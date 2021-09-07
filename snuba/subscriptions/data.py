@@ -74,6 +74,12 @@ class _SubscriptionData:
     project_id: int
     resolution: timedelta
     time_window: timedelta
+    organization: int
+    granularity: int
+    selected_columns: list
+    groupby: list
+    offset: int
+    limit: int
 
 
 class SubscriptionData(ABC, _SubscriptionData):
@@ -150,15 +156,21 @@ class LegacySubscriptionData(SubscriptionData):
             Language.LEGACY,
         )
         extra_conditions: Sequence[Condition] = []
-        if offset is not None:
-            extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
+        # if offset is not None:
+        #     extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
         return build_request(
             {
                 "project": self.project_id,
+                "selected_columns": self.selected_columns,
+                "granularity": self.granularity,
+                "organization": self.organization,
                 "conditions": [*self.conditions, *extra_conditions],
                 "aggregations": self.aggregations,
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
+                "groupby": self.groupby,
+                "offset": self.offset,
+                "limit": self.limit
             },
             parse_legacy_query,
             SubscriptionRequestSettings,
@@ -170,24 +182,36 @@ class LegacySubscriptionData(SubscriptionData):
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> LegacySubscriptionData:
-        if not data.get("aggregations"):
-            raise InvalidQueryException("No aggregation provided")
+        # if not data.get("aggregations"):
+        #     raise InvalidQueryException("No aggregation provided")
 
         return LegacySubscriptionData(
             project_id=data["project_id"],
             conditions=data["conditions"],
-            aggregations=data["aggregations"],
+            organization=data["organization"],
+            aggregations=data.get("aggregations", []),
+            selected_columns=data.get("selected_columns", []),
+            granularity=data.get("granularity"),
             time_window=timedelta(seconds=data["time_window"]),
             resolution=timedelta(seconds=data["resolution"]),
+            groupby=data.get("groupby", []),
+            offset=data.get("offset", 0),
+            limit=data.get("limit", 1000)
         )
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
             "project_id": self.project_id,
+            "organization": self.organization,
+            "selected_columns": self.selected_columns,
+            "groupby": self.groupby,
+            "granularity": self.granularity,
             "conditions": self.conditions,
             "aggregations": self.aggregations,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
+            "offset": int(self.offset),
+            "limit": int(self.limit)
         }
 
 
@@ -230,18 +254,18 @@ class SnQLSubscriptionData(SubscriptionData):
             ),
         ]
 
-        if offset is not None:
-            conditions_to_add.append(
-                binary_condition(
-                    ConditionFunctions.LTE,
-                    FunctionCall(
-                        None,
-                        "ifnull",
-                        (Column(None, None, "offset"), Literal(None, 0)),
-                    ),
-                    Literal(None, offset),
-                )
-            )
+        # if offset is not None:
+        #     conditions_to_add.append(
+        #         binary_condition(
+        #             ConditionFunctions.LTE,
+        #             FunctionCall(
+        #                 None,
+        #                 "ifnull",
+        #                 (Column(None, None, "offset"), Literal(None, 0)),
+        #             ),
+        #             Literal(None, offset),
+        #         )
+        #     )
 
         new_condition = combine_and_conditions(conditions_to_add)
         condition = query.get_condition()
@@ -277,6 +301,11 @@ class SnQLSubscriptionData(SubscriptionData):
             {}, SubscriptionRequestSettings, Language.SNQL,
         )
 
+        print("SNQL QUERT IS ", self.query)
+
+        if offset is None:
+            offset = 0
+
         request = build_request(
             {"query": self.query},
             partial(
@@ -301,18 +330,30 @@ class SnQLSubscriptionData(SubscriptionData):
 
         return SnQLSubscriptionData(
             project_id=data["project_id"],
+            organization=data["organization"],
             time_window=timedelta(seconds=data["time_window"]),
             resolution=timedelta(seconds=data["resolution"]),
             query=data["query"],
+            selected_columns=data["selected_columns"],
+            granularity=data["granularity"],
+            groupby=data.get("groupby", []),
+            offset=data.get("offset", 0),
+            limit=data.get("limit", 1000)
         )
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
             self.TYPE_FIELD: SubscriptionType.SNQL.value,
             "project_id": self.project_id,
+            "organization": self.organization,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
             "query": self.query,
+            "selected_columns": self.selected_columns,
+            "granularity": self.granularity,
+            "groupby": self.groupby,
+            "offset": self.offset,
+            "limit": self.limit
         }
 
 
@@ -365,6 +406,9 @@ class DelegateSubscriptionData(SubscriptionData):
         if metrics is not None:
             metrics.increment("snql.subscription.delegate.use_legacy")
 
+        if offset is None:
+            offset = 0
+
         return self.to_legacy().build_request(dataset, timestamp, offset, timer)
 
     @classmethod
@@ -379,6 +423,12 @@ class DelegateSubscriptionData(SubscriptionData):
             conditions=data["conditions"],
             aggregations=data["aggregations"],
             query=data["query"],
+            organization=data["organization"],
+            granularity=data["granularity"],
+            selected_columns=data["selected_columns"],
+            groupby=data["groupby"],
+            offset=data.get("offset", 0),
+            limit=data.get("limit", 1000)
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -390,6 +440,12 @@ class DelegateSubscriptionData(SubscriptionData):
             "conditions": self.conditions,
             "aggregations": self.aggregations,
             "query": self.query,
+            "organization": self.organization,
+            "selected_columns": self.selected_columns,
+            "granularity": self.granularity,
+            "groupby": self.groupby,
+            "limit": self.limit,
+            "offset": self.offset
         }
 
     def to_snql(self) -> SnQLSubscriptionData:

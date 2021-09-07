@@ -120,6 +120,7 @@ def subscriptions(
     ), f"Dataset {dataset_name} does not have a writable storage by default."
 
     loader = enforce_table_writer(dataset).get_stream_loader()
+    print("Loader ", loader)
     commit_log_topic_spec = loader.get_commit_log_topic_spec()
     assert commit_log_topic_spec is not None
 

@@ -144,6 +144,7 @@ class RedisCache(Cache[TValue]):
             # notifications and approximately how long we have to run the
             # function. (In practice, these should be the same values as what
             # we provided earlier.)
+            print("Well if you are curious, run eher -> ", self.get(result[1]))
             task_ident = result[1].decode("utf-8")
             task_timeout = int(result[2])
             logger.debug(
@@ -166,7 +167,7 @@ class RedisCache(Cache[TValue]):
                 # Regardless of whether the function succeeded or failed, we
                 # need to mark the task as completed. If there is no result
                 # value, other clients will know that we raised an exception.
-                logger.debug("Setting result and waking blocked clients...")
+                logger.debug("Setting result and waking blocked clients... ", argv)
                 try:
                     self.__script_set(
                         [

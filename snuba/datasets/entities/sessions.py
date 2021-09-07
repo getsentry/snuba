@@ -212,6 +212,7 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
         granularity = extract_granularity_from_query(query, "started") or 3600
+        print(granularity)
         use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
 
         metrics.increment(
@@ -224,10 +225,12 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         )
 
         if use_materialized_storage:
+            print("WE ARE USING MATERIALIZED STORAGE")
             return StorageAndMappers(
                 self.materialized_storage, sessions_hourly_translators
             )
         else:
+            print("WE ARE NOT USING MATERIALIZED")
             return StorageAndMappers(self.raw_storage, sessions_raw_translators)
 
 
