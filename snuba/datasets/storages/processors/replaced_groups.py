@@ -43,7 +43,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         set_final = False
         if project_ids:
-            final, exclude_group_ids = get_projects_query_flags(
+            final, exclude_group_ids, replacement_types = get_projects_query_flags(
                 list(project_ids), self.__replacer_state_name,
             )
             if final:

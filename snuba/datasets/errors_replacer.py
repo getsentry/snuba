@@ -156,8 +156,15 @@ def get_project_exclude_groups_key(
     return f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
 
 
+def get_project_exclude_groups_replacement_type_key(key: str) -> str:
+    return f"{key}-type"
+
+
 def set_project_exclude_groups(
-    project_id: int, group_ids: Sequence[int], state_name: Optional[ReplacerState]
+    project_id: int,
+    group_ids: Sequence[int],
+    state_name: Optional[ReplacerState],
+    replacement_type: str,
 ) -> None:
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
@@ -167,10 +174,12 @@ def set_project_exclude_groups(
 
     now = time.time()
     key = get_project_exclude_groups_key(project_id, state_name)
+    type_key = get_project_exclude_groups_replacement_type_key(key)
     p = redis_client.pipeline()
 
     group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
     p.zadd(key, **group_id_data)
+    p.set(type_key, replacement_type)
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
@@ -195,7 +204,7 @@ def set_project_needs_final(
 
 def get_projects_query_flags(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Tuple[bool, Sequence[int]]:
+) -> Tuple[bool, Sequence[int], Sequence[str]]:
     """\
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
@@ -229,12 +238,26 @@ def get_projects_query_flags(
 
     results = p.execute()
 
+    exclude_groups_keys_replacement_types = [
+        get_project_exclude_groups_replacement_type_key(exclude_groups_key)
+        for exclude_groups_key in exclude_groups_keys
+    ]
+
+    for exclude_groups_key_replacement_type in exclude_groups_keys_replacement_types:
+        p.get(exclude_groups_key_replacement_type)
+
+    replacement_types = [
+        replacement_type.decode("utf-8")
+        for replacement_type in p.execute()
+        if replacement_type
+    ]
+
     needs_final = any(results[: len(s_project_ids)])
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(results[(len(s_project_ids) + 1) :: 2], [])}
     )
 
-    return (needs_final, exclude_groups)
+    return (needs_final, exclude_groups, replacement_types)
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
@@ -343,10 +366,16 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             elif isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:
                     set_project_exclude_groups(
-                        project_id, query_time_flags.group_ids, None
+                        project_id,
+                        query_time_flags.group_ids,
+                        None,
+                        replacement.replacement_type,
                     )
                 set_project_exclude_groups(
-                    project_id, query_time_flags.group_ids, self.__state_name
+                    project_id,
+                    query_time_flags.group_ids,
+                    self.__state_name,
+                    replacement.replacement_type,
                 )
 
         elif query_time_flags is not None:

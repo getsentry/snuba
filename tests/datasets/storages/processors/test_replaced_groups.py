@@ -1,6 +1,7 @@
 from typing import Sequence
 
 import pytest
+
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -71,7 +72,9 @@ def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) ->
 
 def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 5)
-    set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)
+    set_project_exclude_groups(
+        2, [100, 101, 102], ReplacerState.EVENTS, "replacement_type"
+    )
 
     PostReplacementConsistencyEnforcer(
         "project_id", ReplacerState.EVENTS
@@ -103,7 +106,9 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
 
 def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 2)
-    set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)
+    set_project_exclude_groups(
+        2, [100, 101, 102], ReplacerState.EVENTS, "replacement_type"
+    )
 
     PostReplacementConsistencyEnforcer(
         "project_id", ReplacerState.EVENTS

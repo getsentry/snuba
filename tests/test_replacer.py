@@ -524,34 +524,38 @@ class TestReplacer:
 
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (False, [],)
+        ) == (False, [], [])
 
         errors_replacer.set_project_needs_final(100, ReplacerState.ERRORS)
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (False, [],)
+        ) == (False, [], [])
 
         errors_replacer.set_project_needs_final(1, ReplacerState.ERRORS)
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [],)
+        ) == (True, [], [])
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
-        ) == (False, [],)
+        ) == (False, [], [])
 
         errors_replacer.set_project_needs_final(2, ReplacerState.ERRORS)
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [],)
+        ) == (True, [], [])
 
-        errors_replacer.set_project_exclude_groups(1, [1, 2], ReplacerState.ERRORS)
-        errors_replacer.set_project_exclude_groups(2, [3, 4], ReplacerState.ERRORS)
+        errors_replacer.set_project_exclude_groups(
+            1, [1, 2], ReplacerState.ERRORS, "replace_type_1"
+        )
+        errors_replacer.set_project_exclude_groups(
+            2, [3, 4], ReplacerState.ERRORS, "replace_type_2"
+        )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [1, 2, 3, 4],)
+        ) == (True, [1, 2, 3, 4], ["replace_type_1", "replace_type_2"])
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
-        ) == (False, [],)
+        ) == (False, [], [])
 
     def test_tombstone_events_process_noop(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)

@@ -136,6 +136,8 @@ FINAL_QUERY_TEMPLATE = {
     "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
 }
 
+REPLACEMENT_TYPE = "replacement_type"
+
 
 @pytest.mark.parametrize(
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
@@ -165,6 +167,7 @@ def test_write_each_node(
                 INSERT_QUERY_TEMPLATE,
                 FINAL_QUERY_TEMPLATE,
                 (NEEDS_FINAL, 1),
+                REPLACEMENT_TYPE,
             )
         ]
     )
@@ -195,6 +198,7 @@ def test_failing_query(
                     INSERT_QUERY_TEMPLATE,
                     FINAL_QUERY_TEMPLATE,
                     (NEEDS_FINAL, 1),
+                    REPLACEMENT_TYPE,
                 )
             ]
         )
@@ -218,6 +222,7 @@ def test_load_balancing(
         INSERT_QUERY_TEMPLATE,
         FINAL_QUERY_TEMPLATE,
         (NEEDS_FINAL, 1),
+        REPLACEMENT_TYPE,
     )
     replacer.flush_batch([replacement, replacement])
 
@@ -376,6 +381,7 @@ def test_local_executor(
             INSERT_QUERY_TEMPLATE,
             FINAL_QUERY_TEMPLATE,
             (NEEDS_FINAL, 1),
+            REPLACEMENT_TYPE,
         ),
         records_count=1,
     )
