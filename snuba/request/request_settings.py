@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import List, Sequence
 
-from snuba.state.rate_limit import RateLimitParameters, get_global_rate_limit_params
+from snuba.state.rate_limit import RateLimitParameters
 
 
 class RequestSettings(ABC):
@@ -69,7 +69,7 @@ class HTTPRequestSettings(RequestSettings):
         self.__debug = debug
         self.__dry_run = dry_run
         self.__legacy = legacy
-        self.__rate_limit_params = [get_global_rate_limit_params()]
+        self.__rate_limit_params: List[RateLimitParameters] = []
 
     def get_turbo(self) -> bool:
         return self.__turbo
