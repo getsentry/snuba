@@ -14,6 +14,7 @@ class Topic(Enum):
     SESSIONS = "ingest-sessions"
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
+    SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
     QUERYLOG = "snuba-queries"
 
 

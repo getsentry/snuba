@@ -122,6 +122,23 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ],
         ),
         (
+            "subscriptions-consumer-sessions",
+            [
+                "snuba",
+                "subscriptions",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--max-batch-size=1",
+                "--consumer-group=snuba-sessions-subscriptions-consumers",
+                "--dataset=sessions",
+                "--commit-log-topic=snuba-commit-log",
+                "--commit-log-group=sessions_group",
+                "--delay-seconds=1",
+                "--schedule-ttl=10",
+                "--max-query-workers=1",
+            ],
+        ),
+        (
             "cdc-consumer",
             [
                 "snuba",

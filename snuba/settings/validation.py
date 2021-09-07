@@ -30,6 +30,7 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-queries",
         "events-subscription-results",
         "transactions-subscription-results",
+        "sessions-subscription-results",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
