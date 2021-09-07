@@ -151,7 +151,7 @@ class LegacySubscriptionData(SubscriptionData):
         )
         extra_conditions: Sequence[Condition] = []
         if offset is not None:
-            extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
+            extra_conditions = [[["ifNull", ["offset", 0]], "<=", offset]]
         return build_request(
             {
                 "project": self.project_id,
@@ -236,7 +236,7 @@ class SnQLSubscriptionData(SubscriptionData):
                     ConditionFunctions.LTE,
                     FunctionCall(
                         None,
-                        "ifnull",
+                        "ifNull",
                         (Column(None, None, "offset"), Literal(None, 0)),
                     ),
                     Literal(None, offset),

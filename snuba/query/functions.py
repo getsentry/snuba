@@ -171,12 +171,6 @@ REGULAR_FUNCTIONS = {
     "isNull",
     "isNotNull",
     "ifNull",
-    # TODO(meredith): certain functions are case insensitive, but an ifNull varient
-    # seems to be the only one used that isn't in documented format. Ideally have a
-    # better way to add in checking the case sensitivity for the right functions
-    "IfNull",
-    "ifnull",
-    "IFNULL",
     "assumeNotNull",
     "coalesce",
     # functions for tuples
