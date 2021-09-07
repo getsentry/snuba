@@ -438,9 +438,6 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-        data = json.loads(response.data)
-        assert "empty-string-tag-condition" in data["experiments"]
-
     def test_alias_allowances(self) -> None:
         response = self.post(
             "/events/snql",
