@@ -18,6 +18,7 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
 )
@@ -204,7 +205,7 @@ def set_project_needs_final(
 
 def get_projects_query_flags(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Tuple[bool, Sequence[int], Sequence[str]]:
+) -> Tuple[bool, Sequence[int], Set[str]]:
     """\
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
@@ -246,11 +247,11 @@ def get_projects_query_flags(
     for exclude_groups_key_replacement_type in exclude_groups_keys_replacement_types:
         p.get(exclude_groups_key_replacement_type)
 
-    replacement_types = [
+    replacement_types = {
         replacement_type.decode("utf-8")
         for replacement_type in p.execute()
         if replacement_type
-    ]
+    }
 
     needs_final = any(results[: len(s_project_ids)])
     exclude_groups = sorted(
