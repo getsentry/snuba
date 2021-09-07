@@ -38,6 +38,7 @@ from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
+    get_global_rate_limit_params,
 )
 from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import Codec
@@ -244,6 +245,12 @@ def execute_query_with_rate_limits(
     query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
+    # Global rate limiter is added at the end of the chain to be
+    # the last for evaluation.
+    # This allows us not to borrow capacity from the global quota
+    # during the evaluation if one of the more specific limiters
+    # (like the project rate limiter) rejects the query first.
+    request_settings.add_rate_limit(get_global_rate_limit_params())
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
     with RateLimitAggregator(
