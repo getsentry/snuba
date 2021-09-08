@@ -77,7 +77,6 @@ class ReplacementContext:
 
 
 class Replacement(ReplacementBase):
-    # TODO: add type here
 
     replacement_type: str
 
@@ -170,8 +169,6 @@ def set_project_exclude_groups(
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
     the entire ZSET incase it's rarely touched."""
-
-    # TODO: Set new key for type?
 
     now = time.time()
     key = get_project_exclude_groups_key(project_id, state_name)
@@ -361,8 +358,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 if compatibility_double_write:
                     set_project_needs_final(project_id, None)
                 set_project_needs_final(project_id, self.__state_name)
-
-            # TODO: Figure out sending type to setter
 
             elif isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:
