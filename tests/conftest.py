@@ -108,7 +108,6 @@ def _build_snql_post_methods(
     def simple_post(data: str, entity: str = entity, referrer: str = "test") -> Any:
         if request.param == "snql":
             data = convert_legacy_to_snql(data, entity)
-        print("SENDING", data)
         return test_app.post(endpoint, data=data, headers={"referer": referrer})
 
     return simple_post
