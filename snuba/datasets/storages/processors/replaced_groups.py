@@ -46,10 +46,12 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             final, exclude_group_ids, replacement_types = get_projects_query_flags(
                 list(project_ids), self.__replacer_state_name,
             )
+            tags = {replacement_type: "True" for replacement_type in replacement_types}
+            tags["referrer"] = request_settings.referrer
             if final:
+                tags["cause"] = "final_flag"
                 metrics.increment(
-                    "final",
-                    tags={"cause": "final_flag", "referrer": request_settings.referrer},
+                    "final", tags=tags,
                 )
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
@@ -59,12 +61,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 )
                 assert isinstance(max_group_ids_exclude, int)
                 if len(exclude_group_ids) > max_group_ids_exclude:
+                    tags["cause"] = "max_groups"
                     metrics.increment(
-                        "final",
-                        tags={
-                            "cause": "max_groups",
-                            "referrer": request_settings.referrer,
-                        },
+                        "final", tags=tags,
                     )
                     set_final = True
                 else:
