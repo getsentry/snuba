@@ -291,7 +291,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
-        # event = message.data
 
         if type_ in REPLACEMENT_EVENT_TYPES:
             metrics.increment("process", 1, tags={"type": type_})
