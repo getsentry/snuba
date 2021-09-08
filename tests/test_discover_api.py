@@ -512,6 +512,7 @@ class TestDiscoverApi(BaseApiTest):
             json.dumps(
                 {
                     "dataset": "discover",
+                    "parent_api": "something",
                     "project": self.project_id,
                     "aggregations": [["count()", "", "count"]],
                     "conditions": [
