@@ -36,6 +36,7 @@ TESTS = [
             "having": [],
             "limit": 1000,
             "totals": False,
+            "parent_api": "<unknown>",
         },
         Language.LEGACY,
         binary_condition(
@@ -71,6 +72,7 @@ TESTS = [
                 "LIMIT 1000 "
                 "GRANULARITY 60"
             ),
+            "parent_api": "<unknown>",
         },
         Language.SNQL,
         binary_condition(

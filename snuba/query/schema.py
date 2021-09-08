@@ -18,7 +18,12 @@ BINARY_OPERATORS = [o for o in CONDITION_OPERATORS if o not in UNARY_OPERATORS]
 
 SNQL_QUERY_SCHEMA = {
     "type": "object",
-    "properties": {"query": {"type": "string"}, "dataset": {"type": "string"}},
+    "properties": {
+        "query": {"type": "string"},
+        "dataset": {"type": "string"},
+        # Maps to the transaction name of the Sentry API call
+        "parent_api": {"type": "string", "default": "<unknown>"},
+    },
     "additionalProperties": False,
 }
 
@@ -118,6 +123,8 @@ GENERIC_QUERY_SCHEMA = {
                 {"$ref": "#/definitions/column_name"},
             ],
         },
+        # Maps to the transaction name of the Sentry API call
+        "parent_api": {"type": "string", "default": "<unknown>"},
     },
     "dependencies": {"offset": ["limit"], "totals": ["groupby"]},
     "additionalProperties": False,

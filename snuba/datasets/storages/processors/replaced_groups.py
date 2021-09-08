@@ -48,6 +48,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             )
             tags = {replacement_type: "True" for replacement_type in replacement_types}
             tags["referrer"] = request_settings.referrer
+            tags["parent_api"] = request_settings.get_parent_api()
             if final:
                 tags["cause"] = "final_flag"
                 metrics.increment(
