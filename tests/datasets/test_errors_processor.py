@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -14,7 +15,8 @@ from snuba.settings import PAYLOAD_DATETIME_FORMAT
 def test_error_processor() -> None:
     received_timestamp = datetime.now() - timedelta(minutes=1)
     error_timestamp = received_timestamp - timedelta(minutes=1)
-
+    trace_id = str(uuid.uuid4())
+    span_id = "deadbeef"
     error = (
         2,
         "insert",
@@ -119,7 +121,8 @@ def test_error_processor() -> None:
                             "type": "runtime",
                             "name": "CPython",
                             "build": "3.7.6",
-                        }
+                        },
+                        "trace": {"trace_id": trace_id, "span_id": span_id},
                     },
                     "culprit": "snuba.clickhouse.http in write",
                     "exception": {
@@ -240,6 +243,10 @@ def test_error_processor() -> None:
         "sdk_version": "0.0.0.0.1",
         "http_method": "POST",
         "http_referer": "tagstore.something",
+        # Notice that trace_id and span_id shows up in columns but not in the contexts
+        # this is on purpose to save space
+        "trace_id": trace_id,
+        "span_id": int(span_id, 16),
         "tags.key": [
             "environment",
             "handled",
@@ -339,6 +346,8 @@ def test_error_processor() -> None:
         }
     )
 
-    assert processor.process_message(error, meta) == InsertBatch(
-        [expected_result], None
-    )
+    processed_message = processor.process_message(error, meta)
+    expected_message = InsertBatch([expected_result], None)
+    # assert on the rows first so we get a nice diff from pytest
+    assert processed_message.rows[0] == expected_message.rows[0]
+    assert processed_message == expected_message
