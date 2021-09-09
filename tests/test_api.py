@@ -16,7 +16,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.events_processor_base import InsertEvent, ReplacementTypes
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import storage as errors_storage
@@ -2212,7 +2212,7 @@ class TestLegacyAPI(SimpleAPITest):
 
         event = (
             2,
-            "end_delete_groups",
+            ReplacementTypes.END_DELETE_GROUPS,
             {
                 "transaction_id": "foo",
                 "project_id": project_id,
