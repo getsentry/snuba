@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 import uuid
 from collections import ChainMap, namedtuple
@@ -164,7 +165,6 @@ def rate_limit(
     ]
 
     reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
-
     if reason:
         try:
             rds.zrem(bucket, query_id)  # not allowed / not counted
@@ -177,12 +177,25 @@ def rate_limit(
             )
         )
 
+    rate_limited = False
     try:
         yield stats
+        _, err, _ = sys.exc_info()
+        if isinstance(err, RateLimitExceeded):
+            # If another rate limiter throws an exception, it won't be propagated
+            # through this context. So check for the exception explicitly.
+            # If another rate limit was hit, we don't want to count this query
+            # against this limit.
+            try:
+                rds.zrem(bucket, query_id)  # not allowed / not counted
+                rate_limited = True
+            except Exception as ex:
+                logger.exception(ex)
     finally:
         try:
-            # return the query to its start time
-            rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
+            # return the query to its start time, if the query_id was actually added.
+            if not rate_limited:
+                rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
         except Exception as ex:
             logger.exception(ex)
 
@@ -219,9 +232,18 @@ class RateLimitAggregator(AbstractContextManager):  # type: ignore
         stats = RateLimitStatsContainer()
 
         for rate_limit_param in self.rate_limit_params:
-            child_stats = self.stack.enter_context(rate_limit(rate_limit_param))
-            if child_stats:
-                stats.add_stats(rate_limit_param.rate_limit_name, child_stats)
+            try:
+                child_stats = self.stack.enter_context(rate_limit(rate_limit_param))
+                if child_stats:
+                    stats.add_stats(rate_limit_param.rate_limit_name, child_stats)
+            except RateLimitExceeded as e:
+                # If an exception occurs in one of the rate limiters, the __exit__ callbacks are not
+                # called since the error happened in the __enter__ method and not in the context
+                # block itself. In the case that one of the rate limiters caught a limit, we need
+                # these exit functions to be called so we can roll back any limits that were set
+                # earlier in the stack.
+                self.__exit__(*sys.exc_info())
+                raise e
 
         return stats
 
