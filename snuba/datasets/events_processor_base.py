@@ -30,7 +30,7 @@ from snuba.processor import (
 logger = logging.getLogger(__name__)
 
 
-class ReplacementTypes(str, Enum):
+class ReplacementType(str, Enum):
     START_DELETE_GROUPS = "start_delete_groups"
     START_MERGE = "start_merge"
     START_UNMERGE = "start_unmerge"
@@ -48,17 +48,17 @@ class ReplacementTypes(str, Enum):
 
 REPLACEMENT_EVENT_TYPES = frozenset(
     [
-        ReplacementTypes.START_DELETE_GROUPS,
-        ReplacementTypes.START_MERGE,
-        ReplacementTypes.START_UNMERGE,
-        ReplacementTypes.START_DELETE_TAG,
-        ReplacementTypes.END_DELETE_GROUPS,
-        ReplacementTypes.END_MERGE,
-        ReplacementTypes.END_UNMERGE,
-        ReplacementTypes.END_DELETE_TAG,
-        ReplacementTypes.TOMBSTONE_EVENTS,
-        ReplacementTypes.EXCLUDE_GROUPS,
-        ReplacementTypes.REPLACE_GROUP,
+        ReplacementType.START_DELETE_GROUPS,
+        ReplacementType.START_MERGE,
+        ReplacementType.START_UNMERGE,
+        ReplacementType.START_DELETE_TAG,
+        ReplacementType.END_DELETE_GROUPS,
+        ReplacementType.END_MERGE,
+        ReplacementType.END_UNMERGE,
+        ReplacementType.END_DELETE_TAG,
+        ReplacementType.TOMBSTONE_EVENTS,
+        ReplacementType.EXCLUDE_GROUPS,
+        ReplacementType.REPLACE_GROUP,
     ]
 )
 

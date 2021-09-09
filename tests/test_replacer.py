@@ -13,7 +13,7 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets import errors_replacer
 from snuba.datasets.errors_replacer import NeedsFinal, ReplacerState
-from snuba.datasets.events_processor_base import ReplacementTypes
+from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.optimize import run_optimize
@@ -80,7 +80,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.END_DELETE_GROUPS,
+            ReplacementType.END_DELETE_GROUPS,
             {
                 "project_id": self.project_id,
                 "group_ids": [1, 2, 3],
@@ -115,7 +115,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.END_MERGE,
+            ReplacementType.END_MERGE,
             {
                 "project_id": self.project_id,
                 "new_group_id": 2,
@@ -151,7 +151,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.END_UNMERGE,
+            ReplacementType.END_UNMERGE,
             {
                 "project_id": self.project_id,
                 "previous_group_id": 1,
@@ -190,7 +190,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.END_UNMERGE_HIERARCHICAL,
+            ReplacementType.END_UNMERGE_HIERARCHICAL,
             {
                 "project_id": self.project_id,
                 "previous_group_id": 1,
@@ -226,7 +226,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.END_DELETE_TAG,
+            ReplacementType.END_DELETE_TAG,
             {
                 "project_id": self.project_id,
                 "tag": "sentry:user",
@@ -261,7 +261,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.END_DELETE_TAG,
+            ReplacementType.END_DELETE_TAG,
             {
                 "project_id": self.project_id,
                 "tag": "foo:bar",
@@ -312,7 +312,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        ReplacementTypes.END_DELETE_GROUPS,
+                        ReplacementType.END_DELETE_GROUPS,
                         {
                             "project_id": project_id,
                             "group_ids": [1],
@@ -353,7 +353,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        ReplacementTypes.END_MERGE,
+                        ReplacementType.END_MERGE,
                         {
                             "project_id": project_id,
                             "new_group_id": 2,
@@ -392,7 +392,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        ReplacementTypes.END_UNMERGE,
+                        ReplacementType.END_UNMERGE,
                         {
                             "project_id": project_id,
                             "previous_group_id": 1,
@@ -433,7 +433,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        ReplacementTypes.END_UNMERGE_HIERARCHICAL,
+                        ReplacementType.END_UNMERGE_HIERARCHICAL,
                         {
                             "project_id": project_id,
                             "previous_group_id": 1,
@@ -501,7 +501,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        ReplacementTypes.END_DELETE_TAG,
+                        ReplacementType.END_DELETE_TAG,
                         {
                             "project_id": project_id,
                             "tag": "browser.name",
@@ -572,7 +572,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.TOMBSTONE_EVENTS,
+            ReplacementType.TOMBSTONE_EVENTS,
             {
                 "project_id": self.project_id,
                 "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
@@ -587,7 +587,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            ReplacementTypes.TOMBSTONE_EVENTS,
+            ReplacementType.TOMBSTONE_EVENTS,
             {
                 "project_id": self.project_id,
                 "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
@@ -622,7 +622,7 @@ class TestReplacer:
         to_ts = datetime.now(tz=pytz.utc) + timedelta(3)
         message = (
             2,
-            ReplacementTypes.TOMBSTONE_EVENTS,
+            ReplacementType.TOMBSTONE_EVENTS,
             {
                 "project_id": self.project_id,
                 "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],

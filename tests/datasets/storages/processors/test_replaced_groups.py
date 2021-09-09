@@ -10,6 +10,7 @@ from snuba.datasets.errors_replacer import (
     set_project_exclude_groups,
     set_project_needs_final,
 )
+from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
@@ -73,7 +74,10 @@ def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) ->
 def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 5)
     set_project_exclude_groups(
-        2, [100, 101, 102], ReplacerState.EVENTS, "replacement_type"
+        2,
+        [100, 101, 102],
+        ReplacerState.EVENTS,
+        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
     PostReplacementConsistencyEnforcer(
@@ -107,7 +111,10 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
 def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 2)
     set_project_exclude_groups(
-        2, [100, 101, 102], ReplacerState.EVENTS, "replacement_type"
+        2,
+        [100, 101, 102],
+        ReplacerState.EVENTS,
+        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
     PostReplacementConsistencyEnforcer(

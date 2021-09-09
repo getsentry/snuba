@@ -15,7 +15,7 @@ from snuba.datasets.events_format import (
     extract_http,
     extract_user,
 )
-from snuba.datasets.events_processor_base import InsertEvent, ReplacementTypes
+from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import (
@@ -131,56 +131,56 @@ class TestEventsProcessor:
 
     def test_v2_start_delete_groups(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.START_DELETE_GROUPS, {"project_id": project_id})
+        message = (2, ReplacementType.START_DELETE_GROUPS, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_delete_groups(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.END_DELETE_GROUPS, {"project_id": project_id})
+        message = (2, ReplacementType.END_DELETE_GROUPS, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_start_merge(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.START_MERGE, {"project_id": project_id})
+        message = (2, ReplacementType.START_MERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_merge(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.END_MERGE, {"project_id": project_id})
+        message = (2, ReplacementType.END_MERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_start_unmerge(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.START_UNMERGE, {"project_id": project_id})
+        message = (2, ReplacementType.START_UNMERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_unmerge(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.END_UNMERGE, {"project_id": project_id})
+        message = (2, ReplacementType.END_UNMERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_start_delete_tag(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.START_DELETE_TAG, {"project_id": project_id})
+        message = (2, ReplacementType.START_DELETE_TAG, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_delete_tag(self) -> None:
         project_id = 1
-        message = (2, ReplacementTypes.END_DELETE_TAG, {"project_id": project_id})
+        message = (2, ReplacementType.END_DELETE_TAG, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
