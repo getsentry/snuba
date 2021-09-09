@@ -245,19 +245,16 @@ def get_projects_query_flags(
 
     results = p.execute()
 
-    for exclude_groups_key_replacement_type in exclude_groups_keys_replacement_types:
-        p.get(exclude_groups_key_replacement_type)
-
-    replacement_types = {
-        replacement_type.decode("utf-8")
-        for replacement_type in p.execute()
-        if replacement_type
-    }
-
     needs_final = any(results[: len(s_project_ids)])
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(results[(len(s_project_ids) + 1) :: 2], [])}
     )
+
+    replacement_types = {
+        replacement_type.decode("utf-8")
+        for replacement_type in redis_client.mget(exclude_groups_keys_replacement_types)
+        if replacement_type
+    }
 
     return (needs_final, exclude_groups, replacement_types)
 
