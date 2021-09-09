@@ -1,8 +1,9 @@
 import logging
 import numbers
 import uuid
+from collections import namedtuple
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Tuple
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -35,6 +36,9 @@ metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
 
 UNKNOWN_SPAN_STATUS = 2
+NamedMessageTuple = namedtuple(
+    "NamedMessageTuple", ["version", "message_type", "event", "data", "retention_days"]
+)
 
 
 class TransactionsMessageProcessor(MessageProcessor):
@@ -54,12 +58,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(
-        self, message: Tuple[int, str, Any], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
-        processed: MutableMapping[str, Any] = {"deleted": 0}
+    def _destructure_and_validate_message(
+        self, message: Tuple[int, str, Dict[str, Any]]
+    ) -> Optional[NamedMessageTuple]:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
+
         version = message[0]
         if version not in (0, 1, 2):
             return None
@@ -71,30 +75,42 @@ class TransactionsMessageProcessor(MessageProcessor):
         event_type = data.get("type")
         if event_type != "transaction":
             return None
-        extract_base(processed, event)
 
+        if not data.get("contexts", {}).get("trace"):
+            return None
         try:
             # We are purposely using a naive datetime here to work with the
             # rest of the codebase. We can be confident that clients are only
             # sending UTC dates.
-            processed["retention_days"] = enforce_retention(
-                event, datetime.utcfromtimestamp(data["timestamp"]),
+            retention_days = enforce_retention(
+                event, datetime.utcfromtimestamp(data["timestamp"])
             )
         except EventTooOld:
             return None
 
-        if not data.get("contexts", {}).get("trace"):
-            return None
+        return NamedMessageTuple(version, type_, event, data, retention_days)
 
-        transaction_ctx = data["contexts"]["trace"]
+    def _build_column_values(
+        self, destructured_message: NamedMessageTuple
+    ) -> MutableMapping[str, Any]:
+        processed: MutableMapping[str, Any] = {
+            "deleted": 0,
+            "retention_days": destructured_message.retention_days,
+        }
+
+        extract_base(processed, destructured_message.event)
+
+        transaction_ctx = destructured_message.data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
         processed["event_id"] = str(uuid.UUID(processed["event_id"]))
         processed["trace_id"] = str(uuid.UUID(trace_id))
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
         processed["transaction_op"] = _unicodify(transaction_ctx.get("op") or "")
-        processed["transaction_name"] = _unicodify(data.get("transaction") or "")
+        processed["transaction_name"] = _unicodify(
+            destructured_message.data.get("transaction") or ""
+        )
         processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
-            data["start_timestamp"],
+            destructured_message.data["start_timestamp"],
         )
         status = transaction_ctx.get("status", None)
         if status:
@@ -103,36 +119,50 @@ class TransactionsMessageProcessor(MessageProcessor):
             int_status = UNKNOWN_SPAN_STATUS
 
         processed["transaction_status"] = int_status
-        if data["timestamp"] - data["start_timestamp"] < 0:
+        if (
+            destructured_message.data["timestamp"]
+            - destructured_message.data["start_timestamp"]
+            < 0
+        ):
             # Seems we have some negative durations in the DB
             metrics.increment("negative_duration")
 
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
-            data["timestamp"],
+            destructured_message.data["timestamp"],
         )
 
         duration_secs = (processed["finish_ts"] - processed["start_ts"]).total_seconds()
         processed["duration"] = max(int(duration_secs * 1000), 0)
 
-        processed["platform"] = _unicodify(event["platform"])
+        processed["platform"] = _unicodify(destructured_message.event["platform"])
+        return processed
 
-        tags: Mapping[str, Any] = _as_dict_safe(data.get("tags", None))
+    def _process_tags(
+        self,
+        processed: MutableMapping[str, Any],
+        destructured_message: NamedMessageTuple,
+    ) -> None:
+
+        tags: Mapping[str, Any] = _as_dict_safe(
+            destructured_message.data.get("tags", None)
+        )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
-            "sentry:release", event.get("release"),
+            "sentry:release", destructured_message.event.get("release"),
         )
         processed["environment"] = promoted_tags.get("environment")
+        processed["user"] = promoted_tags.get("sentry:user", "")
+        processed["dist"] = _unicodify(
+            promoted_tags.get("sentry:dist", destructured_message.data.get("dist")),
+        )
 
-        contexts: MutableMapping[str, Any] = _as_dict_safe(data.get("contexts", None))
-
-        user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
-        geo = user_dict.get("geo", None) or {}
-        if "geo" not in contexts and isinstance(geo, dict):
-            contexts["geo"] = geo
-
-        measurements = data.get("measurements")
+    def _process_measurements(
+        self,
+        processed: MutableMapping[str, Any],
+        destructured_message: NamedMessageTuple,
+    ) -> None:
+        measurements = destructured_message.data.get("measurements")
         if measurements is not None:
             try:
                 (
@@ -156,7 +186,12 @@ class TransactionsMessageProcessor(MessageProcessor):
                     exc_info=True,
                 )
 
-        breakdowns = data.get("breakdowns")
+    def _process_breakdown(
+        self,
+        processed: MutableMapping[str, Any],
+        destructured_message: NamedMessageTuple,
+    ) -> None:
+        breakdowns = destructured_message.data.get("breakdowns")
         if breakdowns is not None:
             span_op_breakdowns = breakdowns.get("span_ops")
             if span_op_breakdowns is not None:
@@ -182,11 +217,24 @@ class TransactionsMessageProcessor(MessageProcessor):
                         exc_info=True,
                     )
 
-        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
-        http_data: MutableMapping[str, Any] = {}
-        extract_http(http_data, request)
-        processed["http_method"] = http_data["http_method"]
-        processed["http_referer"] = http_data["http_referer"]
+    def _process_contexts_and_user(
+        self,
+        processed: MutableMapping[str, Any],
+        destructured_message: NamedMessageTuple,
+    ) -> None:
+        contexts: MutableMapping[str, Any] = _as_dict_safe(
+            destructured_message.data.get("contexts", None)
+        )
+        user_dict = (
+            destructured_message.data.get(
+                "user", destructured_message.data.get("sentry.interfaces.User", None)
+            )
+            or {}
+        )
+        geo = user_dict.get("geo", None) or {}
+
+        if "geo" not in contexts and isinstance(geo, dict):
+            contexts["geo"] = geo
 
         skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
             processed["project_id"], set()
@@ -199,28 +247,40 @@ class TransactionsMessageProcessor(MessageProcessor):
             contexts
         )
 
-        processed["dist"] = _unicodify(
-            promoted_tags.get("sentry:dist", data.get("dist")),
-        )
-
         user_data: MutableMapping[str, Any] = {}
         extract_user(user_data, user_dict)
-        processed["user"] = promoted_tags.get("sentry:user", "")
         processed["user_name"] = user_data["username"]
         processed["user_id"] = user_data["user_id"]
         processed["user_email"] = user_data["email"]
         ip_address = _ensure_valid_ip(user_data["ip_address"])
-
         if ip_address:
             if ip_address.version == 4:
                 processed["ip_address_v4"] = str(ip_address)
             elif ip_address.version == 6:
                 processed["ip_address_v6"] = str(ip_address)
 
-        processed["partition"] = metadata.partition
-        processed["offset"] = metadata.offset
+    def _process_request_data(
+        self,
+        processed: MutableMapping[str, Any],
+        destructured_message: NamedMessageTuple,
+    ) -> None:
+        request = (
+            destructured_message.data.get(
+                "request", destructured_message.data.get("sentry.interfaces.Http", None)
+            )
+            or {}
+        )
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        processed["http_method"] = http_data["http_method"]
+        processed["http_referer"] = http_data["http_referer"]
 
-        sdk = data.get("sdk", None) or {}
+    def _process_sdk_data(
+        self,
+        processed: MutableMapping[str, Any],
+        destructured_message: NamedMessageTuple,
+    ) -> None:
+        sdk = destructured_message.data.get("sdk", None) or {}
         processed["sdk_name"] = _unicodify(sdk.get("name") or "")
         processed["sdk_version"] = _unicodify(sdk.get("version") or "")
 
@@ -228,5 +288,22 @@ class TransactionsMessageProcessor(MessageProcessor):
             metrics.increment("missing_sdk_name")
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
+
+    def process_message(
+        self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
+        destructured_message = self._destructure_and_validate_message(message)
+        if not destructured_message:
+            return None
+
+        processed = self._build_column_values(destructured_message)
+        self._process_tags(processed, destructured_message)
+        self._process_measurements(processed, destructured_message)
+        self._process_breakdown(processed, destructured_message)
+        self._process_contexts_and_user(processed, destructured_message)
+        self._process_request_data(processed, destructured_message)
+        self._process_sdk_data(processed, destructured_message)
+        processed["partition"] = metadata.partition
+        processed["offset"] = metadata.offset
 
         return InsertBatch([processed], None)
