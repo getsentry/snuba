@@ -150,14 +150,11 @@ class LegacyReplacement(Replacement):
         return self.count_query_template % args
 
 
-def get_project_exclude_groups_key(
+def get_project_exclude_groups_key_and_type_key(
     project_id: int, state_name: Optional[ReplacerState]
-) -> str:
-    return f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
-
-
-def get_project_exclude_groups_replacement_type_key(key: str) -> str:
-    return f"{key}-type"
+) -> Tuple[str, str]:
+    key = f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
+    return key, f"{key}-type"
 
 
 def set_project_exclude_groups(
@@ -166,13 +163,16 @@ def set_project_exclude_groups(
     state_name: Optional[ReplacerState],
     replacement_type: str,
 ) -> None:
-    """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
+    """
+    Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
-    the entire ZSET incase it's rarely touched."""
+    the entire ZSET incase it's rarely touched.
+
+    Add replacement type for this replacement.
+    """
 
     now = time.time()
-    key = get_project_exclude_groups_key(project_id, state_name)
-    type_key = get_project_exclude_groups_replacement_type_key(key)
+    key, type_key = get_project_exclude_groups_key_and_type_key(project_id, state_name)
     p = redis_client.pipeline()
 
     group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
@@ -207,8 +207,9 @@ def get_projects_query_flags(
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
     3. Trim groups to exclude ZSET for each Project
+    4. Fetch replacement types for each Project
 
-    Returns (needs_final, group_ids_to_exclude)
+    Returns (needs_final, group_ids_to_exclude, replacement_types)
     """
 
     s_project_ids = set(project_ids)
@@ -222,10 +223,18 @@ def get_projects_query_flags(
     for needs_final_key in needs_final_keys:
         p.get(needs_final_key)
 
-    exclude_groups_keys = [
-        get_project_exclude_groups_key(project_id, state_name)
+    exclude_groups_keys_and_types = [
+        get_project_exclude_groups_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
+
+    exclude_groups_keys: List[str] = []
+    exclude_groups_keys_replacement_types: List[str] = []
+
+    for key, type_key in exclude_groups_keys_and_types:
+        exclude_groups_keys.append(key)
+        exclude_groups_keys_replacement_types.append(type_key)
+
     for exclude_groups_key in exclude_groups_keys:
         p.zremrangebyscore(
             exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
@@ -235,11 +244,6 @@ def get_projects_query_flags(
         )
 
     results = p.execute()
-
-    exclude_groups_keys_replacement_types = [
-        get_project_exclude_groups_replacement_type_key(exclude_groups_key)
-        for exclude_groups_key in exclude_groups_keys
-    ]
 
     for exclude_groups_key_replacement_type in exclude_groups_keys_replacement_types:
         p.get(exclude_groups_key_replacement_type)
