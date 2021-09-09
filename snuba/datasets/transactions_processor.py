@@ -1,7 +1,7 @@
 import logging
 import numbers
 import uuid
-from collections import namedtuple
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Tuple
 
@@ -36,9 +36,15 @@ metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
 
 UNKNOWN_SPAN_STATUS = 2
-NamedMessageTuple = namedtuple(
-    "NamedMessageTuple", ["version", "message_type", "event", "data", "retention_days"]
-)
+
+
+@dataclass(frozen=True)
+class StructuredMessage:
+    version: int
+    message_type: str
+    event: Dict[str, Any]
+    data: Dict[str, Any]
+    retention_days: int
 
 
 class TransactionsMessageProcessor(MessageProcessor):
@@ -58,9 +64,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def _destructure_and_validate_message(
+    def _structure_and_validate_message(
         self, message: Tuple[int, str, Dict[str, Any]]
-    ) -> Optional[NamedMessageTuple]:
+    ) -> Optional[StructuredMessage]:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
 
@@ -88,29 +94,25 @@ class TransactionsMessageProcessor(MessageProcessor):
         except EventTooOld:
             return None
 
-        return NamedMessageTuple(version, type_, event, data, retention_days)
+        return StructuredMessage(version, type_, event, data, retention_days)
 
-    def _build_column_values(
-        self, destructured_message: NamedMessageTuple
+    def _process_base_event_values(
+        self, processed: MutableMapping[str, Any], structured_message: StructuredMessage
     ) -> MutableMapping[str, Any]:
-        processed: MutableMapping[str, Any] = {
-            "deleted": 0,
-            "retention_days": destructured_message.retention_days,
-        }
 
-        extract_base(processed, destructured_message.event)
+        extract_base(processed, structured_message.event)
 
-        transaction_ctx = destructured_message.data["contexts"]["trace"]
+        transaction_ctx = structured_message.data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
         processed["event_id"] = str(uuid.UUID(processed["event_id"]))
         processed["trace_id"] = str(uuid.UUID(trace_id))
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
         processed["transaction_op"] = _unicodify(transaction_ctx.get("op") or "")
         processed["transaction_name"] = _unicodify(
-            destructured_message.data.get("transaction") or ""
+            structured_message.data.get("transaction") or ""
         )
         processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
-            destructured_message.data["start_timestamp"],
+            structured_message.data["start_timestamp"],
         )
         status = transaction_ctx.get("status", None)
         if status:
@@ -120,49 +122,49 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         processed["transaction_status"] = int_status
         if (
-            destructured_message.data["timestamp"]
-            - destructured_message.data["start_timestamp"]
+            structured_message.data["timestamp"]
+            - structured_message.data["start_timestamp"]
             < 0
         ):
             # Seems we have some negative durations in the DB
             metrics.increment("negative_duration")
 
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
-            destructured_message.data["timestamp"],
+            structured_message.data["timestamp"],
         )
 
         duration_secs = (processed["finish_ts"] - processed["start_ts"]).total_seconds()
         processed["duration"] = max(int(duration_secs * 1000), 0)
 
-        processed["platform"] = _unicodify(destructured_message.event["platform"])
+        processed["platform"] = _unicodify(structured_message.event["platform"])
         return processed
 
     def _process_tags(
         self,
         processed: MutableMapping[str, Any],
-        destructured_message: NamedMessageTuple,
+        structured_message: StructuredMessage,
     ) -> None:
 
         tags: Mapping[str, Any] = _as_dict_safe(
-            destructured_message.data.get("tags", None)
+            structured_message.data.get("tags", None)
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
-            "sentry:release", destructured_message.event.get("release"),
+            "sentry:release", structured_message.event.get("release"),
         )
         processed["environment"] = promoted_tags.get("environment")
         processed["user"] = promoted_tags.get("sentry:user", "")
         processed["dist"] = _unicodify(
-            promoted_tags.get("sentry:dist", destructured_message.data.get("dist")),
+            promoted_tags.get("sentry:dist", structured_message.data.get("dist")),
         )
 
     def _process_measurements(
         self,
         processed: MutableMapping[str, Any],
-        destructured_message: NamedMessageTuple,
+        structured_message: StructuredMessage,
     ) -> None:
-        measurements = destructured_message.data.get("measurements")
+        measurements = structured_message.data.get("measurements")
         if measurements is not None:
             try:
                 (
@@ -189,9 +191,9 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_breakdown(
         self,
         processed: MutableMapping[str, Any],
-        destructured_message: NamedMessageTuple,
+        structured_message: StructuredMessage,
     ) -> None:
-        breakdowns = destructured_message.data.get("breakdowns")
+        breakdowns = structured_message.data.get("breakdowns")
         if breakdowns is not None:
             span_op_breakdowns = breakdowns.get("span_ops")
             if span_op_breakdowns is not None:
@@ -220,14 +222,14 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_contexts_and_user(
         self,
         processed: MutableMapping[str, Any],
-        destructured_message: NamedMessageTuple,
+        structured_message: StructuredMessage,
     ) -> None:
         contexts: MutableMapping[str, Any] = _as_dict_safe(
-            destructured_message.data.get("contexts", None)
+            structured_message.data.get("contexts", None)
         )
         user_dict = (
-            destructured_message.data.get(
-                "user", destructured_message.data.get("sentry.interfaces.User", None)
+            structured_message.data.get(
+                "user", structured_message.data.get("sentry.interfaces.User", None)
             )
             or {}
         )
@@ -262,11 +264,11 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_request_data(
         self,
         processed: MutableMapping[str, Any],
-        destructured_message: NamedMessageTuple,
+        structured_message: StructuredMessage,
     ) -> None:
         request = (
-            destructured_message.data.get(
-                "request", destructured_message.data.get("sentry.interfaces.Http", None)
+            structured_message.data.get(
+                "request", structured_message.data.get("sentry.interfaces.Http", None)
             )
             or {}
         )
@@ -278,9 +280,9 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_sdk_data(
         self,
         processed: MutableMapping[str, Any],
-        destructured_message: NamedMessageTuple,
+        structured_message: StructuredMessage,
     ) -> None:
-        sdk = destructured_message.data.get("sdk", None) or {}
+        sdk = structured_message.data.get("sdk", None) or {}
         processed["sdk_name"] = _unicodify(sdk.get("name") or "")
         processed["sdk_version"] = _unicodify(sdk.get("version") or "")
 
@@ -292,17 +294,24 @@ class TransactionsMessageProcessor(MessageProcessor):
     def process_message(
         self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        destructured_message = self._destructure_and_validate_message(message)
-        if not destructured_message:
+        structured_message = self._structure_and_validate_message(message)
+        if not structured_message:
             return None
-
-        processed = self._build_column_values(destructured_message)
-        self._process_tags(processed, destructured_message)
-        self._process_measurements(processed, destructured_message)
-        self._process_breakdown(processed, destructured_message)
-        self._process_contexts_and_user(processed, destructured_message)
-        self._process_request_data(processed, destructured_message)
-        self._process_sdk_data(processed, destructured_message)
+        processed: MutableMapping[str, Any] = {
+            "deleted": 0,
+            "retention_days": structured_message.retention_days,
+        }
+        # The following helper functions should be able to be applied in any order.
+        # At time of writing, there are no reads of the values in the `processed`
+        # dictionary to inform values in other functions.
+        # Ideally we keep continue that rule
+        self._process_base_event_values(processed, structured_message)
+        self._process_tags(processed, structured_message)
+        self._process_measurements(processed, structured_message)
+        self._process_breakdown(processed, structured_message)
+        self._process_contexts_and_user(processed, structured_message)
+        self._process_request_data(processed, structured_message)
+        self._process_sdk_data(processed, structured_message)
         processed["partition"] = metadata.partition
         processed["offset"] = metadata.offset
 
