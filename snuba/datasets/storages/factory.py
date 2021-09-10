@@ -34,6 +34,7 @@ from snuba.datasets.storages.sessions import (
 )
 from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
 from snuba.datasets.storages.spans import storage as spans_storage
+from snuba.datasets.storages.spans_v2 import storage as spans_v2_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
@@ -64,6 +65,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             sessions_raw_storage,
             transactions_storage,
             spans_storage,
+            spans_v2_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),

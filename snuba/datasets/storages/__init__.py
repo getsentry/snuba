@@ -26,4 +26,5 @@ class StorageKey(Enum):
     SESSIONS_HOURLY = "sessions_hourly"
     ORG_SESSIONS = "org_sessions"
     SPANS = "spans"
+    SPANS_V2 = "spans_v2"
     TRANSACTIONS = "transactions"
