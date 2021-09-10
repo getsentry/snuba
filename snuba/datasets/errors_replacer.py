@@ -179,11 +179,9 @@ def set_project_exclude_groups(
 
     group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
     p.zadd(key, **group_id_data)
-    # p.set(type_key, replacement_type)
     p.sadd(type_key, replacement_type)
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
-    # p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
     p.execute()
 
