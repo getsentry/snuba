@@ -36,9 +36,14 @@ def record_query(
             tags={
                 "status": query_metadata.status.value,
                 "referrer": referrer,
+                "parent_api": request.settings.get_parent_api(),
                 "final": final,
             },
-            mark_tags={"final": final, "referrer": referrer},
+            mark_tags={
+                "final": final,
+                "referrer": referrer,
+                "parent_api": request.settings.get_parent_api(),
+            },
         )
 
         _add_tags(timer, extra_data.get("experiments"), query_metadata)

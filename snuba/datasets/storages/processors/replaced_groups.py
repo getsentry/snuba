@@ -49,7 +49,11 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if final:
                 metrics.increment(
                     "final",
-                    tags={"cause": "final_flag", "referrer": request_settings.referrer},
+                    tags={
+                        "cause": "final_flag",
+                        "referrer": request_settings.referrer,
+                        "parent_api": request_settings.get_parent_api(),
+                    },
                 )
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
@@ -64,6 +68,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                         tags={
                             "cause": "max_groups",
                             "referrer": request_settings.referrer,
+                            "parent_api": request_settings.get_parent_api(),
                         },
                     )
                     set_final = True
