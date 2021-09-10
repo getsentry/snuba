@@ -104,12 +104,13 @@ class ErrorsProcessor(EventsProcessorBase):
         tags: Mapping[str, Any],
     ) -> None:
         transaction_ctx = contexts.get("trace") or {}
-        if transaction_ctx.get("trace_id", None):
-            output["trace_id"] = str(uuid.UUID(transaction_ctx["trace_id"]))
-        if transaction_ctx.get("span_id", None):
-            output["span_id"] = int(transaction_ctx["span_id"], 16)
         # We store trace_id and span_id as promoted columns and on the query level
         # we make sure that all queries on contexts[trace.trace_id/span_id] use those promoted
         # columns instead. So we don't need to store them
-        transaction_ctx.pop("trace_id", None)
-        transaction_ctx.pop("span_id", None)
+        trace_id = transaction_ctx.pop("trace_id", None)
+        span_id = transaction_ctx.pop("span_id", None)
+
+        if trace_id:
+            output["trace_id"] = str(uuid.UUID(trace_id))
+        if span_id:
+            output["span_id"] = int(span_id, 16)

@@ -20,7 +20,7 @@ def get_raw_event() -> InsertEvent:
     event_datetime = (now - timedelta(seconds=2)).strftime(
         settings.PAYLOAD_DATETIME_FORMAT,
     )
-    trace_id = str(uuid.uuid4())
+    trace_id = str(uuid.uuid4().hex)
     span_id = "deadbeef"
 
     return {
