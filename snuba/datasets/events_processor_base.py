@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, TypedDict
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
@@ -25,8 +25,12 @@ from snuba.processor import (
     _ensure_valid_date,
     _unicodify,
 )
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
+
+
+metrics = MetricsWrapper(environment.metrics, "events.base.processor")
 
 
 REPLACEMENT_EVENT_TYPES = frozenset(
@@ -107,6 +111,32 @@ class EventsProcessorBase(MessageProcessor, ABC):
         tags: Mapping[str, Any],
     ) -> None:
         raise NotImplementedError
+
+    def __track_latency(
+        self, output: MutableMapping[str, Any], data: MutableMapping[str, Any]
+    ) -> None:
+        # XXX: For now this function is purely for debugging purposes. While
+        # it would be nice to have these kind of statistics for our ingest
+        # system I don't think this hack is the correct solution.
+        now = datetime.utcnow().timestamp()
+        if "timestamp" in output:
+            metrics.timing(
+                "process_timestamp_latency",
+                (now - output["timestamp"].timestamp()) * 1000,
+            )
+        if output.get("received") is not None:
+            metrics.timing(
+                "process_received_latency",
+                (now - output["received"].timestamp()) * 1000,
+            )
+        if data.get("nodestore_insert") is not None:
+            value = _collapse_uint32(int(data["nodestore_insert"]))
+            time_value = datetime.utcfromtimestamp(value) if value is not None else None
+            if time_value is not None:
+                metrics.timing(
+                    "process_nodestore_insert_latency",
+                    (now - time_value.timestamp()) * 1000,
+                )
 
     def extract_required(
         self, output: MutableMapping[str, Any], event: InsertEvent,
@@ -232,6 +262,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["received"] = (
             datetime.utcfromtimestamp(received) if received is not None else None
         )
+
+        try:
+            self.__track_latency(output, data)
+        except Exception:
+            pass
+
         output["version"] = _unicodify(data.get("version", None))
         output["location"] = _unicodify(data.get("location", None))
 

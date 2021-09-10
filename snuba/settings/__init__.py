@@ -50,6 +50,9 @@ DOGSTATSD_PORT = 8125
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
+    "events.base.processor.process_timestamp_latency": 0.01,
+    "events.base.processor.process_received_latency": 0.01,
+    "events.base.processor.process_nodestore_insert_latency": 0.01,
 }
 
 # Redis Options
