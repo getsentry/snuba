@@ -18,14 +18,37 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "outcomes.processor")
 
 
+OUTCOME_ABUSE = 4
+OUTCOME_CLIENT_DISCARD = 5
+
+CLIENT_DISCARD_REASONS = frozenset([
+    "queue_overflow",
+    "cache_overflow",
+    "ratelimit_backoff",
+    "network_error",
+    "before_send",
+    "event_processor",
+    "sample_rate",
+])
+
+
 class OutcomesProcessor(MessageProcessor):
     def process_message(
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
         v_uuid = value.get("event_id")
+        reason = value.get("reason")
 
-        if value["outcome"] != 4:  # we dont care about abuse outcomes for these metrics
+        # relays let arbitrary outcome reasons through do the topic.  We
+        # reject undesired values only in the processor so that we can
+        # add new ones without having to update relays through the entire
+        # chain.
+        if value["outcome"] == OUTCOME_CLIENT_DISCARD:
+            if reason is not None and reason not in CLIENT_DISCARD_REASONS:
+                reason = None
+
+        if value["outcome"] != OUTCOME_ABUSE:  # we dont care about abuse outcomes for these metrics
             if "category" not in value:
                 metrics.increment("missing_category")
             if "quantity" not in value:
@@ -41,7 +64,7 @@ class OutcomesProcessor(MessageProcessor):
             "outcome": value["outcome"],
             "category": value.get("category", DataCategory.ERROR),
             "quantity": value.get("quantity", 1),
-            "reason": _unicodify(value.get("reason")),
+            "reason": _unicodify(reason),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }
 
