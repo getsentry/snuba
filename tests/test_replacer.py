@@ -521,7 +521,7 @@ class TestReplacer:
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
     def test_query_time_flags(self) -> None:
-        project_ids = [1, 2]
+        project_ids = [1, 2, 3]
 
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
@@ -545,25 +545,42 @@ class TestReplacer:
             project_ids, ReplacerState.ERRORS
         ) == (True, [], set())
 
+        # Replacement types don't impact test, just checking if same ones show up
         errors_replacer.set_project_exclude_groups(
-            1, [1, 2], ReplacerState.ERRORS, "replace_type_1"
+            1, [1, 2], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
         errors_replacer.set_project_exclude_groups(
-            2, [3, 4], ReplacerState.ERRORS, "replace_type_2"
+            2, [3, 4], ReplacerState.ERRORS, ReplacementType.START_MERGE
         )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [1, 2, 3, 4], {"replace_type_1", "replace_type_2"})
+        ) == (
+            True,
+            [1, 2, 3, 4],
+            {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
+        )
 
         errors_replacer.set_project_exclude_groups(
-            1, [1, 2], ReplacerState.ERRORS, "replace_type_1"
+            1, [1, 2], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
         errors_replacer.set_project_exclude_groups(
-            2, [3, 4], ReplacerState.ERRORS, "replace_type_1"
+            2, [3, 4], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
+        errors_replacer.set_project_exclude_groups(
+            3, [5, 6], ReplacerState.ERRORS, ReplacementType.START_UNMERGE
         )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [1, 2, 3, 4], {"replace_type_1"})
+        ) == (
+            True,
+            [1, 2, 3, 4, 5, 6],
+            {
+                ReplacementType.EXCLUDE_GROUPS,
+                # start_merge should show up from previous setter on project id 2
+                ReplacementType.START_MERGE,
+                ReplacementType.START_UNMERGE,
+            },
+        )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
         ) == (False, [], set())

@@ -179,9 +179,11 @@ def set_project_exclude_groups(
 
     group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
     p.zadd(key, **group_id_data)
-    p.set(type_key, replacement_type)
+    # p.set(type_key, replacement_type)
+    p.sadd(type_key, replacement_type)
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
+    # p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
     p.execute()
 
@@ -245,16 +247,27 @@ def get_projects_query_flags(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
         )
 
+    for type_key in exclude_groups_keys_replacement_types:
+        p.smembers(type_key)
+
+    # 'results' list looks like:
+    # [needs_final..., exclude_groups..., replacement_types...]
     results = p.execute()
 
     needs_final = any(results[: len(s_project_ids)])
+
+    exclude_groups_results = results[
+        len(s_project_ids) + 1 : -len(exclude_groups_keys_replacement_types)
+    ]
     exclude_groups = sorted(
-        {int(group_id) for group_id in sum(results[(len(s_project_ids) + 1) :: 2], [])}
+        {int(group_id) for group_id in sum(exclude_groups_results[::2], [])}
     )
 
+    replacement_types_result = results[-len(exclude_groups_keys_replacement_types) :]
     replacement_types = {
         replacement_type.decode("utf-8")
-        for replacement_type in redis_client.mget(exclude_groups_keys_replacement_types)
+        for replacement_types_set in replacement_types_result
+        for replacement_type in replacement_types_set
         if replacement_type
     }
 
