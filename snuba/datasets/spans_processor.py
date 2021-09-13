@@ -159,3 +159,11 @@ class SpansMessageProcessor(MessageProcessor):
             return InsertBatch(ret, None)
         else:
             return None
+
+
+class SpansMessageProcessorV2(MessageProcessor):
+    def process_message(
+        self, message: Sequence[Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
+        # TODO
+        return None
