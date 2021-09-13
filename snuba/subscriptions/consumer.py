@@ -15,6 +15,7 @@ from typing import (
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer
 from arroyo.errors import ConsumerError
+from arroyo.types import Offset
 
 from snuba.utils.types import Interval, InvalidRangeError
 
@@ -190,10 +191,10 @@ class TickConsumer(Consumer[Tick]):
 
         return self.__consumer.seek(offsets)
 
-    def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
+    def stage_offsets(self, offsets: Mapping[Partition, Offset]) -> None:
         return self.__consumer.stage_offsets(offsets)
 
-    def commit_offsets(self) -> Mapping[Partition, int]:
+    def commit_offsets(self) -> Mapping[Partition, Offset]:
         return self.__consumer.commit_offsets()
 
     def close(self, timeout: Optional[float] = None) -> None:
