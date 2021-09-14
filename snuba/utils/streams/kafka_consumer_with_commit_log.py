@@ -48,7 +48,7 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
                 key=payload.key,
                 value=payload.value,
                 headers={
-                    "message_ts": datetime.strftime(
+                    "orig_message_ts": datetime.strftime(
                         offset.timestamp, PAYLOAD_DATETIME_FORMAT
                     ),
                 },
