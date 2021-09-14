@@ -243,8 +243,6 @@ def test_error_processor() -> None:
         "sdk_version": "0.0.0.0.1",
         "http_method": "POST",
         "http_referer": "tagstore.something",
-        # Notice that trace_id and span_id shows up in columns but not in the contexts
-        # this is on purpose to save space
         "trace_id": trace_id,
         "span_id": int(span_id, 16),
         "tags.key": [
@@ -273,6 +271,8 @@ def test_error_processor() -> None:
             "runtime.version",
             "runtime.name",
             "runtime.build",
+            "trace.trace_id",
+            "trace.span_id",
             "geo.country_code",
             "geo.region",
             "geo.city",
@@ -281,6 +281,8 @@ def test_error_processor() -> None:
             "3.7.6",
             "CPython",
             "3.7.6",
+            trace_id,
+            span_id,
             "XY",
             "fake_region",
             "fake_city",
