@@ -39,6 +39,7 @@ from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings
+from snuba.subscriptions.data import CRASH_RATE_ALERT_PATTERN
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api.sessions")
@@ -211,7 +212,18 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        granularity = extract_granularity_from_query(query, "started") or 3600
+
+        granularity = None
+        # This checks if we are creating this query as a consequence of a Crash Rate Alert and if so
+        # we set the granularity sent by Sentry.
+        # For time windows <= 1h, we expect to use granularity of 60s, and 3600s for time windows
+        # greater than that
+        for col in query.get_selected_columns():
+            if col.name and bool(CRASH_RATE_ALERT_PATTERN.match(col.name)):
+                granularity = query.get_granularity()
+
+        if granularity is None:
+            granularity = extract_granularity_from_query(query, "started") or 3600
         use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
 
         metrics.increment(

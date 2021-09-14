@@ -2,12 +2,23 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from functools import partial
-from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
+from functools import cached_property, partial
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    NamedTuple,
+    NewType,
+    Optional,
+    Sequence,
+    Union,
+)
 from uuid import UUID
 
 from snuba import state
@@ -37,6 +48,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
+CRASH_RATE_ALERT_PATTERN = re.compile(r"(.*)crash_free_percentage")
 
 logger = logging.getLogger("snuba.subscriptions")
 
@@ -129,6 +141,57 @@ class LegacySubscriptionData(SubscriptionData):
 
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
+    organization: Optional[int] = None
+    limit: int = 1
+    offset: int = 0
+    granularity: int = 3600
+
+    @staticmethod
+    def has_crash_rate_alert_aggregation(aggregations: Sequence[Aggregation]) -> bool:
+        for aggregation in aggregations:
+            try:
+                if aggregation[2] and bool(
+                    CRASH_RATE_ALERT_PATTERN.match(aggregation[2])
+                ):
+                    return True
+            except IndexError:
+                continue
+        return False
+
+    @classmethod
+    def update_sessions_subscriptions_with_session_params(
+        cls, data_dict: Dict[str, Any], data: Mapping[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Function that checks if this instance of LegacySubscriptionData is for a Crash Rate Alert
+        by checking if there is a `crash_free_percentage` aggregation, and if so updates the data
+        dictionary used to create an instance from this class.
+        """
+        if cls.has_crash_rate_alert_aggregation(data.get("aggregations", [])):
+            if not data.get("organization"):
+                raise InvalidQueryException(
+                    "No organization provided for Sessions subscription"
+                )
+
+            # Querying over the sessions dataset requires adding the following required fields:
+            # organization, offset and limit.
+            # In the case of subscriptions, we want to be able to send the granularity to snuba from
+            # sentry as it changes from one time window to the other. Specifically, we expect to use
+            # one minute granularity for time windows less than or equal to 1h and the one hour
+            # granularity for any time window above that
+            data_dict.update(
+                {
+                    "organization": data["organization"],
+                    "limit": data.get("limit", 1),
+                    "offset": data.get("offset", 0),
+                    "granularity": data.get("granularity", 3600),
+                }
+            )
+        return data_dict
+
+    @cached_property
+    def is_crash_rate_alert_subscription(self) -> bool:
+        return self.has_crash_rate_alert_aggregation(self.aggregations)
 
     def build_request(
         self,
@@ -150,16 +213,35 @@ class LegacySubscriptionData(SubscriptionData):
             Language.LEGACY,
         )
         extra_conditions: Sequence[Condition] = []
-        if offset is not None:
-            extra_conditions = [[["ifNull", ["offset", 0]], "<=", offset]]
-        return build_request(
+
+        build_request_dict: Dict[str, Any] = {}
+        build_request_dict = self.update_sessions_subscriptions_with_session_params(
+            data_dict=build_request_dict,
+            data={
+                "aggregations": self.aggregations,
+                "granularity": self.granularity,
+                "organization": self.organization,
+                "offset": self.offset,
+                "limit": self.limit,
+            },
+        )
+
+        # This check is necessary because the `sessions` dataset does not contain a column `offset`
+        if not self.is_crash_rate_alert_subscription and offset is not None:
+            extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
+
+        build_request_dict.update(
             {
                 "project": self.project_id,
                 "conditions": [*self.conditions, *extra_conditions],
                 "aggregations": self.aggregations,
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
-            },
+            }
+        )
+
+        return build_request(
+            build_request_dict,
             parse_legacy_query,
             SubscriptionRequestSettings,
             schema,
@@ -173,27 +255,46 @@ class LegacySubscriptionData(SubscriptionData):
         if not data.get("aggregations"):
             raise InvalidQueryException("No aggregation provided")
 
-        return LegacySubscriptionData(
-            project_id=data["project_id"],
-            conditions=data["conditions"],
-            aggregations=data["aggregations"],
-            time_window=timedelta(seconds=data["time_window"]),
-            resolution=timedelta(seconds=data["resolution"]),
+        legacy_subs_dict = {
+            "project_id": data["project_id"],
+            "conditions": data["conditions"],
+            "aggregations": data["aggregations"],
+            "time_window": timedelta(seconds=data["time_window"]),
+            "resolution": timedelta(seconds=data["resolution"]),
+        }
+        legacy_subs_dict = cls.update_sessions_subscriptions_with_session_params(
+            data_dict=legacy_subs_dict, data=data
         )
+        return LegacySubscriptionData(**legacy_subs_dict)
 
     def to_dict(self) -> Mapping[str, Any]:
-        return {
+        legacy_subs_dict = {
             "project_id": self.project_id,
             "conditions": self.conditions,
             "aggregations": self.aggregations,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
         }
+        if self.is_crash_rate_alert_subscription:
+            legacy_subs_dict.update(
+                {
+                    "organization": self.organization,
+                    "granularity": self.granularity,
+                    "offset": self.offset,
+                    "limit": self.limit,
+                }
+            )
+
+        return legacy_subs_dict
 
 
 @dataclass(frozen=True)
 class SnQLSubscriptionData(SubscriptionData):
     query: str
+
+    @cached_property
+    def is_crash_rate_alert_subscription(self) -> bool:
+        return bool(CRASH_RATE_ALERT_PATTERN.match(self.query))
 
     def add_conditions(
         self,
@@ -230,7 +331,8 @@ class SnQLSubscriptionData(SubscriptionData):
             ),
         ]
 
-        if offset is not None:
+        # This check is necessary because the `sessions` dataset does not have an `offset` column
+        if not self.is_crash_rate_alert_subscription and offset is not None:
             conditions_to_add.append(
                 binary_condition(
                     ConditionFunctions.LTE,
@@ -324,11 +426,22 @@ class DelegateSubscriptionData(SubscriptionData):
     legacy and the SnQL language.
     """
 
+    # SnQL
+    query: str
+
     # Legacy
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
-    # SnQL
-    query: str
+    organization: Optional[int] = None
+    limit: int = 1
+    offset: int = 0
+    granularity: int = 3600
+
+    @cached_property
+    def is_crash_rate_alert_subscription(self) -> bool:
+        return LegacySubscriptionData.has_crash_rate_alert_aggregation(
+            self.aggregations
+        )
 
     def build_request(
         self,
@@ -372,17 +485,23 @@ class DelegateSubscriptionData(SubscriptionData):
         if data.get(cls.TYPE_FIELD) != SubscriptionType.DELEGATE.value:
             raise InvalidQueryException("Invalid delegate subscription structure")
 
-        return DelegateSubscriptionData(
-            project_id=data["project_id"],
-            time_window=timedelta(seconds=data["time_window"]),
-            resolution=timedelta(seconds=data["resolution"]),
-            conditions=data["conditions"],
-            aggregations=data["aggregations"],
-            query=data["query"],
+        delegate_subs_dict = {
+            "project_id": data["project_id"],
+            "time_window": timedelta(seconds=data["time_window"]),
+            "resolution": timedelta(seconds=data["resolution"]),
+            "conditions": data["conditions"],
+            "aggregations": data["aggregations"],
+            "query": data["query"],
+        }
+
+        delegate_subs_dict = LegacySubscriptionData.update_sessions_subscriptions_with_session_params(
+            data_dict=delegate_subs_dict, data=data
         )
 
+        return DelegateSubscriptionData(**delegate_subs_dict)
+
     def to_dict(self) -> Mapping[str, Any]:
-        return {
+        delegate_subs_dict = {
             self.TYPE_FIELD: SubscriptionType.DELEGATE.value,
             "project_id": self.project_id,
             "time_window": int(self.time_window.total_seconds()),
@@ -391,6 +510,17 @@ class DelegateSubscriptionData(SubscriptionData):
             "aggregations": self.aggregations,
             "query": self.query,
         }
+
+        if self.is_crash_rate_alert_subscription:
+            delegate_subs_dict.update(
+                {
+                    "organization": self.organization,
+                    "limit": self.limit,
+                    "offset": self.offset,
+                    "granularity": self.granularity,
+                }
+            )
+        return delegate_subs_dict
 
     def to_snql(self) -> SnQLSubscriptionData:
         return SnQLSubscriptionData.from_dict(

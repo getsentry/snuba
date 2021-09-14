@@ -116,6 +116,27 @@ selector_tests = [
         raw_schema.get_table_name(),
         id="Select raw depending on granularity",
     ),
+    pytest.param(
+        {
+            "selected_columns": [],
+            "aggregations": [
+                [
+                    "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
+                    None,
+                    "crash_free_percentage",
+                ]
+            ],
+            "granularity": 60,
+            "conditions": [
+                ("org_id", "=", 1),
+                ("project_id", "=", 1),
+                ("started", ">=", "2019-09-19T10:00:00"),
+                ("started", "<", "2019-09-19T12:00:00"),
+            ],
+        },
+        raw_schema.get_table_name(),
+        id="Select raw depending on granularity if crash rate alert aggregation present",
+    ),
 ]
 
 
