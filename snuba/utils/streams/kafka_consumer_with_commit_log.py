@@ -1,16 +1,13 @@
-from datetime import datetime
 from typing import Any, Mapping, Optional
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.synchronized import Commit, commit_codec
-from arroyo.types import Offset
+from arroyo.types import Position
 from arroyo.utils.retries import RetryPolicy
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
-
-from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer):
@@ -37,25 +34,24 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         if error is not None:
             raise Exception(error.str())
 
-    def commit_offsets(self) -> Mapping[Partition, Offset]:
-        offsets = super().commit_offsets()
+    def commit_positions(self) -> Mapping[Partition, Position]:
+        positions = super().commit_positions()
 
-        for partition, offset in offsets.items():
-            commit = Commit(self.__group_id, partition, offset.kafka_offset)
+        for partition, position in positions.items():
+            commit = Commit(
+                self.__group_id, partition, position.offset, position.timestamp
+            )
             payload = commit_codec.encode(commit)
+
             self.__producer.produce(
                 self.__commit_log_topic.name,
                 key=payload.key,
                 value=payload.value,
-                headers={
-                    "orig_message_ts": datetime.strftime(
-                        offset.timestamp, PAYLOAD_DATETIME_FORMAT
-                    ),
-                },
+                headers=payload.headers,
                 on_delivery=self.__commit_message_delivery_callback,
             )
 
-        return offsets
+        return positions
 
     def close(self, timeout: Optional[float] = None) -> None:
         super().close()
