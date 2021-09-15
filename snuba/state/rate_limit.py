@@ -134,9 +134,8 @@ def rate_limit(
     # we add the query's *deadline* to the sorted set of timestamps, therefore
     # labeling its execution as in the future.
 
-    #                                   v
     # We consider all queries with timestamps in the future to be executing *right now*
-    # Example:                          ^
+    # Example:
 
     # now = 100
     # max_query_duration_s = 30
