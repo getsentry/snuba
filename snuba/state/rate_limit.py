@@ -141,18 +141,21 @@ def rate_limit(
     # now = 100
     # max_query_duration_s = 30
     # rate_lookback_s = 10
-    # sorted_set (timestamps only for clarity) =
+    # sorted_set (timestamps only for clarity) = [91, 94, 97, 103, 105, 130]
+
+    # EXPLANATION:
+    # ===========
 
     # queries that have finished running
-    # (counting these and dividing by rate_lookback_s
-    # gives us how many queries have been executing per second
+    # (in this example there are 3 queries in the last 10 seconds
+    #  thus the per second rate is 3/10 = 0.3)
     #      |
     #      v
     #  -----------              v--- our current query, vaulted into the future
     #  [91, 94, 97, 103, 105, 130]
     #               -------------- < - queries currently running
     #                                (this tells us how many queries are
-    #                                   running concurrently)
+    #                                   running concurrently; in this case 3)
     # .            ^
     #              | current time
 
