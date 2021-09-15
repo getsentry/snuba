@@ -225,7 +225,6 @@ def rate_limit(
         yield stats
     finally:
         try:
-            # return the query to its start time
             # once a query has finished, we put its timestamp in the sorted
             # set to be when it actually started such that we can calculate the
             # per-second rate accurately
