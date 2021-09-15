@@ -1,3 +1,4 @@
+import uuid
 from typing import Any, Dict, Optional, Sequence
 
 from snuba.clickhouse.http import JSONRowEncoder
@@ -290,6 +291,11 @@ def test_backfill_errors() -> None:
         ["contexts.key", "contexts.value"], errors_table_name, None, str(1), clickhouse
     )
 
+    class UUIDVerifier:
+        def __eq__(self, some_str):
+            uuid.UUID(some_str)
+            return True
+
     assert outcome[0] == (
         [
             "device.model_id",
@@ -297,6 +303,8 @@ def test_backfill_errors() -> None:
             "geo.country_code",
             "geo.region",
             "os.kernel_version",
+            "trace.span_id",
+            "trace.trace_id",
         ],
-        ["Galaxy", "San Francisco", "US", "CA", "1.1.1"],
+        ["Galaxy", "San Francisco", "US", "CA", "1.1.1", "deadbeef", UUIDVerifier()],
     )
