@@ -60,15 +60,19 @@ class OutcomesProcessor(MessageProcessor):
 
         message = None
         try:
+            timestamp = _ensure_valid_date(
+                datetime.strptime(value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT),
+            )
+        except Exception:
+            metrics.increment("bad_outcome_timestamp")
+            timestamp = _ensure_valid_date(datetime.utcnow())
+
+        try:
             message = {
                 "org_id": value.get("org_id", 0),
                 "project_id": value.get("project_id", 0),
                 "key_id": value.get("key_id"),
-                "timestamp": _ensure_valid_date(
-                    datetime.strptime(
-                        value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT
-                    ),
-                ),
+                "timestamp": timestamp,
                 "outcome": value["outcome"],
                 "category": value.get("category", DataCategory.ERROR),
                 "quantity": value.get("quantity", 1),
