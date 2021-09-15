@@ -26,6 +26,31 @@ RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 
 
+# ---- prototype stuff ----
+JsonStrBytes = bytes
+import json
+
+ERROR_HEADER = b"__ERR__"
+
+
+def serialize_exception(exception: Exception) -> JsonStrBytes:
+    edict = {
+        "__name__": exception.__class__.__name__,
+        "__message__": getattr(exception, "message", str(exception)),
+    }
+    return json.dumps(edict).encode("UTF-8")
+
+
+def deserialize_exception(s: JsonStrBytes) -> Exception:
+    edict = json.loads(s)
+    res = type(edict["__name__"], (Exception,), {"args": (edict["__message"])})
+    assert isinstance(res, Exception)
+    return res
+
+
+# ---- \prototype stuff ----
+
+
 class RedisCache(Cache[TValue]):
     def __init__(
         self,
@@ -135,10 +160,13 @@ class RedisCache(Cache[TValue]):
         record_cache_hit_type(result[0])
 
         if result[0] == RESULT_VALUE:
+            print("VALUE")
             # If we got a cache hit, this is easy -- we just return it.
             logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
+            print("EXEC")
+
             # If we were the first in line, we need to execute the function.
             # We'll also get back the task identity to use for sending
             # notifications and approximately how long we have to run the
@@ -162,11 +190,16 @@ class RedisCache(Cache[TValue]):
                 )
             except concurrent.futures.TimeoutError as error:
                 raise TimeoutError("timed out waiting for value") from error
+            except Exception as e:
+                value = ERROR_HEADER + serialize_exception(e)
+                argv.extend(
+                    [self.__codec.encode(value), get_config("cache_expiry_sec", 1)]
+                )
+                raise e
             finally:
                 # Regardless of whether the function succeeded or failed, we
                 # need to mark the task as completed. If there is no result
                 # value, other clients will know that we raised an exception.
-                logger.debug("Setting result and waking blocked clients...")
                 try:
                     self.__script_set(
                         [
@@ -188,6 +221,7 @@ class RedisCache(Cache[TValue]):
                         timer.mark("cache_set")
             return value
         elif result[0] == RESULT_WAIT:
+            print("WAIT")
             # If we were not the first in line, we need to wait for the first
             # client to finish and populate the cache with the result value.
             # We use the provided task identity to figure out where to listen
@@ -215,6 +249,10 @@ class RedisCache(Cache[TValue]):
             if notification_received:
                 # There should be a value waiting for us at the result key.
                 raw_value = self.__client.get(result_key)
+                if isinstance(raw_value, bytes) and raw_value.startswith(ERROR_HEADER):
+                    exception_payload = raw_value[len(ERROR_HEADER) :]
+                    stored_exception = deserialize_exception(exception_payload)
+                    raise stored_exception
 
                 # If there is no value, that means that the client responsible
                 # for generating the cache value errored while generating it.

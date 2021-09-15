@@ -6,6 +6,7 @@
 
 -- Check to see if a value already exists at the result key. If one does, we
 -- don't have to do anything other than return it and exit.
+-- TODO(Vlad): assign the args to variables to make this more readable
 local value = redis.call('GET', KEYS[1])
 if value then
     return {0, value}
@@ -21,7 +22,9 @@ if waiting == 1 then
     -- We shouldn't be overwriting an existing task here, but it's safe if we
     -- do, given that the queue was empty.
     redis.call('SETEX', KEYS[3], ARGV[1], ARGV[2])
+    -- return RESULT_EXECUTE, TIMEOUT, TASK_ID
     return {1, ARGV[2], ARGV[1]}
 else
+    -- RESULT_WAIT,
     return {2, redis.call('GET', KEYS[3]), redis.call('TTL', KEYS[3])}
 end
