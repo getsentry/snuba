@@ -87,11 +87,8 @@ def rate_limit(
     rate_limit_params: RateLimitParameters,
 ) -> Iterator[Optional[RateLimitStats]]:
     """
-
-
-    A context manager for rate limiting that allows for limiting based on
-    on:
-        * a rolling-window per-second rate as well
+    A context manager for rate limiting that allows for limiting based on:
+        * a rolling-window per-second rate
         * the number of requests concurrently running.
 
     It uses one redis sorted set to keep track of both of these limits
@@ -99,13 +96,11 @@ def rate_limit(
 
         bucket: SortedSet([(timestamp1, query_id1), (timestamp2, query_id2) ...])
 
-    TODO: reword this
 
-    Uses a single redis sorted set per rate-limiting bucket to track both the
-    concurrency and rate, the score is the query timestamp. Queries are thrown
-    ahead in time when they start so we can count them as concurrent, and
-    thrown back to their start time once they finish so we can count them
-    towards the historical rate. See the comments for an example
+    Queries are thrown ahead in time when they start so we can count them
+    as concurrent, and thrown back to their start time once they finish so
+    we can count them towards the historical rate. See the comments for
+    an example
 
                time >>----->
     +-----------------------------+--------------------------------+
