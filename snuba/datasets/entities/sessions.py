@@ -1,8 +1,10 @@
+import re
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, Optional
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
     ColumnToFunction,
@@ -38,10 +40,12 @@ from snuba.query.processors.timeseries_processor import (
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
-from snuba.request.request_settings import RequestSettings
-from snuba.subscriptions.data import CRASH_RATE_ALERT_PATTERN
+from snuba.request.request_settings import RequestSettings, SubscriptionRequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
+CRASH_RATE_ALERT_FUNCTION_RE = re.compile(
+    r"divide\(\s*(sessions_crashed|users_crashed)(.)*\s*,\s*(sessions|users)(.)*\s*\)"
+)
 metrics = MetricsWrapper(environment.metrics, "api.sessions")
 
 
@@ -212,19 +216,16 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
+        use_materialized_storage: Optional[bool] = None
 
-        granularity = None
-        # This checks if we are creating this query as a consequence of a Crash Rate Alert and if so
-        # we set the granularity sent by Sentry.
-        # For time windows <= 1h, we expect to use granularity of 60s, and 3600s for time windows
-        # greater than that
-        for col in query.get_selected_columns():
-            if col.name and bool(CRASH_RATE_ALERT_PATTERN.match(col.name)):
-                granularity = query.get_granularity()
+        if check_if_crash_rate_alert_subscription(query, request_settings):
+            from_date, to_date = get_time_range(query, "started")
+            if from_date and to_date:
+                use_materialized_storage = to_date - from_date > timedelta(hours=1)
 
-        if granularity is None:
+        if use_materialized_storage is None:
             granularity = extract_granularity_from_query(query, "started") or 3600
-        use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
+            use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
 
         metrics.increment(
             "query.selector",
@@ -316,3 +317,20 @@ class OrgSessionsEntity(Entity):
                 {"bucketed_started": "started"}, ("started", "received")
             ),
         ]
+
+
+def check_if_crash_rate_alert_subscription(
+    query: Query, request_settings: RequestSettings
+) -> bool:
+    """
+    Checks if the provided query is for a Crash Rate Alert subscription based on the if one of
+    the aggregations matches the CRASH_RATE_ALERT_FUNCTION_RE
+    """
+    # Checks if it is a subscription
+    is_subscription = isinstance(request_settings, SubscriptionRequestSettings)
+    for col in query.get_selected_columns():
+        if col.expression and bool(
+            re.search(CRASH_RATE_ALERT_FUNCTION_RE, str(col.expression))
+        ):
+            return is_subscription
+    return False

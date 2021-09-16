@@ -100,7 +100,7 @@ TESTS_OVER_SESSIONS = [
             query=(
                 "MATCH (sessions) "
                 "SELECT multiply(minus(1, divide(sessions_crashed, sessions)), 100) "
-                "AS crash_free_percentage "
+                "AS _crash_rate_alert_aggregate "
                 "WHERE org_id = 1 AND project_id IN tuple(1) "
                 "LIMIT 1 "
                 "OFFSET 0 "
@@ -111,15 +111,12 @@ TESTS_OVER_SESSIONS = [
                 [
                     "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
                     None,
-                    "crash_free_percentage",
+                    "_crash_rate_alert_aggregate",
                 ]
             ],
             time_window=timedelta(minutes=120),
             resolution=timedelta(minutes=1),
             organization=1,
-            granularity=60,
-            limit=1,
-            offset=0,
         ),
         None,
         id="Delegate subscription",
@@ -132,14 +129,11 @@ TESTS_OVER_SESSIONS = [
                 [
                     "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
                     None,
-                    "crash_free_percentage",
+                    "_crash_rate_alert_aggregate",
                 ]
             ],
             time_window=timedelta(minutes=120),
             resolution=timedelta(minutes=1),
-            granularity=60,
-            limit=1,
-            offset=0,
         ),
         InvalidQueryException,
         id="No organization provided for Sessions subscription",
@@ -195,4 +189,6 @@ class TestBuildRequestSessions(BaseSessionsMockTest, TestBuildRequestBase):
     def test_conditions(
         self, subscription: SubscriptionData, exception: Optional[Exception]
     ) -> None:
-        self.compare_conditions(subscription, exception, "crash_free_percentage", 95)
+        self.compare_conditions(
+            subscription, exception, "_crash_rate_alert_aggregate", 95
+        )

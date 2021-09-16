@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Callable, MutableMapping, Union
+from typing import Callable
 
 import pytest
 
@@ -14,7 +14,6 @@ from snuba.subscriptions.codecs import (
     SubscriptionTaskResultEncoder,
 )
 from snuba.subscriptions.data import (
-    CRASH_RATE_ALERT_PATTERN,
     DelegateSubscriptionData,
     LegacySubscriptionData,
     PartitionId,
@@ -47,15 +46,12 @@ def build_legacy_sessions_subscription_data() -> LegacySubscriptionData:
             [
                 "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
                 None,
-                "crash_free_percentage",
+                "_crash_rate_alert_aggregate",
             ]
         ],
         time_window=timedelta(minutes=120),
         resolution=timedelta(minutes=1),
         organization=1,
-        limit=1,
-        offset=0,
-        granularity=60,
     )
 
 
@@ -85,7 +81,7 @@ def build_delegate_sessions_subscription_data() -> DelegateSubscriptionData:
         query=(
             "MATCH (sessions) "
             "SELECT multiply(minus(1, divide(sessions_crashed, sessions)), 100) "
-            "AS crash_free_percentage "
+            "AS _crash_rate_alert_aggregate "
             "WHERE org_id = 1 AND project_id IN tuple(1) "
             "LIMIT 1 "
             "OFFSET 0 "
@@ -96,15 +92,12 @@ def build_delegate_sessions_subscription_data() -> DelegateSubscriptionData:
             [
                 "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
                 None,
-                "crash_free_percentage",
+                "_crash_rate_alert_aggregate",
             ]
         ],
         time_window=timedelta(minutes=120),
         resolution=timedelta(minutes=1),
         organization=1,
-        limit=1,
-        offset=0,
-        granularity=60,
     )
 
 
@@ -119,7 +112,7 @@ DELEGATE_CASES = [
     pytest.param(build_delegate_subscription_data, None, id="delegate"),
     pytest.param(
         build_delegate_sessions_subscription_data,
-        "crash_free_percentage",
+        "_crash_rate_alert_aggregate",
         id="delegate",
     ),
 ]
@@ -129,24 +122,6 @@ BASIC_CASES = [
     pytest.param(build_snql_subscription_data, None, id="snql"),
     *DELEGATE_CASES,
 ]
-
-
-def check_sessions_subscription_fields(
-    data: MutableMapping[Any],
-    subscription: Union[LegacySubscriptionData, DelegateSubscriptionData],
-    aggregate: str,
-) -> None:
-    """
-    Helper function that ensures that columns related to sessions subscriptions are present in
-    the subscription object
-    """
-    if not (aggregate and bool(CRASH_RATE_ALERT_PATTERN.match(aggregate))):
-        return
-
-    assert data["organization"] == subscription.organization
-    assert data["limit"] == subscription.limit
-    assert data["offset"] == subscription.offset
-    assert data["granularity"] == subscription.granularity
 
 
 @pytest.mark.parametrize("builder, _", BASIC_CASES)
@@ -168,10 +143,7 @@ def test_encode(builder: Callable[[], LegacySubscriptionData], aggregate: str) -
     assert data["aggregations"] == subscription.aggregations
     assert data["time_window"] == int(subscription.time_window.total_seconds())
     assert data["resolution"] == int(subscription.resolution.total_seconds())
-
-    check_sessions_subscription_fields(
-        data=data, subscription=subscription, aggregate=aggregate
-    )
+    assert data.get("organization") == subscription.organization
 
 
 def test_encode_snql() -> None:
@@ -201,10 +173,7 @@ def test_encode_delegate(
     assert data["conditions"] == subscription.conditions
     assert data["aggregations"] == subscription.aggregations
     assert data["query"] == subscription.query
-
-    check_sessions_subscription_fields(
-        data=data, subscription=subscription, aggregate=aggregate
-    )
+    assert data.get("organization") == subscription.organization
 
 
 @pytest.mark.parametrize("builder, aggregate", LEGACY_CASES)
@@ -218,16 +187,8 @@ def test_decode(builder: Callable[[], LegacySubscriptionData], aggregate: str) -
         "time_window": int(subscription.time_window.total_seconds()),
         "resolution": int(subscription.resolution.total_seconds()),
     }
-
-    if aggregate and bool(CRASH_RATE_ALERT_PATTERN.match(aggregate)):
-        data.update(
-            {
-                "organization": subscription.organization,
-                "limit": subscription.limit,
-                "offset": subscription.offset,
-                "granularity": subscription.granularity,
-            }
-        )
+    if subscription.organization:
+        data.update({"organization": subscription.organization})
     payload = json.dumps(data).encode("utf-8")
     assert codec.decode(payload) == subscription
 
@@ -261,16 +222,8 @@ def test_decode_delegate(
         "aggregations": subscription.aggregations,
         "query": subscription.query,
     }
-
-    if aggregate and bool(CRASH_RATE_ALERT_PATTERN.match(aggregate)):
-        data.update(
-            {
-                "organization": subscription.organization,
-                "limit": subscription.limit,
-                "offset": subscription.offset,
-                "granularity": subscription.granularity,
-            }
-        )
+    if subscription.organization:
+        data.update({"organization": subscription.organization})
     payload = json.dumps(data).encode("utf-8")
     assert codec.decode(payload) == subscription
 
@@ -289,9 +242,9 @@ def test_subscription_task_result_encoder(
     request = subscription_data.build_request(
         get_dataset("events"), timestamp, None, Timer("timer")
     )
-    if aggregate and bool(CRASH_RATE_ALERT_PATTERN.match(aggregate)):
+    if aggregate == "_crash_rate_alert_aggregate":
         result: Result = {
-            "meta": [{"type": "UInt64", "name": "crash_free_percentage"}],
+            "meta": [{"type": "UInt64", "name": "_crash_free_alert_aggregate"}],
             "data": [{"crash_free_percentage": 95}],
         }
     else:
