@@ -89,7 +89,7 @@ def rate_limit(
     """
     A context manager for rate limiting that allows for limiting based on:
         * a rolling-window per-second rate
-        * the number of requests concurrently running.
+        * the number of queries concurrently running.
 
     It uses one redis sorted set to keep track of both of these limits
     The following mapping is kept in redis:
@@ -100,7 +100,7 @@ def rate_limit(
     Queries are thrown ahead in time when they start so we can count them
     as concurrent, and thrown back to their start time once they finish so
     we can count them towards the historical rate. See the comments for
-    an example
+    an example.
 
                time >>----->
     +-----------------------------+--------------------------------+
@@ -116,25 +116,24 @@ def rate_limit(
     now = time.time()
     bypass_rate_limit, rate_history_s = state.get_configs(
         [("bypass_rate_limit", 0), ("rate_history_sec", 3600)]
-        #                               ^ number of seconds we keep the timestamps
+        #                               ^ number of seconds the timestamps are kept
     )
     assert isinstance(rate_history_s, (int, float))
 
-    # we don't really do this but you *can* skip rate limit
     if bypass_rate_limit == 1:
         yield None
         return
 
     pipe = rds.pipeline(transaction=False)
-    # cleanup old queries: remove everything between [-inf and now - rate_history_s]
+    # cleanup old query timestamps past our retention window
     pipe.zremrangebyscore(bucket, "-inf", "({:f}".format(now - rate_history_s))
 
     # Now for the tricky bit:
     # ======================
-    # we add the query's *deadline* to the sorted set of timestamps, therefore
+    # The query's *deadline* is added to the sorted set of timestamps, therefore
     # labeling its execution as in the future.
 
-    # We consider all queries with timestamps in the future to be executing *right now*
+    # All queries with timestamps in the future are considered to be executing *right now*
     # Example:
 
     # now = 100
@@ -150,12 +149,12 @@ def rate_limit(
     #  thus the per second rate is 3/10 = 0.3)
     #      |
     #      v
-    #  -----------              v--- our current query, vaulted into the future
+    #  -----------              v--- the current query, vaulted into the future
     #  [91, 94, 97, 103, 105, 130]
     #               -------------- < - queries currently running
-    #                                (this tells us how many queries are
+    #                                (how many queries are
     #                                   running concurrently; in this case 3)
-    # .            ^
+    #              ^
     #              | current time
 
     pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # type: ignore
@@ -201,13 +200,13 @@ def rate_limit(
             rate_limit_params.per_second_limit,
         ),
     ]
-    # see if we hit any rate limits
     reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
 
     if reason:
         try:
-            # when we remove the query because we rate limited it,
-            # we use the query id to find that timestamp in our sorted set
+            # Remove the query from the sorted set
+            # because we rate limited it. It shouldn't count towards
+            # rate limiting future queries in this bucket.
             rds.zrem(bucket, query_id)
         except Exception as ex:
             logger.exception(ex)
@@ -219,14 +218,12 @@ def rate_limit(
         )
 
     try:
-        # after this yield the query will execute
-        # (because this function is a context manaager)
         yield stats
     finally:
         try:
-            # once a query has finished, we put its timestamp in the sorted
-            # set to be when it actually started such that we can calculate the
-            # per-second rate accurately
+            # once a query has finished, its timestamp is updated to be
+            # the time the query started. This way, the per-second rate can be
+            # calculated accurately
             rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
         except Exception as ex:
             logger.exception(ex)
