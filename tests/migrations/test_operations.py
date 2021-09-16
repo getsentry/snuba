@@ -119,7 +119,7 @@ def test_add_index() -> None:
             3,
             after=None,
         ).format_sql()
-        == "ALTER TABLE test_table ADD INDEX index_1 timestamp TYPE minmax GRANULARITY 3;"
+        == "ALTER TABLE test_table ADD INDEX IF NOT EXISTS index_1 timestamp TYPE minmax GRANULARITY 3;"
     )
 
 
