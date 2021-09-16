@@ -28,23 +28,33 @@ RESULT_WAIT = 2
 
 # ---- prototype stuff ----
 JsonStrBytes = bytes
-import json
+from typing import Any, cast
+
+import rapidjson as json
 
 ERROR_HEADER = b"__ERR__"
 
 
 def serialize_exception(exception: Exception) -> JsonStrBytes:
+    def _is_jsonable(item: Any) -> bool:
+        try:
+            json.dumps(item)
+            return True
+        except Exception:
+            return False
+
     edict = {
         "__name__": exception.__class__.__name__,
-        "__message__": getattr(exception, "message", str(exception)),
+        "__args__": [a for a in exception.args if _is_jsonable(a)],
     }
-    return json.dumps(edict).encode("UTF-8")
+    # I don't know why this cast is necessary
+    return cast(JsonStrBytes, json.dumps(edict).encode("UTF-8"))
 
 
 def deserialize_exception(s: JsonStrBytes) -> Exception:
     edict = json.loads(s)
-    res = type(edict["__name__"], (Exception,), {"args": (edict["__message"])})
-    assert isinstance(res, Exception)
+    res = type(edict["__name__"], (Exception,), {})(*edict.get("args", []))
+    assert isinstance(res, Exception), res
     return res
 
 
@@ -160,12 +170,10 @@ class RedisCache(Cache[TValue]):
         record_cache_hit_type(result[0])
 
         if result[0] == RESULT_VALUE:
-            print("VALUE")
             # If we got a cache hit, this is easy -- we just return it.
             logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
-            print("EXEC")
 
             # If we were the first in line, we need to execute the function.
             # We'll also get back the task identity to use for sending
@@ -191,10 +199,8 @@ class RedisCache(Cache[TValue]):
             except concurrent.futures.TimeoutError as error:
                 raise TimeoutError("timed out waiting for value") from error
             except Exception as e:
-                value = ERROR_HEADER + serialize_exception(e)
-                argv.extend(
-                    [self.__codec.encode(value), get_config("cache_expiry_sec", 1)]
-                )
+                error_value = ERROR_HEADER + serialize_exception(e)
+                argv.extend([error_value, get_config("cache_expiry_sec", 1)])
                 raise e
             finally:
                 # Regardless of whether the function succeeded or failed, we
@@ -221,7 +227,6 @@ class RedisCache(Cache[TValue]):
                         timer.mark("cache_set")
             return value
         elif result[0] == RESULT_WAIT:
-            print("WAIT")
             # If we were not the first in line, we need to wait for the first
             # client to finish and populate the cache with the result value.
             # We use the provided task identity to figure out where to listen
@@ -257,10 +262,9 @@ class RedisCache(Cache[TValue]):
                 # If there is no value, that means that the client responsible
                 # for generating the cache value errored while generating it.
                 if raw_value is None:
-                    # TODO: If we wanted to get clever, this could include the
-                    # error message from the other client, or a Sentry ID or
-                    # something.
-                    raise ExecutionError("no value at key")
+                    raise ExecutionError(
+                        "no value at key: if we're here that means the original process executing the query crashed before we could handle the exception"
+                    )
                 else:
                     return self.__codec.decode(raw_value)
             else:

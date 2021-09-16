@@ -11,7 +11,7 @@ from unittest import mock
 import pytest
 
 from snuba.redis import redis_client
-from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
+from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import PassthroughCodec
 from tests.assertions import assert_changes, assert_does_not_change
@@ -91,8 +91,6 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
     with pytest.raises(CustomException):
         backend.get_readthrough(key, function, noop, 1)
 
-    assert backend.get(key) is None
-
 
 def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
     key = "key"
@@ -130,8 +128,10 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     with pytest.raises(CustomException):
         setter.result()
 
-    with pytest.raises(ExecutionError):
+    with pytest.raises(Exception) as e:
         waiter.result()
+        assert e.__class__.__name__ == "CustomException"
+        assert e.args == ("error",)
 
 
 def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
