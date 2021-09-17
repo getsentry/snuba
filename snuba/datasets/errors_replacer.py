@@ -184,9 +184,12 @@ def set_project_exclude_groups(
 
     group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
     p.zadd(key, **group_id_data)
-    p.sadd(type_key, replacement_type)
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
+
+    replacement_type_data: Mapping[str, float] = {replacement_type: now}
+    p.zadd(type_key, **replacement_type_data)
+    p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
     p.execute()
@@ -233,6 +236,7 @@ def get_projects_query_flags(
         for project_id in s_project_ids
     ]
 
+    # results in list of bool
     for needs_final_key, _ in needs_final_keys_and_type_keys:
         p.get(needs_final_key)
 
@@ -241,6 +245,7 @@ def get_projects_query_flags(
         for project_id in s_project_ids
     ]
 
+    # results in list of int, list, int..
     for exclude_groups_key, _ in exclude_groups_keys_and_types:
         p.zremrangebyscore(
             exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
@@ -249,11 +254,14 @@ def get_projects_query_flags(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
         )
 
+    # results in list of str
     for _, needs_final_type_key in needs_final_keys_and_type_keys:
         p.get(needs_final_type_key)
 
+    # results in list of int, list, int..
     for _, type_key in exclude_groups_keys_and_types:
-        p.smembers(type_key)
+        p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
+        p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
 
     # 'results' list looks like:
     # [needs_final..., exclude_groups..., project_replacement_types..., groups_replacement_types...]
@@ -266,29 +274,31 @@ def get_projects_query_flags(
     ) = process_exclude_groups_and_replacement_types_results(
         results[len(s_project_ids) + 1 :],
         len(needs_final_keys_and_type_keys),
-        len(exclude_groups_keys_and_types),
+        2 * len(exclude_groups_keys_and_types),
     )
 
     return (needs_final, exclude_groups, replacement_types)
 
 
 def process_exclude_groups_and_replacement_types_results(
-    results: List[Any], len_projects: int, len_groups: int
+    results: List[Any], len_projects: int, double_len_groups: int
 ) -> Tuple[Sequence[int], Set[str]]:
     """
     Helper function for `get_projects_query_flags`.
     `results` is in the form:
-    [exclude_groups..., project_replacement_types..., groups_replacement_types...]
+    [exclude_groups...,   project_replacement_types...,   groups_replacement_types...]
+    which is in the form:
+    [int, list, int...,   str, str, str, ...,             int, list, int, list...]
 
     Returns a tuple of: (list of `exclude_groups`, set of `replacement_types`)
     """
-    exclude_groups_results = results[: -(len_projects + len_groups)]
+    exclude_groups_results = results[: -(len_projects + double_len_groups)]
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(exclude_groups_results[::2], [])}
     )
 
     projects_replacment_types_result = results[
-        len(exclude_groups_results) : -len_groups
+        len(exclude_groups_results) : -double_len_groups
     ]
 
     project_replacement_types = {
@@ -297,13 +307,11 @@ def process_exclude_groups_and_replacement_types_results(
         if replacement_type
     }
 
-    groups_replacement_types_result = results[-len_groups:]
+    groups_replacement_types_result = results[-double_len_groups:]
 
     groups_replacement_types = {
         replacement_type.decode("utf-8")
-        for replacement_types_set in groups_replacement_types_result
-        for replacement_type in replacement_types_set
-        if replacement_type
+        for replacement_type in sum(groups_replacement_types_result[1::2], [])
     }
 
     replacement_types = groups_replacement_types.union(project_replacement_types)
