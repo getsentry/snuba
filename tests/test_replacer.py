@@ -582,6 +582,18 @@ class TestReplacer:
             },
         )
         assert errors_replacer.get_projects_query_flags(
+            [1, 2], ReplacerState.ERRORS
+        ) == (
+            True,
+            [1, 2, 3, 4],
+            {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
+        )
+        assert errors_replacer.get_projects_query_flags([1], ReplacerState.ERRORS) == (
+            True,
+            [1, 2],
+            {ReplacementType.EXCLUDE_GROUPS},
+        )
+        assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
         ) == (False, [], set())
 
