@@ -7,17 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial
-from typing import (
-    Any,
-    Dict,
-    List,
-    Mapping,
-    NamedTuple,
-    NewType,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
 from snuba import state
@@ -164,24 +154,21 @@ class LegacySubscriptionData(SubscriptionData):
 
         # This check is necessary because datasets like the `sessions` dataset does not contain a
         # column `offset`
-        if offset is not None:
-            dataset_column_set = (
-                dataset.get_default_entity().get_data_model().get_column_names()
-            )
-            if "offset" in dataset_column_set:
-                extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
+        if (
+            offset is not None
+            and "offset" in dataset.get_default_entity().get_data_model()
+        ):
+            extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
 
-        build_request_dict: Dict[str, Any] = {
+        build_request_dict = {
             "project": self.project_id,
             "conditions": [*self.conditions, *extra_conditions],
             "aggregations": self.aggregations,
             "from_date": (timestamp - self.time_window).isoformat(),
             "to_date": timestamp.isoformat(),
         }
-
         if self.organization:
             build_request_dict.update({"organization": self.organization})
-
         return build_request(
             build_request_dict,
             parse_legacy_query,
@@ -197,29 +184,24 @@ class LegacySubscriptionData(SubscriptionData):
         if not data.get("aggregations"):
             raise InvalidQueryException("No aggregation provided")
 
-        legacy_subs_dict = {
-            "project_id": data["project_id"],
-            "conditions": data["conditions"],
-            "aggregations": data["aggregations"],
-            "time_window": timedelta(seconds=data["time_window"]),
-            "resolution": timedelta(seconds=data["resolution"]),
-        }
-        organization = data.get("organization")
-        if organization:
-            legacy_subs_dict.update({"organization": organization})
-        return LegacySubscriptionData(**legacy_subs_dict)
+        return LegacySubscriptionData(
+            project_id=data["project_id"],
+            conditions=data["conditions"],
+            aggregations=data["aggregations"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+            organization=data.get("organization"),
+        )
 
     def to_dict(self) -> Mapping[str, Any]:
-        legacy_subs_dict = {
+        return {
             "project_id": self.project_id,
             "conditions": self.conditions,
             "aggregations": self.aggregations,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
+            "organization": self.organization,
         }
-        if self.organization:
-            legacy_subs_dict.update({"organization": self.organization})
-        return legacy_subs_dict
 
 
 @dataclass(frozen=True)
@@ -271,19 +253,18 @@ class SnQLSubscriptionData(SubscriptionData):
             ]
 
         # This check is necessary because the `sessions` dataset does not have an `offset` column
-        if offset is not None:
-            if "offset" in entity.get_data_model().get_column_names():
-                conditions_to_add.append(
-                    binary_condition(
-                        ConditionFunctions.LTE,
-                        FunctionCall(
-                            None,
-                            "ifNull",
-                            (Column(None, None, "offset"), Literal(None, 0)),
-                        ),
-                        Literal(None, offset),
-                    )
+        if offset is not None and "offset" in entity.get_data_model():
+            conditions_to_add.append(
+                binary_condition(
+                    ConditionFunctions.LTE,
+                    FunctionCall(
+                        None,
+                        "ifNull",
+                        (Column(None, None, "offset"), Literal(None, 0)),
+                    ),
+                    Literal(None, offset),
                 )
+            )
 
         new_condition = combine_and_conditions(conditions_to_add)
         condition = query.get_condition()
@@ -341,29 +322,23 @@ class SnQLSubscriptionData(SubscriptionData):
         if data.get(cls.TYPE_FIELD) != SubscriptionType.SNQL.value:
             raise InvalidQueryException("Invalid SnQL subscription structure")
 
-        snql_subs_dict = {
-            "project_id": data["project_id"],
-            "time_window": timedelta(seconds=data["time_window"]),
-            "resolution": timedelta(seconds=data["resolution"]),
-            "query": data["query"],
-        }
-        organization = data.get("organization")
-        if organization:
-            snql_subs_dict.update({"organization": organization})
-
-        return SnQLSubscriptionData(**snql_subs_dict)
+        return SnQLSubscriptionData(
+            project_id=data["project_id"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+            query=data["query"],
+            organization=data.get("organization"),
+        )
 
     def to_dict(self) -> Mapping[str, Any]:
-        snql_subs_dict = {
+        return {
             self.TYPE_FIELD: SubscriptionType.SNQL.value,
             "project_id": self.project_id,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
             "query": self.query,
+            "organization": self.organization,
         }
-        if self.organization:
-            snql_subs_dict.update({"organization": self.organization})
-        return snql_subs_dict
 
 
 @dataclass(frozen=True)
@@ -425,23 +400,18 @@ class DelegateSubscriptionData(SubscriptionData):
         if data.get(cls.TYPE_FIELD) != SubscriptionType.DELEGATE.value:
             raise InvalidQueryException("Invalid delegate subscription structure")
 
-        delegate_subs_dict = {
-            "project_id": data["project_id"],
-            "time_window": timedelta(seconds=data["time_window"]),
-            "resolution": timedelta(seconds=data["resolution"]),
-            "conditions": data["conditions"],
-            "aggregations": data["aggregations"],
-            "query": data["query"],
-        }
-
-        organization = data.get("organization")
-        if organization:
-            delegate_subs_dict.update({"organization": organization})
-
-        return DelegateSubscriptionData(**delegate_subs_dict)
+        return DelegateSubscriptionData(
+            project_id=data["project_id"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+            conditions=data["conditions"],
+            aggregations=data["aggregations"],
+            query=data["query"],
+            organization=data.get("organization"),
+        )
 
     def to_dict(self) -> Mapping[str, Any]:
-        delegate_subs_dict = {
+        return {
             self.TYPE_FIELD: SubscriptionType.DELEGATE.value,
             "project_id": self.project_id,
             "time_window": int(self.time_window.total_seconds()),
@@ -449,11 +419,8 @@ class DelegateSubscriptionData(SubscriptionData):
             "conditions": self.conditions,
             "aggregations": self.aggregations,
             "query": self.query,
+            "organization": self.organization,
         }
-
-        if self.organization:
-            delegate_subs_dict.update({"organization": self.organization})
-        return delegate_subs_dict
 
     def to_snql(self) -> SnQLSubscriptionData:
         return SnQLSubscriptionData.from_dict(

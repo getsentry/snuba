@@ -29,42 +29,36 @@ from snuba.utils.scheduler import ScheduledTask
 
 
 def build_legacy_subscription_data(organization=None) -> LegacySubscriptionData:
-    legacy_subs_dict = {
-        "project_id": 5,
-        "conditions": [["platform", "IN", ["a"]]],
-        "aggregations": [["count()", "", "count"]],
-        "time_window": timedelta(minutes=500),
-        "resolution": timedelta(minutes=1),
-    }
-    if organization:
-        legacy_subs_dict.update({"organization": organization})
-    return LegacySubscriptionData(**legacy_subs_dict)
+    return LegacySubscriptionData(
+        project_id=5,
+        conditions=[["platform", "IN", ["a"]]],
+        aggregations=[["count()", "", "count"]],
+        time_window=timedelta(minutes=500),
+        resolution=timedelta(minutes=1),
+        organization=organization,
+    )
 
 
 def build_snql_subscription_data(organization=None) -> SnQLSubscriptionData:
-    snql_subs_dict = {
-        "project_id": 5,
-        "time_window": timedelta(minutes=500),
-        "resolution": timedelta(minutes=1),
-        "query": "MATCH events SELECT count() WHERE in(platform, 'a')",
-    }
-    if organization:
-        snql_subs_dict.update({"organization": organization})
-    return SnQLSubscriptionData(**snql_subs_dict)
+    return SnQLSubscriptionData(
+        project_id=5,
+        time_window=timedelta(minutes=500),
+        resolution=timedelta(minutes=1),
+        query="MATCH events SELECT count() WHERE in(platform, 'a')",
+        organization=organization,
+    )
 
 
 def build_delegate_subscription_data(organization=None) -> DelegateSubscriptionData:
-    delegate_subs_dict = {
-        "project_id": 5,
-        "time_window": timedelta(minutes=500),
-        "resolution": timedelta(minutes=1),
-        "conditions": [["platform", "IN", ["a"]]],
-        "aggregations": [["count()", "", "count"]],
-        "query": "MATCH events SELECT count() WHERE in(platform, 'a')",
-    }
-    if organization:
-        delegate_subs_dict.update({"organization": organization})
-    return DelegateSubscriptionData(**delegate_subs_dict)
+    return DelegateSubscriptionData(
+        project_id=5,
+        time_window=timedelta(minutes=500),
+        resolution=timedelta(minutes=1),
+        conditions=[["platform", "IN", ["a"]]],
+        aggregations=[["count()", "", "count"]],
+        query="MATCH events SELECT count() WHERE in(platform, 'a')",
+        organization=organization,
+    )
 
 
 LEGACY_CASES = [
@@ -109,9 +103,7 @@ def test_encode(
     assert data["aggregations"] == subscription.aggregations
     assert data["time_window"] == int(subscription.time_window.total_seconds())
     assert data["resolution"] == int(subscription.resolution.total_seconds())
-
-    if organization:
-        assert data["organization"] == subscription.organization
+    assert data["organization"] == subscription.organization
 
 
 @pytest.mark.parametrize("builder, organization", SNQL_CASES)
@@ -128,9 +120,7 @@ def test_encode_snql(
     assert data["time_window"] == int(subscription.time_window.total_seconds())
     assert data["resolution"] == int(subscription.resolution.total_seconds())
     assert data["query"] == subscription.query
-
-    if organization:
-        assert data["organization"] == subscription.organization
+    assert data["organization"] == subscription.organization
 
 
 @pytest.mark.parametrize("builder, organization", DELEGATE_CASES)
@@ -149,9 +139,7 @@ def test_encode_delegate(
     assert data["conditions"] == subscription.conditions
     assert data["aggregations"] == subscription.aggregations
     assert data["query"] == subscription.query
-
-    if organization:
-        assert data["organization"] == subscription.organization
+    assert data["organization"] == subscription.organization
 
 
 @pytest.mark.parametrize("builder, organization", LEGACY_CASES)
@@ -167,9 +155,8 @@ def test_decode(
         "aggregations": subscription.aggregations,
         "time_window": int(subscription.time_window.total_seconds()),
         "resolution": int(subscription.resolution.total_seconds()),
+        "organization": organization,
     }
-    if organization:
-        data.update({"organization": organization})
     payload = json.dumps(data).encode("utf-8")
     assert codec.decode(payload) == subscription
 
@@ -187,9 +174,8 @@ def test_decode_snql(
         "time_window": int(subscription.time_window.total_seconds()),
         "resolution": int(subscription.resolution.total_seconds()),
         "query": subscription.query,
+        "organization": organization,
     }
-    if organization:
-        data.update({"organization": organization})
     payload = json.dumps(data).encode("utf-8")
     assert codec.decode(payload) == subscription
 
@@ -209,9 +195,8 @@ def test_decode_delegate(
         "conditions": subscription.conditions,
         "aggregations": subscription.aggregations,
         "query": subscription.query,
+        "organization": organization,
     }
-    if organization:
-        data.update({"organization": organization})
     payload = json.dumps(data).encode("utf-8")
     assert codec.decode(payload) == subscription
 

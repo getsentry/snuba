@@ -221,7 +221,7 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         # storage
         # NOTE: If we were to support other types of subscriptions over the sessions dataset that
         # do not follow this method used to identify which storage to use, we would need to
-        # match functions used with a regex.
+        # find a different way to distinguish them.
         if isinstance(request_settings, SubscriptionRequestSettings):
             from_date, to_date = get_time_range(query, "started")  # type: ignore
             if from_date and to_date:

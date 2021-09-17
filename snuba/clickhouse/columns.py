@@ -11,7 +11,6 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
-    Set,
     Tuple,
     Type,
     TypeVar,
@@ -539,12 +538,6 @@ class ColumnSet:
             return self[key]
         except KeyError:
             return default
-
-    def get_column_names(self) -> Set[str]:
-        """
-        Returns a set of column names
-        """
-        return set(col.name for col in self.columns)
 
 
 class QualifiedColumnSet(ColumnSet):
