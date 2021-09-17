@@ -28,6 +28,7 @@ from arroyo.processing.strategies.streaming import (
     ParallelTransformStep,
     TransformStep,
 )
+from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
@@ -515,7 +516,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         )
 
     def create(
-        self, commit: Callable[[Mapping[Partition, int]], None]
+        self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
         # 1. Identify the storages that should be used for the input message.
         # 2. Filter out any messages that do not apply to any storage.
