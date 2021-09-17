@@ -187,20 +187,24 @@ def set_project_exclude_groups(
     p.execute()
 
 
-def get_project_needs_final_key(
+def get_project_needs_final_key_and_type_key(
     project_id: int, state_name: Optional[ReplacerState]
-) -> str:
-    return f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
+) -> Tuple[str, str]:
+    key = f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
+    return key, f"{key}-type"
 
 
 def set_project_needs_final(
-    project_id: int, state_name: Optional[ReplacerState]
+    project_id: int,
+    state_name: Optional[ReplacerState],
+    replacement_type: ReplacementType,
 ) -> Optional[bool]:
-    return redis_client.set(
-        get_project_needs_final_key(project_id, state_name),
-        True,
-        ex=settings.REPLACER_KEY_TTL,
-    )
+    key, type_key = get_project_needs_final_key_and_type_key(project_id, state_name)
+    p = redis_client.pipeline()
+    p.set(key, True, ex=settings.REPLACER_KEY_TTL)
+    p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
+    [final_was_set, _] = p.execute()
+    return bool(final_was_set)
 
 
 def get_projects_query_flags(
@@ -219,11 +223,12 @@ def get_projects_query_flags(
     now = time.time()
     p = redis_client.pipeline()
 
-    needs_final_keys = [
-        get_project_needs_final_key(project_id, state_name)
+    needs_final_keys_and_type_keys = [
+        get_project_needs_final_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
-    for needs_final_key in needs_final_keys:
+
+    for needs_final_key, _ in needs_final_keys_and_type_keys:
         p.get(needs_final_key)
 
     exclude_groups_keys_and_types = [
@@ -246,29 +251,53 @@ def get_projects_query_flags(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
         )
 
+    for _, needs_final_type_key in needs_final_keys_and_type_keys:
+        p.get(needs_final_type_key)
+
     for type_key in exclude_groups_keys_replacement_types:
         p.smembers(type_key)
 
     # 'results' list looks like:
-    # [needs_final..., exclude_groups..., replacement_types...]
+    # [needs_final..., exclude_groups..., project_replacement_types..., groups_replacement_types...]
     results = p.execute()
 
     needs_final = any(results[: len(s_project_ids)])
 
     exclude_groups_results = results[
-        len(s_project_ids) + 1 : -len(exclude_groups_keys_replacement_types)
+        len(s_project_ids)
+        + 1 : -(
+            len(needs_final_keys_and_type_keys)
+            + len(exclude_groups_keys_replacement_types)
+        )
     ]
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(exclude_groups_results[::2], [])}
     )
 
-    replacement_types_result = results[-len(exclude_groups_keys_replacement_types) :]
-    replacement_types = {
+    projects_replacment_types_result = results[
+        len(s_project_ids)
+        + len(exclude_groups_results)
+        + 1 : -len(exclude_groups_keys_replacement_types)
+    ]
+
+    project_replacement_types = {
         replacement_type.decode("utf-8")
-        for replacement_types_set in replacement_types_result
+        for replacement_type in projects_replacment_types_result
+        if replacement_type
+    }
+
+    groups_replacement_types_result = results[
+        -len(exclude_groups_keys_replacement_types) :
+    ]
+
+    groups_replacement_types = {
+        replacement_type.decode("utf-8")
+        for replacement_types_set in groups_replacement_types_result
         for replacement_type in replacement_types_set
         if replacement_type
     }
+
+    replacement_types = groups_replacement_types.union(project_replacement_types)
 
     return (needs_final, exclude_groups, replacement_types)
 
@@ -370,8 +399,12 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
             if isinstance(query_time_flags, NeedsFinal):
                 if compatibility_double_write:
-                    set_project_needs_final(project_id, None)
-                set_project_needs_final(project_id, self.__state_name)
+                    set_project_needs_final(
+                        project_id, None, replacement.replacement_type
+                    )
+                set_project_needs_final(
+                    project_id, self.__state_name, replacement.replacement_type
+                )
 
             elif isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:

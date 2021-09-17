@@ -52,7 +52,11 @@ def test_with_turbo(query: ClickhouseQuery) -> None:
 
 
 def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> None:
-    set_project_needs_final(2, ReplacerState.EVENTS)
+    set_project_needs_final(
+        2,
+        ReplacerState.EVENTS,
+        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
+    )
 
     PostReplacementConsistencyEnforcer(
         "project_id", ReplacerState.EVENTS
