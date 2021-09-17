@@ -80,14 +80,16 @@ class ReplacementContext:
 
 
 class Replacement(ReplacementBase):
-    replacement_type: ReplacementType
-
     @abstractmethod
     def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         raise NotImplementedError()
 
     @abstractmethod
     def get_project_id(self) -> int:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_replacement_type(self) -> ReplacementType:
         raise NotImplementedError()
 
     def should_write_every_node(self) -> bool:
@@ -136,6 +138,9 @@ class LegacyReplacement(Replacement):
             return ExcludeGroups(group_ids=self.query_time_flags[2])  # type: ignore
 
         return None
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
         if self.insert_query_template is None:
@@ -404,10 +409,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             if isinstance(query_time_flags, NeedsFinal):
                 if compatibility_double_write:
                     set_project_needs_final(
-                        project_id, None, replacement.replacement_type
+                        project_id, None, replacement.get_replacement_type()
                     )
                 set_project_needs_final(
-                    project_id, self.__state_name, replacement.replacement_type
+                    project_id, self.__state_name, replacement.get_replacement_type()
                 )
 
             elif isinstance(query_time_flags, ExcludeGroups):
@@ -416,13 +421,13 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                         project_id,
                         query_time_flags.group_ids,
                         None,
-                        replacement.replacement_type,
+                        replacement.get_replacement_type(),
                     )
                 set_project_exclude_groups(
                     project_id,
                     query_time_flags.group_ids,
                     self.__state_name,
-                    replacement.replacement_type,
+                    replacement.get_replacement_type(),
                 )
 
         elif query_time_flags is not None:
@@ -725,6 +730,9 @@ class ExcludeGroupsReplacement(Replacement):
     def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         return ExcludeGroups(group_ids=self.group_ids)
 
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
+
     def get_insert_query(self, table_name: str) -> Optional[str]:
         return None
 
@@ -821,6 +829,9 @@ class UnmergeGroupsReplacement(Replacement):
 
     def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         return NeedsFinal()
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
     @cached_property
     def _where_clause(self) -> str:
