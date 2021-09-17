@@ -24,6 +24,11 @@ class FakeConfluentKafkaMessage(object):
         self._offset = offset
         self._value = value
         self._key = key
+        self._headers = (
+            {str(k): str(v) if v else None for k, v in headers.items()}
+            if headers
+            else None
+        )
         self._headers = headers
         self._error = error
 
