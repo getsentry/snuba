@@ -1,18 +1,13 @@
+import logging
+import uuid
 from typing import Any, Mapping, MutableMapping
 
-import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
-import uuid
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
-from snuba.processor import (
-    _as_dict_safe,
-    _ensure_valid_ip,
-    _hashify,
-    _unicodify,
-)
+from snuba.processor import _as_dict_safe, _ensure_valid_ip, _hashify, _unicodify
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +104,10 @@ class ErrorsProcessor(EventsProcessorBase):
         tags: Mapping[str, Any],
     ) -> None:
         transaction_ctx = contexts.get("trace") or {}
-        if transaction_ctx.get("trace_id", None):
-            output["trace_id"] = str(uuid.UUID(transaction_ctx["trace_id"]))
-        if transaction_ctx.get("span_id", None):
-            output["span_id"] = int(transaction_ctx["span_id"], 16)
+        trace_id = transaction_ctx.get("trace_id", None)
+        span_id = transaction_ctx.get("span_id", None)
+
+        if trace_id:
+            output["trace_id"] = str(uuid.UUID(trace_id))
+        if span_id:
+            output["span_id"] = int(span_id, 16)

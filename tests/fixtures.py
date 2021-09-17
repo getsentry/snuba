@@ -2,6 +2,7 @@ import calendar
 import uuid
 from datetime import datetime, timedelta, timezone
 from hashlib import md5
+
 from snuba import settings
 from snuba.datasets.events_processor_base import InsertEvent
 
@@ -19,6 +20,8 @@ def get_raw_event() -> InsertEvent:
     event_datetime = (now - timedelta(seconds=2)).strftime(
         settings.PAYLOAD_DATETIME_FORMAT,
     )
+    trace_id = str(uuid.uuid4().hex)
+    span_id = "deadbeef"
 
     return {
         "project_id": PROJECT_ID,
@@ -72,6 +75,7 @@ def get_raw_event() -> InsertEvent:
             "contexts": {
                 "device": {"online": True, "charging": True, "model_id": "Galaxy"},
                 "os": {"kernel_version": "1.1.1"},
+                "trace": {"trace_id": trace_id, "span_id": span_id},
             },
             "sentry.interfaces.Exception": {
                 "exc_omitted": None,

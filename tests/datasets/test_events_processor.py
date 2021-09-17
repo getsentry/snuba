@@ -29,7 +29,7 @@ from tests.fixtures import get_raw_event
 
 
 class TestEventsProcessor:
-    def setup_method(self, test_method):
+    def setup_method(self, test_method) -> None:
         self.metadata = KafkaMessageMetadata(0, 0, datetime.now())
         self.event = get_raw_event()
 
@@ -54,6 +54,12 @@ class TestEventsProcessor:
 
     def __process_insert_event(self, event: InsertEvent) -> Optional[ProcessedMessage]:
         return self.processor.process_message((2, "insert", event, {}), self.metadata)
+
+    def test_has_trace_and_span_id(self) -> None:
+        processed_message = self.__process_insert_event(self.event)
+        assert isinstance(processed_message, InsertBatch)
+        assert "trace.trace_id" in processed_message.rows[0]["contexts.key"]
+        assert "trace.span_id" in processed_message.rows[0]["contexts.key"]
 
     def test_unexpected_obj(self) -> None:
         self.event["message"] = {"what": "why is this in the message"}

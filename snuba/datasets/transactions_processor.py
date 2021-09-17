@@ -225,6 +225,12 @@ class TransactionsMessageProcessor(MessageProcessor):
             if context in contexts:
                 del contexts[context]
 
+        transaction_ctx = contexts.get("trace", {})
+        # We store trace_id and span_id as promoted columns and on the query level
+        # we make sure that all queries on contexts[trace.trace_id/span_id] use those promoted
+        # columns instead. So we don't need to store them in the contexts array as well
+        transaction_ctx.pop("trace_id", None)
+        transaction_ctx.pop("span_id", None)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
