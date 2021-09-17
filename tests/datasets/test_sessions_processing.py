@@ -128,9 +128,9 @@ selector_tests = [
             "selected_columns": [],
             "aggregations": [
                 [
-                    "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
+                    "if(greater(sessions, 0), divide(sessions_crashed, sessions), null)",
                     None,
-                    "_crash_rate_alert_aggregate",
+                    "crash_rate_alert_aggregate",
                 ]
             ],
             "conditions": [
@@ -142,16 +142,16 @@ selector_tests = [
         },
         True,
         raw_schema.get_table_name(),
-        id="Select raw depends on if crash rate alert aggregation present and time_window is <=1h",
+        id="Select raw if its a dataset subscription and time_window is <=1h",
     ),
     pytest.param(
         {
             "selected_columns": [],
             "aggregations": [
                 [
-                    "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
+                    "if(greater(sessions, 0), divide(sessions_crashed, sessions), null)",
                     None,
-                    "_crash_rate_alert_aggregate",
+                    "crash_rate_alert_aggregate",
                 ]
             ],
             "conditions": [
@@ -163,8 +163,7 @@ selector_tests = [
         },
         True,
         read_schema.get_table_name(),
-        id="Select materialized depends on if crash rate alert aggregation present "
-        "and time_window > 1h",
+        id="Select materialized if its a dataset subscription and time_window > 1h",
     ),
 ]
 

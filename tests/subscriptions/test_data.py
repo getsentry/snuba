@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
-from typing import Generator, Optional
+from typing import Generator, Optional, Union
 
 import pytest
 
 from snuba import state
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
+from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
     LegacySubscriptionData,
@@ -99,8 +100,9 @@ TESTS_OVER_SESSIONS = [
             project_id=1,
             query=(
                 "MATCH (sessions) "
-                "SELECT multiply(minus(1, divide(sessions_crashed, sessions)), 100) "
-                "AS _crash_rate_alert_aggregate "
+                "if(greater(sessions AS `_snuba_sessions`, 0), divide(sessions_crashed AS "
+                "`_snuba_sessions_crashed`, sessions AS `_snuba_sessions`), null AS `_snuba_null`) "
+                "AS `_snuba_crash_rate_alert_aggregate` "
                 "WHERE org_id = 1 AND project_id IN tuple(1) "
                 "LIMIT 1 "
                 "OFFSET 0 "
@@ -109,9 +111,9 @@ TESTS_OVER_SESSIONS = [
             conditions=[],
             aggregations=[
                 [
-                    "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
+                    "if(greater(sessions, 0), divide(sessions_crashed, sessions), null)",
                     None,
-                    "_crash_rate_alert_aggregate",
+                    "crash_rate_alert_aggregate",
                 ]
             ],
             time_window=timedelta(minutes=120),
@@ -127,16 +129,16 @@ TESTS_OVER_SESSIONS = [
             conditions=[],
             aggregations=[
                 [
-                    "multiply(minus(1, divide(sessions_crashed, sessions)), 100)",
+                    "if(greater(sessions, 0), divide(sessions_crashed, sessions), null)",
                     None,
-                    "_crash_rate_alert_aggregate",
+                    "crash_rate_alert_aggregate",
                 ]
             ],
             time_window=timedelta(minutes=120),
             resolution=timedelta(minutes=1),
         ),
-        InvalidQueryException,
-        id="No organization provided for Sessions subscription",
+        JsonSchemaValidationException,
+        id="No organization provided for sessions dataset subscription",
     ),
 ]
 
@@ -153,7 +155,7 @@ class TestBuildRequestBase:
         subscription: SubscriptionData,
         exception: Optional[Exception],
         aggregate: str,
-        value: int,
+        value: Union[int, float],
     ):
         timer = Timer("test")
         if exception is not None:
@@ -190,5 +192,5 @@ class TestBuildRequestSessions(BaseSessionsMockTest, TestBuildRequestBase):
         self, subscription: SubscriptionData, exception: Optional[Exception]
     ) -> None:
         self.compare_conditions(
-            subscription, exception, "_crash_rate_alert_aggregate", 95
+            subscription, exception, "crash_rate_alert_aggregate", 0.05
         )

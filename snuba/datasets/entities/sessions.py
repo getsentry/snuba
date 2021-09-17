@@ -1,6 +1,5 @@
-import re
 from datetime import timedelta
-from typing import Mapping, Sequence, Optional
+from typing import Mapping, Optional, Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
@@ -43,9 +42,6 @@ from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings, SubscriptionRequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-CRASH_RATE_ALERT_FUNCTION_RE = re.compile(
-    r"divide\(\s*(sessions_crashed|users_crashed)(.)*\s*,\s*(sessions|users)(.)*\s*\)"
-)
 metrics = MetricsWrapper(environment.metrics, "api.sessions")
 
 
@@ -218,8 +214,16 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
     ) -> StorageAndMappers:
         use_materialized_storage: Optional[bool] = None
 
-        if check_if_crash_rate_alert_subscription(query, request_settings):
-            from_date, to_date = get_time_range(query, "started")
+        # If the passed in `request_settings` arg is an instance of `SubscriptionRequestSettings`,
+        # then it is a crash rate alert subscription, and hence we decide on whether to use the
+        # materialized storage or the raw storage by examining the time_window.
+        # If the `time_window` <=1h, then select the raw storage otherwise select materialized
+        # storage
+        # NOTE: If we were to support other types of subscriptions over the sessions dataset that
+        # do not follow this method used to identify which storage to use, we would need to
+        # match functions used with a regex.
+        if isinstance(request_settings, SubscriptionRequestSettings):
+            from_date, to_date = get_time_range(query, "started")  # type: ignore
             if from_date and to_date:
                 use_materialized_storage = to_date - from_date > timedelta(hours=1)
 
@@ -317,20 +321,3 @@ class OrgSessionsEntity(Entity):
                 {"bucketed_started": "started"}, ("started", "received")
             ),
         ]
-
-
-def check_if_crash_rate_alert_subscription(
-    query: Query, request_settings: RequestSettings
-) -> bool:
-    """
-    Checks if the provided query is for a Crash Rate Alert subscription based on the if one of
-    the aggregations matches the CRASH_RATE_ALERT_FUNCTION_RE
-    """
-    # Checks if it is a subscription
-    is_subscription = isinstance(request_settings, SubscriptionRequestSettings)
-    for col in query.get_selected_columns():
-        if col.expression and bool(
-            re.search(CRASH_RATE_ALERT_FUNCTION_RE, str(col.expression))
-        ):
-            return is_subscription
-    return False

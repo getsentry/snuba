@@ -23,7 +23,6 @@ from uuid import UUID
 from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
-from snuba.query import organization_extension
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -156,9 +155,10 @@ class LegacySubscriptionData(SubscriptionData):
         :param timestamp: Date that the query should run up until
         :param offset: Maximum offset we should query for
         """
-        dataset_extensions = dataset.get_default_entity().get_extensions()
         schema = RequestSchema.build_with_extensions(
-            dataset_extensions, SubscriptionRequestSettings, Language.LEGACY,
+            dataset.get_default_entity().get_extensions(),
+            SubscriptionRequestSettings,
+            Language.LEGACY,
         )
         extra_conditions: Sequence[Condition] = []
 
@@ -179,18 +179,7 @@ class LegacySubscriptionData(SubscriptionData):
             "to_date": timestamp.isoformat(),
         }
 
-        # If instance of `OrganizationExtension` is present in the dataset extensions,
-        # then we need to provide an organization param as it is a required column
-        # Required for datasets like "sessions" dataset for example
-        if any(
-            isinstance(extension, organization_extension.OrganizationExtension)
-            for extension in dataset_extensions.values()
-        ):
-            if not self.organization:
-                raise InvalidQueryException(
-                    "Param organization is required for this dataset's OrganizationExtension "
-                    "extension"
-                )
+        if self.organization:
             build_request_dict.update({"organization": self.organization})
 
         return build_request(
