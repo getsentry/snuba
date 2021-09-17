@@ -1,12 +1,10 @@
 import itertools
 from contextlib import closing
-from datetime import datetime
 from typing import Iterator
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.synchronized import Commit, commit_codec
-from arroyo.types import Position
 
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
@@ -55,13 +53,9 @@ def test_commit_log_consumer() -> None:
         message = consumer.poll(10.0)  # XXX: getting the subscription is slow
         assert isinstance(message, Message)
 
-        now = datetime.now()
+        consumer.stage_offsets({message.partition: message.next_offset})
 
-        position = Position(message.next_offset, now)
-
-        consumer.stage_positions({message.partition: position})
-
-        assert consumer.commit_positions() == {Partition(topic, 0): position}
+        assert consumer.commit_offsets() == {Partition(topic, 0): message.next_offset}
 
         assert len(commit_log_producer.messages) == 1
         commit_message = commit_log_producer.messages[0]
@@ -71,4 +65,4 @@ def test_commit_log_consumer() -> None:
             KafkaPayload(
                 commit_message.key(), commit_message.value(), commit_message.headers(),
             )
-        ) == Commit("test", Partition(topic, 0), message.next_offset, now)
+        ) == Commit("test", Partition(topic, 0), message.next_offset)
