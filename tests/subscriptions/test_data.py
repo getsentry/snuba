@@ -64,7 +64,7 @@ TESTS = [
             project_id=1,
             query=(
                 "MATCH (events) "
-                "SELECT count() AS count, avg(timestamp) AS average_t "
+                "SELECT count() AS count, max(timestamp) AS max_t, min(timestamp) AS min_t"
                 "WHERE "
                 "platform IN tuple('a') "
             ),
@@ -72,7 +72,7 @@ TESTS = [
             resolution=timedelta(minutes=1),
         ),
         InvalidQueryException,
-        id="SnQL subscription with 2 many aggregates",
+        id="SnQL subscription with 3 many aggregates",
     ),
     pytest.param(
         SnQLSubscriptionData(
