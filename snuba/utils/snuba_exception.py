@@ -1,5 +1,6 @@
-from typing import Any, Dict, List, TypedDict, Union, cast
+from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
 
+# mypy has not figured out recursive types yet so this can't be totally typesafe
 JsonSerializable = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
 
 
@@ -8,6 +9,33 @@ class SnubaExceptionDict(TypedDict):
     __name__: str
     __message__: str
     __extra_data__: Dict[str, JsonSerializable]
+
+
+class _ExceptionRegistry:
+    """Keep a mapping of SnubaExceptions to their names"""
+
+    def __init__(self) -> None:
+        self.__mapping: Dict[str, Type["SnubaException"]] = {}
+
+    def register_class(self, cls: Type["SnubaException"]) -> None:
+        existing_class = self.__mapping.get(cls.__name__)
+        if not existing_class:
+            self.__mapping[cls.__name__] = cls
+
+    def get_class_by_name(self, cls_name: str) -> Optional[Type["SnubaException"]]:
+        return self.__mapping.get(cls_name)
+
+
+_REGISTRY = None
+
+
+def _get_registry() -> _ExceptionRegistry:
+    global _REGISTRY
+    # NOTE (Should this be protected by a mutex? I'm thinking it should be fine)
+    # given that this will be instatiated with the python AST loading
+    if _REGISTRY is None:
+        _REGISTRY = _ExceptionRegistry()
+    return _REGISTRY
 
 
 class SnubaException(Exception):
@@ -25,9 +53,29 @@ class SnubaException(Exception):
 
     @classmethod
     def from_dict(cls, edict: SnubaExceptionDict) -> "SnubaException":
+        defined_exception = _get_registry().get_class_by_name(edict.get("__name__", ""))
+        if defined_exception is not None:
+            return defined_exception(
+                message=edict.get("__message__", ""), **edict.get("__extra_data__", {})
+            )
         return cast(
             SnubaException,
             type(edict["__name__"], (cls,), {})(
                 message=edict.get("__message__", ""), **edict.get("__extra_data__", {})
+            ),
+        )
+
+    def __init_subclass__(cls) -> None:
+        _get_registry().register_class(cls)
+        return super().__init_subclass__()
+
+    @classmethod
+    def from_standard_exception_instance(cls, exc: Exception) -> "SnubaException":
+        if isinstance(exc, cls):
+            return exc
+        return cast(
+            SnubaException,
+            type(exc.__class__.__name__, (cls,), {})(
+                message=str(exc), source="standard exception"
             ),
         )
