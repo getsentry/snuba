@@ -41,9 +41,12 @@ def _get_registry() -> _ExceptionRegistry:
 
 class SnubaException(Exception):
     def __init__(
-        self, message: str, should_report: bool = True, **extra_data: JsonSerializable
+        self,
+        message: Optional[str] = None,
+        should_report: bool = True,
+        **extra_data: JsonSerializable
     ) -> None:
-        self.message = message
+        self.message = message or ""
         self.extra_data = extra_data or {}
         # whether or not the error should be reported to sentry
         self.should_report = should_report

@@ -18,7 +18,7 @@ class FixedStringArrayColumnProcessor(BaseTypeConverter):
                 (Literal(None, value=exp.value), Literal(None, self.fixed_length)),
             )
         except (AssertionError, ValueError):
-            raise ColumnTypeError("Not a valid UUID string", report=False)
+            raise ColumnTypeError("Not a valid UUID string", should_report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         # FixedString is converted to regular string just fine in query return

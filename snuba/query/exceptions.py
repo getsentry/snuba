@@ -8,13 +8,7 @@ class InvalidQueryException(SnubaException):
     and validation.
     This should not be used for system errors.
 
-    Attributes:
-        message: Message of the exception
-        report: Should we report the exception to Sentry or not
     """
-
-    def __str__(self) -> str:
-        return f"{self.message}"
 
 
 class ValidationException(InvalidQueryException):
@@ -25,6 +19,6 @@ class InvalidExpressionException(ValidationException):
     # TODO (figure out what do do with this)
     @classmethod
     def from_args(
-        cls, message: str, expression: Expression, should_report: bool,
+        cls, expression: Expression, message: str, should_report: bool,
     ) -> "InvalidExpressionException":
-        return cls(message, should_report=should_report, expression=repr(Expression))
+        return cls(message, should_report=should_report, expression=repr(expression))

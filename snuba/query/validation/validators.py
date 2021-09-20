@@ -82,10 +82,10 @@ class NoTimeBasedConditionValidator(QueryValidator):
         top_level = get_first_level_and_conditions(condition) if condition else []
         for cond in top_level:
             if self.match.match(cond):
-                raise InvalidExpressionException(
+                raise InvalidExpressionException.from_args(
                     cond,
                     f"Cannot have existing conditions on time field {self.required_time_column}",
-                    report=False,
+                    should_report=False,
                 )
 
 
