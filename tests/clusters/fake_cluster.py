@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
 from snuba.clickhouse.native import ClickhousePool, Params

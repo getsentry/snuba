@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 import logging
 import time
 import uuid

@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 import pytest
 
 from typing import Any, Sequence

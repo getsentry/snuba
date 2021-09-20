@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 import ipaddress
 import re
 from abc import ABC, abstractmethod

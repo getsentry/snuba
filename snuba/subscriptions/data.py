@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from __future__ import annotations
 
 import logging

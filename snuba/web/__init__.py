@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from typing import Any, Mapping, NamedTuple
 
 from mypy_extensions import TypedDict

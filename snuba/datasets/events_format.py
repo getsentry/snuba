@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from datetime import datetime, timedelta
 from typing import (
     Any,

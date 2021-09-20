@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 import logging
 from enum import Enum
 from typing import Callable, MutableMapping, Optional, Sequence, Tuple

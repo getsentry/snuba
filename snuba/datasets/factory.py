@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from typing import Callable, MutableMapping, Sequence, Set
 
 from snuba import settings

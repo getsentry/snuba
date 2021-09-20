@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from abc import ABC, abstractmethod
 from typing import Sequence
 

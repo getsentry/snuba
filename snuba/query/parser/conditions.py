@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
 from snuba.clickhouse.columns import ColumnSet

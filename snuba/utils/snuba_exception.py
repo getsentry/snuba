@@ -1,3 +1,4 @@
+from snuba.utils.snuba_exception import SnubaException
 from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
 
 # mypy has not figured out recursive types yet so this can't be totally typesafe
