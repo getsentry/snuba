@@ -20,6 +20,8 @@ def test_exception() -> None:
 
 def test_from_standard_exception() -> None:
     message = "I am an exception beep boop"
+    snubs_exc = None
+    # We can create snuba exceptions from standard ones
     try:
         raise Exception(message)
     except Exception as e:
@@ -27,3 +29,12 @@ def test_from_standard_exception() -> None:
         assert isinstance(snubs_exc, SnubaException)
         assert snubs_exc.__class__.__name__ == "Exception"
         assert snubs_exc.message == message
+        assert snubs_exc.extra_data["from_standard_exception"]
+
+    # if we create a SnubaException from a standard exception
+    # before, we'll create the same one again
+    try:
+        raise Exception("Other message")
+    except Exception as e:
+        new_snubs_exc = SnubaException.from_standard_exception_instance(e)
+        assert isinstance(new_snubs_exc, snubs_exc.__class__)

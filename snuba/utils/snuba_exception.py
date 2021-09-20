@@ -53,6 +53,7 @@ class SnubaException(Exception):
 
     @classmethod
     def from_dict(cls, edict: SnubaExceptionDict) -> "SnubaException":
+        assert edict["__type__"] == "SnubaException"
         defined_exception = _get_registry().get_class_by_name(edict.get("__name__", ""))
         if defined_exception is not None:
             return defined_exception(
@@ -73,9 +74,11 @@ class SnubaException(Exception):
     def from_standard_exception_instance(cls, exc: Exception) -> "SnubaException":
         if isinstance(exc, cls):
             return exc
-        return cast(
-            SnubaException,
-            type(exc.__class__.__name__, (cls,), {})(
-                message=str(exc), source="standard exception"
-            ),
+        return cls.from_dict(
+            {
+                "__type__": "SnubaException",
+                "__name__": exc.__class__.__name__,
+                "__message__": str(exc),
+                "__extra_data__": {"from_standard_exception": True},
+            }
         )
