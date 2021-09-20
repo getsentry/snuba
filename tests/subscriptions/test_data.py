@@ -99,21 +99,19 @@ TESTS_OVER_SESSIONS = [
         DelegateSubscriptionData(
             project_id=1,
             query=(
-                "MATCH (sessions) "
-                "if(greater(sessions AS `_snuba_sessions`, 0), divide(sessions_crashed AS "
-                "`_snuba_sessions_crashed`, sessions AS `_snuba_sessions`), null AS `_snuba_null`) "
-                "AS `_snuba_crash_rate_alert_aggregate` "
-                "WHERE org_id = 1 AND project_id IN tuple(1) "
-                "LIMIT 1 "
-                "OFFSET 0 "
-                "GRANULARITY 3600"
+                """
+                MATCH (sessions) SELECT if(greater(sessions,0),
+                divide(sessions_crashed,sessions),null)
+                AS _crash_rate_alert_aggregate WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
+                OFFSET 0 GRANULARITY 3600
+                """
             ),
             conditions=[],
             aggregations=[
                 [
-                    "if(greater(sessions, 0), divide(sessions_crashed, sessions), null)",
+                    "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
                     None,
-                    "crash_rate_alert_aggregate",
+                    "_crash_rate_alert_aggregate",
                 ]
             ],
             time_window=timedelta(minutes=120),
@@ -192,5 +190,5 @@ class TestBuildRequestSessions(BaseSessionsMockTest, TestBuildRequestBase):
         self, subscription: SubscriptionData, exception: Optional[Exception]
     ) -> None:
         self.compare_conditions(
-            subscription, exception, "crash_rate_alert_aggregate", 0.05
+            subscription, exception, "_crash_rate_alert_aggregate", 0.05
         )

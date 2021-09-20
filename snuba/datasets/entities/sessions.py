@@ -223,7 +223,7 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         # do not follow this method used to identify which storage to use, we would need to
         # find a different way to distinguish them.
         if isinstance(request_settings, SubscriptionRequestSettings):
-            from_date, to_date = get_time_range(query, "started")  # type: ignore
+            from_date, to_date = get_time_range(query, "started")
             if from_date and to_date:
                 use_materialized_storage = to_date - from_date > timedelta(hours=1)
 
