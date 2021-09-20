@@ -22,7 +22,10 @@ class Topic(Enum):
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
-    config = {Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"}}
+    config = {
+        Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
+    }
     if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         config.update({Topic.SESSIONS: {"message.timestamp.type": "LogAppendTime"}})
     return config.get(topic, {})
