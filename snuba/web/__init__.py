@@ -12,7 +12,7 @@ class QueryExtraData(TypedDict):
     experiments: Mapping[str, Any]
 
 
-class QueryException(Exception):
+class QueryException(SnubaException):
     """
     Exception raised during query execution that is used to carry extra data
     back up the stack to the HTTP response -- basically a ``QueryResult``,

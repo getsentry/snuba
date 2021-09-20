@@ -7,7 +7,7 @@ from snuba.utils.snuba_exception import SnubaException
 TValue = TypeVar("TValue")
 
 
-class ExecutionError(Exception):
+class ExecutionError(SnubaException):
     pass
 
 

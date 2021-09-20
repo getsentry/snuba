@@ -6,7 +6,7 @@ from snuba.datasets.entity import Entity
 from snuba.utils.snuba_exception import SnubaException
 
 
-class InvalidEntityError(Exception):
+class InvalidEntityError(SnubaException):
     """Exception raised on invalid entity access."""
 
 

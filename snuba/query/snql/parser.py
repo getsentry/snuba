@@ -1181,12 +1181,12 @@ def validate_entities_with_query(
         except InvalidQueryException as e:
             raise ParsingException(
                 f"validation failed for entity {query.get_from_clause().key.value}: {e}",
-                report=e.report,
+                report=e.extra_data.get("report", True),
             )
         except InvalidExpressionException as e:
             raise ParsingException(
                 f"validation failed for entity {query.get_from_clause().key.value}: {e}",
-                report=e.report,
+                report=e.extra_data.get("report", True),
             )
     else:
         from_clause = query.get_from_clause()
@@ -1201,12 +1201,12 @@ def validate_entities_with_query(
                 except InvalidQueryException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
-                        report=e.report,
+                        report=e.extra_data.get("report", True),
                     )
                 except InvalidExpressionException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
-                        report=e.report,
+                        report=e.extra_data.get("report", True),
                     )
 
 

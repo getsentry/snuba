@@ -55,11 +55,11 @@ class MessageProcessor(ABC):
         raise NotImplementedError
 
 
-class InvalidMessageType(Exception):
+class InvalidMessageType(SnubaException):
     pass
 
 
-class InvalidMessageVersion(Exception):
+class InvalidMessageVersion(SnubaException):
     pass
 
 

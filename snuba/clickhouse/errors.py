@@ -5,7 +5,8 @@ from snuba.utils.snuba_exception import SnubaException
 
 
 @dataclass(frozen=True)
-class ClickhouseError(Exception):
+class ClickhouseError(SnubaException):
+    # TODO: figure out what to do this this
     code: int
     message: str
 

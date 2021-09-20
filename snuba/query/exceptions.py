@@ -1,8 +1,9 @@
 from snuba.query.expressions import Expression
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.snuba_exception import JsonSerializable, SnubaException
 
 
-class InvalidQueryException(Exception):
+class InvalidQueryException(SnubaException):
+    # TODO (figure out what do do with this)
     """
     Common parent class used for invalid queries during parsing
     and validation.
@@ -13,10 +14,11 @@ class InvalidQueryException(Exception):
         report: Should we report the exception to Sentry or not
     """
 
-    def __init__(self, message: str, *, report: bool = True):
-        self.message = message
-        self.report = report
-        super().__init__(self.message, self.report)
+    @classmethod
+    def from_args(
+        cls, *, message: str, report: bool = True, **kwargs: JsonSerializable
+    ) -> "InvalidQueryException":
+        return cls(message=message, report=report, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.message}"
@@ -27,6 +29,7 @@ class ValidationException(InvalidQueryException):
 
 
 class InvalidExpressionException(ValidationException):
+    # TODO (figure out what do do with this)
     def __init__(
         self, expression: Expression, message: str, report: bool = True
     ) -> None:

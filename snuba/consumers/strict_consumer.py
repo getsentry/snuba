@@ -10,11 +10,11 @@ from snuba.utils.streams.types import KafkaBrokerConfig
 logger = logging.getLogger("snuba.kafka-consumer")
 
 
-class NoPartitionAssigned(Exception):
+class NoPartitionAssigned(SnubaException):
     pass
 
 
-class PartitionReassigned(Exception):
+class PartitionReassigned(SnubaException):
     pass
 
 

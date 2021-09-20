@@ -32,7 +32,7 @@ class RateLimitParameters:
     concurrent_limit: Optional[int]
 
 
-class RateLimitExceeded(Exception):
+class RateLimitExceeded(SnubaException):
     """
     Exception thrown when the rate limit is exceeded
     """

@@ -9,7 +9,7 @@ from snuba.clusters.cluster import (
 from snuba.utils.snuba_exception import SnubaException
 
 
-class ServerExplodedException(Exception):
+class ServerExplodedException(SnubaException):
     pass
 
 

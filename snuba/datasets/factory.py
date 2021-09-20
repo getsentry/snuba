@@ -24,7 +24,7 @@ DATASET_NAMES: Set[str] = {
 }
 
 
-class InvalidDatasetError(Exception):
+class InvalidDatasetError(SnubaException):
     """Exception raised on invalid dataset access."""
 
 

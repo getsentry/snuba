@@ -1,7 +1,5 @@
 from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
 
-from snuba.utils.snuba_exception import SnubaException
-
 # mypy has not figured out recursive types yet so this can't be totally typesafe
 JsonSerializable = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
 
@@ -52,6 +50,16 @@ class SnubaException(Exception):
             "__message__": self.message,
             "__extra_data__": self.extra_data,
         }
+
+    # @classmethod
+    # def from_args(cls, **kwargs: JsonSerializable) -> "SnubaException":
+    #     """SnubaException does some metaprogramming magic in order to
+    #     be able to re-raise desrialized exceptions as if they were thrown by local
+    #     code. As such, the __init__ method of all SnubaException(s) must have the same signature
+
+    #     If you want to make a custom constructor for your SnubaException, override this function on the class
+    #     """
+    #     raise NotImplementedError
 
     @classmethod
     def from_dict(cls, edict: SnubaExceptionDict) -> "SnubaException":

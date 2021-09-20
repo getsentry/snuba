@@ -1,4 +1,3 @@
-from snuba.utils.snuba_exception import SnubaException
 from __future__ import annotations
 
 import random
@@ -15,6 +14,7 @@ from snuba.redis import redis_client
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import PassthroughCodec
+from snuba.utils.snuba_exception import SnubaException
 from tests.assertions import assert_changes, assert_does_not_change
 
 
@@ -83,7 +83,7 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
 def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
     key = "key"
 
-    class CustomException(Exception):
+    class CustomException(SnubaException):
         pass
 
     def function() -> bytes:
@@ -114,7 +114,7 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     key = "key"
 
-    class CustomException(Exception):
+    class CustomException(SnubaException):
         pass
 
     def function() -> bytes:

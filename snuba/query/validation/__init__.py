@@ -6,7 +6,7 @@ from snuba.query.expressions import Expression
 from snuba.utils.snuba_exception import SnubaException
 
 
-class InvalidFunctionCall(Exception):
+class InvalidFunctionCall(SnubaException):
     pass
 
 

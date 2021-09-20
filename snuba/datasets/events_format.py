@@ -134,5 +134,5 @@ def escape_field(field: str) -> str:
     return field.translate(ESCAPE_TRANSLATION)
 
 
-class EventTooOld(Exception):
+class EventTooOld(SnubaException):
     pass

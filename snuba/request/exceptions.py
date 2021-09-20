@@ -1,7 +1,7 @@
 from snuba.utils.snuba_exception import SnubaException
 
 
-class InvalidJsonRequestException(Exception):
+class InvalidJsonRequestException(SnubaException):
     """
     Common parent class for exceptions signaling the json payload
     of the request was not valid.

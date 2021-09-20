@@ -19,7 +19,7 @@ from snuba.utils.snuba_exception import SnubaException
 TExpression = TypeVar("TExpression")
 
 
-class InvalidConditionException(Exception):
+class InvalidConditionException(SnubaException):
     pass
 
 

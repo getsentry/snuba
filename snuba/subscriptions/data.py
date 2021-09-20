@@ -42,7 +42,7 @@ SUBSCRIPTION_REFERRER = "subscription"
 logger = logging.getLogger("snuba.subscriptions")
 
 
-class InvalidSubscriptionError(Exception):
+class InvalidSubscriptionError(SnubaException):
     pass
 
 
