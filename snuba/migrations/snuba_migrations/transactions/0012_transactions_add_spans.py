@@ -45,8 +45,9 @@ class Migration(migration.ClickhouseNodeMigration):
                     "spans",
                     Nested(
                         [
-                            ("key", String(Modifiers(low_cardinality=True))),
-                            ("value", Float(64)),
+                            ("op", String(Modifiers(low_cardinality=True))),
+                            ("group", UInt(64)),
+                            ("exclusive_time", Float(64)),
                         ]
                     ),
                 ),
