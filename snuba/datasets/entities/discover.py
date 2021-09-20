@@ -262,8 +262,14 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         ("transaction_op", String(Modifiers(nullable=True))),
         ("transaction_status", UInt(8, Modifiers(nullable=True))),
         ("duration", UInt(32, Modifiers(nullable=True))),
-        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
-        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
+        ("measurements", Nested([("key", String()), ("value", Float(64))])),
+        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))])),
+        (
+            "spans",
+            Nested(
+                [("op", String()), ("group", UInt(64)), ("exclusive_time", Float(64))]
+            ),
+        ),
     ]
 )
 
