@@ -9,6 +9,7 @@ class SnubaExceptionDict(TypedDict):
     __name__: str
     __message__: str
     __extra_data__: Dict[str, JsonSerializable]
+    __should_report__: bool
 
 
 class _ExceptionRegistry:
@@ -39,40 +40,40 @@ def _get_registry() -> _ExceptionRegistry:
 
 
 class SnubaException(Exception):
-    def __init__(self, message: str, **extra_data: JsonSerializable) -> None:
+    def __init__(
+        self, message: str, should_report: bool = True, **extra_data: JsonSerializable
+    ) -> None:
         self.message = message
         self.extra_data = extra_data or {}
+        # whether or not the error should be reported to sentry
+        self.should_report = should_report
 
     def to_dict(self) -> SnubaExceptionDict:
         return {
             "__type__": "SnubaException",
             "__name__": self.__class__.__name__,
             "__message__": self.message,
+            "__should_report__": self.should_report,
             "__extra_data__": self.extra_data,
         }
-
-    # @classmethod
-    # def from_args(cls, **kwargs: JsonSerializable) -> "SnubaException":
-    #     """SnubaException does some metaprogramming magic in order to
-    #     be able to re-raise desrialized exceptions as if they were thrown by local
-    #     code. As such, the __init__ method of all SnubaException(s) must have the same signature
-
-    #     If you want to make a custom constructor for your SnubaException, override this function on the class
-    #     """
-    #     raise NotImplementedError
 
     @classmethod
     def from_dict(cls, edict: SnubaExceptionDict) -> "SnubaException":
         assert edict["__type__"] == "SnubaException"
         defined_exception = _get_registry().get_class_by_name(edict.get("__name__", ""))
+
         if defined_exception is not None:
             return defined_exception(
-                message=edict.get("__message__", ""), **edict.get("__extra_data__", {})
+                message=edict.get("__message__", ""),
+                should_report=edict.get("__should_report__", True),
+                **edict.get("__extra_data__", {})
             )
         return cast(
             SnubaException,
             type(edict["__name__"], (cls,), {})(
-                message=edict.get("__message__", ""), **edict.get("__extra_data__", {})
+                message=edict.get("__message__", ""),
+                should_report=edict.get("__should_report__", True),
+                **edict.get("__extra_data__", {})
             ),
         )
 
@@ -90,5 +91,6 @@ class SnubaException(Exception):
                 "__name__": exc.__class__.__name__,
                 "__message__": str(exc),
                 "__extra_data__": {"from_standard_exception": True},
+                "__should_report__": True,
             }
         )

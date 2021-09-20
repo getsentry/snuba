@@ -16,6 +16,7 @@ def test_exception() -> None:
         assert isinstance(resurfaced_e, MyException)
         assert resurfaced_e.message == message
         assert resurfaced_e.extra_data == {"extra": "data"}
+        assert resurfaced_e.should_report
 
 
 def test_from_standard_exception() -> None:
@@ -30,6 +31,7 @@ def test_from_standard_exception() -> None:
         assert snubs_exc.__class__.__name__ == "Exception"
         assert snubs_exc.message == message
         assert snubs_exc.extra_data["from_standard_exception"]
+        assert snubs_exc.should_report
 
     # if we create a SnubaException from a standard exception
     # before, we'll create the same one again
