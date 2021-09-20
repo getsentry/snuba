@@ -88,15 +88,20 @@ def rate_limit(
     rate_limit_params: RateLimitParameters,
 ) -> Iterator[Optional[RateLimitStats]]:
     """
-    A context manager for rate limiting that allows for limiting based on
-    on a rolling-window per-second rate as well as the number of requests
-    concurrently running.
+    A context manager for rate limiting that allows for limiting based on:
+        * a rolling-window per-second rate
+        * the number of queries concurrently running.
 
-    Uses a single redis sorted set per rate-limiting bucket to track both the
-    concurrency and rate, the score is the query timestamp. Queries are thrown
-    ahead in time when they start so we can count them as concurrent, and
-    thrown back to their start time once they finish so we can count them
-    towards the historical rate.
+    It uses one redis sorted set to keep track of both of these limits
+    The following mapping is kept in redis:
+
+        bucket: SortedSet([(timestamp1, query_id1), (timestamp2, query_id2) ...])
+
+
+    Queries are thrown ahead in time when they start so we can count them
+    as concurrent, and thrown back to their start time once they finish so
+    we can count them towards the historical rate. See the comments for
+    an example.
 
                time >>----->
     +-----------------------------+--------------------------------+
@@ -112,6 +117,7 @@ def rate_limit(
     now = time.time()
     bypass_rate_limit, rate_history_s = state.get_configs(
         [("bypass_rate_limit", 0), ("rate_history_sec", 3600)]
+        #                               ^ number of seconds the timestamps are kept
     )
     assert isinstance(rate_history_s, (int, float))
 
@@ -120,18 +126,50 @@ def rate_limit(
         return
 
     pipe = rds.pipeline(transaction=False)
-    pipe.zremrangebyscore(
-        bucket, "-inf", "({:f}".format(now - rate_history_s)
-    )  # cleanup
+    # cleanup old query timestamps past our retention window
+    pipe.zremrangebyscore(bucket, "-inf", "({:f}".format(now - rate_history_s))
+
+    # Now for the tricky bit:
+    # ======================
+    # The query's *deadline* is added to the sorted set of timestamps, therefore
+    # labeling its execution as in the future.
+
+    # All queries with timestamps in the future are considered to be executing *right now*
+    # Example:
+
+    # now = 100
+    # max_query_duration_s = 30
+    # rate_lookback_s = 10
+    # sorted_set (timestamps only for clarity) = [91, 94, 97, 103, 105, 130]
+
+    # EXPLANATION:
+    # ===========
+
+    # queries that have finished running
+    # (in this example there are 3 queries in the last 10 seconds
+    #  thus the per second rate is 3/10 = 0.3)
+    #      |
+    #      v
+    #  -----------              v--- the current query, vaulted into the future
+    #  [91, 94, 97, 103, 105, 130]
+    #               -------------- < - queries currently running
+    #                                (how many queries are
+    #                                   running concurrently; in this case 3)
+    #              ^
+    #              | current time
+
     pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # type: ignore
     if rate_limit_params.per_second_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need per-second
     else:
-        pipe.zcount(bucket, now - state.rate_lookback_s, now)  # get historical
+        # count queries that have finished for the per-second rate
+        pipe.zcount(bucket, now - state.rate_lookback_s, now)
     if rate_limit_params.concurrent_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need concurrent
     else:
-        pipe.zcount(bucket, "({:f}".format(now), "+inf")  # get concurrent
+        # count the amount queries in the "future" which tells us the amount
+        # of concurrent queries
+        pipe.zcount(bucket, "({:f}".format(now), "+inf")
 
     try:
         _, _, historical, concurrent = pipe.execute()
@@ -163,11 +201,13 @@ def rate_limit(
             rate_limit_params.per_second_limit,
         ),
     ]
-
     reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
     if reason:
         try:
-            rds.zrem(bucket, query_id)  # not allowed / not counted
+            # Remove the query from the sorted set
+            # because we rate limited it. It shouldn't count towards
+            # rate limiting future queries in this bucket.
+            rds.zrem(bucket, query_id)
         except Exception as ex:
             logger.exception(ex)
 
