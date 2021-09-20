@@ -97,8 +97,13 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         selected = query.get_selected_columns()
-        if len(selected) != 1:
-            raise InvalidQueryException("only one aggregation in the select allowed")
+
+        if len(selected) > 2:
+            # In datasets like `sessions` dataset, we might also want to return the total count
+            # along with the aggregate value
+            raise InvalidQueryException(
+                "a maximum of two aggregations in the select are allowed"
+            )
 
         disallowed = ["groupby", "having", "orderby"]
         for field in disallowed:

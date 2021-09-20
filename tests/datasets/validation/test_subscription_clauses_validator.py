@@ -96,6 +96,28 @@ invalid_tests = [
         ),
         id="no orderby clauses",
     ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
+                SelectedExpression(
+                    "count", FunctionCall("_snuba_count_2", "count", ())
+                ),
+                SelectedExpression(
+                    "count", FunctionCall("_snuba_count_3", "count", ())
+                ),
+            ],
+            condition=binary_condition(
+                "equals",
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
+        ),
+        id="a maximum of two aggregations in the select are allowed",
+    ),
 ]
 
 

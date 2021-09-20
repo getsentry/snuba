@@ -2107,7 +2107,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         data = json.loads(resp.data)
         assert data == {
             "error": {
-                "message": "only one aggregation in the select allowed",
+                "message": "invalid clause groupby in subscription query",
                 "type": "invalid_query",
             }
         }
