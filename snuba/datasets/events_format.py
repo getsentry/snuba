@@ -1,4 +1,3 @@
-from snuba.utils.snuba_exception import SnubaException
 from datetime import datetime, timedelta
 from typing import (
     Any,
@@ -18,6 +17,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
+from snuba.utils.snuba_exception import SnubaException
 
 
 def extract_project_id(

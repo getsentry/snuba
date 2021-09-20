@@ -1,10 +1,10 @@
-from snuba.utils.snuba_exception import SnubaException
 from typing import Callable, MutableMapping, Sequence, Set
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.table_storage import TableWriter
 from snuba.util import with_span
+from snuba.utils.snuba_exception import SnubaException
 
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}

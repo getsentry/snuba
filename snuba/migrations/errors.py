@@ -1,4 +1,6 @@
 from snuba.utils.snuba_exception import SnubaException
+
+
 class InvalidMigrationState(Exception):
     pass
 

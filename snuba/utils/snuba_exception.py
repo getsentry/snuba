@@ -1,5 +1,6 @@
-from snuba.utils.snuba_exception import SnubaException
 from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
+
+from snuba.utils.snuba_exception import SnubaException
 
 # mypy has not figured out recursive types yet so this can't be totally typesafe
 JsonSerializable = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]

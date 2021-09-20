@@ -1,9 +1,8 @@
-from snuba.utils.snuba_exception import SnubaException
 from abc import ABC, abstractmethod
 from typing import Callable, Generic, Optional, TypeVar
 
 from snuba.utils.metrics.timer import Timer
-
+from snuba.utils.snuba_exception import SnubaException
 
 TValue = TypeVar("TValue")
 

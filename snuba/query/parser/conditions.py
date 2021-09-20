@@ -1,4 +1,3 @@
-from snuba.utils.snuba_exception import SnubaException
 from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
 from snuba.clickhouse.columns import ColumnSet
@@ -15,6 +14,7 @@ from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS, UNARY_OPERATORS
 from snuba.util import is_condition
+from snuba.utils.snuba_exception import SnubaException
 
 TExpression = TypeVar("TExpression")
 

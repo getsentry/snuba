@@ -1,6 +1,7 @@
-from snuba.utils.snuba_exception import SnubaException
 from dataclasses import dataclass
 from typing import Optional
+
+from snuba.utils.snuba_exception import SnubaException
 
 
 @dataclass(frozen=True)

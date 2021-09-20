@@ -1,9 +1,9 @@
-from snuba.utils.snuba_exception import SnubaException
 from typing import Callable, MutableMapping
 
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.utils.snuba_exception import SnubaException
 
 
 class InvalidEntityError(Exception):

@@ -1,4 +1,3 @@
-from snuba.utils.snuba_exception import SnubaException
 import logging
 import time
 import uuid
@@ -11,6 +10,7 @@ from typing import Iterator, Mapping, MutableMapping, Optional, Sequence, Type
 
 from snuba import state
 from snuba.redis import redis_client as rds
+from snuba.utils.snuba_exception import SnubaException
 
 logger = logging.getLogger("snuba.state.rate_limit")
 

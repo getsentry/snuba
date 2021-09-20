@@ -1,5 +1,5 @@
-from snuba.utils.snuba_exception import SnubaException
 from snuba.query.expressions import Expression
+from snuba.utils.snuba_exception import SnubaException
 
 
 class InvalidQueryException(Exception):

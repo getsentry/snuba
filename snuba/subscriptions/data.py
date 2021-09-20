@@ -1,4 +1,3 @@
-from snuba.utils.snuba_exception import SnubaException
 from __future__ import annotations
 
 import logging
@@ -36,6 +35,7 @@ from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.snuba_exception import SnubaException
 
 SUBSCRIPTION_REFERRER = "subscription"
 

@@ -1,23 +1,20 @@
-from snuba.utils.snuba_exception import SnubaException
-import pytest
-
 from typing import Any, Sequence
+
+import pytest
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.query.conditions import BooleanFunctions, ConditionFunctions
 from snuba.query.expressions import (
+    Argument,
     Column,
     Expression,
     FunctionCall,
     Lambda,
     Literal,
-    Argument,
-)
-from snuba.query.conditions import (
-    ConditionFunctions,
-    BooleanFunctions,
 )
 from snuba.query.parser.conditions import parse_conditions_to_expr
+from snuba.utils.snuba_exception import SnubaException
 
 test_conditions = [
     ([], None,),
