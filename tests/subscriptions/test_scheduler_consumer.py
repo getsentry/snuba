@@ -5,15 +5,24 @@ from datetime import datetime, timedelta
 from arroyo import Partition, Topic
 from arroyo.backends.kafka import KafkaProducer
 from arroyo.synchronized import Commit, commit_codec
+from confluent_kafka.admin import AdminClient
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
-from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import (
+    build_kafka_producer_configuration,
+    get_default_kafka_configuration,
+)
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
 def test_scheduler_consumer() -> None:
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [SnubaTopic.COMMIT_LOG])
+
     metrics_backend = TestingMetricsBackend()
     entity_name = "events"
     entity = get_entity(EntityKey(entity_name))
