@@ -5,7 +5,7 @@ from typing import Optional
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
+from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -39,7 +39,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         if request_settings.get_turbo():
             return
 
-        project_ids = get_project_ids_in_query_ast(query, self.__project_column)
+        project_ids = get_object_ids_in_query_ast(query, self.__project_column)
 
         set_final = False
         if project_ids:
@@ -47,7 +47,14 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 list(project_ids), self.__replacer_state_name,
             )
             if final:
-                metrics.increment("final", tags={"cause": "final_flag"})
+                metrics.increment(
+                    "final",
+                    tags={
+                        "cause": "final_flag",
+                        "referrer": request_settings.referrer,
+                        "parent_api": request_settings.get_parent_api(),
+                    },
+                )
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.
@@ -56,7 +63,14 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 )
                 assert isinstance(max_group_ids_exclude, int)
                 if len(exclude_group_ids) > max_group_ids_exclude:
-                    metrics.increment("final", tags={"cause": "max_groups"})
+                    metrics.increment(
+                        "final",
+                        tags={
+                            "cause": "max_groups",
+                            "referrer": request_settings.referrer,
+                            "parent_api": request_settings.get_parent_api(),
+                        },
+                    )
                     set_final = True
                 else:
                     query.add_condition_to_ast(

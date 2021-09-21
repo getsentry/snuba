@@ -1,4 +1,4 @@
-from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
+from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
@@ -23,7 +23,7 @@ class ProjectRateLimiterProcessor(QueryProcessor):
             if ex.rate_limit_name == PROJECT_RATE_LIMIT_NAME:
                 return
 
-        project_ids = get_project_ids_in_query_ast(query, self.project_column)
+        project_ids = get_object_ids_in_query_ast(query, self.project_column)
         if not project_ids:
             return
 

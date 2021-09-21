@@ -1,9 +1,9 @@
-from snuba.clickhouse.columns import ColumnSet
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
 )
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import (
     Argument,
@@ -34,14 +34,13 @@ class HandledFunctionsProcessor(QueryProcessor):
     Both functions return 1 or 0 if a row matches.
     """
 
-    def __init__(self, column: str, columnset: ColumnSet):
+    def __init__(self, column: str):
         self.__column = column
-        self.__columnset = columnset
 
-    def validate_parameters(self, exp: FunctionCall) -> None:
+    def validate_parameters(self, exp: FunctionCall, entity: QueryEntity) -> None:
         validator = SignatureValidator([])
         try:
-            validator.validate(exp.parameters, self.__columnset)
+            validator.validate(exp.function_name, exp.parameters, entity)
         except InvalidFunctionCall as err:
             raise InvalidExpressionException(
                 exp,
@@ -53,7 +52,7 @@ class HandledFunctionsProcessor(QueryProcessor):
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "isHandled":
-                    self.validate_parameters(exp)
+                    self.validate_parameters(exp, query.get_from_clause())
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",
@@ -81,7 +80,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                         ),
                     )
                 if exp.function_name == "notHandled":
-                    self.validate_parameters(exp)
+                    self.validate_parameters(exp, query.get_from_clause())
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",

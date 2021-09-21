@@ -15,6 +15,7 @@ from sentry_sdk.api import configure_scope
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
+from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
@@ -37,6 +38,7 @@ from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
+    get_global_rate_limit_params,
 )
 from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import Codec
@@ -165,10 +167,12 @@ def update_query_metadata_and_stats(
     Also updates stats with any relevant information and returns the updated dict.
     """
     stats.update(query_settings)
+    sql_anonymized = format_query_anonymized(query).get_sql()
 
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
             sql=sql,
+            sql_anonymized=sql_anonymized,
             stats=stats,
             status=status,
             profile=generate_profile(query),
@@ -241,6 +245,12 @@ def execute_query_with_rate_limits(
     query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
+    # Global rate limiter is added at the end of the chain to be
+    # the last for evaluation.
+    # This allows us not to borrow capacity from the global quota
+    # during the evaluation if one of the more specific limiters
+    # (like the project rate limiter) rejects the query first.
+    request_settings.add_rate_limit(get_global_rate_limit_params())
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
     with RateLimitAggregator(

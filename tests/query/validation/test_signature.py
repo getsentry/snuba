@@ -2,13 +2,14 @@ from typing import Sequence
 
 import pytest
 
+from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import ColumnSet, DateTime, String
-from snuba.query.expressions import (
-    Column as ColumnExpr,
-    Expression,
-    Literal as LiteralExpr,
-)
+from snuba.clickhouse.columns import String
+from snuba.datasets.entities import EntityKey
+from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.expressions import Column as ColumnExpr
+from snuba.query.expressions import Expression
+from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import (
     Any,
@@ -121,20 +122,23 @@ def test_like_validator(
     extra_param: bool,
     should_raise: bool,
 ) -> None:
-    schema = ColumnSet(
-        [
-            ("event_id", String()),
-            ("level", String(Modifiers(nullable=True))),
-            ("str_col", String()),
-            ("timestamp", DateTime()),
-            ("received", DateTime(Modifiers(nullable=True))),
-        ]
+    entity = QueryEntity(
+        EntityKey.EVENTS,
+        ColumnSet(
+            [
+                ("event_id", String()),
+                ("level", String(Modifiers(nullable=True))),
+                ("str_col", String()),
+                ("timestamp", DateTime()),
+                ("received", DateTime(Modifiers(nullable=True))),
+            ]
+        ),
     )
-
+    func_name = "like"
     validator = SignatureValidator(expected_types, extra_param)
 
     if should_raise:
         with pytest.raises(InvalidFunctionCall):
-            validator.validate(expressions, schema)
+            validator.validate(func_name, expressions, entity)
     else:
-        validator.validate(expressions, schema)
+        validator.validate(func_name, expressions, entity)

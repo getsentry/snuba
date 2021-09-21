@@ -37,7 +37,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
-    enforce_table_writer,
     get_dataset,
     get_dataset_name,
     get_enabled_dataset_names,
@@ -120,17 +119,22 @@ def truncate_dataset(dataset: Dataset) -> None:
     for entity in dataset.get_all_entities():
         for storage in entity.get_all_storages():
             cluster = storage.get_cluster()
-            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-            database = cluster.get_database()
+            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+            for node in nodes:
+                clickhouse = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
 
-            schema = storage.get_schema()
+                database = cluster.get_database()
 
-            if not isinstance(schema, TableSchema):
-                return
+                schema = storage.get_schema()
 
-            table = schema.get_local_table_name()
+                if not isinstance(schema, TableSchema):
+                    return
 
-            clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+                table = schema.get_local_table_name()
+
+                clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 application = Flask(__name__, static_url_path="")
@@ -427,8 +431,11 @@ def dataset_query(
             status = 429
             details = {
                 "type": "rate-limited",
-                "message": "rate limit exceeded",
+                "message": str(cause),
             }
+            logger.warning(
+                str(cause), exc_info=True,
+            )
         elif isinstance(cause, ClickhouseError):
             details = {
                 "type": "clickhouse",
@@ -491,17 +498,25 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
-    def write(*, dataset: Dataset) -> RespTuple:
+    from snuba.datasets.entity import Entity as EntityType
+    from snuba.web.converters import EntityConverter
+
+    application.url_map.converters["entity"] = EntityConverter
+
+    def _write_to_entity(*, entity: EntityType) -> RespTuple:
         from snuba.processor import InsertBatch
 
         rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
+        writable_storage = entity.get_writable_storage()
+        assert writable_storage is not None
+        table_writer = writable_storage.get_table_writer()
+
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
+
             processed_message = (
-                enforce_table_writer(dataset)
-                .get_stream_loader()
+                table_writer.get_stream_loader()
                 .get_processor()
                 .process_message(
                     message,
@@ -515,10 +530,18 @@ if application.debug or application.testing:
                 rows.extend(processed_message.rows)
 
         BatchWriterEncoderWrapper(
-            enforce_table_writer(dataset).get_batch_writer(metrics), JSONRowEncoder(),
+            table_writer.get_batch_writer(metrics), JSONRowEncoder(),
         ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
+
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset) -> RespTuple:
+        return _write_to_entity(entity=dataset.get_default_entity())
+
+    @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
+    def write_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(entity=entity)
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset) -> RespTuple:

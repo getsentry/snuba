@@ -333,7 +333,7 @@ test_data = [
 def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
-    request = Request("a", query_body, query, HTTPRequestSettings(), "r")
+    request = Request("a", query_body, query, HTTPRequestSettings(referrer="r"))
     entity = get_entity(query.get_from_clause().key)
     storage = entity.get_writable_storage()
     assert storage is not None
@@ -412,7 +412,7 @@ def test_aliasing() -> None:
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         }
     )
-    sql = format_query(processed, HTTPRequestSettings()).get_sql()
+    sql = format_query(processed).get_sql()
     transactions_table_name = (
         transactions_storage.get_table_writer().get_schema().get_table_name()
     )

@@ -198,9 +198,7 @@ class BaseEventsEntity(Entity, ABC):
             ),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            HandledFunctionsProcessor(
-                "exception_stacks.mechanism_handled", self.get_data_model()
-            ),
+            HandledFunctionsProcessor("exception_stacks.mechanism_handled"),
             ProjectRateLimiterProcessor(project_column="project_id"),
         ]
 

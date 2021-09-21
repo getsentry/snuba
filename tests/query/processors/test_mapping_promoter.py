@@ -1,4 +1,5 @@
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet, Nested
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt

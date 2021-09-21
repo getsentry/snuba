@@ -1,5 +1,6 @@
+from abc import ABC, abstractmethod
 from datetime import date, datetime
-from typing import Optional, Sequence
+from typing import Optional, Sequence, cast
 
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 from snuba.query.conditions import (
@@ -21,7 +22,7 @@ from snuba.query.expressions import (
 from snuba.query.parsing import ParsingContext
 
 
-class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
+class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
     """
     This Visitor implementation is able to format one expression in the Snuba
     Query for Clickhouse.
@@ -31,11 +32,6 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
 
     When passing an instance of this class to the accept method of
     the visited expression, the return value is the formatted string.
-
-    This Formatter produces a properly escaped string. The result should never
-    be further escaped. This should be the only place where expression
-    escaping happens as it is done by each method that formats a specific
-    type of expression.
     """
 
     def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
@@ -43,7 +39,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             parsing_context if parsing_context is not None else ParsingContext()
         )
 
-    def __alias(self, formatted_exp: str, alias: Optional[str]) -> str:
+    def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
             return formatted_exp
         elif self.__parsing_context.is_alias_present(alias):
@@ -57,26 +53,39 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             self.__parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
+    @abstractmethod
+    def _format_string_literal(self, exp: Literal) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _format_number_literal(self, exp: Literal) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _format_boolean_literal(self, exp: Literal) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _format_datetime_literal(self, exp: Literal) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _format_date_literal(self, exp: Literal) -> str:
+        raise NotImplementedError
+
     def visit_literal(self, exp: Literal) -> str:
         if exp.value is None:
-            return self.__alias("NULL", exp.alias)
-        elif exp.value is True:
-            return self.__alias("true", exp.alias)
-        elif exp.value is False:
-            return self.__alias("false", exp.alias)
+            return self._alias("NULL", exp.alias)
+        if isinstance(exp.value, bool):
+            return self._format_boolean_literal(exp)
         elif isinstance(exp.value, str):
-            return self.__alias(escape_string(exp.value), exp.alias)
+            return self._format_string_literal(exp)
         elif isinstance(exp.value, (int, float)):
-            return self.__alias(str(exp.value), exp.alias)
+            return self._format_number_literal(exp)
         elif isinstance(exp.value, datetime):
-            value = exp.value.replace(tzinfo=None, microsecond=0)
-            return self.__alias(
-                "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
-            )
+            return self._format_datetime_literal(exp)
         elif isinstance(exp.value, date):
-            return self.__alias(
-                "toDate('{}', 'Universal')".format(exp.value.isoformat()), exp.alias
-            )
+            return self._format_date_literal(exp)
         else:
             raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
@@ -101,7 +110,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         # This happens often since we apply column aliases during
         # parsing so the names are preserved during query processing.
         if exp.alias != "".join(ret_unescaped):
-            return self.__alias("".join(ret), exp.alias)
+            return self._alias("".join(ret), exp.alias)
         else:
             return "".join(ret)
 
@@ -123,7 +132,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             # Workaround for https://github.com/ClickHouse/ClickHouse/issues/11622
             # Some distributed queries fail when arrays are passed as array(1,2,3)
             # and work when they are passed as [1, 2, 3]
-            return self.__alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
+            return self._alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
 
         elif exp.function_name == BooleanFunctions.AND:
             formatted = (c.accept(self) for c in get_first_level_and_conditions(exp))
@@ -134,12 +143,12 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return f"({' OR '.join(formatted)})"
 
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
-        return self.__alias(ret, exp.alias)
+        return self._alias(ret, exp.alias)
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         int_func = exp.internal_function.accept(self)
         ret = f"{int_func}({self.__visit_params(exp.parameters)})"
-        return self.__alias(ret, exp.alias)
+        return self._alias(ret, exp.alias)
 
     def __escape_identifier_enforce(self, expr: str) -> str:
         ret = escape_identifier(expr)
@@ -154,4 +163,59 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     def visit_lambda(self, exp: Lambda) -> str:
         parameters = [self.__escape_identifier_enforce(v) for v in exp.parameters]
         ret = f"({', '.join(parameters)} -> {exp.transformation.accept(self)})"
-        return self.__alias(ret, exp.alias)
+        return self._alias(ret, exp.alias)
+
+
+class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
+    """
+    This Formatter produces a properly escaped string. The result should never
+    be further escaped. This should be the only place where expression
+    escaping happens as it is done by each method that formats a specific
+    type of expression.
+    """
+
+    def _format_string_literal(self, exp: Literal) -> str:
+        return self._alias(escape_string(cast(str, exp.value)), exp.alias)
+
+    def _format_number_literal(self, exp: Literal) -> str:
+        return self._alias(str(exp.value), exp.alias)
+
+    def _format_boolean_literal(self, exp: Literal) -> str:
+        if exp.value is True:
+            return self._alias("true", exp.alias)
+
+        return self._alias("false", exp.alias)
+
+    def _format_datetime_literal(self, exp: Literal) -> str:
+        value = cast(datetime, exp.value).replace(tzinfo=None, microsecond=0)
+        return self._alias(
+            "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
+        )
+
+    def _format_date_literal(self, exp: Literal) -> str:
+        return self._alias(
+            "toDate('{}', 'Universal')".format(cast(date, exp.value).isoformat()),
+            exp.alias,
+        )
+
+
+class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase):
+    """
+    This Formatter strips string and integer literals and replaces them with a
+    a token representing the type of literal.
+    """
+
+    def _format_string_literal(self, exp: Literal) -> str:
+        return "$S"
+
+    def _format_number_literal(self, exp: Literal) -> str:
+        return "$N"
+
+    def _format_boolean_literal(self, exp: Literal) -> str:
+        return "$B"
+
+    def _format_datetime_literal(self, exp: Literal) -> str:
+        return "$DT"
+
+    def _format_date_literal(self, exp: Literal) -> str:
+        return "$D"

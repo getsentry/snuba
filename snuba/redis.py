@@ -2,10 +2,10 @@ from __future__ import absolute_import
 
 from typing import Any, Union
 
-from redis.client import StrictRedis
-from redis.exceptions import BusyLoadingError, ConnectionError
 from rediscluster import StrictRedisCluster
 
+from redis.client import StrictRedis
+from redis.exceptions import BusyLoadingError, ConnectionError
 from snuba import settings
 
 RedisClientType = Union[StrictRedis, StrictRedisCluster]

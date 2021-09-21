@@ -1,10 +1,12 @@
 import random
+import textwrap
 import uuid
 from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union
 
 import sentry_sdk
 
 from snuba import state
+from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
@@ -79,13 +81,25 @@ def build_request(
                 }
                 settings_obj: Union[
                     HTTPRequestSettings, SubscriptionRequestSettings
-                ] = settings_class(**settings)
+                ] = settings_class(
+                    referrer=referrer,
+                    parent_api=request_parts.query["parent_api"],
+                    **settings
+                )
             elif settings_class == SubscriptionRequestSettings:
                 settings_obj = settings_class(
-                    consistent=_consistent_override(True, referrer)
+                    referrer=referrer, consistent=_consistent_override(True, referrer),
                 )
 
             query = parser(request_parts, settings_obj, dataset)
+
+            project_ids = get_object_ids_in_query_ast(query, "project_id")
+            if project_ids is not None and len(project_ids) == 1:
+                sentry_sdk.set_tag("snuba_project_id", project_ids.pop())
+
+            org_ids = get_object_ids_in_query_ast(query, "org_id")
+            if org_ids is not None and len(org_ids) == 1:
+                sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
 
             request_id = uuid.uuid4().hex
             request = Request(
@@ -96,7 +110,6 @@ def build_request(
                 ChainMap(request_parts.query, *request_parts.extensions.values()),
                 query,
                 settings_obj,
-                referrer,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             record_invalid_request(timer, referrer)
@@ -105,7 +118,13 @@ def build_request(
             record_error_building_request(timer, referrer)
             raise exception
 
-        span.set_data("snuba_query", request.body)
+        span.set_data(
+            "snuba_query_parsed", repr(query).split("\n"),
+        )
+        span.set_data(
+            "snuba_query_raw",
+            textwrap.wrap(repr(request.body), 100, break_long_words=False),
+        )
 
         timer.mark("validate_schema")
         return request

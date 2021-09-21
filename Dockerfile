@@ -1,12 +1,11 @@
-ARG PYTHON_VERSION=3.8
-FROM python:${PYTHON_VERSION}-slim AS application
+ARG PYTHON_VERSION=3.8.11
+FROM python:${PYTHON_VERSION}-slim-bullseye AS application
 
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
     apt-get update; \
     apt-get install --no-install-recommends -y \
         libexpat1 \
-        libffi6 \
         liblz4-1 \
         libpcre3 \
     ; \
@@ -70,8 +69,8 @@ RUN set -ex; \
     pip install -e .; \
     snuba --help;
 
-ARG SNUBA_VERSION_SHA
-ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
+ARG SOURCE_COMMIT
+ENV SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

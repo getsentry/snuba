@@ -53,9 +53,7 @@ def test_failure_rate_format_expressions() -> None:
         ],
     )
 
-    failure_rate_processor(ColumnSet([])).process_query(
-        unprocessed, HTTPRequestSettings()
-    )
+    failure_rate_processor().process_query(unprocessed, HTTPRequestSettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
     ret = unprocessed.get_selected_columns()[1].expression.accept(

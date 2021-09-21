@@ -1381,6 +1381,8 @@ class TestApi(SimpleAPITest):
             )
         )
         assert response.status_code == 429
+        data = json.loads(response.data)
+        assert data["error"]["message"] == "global concurrent of 1 exceeds limit of 0"
 
     def test_project_rate_limiting(self) -> None:
         # All projects except project 1 are allowed
@@ -1414,6 +1416,8 @@ class TestApi(SimpleAPITest):
             )
         )
         assert response.status_code == 429
+        data = json.loads(response.data)
+        assert data["error"]["message"] == "project concurrent of 1 exceeds limit of 0"
 
     def test_doesnt_select_deletions(self) -> None:
         query = {

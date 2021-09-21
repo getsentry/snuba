@@ -27,6 +27,7 @@ _AGGREGATION_FUNCTIONS_BASE = {
     "argMin",
     "argMax",
     "avgWeighted",
+    "corr",
     "topK",
     "topKWeighted",
     "groupArray",
@@ -102,3 +103,101 @@ AGGREGATION_FUNCTIONS = {
 
 def is_aggregation_function(func_name: str) -> bool:
     return func_name in AGGREGATION_FUNCTIONS
+
+
+# Categorized based on ClickHouse docs
+# https://clickhouse.tech/docs/en/sql-reference/functions/
+REGULAR_FUNCTIONS = {
+    # arithmetic
+    "abs",
+    "plus",
+    "minus",
+    "multiply",
+    "divide",
+    # arrays,
+    "array",
+    "arrayConcat",
+    "arrayElement",
+    "arrayExists",
+    "arrayAll",
+    "indexOf",
+    "has",
+    "hasAny",
+    "notEmpty",  # can apply to strings as well
+    "length",  # can apply to strings as well
+    # comparison
+    "equals",
+    "notEquals",
+    "less",
+    "greater",
+    "lessOrEquals",
+    "greaterOrEquals",
+    # logical
+    "and",
+    "or",
+    "not",
+    # type comparison
+    "toDateTime",
+    "toString",
+    "toInt8",
+    "toUInt8",
+    "toUInt64",
+    "toFloat64",
+    # dates and times
+    "toStartOfDay",
+    "toStartOfHour",
+    "toStartOfYear",
+    "toUnixTimestamp",
+    # conditionals
+    "if",
+    "multiIf",
+    # mathematical
+    "log",
+    "sqrt",
+    # rounding functions
+    "floor",
+    # hash functions
+    "cityHash64",
+    # functions for IN operator
+    "in",
+    "notIn",
+    # functions for searching strings
+    "like",
+    "notLike",
+    "match",
+    "positionCaseInsensitive",
+    "multiSearchFirstPositionCaseInsensitive",
+    # functions for nulls
+    "isNull",
+    "isNotNull",
+    "ifNull",
+    "assumeNotNull",
+    "coalesce",
+    # functions for tuples
+    "tuple",
+    "tupleElement",
+    # other,
+    "transform",
+    "least",
+    "greatest",
+    # table functions
+    "arrayJoin",
+}
+
+# Custom function names that are not in ClickHouse but need to be validated
+CUSTOM_FUNCTIONS = {
+    # transactions
+    "apdex",
+    "failure_rate",
+    # events
+    "isHandled",
+    "notHandled",
+}
+
+GLOBAL_VALID_FUNCTIONS = (
+    set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS | CUSTOM_FUNCTIONS
+)
+
+
+def is_valid_global_function(func_name: str) -> bool:
+    return func_name in GLOBAL_VALID_FUNCTIONS
