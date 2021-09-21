@@ -51,7 +51,6 @@ class TagsTypeTransformer(QueryProcessor):
                 raise InvalidExpressionException.from_args(
                     exp,
                     "Expected a string key containing an integer in subscriptable.",
-                    should_report=True,
                 )
 
             return SubscriptableReference(

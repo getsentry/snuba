@@ -1,4 +1,50 @@
+"""
+SnubaException: the base class for all custom exceptions in the snuba project which
+allows for serialization, deserialization, and re-raising the same exception from the
+deserialized version.
+
+Diagram:
+
+┌──────────────────────────────────┐                           ┌──────────────────────────────────────────────┐
+│         MachineA                 │                           │         MachineB                             │
+│                                  │MyException().to_dict()    │ class MyException(SnubaException)            │
+│ class MyException(SnubaException)├──────────────────────────►│recvd_exc = SnubaException.from_dict(payload) │
+│                                  │                           │assert isinstance(recvd_exc, MyException)     │
+│                                  │                           │                                              │
+└──────────────────────────────────┘                           └──────────────────────────────────────────────┘
+
+Usage:
+
+>>> # Sender code
+>>> from snuba.utils.snuba_exception import SnubaException
+>>>
+>>> class MyException(SnubaException):
+>>>     pass
+>>>
+>>> try:
+>>>     raise MyException(
+>>>         message="this is a message",
+>>>         should_report=False # this should not be reported to sentry
+>>>     )
+>>> except SnubaException as e:
+>>>     # serialize it
+>>>     send_somewhere(rapidjson.dumps(e.to_dict()))
+
+# Receiver code
+
+>>> from snuba.utils.snuba_exception import SnubaException
+>>> # Both sender AND receiver have to define the exception with the same
+>>> # name to be able to resurface the exception
+>>> class MyException(SnubaException):
+>>>     pass
+>>>
+>>> recvd_exception_dict = rapidjson.loads(recv())
+>>> raise SnubaException.from_dict(recvd_exception_dict) # this will be an instance of MyException
+"""
+
 from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
+
+import rapidjson
 
 # mypy has not figured out recursive types yet so this can't be totally typesafe
 JsonSerializable = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
@@ -32,9 +78,7 @@ _REGISTRY = None
 
 def _get_registry() -> _ExceptionRegistry:
     global _REGISTRY
-    # NOTE (Should this be protected by a mutex? I'm thinking it should be fine)
-    # given that this will be instatiated with the python AST loading
-    if _REGISTRY is None:
+    if not _REGISTRY:
         _REGISTRY = _ExceptionRegistry()
     return _REGISTRY
 
@@ -71,6 +115,10 @@ class SnubaException(Exception):
                 should_report=edict.get("__should_report__", True),
                 **edict.get("__extra_data__", {})
             )
+        # if an exception is created from a dictionary which is not in the registry,
+        # create a new Exception type with that name and message dynamically.
+        # This allows gracefully handling the receiver not having the exception defined
+        # on its end while still allowing normal exception behavior.
         return cast(
             SnubaException,
             type(edict["__name__"], (cls,), {})(
@@ -81,6 +129,10 @@ class SnubaException(Exception):
         )
 
     def __init_subclass__(cls) -> None:
+        # NOTE: This function is called when a subclass of SnubaException
+        # is **DEFINED** not when its __init__ function is called (the name is a bit confusing)
+        # This is how we keep a registry of all the defined snuba Exceptions. It happens
+        # at the time that the python AST is loaded into memory
         _get_registry().register_class(cls)
         return super().__init_subclass__()
 
@@ -97,3 +149,6 @@ class SnubaException(Exception):
                 "__should_report__": True,
             }
         )
+
+    def __repr__(self) -> str:
+        return cast(str, rapidjson.dumps(self.to_dict(), indent=2))

@@ -16,9 +16,8 @@ class ValidationException(InvalidQueryException):
 
 
 class InvalidExpressionException(ValidationException):
-    # TODO (figure out what do do with this)
     @classmethod
     def from_args(
-        cls, expression: Expression, message: str, should_report: bool,
+        cls, expression: Expression, message: str, should_report: bool = True,
     ) -> "InvalidExpressionException":
         return cls(message, should_report=should_report, expression=repr(expression))
