@@ -37,6 +37,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
+    enforce_table_writer,
     get_dataset,
     get_dataset_name,
     get_enabled_dataset_names,
@@ -498,25 +499,17 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    from snuba.datasets.entity import Entity as EntityType
-    from snuba.web.converters import EntityConverter
-
-    application.url_map.converters["entity"] = EntityConverter
-
-    def _write_to_entity(*, entity: EntityType) -> RespTuple:
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset) -> RespTuple:
         from snuba.processor import InsertBatch
 
         rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
-        writable_storage = entity.get_writable_storage()
-        assert writable_storage is not None
-        table_writer = writable_storage.get_table_writer()
-
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
-
             processed_message = (
-                table_writer.get_stream_loader()
+                enforce_table_writer(dataset)
+                .get_stream_loader()
                 .get_processor()
                 .process_message(
                     message,
@@ -530,18 +523,10 @@ if application.debug or application.testing:
                 rows.extend(processed_message.rows)
 
         BatchWriterEncoderWrapper(
-            table_writer.get_batch_writer(metrics), JSONRowEncoder(),
+            enforce_table_writer(dataset).get_batch_writer(metrics), JSONRowEncoder(),
         ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
-
-    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
-    def write(*, dataset: Dataset) -> RespTuple:
-        return _write_to_entity(entity=dataset.get_default_entity())
-
-    @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
-    def write_to_entity(*, entity: EntityType) -> RespTuple:
-        return _write_to_entity(entity=entity)
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset) -> RespTuple:

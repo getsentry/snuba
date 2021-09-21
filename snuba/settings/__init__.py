@@ -145,9 +145,6 @@ TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
 # Map the Zookeeper path for the replicated merge tree to something else
 CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 
-# Metric Alerts Subscription Options
-ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
-
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

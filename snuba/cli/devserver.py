@@ -1,7 +1,5 @@
 import click
 
-from snuba import settings
-
 
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
@@ -136,27 +134,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ],
         ),
     ]
-
-    if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
-        daemons += [
-            (
-                "subscriptions-consumer-sessions",
-                [
-                    "snuba",
-                    "subscriptions",
-                    "--auto-offset-reset=latest",
-                    "--log-level=debug",
-                    "--max-batch-size=1",
-                    "--consumer-group=snuba-sessions-subscriptions-consumers",
-                    "--dataset=sessions",
-                    "--commit-log-topic=snuba-sessions-commit-log",
-                    "--commit-log-group=sessions_group",
-                    "--delay-seconds=1",
-                    "--schedule-ttl=10",
-                    "--max-query-workers=1",
-                ],
-            )
-        ]
 
     manager = Manager()
     for name, cmd in daemons:
