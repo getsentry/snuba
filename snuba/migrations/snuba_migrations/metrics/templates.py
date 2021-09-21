@@ -81,10 +81,10 @@ SELECT
     org_id,
     project_id,
     metric_id,
-    60 as granularity,
+    %(granularity)d as granularity,
     tags.key,
     tags.value,
-    toStartOfMinute(timestamp) as timestamp,
+    toStartOfInterval(timestamp, INTERVAL %(granularity)d second) as timestamp,
     retention_days,
     %(aggregation_states)s
 FROM %(raw_table_name)s
@@ -107,6 +107,7 @@ def get_forward_migrations_local(
     mv_name: str,
     aggregation_col_schema: Sequence[Column[Modifiers]],
     aggregation_states: str,
+    granularity: int,
 ) -> Sequence[operations.SqlOperation]:
     aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
     return [
@@ -146,18 +147,39 @@ def get_forward_migrations_local(
             index_type="bloom_filter()",
             granularity=1,
         ),
-        operations.CreateMaterializedView(
-            storage_set=StorageSetKey.METRICS,
-            view_name=mv_name,
-            destination_table_name=table_name,
-            columns=aggregated_cols,
-            query=MATVIEW_STATEMENT
-            % {
-                "raw_table_name": source_table_name,
-                "aggregation_states": aggregation_states,
-            },
-        ),
+    ] + [
+        get_forward_view_migration_local(
+            source_table_name,
+            table_name,
+            mv_name,
+            aggregation_col_schema,
+            aggregation_states,
+            granularity,
+        )
     ]
+
+
+def get_forward_view_migration_local(
+    source_table_name: str,
+    table_name: str,
+    mv_name: str,
+    aggregation_col_schema: Sequence[Column[Modifiers]],
+    aggregation_states: str,
+    granularity: int,
+) -> operations.SqlOperation:
+    aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
+    return operations.CreateMaterializedView(
+        storage_set=StorageSetKey.METRICS,
+        view_name=mv_name,
+        destination_table_name=table_name,
+        columns=aggregated_cols,
+        query=MATVIEW_STATEMENT
+        % {
+            "raw_table_name": source_table_name,
+            "aggregation_states": aggregation_states,
+            "granularity": granularity,
+        },
+    )
 
 
 def get_forward_migrations_dist(

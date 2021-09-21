@@ -21,6 +21,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 Column("value", AggregateFunction("sum", [Float(64)])),
             ],
             aggregation_states="sumState(value) as value",
+            granularity=60,
         )
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:

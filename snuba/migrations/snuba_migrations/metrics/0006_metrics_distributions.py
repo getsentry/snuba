@@ -39,6 +39,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 "sumState(values_rows) as sum, "
                 "countState(values_rows) as count"
             ),
+            granularity=60,
         )
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:

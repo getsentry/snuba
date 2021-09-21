@@ -21,6 +21,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
             ],
             aggregation_states="uniqCombined64State(arrayJoin(set_values)) as value",
+            granularity=60,
         )
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
