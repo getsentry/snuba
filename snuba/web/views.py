@@ -43,7 +43,7 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity as EntityMarker
+from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
 from snuba.redis import redis_client
@@ -406,7 +406,7 @@ def dataset_query(
     if language == Language.SNQL:
         parser: Callable[
             [RequestParts, RequestSettings, Dataset],
-            Union[Query, CompositeQuery[EntityMarker]],
+            Union[Query, CompositeQuery[Entity]],
         ] = partial(parse_snql_query, [])
     else:
         parser = parse_legacy_query
@@ -498,12 +498,12 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    from snuba.datasets.entity import Entity
+    from snuba.datasets.entity import Entity as EntityType
     from snuba.web.converters import EntityConverter
 
     application.url_map.converters["entity"] = EntityConverter
 
-    def _write_to_entity(*, entity: Entity) -> RespTuple:
+    def _write_to_entity(*, entity: EntityType) -> RespTuple:
         from snuba.processor import InsertBatch
 
         rows: MutableSequence[WriterTableRow] = []
@@ -540,7 +540,7 @@ if application.debug or application.testing:
         return _write_to_entity(entity=dataset.get_default_entity())
 
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
-    def write_to_entity(*, entity: Entity) -> RespTuple:
+    def write_to_entity(*, entity: EntityType) -> RespTuple:
         return _write_to_entity(entity=entity)
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
