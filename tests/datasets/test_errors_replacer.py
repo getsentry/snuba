@@ -15,6 +15,7 @@ from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets import errors_replacer
+from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize
@@ -95,7 +96,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "end_delete_groups",
+            ReplacementType.END_DELETE_GROUPS,
             {
                 "project_id": self.project_id,
                 "group_ids": [1, 2, 3],
@@ -140,7 +141,7 @@ class TestReplacer:
         if old_primary_hash is not None:
             message_kwargs["old_primary_hash"] = old_primary_hash
 
-        message = (2, "tombstone_events", message_kwargs)
+        message = (2, ReplacementType.TOMBSTONE_EVENTS, message_kwargs)
 
         replacement = self.replacer.process_message(self._wrap(message))
 
@@ -174,7 +175,7 @@ class TestReplacer:
         to_ts = datetime.now(tz=pytz.utc) + timedelta(3)
         message = (
             2,
-            "tombstone_events",
+            ReplacementType.TOMBSTONE_EVENTS,
             {
                 "project_id": self.project_id,
                 "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
@@ -205,7 +206,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "replace_group",
+            ReplacementType.REPLACE_GROUP,
             {
                 "project_id": self.project_id,
                 "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
@@ -237,7 +238,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "end_merge",
+            ReplacementType.END_MERGE,
             {
                 "project_id": self.project_id,
                 "new_group_id": 2,
@@ -273,7 +274,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "end_unmerge",
+            ReplacementType.END_UNMERGE,
             {
                 "project_id": self.project_id,
                 "previous_group_id": 1,
@@ -313,7 +314,7 @@ class TestReplacer:
 
         message = (
             2,
-            "end_unmerge_hierarchical",
+            ReplacementType.END_UNMERGE_HIERARCHICAL,
             {
                 "project_id": self.project_id,
                 "previous_group_id": 1,
@@ -350,7 +351,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "end_delete_tag",
+            ReplacementType.END_DELETE_TAG,
             {
                 "project_id": self.project_id,
                 "tag": "sentry:user",
@@ -385,7 +386,7 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "end_delete_tag",
+            ReplacementType.END_DELETE_TAG,
             {
                 "project_id": self.project_id,
                 "tag": "foo:bar",
@@ -436,7 +437,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        "end_delete_groups",
+                        ReplacementType.END_DELETE_GROUPS,
                         {
                             "project_id": project_id,
                             "group_ids": [1],
@@ -479,7 +480,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        "tombstone_events",
+                        ReplacementType.TOMBSTONE_EVENTS,
                         {"project_id": project_id, "event_ids": [event_id]},
                     )
                 ).encode("utf-8"),
@@ -509,7 +510,11 @@ class TestReplacer:
             KafkaPayload(
                 None,
                 json.dumps(
-                    (2, "exclude_groups", {"project_id": project_id, "group_ids": [1]},)
+                    (
+                        2,
+                        ReplacementType.EXCLUDE_GROUPS,
+                        {"project_id": project_id, "group_ids": [1]},
+                    )
                 ).encode("utf-8"),
                 [],
             ),
@@ -548,7 +553,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        "end_merge",
+                        ReplacementType.END_MERGE,
                         {
                             "project_id": project_id,
                             "new_group_id": 2,
@@ -587,7 +592,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        "end_unmerge",
+                        ReplacementType.END_UNMERGE,
                         {
                             "project_id": project_id,
                             "previous_group_id": 1,
