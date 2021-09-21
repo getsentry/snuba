@@ -237,8 +237,7 @@ def get_projects_query_flags(
     ]
 
     # results in list of bool
-    for needs_final_key, _ in needs_final_keys_and_type_keys:
-        p.get(needs_final_key)
+    p.mget([needs_final_key for needs_final_key, _ in needs_final_keys_and_type_keys])
 
     exclude_groups_keys_and_types = [
         get_project_exclude_groups_key_and_type_key(project_id, state_name)
@@ -255,8 +254,12 @@ def get_projects_query_flags(
         )
 
     # results in list of str
-    for _, needs_final_type_key in needs_final_keys_and_type_keys:
-        p.get(needs_final_type_key)
+    p.mget(
+        [
+            needs_final_type_key
+            for _, needs_final_type_key in needs_final_keys_and_type_keys
+        ]
+    )
 
     # results in list of int, list, int..
     for _, type_key in exclude_groups_keys_and_types:
@@ -264,42 +267,38 @@ def get_projects_query_flags(
         p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
 
     # 'results' list looks like:
-    # [needs_final..., exclude_groups..., project_replacement_types..., groups_replacement_types...]
+    # [[needs_final...], exclude_groups..., [project_replacement_types...], groups_replacement_types...]
     results = p.execute()
 
-    needs_final = any(results[: len(s_project_ids)])
+    needs_final = any(results[0])
     (
         exclude_groups,
         replacement_types,
     ) = process_exclude_groups_and_replacement_types_results(
-        results[len(s_project_ids) + 1 :],
-        len(needs_final_keys_and_type_keys),
-        2 * len(exclude_groups_keys_and_types),
+        results[1:], 2 * len(exclude_groups_keys_and_types),
     )
 
     return (needs_final, exclude_groups, replacement_types)
 
 
 def process_exclude_groups_and_replacement_types_results(
-    results: List[Any], len_projects: int, double_len_groups: int
+    results: List[Any], double_len_groups: int
 ) -> Tuple[Sequence[int], Set[str]]:
     """
     Helper function for `get_projects_query_flags`.
     `results` is in the form:
     [exclude_groups...,   project_replacement_types...,   groups_replacement_types...]
     which is in the form:
-    [int, list, int...,   str, str, str, ...,             int, list, int, list...]
+    [int, list, int...,   [str, str, str, ...],           int, list, int, list...]
 
     Returns a tuple of: (list of `exclude_groups`, set of `replacement_types`)
     """
-    exclude_groups_results = results[: -(len_projects + double_len_groups)]
+    exclude_groups_results = results[1:double_len_groups]
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(exclude_groups_results[::2], [])}
     )
 
-    projects_replacment_types_result = results[
-        len(exclude_groups_results) : -double_len_groups
-    ]
+    projects_replacment_types_result = results[double_len_groups]
 
     project_replacement_types = {
         replacement_type.decode("utf-8")
