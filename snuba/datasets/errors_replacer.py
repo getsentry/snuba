@@ -236,15 +236,14 @@ def get_projects_query_flags(
         for project_id in s_project_ids
     ]
 
-    # results in list of bool
-    [p.get(needs_final_key) for needs_final_key, _ in needs_final_keys_and_type_keys]
+    for needs_final_key, _ in needs_final_keys_and_type_keys:
+        p.get(needs_final_key)
 
     exclude_groups_keys_and_types = [
         get_project_exclude_groups_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
 
-    # results in list of int, list, int..
     for exclude_groups_key, _ in exclude_groups_keys_and_types:
         p.zremrangebyscore(
             exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
@@ -253,13 +252,9 @@ def get_projects_query_flags(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
         )
 
-    # results in list of str
-    [
+    for _, needs_final_type_key in needs_final_keys_and_type_keys:
         p.get(needs_final_type_key)
-        for _, needs_final_type_key in needs_final_keys_and_type_keys
-    ]
 
-    # results in list of int, list, int..
     for _, type_key in exclude_groups_keys_and_types:
         p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
         p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
@@ -277,27 +272,37 @@ def process_exclude_groups_and_replacement_types_results(
     """
     Helper function for `get_projects_query_flags`.
     `results` is in the form:
-    [needs_final..., exclude_groups..., project_replacement_types..., groups_replacement_types...]
+    [
+        needs_final...,
+        exclude_groups...,
+        project_replacement_types...,
+        groups_replacement_types...
+    ]
+    - `needs_final` slice is `len_projects` long
+    - `excludes_groups` slice is `len_projects * 2` long
+    - `project_replacement_types` slice is `len_projects` long
+    - `groups_replacement_types` slice is `len_projects * 2` long
 
-    Returns a tuple of: (bool, list of `exclude_groups`, set of `replacement_types`)
+    The `len_projects * 2` long slices are in the form:
+    int, list, int, list, ...
+    Only the lists are necessary, the ints are scores from
+    the redis sorted set used to track when the items were zadded.
     """
 
     needs_final = any(results[:len_projects])
-
     exclude_groups_results = results[len_projects : len_projects * 3]
+    projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
+    groups_replacement_types_result = results[len_projects * 4 :]
+
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
     )
-
-    projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
 
     project_replacement_types = {
         replacement_type.decode("utf-8")
         for replacement_type in projects_replacment_types_result
         if replacement_type
     }
-
-    groups_replacement_types_result = results[len_projects * 4 :]
 
     groups_replacement_types = {
         replacement_type.decode("utf-8")
