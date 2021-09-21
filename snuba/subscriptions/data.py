@@ -22,7 +22,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Aggregation, Query
 from snuba.query.types import Condition
 from snuba.query.validation.validators import (
@@ -33,6 +33,10 @@ from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
+from snuba.subscriptions.dataset_subscription import (
+    DatasetSubscription,
+    get_dataset_subscription_class,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 
@@ -129,7 +133,8 @@ class LegacySubscriptionData(SubscriptionData):
 
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
-    organization: Optional[int] = None
+
+    dataset_subscription: DatasetSubscription
 
     def build_request(
         self,
@@ -150,27 +155,20 @@ class LegacySubscriptionData(SubscriptionData):
             SubscriptionRequestSettings,
             Language.LEGACY,
         )
-        extra_conditions: Sequence[Condition] = []
 
-        # This check is necessary because datasets like the `sessions` dataset does not contain a
-        # column `offset`
-        if (
-            offset is not None
-            and "offset" in dataset.get_default_entity().get_data_model()
-        ):
-            extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
+        extra_conditions = self.dataset_subscription.get_dataset_subscription_conditions(
+            offset
+        )
 
-        build_request_dict = {
-            "project": self.project_id,
-            "conditions": [*self.conditions, *extra_conditions],
-            "aggregations": self.aggregations,
-            "from_date": (timestamp - self.time_window).isoformat(),
-            "to_date": timestamp.isoformat(),
-        }
-        if self.organization:
-            build_request_dict.update({"organization": self.organization})
         return build_request(
-            build_request_dict,
+            {
+                "project": self.project_id,
+                "conditions": [*self.conditions, *extra_conditions],
+                "aggregations": self.aggregations,
+                "from_date": (timestamp - self.time_window).isoformat(),
+                "to_date": timestamp.isoformat(),
+                **self.dataset_subscription.to_dict(),
+            },
             parse_legacy_query,
             SubscriptionRequestSettings,
             schema,
@@ -184,13 +182,17 @@ class LegacySubscriptionData(SubscriptionData):
         if not data.get("aggregations"):
             raise InvalidQueryException("No aggregation provided")
 
+        dataset_subscription = get_dataset_subscription_class(data_dict=data)(
+            subscription_type=SubscriptionType.LEGACY.value, data_dict=data
+        )
+
         return LegacySubscriptionData(
             project_id=data["project_id"],
             conditions=data["conditions"],
             aggregations=data["aggregations"],
             time_window=timedelta(seconds=data["time_window"]),
             resolution=timedelta(seconds=data["resolution"]),
-            organization=data.get("organization"),
+            dataset_subscription=dataset_subscription,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -200,14 +202,15 @@ class LegacySubscriptionData(SubscriptionData):
             "aggregations": self.aggregations,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
-            "organization": self.organization,
+            **self.dataset_subscription.to_dict(),
         }
 
 
 @dataclass(frozen=True)
 class SnQLSubscriptionData(SubscriptionData):
     query: str
-    organization: Optional[int] = None
+
+    dataset_subscription: DatasetSubscription
 
     def add_conditions(
         self,
@@ -243,28 +246,9 @@ class SnQLSubscriptionData(SubscriptionData):
                 Literal(None, timestamp),
             ),
         ]
-        if self.organization:
-            conditions_to_add += [
-                binary_condition(
-                    ConditionFunctions.EQ,
-                    Column("_snuba_org_id", None, "org_id"),
-                    Literal(None, self.organization),
-                ),
-            ]
-
-        # This check is necessary because the `sessions` dataset does not have an `offset` column
-        if offset is not None and "offset" in entity.get_data_model():
-            conditions_to_add.append(
-                binary_condition(
-                    ConditionFunctions.LTE,
-                    FunctionCall(
-                        None,
-                        "ifNull",
-                        (Column(None, None, "offset"), Literal(None, 0)),
-                    ),
-                    Literal(None, offset),
-                )
-            )
+        conditions_to_add += self.dataset_subscription.get_dataset_subscription_conditions(
+            offset
+        )
 
         new_condition = combine_and_conditions(conditions_to_add)
         condition = query.get_condition()
@@ -322,12 +306,16 @@ class SnQLSubscriptionData(SubscriptionData):
         if data.get(cls.TYPE_FIELD) != SubscriptionType.SNQL.value:
             raise InvalidQueryException("Invalid SnQL subscription structure")
 
+        dataset_subscription = get_dataset_subscription_class(data_dict=data)(
+            subscription_type=SubscriptionType.SNQL.value, data_dict=data
+        )
+
         return SnQLSubscriptionData(
             project_id=data["project_id"],
             time_window=timedelta(seconds=data["time_window"]),
             resolution=timedelta(seconds=data["resolution"]),
             query=data["query"],
-            organization=data.get("organization"),
+            dataset_subscription=dataset_subscription,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -337,7 +325,7 @@ class SnQLSubscriptionData(SubscriptionData):
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
             "query": self.query,
-            "organization": self.organization,
+            **self.dataset_subscription.to_dict(),
         }
 
 
@@ -356,7 +344,7 @@ class DelegateSubscriptionData(SubscriptionData):
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
 
-    organization: Optional[int] = None
+    dataset_subscription: DatasetSubscription
 
     def build_request(
         self,
@@ -400,6 +388,10 @@ class DelegateSubscriptionData(SubscriptionData):
         if data.get(cls.TYPE_FIELD) != SubscriptionType.DELEGATE.value:
             raise InvalidQueryException("Invalid delegate subscription structure")
 
+        dataset_subscription = get_dataset_subscription_class(data_dict=data)(
+            subscription_type=SubscriptionType.DELEGATE.value, data_dict=data
+        )
+
         return DelegateSubscriptionData(
             project_id=data["project_id"],
             time_window=timedelta(seconds=data["time_window"]),
@@ -407,7 +399,7 @@ class DelegateSubscriptionData(SubscriptionData):
             conditions=data["conditions"],
             aggregations=data["aggregations"],
             query=data["query"],
-            organization=data.get("organization"),
+            dataset_subscription=dataset_subscription,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -419,7 +411,7 @@ class DelegateSubscriptionData(SubscriptionData):
             "conditions": self.conditions,
             "aggregations": self.aggregations,
             "query": self.query,
-            "organization": self.organization,
+            **self.dataset_subscription.to_dict(),
         }
 
     def to_snql(self) -> SnQLSubscriptionData:
