@@ -27,10 +27,36 @@ class Migration(migration.ClickhouseNodeMigration):
                 ),
                 after="span_op_breakdowns.value",
             ),
+            operations.AddIndex(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                index_name="bf_spans_op",
+                index_expression="spans.op",
+                index_type="bloom_filter()",
+                granularity=1,
+            ),
+            operations.AddIndex(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                index_name="bf_spans_group",
+                index_expression="spans.group",
+                index_type="bloom_filter()",
+                granularity=1,
+            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
+            operations.DropIndex(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                index_name="bf_spans_op",
+            ),
+            operations.DropIndex(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                index_name="bf_spans_op",
+            ),
             operations.DropColumn(
                 StorageSetKey.TRANSACTIONS, "transactions_local", "spans"
             ),
