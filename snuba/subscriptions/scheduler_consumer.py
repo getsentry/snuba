@@ -46,23 +46,53 @@ class Tick(NamedTuple):
 
 class CommitLogTickConsumer(Consumer[Tick]):
     """
-    A modified version of the `TickConsumer` that returns `ticks` constructed
-    from messages of a single commit log consumer rather than a synchronized consumer.
+    The ``CommitLogTickConsumer`` is a ``Consumer`` implementation that differs
+    from other ``Consumer`` implementations in that the messages returned returns
+    contain a ``Tick`` that is derived from the timestamps of the previous
+    two messages received within a partition.
 
-    Like the `TickConsumer` the consumer returns a `Tick` message, which is derived
-    from the timestamps of the previous two messages associated with a partition.
-    The `Tick` now includes the partition number as the partition for the tick
-    is no longer the same as the partition of the message.
+    In other words, this consumer provides a measure of the progression of
+    time, using the advancement of the broker timestamp within a Kafka
+    partition as a "virtual clock" rather than depending on wall clock time.
 
-    Since there is no synchronized consumer involved in this implementation,
-    this tick consumer decodes the commit log message in order to get the partition
-    number and timestamp corresponding to the original topic being followed by
-    the commit log.
-
-    The intervals being returned by this consumer should be equivalent to
-    those in the original TickConsumer/Synchronized consumer implementation.
+    This consumer must follow a commit log topic, and requires that the
+    ``message.timestamp.type`` configuration of the original topic being
+    followed by the commit log topic  is set to ``LogAppendTime``, so that
+    the message time is set by the primary broker for the topic -- not the
+    producer of the message -- ensuring that each partition timestamp moves
+    monotonically.
     """
 
+    # Since this consumer deals with the intervals *between* messages rather
+    # the individual messages themselves, this introduces some additional
+    # complexity into the way that offsets are managed. Take this example,
+    # where a partition contains three messages:
+    #
+    #    Message:            A         B         C         D
+    #    Offset:             0         1         2         3
+    #    Timeline:   --------+---------+---------+---------+------>>>
+    #
+    # Consuming message "A" (via a call to ``poll``) does not cause a tick to
+    # be returned, since an tick interval cannot be formed with the timestamp
+    # from only one message. When message B is consumed, we can form a tick
+    # interval using the timestamps from A and B.
+    #
+    # When storing (or committing) offsets, we need to be careful that we
+    # correctly commit the offsets that represent the interval so that
+    # intervals are not repeated or skipped when a consumer restarts (or more
+    # likely rebalances, which can be generalized to a restart operation.)
+    #
+    # Take the previously described scenario where we had just returned a tick
+    # interval that was represented by the mesasges A and B: without taking any
+    # precautions, the Kafka consumer would use the next offset from message B
+    # for commit, which would be 2 in this case (1 + 1). If the consumer were
+    # to crash and restart, it would resume at offset 2, causing the next tick
+    # interval returned to be for the messages C and D -- in this case, B and C
+    # was never returned! To avoid skipping intervals when restarting, the
+    # consumer would have had to commit the offset 1 (the offset of message B)
+    # to ensure that upon restart, the next interval would be the interval
+    # between B and C, since the message B was the first message received by
+    # the consumer.
     def __init__(
         self, consumer: Consumer[KafkaPayload], time_shift: Optional[timedelta] = None
     ) -> None:
