@@ -26,7 +26,10 @@ from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.datasets.events_processor_base import REPLACEMENT_EVENT_TYPES
+from snuba.datasets.events_processor_base import (
+    REPLACEMENT_EVENT_TYPES,
+    ReplacementType,
+)
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
@@ -269,26 +272,26 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             metrics.increment("process", 1, tags={"type": type_})
 
         if type_ in (
-            "start_delete_groups",
-            "start_merge",
-            "start_unmerge",
-            "start_unmerge_hierarchical",
-            "start_delete_tag",
+            ReplacementType.START_DELETE_GROUPS,
+            ReplacementType.START_MERGE,
+            ReplacementType.START_UNMERGE,
+            ReplacementType.START_UNMERGE_HIERARCHICAL,
+            ReplacementType.START_DELETE_TAG,
         ):
             return None
-        elif type_ == "end_delete_groups":
+        elif type_ == ReplacementType.END_DELETE_GROUPS:
             processed = process_delete_groups(event, self.__required_columns)
-        elif type_ == "end_merge":
+        elif type_ == ReplacementType.END_MERGE:
             processed = process_merge(event, self.__all_columns)
-        elif type_ == "end_unmerge":
+        elif type_ == ReplacementType.END_UNMERGE:
             processed = UnmergeGroupsReplacement.parse_message(
                 event, self.__replacement_context
             )
-        elif type_ == "end_unmerge_hierarchical":
+        elif type_ == ReplacementType.END_UNMERGE_HIERARCHICAL:
             processed = process_unmerge_hierarchical(
                 event, self.__all_columns, self.__state_name
             )
-        elif type_ == "end_delete_tag":
+        elif type_ == ReplacementType.END_DELETE_TAG:
             processed = process_delete_tag(
                 event,
                 self.__all_columns,
@@ -297,15 +300,15 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__use_promoted_prewhere,
                 self.__schema,
             )
-        elif type_ == "tombstone_events":
+        elif type_ == ReplacementType.TOMBSTONE_EVENTS:
             processed = process_tombstone_events(
                 event, self.__required_columns, self.__state_name
             )
-        elif type_ == "replace_group":
+        elif type_ == ReplacementType.REPLACE_GROUP:
             processed = process_replace_group(
                 event, self.__all_columns, self.__state_name
             )
-        elif type_ == "exclude_groups":
+        elif type_ == ReplacementType.EXCLUDE_GROUPS:
             processed = ExcludeGroupsReplacement.parse_message(
                 event, self.__replacement_context
             )
