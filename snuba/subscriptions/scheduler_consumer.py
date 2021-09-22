@@ -216,7 +216,7 @@ class SchedulerBuilder:
         )
 
 
-class MeasureParitionLag(ProcessingStrategy[Tick]):
+class MeasurePartitionLag(ProcessingStrategy[Tick]):
     def __init__(
         self,
         partitions: int,
@@ -276,4 +276,4 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[Tick]:
-        return MeasureParitionLag(self.__partitions, self.__metrics, commit)
+        return MeasurePartitionLag(self.__partitions, self.__metrics, commit)
