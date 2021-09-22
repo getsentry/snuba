@@ -50,7 +50,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropIndex(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                index_name="bf_spans_op",
+                index_name="bf_spans_group",
             ),
             operations.DropIndex(
                 storage_set=StorageSetKey.TRANSACTIONS,
