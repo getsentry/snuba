@@ -32,6 +32,10 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
 )
+from snuba.subscriptions.entity_subscription import (
+    SessionsSubscription,
+    SubscriptionType,
+)
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.worker import (
@@ -42,6 +46,7 @@ from snuba.subscriptions.worker import (
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.backends.metrics import Increment, TestingMetricsBackend
+from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 
 class DummySubscriptionDataStore(SubscriptionDataStore):
@@ -74,7 +79,7 @@ class Datetime(Pattern[datetime]):
 
 
 @pytest.fixture(
-    ids=["Legacy", "SnQL", "Delegate"],
+    ids=["Legacy", "SnQL", "Delegate", "Crash Rate Alert Delegate"],
     params=[
         LegacySubscriptionData(
             project_id=1,
@@ -82,12 +87,18 @@ class Datetime(Pattern[datetime]):
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=60),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(
+                subscription_type=SubscriptionType.LEGACY
+            ),
         ),
         SnQLSubscriptionData(
             project_id=1,
             query=("MATCH (events) SELECT count() AS count"),
             time_window=timedelta(minutes=60),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(
+                subscription_type=SubscriptionType.SNQL
+            ),
         ),
         DelegateSubscriptionData(
             project_id=1,
@@ -96,6 +107,33 @@ class Datetime(Pattern[datetime]):
             query=("MATCH (events) SELECT count() AS count"),
             time_window=timedelta(minutes=60),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(
+                subscription_type=SubscriptionType.DELEGATE
+            ),
+        ),
+        DelegateSubscriptionData(
+            project_id=123,
+            conditions=[],
+            aggregations=[
+                [
+                    "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
+                    None,
+                    "_crash_rate_alert_aggregate",
+                ],
+                ["identity(sessions)", None, "_total_sessions"],
+            ],
+            query=(
+                """MATCH (sessions) SELECT if(greater(sessions,0),
+                divide(sessions_crashed,sessions),null)
+                AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
+                WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
+                OFFSET 0 GRANULARITY 3600"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(
+                subscription_type=SubscriptionType.DELEGATE, dataset_name="sessions"
+            ),
         ),
     ],
 )
@@ -112,6 +150,10 @@ def subscription_rollout() -> Generator[None, None, None]:
 
 
 def test_subscription_worker(subscription_data: SubscriptionData) -> None:
+    uses_sessions_dataset = isinstance(
+        subscription_data.entity_subscription, SessionsSubscription
+    )
+
     broker: Broker[SubscriptionTaskResult] = Broker(
         MemoryMessageStorage(), TestingClock()
     )
@@ -132,7 +174,9 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
 
     metrics = DummyMetricsBackend(strict=True)
 
-    dataset = get_dataset("events")
+    dataset = (
+        get_dataset("events") if not uses_sessions_dataset else get_dataset("sessions")
+    )
     worker = SubscriptionWorker(
         dataset,
         ThreadPoolExecutor(),
@@ -149,9 +193,8 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         timestamps=Interval(now - (frequency * evaluations), now),
     )
 
-    result_futures = worker.process_message(
-        Message(Partition(Topic("events"), 0), 0, tick, now)
-    )
+    topic = Topic("events") if not uses_sessions_dataset else Topic("sessions")
+    result_futures = worker.process_message(Message(Partition(topic, 0), 0, tick, now))
 
     assert result_futures is not None and len(result_futures) == evaluations
 
@@ -175,19 +218,20 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         assert message.payload.task.timestamp == timestamp
         assert message.payload == SubscriptionTaskResult(task, future_result)
 
+        timestamp_field = "timestamp" if not uses_sessions_dataset else "started"
         # NOTE: The time series extension is folded back into the request
         # body, ideally this would reference the timeseries options in
         # isolation.
         from_pattern = FunctionCall(
             String(ConditionFunctions.GTE),
             (
-                Column(None, String("timestamp")),
+                Column(None, String(timestamp_field)),
                 Literal(Datetime(timestamp - subscription.data.time_window)),
             ),
         )
         to_pattern = FunctionCall(
             String(ConditionFunctions.LT),
-            (Column(None, String("timestamp")), Literal(Datetime(timestamp))),
+            (Column(None, String(timestamp_field)), Literal(Datetime(timestamp))),
         )
 
         condition = request.query.get_condition()
@@ -198,10 +242,24 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         assert any([from_pattern.match(e) for e in conditions])
         assert any([to_pattern.match(e) for e in conditions])
 
-        assert result == {
-            "meta": [{"name": "count", "type": "UInt64"}],
-            "data": [{"count": 0}],
-        }
+        if uses_sessions_dataset:
+            expected_result = {
+                "meta": [
+                    {
+                        "name": "_crash_rate_alert_aggregate",
+                        "type": "Nullable(Float64)",
+                    },
+                    {"type": "UInt64", "name": "_total_sessions"},
+                ],
+                "data": [{"_crash_rate_alert_aggregate": None, "_total_sessions": 0}],
+            }
+        else:
+            expected_result = {
+                "meta": [{"name": "count", "type": "UInt64"}],
+                "data": [{"count": 0}],
+            }
+        print(result)
+        assert result == expected_result
 
 
 def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> None:

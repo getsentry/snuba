@@ -5,7 +5,6 @@ import random
 from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
 from functools import partial
 from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
@@ -33,9 +32,11 @@ from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
-from snuba.subscriptions.dataset_subscription import (
-    DatasetSubscription,
-    get_dataset_subscription_class,
+from snuba.subscriptions.entity_subscription import (
+    EntitySubscription,
+    SubscriptionType,
+    get_dataset_name_from_entity_subscription_class,
+    get_entity_subscription_class_from_dataset_name,
 )
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -66,18 +67,13 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
-class SubscriptionType(Enum):
-    LEGACY = "legacy"
-    SNQL = "snql"
-    DELEGATE = "delegate"
-
-
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
 class _SubscriptionData:
     project_id: int
     resolution: timedelta
     time_window: timedelta
+    entity_subscription: EntitySubscription
 
 
 class SubscriptionData(ABC, _SubscriptionData):
@@ -117,7 +113,7 @@ class SubscriptionData(ABC, _SubscriptionData):
         raise NotImplementedError
 
     @abstractclassmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> SubscriptionData:
+    def from_dict(cls, data: Mapping[str, Any], dataset_name: str) -> SubscriptionData:
         raise NotImplementedError
 
     @abstractmethod
@@ -133,8 +129,6 @@ class LegacySubscriptionData(SubscriptionData):
 
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
-
-    dataset_subscription: DatasetSubscription
 
     def build_request(
         self,
@@ -156,7 +150,7 @@ class LegacySubscriptionData(SubscriptionData):
             Language.LEGACY,
         )
 
-        extra_conditions = self.dataset_subscription.get_dataset_subscription_conditions(
+        extra_conditions = self.entity_subscription.get_entity_subscription_conditions(
             offset
         )
 
@@ -167,7 +161,7 @@ class LegacySubscriptionData(SubscriptionData):
                 "aggregations": self.aggregations,
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
-                **self.dataset_subscription.to_dict(),
+                **self.entity_subscription.to_dict(),
             },
             parse_legacy_query,
             SubscriptionRequestSettings,
@@ -178,13 +172,15 @@ class LegacySubscriptionData(SubscriptionData):
         )
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> LegacySubscriptionData:
+    def from_dict(
+        cls, data: Mapping[str, Any], dataset_name: str
+    ) -> LegacySubscriptionData:
         if not data.get("aggregations"):
             raise InvalidQueryException("No aggregation provided")
 
-        dataset_subscription = get_dataset_subscription_class(data_dict=data)(
-            subscription_type=SubscriptionType.LEGACY.value, data_dict=data
-        )
+        entity_subscription = get_entity_subscription_class_from_dataset_name(
+            dataset_name
+        )(subscription_type=SubscriptionType.LEGACY, data_dict=data)
 
         return LegacySubscriptionData(
             project_id=data["project_id"],
@@ -192,7 +188,7 @@ class LegacySubscriptionData(SubscriptionData):
             aggregations=data["aggregations"],
             time_window=timedelta(seconds=data["time_window"]),
             resolution=timedelta(seconds=data["resolution"]),
-            dataset_subscription=dataset_subscription,
+            entity_subscription=entity_subscription,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -202,15 +198,13 @@ class LegacySubscriptionData(SubscriptionData):
             "aggregations": self.aggregations,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
-            **self.dataset_subscription.to_dict(),
+            **self.entity_subscription.to_dict(),
         }
 
 
 @dataclass(frozen=True)
 class SnQLSubscriptionData(SubscriptionData):
     query: str
-
-    dataset_subscription: DatasetSubscription
 
     def add_conditions(
         self,
@@ -246,7 +240,8 @@ class SnQLSubscriptionData(SubscriptionData):
                 Literal(None, timestamp),
             ),
         ]
-        conditions_to_add += self.dataset_subscription.get_dataset_subscription_conditions(
+        conditions_to_add += self.entity_subscription.get_entity_subscription_conditions(
+            # type: ignore
             offset
         )
 
@@ -302,20 +297,22 @@ class SnQLSubscriptionData(SubscriptionData):
         return request
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> SnQLSubscriptionData:
+    def from_dict(
+        cls, data: Mapping[str, Any], dataset_name: str
+    ) -> SnQLSubscriptionData:
         if data.get(cls.TYPE_FIELD) != SubscriptionType.SNQL.value:
             raise InvalidQueryException("Invalid SnQL subscription structure")
 
-        dataset_subscription = get_dataset_subscription_class(data_dict=data)(
-            subscription_type=SubscriptionType.SNQL.value, data_dict=data
-        )
+        entity_subscription = get_entity_subscription_class_from_dataset_name(
+            dataset_name
+        )(subscription_type=SubscriptionType.SNQL, data_dict=data)
 
         return SnQLSubscriptionData(
             project_id=data["project_id"],
             time_window=timedelta(seconds=data["time_window"]),
             resolution=timedelta(seconds=data["resolution"]),
             query=data["query"],
-            dataset_subscription=dataset_subscription,
+            entity_subscription=entity_subscription,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -325,7 +322,7 @@ class SnQLSubscriptionData(SubscriptionData):
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
             "query": self.query,
-            **self.dataset_subscription.to_dict(),
+            **self.entity_subscription.to_dict(),
         }
 
 
@@ -343,8 +340,6 @@ class DelegateSubscriptionData(SubscriptionData):
     # Legacy
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
-
-    dataset_subscription: DatasetSubscription
 
     def build_request(
         self,
@@ -384,13 +379,15 @@ class DelegateSubscriptionData(SubscriptionData):
         return self.to_legacy().build_request(dataset, timestamp, offset, timer)
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> DelegateSubscriptionData:
+    def from_dict(
+        cls, data: Mapping[str, Any], dataset_name: str
+    ) -> DelegateSubscriptionData:
         if data.get(cls.TYPE_FIELD) != SubscriptionType.DELEGATE.value:
             raise InvalidQueryException("Invalid delegate subscription structure")
 
-        dataset_subscription = get_dataset_subscription_class(data_dict=data)(
-            subscription_type=SubscriptionType.DELEGATE.value, data_dict=data
-        )
+        entity_subscription = get_entity_subscription_class_from_dataset_name(
+            dataset_name
+        )(subscription_type=SubscriptionType.DELEGATE, data_dict=data)
 
         return DelegateSubscriptionData(
             project_id=data["project_id"],
@@ -399,7 +396,7 @@ class DelegateSubscriptionData(SubscriptionData):
             conditions=data["conditions"],
             aggregations=data["aggregations"],
             query=data["query"],
-            dataset_subscription=dataset_subscription,
+            entity_subscription=entity_subscription,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -411,17 +408,25 @@ class DelegateSubscriptionData(SubscriptionData):
             "conditions": self.conditions,
             "aggregations": self.aggregations,
             "query": self.query,
-            **self.dataset_subscription.to_dict(),
+            **self.entity_subscription.to_dict(),
         }
 
     def to_snql(self) -> SnQLSubscriptionData:
+        dataset_name = get_dataset_name_from_entity_subscription_class(
+            type(self.entity_subscription)
+        )
         return SnQLSubscriptionData.from_dict(
-            {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.SNQL.value}
+            {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.SNQL.value},
+            dataset_name,
         )
 
     def to_legacy(self) -> LegacySubscriptionData:
+        dataset_name = get_dataset_name_from_entity_subscription_class(
+            type(self.entity_subscription)
+        )
         return LegacySubscriptionData.from_dict(
-            {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.LEGACY.value}
+            {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.LEGACY.value},
+            dataset_name,
         )
 
 

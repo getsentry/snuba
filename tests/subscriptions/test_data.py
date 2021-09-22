@@ -6,16 +6,17 @@ import pytest
 from snuba import state
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
-from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
     LegacySubscriptionData,
     SnQLSubscriptionData,
     SubscriptionData,
 )
+from snuba.subscriptions.entity_subscription import SubscriptionType
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
+from tests.subscriptions.subscriptions_utils import create_entity_subscription
 from tests.test_sessions_api import BaseSessionsMockTest
 
 TESTS = [
@@ -26,6 +27,7 @@ TESTS = [
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(SubscriptionType.LEGACY),
         ),
         None,
         id="Legacy subscription",
@@ -41,6 +43,7 @@ TESTS = [
             ),
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(SubscriptionType.SNQL),
         ),
         None,
         id="SnQL subscription",
@@ -58,6 +61,7 @@ TESTS = [
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(SubscriptionType.DELEGATE),
         ),
         None,
         id="Delegate subscription",
@@ -73,6 +77,9 @@ TESTS = [
             ),
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(
+                subscription_type=SubscriptionType.SNQL
+            ),
         ),
         InvalidQueryException,
         id="SnQL subscription with 2 many aggregates",
@@ -88,6 +95,9 @@ TESTS = [
             ),
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(
+                subscription_type=SubscriptionType.SNQL
+            ),
         ),
         InvalidQueryException,
         id="SnQL subscription with disallowed clause",
@@ -102,7 +112,8 @@ TESTS_OVER_SESSIONS = [
                 """
                 MATCH (sessions) SELECT if(greater(sessions,0),
                 divide(sessions_crashed,sessions),null)
-                AS _crash_rate_alert_aggregate WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
+                AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
+                WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
                 OFFSET 0 GRANULARITY 3600
                 """
             ),
@@ -112,31 +123,17 @@ TESTS_OVER_SESSIONS = [
                     "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
                     None,
                     "_crash_rate_alert_aggregate",
-                ]
+                ],
+                ["identity(sessions)", None, "_total_sessions"],
             ],
             time_window=timedelta(minutes=120),
             resolution=timedelta(minutes=1),
-            organization=1,
+            entity_subscription=create_entity_subscription(
+                SubscriptionType.DELEGATE, "sessions"
+            ),
         ),
         None,
         id="Delegate subscription",
-    ),
-    pytest.param(
-        LegacySubscriptionData(
-            project_id=1,
-            conditions=[],
-            aggregations=[
-                [
-                    "if(greater(sessions, 0), divide(sessions_crashed, sessions), null)",
-                    None,
-                    "crash_rate_alert_aggregate",
-                ]
-            ],
-            time_window=timedelta(minutes=120),
-            resolution=timedelta(minutes=1),
-        ),
-        JsonSchemaValidationException,
-        id="No organization provided for sessions dataset subscription",
     ),
 ]
 
