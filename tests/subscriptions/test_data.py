@@ -146,7 +146,7 @@ TESTS_OVER_SESSIONS = [
             entity_subscription=create_entity_subscription("sessions"),
         ),
         InvalidQueryException,
-        id="Delegate subscription",
+        id="Snql subscription",
     ),
 ]
 
