@@ -20,7 +20,7 @@ import simplejson as json
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import WriterTableRow
 
 HASH_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
@@ -55,11 +55,11 @@ class MessageProcessor(ABC):
         raise NotImplementedError
 
 
-class InvalidMessageType(SnubaException):
+class InvalidMessageType(SerializableException):
     pass
 
 
-class InvalidMessageVersion(SnubaException):
+class InvalidMessageVersion(SerializableException):
     pass
 
 

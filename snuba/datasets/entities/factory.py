@@ -3,10 +3,10 @@ from typing import Callable, MutableMapping
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
-class InvalidEntityError(SnubaException):
+class InvalidEntityError(SerializableException):
     """Exception raised on invalid entity access."""
 
 

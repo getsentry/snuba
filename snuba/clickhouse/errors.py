@@ -1,9 +1,9 @@
 from typing import cast
 
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
-class ClickhouseError(SnubaException):
+class ClickhouseError(SerializableException):
     @property
     def code(self) -> int:
         return cast(int, self.extra_data.get("code", -1))

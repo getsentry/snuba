@@ -17,7 +17,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
 def extract_project_id(
@@ -134,5 +134,5 @@ def escape_field(field: str) -> str:
     return field.translate(ESCAPE_TRANSLATION)
 
 
-class EventTooOld(SnubaException):
+class EventTooOld(SerializableException):
     pass

@@ -2,12 +2,12 @@ from abc import ABC, abstractmethod
 from typing import Callable, Generic, Optional, TypeVar
 
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 TValue = TypeVar("TValue")
 
 
-class ExecutionError(SnubaException):
+class ExecutionError(SerializableException):
     pass
 
 

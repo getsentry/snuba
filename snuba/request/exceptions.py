@@ -1,7 +1,7 @@
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
-class InvalidJsonRequestException(SnubaException):
+class InvalidJsonRequestException(SerializableException):
     """
     Common parent class for exceptions signaling the json payload
     of the request was not valid.

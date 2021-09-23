@@ -1,21 +1,21 @@
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
-class InvalidMigrationState(SnubaException):
+class InvalidMigrationState(SerializableException):
     pass
 
 
-class MigrationDoesNotExist(SnubaException):
+class MigrationDoesNotExist(SerializableException):
     pass
 
 
-class MigrationError(SnubaException):
+class MigrationError(SerializableException):
     pass
 
 
-class MigrationInProgress(SnubaException):
+class MigrationInProgress(SerializableException):
     pass
 
 
-class InvalidClickhouseVersion(SnubaException):
+class InvalidClickhouseVersion(SerializableException):
     pass

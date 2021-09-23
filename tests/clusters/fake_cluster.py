@@ -6,10 +6,10 @@ from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseNode,
 )
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
-class ServerExplodedException(SnubaException):
+class ServerExplodedException(SerializableException):
     pass
 
 

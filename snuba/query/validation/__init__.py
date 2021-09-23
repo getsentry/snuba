@@ -3,10 +3,10 @@ from typing import Sequence
 
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import Expression
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
-class InvalidFunctionCall(SnubaException):
+class InvalidFunctionCall(SerializableException):
     pass
 
 

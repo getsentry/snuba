@@ -3,7 +3,7 @@ from typing import Any, Mapping, NamedTuple
 from mypy_extensions import TypedDict
 
 from snuba.reader import Column, Result, transform_rows
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
 class QueryExtraData(TypedDict):
@@ -12,7 +12,7 @@ class QueryExtraData(TypedDict):
     experiments: Mapping[str, Any]
 
 
-class QueryException(SnubaException):
+class QueryException(SerializableException):
     """
     Exception raised during query execution that is used to carry extra data
     back up the stack to the HTTP response -- basically a ``QueryResult``,

@@ -4,7 +4,7 @@ from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.table_storage import TableWriter
 from snuba.util import with_span
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
@@ -24,7 +24,7 @@ DATASET_NAMES: Set[str] = {
 }
 
 
-class InvalidDatasetError(SnubaException):
+class InvalidDatasetError(SerializableException):
     """Exception raised on invalid dataset access."""
 
 

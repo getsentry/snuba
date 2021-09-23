@@ -14,7 +14,6 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.parser.conditions import parse_conditions_to_expr
-from snuba.utils.snuba_exception import SnubaException
 
 test_conditions = [
     ([], None,),

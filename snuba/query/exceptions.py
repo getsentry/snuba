@@ -1,8 +1,8 @@
 from snuba.query.expressions import Expression
-from snuba.utils.snuba_exception import SnubaException
+from snuba.utils.serializable_exception import SerializableException
 
 
-class InvalidQueryException(SnubaException):
+class InvalidQueryException(SerializableException):
     """
     Common parent class used for invalid queries during parsing
     and validation.
