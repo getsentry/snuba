@@ -3,7 +3,7 @@ from typing import Set
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.query.conditions import FUNCTION_TO_OPERATOR, ConditionFunctions
+from snuba.query.conditions import ConditionFunctions
 from snuba.query.exceptions import ValidationException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import Any as AnyMatch
@@ -30,8 +30,29 @@ class BaseTypeConverter(QueryProcessor, ABC):
             Or(
                 [
                     String(op)
-                    for op in FUNCTION_TO_OPERATOR
-                    if op not in (ConditionFunctions.IN, ConditionFunctions.NOT_IN)
+                    for op in (
+                        ConditionFunctions.EQ,
+                        ConditionFunctions.NEQ,
+                        ConditionFunctions.IS_NULL,
+                        ConditionFunctions.IS_NOT_NULL,
+                    )
+                ]
+            ),
+        )
+
+        unoptimizable_operator = Param(
+            "operator",
+            Or(
+                [
+                    String(op)
+                    for op in (
+                        ConditionFunctions.GT,
+                        ConditionFunctions.GTE,
+                        ConditionFunctions.LT,
+                        ConditionFunctions.LTE,
+                        ConditionFunctions.LIKE,
+                        ConditionFunctions.NOT_LIKE,
+                    )
                 ]
             ),
         )
@@ -62,6 +83,13 @@ class BaseTypeConverter(QueryProcessor, ABC):
             ),
         )
 
+        self.__unoptimizable_condition_matcher = Or(
+            [
+                FunctionCallMatch(unoptimizable_operator, (literal, col)),
+                FunctionCallMatch(unoptimizable_operator, (col, literal)),
+            ]
+        )
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         query.transform_expressions(
             self._process_expressions, skip_transform_condition=True
@@ -69,8 +97,9 @@ class BaseTypeConverter(QueryProcessor, ABC):
 
         condition = query.get_condition()
         if condition is not None:
-            processed = condition.transform(self.__process_optimizable_condition)
-            if processed == condition:
+            if self.__is_optimizable_expression(condition):
+                processed = condition.transform(self.__process_optimizable_condition)
+            else:
                 processed = condition.transform(self._process_expressions)
 
             query.set_ast_condition(processed)
@@ -80,6 +109,17 @@ class BaseTypeConverter(QueryProcessor, ABC):
         return Column(
             alias=None, table_name=exp.table_name, column_name=exp.column_name
         )
+
+    def __is_optimizable_expression(self, exp: Expression) -> bool:
+        """
+        Returns true if the entire expression can optimized, otherwise false.
+        """
+        for e in exp:
+            match = self.__unoptimizable_condition_matcher.match(e)
+            if match is not None:
+                return False
+
+        return True
 
     def __process_optimizable_condition(self, exp: Expression) -> Expression:
         def assert_literal(lit: Expression) -> Literal:
