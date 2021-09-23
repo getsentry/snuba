@@ -7,6 +7,8 @@ from typing import Callable, Optional
 
 import pytest
 
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -34,12 +36,9 @@ from snuba.utils.scheduler import ScheduledTask
 
 def build_legacy_subscription_data(organization=None) -> LegacySubscriptionData:
     if not organization:
-        entity_subscription = EventsSubscription(
-            subscription_type=SubscriptionType.LEGACY, data_dict={}
-        )
+        entity_subscription = EventsSubscription(data_dict={})
     else:
         entity_subscription = SessionsSubscription(
-            subscription_type=SubscriptionType.LEGACY,
             data_dict={"organization": organization},
         )
     return LegacySubscriptionData(
@@ -54,12 +53,9 @@ def build_legacy_subscription_data(organization=None) -> LegacySubscriptionData:
 
 def build_snql_subscription_data(organization=None) -> SnQLSubscriptionData:
     if not organization:
-        entity_subscription = EventsSubscription(
-            subscription_type=SubscriptionType.SNQL, data_dict={}
-        )
+        entity_subscription = EventsSubscription(data_dict={})
     else:
         entity_subscription = SessionsSubscription(
-            subscription_type=SubscriptionType.SNQL,
             data_dict={"organization": organization},
         )
     return SnQLSubscriptionData(
@@ -73,12 +69,9 @@ def build_snql_subscription_data(organization=None) -> SnQLSubscriptionData:
 
 def build_delegate_subscription_data(organization=None) -> DelegateSubscriptionData:
     if not organization:
-        entity_subscription = EventsSubscription(
-            subscription_type=SubscriptionType.DELEGATE, data_dict={}
-        )
+        entity_subscription = EventsSubscription(data_dict={})
     else:
         entity_subscription = SessionsSubscription(
-            subscription_type=SubscriptionType.DELEGATE,
             data_dict={"organization": organization},
         )
     return DelegateSubscriptionData(
@@ -124,8 +117,10 @@ def assert_entity_subscription_on_subscription_class(organization, subscription)
 def test_basic(
     builder: Callable[[Optional[int]], SubscriptionData], organization: Optional[int]
 ) -> None:
-    dataset = get_dataset("sessions") if organization else get_dataset("events")
-    codec = SubscriptionDataCodec(dataset)
+    entity = (
+        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
+    )
+    codec = SubscriptionDataCodec(entity)
     data = builder(organization)
     assert codec.decode(codec.encode(data)) == data
 
@@ -135,8 +130,10 @@ def test_encode(
     builder: Callable[[Optional[int]], LegacySubscriptionData],
     organization: Optional[int],
 ) -> None:
-    dataset = get_dataset("sessions") if organization else get_dataset("events")
-    codec = SubscriptionDataCodec(dataset)
+    entity = (
+        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
+    )
+    codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
 
     payload = codec.encode(subscription)
@@ -154,8 +151,10 @@ def test_encode_snql(
     builder: Callable[[Optional[int]], SnQLSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    dataset = get_dataset("sessions") if organization else get_dataset("events")
-    codec = SubscriptionDataCodec(dataset)
+    entity = (
+        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
+    )
+    codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
 
     payload = codec.encode(subscription)
@@ -172,8 +171,10 @@ def test_encode_delegate(
     builder: Callable[[Optional[int]], DelegateSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    dataset = get_dataset("sessions") if organization else get_dataset("events")
-    codec = SubscriptionDataCodec(dataset)
+    entity = (
+        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
+    )
+    codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
 
     payload = codec.encode(subscription)
@@ -192,8 +193,10 @@ def test_decode(
     builder: Callable[[Optional[int]], LegacySubscriptionData],
     organization: Optional[int],
 ) -> None:
-    dataset = get_dataset("sessions") if organization else get_dataset("events")
-    codec = SubscriptionDataCodec(dataset)
+    entity = (
+        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
+    )
+    codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
     data = {
         "project_id": subscription.project_id,
@@ -213,8 +216,10 @@ def test_decode_snql(
     builder: Callable[[Optional[int]], SnQLSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    dataset = get_dataset("sessions") if organization else get_dataset("events")
-    codec = SubscriptionDataCodec(dataset)
+    entity = (
+        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
+    )
+    codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
     data = {
         "type": SubscriptionType.SNQL.value,
@@ -234,8 +239,10 @@ def test_decode_delegate(
     builder: Callable[[Optional[int]], DelegateSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    dataset = get_dataset("sessions") if organization else get_dataset("events")
-    codec = SubscriptionDataCodec(dataset)
+    entity = (
+        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
+    )
+    codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
     data = {
         "type": SubscriptionType.DELEGATE.value,
@@ -257,9 +264,7 @@ def test_subscription_task_result_encoder() -> None:
 
     timestamp = datetime.now()
 
-    entity_subscription = EventsSubscription(
-        subscription_type=SubscriptionType.LEGACY, data_dict={}
-    )
+    entity_subscription = EventsSubscription(data_dict={})
     subscription_data = LegacySubscriptionData(
         project_id=1,
         conditions=[],
@@ -304,9 +309,7 @@ def test_sessions_subscription_task_result_encoder() -> None:
 
     timestamp = datetime.now()
 
-    entity_subscription = SessionsSubscription(
-        subscription_type=SubscriptionType.SNQL, data_dict={"organization": 1}
-    )
+    entity_subscription = SessionsSubscription(data_dict={"organization": 1})
     subscription_data = SnQLSubscriptionData(
         project_id=1,
         query=(

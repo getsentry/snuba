@@ -10,7 +10,6 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.entity_subscription import (
     EventsSubscription,
     SessionsSubscription,
-    SubscriptionType,
 )
 
 UUIDS = [
@@ -20,9 +19,7 @@ UUIDS = [
 
 
 def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
-    entity_subscription = EventsSubscription(
-        subscription_type=SubscriptionType.SNQL, data_dict={}
-    )
+    entity_subscription = EventsSubscription(data_dict={})
     return Subscription(
         SubscriptionIdentifier(PartitionId(1), UUIDS[sequence]),
         SnQLSubscriptionData(
@@ -35,10 +32,8 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
     )
 
 
-def create_entity_subscription(subscription_type, dataset_name="events"):
+def create_entity_subscription(dataset_name="events"):
     if dataset_name == "sessions":
-        return SessionsSubscription(
-            subscription_type=subscription_type, data_dict={"organization": 1}
-        )
+        return SessionsSubscription(data_dict={"organization": 1})
     else:
-        return EventsSubscription(subscription_type=subscription_type, data_dict={})
+        return EventsSubscription(data_dict={})

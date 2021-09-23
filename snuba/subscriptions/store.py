@@ -47,7 +47,7 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         self, client: RedisClientType, dataset: Dataset, partition_id: PartitionId
     ):
         self.client = client
-        self.codec = SubscriptionDataCodec(dataset=dataset)
+        self.codec = SubscriptionDataCodec(entity=dataset.get_default_entity())
         self.__key = f"subscriptions:{get_dataset_name(dataset)}:{partition_id}"
 
     def create(self, key: UUID, data: SubscriptionData) -> None:

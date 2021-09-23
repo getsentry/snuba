@@ -477,7 +477,9 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
-    subscription = SubscriptionDataCodec(dataset=dataset).decode(http_request.data)
+    subscription = SubscriptionDataCodec(entity=dataset.get_default_entity()).decode(
+        http_request.data
+    )
     identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),

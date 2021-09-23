@@ -9,7 +9,6 @@ from snuba.subscriptions.data import (
     SnQLSubscriptionData,
     SubscriptionData,
 )
-from snuba.subscriptions.entity_subscription import SubscriptionType
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.utils.streams.topics import Topic
 from tests.subscriptions import BaseSubscriptionTest
@@ -23,9 +22,7 @@ TESTS = [
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.LEGACY
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="Legacy subscription",
     ),
@@ -40,9 +37,7 @@ TESTS = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.SNQL
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
     ),

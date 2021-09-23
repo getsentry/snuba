@@ -11,6 +11,7 @@ from uuid import UUID
 
 from snuba import state
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -33,10 +34,10 @@ from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.subscriptions.entity_subscription import (
+    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
+    ENTITY_SUBSCRIPTION_TO_KEY_MAPPER,
     EntitySubscription,
     SubscriptionType,
-    get_dataset_name_from_entity_subscription_class,
-    get_entity_subscription_class_from_dataset_name,
 )
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -113,7 +114,9 @@ class SubscriptionData(ABC, _SubscriptionData):
         raise NotImplementedError
 
     @abstractclassmethod
-    def from_dict(cls, data: Mapping[str, Any], dataset_name: str) -> SubscriptionData:
+    def from_dict(
+        cls, data: Mapping[str, Any], entity_key: EntityKey
+    ) -> SubscriptionData:
         raise NotImplementedError
 
     @abstractmethod
@@ -150,7 +153,7 @@ class LegacySubscriptionData(SubscriptionData):
             Language.LEGACY,
         )
 
-        extra_conditions = self.entity_subscription.get_entity_subscription_conditions(
+        extra_conditions = self.entity_subscription.get_entity_subscription_conditions_for_legacy(
             offset
         )
 
@@ -173,14 +176,14 @@ class LegacySubscriptionData(SubscriptionData):
 
     @classmethod
     def from_dict(
-        cls, data: Mapping[str, Any], dataset_name: str
+        cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> LegacySubscriptionData:
         if not data.get("aggregations"):
             raise InvalidQueryException("No aggregation provided")
 
-        entity_subscription = get_entity_subscription_class_from_dataset_name(
-            dataset_name
-        )(subscription_type=SubscriptionType.LEGACY, data_dict=data)
+        entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
+            data_dict=data
+        )
 
         return LegacySubscriptionData(
             project_id=data["project_id"],
@@ -240,8 +243,7 @@ class SnQLSubscriptionData(SubscriptionData):
                 Literal(None, timestamp),
             ),
         ]
-        conditions_to_add += self.entity_subscription.get_entity_subscription_conditions(
-            # type: ignore
+        conditions_to_add += self.entity_subscription.get_entity_subscription_conditions_for_snql(
             offset
         )
 
@@ -298,14 +300,14 @@ class SnQLSubscriptionData(SubscriptionData):
 
     @classmethod
     def from_dict(
-        cls, data: Mapping[str, Any], dataset_name: str
+        cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SnQLSubscriptionData:
         if data.get(cls.TYPE_FIELD) != SubscriptionType.SNQL.value:
             raise InvalidQueryException("Invalid SnQL subscription structure")
 
-        entity_subscription = get_entity_subscription_class_from_dataset_name(
-            dataset_name
-        )(subscription_type=SubscriptionType.SNQL, data_dict=data)
+        entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
+            data_dict=data
+        )
 
         return SnQLSubscriptionData(
             project_id=data["project_id"],
@@ -380,14 +382,14 @@ class DelegateSubscriptionData(SubscriptionData):
 
     @classmethod
     def from_dict(
-        cls, data: Mapping[str, Any], dataset_name: str
+        cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> DelegateSubscriptionData:
         if data.get(cls.TYPE_FIELD) != SubscriptionType.DELEGATE.value:
             raise InvalidQueryException("Invalid delegate subscription structure")
 
-        entity_subscription = get_entity_subscription_class_from_dataset_name(
-            dataset_name
-        )(subscription_type=SubscriptionType.DELEGATE, data_dict=data)
+        entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
+            data_dict=data
+        )
 
         return DelegateSubscriptionData(
             project_id=data["project_id"],
@@ -412,21 +414,17 @@ class DelegateSubscriptionData(SubscriptionData):
         }
 
     def to_snql(self) -> SnQLSubscriptionData:
-        dataset_name = get_dataset_name_from_entity_subscription_class(
-            type(self.entity_subscription)
-        )
+        entity_key = ENTITY_SUBSCRIPTION_TO_KEY_MAPPER[type(self.entity_subscription)]
         return SnQLSubscriptionData.from_dict(
             {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.SNQL.value},
-            dataset_name,
+            entity_key,
         )
 
     def to_legacy(self) -> LegacySubscriptionData:
-        dataset_name = get_dataset_name_from_entity_subscription_class(
-            type(self.entity_subscription)
-        )
+        entity_key = ENTITY_SUBSCRIPTION_TO_KEY_MAPPER[type(self.entity_subscription)]
         return LegacySubscriptionData.from_dict(
             {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.LEGACY.value},
-            dataset_name,
+            entity_key,
         )
 
 

@@ -1,6 +1,6 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, List, Mapping, Optional, Sequence, Type, Union
+from typing import Any, List, Mapping, Optional, Sequence, Type
 
 from snuba.datasets.entities import EntityKey
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -16,108 +16,99 @@ class SubscriptionType(Enum):
 
 
 class EntitySubscription(ABC):
-    def __init__(
-        self, subscription_type: SubscriptionType, data_dict: Mapping[str, Any]
-    ) -> None:
-        self.subscription_type = subscription_type
+    def __init__(self, data_dict: Mapping[str, Any]) -> None:
+        ...
 
-    def get_entity_subscription_conditions(
+    @abstractmethod
+    def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None
-    ) -> Sequence[Union[Expression, Condition]]:
-        return []
+    ) -> List[Expression]:
+        """
+        Returns a list of extra conditions that are entity specific and required for the
+        snql subscriptions
+        """
+        raise NotImplementedError
 
+    @abstractmethod
+    def get_entity_subscription_conditions_for_legacy(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Condition]:
+        """
+        Returns a list of extra conditions that are entity specific and required for the
+        legacy subscriptions
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def to_dict(self) -> Mapping[str, Any]:
-        return {}
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, EntitySubscription):
-            return NotImplemented
-        return self.to_dict() == other.to_dict() and isinstance(other, type(self))
+        raise NotImplementedError
 
 
 class SessionsSubscription(EntitySubscription):
-    organization: int
-
-    def __init__(
-        self, subscription_type: SubscriptionType, data_dict: Mapping[str, Any]
-    ):
-        super().__init__(subscription_type, data_dict)
+    def __init__(self, data_dict: Mapping[str, Any]) -> None:
+        super().__init__(data_dict)
         try:
-            self.organization = data_dict["organization"]
+            self.organization: int = data_dict["organization"]
         except KeyError:
             raise InvalidQueryException(
                 "organization param is required for any query over sessions entity"
             )
 
-    def get_entity_subscription_conditions(
+    def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None
-    ) -> Sequence[Union[Expression, Condition]]:
-        """
-        Returns a list of extra conditions that are entity specific and required for the
-        subscription
-        """
-        conditions_to_add = []
-        if self.subscription_type == SubscriptionType.SNQL:
-            conditions_to_add += [
-                binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(None, None, "org_id"),
-                    Literal(None, self.organization),
-                ),
-            ]
-        return conditions_to_add
+    ) -> List[Expression]:
+        return [
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "org_id"),
+                Literal(None, self.organization),
+            ),
+        ]
+
+    def get_entity_subscription_conditions_for_legacy(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Condition]:
+        return []
 
     def to_dict(self) -> Mapping[str, Any]:
         return {"organization": self.organization}
 
 
-class EventsSubscription(EntitySubscription):
-    def get_entity_subscription_conditions(
+class BaseEventsSubscription(EntitySubscription, ABC):
+    def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None
-    ) -> Sequence[Union[Expression, Condition]]:
-        """
-        Returns a list of extra conditions that are entity specific and required for the
-        subscription
-        """
+    ) -> List[Expression]:
         if offset is None:
             return []
 
-        conditions_to_add: List[Union[Expression, Condition]] = []
-        if self.subscription_type == SubscriptionType.SNQL:
-            conditions_to_add.append(
-                binary_condition(
-                    ConditionFunctions.LTE,
-                    FunctionCall(
-                        None,
-                        "ifNull",
-                        (Column(None, None, "offset"), Literal(None, 0)),
-                    ),
-                    Literal(None, offset),
-                )
+        return [
+            binary_condition(
+                ConditionFunctions.LTE,
+                FunctionCall(
+                    None, "ifNull", (Column(None, None, "offset"), Literal(None, 0)),
+                ),
+                Literal(None, offset),
             )
-        elif self.subscription_type == SubscriptionType.LEGACY:
-            conditions_to_add = [[["ifnull", ["offset", 0]], "<=", offset]]
-        return conditions_to_add
+        ]
+
+    def get_entity_subscription_conditions_for_legacy(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Condition]:
+        if offset is None:
+            return []
+
+        return [[["ifNull", ["offset", 0]], "<=", offset]]
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {}
 
 
-class TransactionsSubscription(EventsSubscription):
+class EventsSubscription(BaseEventsSubscription):
     ...
 
 
-def get_entity_subscription_class_from_dataset_name(
-    dataset_name: str,
-) -> Type[EntitySubscription]:
-    """
-    Function that returns the correct EntitySubscription class based on the provided dictionary
-    of data
-    """
-    return ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[EntityKey(dataset_name)]
-
-
-def get_dataset_name_from_entity_subscription_class(
-    entity_subscription_type: Type[EntitySubscription],
-) -> str:
-    return ENTITY_SUBSCRIPTION_TO_KEY_MAPPER[entity_subscription_type].value
+class TransactionsSubscription(BaseEventsSubscription):
+    ...
 
 
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
@@ -127,7 +118,5 @@ ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] 
 }
 
 ENTITY_KEY_TO_SUBSCRIPTION_MAPPER: Mapping[EntityKey, Type[EntitySubscription]] = {
-    EntityKey.SESSIONS: SessionsSubscription,
-    EntityKey.EVENTS: EventsSubscription,
-    EntityKey.TRANSACTIONS: TransactionsSubscription,
+    value: key for key, value in ENTITY_SUBSCRIPTION_TO_KEY_MAPPER.items()
 }

@@ -15,7 +15,6 @@ from snuba.subscriptions.data import (
     SnQLSubscriptionData,
     SubscriptionData,
 )
-from snuba.subscriptions.entity_subscription import SubscriptionType
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
@@ -31,9 +30,7 @@ TESTS_CREATE = [
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.LEGACY
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="Legacy subscription",
     ),
@@ -48,9 +45,7 @@ TESTS_CREATE = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.SNQL
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
     ),
@@ -67,9 +62,7 @@ TESTS_CREATE = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.DELEGATE
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="Delegate subscription",
     ),
@@ -97,9 +90,7 @@ TESTS_CREATE_SESSIONS = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.DELEGATE, dataset_name="sessions"
-            ),
+            entity_subscription=create_entity_subscription(dataset_name="sessions"),
         ),
         id="Delegate subscription",
     ),
@@ -113,9 +104,7 @@ TESTS_INVALID = [
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.LEGACY
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="Legacy subscription",
     ),
@@ -130,9 +119,7 @@ TESTS_INVALID = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.SNQL
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
     ),
@@ -149,9 +136,7 @@ TESTS_INVALID = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.DELEGATE
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         id="Delegate subscription",
     ),
@@ -193,9 +178,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window=timedelta(minutes=10),
                     conditions=[["platfo", "IN", ["a"]]],
                     aggregations=[["count()", "", "count"]],
-                    entity_subscription=create_entity_subscription(
-                        subscription_type=SubscriptionType.LEGACY
-                    ),
+                    entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
             )
@@ -210,9 +193,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window=timedelta(minutes=10),
                     conditions=[["platform", "IN", ["a"]]],
                     aggregations=[["cout()", "", "count"]],
-                    entity_subscription=create_entity_subscription(
-                        subscription_type=SubscriptionType.LEGACY
-                    ),
+                    entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
             )
@@ -227,9 +208,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window=timedelta(),
                     conditions=[["platfo", "IN", ["a"]]],
                     aggregations=[["count()", "", "count"]],
-                    entity_subscription=create_entity_subscription(
-                        subscription_type=SubscriptionType.LEGACY
-                    ),
+                    entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
             )
@@ -246,9 +225,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     ),
                     time_window=timedelta(minutes=1),
                     resolution=timedelta(),
-                    entity_subscription=create_entity_subscription(
-                        subscription_type=SubscriptionType.SNQL
-                    ),
+                    entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
             )
@@ -261,9 +238,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window=timedelta(hours=48),
                     conditions=[["platfo", "IN", ["a"]]],
                     aggregations=[["count()", "", "count"]],
-                    entity_subscription=create_entity_subscription(
-                        subscription_type=SubscriptionType.LEGACY
-                    ),
+                    entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
             )
@@ -278,9 +253,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window=timedelta(minutes=1),
                     conditions=[["platfo", "IN", ["a"]]],
                     aggregations=[["count()", "", "count"]],
-                    entity_subscription=create_entity_subscription(
-                        subscription_type=SubscriptionType.LEGACY
-                    ),
+                    entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
             )
@@ -314,9 +287,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.LEGACY
-            ),
+            entity_subscription=create_entity_subscription(),
         )
         identifier = creator.create(subscription, Timer("test"))
         assert (

@@ -32,10 +32,7 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.entity_subscription import (
-    SessionsSubscription,
-    SubscriptionType,
-)
+from snuba.subscriptions.entity_subscription import SessionsSubscription
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.worker import (
@@ -87,18 +84,14 @@ class Datetime(Pattern[datetime]):
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=60),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.LEGACY
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         SnQLSubscriptionData(
             project_id=1,
             query=("MATCH (events) SELECT count() AS count"),
             time_window=timedelta(minutes=60),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.SNQL
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         DelegateSubscriptionData(
             project_id=1,
@@ -107,9 +100,7 @@ class Datetime(Pattern[datetime]):
             query=("MATCH (events) SELECT count() AS count"),
             time_window=timedelta(minutes=60),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.DELEGATE
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         DelegateSubscriptionData(
             project_id=123,
@@ -131,9 +122,7 @@ class Datetime(Pattern[datetime]):
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.DELEGATE, dataset_name="sessions"
-            ),
+            entity_subscription=create_entity_subscription(dataset_name="sessions"),
         ),
     ],
 )

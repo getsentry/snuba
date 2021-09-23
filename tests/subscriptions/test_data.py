@@ -12,7 +12,6 @@ from snuba.subscriptions.data import (
     SnQLSubscriptionData,
     SubscriptionData,
 )
-from snuba.subscriptions.entity_subscription import SubscriptionType
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
@@ -27,7 +26,7 @@ TESTS = [
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(SubscriptionType.LEGACY),
+            entity_subscription=create_entity_subscription(),
         ),
         None,
         id="Legacy subscription",
@@ -43,7 +42,7 @@ TESTS = [
             ),
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(SubscriptionType.SNQL),
+            entity_subscription=create_entity_subscription(),
         ),
         None,
         id="SnQL subscription",
@@ -61,7 +60,7 @@ TESTS = [
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(SubscriptionType.DELEGATE),
+            entity_subscription=create_entity_subscription(),
         ),
         None,
         id="Delegate subscription",
@@ -77,9 +76,7 @@ TESTS = [
             ),
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.SNQL
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         InvalidQueryException,
         id="SnQL subscription with 2 many aggregates",
@@ -95,9 +92,7 @@ TESTS = [
             ),
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                subscription_type=SubscriptionType.SNQL
-            ),
+            entity_subscription=create_entity_subscription(),
         ),
         InvalidQueryException,
         id="SnQL subscription with disallowed clause",
@@ -128,9 +123,7 @@ TESTS_OVER_SESSIONS = [
             ],
             time_window=timedelta(minutes=120),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(
-                SubscriptionType.DELEGATE, "sessions"
-            ),
+            entity_subscription=create_entity_subscription("sessions"),
         ),
         None,
         id="Delegate subscription",
