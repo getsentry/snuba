@@ -128,6 +128,26 @@ TESTS_OVER_SESSIONS = [
         None,
         id="Delegate subscription",
     ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=1,
+            query=(
+                """
+                MATCH (sessions) SELECT if(greater(sessions,0),
+                divide(sessions_crashed,sessions),null)
+                AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions,
+                identity(sessions_crashed)
+                WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
+                OFFSET 0 GRANULARITY 3600
+                """
+            ),
+            time_window=timedelta(minutes=120),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription("sessions"),
+        ),
+        InvalidQueryException,
+        id="Delegate subscription",
+    ),
 ]
 
 

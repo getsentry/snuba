@@ -2083,6 +2083,48 @@ class TestCreateSubscriptionApi(BaseApiTest):
             "subscription_id": f"0/{expected_uuid.hex}",
         }
 
+    def test_delegate_with_sessions_entity_subscription(self) -> None:
+        expected_uuid = uuid.uuid1()
+
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                "{}/subscriptions".format("sessions"),
+                data=json.dumps(
+                    {
+                        "type": "delegate",
+                        "project_id": 1,
+                        "conditions": [],
+                        "aggregations": [
+                            [
+                                "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
+                                None,
+                                "_crash_rate_alert_aggregate",
+                            ],
+                            ["identity(sessions)", None, "_total_sessions"],
+                        ],
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                        "query": (
+                            """
+                            MATCH (sessions) SELECT if(greater(sessions,0),
+                            divide(sessions_crashed,sessions),null)
+                            AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
+                            WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
+                            OFFSET 0 GRANULARITY 3600
+                            """
+                        ),
+                        "organization": 1,
+                    }
+                ).encode("utf-8"),
+            )
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {
+            "subscription_id": f"0/{expected_uuid.hex}",
+        }
+
     def test_delegate_with_bad_snql(self) -> None:
         expected_uuid = uuid.uuid1()
 
@@ -2107,10 +2149,56 @@ class TestCreateSubscriptionApi(BaseApiTest):
         data = json.loads(resp.data)
         assert data == {
             "error": {
-                "message": "only one aggregation in the select allowed",
+                "message": "A maximum of 1 aggregation is allowed in the select",
                 "type": "invalid_query",
             }
         }
+
+    def test_bad_delegate_with_sessions_entity_subscription(self) -> None:
+        expected_uuid = uuid.uuid1()
+
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                "{}/subscriptions".format("sessions"),
+                data=json.dumps(
+                    {
+                        "type": "delegate",
+                        "project_id": 1,
+                        "conditions": [],
+                        "aggregations": [
+                            [
+                                "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
+                                None,
+                                "_crash_rate_alert_aggregate",
+                            ],
+                            ["identity(sessions)", None, "_total_sessions"],
+                            ["identity(sessions_crashed)", None, None],
+                        ],
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                        "query": (
+                            """
+                            MATCH (sessions) SELECT if(greater(sessions,0),
+                            divide(sessions_crashed,sessions),null)
+                            AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions,
+                            identity(sessions_crashed)
+                            WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
+                            OFFSET 0 GRANULARITY 3600
+                            """
+                        ),
+                        "organization": 1,
+                    }
+                ).encode("utf-8"),
+            )
+            assert resp.status_code == 400
+            data = json.loads(resp.data)
+            assert data == {
+                "error": {
+                    "message": "A maximum of 2 aggregations are allowed in the select",
+                    "type": "invalid_query",
+                }
+            }
 
 
 class TestDeleteSubscriptionApi(BaseApiTest):
