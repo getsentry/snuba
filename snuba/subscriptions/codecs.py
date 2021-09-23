@@ -18,8 +18,6 @@ from snuba.utils.codecs import Codec, Encoder
 
 
 class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
-    dataset_name: str
-
     def __init__(self, entity: Entity):
         self.entity_key = ENTITY_NAME_LOOKUP[entity]
 
