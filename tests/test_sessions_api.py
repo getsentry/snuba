@@ -284,13 +284,17 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
             "message": "Minute-resolution queries are restricted to a 7-hour time window.",
         }
 
+
+class TestCreateSubscriptionApi(BaseApiTest):
+    dataset_name = "sessions"
+
     def test_delegate_with_sessions_entity_subscription(self) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format("sessions"),
+                "{}/subscriptions".format(self.dataset_name),
                 data=json.dumps(
                     {
                         "type": "delegate",
@@ -332,7 +336,7 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format("sessions"),
+                "{}/subscriptions".format(self.dataset_name),
                 data=json.dumps(
                     {
                         "type": "delegate",
