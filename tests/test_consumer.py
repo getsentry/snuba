@@ -11,6 +11,7 @@ import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
+from arroyo.types import Position
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -178,10 +179,10 @@ def test_multistorage_strategy(
         ),
     ]
 
+    now = datetime.now()
+
     messages = [
-        Message(
-            Partition(Topic("topic"), 0), offset, payload, datetime.now(), offset + 1
-        )
+        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
         for offset, payload in enumerate(payloads)
     ]
 
@@ -193,7 +194,9 @@ def test_multistorage_strategy(
             strategy.submit(message)
 
         with assert_changes(
-            lambda: commit.call_args_list, [], [call({Partition(Topic("topic"), 0): 3})]
+            lambda: commit.call_args_list,
+            [],
+            [call({Partition(Topic("topic"), 0): Position(3, now)})],
         ):
             strategy.close()
             strategy.join()
