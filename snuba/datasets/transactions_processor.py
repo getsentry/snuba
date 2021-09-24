@@ -38,6 +38,7 @@ UNKNOWN_SPAN_STATUS = 2
 
 
 EventDict = Dict[str, Any]
+SpanDict = Dict[str, Any]
 RetentionDays = int
 
 
@@ -226,6 +227,10 @@ class TransactionsMessageProcessor(MessageProcessor):
                 del contexts[context]
 
         transaction_ctx = contexts.get("trace", {})
+        # The hash and exclusive_time is stored in the spans columns so there is no need
+        # to store it in the context array.
+        transaction_ctx.pop("hash", None)
+        transaction_ctx.pop("exclusive_time", None)
         # We store trace_id and span_id as promoted columns and on the query level
         # we make sure that all queries on contexts[trace.trace_id/span_id] use those promoted
         # columns instead. So we don't need to store them in the contexts array as well
@@ -273,6 +278,51 @@ class TransactionsMessageProcessor(MessageProcessor):
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
 
+    def _process_span(self, span_dict: SpanDict) -> Optional[Tuple[str, int, float]]:
+        op = span_dict.get("op")
+        group = span_dict.get("hash")
+        exclusive_time = span_dict.get("exclusive_time")
+
+        if op is None or group is None or exclusive_time is None:
+            return None
+
+        return op, int(group, 16), exclusive_time
+
+    def _process_spans(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        processed["spans.op"] = []
+        processed["spans.group"] = []
+        processed["spans.exclusive_time"] = []
+
+        try:
+            trace_context = event_dict["data"].get("contexts", {}).get("trace", {})
+            processed_root_span = self._process_span(trace_context)
+            if processed_root_span is None:
+                return
+
+            processed_spans = [processed_root_span]
+
+            for span in event_dict["data"].get("spans", []):
+                processed_span = self._process_span(span)
+                if processed_span is None:
+                    return
+                processed_spans.append(processed_span)
+
+            for op, group, exclusive_time in sorted(processed_spans):
+                processed["spans.op"].append(op)
+                processed["spans.group"].append(group)
+                processed["spans.exclusive_time"].append(exclusive_time)
+
+        except Exception:
+            # Not failing the event in this case just yet, because we are still
+            # developing this feature.
+            logger.error(
+                "Invalid span fields.",
+                extra={"trace_context": trace_context},
+                exec_info=True,
+            )
+
     def process_message(
         self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -294,6 +344,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         self._process_tags(processed, event_dict)
         self._process_measurements(processed, event_dict)
         self._process_breakdown(processed, event_dict)
+        self._process_spans(processed, event_dict)
         self._process_contexts_and_user(processed, event_dict)
         self._process_request_data(processed, event_dict)
         self._process_sdk_data(processed, event_dict)

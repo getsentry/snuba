@@ -85,6 +85,8 @@ class TransactionEvent:
                             "span_id": "b70840cd33074881",
                             "data": {},
                             "op": "http",
+                            "hash": "b" * 16,
+                            "exclusive_time": 0.1234,
                         }
                     ],
                     "platform": self.platform,
@@ -123,6 +125,8 @@ class TransactionEvent:
                             "type": "trace",
                             "span_id": self.span_id,
                             "status": self.status,
+                            "hash": "a" * 16,
+                            "exclusive_time": 1.2345,
                         },
                         "experiments": {"test1": 1, "test2": 2},
                     },
@@ -160,6 +164,10 @@ class TransactionEvent:
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
         finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
+
+        spans = sorted(
+            [(self.op, int("a" * 16, 16), 1.2345), ("http", int("b" * 16, 16), 0.1234)]
+        )
 
         ret = {
             "deleted": 0,
@@ -216,6 +224,9 @@ class TransactionEvent:
             "measurements.value": [32.129, 4242.0],
             "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
             "span_op_breakdowns.value": [62.512, 109.774, 172.286],
+            "spans.op": [span[0] for span in spans],
+            "spans.group": [span[1] for span in spans],
+            "spans.exclusive_time": [span[2] for span in spans],
         }
 
         if self.ipv4:
