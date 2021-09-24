@@ -1,3 +1,4 @@
+import importlib
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -14,13 +15,11 @@ from arroyo.synchronized import Commit, commit_codec
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
+from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.subscriptions.scheduler_consumer import (
-    CommitLogTickConsumer,
-    SchedulerBuilder,
-    Tick,
-)
+from snuba.subscriptions import scheduler_consumer
+from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer, Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
@@ -33,6 +32,9 @@ from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
 def test_scheduler_consumer() -> None:
+    settings.TOPIC_PARTITION_COUNTS = {"events": 2}
+    importlib.reload(scheduler_consumer)
+
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.COMMIT_LOG])
 
@@ -43,8 +45,8 @@ def test_scheduler_consumer() -> None:
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
 
-    builder = SchedulerBuilder(
-        entity_name, 2, str(uuid.uuid1().hex), "latest", None, metrics_backend
+    builder = scheduler_consumer.SchedulerBuilder(
+        entity_name, str(uuid.uuid1().hex), "latest", None, metrics_backend
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
@@ -84,6 +86,8 @@ def test_scheduler_consumer() -> None:
     scheduler._shutdown()
 
     assert metrics_backend.calls[0] == Timing("partition_lag_ms", 2000, None)
+
+    settings.TOPIC_PARTITION_COUNTS = {}
 
 
 def test_tick_time_shift() -> None:

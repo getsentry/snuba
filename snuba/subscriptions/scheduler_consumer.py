@@ -192,7 +192,6 @@ class SchedulerBuilder:
     def __init__(
         self,
         entity_name: str,
-        partitions: Optional[int],
         consumer_group: str,
         auto_offset_reset: str,
         delay_seconds: Optional[int],
@@ -212,11 +211,7 @@ class SchedulerBuilder:
         assert commit_log_topic_spec is not None
         self.__commit_log_topic_spec = commit_log_topic_spec
 
-        self.__partitions = (
-            partitions
-            if partitions is not None
-            else stream_loader.get_default_topic_spec().partitions_number
-        )
+        self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
         self.__consumer_group = consumer_group
         self.__auto_offset_reset = auto_offset_reset

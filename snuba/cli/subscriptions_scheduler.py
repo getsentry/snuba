@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
     type=click.Choice(["events", "transactions"]),
     help="The entity to target",
 )
-@click.option("--partitions", type=int)
 @click.option(
     "--consumer-group",
     default="snuba-subscription-scheduler",
@@ -41,7 +40,6 @@ logger = logging.getLogger(__name__)
 def subscriptions_scheduler(
     *,
     entity_name: str,
-    partitions: Optional[int],
     consumer_group: str,
     auto_offset_reset: str,
     schedule_ttl: int,
@@ -63,12 +61,7 @@ def subscriptions_scheduler(
     configure_metrics(StreamMetricsAdapter(metrics))
 
     builder = SchedulerBuilder(
-        entity_name,
-        partitions,
-        consumer_group,
-        auto_offset_reset,
-        delay_seconds,
-        metrics,
+        entity_name, consumer_group, auto_offset_reset, delay_seconds, metrics,
     )
 
     processor: StreamProcessor[Tick] = builder.build_consumer()
