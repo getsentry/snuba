@@ -1,6 +1,3 @@
-import random
-
-from snuba import settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
