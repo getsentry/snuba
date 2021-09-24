@@ -5,7 +5,10 @@ from typing import Optional
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
+from snuba.clickhouse.query_dsl.accessors import (
+    get_object_ids_in_query_ast,
+    get_time_range,
+)
 from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -43,10 +46,10 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         set_final = False
         if project_ids:
-            final, exclude_group_ids = get_projects_query_flags(
+            query_is_final, exclude_group_ids = get_projects_query_flags(
                 list(project_ids), self.__replacer_state_name,
             )
-            if final:
+            if query_is_final:
                 metrics.increment(
                     "final",
                     tags={
@@ -55,33 +58,43 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                         "parent_api": request_settings.get_parent_api(),
                     },
                 )
-            if not final and exclude_group_ids:
-                # If the number of groups to exclude exceeds our limit, the query
-                # should just use final instead of the exclusion set.
-                max_group_ids_exclude = get_config(
-                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
-                )
-                assert isinstance(max_group_ids_exclude, int)
-                if len(exclude_group_ids) > max_group_ids_exclude:
-                    metrics.increment(
-                        "final",
-                        tags={
-                            "cause": "max_groups",
-                            "referrer": request_settings.referrer,
-                            "parent_api": request_settings.get_parent_api(),
-                        },
+            if not query_is_final and exclude_group_ids:
+                if self._query_overlaps_replacements(query):
+                    # If the number of groups to exclude exceeds our limit, the query
+                    # should just use final instead of the exclusion set.
+                    max_group_ids_exclude = get_config(
+                        "max_group_ids_exclude",
+                        settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
                     )
-                    set_final = True
-                else:
-                    query.add_condition_to_ast(
-                        not_in_condition(
-                            FunctionCall(
-                                None, "assumeNotNull", (Column(None, None, "group_id"),)
-                            ),
-                            [Literal(None, p) for p in exclude_group_ids],
+                    assert isinstance(max_group_ids_exclude, int)
+                    if len(exclude_group_ids) > max_group_ids_exclude:
+                        metrics.increment(
+                            "final",
+                            tags={
+                                "cause": "max_groups",
+                                "referrer": request_settings.referrer,
+                                "parent_api": request_settings.get_parent_api(),
+                            },
                         )
-                    )
+                        set_final = True
+                    else:
+                        query.add_condition_to_ast(
+                            not_in_condition(
+                                FunctionCall(
+                                    None,
+                                    "assumeNotNull",
+                                    (Column(None, None, "group_id"),),
+                                ),
+                                [Literal(None, p) for p in exclude_group_ids],
+                            )
+                        )
             else:
-                set_final = final
+                set_final = query_is_final
 
         query.set_from_clause(replace(query.get_from_clause(), final=set_final))
+
+    def _query_overlaps_replacements(self, query: Query) -> bool:
+        query_lower_timestamp, query_upper_timestamp = get_time_range(
+            query, "timestamp"
+        )
+        return True
