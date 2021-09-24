@@ -275,12 +275,12 @@ def process_exclude_groups_and_replacement_types_results(
     [
         needs_final...,
         exclude_groups...,
-        project_replacement_types...,
+        needs_final_replacement_types...,
         groups_replacement_types...
     ]
     - `needs_final` slice is `len_projects` long
     - `excludes_groups` slice is `len_projects * 2` long
-    - `project_replacement_types` slice is `len_projects` long
+    - `needs_final_replacement_types` slice is `len_projects` long
     - `groups_replacement_types` slice is `len_projects * 2` long
 
     The `len_projects * 2` long slices are in the form:
@@ -298,7 +298,7 @@ def process_exclude_groups_and_replacement_types_results(
         {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
     )
 
-    project_replacement_types = {
+    needs_final_replacement_types = {
         replacement_type.decode("utf-8")
         for replacement_type in projects_replacment_types_result
         if replacement_type
@@ -309,7 +309,7 @@ def process_exclude_groups_and_replacement_types_results(
         for replacement_type in sum(groups_replacement_types_result[1::2], [])
     }
 
-    replacement_types = groups_replacement_types.union(project_replacement_types)
+    replacement_types = groups_replacement_types.union(needs_final_replacement_types)
 
     return needs_final, exclude_groups, replacement_types
 
