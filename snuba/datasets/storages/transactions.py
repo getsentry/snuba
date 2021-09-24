@@ -21,6 +21,7 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.arrayjoin_spans_optimizer import ArrayJoinSpansOptimizer
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
@@ -30,6 +31,7 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.type_converters.hexint_column_processor import (
+    HexIntArrayColumnProcessor,
     HexIntColumnProcessor,
 )
 from snuba.query.processors.type_converters.uuid_column_processor import (
@@ -127,6 +129,8 @@ storage = WritableTableStorage(
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
+        ArrayJoinSpansOptimizer(),
+        HexIntArrayColumnProcessor({"spans.group"}),
         PrewhereProcessor(
             [
                 "event_id",
