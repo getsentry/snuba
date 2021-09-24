@@ -1,21 +1,34 @@
 import time
 import uuid
 from datetime import datetime, timedelta
+from typing import Mapping, Optional
+from unittest import mock
 
-from arroyo import Partition, Topic
-from arroyo.backends.kafka import KafkaProducer
+import pytest
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload, KafkaProducer
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.errors import ConsumerError
 from arroyo.synchronized import Commit, commit_codec
+from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
+from snuba.subscriptions.scheduler_consumer import (
+    CommitLogTickConsumer,
+    SchedulerBuilder,
+    Tick,
+)
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
+from snuba.utils.types import Interval
+from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
@@ -71,3 +84,230 @@ def test_scheduler_consumer() -> None:
     scheduler._shutdown()
 
     assert metrics_backend.calls[0] == Timing("partition_lag_ms", 2000, None)
+
+
+def test_tick_time_shift() -> None:
+    partition = 0
+    offsets = Interval(0, 1)
+    tick = Tick(
+        partition, offsets, Interval(datetime(1970, 1, 1), datetime(1970, 1, 2))
+    )
+    assert tick.time_shift(timedelta(hours=24)) == Tick(
+        partition, offsets, Interval(datetime(1970, 1, 2), datetime(1970, 1, 3))
+    )
+
+
+@pytest.mark.parametrize(
+    "time_shift",
+    [
+        pytest.param(None, id="without time shift"),
+        pytest.param(timedelta(minutes=-5), id="with time shift"),
+    ],
+)
+def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
+    clock = TestingClock()
+    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+
+    epoch = datetime.fromtimestamp(clock.time())
+
+    topic = Topic("messages")
+
+    broker.create_topic(topic, partitions=1)
+
+    producer = broker.get_producer()
+
+    for partition, offsets in enumerate([[0, 1, 2], [0]]):
+        for offset in offsets:
+            payload = commit_codec.encode(
+                Commit("events", Partition(topic, partition), offset, epoch)
+            )
+            producer.produce(Partition(topic, 0), payload).result()
+
+    inner_consumer = broker.get_consumer("group")
+
+    consumer = CommitLogTickConsumer(inner_consumer, time_shift=time_shift)
+
+    if time_shift is None:
+        time_shift = timedelta()
+
+    def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
+        assert consumer.tell() == {
+            Partition(topic, 0): 0,
+        }
+
+    assignment_callback = mock.Mock(side_effect=_assignment_callback)
+
+    consumer.subscribe([topic], on_assign=assignment_callback)
+
+    with assert_changes(lambda: assignment_callback.called, False, True):
+        # consume 0, 0
+        assert consumer.poll() is None
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 1,
+    }
+
+    # consume 0, 1
+    assert consumer.poll() == Message(
+        Partition(topic, 0),
+        1,
+        Tick(0, offsets=Interval(0, 1), timestamps=Interval(epoch, epoch)).time_shift(
+            time_shift
+        ),
+        epoch,
+        2,
+    )
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 2,
+    }
+
+    # consume 0, 2
+    assert consumer.poll() == Message(
+        Partition(topic, 0),
+        2,
+        Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
+            time_shift
+        ),
+        epoch,
+        3,
+    )
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 3,
+    }
+
+    # consume 1, 0
+    assert consumer.poll() is None
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 4,
+    }
+
+    # consume no message
+    assert consumer.poll() is None
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 4,
+    }
+
+    consumer.seek({Partition(topic, 0): 1})
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 1,
+    }
+
+    # consume 0, 1
+    assert consumer.poll() is None
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 2,
+    }
+
+    # consume 0, 2
+    assert consumer.poll() == Message(
+        Partition(topic, 0),
+        2,
+        Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
+            time_shift
+        ),
+        epoch,
+        3,
+    )
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 3,
+    }
+
+    with pytest.raises(ConsumerError):
+        consumer.seek({Partition(topic, -1): 0})
+
+
+def test_tick_consumer_non_monotonic() -> None:
+    clock = TestingClock()
+    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+
+    epoch = datetime.fromtimestamp(clock.time())
+
+    topic = Topic("messages")
+    partition = Partition(topic, 0)
+
+    broker.create_topic(topic, partitions=1)
+
+    producer = broker.get_producer()
+
+    inner_consumer = broker.get_consumer("group")
+
+    consumer = CommitLogTickConsumer(inner_consumer)
+
+    def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
+        assert inner_consumer.tell() == {partition: 0}
+        assert consumer.tell() == {partition: 0}
+
+    assignment_callback = mock.Mock(side_effect=_assignment_callback)
+
+    consumer.subscribe([topic], on_assign=assignment_callback)
+
+    producer.produce(
+        partition, commit_codec.encode(Commit("events", partition, 0, epoch))
+    ).result()
+
+    clock.sleep(1)
+
+    producer.produce(
+        partition,
+        commit_codec.encode(
+            Commit("events", partition, 1, epoch + timedelta(seconds=1))
+        ),
+    ).result()
+
+    with assert_changes(lambda: assignment_callback.called, False, True):
+        assert consumer.poll() is None
+
+    assert consumer.tell() == {partition: 1}
+
+    with assert_changes(consumer.tell, {partition: 1}, {partition: 2}):
+        assert consumer.poll() == Message(
+            partition,
+            1,
+            Tick(
+                0,
+                offsets=Interval(0, 1),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
+            ),
+            epoch + timedelta(seconds=1),
+            2,
+        )
+
+    clock.sleep(-1)
+
+    producer.produce(
+        partition, commit_codec.encode(Commit("events", partition, 2, epoch)),
+    ).result()
+
+    with assert_changes(consumer.tell, {partition: 2}, {partition: 3}):
+        assert consumer.poll() is None
+
+    clock.sleep(2)
+
+    producer.produce(
+        partition,
+        commit_codec.encode(
+            Commit("events", partition, 3, epoch + timedelta(seconds=2))
+        ),
+    ).result()
+
+    with assert_changes(consumer.tell, {partition: 3}, {partition: 4}):
+        assert consumer.poll() == Message(
+            partition,
+            3,
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
+                ),
+            ),
+            epoch + timedelta(seconds=2),
+            4,
+        )
