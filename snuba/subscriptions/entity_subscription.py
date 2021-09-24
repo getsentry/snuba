@@ -16,6 +16,8 @@ class SubscriptionType(Enum):
 
 
 class EntitySubscription(ABC):
+    MAX_ALLOWED_AGGREGATIONS: int = 1
+
     def __init__(self, data_dict: Mapping[str, Any]) -> None:
         ...
 
@@ -45,6 +47,8 @@ class EntitySubscription(ABC):
 
 
 class SessionsSubscription(EntitySubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 2
+
     def __init__(self, data_dict: Mapping[str, Any]) -> None:
         super().__init__(data_dict)
         try:

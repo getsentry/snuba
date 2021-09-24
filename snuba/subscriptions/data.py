@@ -265,7 +265,9 @@ class SnQLSubscriptionData(SubscriptionData):
             raise InvalidSubscriptionError("Only simple queries are supported")
         entity = get_entity(from_clause.key)
 
-        SubscriptionAllowedClausesValidator().validate(query)
+        SubscriptionAllowedClausesValidator(
+            self.entity_subscription.MAX_ALLOWED_AGGREGATIONS
+        ).validate(query)
         if entity.required_time_column:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
