@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
@@ -212,7 +212,6 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        use_materialized_storage: Optional[bool] = None
 
         # If the passed in `request_settings` arg is an instance of `SubscriptionRequestSettings`,
         # then it is a crash rate alert subscription, and hence we decide on whether to use the
@@ -226,8 +225,9 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
             from_date, to_date = get_time_range(query, "started")
             if from_date and to_date:
                 use_materialized_storage = to_date - from_date > timedelta(hours=1)
-
-        if use_materialized_storage is None:
+            else:
+                use_materialized_storage = True
+        else:
             granularity = extract_granularity_from_query(query, "started") or 3600
             use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
 
