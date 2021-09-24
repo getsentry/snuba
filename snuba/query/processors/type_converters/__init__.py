@@ -19,11 +19,19 @@ class ColumnTypeError(ValidationException):
 
 
 class BaseTypeConverter(QueryProcessor, ABC):
-    def __init__(self, columns: Set[str]):
+    def __init__(self, columns: Set[str], optimize_ordering: bool = False):
         self.columns = columns
+        self.optimize_ordering = optimize_ordering
         column_match = Or([String(col) for col in columns])
 
         literal = Param("literal", LiteralMatch(AnyMatch(str)))
+
+        ordering_operators = (
+            ConditionFunctions.GT,
+            ConditionFunctions.GTE,
+            ConditionFunctions.LT,
+            ConditionFunctions.LTE,
+        )
 
         operator = Param(
             "operator",
@@ -35,6 +43,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
                         ConditionFunctions.NEQ,
                         ConditionFunctions.IS_NULL,
                         ConditionFunctions.IS_NOT_NULL,
+                        *(ordering_operators if self.optimize_ordering else ()),
                     )
                 ]
             ),
@@ -46,12 +55,9 @@ class BaseTypeConverter(QueryProcessor, ABC):
                 [
                     String(op)
                     for op in (
-                        ConditionFunctions.GT,
-                        ConditionFunctions.GTE,
-                        ConditionFunctions.LT,
-                        ConditionFunctions.LTE,
                         ConditionFunctions.LIKE,
                         ConditionFunctions.NOT_LIKE,
+                        *(() if self.optimize_ordering else ordering_operators),
                     )
                 ]
             ),
