@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Generic, Mapping, NamedTuple, Optional, TypeVar
 
+from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.schemas.tables import WritableTableSchema
 
 
@@ -11,7 +12,7 @@ class ReplacementMessage(NamedTuple):
     TODO: We should use codecs to encode/decode kafka replacements messages.
     """
 
-    action_type: str  # This is a string to make this class agnostic to the dataset
+    action_type: ReplacementType  # This is a string to make this class agnostic to the dataset
     data: Mapping[str, Any]
 
 
