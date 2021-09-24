@@ -97,10 +97,12 @@ class BaseTypeConverter(QueryProcessor, ABC):
 
         condition = query.get_condition()
         if condition is not None:
-            if self.__is_optimizable_expression(condition):
-                processed = condition.transform(self.__process_optimizable_condition)
-            else:
+            if self.__contains_unoptimizable_condition(condition):
                 processed = condition.transform(self._process_expressions)
+            else:
+                processed = condition.transform(self.__process_optimizable_condition)
+                if condition == processed:
+                    processed = processed.transform(self._process_expressions)
 
             query.set_ast_condition(processed)
 
@@ -110,16 +112,16 @@ class BaseTypeConverter(QueryProcessor, ABC):
             alias=None, table_name=exp.table_name, column_name=exp.column_name
         )
 
-    def __is_optimizable_expression(self, exp: Expression) -> bool:
+    def __contains_unoptimizable_condition(self, exp: Expression) -> bool:
         """
-        Returns true if the entire expression can optimized, otherwise false.
+        Returns true if there is an unoptimizable condition, otherwise false.
         """
         for e in exp:
             match = self.__unoptimizable_condition_matcher.match(e)
             if match is not None:
-                return False
+                return True
 
-        return True
+        return False
 
     def __process_optimizable_condition(self, exp: Expression) -> Expression:
         def assert_literal(lit: Expression) -> Literal:
