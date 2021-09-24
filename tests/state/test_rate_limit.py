@@ -137,6 +137,27 @@ class TestRateLimit:
         with rate_limit(rate_limit_params) as stats:
             assert stats is None
 
+    def test_rate_limit_exceptions(self) -> None:
+        params = RateLimitParameters("foo", "bar", None, 5)
+        bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
+
+        def count() -> int:
+            return rds.zcount(bucket, "-inf", "+inf")
+
+        with rate_limit(params):
+            assert count() == 1
+
+        assert count() == 1
+
+        with pytest.raises(RateLimitExceeded):
+            with rate_limit(params):
+                assert count() == 2
+                raise RateLimitExceeded(
+                    "stuff"
+                )  # simulate an inner rate limiter failing
+
+        assert count() == 2
+
 
 tests = [
     pytest.param((0, 5, 5)),
