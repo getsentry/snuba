@@ -291,10 +291,6 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_spans(
         self, processed: MutableMapping[str, Any], event_dict: EventDict,
     ) -> None:
-        processed["spans.op"] = []
-        processed["spans.group"] = []
-        processed["spans.exclusive_time"] = []
-
         try:
             trace_context = event_dict["data"].get("contexts", {}).get("trace", {})
             processed_root_span = self._process_span(trace_context)
@@ -308,6 +304,10 @@ class TransactionsMessageProcessor(MessageProcessor):
                 if processed_span is None:
                     return
                 processed_spans.append(processed_span)
+
+            processed["spans.op"] = []
+            processed["spans.group"] = []
+            processed["spans.exclusive_time"] = []
 
             for op, group, exclusive_time in sorted(processed_spans):
                 processed["spans.op"].append(op)
