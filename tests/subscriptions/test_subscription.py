@@ -10,11 +10,11 @@ from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
-    InvalidSubscriptionError,
     LegacySubscriptionData,
     SnQLSubscriptionData,
     SubscriptionData,
 )
+from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer

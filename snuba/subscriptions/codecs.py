@@ -7,12 +7,14 @@ from snuba.datasets.entity import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
-    InvalidSubscriptionError,
     LegacySubscriptionData,
     SnQLSubscriptionData,
     SubscriptionData,
 )
-from snuba.subscriptions.entity_subscription import SubscriptionType
+from snuba.subscriptions.entity_subscription import (
+    InvalidSubscriptionError,
+    SubscriptionType,
+)
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
 

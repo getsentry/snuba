@@ -54,7 +54,8 @@ from snuba.request.schema import RequestParts, RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
+from snuba.subscriptions.data import PartitionId
+from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
