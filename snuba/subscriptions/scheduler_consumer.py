@@ -276,9 +276,9 @@ class MeasurePartitionLag(ProcessingStrategy[Tick]):
                 if ts is None:
                     return
 
-                if earliest is None or ts < earliest:
+                if ts < earliest:
                     earliest = ts
-                if latest is None or ts > latest:
+                if ts > latest:
                     latest = ts
 
             self.__metrics.timing(
