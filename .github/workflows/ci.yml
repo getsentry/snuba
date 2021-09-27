@@ -140,6 +140,9 @@ jobs:
       matrix:
         instance: [0, 1]
 
+    env:
+      USE_REDIS_INDEXER: 1
+
     steps:
       # Checkout codebase
       - name: Checkout snuba
