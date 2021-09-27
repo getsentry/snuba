@@ -7,7 +7,7 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 class FixedStringArrayColumnProcessor(BaseTypeConverter):
     def __init__(self, columns: Set[str], fixed_length: int):
         self.fixed_length = fixed_length
-        super().__init__(columns)
+        super().__init__(columns, optimize_ordering=True)
 
     def _translate_literal(self, exp: Literal) -> Expression:
         try:
