@@ -6,7 +6,7 @@ from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
-from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
+from typing import Any, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
 from snuba import state
@@ -25,10 +25,6 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Aggregation, Query
 from snuba.query.types import Condition
-from snuba.query.validation.validators import (
-    NoTimeBasedConditionValidator,
-    SubscriptionAllowedClausesValidator,
-)
 from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
@@ -37,6 +33,7 @@ from snuba.subscriptions.entity_subscription import (
     ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
     ENTITY_SUBSCRIPTION_TO_KEY_MAPPER,
     EntitySubscription,
+    InvalidSubscriptionError,
     SubscriptionType,
 )
 from snuba.utils.metrics import MetricsBackend
@@ -45,10 +42,6 @@ from snuba.utils.metrics.timer import Timer
 SUBSCRIPTION_REFERRER = "subscription"
 
 logger = logging.getLogger("snuba.subscriptions")
-
-
-class InvalidSubscriptionError(Exception):
-    pass
 
 
 PartitionId = NewType("PartitionId", int)
@@ -226,7 +219,7 @@ class SnQLSubscriptionData(SubscriptionData):
                 "Entity must have a timestamp column for subscriptions"
             )
 
-        conditions_to_add: List[Expression] = [
+        conditions_to_add: Sequence[Expression] = [
             binary_condition(
                 ConditionFunctions.EQ,
                 Column(None, None, "project_id"),
@@ -242,10 +235,10 @@ class SnQLSubscriptionData(SubscriptionData):
                 Column(None, None, required_timestamp_column),
                 Literal(None, timestamp),
             ),
+            *self.entity_subscription.get_entity_subscription_conditions_for_snql(
+                offset
+            ),
         ]
-        conditions_to_add += self.entity_subscription.get_entity_subscription_conditions_for_snql(
-            offset
-        )
 
         new_condition = combine_and_conditions(conditions_to_add)
         condition = query.get_condition()
@@ -259,17 +252,7 @@ class SnQLSubscriptionData(SubscriptionData):
     def validate_subscription(
         self, query: Union[CompositeQuery[Entity], Query]
     ) -> None:
-        # TODO: Support composite queries with multiple entities.
-        from_clause = query.get_from_clause()
-        if not isinstance(from_clause, Entity):
-            raise InvalidSubscriptionError("Only simple queries are supported")
-        entity = get_entity(from_clause.key)
-
-        SubscriptionAllowedClausesValidator(
-            self.entity_subscription.MAX_ALLOWED_AGGREGATIONS
-        ).validate(query)
-        if entity.required_time_column:
-            NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
+        self.entity_subscription.validate_query(query)
 
     def build_request(
         self,
