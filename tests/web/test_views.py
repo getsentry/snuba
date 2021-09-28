@@ -8,12 +8,12 @@ from snuba.web.views import handle_invalid_query
 
 invalid_query_exception_test_cases = [
     pytest.param(
-        ParsingException("This should be reported at WARNING", report=True),
+        ParsingException("This should be reported at WARNING", should_report=True),
         "WARNING",
         id="Report exception",
     ),
     pytest.param(
-        ParsingException("This should be reported at INFO", report=False),
+        ParsingException("This should be reported at INFO", should_report=False),
         "INFO",
         id="Mute exception",
     ),
