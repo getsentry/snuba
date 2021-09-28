@@ -304,13 +304,13 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_spans(
         self, processed: MutableMapping[str, Any], event_dict: EventDict,
     ) -> None:
-        try:
-            data = event_dict["data"]
+        data = event_dict["data"]
+        trace_context = data["contexts"]["trace"]
 
+        try:
             if not self.__should_write_span_columns(data["project"]):
                 return
 
-            trace_context = data.get("contexts", {}).get("trace", {})
             processed_root_span = self._process_span(trace_context)
             if processed_root_span is None:
                 return
@@ -338,7 +338,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             logger.error(
                 "Invalid span fields.",
                 extra={"trace_context": trace_context},
-                exec_info=True,
+                exc_info=True,
             )
 
     def process_message(
