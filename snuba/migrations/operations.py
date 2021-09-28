@@ -182,7 +182,7 @@ class ModifyColumn(SqlOperation):
         storage_set: StorageSetKey,
         table_name: str,
         column: Column[MigrationModifiers],
-        ttl_month: Optional[Tuple[str, int]],
+        ttl_month: Optional[Tuple[str, int]] = None,
     ):
         super().__init__(storage_set)
         self.__table_name = table_name
