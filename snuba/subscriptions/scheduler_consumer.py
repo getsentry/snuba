@@ -168,9 +168,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
         return self.__consumer.tell()
 
     def seek(self, offsets: Mapping[Partition, int]) -> None:
-        for partition in offsets:
-            if partition in self.__previous_messages:
-                del self.__previous_messages[partition]
+        self.__previous_messages = {}
 
         self.__consumer.seek(offsets)
 
