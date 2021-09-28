@@ -7,6 +7,7 @@ from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.processor import InsertBatch
+from snuba.state import set_config
 
 
 @dataclass
@@ -317,6 +318,7 @@ class TestTransactionsProcessor:
     def test_base_process(self) -> None:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+        set_config("write_span_columns_projects", "[1]")
 
         start, finish = self.__get_timestamps()
         message = TransactionEvent(

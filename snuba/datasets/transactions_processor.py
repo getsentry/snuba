@@ -308,7 +308,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         trace_context = data["contexts"]["trace"]
 
         try:
-            if not self.__should_write_span_columns(data["project"]):
+            if not self.__should_write_span_columns(processed["project_id"]):
                 return
 
             processed_root_span = self._process_span(trace_context)
