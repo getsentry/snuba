@@ -7,6 +7,10 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionIdentifier,
 )
+from snuba.subscriptions.entity_subscription import (
+    EventsSubscription,
+    SessionsSubscription,
+)
 
 UUIDS = [
     UUID("fac82541-049f-4435-982d-819082761a53"),
@@ -15,6 +19,7 @@ UUIDS = [
 
 
 def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
+    entity_subscription = EventsSubscription(data_dict={})
     return Subscription(
         SubscriptionIdentifier(PartitionId(1), UUIDS[sequence]),
         SnQLSubscriptionData(
@@ -22,5 +27,13 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
             time_window=timedelta(minutes=5),
             resolution=resolution,
             query="MATCH events SELECT count()",
+            entity_subscription=entity_subscription,
         ),
     )
+
+
+def create_entity_subscription(dataset_name="events"):
+    if dataset_name == "sessions":
+        return SessionsSubscription(data_dict={"organization": 1})
+    else:
+        return EventsSubscription(data_dict={})

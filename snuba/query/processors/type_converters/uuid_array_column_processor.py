@@ -1,4 +1,5 @@
 import uuid
+from typing import Set
 
 from snuba.query.expressions import (
     Argument,
@@ -12,6 +13,9 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 
 
 class UUIDArrayColumnProcessor(BaseTypeConverter):
+    def __init__(self, columns: Set[str]) -> None:
+        super().__init__(columns)
+
     def _translate_literal(self, exp: Literal) -> Expression:
         try:
             assert isinstance(exp.value, str)

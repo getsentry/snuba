@@ -11,6 +11,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
+from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 
 class TestRedisSubscriptionStore(BaseSubscriptionTest):
@@ -23,12 +24,14 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 aggregations=[["count()", "", "count"]],
                 time_window=timedelta(minutes=500),
                 resolution=timedelta(minutes=1),
+                entity_subscription=create_entity_subscription(),
             ),
             SnQLSubscriptionData(
                 project_id=self.project_id,
                 time_window=timedelta(minutes=500),
                 resolution=timedelta(minutes=1),
                 query="MATCH events SELECT count() WHERE in(platform, 'a')",
+                entity_subscription=create_entity_subscription(),
             ),
         ]
 

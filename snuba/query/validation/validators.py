@@ -95,10 +95,20 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
     clauses are being used in the query, and that those clauses are in the correct structure.
     """
 
+    def __init__(self, max_allowed_aggregations: int) -> None:
+        self.max_allowed_aggregations = max_allowed_aggregations
+
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         selected = query.get_selected_columns()
-        if len(selected) != 1:
-            raise InvalidQueryException("only one aggregation in the select allowed")
+        if len(selected) > self.max_allowed_aggregations:
+            aggregation_error_text = (
+                "1 aggregation is"
+                if self.max_allowed_aggregations == 1
+                else f"{self.max_allowed_aggregations} aggregations are"
+            )
+            raise InvalidQueryException(
+                f"A maximum of {aggregation_error_text} allowed in the select"
+            )
 
         disallowed = ["groupby", "having", "orderby"]
         for field in disallowed:
