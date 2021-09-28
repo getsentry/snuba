@@ -27,6 +27,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
+from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -288,18 +289,35 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         return op, int(group, 16), exclusive_time
 
+    def __should_write_span_columns(self, project_id: int) -> bool:
+        project_rollout_setting = get_config("write_span_columns_projects", "")
+        if project_rollout_setting:
+            # The expected format is [project,project,...]
+            project_rollout_setting = project_rollout_setting[1:-1]
+            if project_rollout_setting:
+                for p in project_rollout_setting.split(","):
+                    if int(p.strip()) == project_id:
+                        return True
+
+        return False
+
     def _process_spans(
         self, processed: MutableMapping[str, Any], event_dict: EventDict,
     ) -> None:
         try:
-            trace_context = event_dict["data"].get("contexts", {}).get("trace", {})
+            data = event_dict["data"]
+
+            if not self.__should_write_span_columns(data["project"]):
+                return
+
+            trace_context = data.get("contexts", {}).get("trace", {})
             processed_root_span = self._process_span(trace_context)
             if processed_root_span is None:
                 return
 
             processed_spans = [processed_root_span]
 
-            for span in event_dict["data"].get("spans", []):
+            for span in data.get("spans", []):
                 processed_span = self._process_span(span)
                 if processed_span is None:
                     return
