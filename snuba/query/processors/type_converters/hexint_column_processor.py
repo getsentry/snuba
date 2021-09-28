@@ -1,8 +1,13 @@
+from typing import Set
+
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.type_converters import BaseTypeConverter, ColumnTypeError
 
 
 class HexIntColumnProcessor(BaseTypeConverter):
+    def __init__(self, columns: Set[str]) -> None:
+        super().__init__(columns, optimize_ordering=True)
+
     def _translate_literal(self, exp: Literal) -> Literal:
         try:
             assert isinstance(exp.value, str)
