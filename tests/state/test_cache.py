@@ -40,6 +40,15 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
         return value
 
     def decode(self, value: bytes) -> bytes:
+        try:
+            ret = rapidjson.loads(value)
+            if not isinstance(ret, dict):
+                return value
+            if ret.get("__type__", "NOP") == "SerializableException":
+                raise SerializableException.from_dict(ret)
+            return value
+        except rapidjson.JSONDecodeError:
+            pass
         return value
 
     def encode_exception(self, value: SerializableException) -> bytes:
@@ -124,12 +133,12 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     key = "key"
 
-    class CustomException(SerializableException):
+    class ReadThroughCustomException(SerializableException):
         pass
 
     def function() -> bytes:
         time.sleep(1)
-        raise CustomException("error")
+        raise ReadThroughCustomException("error")
 
     def worker() -> bytes:
         return backend.get_readthrough(key, function, noop, 10)
@@ -138,13 +147,20 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     time.sleep(0.5)
     waiter = execute(worker)
 
-    with pytest.raises(CustomException):
+    with pytest.raises(ReadThroughCustomException):
         setter.result()
 
-    with pytest.raises(Exception) as e:
+    # pytest assertRaises does not give us the actual exception object
+    # so we implement it ourselves as we need it here
+    raised_exc = False
+    try:
         waiter.result()
-        assert e.__class__.__name__ == "CustomException"
-        assert e.args == ("error",)
+    except ReadThroughCustomException as e:
+        # notice that we raised the same exception class in the waiter despite it being deserialized
+        # from redis
+        raised_exc = True
+        assert e.message == "error"
+    assert raised_exc
 
 
 def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:

@@ -54,15 +54,15 @@ metrics = MetricsWrapper(environment.metrics, "db_query")
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
-    def encode(self, value: Union[SerializableException, Result]) -> bytes:
+    def encode(self, value: Result) -> bytes:
         return cast(str, rapidjson.dumps(value)).encode("utf-8")
 
     def decode(self, value: bytes) -> Result:
         ret = rapidjson.loads(value)
-        if not isinstance(ret, Mapping) or "meta" not in ret or "data" not in ret:
-            raise ValueError("Invalid value type in result cache")
         if ret.get("__type__", "DNE") == "SerializableException":
             raise SerializableException.from_dict(cast(SerializableExceptionDict, ret))
+        if not isinstance(ret, Mapping) or "meta" not in ret or "data" not in ret:
+            raise ValueError("Invalid value type in result cache")
         return cast(Result, ret)
 
     def encode_exception(self, value: SerializableException) -> bytes:
