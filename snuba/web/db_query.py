@@ -41,23 +41,32 @@ from snuba.state.rate_limit import (
     get_global_rate_limit_params,
 )
 from snuba.util import force_bytes, with_span
-from snuba.utils.codecs import Codec
+from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.serializable_exception import (
+    SerializableException,
+    SerializableExceptionDict,
+)
 from snuba.web import QueryException, QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 
-class ResultCacheCodec(Codec[bytes, Result]):
-    def encode(self, value: Result) -> bytes:
+class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
+    def encode(self, value: Union[SerializableException, Result]) -> bytes:
         return cast(str, rapidjson.dumps(value)).encode("utf-8")
 
     def decode(self, value: bytes) -> Result:
         ret = rapidjson.loads(value)
         if not isinstance(ret, Mapping) or "meta" not in ret or "data" not in ret:
             raise ValueError("Invalid value type in result cache")
+        if ret.get("__type__", "DNE") == "SerializableException":
+            raise SerializableException.from_dict(cast(SerializableExceptionDict, ret))
         return cast(Result, ret)
+
+    def encode_exception(self, value: SerializableException) -> bytes:
+        return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
 
 
 cache: Cache[Result] = RedisCache(

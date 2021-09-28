@@ -9,11 +9,12 @@ from typing import Any, Callable, Iterator
 from unittest import mock
 
 import pytest
+import rapidjson
 
 from snuba.redis import redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
-from snuba.utils.codecs import PassthroughCodec
+from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.serializable_exception import SerializableException
 from tests.assertions import assert_changes, assert_does_not_change
 
@@ -34,9 +35,20 @@ def execute(function: Callable[[], Any]) -> Future[Any]:
     return future
 
 
+class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
+    def encode(self, value: bytes) -> bytes:
+        return value
+
+    def decode(self, value: bytes) -> bytes:
+        return value
+
+    def encode_exception(self, value: SerializableException) -> bytes:
+        return rapidjson.dumps(value.to_dict()).encode("utf-8")
+
+
 @pytest.fixture
 def backend() -> Iterator[Cache[bytes]]:
-    codec: PassthroughCodec[bytes] = PassthroughCodec()
+    codec = PassthroughCodec()
     backend: Cache[bytes] = RedisCache(
         redis_client, "test", codec, ThreadPoolExecutor()
     )

@@ -2,7 +2,7 @@ import concurrent.futures
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 from pkg_resources import resource_string
 
@@ -15,8 +15,9 @@ from snuba.state.cache.abstract import (
     ExecutionTimeoutError,
     TValue,
 )
-from snuba.utils.codecs import Codec
+from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger(__name__)
 
@@ -26,47 +27,12 @@ RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 
 
-# ---- prototype stuff ----
-JsonStrBytes = bytes
-from typing import Any, cast
-
-import rapidjson as json
-
-ERROR_HEADER = b"__ERR__"
-
-
-def serialize_exception(exception: Exception) -> JsonStrBytes:
-    def _is_jsonable(item: Any) -> bool:
-        try:
-            json.dumps(item)
-            return True
-        except Exception:
-            return False
-
-    edict = {
-        "__name__": exception.__class__.__name__,
-        "__args__": [a for a in exception.args if _is_jsonable(a)],
-    }
-    # I don't know why this cast is necessary
-    return cast(JsonStrBytes, json.dumps(edict).encode("UTF-8"))
-
-
-def deserialize_exception(s: JsonStrBytes) -> Exception:
-    edict = json.loads(s)
-    res = type(edict["__name__"], (Exception,), {})(*edict.get("args", []))
-    assert isinstance(res, Exception), res
-    return res
-
-
-# ---- \prototype stuff ----
-
-
 class RedisCache(Cache[TValue]):
     def __init__(
         self,
         client: RedisClientType,
         prefix: str,
-        codec: Codec[bytes, TValue],
+        codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
     ) -> None:
         self.__client = client
@@ -97,7 +63,7 @@ class RedisCache(Cache[TValue]):
 
         return self.__codec.decode(value)
 
-    def set(self, key: str, value: TValue) -> None:
+    def set(self, key: str, value: Union[TValue]) -> None:
         self.__client.set(
             self.__build_key(key),
             self.__codec.encode(value),
@@ -199,13 +165,19 @@ class RedisCache(Cache[TValue]):
             except concurrent.futures.TimeoutError as error:
                 raise TimeoutError("timed out waiting for value") from error
             except Exception as e:
-                error_value = ERROR_HEADER + serialize_exception(e)
-                argv.extend([error_value, get_config("cache_expiry_sec", 1)])
+                error_value = SerializableException.from_standard_exception_instance(e)
+                argv.extend(
+                    [
+                        self.__codec.encode_exception(error_value),
+                        get_config("cache_expiry_sec", 1),
+                    ]
+                )
                 raise e
             finally:
                 # Regardless of whether the function succeeded or failed, we
                 # need to mark the task as completed. If there is no result
                 # value, other clients will know that we raised an exception.
+                logger.debug("Setting result and waking blocked clients...")
                 try:
                     self.__script_set(
                         [
@@ -254,16 +226,11 @@ class RedisCache(Cache[TValue]):
             if notification_received:
                 # There should be a value waiting for us at the result key.
                 raw_value = self.__client.get(result_key)
-                if isinstance(raw_value, bytes) and raw_value.startswith(ERROR_HEADER):
-                    exception_payload = raw_value[len(ERROR_HEADER) :]
-                    stored_exception = deserialize_exception(exception_payload)
-                    raise stored_exception
-
                 # If there is no value, that means that the client responsible
                 # for generating the cache value errored while generating it.
                 if raw_value is None:
                     raise ExecutionError(
-                        "no value at key: if we're here that means the original process executing the query crashed before we could handle the exception"
+                        "no value at key: this means the original process executing the query crashed before the exception could be handled"
                     )
                 else:
                     return self.__codec.decode(raw_value)
