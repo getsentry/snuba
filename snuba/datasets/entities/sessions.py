@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
     ColumnToFunction,
@@ -38,7 +39,7 @@ from snuba.query.processors.timeseries_processor import (
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import RequestSettings, SubscriptionRequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api.sessions")
@@ -211,8 +212,24 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        granularity = extract_granularity_from_query(query, "started") or 3600
-        use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
+
+        # If the passed in `request_settings` arg is an instance of `SubscriptionRequestSettings`,
+        # then it is a crash rate alert subscription, and hence we decide on whether to use the
+        # materialized storage or the raw storage by examining the time_window.
+        # If the `time_window` <=1h, then select the raw storage otherwise select materialized
+        # storage
+        # NOTE: If we were to support other types of subscriptions over the sessions dataset that
+        # do not follow this method used to identify which storage to use, we would need to
+        # find a different way to distinguish them.
+        if isinstance(request_settings, SubscriptionRequestSettings):
+            from_date, to_date = get_time_range(query, "started")
+            if from_date and to_date:
+                use_materialized_storage = to_date - from_date > timedelta(hours=1)
+            else:
+                use_materialized_storage = True
+        else:
+            granularity = extract_granularity_from_query(query, "started") or 3600
+            use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
 
         metrics.increment(
             "query.selector",

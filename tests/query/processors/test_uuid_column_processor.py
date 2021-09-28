@@ -1,17 +1,18 @@
-import pytest
 import uuid
+
+import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.query import Query
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
-    binary_condition,
     BooleanFunctions,
     ConditionFunctions,
+    binary_condition,
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.clickhouse.query import Query
 from snuba.query.processors.type_converters import ColumnTypeError
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
@@ -106,6 +107,78 @@ tests = [
         ),
         "equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
         id="equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.GTE,
+            Column(None, None, "column1"),
+            Literal(None, "a7d67cf796774551a95be6543cacd459"),
+        ),
+        binary_condition(
+            ConditionFunctions.GTE,
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),),),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
+            Literal(None, "a7d67cf796774551a95be6543cacd459"),
+        ),
+        "greaterOrEquals(replaceAll(toString(column1), '-', ''), 'a7d67cf796774551a95be6543cacd459')",
+        id="Use string UUID if GTE",
+    ),
+    pytest.param(
+        binary_condition(
+            BooleanFunctions.OR,
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "column1"),
+                Literal(None, "a7d67cf796774551a95be6543cacd458"),
+            ),
+            binary_condition(
+                ConditionFunctions.GTE,
+                Column(None, None, "column1"),
+                Literal(None, "a7d67cf796774551a95be6543cacd459"),
+            ),
+        ),
+        binary_condition(
+            BooleanFunctions.OR,
+            binary_condition(
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "replaceAll",
+                    (
+                        FunctionCall(
+                            None, "toString", (Column(None, None, "column1"),),
+                        ),
+                        Literal(None, "-"),
+                        Literal(None, ""),
+                    ),
+                ),
+                Literal(None, "a7d67cf796774551a95be6543cacd458"),
+            ),
+            binary_condition(
+                ConditionFunctions.GTE,
+                FunctionCall(
+                    None,
+                    "replaceAll",
+                    (
+                        FunctionCall(
+                            None, "toString", (Column(None, None, "column1"),),
+                        ),
+                        Literal(None, "-"),
+                        Literal(None, ""),
+                    ),
+                ),
+                Literal(None, "a7d67cf796774551a95be6543cacd459"),
+            ),
+        ),
+        "(equals(replaceAll(toString(column1), '-', ''), 'a7d67cf796774551a95be6543cacd458') OR greaterOrEquals(replaceAll(toString(column1), '-', ''), 'a7d67cf796774551a95be6543cacd459'))",
+        id="Both optimizable and unoptimizable conditions in query",
     ),
     pytest.param(
         binary_condition(

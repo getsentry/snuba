@@ -2,13 +2,17 @@ import json
 
 from arroyo.backends.kafka import KafkaPayload
 
+from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
+from snuba.datasets.entity import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
-    InvalidSubscriptionError,
     LegacySubscriptionData,
     SnQLSubscriptionData,
     SubscriptionData,
+)
+from snuba.subscriptions.entity_subscription import (
+    InvalidSubscriptionError,
     SubscriptionType,
 )
 from snuba.subscriptions.worker import SubscriptionTaskResult
@@ -16,6 +20,9 @@ from snuba.utils.codecs import Codec, Encoder
 
 
 class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
+    def __init__(self, entity: Entity):
+        self.entity_key = ENTITY_NAME_LOOKUP[entity]
+
     def encode(self, value: SubscriptionData) -> bytes:
         return json.dumps(value.to_dict()).encode("utf-8")
 
@@ -27,11 +34,11 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
 
         subscription_type = data.get(SubscriptionData.TYPE_FIELD)
         if subscription_type == SubscriptionType.SNQL.value:
-            return SnQLSubscriptionData.from_dict(data)
+            return SnQLSubscriptionData.from_dict(data, self.entity_key)
         elif subscription_type == SubscriptionType.DELEGATE.value:
-            return DelegateSubscriptionData.from_dict(data)
+            return DelegateSubscriptionData.from_dict(data, self.entity_key)
         elif subscription_type is None:
-            return LegacySubscriptionData.from_dict(data)
+            return LegacySubscriptionData.from_dict(data, self.entity_key)
         else:
             raise InvalidSubscriptionError("Invalid subscription data")
 
