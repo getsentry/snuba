@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, SimpleQueue
-from typing import Any, Sequence, cast, Iterable, Iterator, Mapping, Optional, Union
+from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Union, cast
 from urllib.parse import urlencode
 
 import rapidjson
@@ -19,7 +19,6 @@ from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter, WriterTableRow
-
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +189,7 @@ class HTTPWriteBatch:
                 code = int(details["code"])
                 message = details["message"]
                 row = int(details["row"]) if details["row"] is not None else None
-                raise ClickhouseWriterError(code, message, row)
+                raise ClickhouseWriterError(message, code=code, row=row)
             else:
                 raise HTTPError(
                     f"Received unexpected {response.status} response: {content}"

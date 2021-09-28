@@ -160,7 +160,7 @@ class TimeSeriesProcessor(QueryProcessor):
                 column_name = result.string("column_name")
                 raise InvalidQueryException(
                     f"Illegal datetime in condition on column {column_name}: '{literal.value}''",
-                    report=False,
+                    should_report=False,
                 ) from err
 
             return FunctionCall(
