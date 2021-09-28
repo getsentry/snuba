@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, Float, Nested, String, UInt
+from snuba.clickhouse.columns import Array, Column, Float, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -26,6 +26,26 @@ class Migration(migration.ClickhouseNodeMigration):
                     ),
                 ),
                 after="span_op_breakdowns.value",
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column(
+                    "spans.op", Array(String(Modifiers(low_cardinality=True)))
+                ),
+                ttl_month=("finish_ts", 1),
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column("spans.group", Array(UInt(64))),
+                ttl_month=("finish_ts", 1),
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column("spans.exclusive_time", Array(Float(64))),
+                ttl_month=("finish_ts", 1),
             ),
             operations.AddIndex(
                 storage_set=StorageSetKey.TRANSACTIONS,
