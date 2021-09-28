@@ -222,7 +222,7 @@ class AddIndex(SqlOperation):
 
     def format_sql(self) -> str:
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
-        return f"ALTER TABLE {self.__table_name} ADD INDEX {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
+        return f"ALTER TABLE {self.__table_name} ADD INDEX IF NOT EXISTS {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
 
 
 class DropIndex(SqlOperation):

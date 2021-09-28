@@ -128,7 +128,7 @@ def parse_function(
     if function_tuple is None:
         raise ParsingException(
             f"complex_column_expr was given an expr {expr} that is not a function at depth {depth}.",
-            report=False,
+            should_report=False,
         )
 
     name, args, alias = function_tuple

@@ -34,7 +34,7 @@ tests = [
 
 @pytest.mark.parametrize("query", tests)  # type: ignore
 def test_subscription_clauses_validation(query: LogicalQuery) -> None:
-    validator = SubscriptionAllowedClausesValidator()
+    validator = SubscriptionAllowedClausesValidator(max_allowed_aggregations=1)
     validator.validate(query)
 
 
@@ -101,6 +101,6 @@ invalid_tests = [
 
 @pytest.mark.parametrize("query", invalid_tests)  # type: ignore
 def test_subscription_clauses_validation_failure(query: LogicalQuery) -> None:
-    validator = SubscriptionAllowedClausesValidator()
+    validator = SubscriptionAllowedClausesValidator(max_allowed_aggregations=1)
     with pytest.raises(InvalidQueryException):
         validator.validate(query)

@@ -1,5 +1,5 @@
 import threading
-from typing import Callable, Optional, Mapping, Sequence, Union
+from typing import Callable, Mapping, Optional, Sequence, Union
 
 from datadog import DogStatsd
 
@@ -42,7 +42,7 @@ class DatadogMetricsBackend(MetricsBackend):
         if tags is None:
             return None
         else:
-            return [f"{key}:{value}" for key, value in tags.items()]
+            return [f"{key}:{value.replace('|', '_')}" for key, value in tags.items()]
 
     def increment(
         self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None

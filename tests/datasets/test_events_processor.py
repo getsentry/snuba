@@ -15,7 +15,7 @@ from snuba.datasets.events_format import (
     extract_http,
     extract_user,
 )
-from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import (
@@ -29,7 +29,7 @@ from tests.fixtures import get_raw_event
 
 
 class TestEventsProcessor:
-    def setup_method(self, test_method):
+    def setup_method(self, test_method) -> None:
         self.metadata = KafkaMessageMetadata(0, 0, datetime.now())
         self.event = get_raw_event()
 
@@ -54,6 +54,12 @@ class TestEventsProcessor:
 
     def __process_insert_event(self, event: InsertEvent) -> Optional[ProcessedMessage]:
         return self.processor.process_message((2, "insert", event, {}), self.metadata)
+
+    def test_has_trace_and_span_id(self) -> None:
+        processed_message = self.__process_insert_event(self.event)
+        assert isinstance(processed_message, InsertBatch)
+        assert "trace.trace_id" in processed_message.rows[0]["contexts.key"]
+        assert "trace.span_id" in processed_message.rows[0]["contexts.key"]
 
     def test_unexpected_obj(self) -> None:
         self.event["message"] = {"what": "why is this in the message"}
@@ -131,56 +137,56 @@ class TestEventsProcessor:
 
     def test_v2_start_delete_groups(self) -> None:
         project_id = 1
-        message = (2, "start_delete_groups", {"project_id": project_id})
+        message = (2, ReplacementType.START_DELETE_GROUPS, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_delete_groups(self) -> None:
         project_id = 1
-        message = (2, "end_delete_groups", {"project_id": project_id})
+        message = (2, ReplacementType.END_DELETE_GROUPS, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_start_merge(self) -> None:
         project_id = 1
-        message = (2, "start_merge", {"project_id": project_id})
+        message = (2, ReplacementType.START_MERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_merge(self) -> None:
         project_id = 1
-        message = (2, "end_merge", {"project_id": project_id})
+        message = (2, ReplacementType.END_MERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_start_unmerge(self) -> None:
         project_id = 1
-        message = (2, "start_unmerge", {"project_id": project_id})
+        message = (2, ReplacementType.START_UNMERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_unmerge(self) -> None:
         project_id = 1
-        message = (2, "end_unmerge", {"project_id": project_id})
+        message = (2, ReplacementType.END_UNMERGE, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_start_delete_tag(self) -> None:
         project_id = 1
-        message = (2, "start_delete_tag", {"project_id": project_id})
+        message = (2, ReplacementType.START_DELETE_TAG, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
     def test_v2_end_delete_tag(self) -> None:
         project_id = 1
-        message = (2, "end_delete_tag", {"project_id": project_id})
+        message = (2, ReplacementType.END_DELETE_TAG, {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])

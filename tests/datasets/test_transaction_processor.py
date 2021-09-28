@@ -187,11 +187,11 @@ class TransactionEvent:
             "user_email": self.user_email,
             "tags.key": ["environment", "sentry:release", "sentry:user", "we|r=d"],
             "tags.value": [self.environment, self.release, self.user_id, "tag"],
+            # Notice that we do not store trace.trace_id or trace.span_id in contexts
+            # this is because it is redundant (as it is also stored as a promoted column)
             "contexts.key": [
                 "trace.sampled",
-                "trace.trace_id",
                 "trace.op",
-                "trace.span_id",
                 "trace.status",
                 "geo.country_code",
                 "geo.region",
@@ -199,9 +199,7 @@ class TransactionEvent:
             ],
             "contexts.value": [
                 "True",
-                self.trace_id,
                 self.op,
-                self.span_id,
                 self.status,
                 self.geo["country_code"],
                 self.geo["region"],

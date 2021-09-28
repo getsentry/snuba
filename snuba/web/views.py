@@ -37,7 +37,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
-    enforce_table_writer,
     get_dataset,
     get_dataset_name,
     get_enabled_dataset_names,
@@ -55,7 +54,8 @@ from snuba.request.schema import RequestParts, RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
+from snuba.subscriptions.data import PartitionId
+from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
@@ -191,7 +191,7 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
 def handle_invalid_query(exception: InvalidQueryException) -> Response:
     # TODO: Remove this logging as soon as the query validation code is
     # mature enough that we can trust it.
-    if exception.report:
+    if exception.should_report:
         logger.warning("Invalid query", exc_info=exception)
     else:
         logger.info("Invalid query", exc_info=exception)
@@ -478,7 +478,9 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
-    subscription = SubscriptionDataCodec().decode(http_request.data)
+    subscription = SubscriptionDataCodec(entity=dataset.get_default_entity()).decode(
+        http_request.data
+    )
     identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),
@@ -499,17 +501,25 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
-    def write(*, dataset: Dataset) -> RespTuple:
+    from snuba.datasets.entity import Entity as EntityType
+    from snuba.web.converters import EntityConverter
+
+    application.url_map.converters["entity"] = EntityConverter
+
+    def _write_to_entity(*, entity: EntityType) -> RespTuple:
         from snuba.processor import InsertBatch
 
         rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
+        writable_storage = entity.get_writable_storage()
+        assert writable_storage is not None
+        table_writer = writable_storage.get_table_writer()
+
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
+
             processed_message = (
-                enforce_table_writer(dataset)
-                .get_stream_loader()
+                table_writer.get_stream_loader()
                 .get_processor()
                 .process_message(
                     message,
@@ -523,10 +533,18 @@ if application.debug or application.testing:
                 rows.extend(processed_message.rows)
 
         BatchWriterEncoderWrapper(
-            enforce_table_writer(dataset).get_batch_writer(metrics), JSONRowEncoder(),
+            table_writer.get_batch_writer(metrics), JSONRowEncoder(),
         ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
+
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset) -> RespTuple:
+        return _write_to_entity(entity=dataset.get_default_entity())
+
+    @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
+    def write_to_entity(*, entity: EntityType) -> RespTuple:
+        return _write_to_entity(entity=entity)
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset) -> RespTuple:

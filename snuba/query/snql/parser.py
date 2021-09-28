@@ -830,7 +830,7 @@ def parse_snql_query_initial(
         parsed.set_limit(1000)
     elif limit > 10000:
         raise ParsingException(
-            "queries cannot have a limit higher than 10000", report=False
+            "queries cannot have a limit higher than 10000", should_report=False
         )
 
     if parsed.get_offset() is None:
@@ -1181,12 +1181,12 @@ def validate_entities_with_query(
         except InvalidQueryException as e:
             raise ParsingException(
                 f"validation failed for entity {query.get_from_clause().key.value}: {e}",
-                report=e.report,
+                should_report=e.should_report,
             )
         except InvalidExpressionException as e:
             raise ParsingException(
                 f"validation failed for entity {query.get_from_clause().key.value}: {e}",
-                report=e.report,
+                should_report=e.should_report,
             )
     else:
         from_clause = query.get_from_clause()
@@ -1201,12 +1201,12 @@ def validate_entities_with_query(
                 except InvalidQueryException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
-                        report=e.report,
+                        should_report=e.should_report,
                     )
                 except InvalidExpressionException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
-                        report=e.report,
+                        should_report=e.should_report,
                     )
 
 
