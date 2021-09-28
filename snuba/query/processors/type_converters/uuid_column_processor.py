@@ -15,7 +15,7 @@ class UUIDColumnProcessor(BaseTypeConverter):
             new_val = str(uuid.UUID(exp.value))
             return Literal(alias=exp.alias, value=new_val)
         except (AssertionError, ValueError):
-            raise ColumnTypeError("Not a valid UUID string", report=False)
+            raise ColumnTypeError("Not a valid UUID string", should_report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:
