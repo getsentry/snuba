@@ -2107,7 +2107,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         data = json.loads(resp.data)
         assert data == {
             "error": {
-                "message": "only one aggregation in the select allowed",
+                "message": "A maximum of 1 aggregation is allowed in the select",
                 "type": "invalid_query",
             }
         }

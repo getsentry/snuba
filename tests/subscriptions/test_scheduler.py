@@ -16,6 +16,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.types import Interval
+from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 
 class TestSubscriptionScheduler:
@@ -33,6 +34,7 @@ class TestSubscriptionScheduler:
                 aggregations=[["count()", "", "count"]],
                 time_window=timedelta(minutes=1),
                 resolution=resolution,
+                entity_subscription=create_entity_subscription(),
             ),
         )
 
