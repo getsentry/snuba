@@ -9,6 +9,7 @@ from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_replacer import NEEDS_FINAL, LegacyReplacement
+from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.replacer import (
@@ -136,6 +137,10 @@ FINAL_QUERY_TEMPLATE = {
     "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
 }
 
+REPLACEMENT_TYPE = (
+    ReplacementType.EXCLUDE_GROUPS
+)  # Arbitrary replacement type, no impact on tests
+
 
 @pytest.mark.parametrize(
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
@@ -165,6 +170,7 @@ def test_write_each_node(
                 INSERT_QUERY_TEMPLATE,
                 FINAL_QUERY_TEMPLATE,
                 (NEEDS_FINAL, 1),
+                REPLACEMENT_TYPE,
             )
         ]
     )
@@ -195,6 +201,7 @@ def test_failing_query(
                     INSERT_QUERY_TEMPLATE,
                     FINAL_QUERY_TEMPLATE,
                     (NEEDS_FINAL, 1),
+                    REPLACEMENT_TYPE,
                 )
             ]
         )
@@ -218,6 +225,7 @@ def test_load_balancing(
         INSERT_QUERY_TEMPLATE,
         FINAL_QUERY_TEMPLATE,
         (NEEDS_FINAL, 1),
+        REPLACEMENT_TYPE,
     )
     replacer.flush_batch([replacement, replacement])
 
@@ -376,6 +384,7 @@ def test_local_executor(
             INSERT_QUERY_TEMPLATE,
             FINAL_QUERY_TEMPLATE,
             (NEEDS_FINAL, 1),
+            REPLACEMENT_TYPE,
         ),
         records_count=1,
     )
