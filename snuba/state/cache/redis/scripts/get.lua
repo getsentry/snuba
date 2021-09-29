@@ -3,11 +3,15 @@
 -- KEYS[3]: The task unique ID key.
 -- ARGV[1]: The task execution timeout. Only used when creating a new task.
 -- ARGV[2]: The task unique ID. Only used when creating a new task.
+local value_key = KEYS[1]
+local wait_queue_key = KEYS[2]
+local task_id_key = KEYS[3]
+local task_timeout = ARGV[1]
+local task_id = ARGV[2]
 
 -- Check to see if a value already exists at the result key. If one does, we
 -- don't have to do anything other than return it and exit.
--- TODO(Vlad): assign the args to variables to make this more readable
-local value = redis.call('GET', KEYS[1])
+local value = redis.call('GET', value_key)
 if value then
     return {0, value}
 end
@@ -16,15 +20,14 @@ end
 -- only member of the queue, we can proceed with the task. Otherwise, we need to
 -- wait to be notified of task completion, or for the timeout to be reached,
 -- whichever comes first.
-local waiting = redis.call('RPUSH', KEYS[2], '')
+local waiting = redis.call('RPUSH', wait_queue_key, '')
 if waiting == 1 then
-    redis.call('EXPIRE', KEYS[2], ARGV[1])
+    redis.call('EXPIRE', wait_queue_key, task_timeout)
     -- We shouldn't be overwriting an existing task here, but it's safe if we
     -- do, given that the queue was empty.
-    redis.call('SETEX', KEYS[3], ARGV[1], ARGV[2])
-    -- return RESULT_EXECUTE, TIMEOUT, TASK_ID
-    return {1, ARGV[2], ARGV[1]}
+    redis.call('SETEX', task_id_key, task_timeout, task_id)
+    return {1, task_id, task_timeout}
 else
     -- RESULT_WAIT,
-    return {2, redis.call('GET', KEYS[3]), redis.call('TTL', KEYS[3])}
+    return {2, redis.call('GET', task_id_key), redis.call('TTL', task_id_key)}
 end
