@@ -3,12 +3,12 @@ from syslog import LOG_CRIT
 from typing import Optional, Sequence
 
 import click
-from confluent_kafka import KafkaError, KafkaException
+from confluent_kafka import KafkaException
 
-from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
+from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -43,7 +43,7 @@ def bootstrap(
 
     if kafka:
         logger.debug("Using Kafka with %r", bootstrap_server)
-        from confluent_kafka.admin import AdminClient, NewTopic
+        from confluent_kafka.admin import AdminClient
 
         override_params = {
             # Same as above: override socket timeout as we expect Kafka
@@ -79,28 +79,7 @@ def bootstrap(
 
         logger.info("Connected to Kafka on attempt %d", attempts)
 
-        topics = {}
-
-        for topic in Topic:
-            topic_spec = KafkaTopicSpec(topic)
-            logger.debug("Adding topic %s to creation list", topic_spec.topic_name)
-            topics[topic_spec.topic_name] = NewTopic(
-                topic_spec.topic_name,
-                num_partitions=topic_spec.partitions_number,
-                replication_factor=topic_spec.replication_factor,
-                config=topic_spec.topic_creation_config,
-            )
-
-        logger.info("Creating Kafka topics...")
-        for topic, future in client.create_topics(
-            list(topics.values()), operation_timeout=1
-        ).items():
-            try:
-                future.result()
-                logger.info("Topic %s created", topic)
-            except KafkaException as err:
-                if err.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
-                    logger.error("Failed to create topic %s", topic, exc_info=err)
+        create_topics(client, [t for t in Topic])
 
     if migrate:
         check_clickhouse_connections()

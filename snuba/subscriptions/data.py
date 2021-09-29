@@ -38,6 +38,7 @@ from snuba.subscriptions.entity_subscription import (
 )
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.serializable_exception import SerializableException
 
 SUBSCRIPTION_REFERRER = "subscription"
 
