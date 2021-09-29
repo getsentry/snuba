@@ -9,11 +9,12 @@ from typing import Any, Callable, Iterator
 from unittest import mock
 
 import pytest
+import rapidjson
 
 from snuba.redis import redis_client
-from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
+from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
-from snuba.utils.codecs import PassthroughCodec
+from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.serializable_exception import SerializableException
 from tests.assertions import assert_changes, assert_does_not_change
 
@@ -34,9 +35,29 @@ def execute(function: Callable[[], Any]) -> Future[Any]:
     return future
 
 
+class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
+    def encode(self, value: bytes) -> bytes:
+        return value
+
+    def decode(self, value: bytes) -> bytes:
+        try:
+            ret = rapidjson.loads(value)
+            if not isinstance(ret, dict):
+                return value
+            if ret.get("__type__", "NOP") == "SerializableException":
+                raise SerializableException.from_dict(ret)
+            return value
+        except rapidjson.JSONDecodeError:
+            pass
+        return value
+
+    def encode_exception(self, value: SerializableException) -> bytes:
+        return rapidjson.dumps(value.to_dict()).encode("utf-8")
+
+
 @pytest.fixture
 def backend() -> Iterator[Cache[bytes]]:
-    codec: PassthroughCodec[bytes] = PassthroughCodec()
+    codec = PassthroughCodec()
     backend: Cache[bytes] = RedisCache(
         redis_client, "test", codec, ThreadPoolExecutor()
     )
@@ -92,8 +113,6 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
     with pytest.raises(CustomException):
         backend.get_readthrough(key, function, noop, 1)
 
-    assert backend.get(key) is None
-
 
 def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
     key = "key"
@@ -114,12 +133,12 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     key = "key"
 
-    class CustomException(SerializableException):
+    class ReadThroughCustomException(SerializableException):
         pass
 
     def function() -> bytes:
         time.sleep(1)
-        raise CustomException("error")
+        raise ReadThroughCustomException("error")
 
     def worker() -> bytes:
         return backend.get_readthrough(key, function, noop, 10)
@@ -128,11 +147,20 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     time.sleep(0.5)
     waiter = execute(worker)
 
-    with pytest.raises(CustomException):
+    with pytest.raises(ReadThroughCustomException):
         setter.result()
 
-    with pytest.raises(ExecutionError):
+    # pytest assertRaises does not give us the actual exception object
+    # so we implement it ourselves as we need it here
+    raised_exc = False
+    try:
         waiter.result()
+    except ReadThroughCustomException as e:
+        # notice that we raised the same exception class in the waiter despite it being deserialized
+        # from redis
+        raised_exc = True
+        assert e.message == "error"
+    assert raised_exc
 
 
 def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
