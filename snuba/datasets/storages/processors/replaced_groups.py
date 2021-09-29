@@ -94,7 +94,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         query.set_from_clause(replace(query.get_from_clause(), final=set_final))
 
     def _query_overlaps_replacements(self, query: Query) -> bool:
-        query_lower_timestamp, query_upper_timestamp = get_time_range(
-            query, "timestamp"
-        )
+        query_from, query_to = get_time_range(query, "timestamp")
+        if query_from and query_to:
+            pass
         return True
