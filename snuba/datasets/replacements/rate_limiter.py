@@ -1,7 +1,7 @@
 import time
 from contextlib import contextmanager
 from enum import Enum
-from typing import Iterator, MutableMapping, Tuple
+from typing import Iterator, MutableMapping, Optional, Tuple
 
 from snuba import state
 
@@ -21,7 +21,9 @@ class RateLimitResult(Enum):
 
 
 @contextmanager
-def rate_limit(bucket: str) -> Iterator[Tuple[RateLimitResult, int]]:
+def rate_limit(
+    bucket: str, rate_limit: Optional[float] = None
+) -> Iterator[Tuple[RateLimitResult, int]]:
     """
     A simple context manager that implements a per second window
     rate limiter that slows down operations to a maximum number
@@ -36,7 +38,11 @@ def rate_limit(bucket: str) -> Iterator[Tuple[RateLimitResult, int]]:
     Do not use it concurrently.
     """
 
-    limit = state.get_config(f"{RATE_LIMIT_PER_SEC}{bucket}", None)
+    limit = (
+        state.get_config(f"{RATE_LIMIT_PER_SEC}{bucket}", None)
+        if not rate_limit
+        else rate_limit
+    )
     if not limit:
         yield (RateLimitResult.OFF, 0)
     else:
