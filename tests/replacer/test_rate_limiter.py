@@ -4,12 +4,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from snuba import state
 from snuba.datasets.replacements.rate_limiter import (
     RATE_LIMIT_PER_SEC,
     RateLimitResult,
     rate_limit,
 )
-from snuba.state import set_config
 
 test_cases = [
     pytest.param(
@@ -66,7 +66,7 @@ def test_rate_limiter(
     # We need to set all the config values before getting one because
     # config is cached during read.
     for i in range(1, 8):
-        set_config(f"{RATE_LIMIT_PER_SEC}bucket{i}", 3.0)
+        state.set_config(f"{RATE_LIMIT_PER_SEC}bucket{i}", 3.0)
 
     for bucket, time_resp, expected_result, expected_quota in trials:
         time.time = Mock(return_value=time_resp)

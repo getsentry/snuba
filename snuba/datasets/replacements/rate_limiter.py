@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from enum import Enum
 from typing import Iterator, MutableMapping, Tuple
 
-from snuba.state import get_config
+from snuba import state
 
 RATE_LIMIT_PER_SEC = "mem_rate_limit_per_sec_"
 
@@ -36,7 +36,7 @@ def rate_limit(bucket: str) -> Iterator[Tuple[RateLimitResult, int]]:
     Do not use it concurrently.
     """
 
-    limit = get_config(f"{RATE_LIMIT_PER_SEC}{bucket}", None)
+    limit = state.get_config(f"{RATE_LIMIT_PER_SEC}{bucket}", None)
     if not limit:
         yield (RateLimitResult.OFF, 0)
     else:
@@ -46,15 +46,15 @@ def rate_limit(bucket: str) -> Iterator[Tuple[RateLimitResult, int]]:
         if current_bucket is None or current_epoch != current_bucket[0]:
             BUCKETS[bucket] = (current_epoch, 1)
             new_rate = 1
-            state = RateLimitResult.WITHIN_QUOTA
+            ret_state = RateLimitResult.WITHIN_QUOTA
         elif current_bucket[1] >= limit:
             new_epoch = current_epoch + 1
             time.sleep(new_epoch - current_time)
             BUCKETS[bucket] = (new_epoch, 1)
             new_rate = 1
-            state = RateLimitResult.THROTTLED
+            ret_state = RateLimitResult.THROTTLED
         else:
             BUCKETS[bucket] = (current_epoch, current_bucket[1] + 1)
             new_rate = current_bucket[1] + 1
-            state = RateLimitResult.WITHIN_QUOTA
-        yield (state, new_rate)
+            ret_state = RateLimitResult.WITHIN_QUOTA
+        yield (ret_state, new_rate)
