@@ -9,11 +9,15 @@ local task_id_key = KEYS[3]
 local task_timeout = ARGV[1]
 local task_id = ARGV[2]
 
+local CODE_RESULT_VALUE = 0
+local CODE_RESULT_EXECUTE = 1
+local CODE_RESULT_WAIT = 2
+
 -- Check to see if a value already exists at the result key. If one does, we
 -- don't have to do anything other than return it and exit.
 local value = redis.call('GET', value_key)
 if value then
-    return {0, value}
+    return {CODE_RESULT_VALUE, value}
 end
 
 -- Check to see if a waiting queue has already been established. If we are the
@@ -26,8 +30,7 @@ if waiting == 1 then
     -- We shouldn't be overwriting an existing task here, but it's safe if we
     -- do, given that the queue was empty.
     redis.call('SETEX', task_id_key, task_timeout, task_id)
-    return {1, task_id, task_timeout}
+    return {CODE_RESULT_EXECUTE, task_id, task_timeout}
 else
-    -- RESULT_WAIT,
-    return {2, redis.call('GET', task_id_key), redis.call('TTL', task_id_key)}
+    return {CODE_RESULT_WAIT, redis.call('GET', task_id_key), redis.call('TTL', task_id_key)}
 end
