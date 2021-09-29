@@ -2,7 +2,7 @@ import concurrent.futures
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
 from pkg_resources import resource_string
 
@@ -63,7 +63,7 @@ class RedisCache(Cache[TValue]):
 
         return self.__codec.decode(value)
 
-    def set(self, key: str, value: Union[TValue]) -> None:
+    def set(self, key: str, value: TValue) -> None:
         self.__client.set(
             self.__build_key(key),
             self.__codec.encode(value),
