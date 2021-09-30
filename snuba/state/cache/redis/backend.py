@@ -171,7 +171,7 @@ class RedisCache(Cache[TValue]):
                         self.__codec.encode_exception(error_value),
                         # NOTE (Vlad): this is only temporary so we don't cache
                         # error values for too long
-                        0.1,
+                        1,
                     ]
                 )
                 raise e

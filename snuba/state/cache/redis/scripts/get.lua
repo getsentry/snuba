@@ -6,7 +6,7 @@
 local value_key = KEYS[1]
 local wait_queue_key = KEYS[2]
 local task_id_key = KEYS[3]
-local task_timeout_s = ARGV[1]
+local task_timeout = ARGV[1]
 local task_id = ARGV[2]
 
 local CODE_RESULT_VALUE = 0
@@ -26,11 +26,11 @@ end
 -- whichever comes first.
 local waiting = redis.call('RPUSH', wait_queue_key, '')
 if waiting == 1 then
-    redis.call('PEXPIRE', wait_queue_key, math.floor(task_timeout_s * 1000))
+    redis.call('EXPIRE', wait_queue_key, task_timeout)
     -- We shouldn't be overwriting an existing task here, but it's safe if we
     -- do, given that the queue was empty.
-    redis.call('SET', task_id_key, task_id, "PX", math.floor(task_timeout_s * 1000))
-    return {CODE_RESULT_EXECUTE, task_id, task_timeout_s}
+    redis.call('SETEX', task_id_key, task_timeout, task_id)
+    return {CODE_RESULT_EXECUTE, task_id, task_timeout}
 else
     return {CODE_RESULT_WAIT, redis.call('GET', task_id_key), redis.call('TTL', task_id_key)}
 end
