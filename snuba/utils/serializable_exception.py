@@ -156,3 +156,6 @@ class SerializableException(Exception):
 
     def __repr__(self) -> str:
         return cast(str, rapidjson.dumps(self.to_dict(), indent=2))
+
+    def __str__(self) -> str:
+        return self.message
