@@ -96,6 +96,7 @@ class SerializableException(Exception):
         self.extra_data = extra_data or {}
         # whether or not the error should be reported to sentry
         self.should_report = should_report
+        super().__init__(message)
 
     def to_dict(self) -> SerializableExceptionDict:
         return {
@@ -156,6 +157,3 @@ class SerializableException(Exception):
 
     def __repr__(self) -> str:
         return cast(str, rapidjson.dumps(self.to_dict(), indent=2))
-
-    def __str__(self) -> str:
-        return self.message
