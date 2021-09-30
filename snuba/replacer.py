@@ -18,11 +18,11 @@ from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseNode,
 )
-from snuba.datasets.replacements.rate_limiter import rate_limit
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
 
@@ -265,6 +265,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__database_name = storage.get_cluster().get_database()
 
         self.__sharded_pool = RoundRobinConnectionPool(self.__storage.get_cluster())
+        self.__rate_limiter = RateLimiter("replacements")
 
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
         """
@@ -364,7 +365,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             )
 
             query_executor = self.__get_insert_executor(replacement)
-            with rate_limit("replacement_insert") as state:
+            with self.__rate_limiter as state:
                 self.metrics.increment("insert_state", tags={"state": state[0].value})
                 count = query_executor.execute(replacement, count)
 
