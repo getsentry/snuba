@@ -188,3 +188,35 @@ def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
 
     with pytest.raises(ExecutionTimeoutError):
         waiter_slow.result()
+
+
+def test_transient_error(backend: Cache[bytes]) -> None:
+    key = "key"
+
+    class SomeTransientException(SerializableException):
+        pass
+
+    def error_function() -> bytes:
+        raise SomeTransientException("error")
+
+    def normal_function() -> bytes:
+        return b"hello"
+
+    def transient_error() -> bytes:
+        return backend.get_readthrough(key, error_function, noop, 10)
+
+    def functioning_query() -> bytes:
+        return backend.get_readthrough(key, normal_function, noop, 10)
+
+    setter = execute(transient_error)
+    # if this sleep were removed, the waiter would also raise
+    # SomeTransientException, but because we (temporarily) set
+    # the error value timeout to be 0.1, it will go through and execute
+    # the query
+    time.sleep(0.5)
+    waiter = execute(functioning_query)
+
+    with pytest.raises(SomeTransientException):
+        setter.result()
+
+    assert waiter.result() == b"hello"
