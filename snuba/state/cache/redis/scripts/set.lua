@@ -9,9 +9,9 @@ local notify_queue_key = KEYS[4]
 
 -- ARGV[1]: The task unique ID.
 local task_id = ARGV[1]
-local notify_queue_ttl = ARGV[2]
+local notify_queue_ttl_s = ARGV[2]
 local value = ARGV[3]
-local value_ttl = ARGV[4]
+local value_ttl_s = ARGV[4]
 -- ARGV[2]: The notify queue TTL.
 -- ARGV[3]: The value. (optional)
 -- ARGV[4]: The value TTL. (optional)
@@ -27,12 +27,12 @@ end
 
 -- Update the cache value.
 if value ~= nil then
-    redis.call('SETEX', value_key, value_ttl, value)
+    redis.call('SET', value_key,  value, "PX", math.floor(value_ttl_s * 1000))
 end
 
 -- Move the data from the waiting queue to the notify queue.
 redis.call('RENAME', wait_queue_key, notify_queue_key)
-redis.call('PEXPIRE', notify_queue_key, notify_queue_ttl)
+redis.call('PEXPIRE', notify_queue_key, math.floor(notify_queue_ttl_s * 1000))
 
 -- Remove one item (representing our own entry) from the notify queue.
 redis.call('LPOP', notify_queue_key)
