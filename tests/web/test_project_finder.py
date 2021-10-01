@@ -18,7 +18,7 @@ ERRORS_SCHEMA = ColumnSet(
 
 
 SIMPLE_QUERY = Query(
-    Entity(EntityKey.ERRORS, ERRORS_SCHEMA),
+    Entity(EntityKey.EVENTS, ERRORS_SCHEMA),
     selected_columns=[
         SelectedExpression("alias", Column("_snuba_project", None, "project_id"),)
     ],

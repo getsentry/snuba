@@ -35,6 +35,7 @@ from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -478,9 +479,9 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
-    subscription = SubscriptionDataCodec(entity=dataset.get_default_entity()).decode(
-        http_request.data
-    )
+    entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+
+    subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),
