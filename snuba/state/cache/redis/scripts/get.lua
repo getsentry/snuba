@@ -20,7 +20,6 @@ if value then
     return {CODE_RESULT_VALUE, value}
 end
 
-
 -- Check to see if a waiting queue has already been established. If we are the
 -- only member of the queue, we can proceed with the task. Otherwise, we need to
 -- wait to be notified of task completion, or for the timeout to be reached,
