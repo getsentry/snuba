@@ -6,8 +6,6 @@ import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
-from snuba.datasets.entity import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
@@ -27,8 +25,8 @@ from snuba.utils.scheduler import ScheduledTask
 
 
 class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
-    def __init__(self, entity: Entity):
-        self.entity_key = ENTITY_NAME_LOOKUP[entity]
+    def __init__(self, entity_key: EntityKey):
+        self.entity_key = entity_key
 
     def encode(self, value: SubscriptionData) -> bytes:
         return json.dumps(value.to_dict()).encode("utf-8")

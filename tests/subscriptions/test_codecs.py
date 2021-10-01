@@ -8,7 +8,6 @@ from typing import Callable, Optional
 import pytest
 
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -130,9 +129,7 @@ def assert_entity_subscription_on_subscription_class(
 def test_basic(
     builder: Callable[[Optional[int]], SubscriptionData], organization: Optional[int]
 ) -> None:
-    entity = (
-        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
-    )
+    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
     codec = SubscriptionDataCodec(entity)
     data = builder(organization)
     assert codec.decode(codec.encode(data)) == data
@@ -143,9 +140,7 @@ def test_encode(
     builder: Callable[[Optional[int]], LegacySubscriptionData],
     organization: Optional[int],
 ) -> None:
-    entity = (
-        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
-    )
+    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
     codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
 
@@ -164,9 +159,7 @@ def test_encode_snql(
     builder: Callable[[Optional[int]], SnQLSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    entity = (
-        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
-    )
+    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
     codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
 
@@ -184,9 +177,7 @@ def test_encode_delegate(
     builder: Callable[[Optional[int]], DelegateSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    entity = (
-        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
-    )
+    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
     codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
 
@@ -206,9 +197,7 @@ def test_decode(
     builder: Callable[[Optional[int]], LegacySubscriptionData],
     organization: Optional[int],
 ) -> None:
-    entity = (
-        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
-    )
+    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
     codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
     data = {
@@ -229,9 +218,7 @@ def test_decode_snql(
     builder: Callable[[Optional[int]], SnQLSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    entity = (
-        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
-    )
+    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
     codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
     data = {
@@ -252,9 +239,7 @@ def test_decode_delegate(
     builder: Callable[[Optional[int]], DelegateSubscriptionData],
     organization: Optional[int],
 ) -> None:
-    entity = (
-        get_entity(EntityKey.SESSIONS) if organization else get_entity(EntityKey.EVENTS)
-    )
+    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
     codec = SubscriptionDataCodec(entity)
     subscription = builder(organization)
     data = {

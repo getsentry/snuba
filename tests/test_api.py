@@ -15,7 +15,7 @@ from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
 from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
@@ -2135,9 +2135,12 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         data = json.loads(resp.data)
         subscription_id = data["subscription_id"]
         partition = subscription_id.split("/", 1)[0]
+
+        entity_key = ENTITY_NAME_LOOKUP[self.dataset.get_default_entity()]
+
         assert (
             len(
-                RedisSubscriptionDataStore(redis_client, self.dataset, partition,).all()  # type: ignore
+                RedisSubscriptionDataStore(redis_client, entity_key, partition,).all()  # type: ignore
             )
             == 1
         )
@@ -2147,8 +2150,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         )
         assert resp.status_code == 202, resp
         assert (
-            RedisSubscriptionDataStore(redis_client, self.dataset, partition,).all()
-            == []
+            RedisSubscriptionDataStore(redis_client, entity_key, partition,).all() == []
         )
 
 
