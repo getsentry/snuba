@@ -6,6 +6,7 @@ import pytest
 from pytest import raises
 
 from snuba import state
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
@@ -161,7 +162,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, self.dataset, identifier.partition,
+                    redis_client, self.entity_key, identifier.partition,
                 ).all(),
             )[0][1]
             == subscription
@@ -271,7 +272,7 @@ class TestSessionsSubscriptionCreator:
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, dataset, identifier.partition,
+                    redis_client, EntityKey.SESSIONS, identifier.partition,
                 ).all(),
             )[0][1]
             == subscription
@@ -294,7 +295,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, self.dataset, identifier.partition,
+                    redis_client, self.entity_key, identifier.partition,
                 ).all(),
             )[0][1]
             == subscription
@@ -303,7 +304,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         SubscriptionDeleter(self.dataset, identifier.partition).delete(identifier.uuid)
         assert (
             RedisSubscriptionDataStore(
-                redis_client, self.dataset, identifier.partition,
+                redis_client, self.entity_key, identifier.partition,
             ).all()
             == []
         )

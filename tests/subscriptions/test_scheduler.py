@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Collection, Optional, Tuple
 
 from snuba import state
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.entities import EntityKey
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     LegacySubscriptionData,
@@ -23,7 +23,7 @@ class TestSubscriptionScheduler:
     def setup_method(self) -> None:
         self.now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         self.partition_id = PartitionId(1)
-        self.dataset = get_dataset("events")
+        self.entity_key = EntityKey("events")
 
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
@@ -55,7 +55,7 @@ class TestSubscriptionScheduler:
         ] = None,
     ) -> None:
         store = RedisSubscriptionDataStore(
-            redis_client, self.dataset, self.partition_id,
+            redis_client, self.entity_key, self.partition_id,
         )
         for subscription in subscriptions:
             store.create(subscription.identifier.uuid, subscription.data)
