@@ -1,7 +1,11 @@
 import json
+from datetime import datetime
+from typing import cast
 
+import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
 from snuba.datasets.entity import Entity
 from snuba.query.exceptions import InvalidQueryException
@@ -9,7 +13,9 @@ from snuba.subscriptions.data import (
     DelegateSubscriptionData,
     LegacySubscriptionData,
     SnQLSubscriptionData,
+    Subscription,
     SubscriptionData,
+    SubscriptionIdentifier,
 )
 from snuba.subscriptions.entity_subscription import (
     InvalidSubscriptionError,
@@ -17,6 +23,7 @@ from snuba.subscriptions.entity_subscription import (
 )
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
+from snuba.utils.scheduler import ScheduledTask
 
 
 class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
@@ -61,4 +68,45 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
                 }
             ).encode("utf-8"),
             [],
+        )
+
+
+class SubscriptionScheduledTaskEncoder(Encoder[bytes, ScheduledTask[Subscription]]):
+    """
+    Encodes/decodes a scheduled subscription to bytes for Kafka.
+    Does not support non SnQL subscriptions.
+    """
+
+    def __init__(self, entity_key: EntityKey) -> None:
+        self.__entity_key = entity_key
+
+    def encode(self, value: ScheduledTask[Subscription]) -> bytes:
+        assert isinstance(value.task.data, SnQLSubscriptionData)
+
+        return cast(
+            bytes,
+            rapidjson.dumps(
+                {
+                    "timestamp": value.timestamp.isoformat(),
+                    "task": {
+                        "identifier": str(value.task.identifier),
+                        "data": value.task.data.to_dict(),
+                    },
+                }
+            ).encode("utf-8"),
+        )
+
+    def decode(self, value: bytes) -> ScheduledTask[Subscription]:
+        scheduled_subscription_dict = rapidjson.loads(value.decode("utf-8"))
+        assert scheduled_subscription_dict["task"]["data"]["type"] == "snql"
+        return ScheduledTask(
+            datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
+            Subscription(
+                SubscriptionIdentifier.from_string(
+                    scheduled_subscription_dict["task"]["identifier"]
+                ),
+                SnQLSubscriptionData.from_dict(
+                    scheduled_subscription_dict["task"]["data"], self.__entity_key
+                ),
+            ),
         )
