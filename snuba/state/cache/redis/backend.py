@@ -94,6 +94,11 @@ class RedisCache(Cache[TValue]):
         # (or lack thereof.)
         result_key = self.__build_key(key)
 
+        # if we hit an error, we want to communicate that to waiting clients
+        # but we do not want it to be considered a true value. hence we store
+        # the error info in a different key
+        error_key = self.__build_key(key, "error")
+
         # The wait queue (a Redis list) is used to identify clients that are
         # currently "subscribed" to the evaluation of the function and awaiting
         # its result. The first member of this queue is a special case -- it is
@@ -153,6 +158,7 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 task_timeout,
             )
+            redis_key_to_write_to = result_key
 
             argv = [task_ident, 60]
             try:
@@ -169,11 +175,15 @@ class RedisCache(Cache[TValue]):
                 argv.extend(
                     [
                         self.__codec.encode_exception(error_value),
-                        # NOTE (Vlad): this is only temporary so we don't cache
-                        # error values for too long
+                        # the error data only needs to be present for long enough such that
+                        # the waiting clients know that they all have their queries rejected.
+                        # thus we set it to only one second
                         1,
                     ]
                 )
+                # we want the result key to only store real query results in it as the TTL
+                # of a cached query can be fairly long (minutes).
+                redis_key_to_write_to = error_key
                 raise e
             finally:
                 # Regardless of whether the function succeeded or failed, we
@@ -183,7 +193,7 @@ class RedisCache(Cache[TValue]):
                 try:
                     self.__script_set(
                         [
-                            result_key,
+                            redis_key_to_write_to,
                             wait_queue_key,
                             task_ident_key,
                             build_notify_queue_key(task_ident),
@@ -231,8 +241,12 @@ class RedisCache(Cache[TValue]):
                 # If there is no value, that means that the client responsible
                 # for generating the cache value errored while generating it.
                 if raw_value is None:
+                    upsteam_error_payload = self.__client.get(error_key)
+                    if upsteam_error_payload:
+                        return self.__codec.decode(upsteam_error_payload)
+
                     raise ExecutionError(
-                        "no value at key: this means the original process executing the query crashed before the exception could be handled"
+                        "no value at key: this means the original process executing the query crashed before the exception could be handled or we were not able to set the cache result"
                     )
                 else:
                     return self.__codec.decode(raw_value)
