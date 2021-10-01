@@ -213,7 +213,7 @@ def test_transient_error(backend: Cache[bytes]) -> None:
     # SomeTransientException, but because we (temporarily) set
     # the error value timeout to be 0.1, it will go through and execute
     # the query
-    time.sleep(0.5)
+    time.sleep(1.01)
     waiter = execute(functioning_query)
 
     with pytest.raises(SomeTransientException):
