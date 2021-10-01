@@ -27,7 +27,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.state import get_config
+from snuba.state import is_project_in_rollout_group
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -228,10 +228,6 @@ class TransactionsMessageProcessor(MessageProcessor):
                 del contexts[context]
 
         transaction_ctx = contexts.get("trace", {})
-        # The hash and exclusive_time is stored in the spans columns so there is no need
-        # to store it in the context array.
-        transaction_ctx.pop("hash", None)
-        transaction_ctx.pop("exclusive_time", None)
         # We store trace_id and span_id as promoted columns and on the query level
         # we make sure that all queries on contexts[trace.trace_id/span_id] use those promoted
         # columns instead. So we don't need to store them in the contexts array as well
@@ -289,18 +285,6 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         return op, int(group, 16), exclusive_time
 
-    def __should_write_span_columns(self, project_id: int) -> bool:
-        project_rollout_setting = get_config("write_span_columns_projects", "")
-        if project_rollout_setting:
-            # The expected format is [project,project,...]
-            project_rollout_setting = project_rollout_setting[1:-1]
-            if project_rollout_setting:
-                for p in project_rollout_setting.split(","):
-                    if int(p.strip()) == project_id:
-                        return True
-
-        return False
-
     def _process_spans(
         self, processed: MutableMapping[str, Any], event_dict: EventDict,
     ) -> None:
@@ -308,20 +292,19 @@ class TransactionsMessageProcessor(MessageProcessor):
         trace_context = data["contexts"]["trace"]
 
         try:
-            if not self.__should_write_span_columns(processed["project_id"]):
+            if not is_project_in_rollout_group(
+                "write_span_columns_projects", processed["project_id"]
+            ):
                 return
 
             processed_root_span = self._process_span(trace_context)
-            if processed_root_span is None:
-                return
-
-            processed_spans = [processed_root_span]
+            if processed_root_span is not None:
+                processed_spans = [processed_root_span]
 
             for span in data.get("spans", []):
                 processed_span = self._process_span(span)
-                if processed_span is None:
-                    return
-                processed_spans.append(processed_span)
+                if processed_span is not None:
+                    processed_spans.append(processed_span)
 
             processed["spans.op"] = []
             processed["spans.group"] = []
@@ -332,10 +315,15 @@ class TransactionsMessageProcessor(MessageProcessor):
                 processed["spans.group"].append(group)
                 processed["spans.exclusive_time"].append(exclusive_time)
 
+            # The hash and exclusive_time is being stored in the spans columns
+            # so there is no need to store it again in the context array.
+            trace_context.pop("hash", None)
+            trace_context.pop("exclusive_time", None)
+
         except Exception:
             # Not failing the event in this case just yet, because we are still
             # developing this feature.
-            logger.error(
+            logger.warning(
                 "Invalid span fields.",
                 extra={"trace_context": trace_context},
                 exc_info=True,
