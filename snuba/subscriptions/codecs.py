@@ -69,7 +69,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         )
 
 
-class SubscriptionScheduledTaskEncoder(Encoder[bytes, ScheduledTask[Subscription]]):
+class SubscriptionScheduledTaskEncoder(Codec[bytes, ScheduledTask[Subscription]]):
     """
     Encodes/decodes a scheduled subscription to bytes for Kafka.
     Does not support non SnQL subscriptions.
