@@ -2,8 +2,7 @@ import abc
 from typing import Iterable, Tuple
 from uuid import UUID
 
-from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.entities import EntityKey
 from snuba.redis import RedisClientType
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId, SubscriptionData
@@ -44,11 +43,11 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
     KEY_TEMPLATE = "subscriptions:{}:{}"
 
     def __init__(
-        self, client: RedisClientType, dataset: Dataset, partition_id: PartitionId
+        self, client: RedisClientType, entity: EntityKey, partition_id: PartitionId
     ):
         self.client = client
-        self.codec = SubscriptionDataCodec(entity=dataset.get_default_entity())
-        self.__key = f"subscriptions:{get_dataset_name(dataset)}:{partition_id}"
+        self.codec = SubscriptionDataCodec(entity)
+        self.__key = f"subscriptions:{entity.value}:{partition_id}"
 
     def create(self, key: UUID, data: SubscriptionData) -> None:
         """

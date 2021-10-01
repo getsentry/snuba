@@ -36,7 +36,9 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         ]
 
     def build_store(self, key: int = 1) -> RedisSubscriptionDataStore:
-        return RedisSubscriptionDataStore(redis_client, self.dataset, PartitionId(key))
+        return RedisSubscriptionDataStore(
+            redis_client, self.entity_key, PartitionId(key)
+        )
 
     def test_create(self) -> None:
         store = self.build_store()
