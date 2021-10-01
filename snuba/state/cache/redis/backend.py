@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
-RESULT_ERROR = 3
 
 
 class RedisCache(Cache[TValue]):
@@ -94,8 +93,6 @@ class RedisCache(Cache[TValue]):
         # methods, which restricts this key to only containing the cache value
         # (or lack thereof.)
         result_key = self.__build_key(key)
-        error_key = self.__build_key(key, "error")
-
 
         # The wait queue (a Redis list) is used to identify clients that are
         # currently "subscribed" to the evaluation of the function and awaiting
@@ -129,7 +126,7 @@ class RedisCache(Cache[TValue]):
         # task creation parameters -- the timeout (execution deadline) and a
         # new task identity just in case we are the first in line.
         result = self.__script_get(
-            [result_key, wait_queue_key, task_ident_key, error_key], [timeout, uuid.uuid1().hex]
+            [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
         )
 
         if timer is not None:
@@ -142,8 +139,6 @@ class RedisCache(Cache[TValue]):
             # If we got a cache hit, this is easy -- we just return it.
             logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
-        elif result[0] == RESULT_ERROR:
-            pass
         elif result[0] == RESULT_EXECUTE:
 
             # If we were the first in line, we need to execute the function.
