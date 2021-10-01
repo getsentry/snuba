@@ -67,12 +67,18 @@ class KafkaStreamLoader:
         pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
         replacement_topic_spec: Optional[KafkaTopicSpec] = None,
         commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
+        subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
+        assert (subscription_scheduled_topic_spec is None) == (
+            subscription_result_topic_spec is None
+        )
+
         self.__processor = processor
         self.__default_topic_spec = default_topic_spec
         self.__replacement_topic_spec = replacement_topic_spec
         self.__commit_log_topic_spec = commit_log_topic_spec
+        self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
 
@@ -95,6 +101,9 @@ class KafkaStreamLoader:
     def get_commit_log_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__commit_log_topic_spec
 
+    def get_subscription_scheduled_topic_spec(self) -> Optional[KafkaTopicSpec]:
+        return self.__subscription_scheduled_topic_spec
+
     def get_subscription_result_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_result_topic_spec
 
@@ -105,6 +114,7 @@ def build_kafka_stream_loader_from_settings(
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
     replacement_topic: Optional[Topic] = None,
     commit_log_topic: Optional[Topic] = None,
+    subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
@@ -122,6 +132,12 @@ def build_kafka_stream_loader_from_settings(
     else:
         commit_log_topic_spec = None
 
+    subscription_scheduled_topic_spec: Optional[KafkaTopicSpec]
+    if subscription_scheduled_topic is not None:
+        subscription_scheduled_topic_spec = KafkaTopicSpec(subscription_scheduled_topic)
+    else:
+        subscription_scheduled_topic_spec = None
+
     subscription_result_topic_spec: Optional[KafkaTopicSpec]
     if subscription_result_topic is not None:
         subscription_result_topic_spec = KafkaTopicSpec(subscription_result_topic)
@@ -134,6 +150,7 @@ def build_kafka_stream_loader_from_settings(
         pre_filter,
         replacement_topic_spec,
         commit_log_topic_spec,
+        subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
     )
 
