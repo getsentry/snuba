@@ -432,7 +432,7 @@ def dataset_query(
         if isinstance(cause, RateLimitExceeded):
             status = 429
             details = {
-                "type": "rate-limited",
+                "type": f"rate-limited-{cause.limit_name}",
                 "message": str(cause),
             }
             logger.warning(

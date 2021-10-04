@@ -38,6 +38,10 @@ class RateLimitExceeded(SerializableException):
     Exception thrown when the rate limit is exceeded
     """
 
+    @property
+    def limit_name(self) -> str:
+        return str(self.extra_data.get("limit_name", "unspecified"))
+
 
 @dataclass(frozen=True)
 class RateLimitStats:
@@ -215,7 +219,8 @@ def rate_limit(
         raise RateLimitExceeded(
             "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
                 r=reason
-            )
+            ),
+            limit_name=reason.name,
         )
 
     rate_limited = False
