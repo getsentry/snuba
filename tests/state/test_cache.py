@@ -224,7 +224,7 @@ def test_transient_error(backend: Cache[bytes]) -> None:
 def test_notify_queue_ttl() -> None:
     # Tests that waiting clients can be notified of the cache status
     # even with network delays. This test will break if the notify queue
-    # TTL is set to a very low number
+    # TTL is set below 1 second
 
     pop_calls = 0
     num_waiters = 9
