@@ -4,16 +4,17 @@ from typing import Callable, MutableMapping, Optional, Sequence, Tuple
 
 from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
 
+from snuba.utils.serializable_exception import SerializableException
 from snuba.utils.streams.types import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.kafka-consumer")
 
 
-class NoPartitionAssigned(Exception):
+class NoPartitionAssigned(SerializableException):
     pass
 
 
-class PartitionReassigned(Exception):
+class PartitionReassigned(SerializableException):
     pass
 
 
