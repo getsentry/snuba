@@ -1,3 +1,5 @@
+from typing import Set
+
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -10,12 +12,15 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 
 
 class HexIntColumnProcessor(BaseTypeConverter):
+    def __init__(self, columns: Set[str]) -> None:
+        super().__init__(columns, optimize_ordering=True)
+
     def _translate_literal(self, exp: Literal) -> Literal:
         try:
             assert isinstance(exp.value, str)
             return Literal(alias=exp.alias, value=int(exp.value, 16))
         except (AssertionError, ValueError):
-            raise ColumnTypeError("Invalid hexint", report=False)
+            raise ColumnTypeError("Invalid hexint", should_report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:

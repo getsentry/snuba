@@ -15,8 +15,9 @@ from snuba.state.cache.abstract import (
     ExecutionTimeoutError,
     TValue,
 )
-from snuba.utils.codecs import Codec
+from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class RedisCache(Cache[TValue]):
         self,
         client: RedisClientType,
         prefix: str,
-        codec: Codec[bytes, TValue],
+        codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
     ) -> None:
         self.__client = client
@@ -139,6 +140,7 @@ class RedisCache(Cache[TValue]):
             logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
+
             # If we were the first in line, we need to execute the function.
             # We'll also get back the task identity to use for sending
             # notifications and approximately how long we have to run the
@@ -162,6 +164,17 @@ class RedisCache(Cache[TValue]):
                 )
             except concurrent.futures.TimeoutError as error:
                 raise TimeoutError("timed out waiting for value") from error
+            except Exception as e:
+                error_value = SerializableException.from_standard_exception_instance(e)
+                argv.extend(
+                    [
+                        self.__codec.encode_exception(error_value),
+                        # NOTE (Vlad): this is only temporary so we don't cache
+                        # error values for too long
+                        1,
+                    ]
+                )
+                raise e
             finally:
                 # Regardless of whether the function succeeded or failed, we
                 # need to mark the task as completed. If there is no result
@@ -215,14 +228,12 @@ class RedisCache(Cache[TValue]):
             if notification_received:
                 # There should be a value waiting for us at the result key.
                 raw_value = self.__client.get(result_key)
-
                 # If there is no value, that means that the client responsible
                 # for generating the cache value errored while generating it.
                 if raw_value is None:
-                    # TODO: If we wanted to get clever, this could include the
-                    # error message from the other client, or a Sentry ID or
-                    # something.
-                    raise ExecutionError("no value at key")
+                    raise ExecutionError(
+                        "no value at key: this means the original process executing the query crashed before the exception could be handled"
+                    )
                 else:
                     return self.__codec.decode(raw_value)
             else:

@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload to codecov
         run: |
-          bash <(curl -s https://codecov.io/bash)
+          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   sentry:
     needs: [snuba-image]
@@ -139,6 +139,9 @@ jobs:
     strategy:
       matrix:
         instance: [0, 1]
+
+    env:
+      USE_REDIS_INDEXER: 1
 
     steps:
       # Checkout codebase
@@ -182,7 +185,7 @@ jobs:
         with:
           workdir: sentry
           cache-files-hash: ${{ hashFiles('sentry/requirements**.txt') }}
-          python-version: 3.8
+          python-version: 3.6
           snuba: false
           kafka: true
           clickhouse: true
@@ -205,7 +208,6 @@ jobs:
             --network sentry \
             snuba-test
           docker exec sentry_snuba snuba migrations migrate --force
-
 
       - name: Run snuba tests
         working-directory: sentry

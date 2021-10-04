@@ -35,6 +35,7 @@ from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -54,7 +55,8 @@ from snuba.request.schema import RequestParts, RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
+from snuba.subscriptions.data import PartitionId
+from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
@@ -190,7 +192,7 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
 def handle_invalid_query(exception: InvalidQueryException) -> Response:
     # TODO: Remove this logging as soon as the query validation code is
     # mature enough that we can trust it.
-    if exception.report:
+    if exception.should_report:
         logger.warning("Invalid query", exc_info=exception)
     else:
         logger.info("Invalid query", exc_info=exception)
@@ -477,7 +479,9 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
-    subscription = SubscriptionDataCodec().decode(http_request.data)
+    entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+
+    subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),

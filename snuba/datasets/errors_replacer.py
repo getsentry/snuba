@@ -18,6 +18,7 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
 )
@@ -87,6 +88,10 @@ class Replacement(ReplacementBase):
     def get_project_id(self) -> int:
         raise NotImplementedError()
 
+    @abstractmethod
+    def get_replacement_type(self) -> ReplacementType:
+        raise NotImplementedError()
+
     def should_write_every_node(self) -> bool:
         project_rollout_setting = get_config("write_node_replacements_projects", "")
         if project_rollout_setting:
@@ -120,6 +125,7 @@ class LegacyReplacement(Replacement):
     insert_query_template: Optional[str]
     query_args: Mapping[str, Any]
     query_time_flags: LegacyQueryTimeFlags
+    replacement_type: ReplacementType
 
     def get_project_id(self) -> int:
         return self.query_time_flags[1]
@@ -132,6 +138,9 @@ class LegacyReplacement(Replacement):
             return ExcludeGroups(group_ids=self.query_time_flags[2])  # type: ignore
 
         return None
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
         if self.insert_query_template is None:
@@ -148,21 +157,29 @@ class LegacyReplacement(Replacement):
         return self.count_query_template % args
 
 
-def get_project_exclude_groups_key(
+def get_project_exclude_groups_key_and_type_key(
     project_id: int, state_name: Optional[ReplacerState]
-) -> str:
-    return f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
+) -> Tuple[str, str]:
+    key = f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
+    return key, f"{key}-type"
 
 
 def set_project_exclude_groups(
-    project_id: int, group_ids: Sequence[int], state_name: Optional[ReplacerState]
+    project_id: int,
+    group_ids: Sequence[int],
+    state_name: Optional[ReplacerState],
+    replacement_type: ReplacementType,
 ) -> None:
-    """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
+    """
+    Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
-    the entire ZSET incase it's rarely touched."""
+    the entire ZSET incase it's rarely touched.
+
+    Add replacement type for this replacement.
+    """
 
     now = time.time()
-    key = get_project_exclude_groups_key(project_id, state_name)
+    key, type_key = get_project_exclude_groups_key_and_type_key(project_id, state_name)
     p = redis_client.pipeline()
 
     group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
@@ -170,52 +187,64 @@ def set_project_exclude_groups(
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
+    replacement_type_data: Mapping[str, float] = {replacement_type: now}
+    p.zadd(type_key, **replacement_type_data)
+    p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
+    p.expire(type_key, int(settings.REPLACER_KEY_TTL))
+
     p.execute()
 
 
-def get_project_needs_final_key(
+def get_project_needs_final_key_and_type_key(
     project_id: int, state_name: Optional[ReplacerState]
-) -> str:
-    return f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
+) -> Tuple[str, str]:
+    key = f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
+    return key, f"{key}-type"
 
 
 def set_project_needs_final(
-    project_id: int, state_name: Optional[ReplacerState]
+    project_id: int,
+    state_name: Optional[ReplacerState],
+    replacement_type: ReplacementType,
 ) -> Optional[bool]:
-    return redis_client.set(
-        get_project_needs_final_key(project_id, state_name),
-        True,
-        ex=settings.REPLACER_KEY_TTL,
-    )
+    key, type_key = get_project_needs_final_key_and_type_key(project_id, state_name)
+    p = redis_client.pipeline()
+    p.set(key, True, ex=settings.REPLACER_KEY_TTL)
+    p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
+    [final_was_set, _] = p.execute()
+    return bool(final_was_set)
 
 
 def get_projects_query_flags(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Tuple[bool, Sequence[int]]:
+) -> Tuple[bool, Sequence[int], Set[str]]:
     """\
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
     3. Trim groups to exclude ZSET for each Project
+    4. Fetch replacement types for each Project
 
-    Returns (needs_final, group_ids_to_exclude)
+    Returns (needs_final, group_ids_to_exclude, replacement_types)
     """
 
     s_project_ids = set(project_ids)
     now = time.time()
     p = redis_client.pipeline()
 
-    needs_final_keys = [
-        get_project_needs_final_key(project_id, state_name)
+    needs_final_keys_and_type_keys = [
+        get_project_needs_final_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
-    for needs_final_key in needs_final_keys:
+
+    for needs_final_key, _ in needs_final_keys_and_type_keys:
         p.get(needs_final_key)
 
-    exclude_groups_keys = [
-        get_project_exclude_groups_key(project_id, state_name)
+    exclude_groups_keys_and_types = [
+        get_project_exclude_groups_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
-    for exclude_groups_key in exclude_groups_keys:
+
+    for exclude_groups_key, _ in exclude_groups_keys_and_types:
         p.zremrangebyscore(
             exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
         )
@@ -223,14 +252,66 @@ def get_projects_query_flags(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
         )
 
+    for _, needs_final_type_key in needs_final_keys_and_type_keys:
+        p.get(needs_final_type_key)
+
+    for _, type_key in exclude_groups_keys_and_types:
+        p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
+        p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
+
     results = p.execute()
 
-    needs_final = any(results[: len(s_project_ids)])
-    exclude_groups = sorted(
-        {int(group_id) for group_id in sum(results[(len(s_project_ids) + 1) :: 2], [])}
+    return process_exclude_groups_and_replacement_types_results(
+        results, len(s_project_ids)
     )
 
-    return (needs_final, exclude_groups)
+
+def process_exclude_groups_and_replacement_types_results(
+    results: List[Any], len_projects: int
+) -> Tuple[bool, Sequence[int], Set[str]]:
+    """
+    Helper function for `get_projects_query_flags`.
+    `results` is in the form:
+    [
+        needs_final...,
+        exclude_groups...,
+        needs_final_replacement_types...,
+        groups_replacement_types...
+    ]
+    - `needs_final` slice is `len_projects` long
+    - `excludes_groups` slice is `len_projects * 2` long
+    - `needs_final_replacement_types` slice is `len_projects` long
+    - `groups_replacement_types` slice is `len_projects * 2` long
+
+    The `len_projects * 2` long slices are in the form:
+    int, list, int, list, ...
+    Only the lists are necessary, the ints are scores from
+    the redis sorted set used to track when the items were zadded.
+    """
+
+    needs_final = any(results[:len_projects])
+    exclude_groups_results = results[len_projects : len_projects * 3]
+    projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
+    groups_replacement_types_result = results[len_projects * 4 :]
+
+    exclude_groups = sorted(
+        {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
+    )
+
+    needs_final_replacement_types = {
+        replacement_type.decode("utf-8")
+        for replacement_type in projects_replacment_types_result
+        if replacement_type
+    }
+
+    groups_replacement_types = {
+        replacement_type.decode("utf-8")
+        for replacement_type in sum(groups_replacement_types_result[1::2], [])
+    }
+
+    replacement_types = groups_replacement_types.union(needs_final_replacement_types)
+
+    return needs_final, exclude_groups, replacement_types
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
@@ -266,7 +347,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
-        event = message.data
 
         if type_ in REPLACEMENT_EVENT_TYPES:
             metrics.increment("process", 1, tags={"type": type_})
@@ -280,20 +360,20 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         ):
             return None
         elif type_ == ReplacementType.END_DELETE_GROUPS:
-            processed = process_delete_groups(event, self.__required_columns)
+            processed = process_delete_groups(message, self.__required_columns)
         elif type_ == ReplacementType.END_MERGE:
-            processed = process_merge(event, self.__all_columns)
+            processed = process_merge(message, self.__all_columns)
         elif type_ == ReplacementType.END_UNMERGE:
             processed = UnmergeGroupsReplacement.parse_message(
-                event, self.__replacement_context
+                message, self.__replacement_context
             )
         elif type_ == ReplacementType.END_UNMERGE_HIERARCHICAL:
             processed = process_unmerge_hierarchical(
-                event, self.__all_columns, self.__state_name
+                message, self.__all_columns, self.__state_name
             )
         elif type_ == ReplacementType.END_DELETE_TAG:
             processed = process_delete_tag(
-                event,
+                message,
                 self.__all_columns,
                 self.__tag_column_map,
                 self.__promoted_tags,
@@ -302,15 +382,15 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             )
         elif type_ == ReplacementType.TOMBSTONE_EVENTS:
             processed = process_tombstone_events(
-                event, self.__required_columns, self.__state_name
+                message, self.__required_columns, self.__state_name
             )
         elif type_ == ReplacementType.REPLACE_GROUP:
             processed = process_replace_group(
-                event, self.__all_columns, self.__state_name
+                message, self.__all_columns, self.__state_name
             )
         elif type_ == ReplacementType.EXCLUDE_GROUPS:
             processed = ExcludeGroupsReplacement.parse_message(
-                event, self.__replacement_context
+                message, self.__replacement_context
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -331,16 +411,26 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
             if isinstance(query_time_flags, NeedsFinal):
                 if compatibility_double_write:
-                    set_project_needs_final(project_id, None)
-                set_project_needs_final(project_id, self.__state_name)
+                    set_project_needs_final(
+                        project_id, None, replacement.get_replacement_type()
+                    )
+                set_project_needs_final(
+                    project_id, self.__state_name, replacement.get_replacement_type()
+                )
 
             elif isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:
                     set_project_exclude_groups(
-                        project_id, query_time_flags.group_ids, None
+                        project_id,
+                        query_time_flags.group_ids,
+                        None,
+                        replacement.get_replacement_type(),
                     )
                 set_project_exclude_groups(
-                    project_id, query_time_flags.group_ids, self.__state_name
+                    project_id,
+                    query_time_flags.group_ids,
+                    self.__state_name,
+                    replacement.get_replacement_type(),
                 )
 
         elif query_time_flags is not None:
@@ -350,7 +440,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
 
 def _build_event_tombstone_replacement(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     required_columns: Sequence[str],
     where: str,
     query_args: Mapping[str, str],
@@ -377,19 +467,22 @@ def _build_event_tombstone_replacement(
     final_query_args = {
         "required_columns": ", ".join(required_columns),
         "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
+        "project_id": message.data["project_id"],
     }
     final_query_args.update(query_args)
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, final_query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        final_query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )
 
 
 def _build_group_replacement(
-    txn: Optional[str],
+    message: ReplacementMessage,
     project_id: int,
-    new_group_id: str,
     where: str,
     query_args: Mapping[str, str],
     query_time_flags: LegacyQueryTimeFlags,
@@ -397,6 +490,7 @@ def _build_group_replacement(
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
+    txn = message.data.get("transaction_id")
     if txn:
         if txn in SEEN_MERGE_TXN_CACHE:
             return None
@@ -405,7 +499,8 @@ def _build_group_replacement(
 
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
-        lambda i: i if i != "group_id" else str(new_group_id), all_column_names,
+        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
+        all_column_names,
     )
 
     count_query_template = (
@@ -433,7 +528,11 @@ def _build_group_replacement(
     final_query_args.update(query_args)
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, final_query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        final_query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )
 
 
@@ -485,7 +584,7 @@ def _build_event_set_filter(
 
 
 def process_replace_group(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
@@ -500,40 +599,36 @@ def process_replace_group(
     how the merging was done.
     """
 
-    event_ids = message["event_ids"]
+    event_ids = message.data["event_ids"]
     if not event_ids:
         return None
 
-    event_set_filter = _build_event_set_filter(message, state_name)
+    event_set_filter = _build_event_set_filter(message.data, state_name)
     if event_set_filter is None:
         return None
 
     prewhere, where, query_args = event_set_filter
 
     full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-    project_id: int = message["project_id"]
+    project_id: int = message.data["project_id"]
     query_time_flags = (None, project_id)
 
     return _build_group_replacement(
-        message.get("transaction_id"),
-        project_id,
-        message["new_group_id"],
-        full_where,
-        query_args,
-        query_time_flags,
-        all_columns,
+        message, project_id, full_where, query_args, query_time_flags, all_columns,
     )
 
 
 def process_delete_groups(
-    message: Mapping[str, Any], required_columns: Sequence[str]
+    message: ReplacementMessage, required_columns: Sequence[str]
 ) -> Optional[Replacement]:
-    group_ids = message["group_ids"]
+    group_ids = message.data["group_ids"]
     if not group_ids:
         return None
 
     assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    timestamp = datetime.strptime(
+        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+    )
 
     where = """\
         PREWHERE group_id IN (%(group_ids)s)
@@ -547,7 +642,7 @@ def process_delete_groups(
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
+    query_time_flags = (EXCLUDE_GROUPS, message.data["project_id"], group_ids)
 
     return _build_event_tombstone_replacement(
         message, required_columns, where, query_args, query_time_flags
@@ -555,15 +650,15 @@ def process_delete_groups(
 
 
 def process_tombstone_events(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     required_columns: Sequence[str],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
-    event_ids = message["event_ids"]
+    event_ids = message.data["event_ids"]
     if not event_ids:
         return None
 
-    old_primary_hash = message.get("old_primary_hash")
+    old_primary_hash = message.data.get("old_primary_hash")
 
     if old_primary_hash and state_name == ReplacerState.EVENTS:
         # old_primary_hash flag means the event is only tombstoned
@@ -573,7 +668,7 @@ def process_tombstone_events(
         # not.
         return None
 
-    event_set_filter = _build_event_set_filter(message, state_name)
+    event_set_filter = _build_event_set_filter(message.data, state_name)
     if event_set_filter is None:
         return None
 
@@ -588,7 +683,7 @@ def process_tombstone_events(
 
         prewhere.append("primary_hash = %(old_primary_hash)s")
 
-    query_time_flags = (None, message["project_id"])
+    query_time_flags = (None, message.data["project_id"])
 
     full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
 
@@ -617,21 +712,29 @@ class ExcludeGroupsReplacement(Replacement):
 
     project_id: int
     group_ids: Sequence[int]
+    replacement_type: ReplacementType
 
     @classmethod
     def parse_message(
-        cls, message: Mapping[str, Any], context: ReplacementContext
+        cls, message: ReplacementMessage, context: ReplacementContext
     ) -> Optional[ExcludeGroupsReplacement]:
-        if not message["group_ids"]:
+        if not message.data["group_ids"]:
             return None
 
-        return cls(project_id=message["project_id"], group_ids=message["group_ids"])
+        return cls(
+            project_id=message.data["project_id"],
+            group_ids=message.data["group_ids"],
+            replacement_type=message.action_type,
+        )
 
     def get_project_id(self) -> int:
         return self.project_id
 
     def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         return ExcludeGroups(group_ids=self.group_ids)
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
         return None
@@ -644,7 +747,7 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
 def process_merge(
-    message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
+    message: ReplacementMessage, all_columns: Sequence[FlattenedColumn]
 ) -> Optional[Replacement]:
     """
     Merge all events of one group into another group.
@@ -665,30 +768,26 @@ def process_merge(
         AND NOT deleted
     """
 
-    previous_group_ids = message["previous_group_ids"]
+    previous_group_ids = message.data["previous_group_ids"]
     if not previous_group_ids:
         return None
 
     assert all(isinstance(gid, int) for gid in previous_group_ids)
 
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    timestamp = datetime.strptime(
+        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+    )
 
     query_args = {
         "previous_group_ids": ", ".join(str(gid) for gid in previous_group_ids),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
-    project_id: int = message["project_id"]
+    project_id: int = message.data["project_id"]
     query_time_flags = (EXCLUDE_GROUPS, project_id, previous_group_ids)
 
     return _build_group_replacement(
-        message.get("transaction_id"),
-        project_id,
-        message["new_group_id"],
-        where,
-        query_args,
-        query_time_flags,
-        all_columns,
+        message, project_id, where, query_args, query_time_flags, all_columns,
     )
 
 
@@ -701,29 +800,31 @@ class UnmergeGroupsReplacement(Replacement):
     project_id: int
     previous_group_id: int
     new_group_id: int
+    replacement_type: ReplacementType
 
     @classmethod
     def parse_message(
-        cls, message: Mapping[str, Any], context: ReplacementContext
+        cls, message: ReplacementMessage, context: ReplacementContext
     ) -> Optional["Replacement"]:
-        hashes = message["hashes"]
+        hashes = message.data["hashes"]
         if not hashes:
             return None
 
         assert all(isinstance(h, str) for h in hashes)
 
         timestamp = datetime.strptime(
-            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
 
         return UnmergeGroupsReplacement(
             state_name=context.state_name,
             timestamp=timestamp,
             hashes=hashes,
-            project_id=message["project_id"],
-            previous_group_id=message["previous_group_id"],
-            new_group_id=message["new_group_id"],
+            project_id=message.data["project_id"],
+            previous_group_id=message.data["previous_group_id"],
+            new_group_id=message.data["new_group_id"],
             all_columns=context.all_columns,
+            replacement_type=message.action_type,
         )
 
     def get_project_id(self) -> int:
@@ -731,6 +832,9 @@ class UnmergeGroupsReplacement(Replacement):
 
     def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         return NeedsFinal()
+
+    def get_replacement_type(self) -> ReplacementType:
+        return self.replacement_type
 
     @cached_property
     def _where_clause(self) -> str:
@@ -793,25 +897,25 @@ def _convert_hash(
 
 
 def process_unmerge_hierarchical(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
+        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
         all_column_names,
     )
 
     try:
         timestamp = datetime.strptime(
-            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
 
-        primary_hash = message["primary_hash"]
+        primary_hash = message.data["primary_hash"]
         assert isinstance(primary_hash, str)
 
-        hierarchical_hash = message["hierarchical_hash"]
+        hierarchical_hash = message.data["hierarchical_hash"]
         assert isinstance(hierarchical_hash, str)
 
         uuid.UUID(primary_hash)
@@ -852,8 +956,8 @@ def process_unmerge_hierarchical(
     query_args = {
         "all_columns": ", ".join(all_column_names),
         "select_columns": ", ".join(select_columns),
-        "previous_group_id": message["previous_group_id"],
-        "project_id": message["project_id"],
+        "previous_group_id": message.data["previous_group_id"],
+        "project_id": message.data["project_id"],
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
         "primary_hash": _convert_hash(primary_hash, state_name),
         "hierarchical_hash": _convert_hash(
@@ -863,27 +967,33 @@ def process_unmerge_hierarchical(
 
     # Sentry is expected to send an `exclude_groups` message after unsplit is
     # done, and we can live with data inconsistencies while this is ongoing.
-    query_time_flags = (None, message["project_id"])
+    query_time_flags = (None, message.data["project_id"])
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )
 
 
 def process_delete_tag(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
     use_promoted_prewhere: bool,
     schema: WritableTableSchema,
 ) -> Optional[Replacement]:
-    tag = message["tag"]
+    tag = message.data["tag"]
     if not tag:
         return None
 
     assert isinstance(tag, str)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    timestamp = datetime.strptime(
+        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+    )
     tag_column_name = tag_column_map["tags"].get(tag, tag)
     is_promoted = tag in promoted_tags["tags"]
 
@@ -938,7 +1048,7 @@ def process_delete_tag(
     query_args = {
         "all_columns": ", ".join(all_column_names),
         "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
+        "project_id": message.data["project_id"],
         "tag_str": escape_string(tag),
         "tag_column": escape_identifier(tag_column_name),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
@@ -953,8 +1063,12 @@ def process_delete_tag(
         + where
     )
 
-    query_time_flags = (NEEDS_FINAL, message["project_id"])
+    query_time_flags = (NEEDS_FINAL, message.data["project_id"])
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )

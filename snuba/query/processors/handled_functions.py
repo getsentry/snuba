@@ -42,10 +42,10 @@ class HandledFunctionsProcessor(QueryProcessor):
         try:
             validator.validate(exp.function_name, exp.parameters, entity)
         except InvalidFunctionCall as err:
-            raise InvalidExpressionException(
+            raise InvalidExpressionException.from_args(
                 exp,
                 f"Illegal function call to {exp.function_name}: {str(err)}",
-                report=False,
+                should_report=False,
             ) from err
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:

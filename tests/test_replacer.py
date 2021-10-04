@@ -520,39 +520,126 @@ class TestReplacer:
         assert _issue_count() == []
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
-    def test_query_time_flags(self) -> None:
-        project_ids = [1, 2]
+    def test_query_time_flags_project(self) -> None:
+        """
+        Tests errors_replacer.set_project_needs_final()
 
+        ReplacementType's are arbitrary, just need to show up in
+        getter appropriately once set.
+        """
+        project_ids = [1, 2, 3]
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (False, [],)
+        ) == (False, [], set())
 
-        errors_replacer.set_project_needs_final(100, ReplacerState.ERRORS)
+        errors_replacer.set_project_needs_final(
+            100, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (False, [],)
+        ) == (False, [], set())
 
-        errors_replacer.set_project_needs_final(1, ReplacerState.ERRORS)
+        errors_replacer.set_project_needs_final(
+            1, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [],)
+        ) == (True, [], {ReplacementType.EXCLUDE_GROUPS})
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
-        ) == (False, [],)
+        ) == (False, [], set())
 
-        errors_replacer.set_project_needs_final(2, ReplacerState.ERRORS)
+        errors_replacer.set_project_needs_final(
+            2, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [],)
+        ) == (True, [], {ReplacementType.EXCLUDE_GROUPS})
 
-        errors_replacer.set_project_exclude_groups(1, [1, 2], ReplacerState.ERRORS)
-        errors_replacer.set_project_exclude_groups(2, [3, 4], ReplacerState.ERRORS)
+    def test_query_time_flags_groups(self) -> None:
+        """
+        Tests errors_replacer.set_project_exclude_groups()
+
+        ReplacementType's are arbitrary, just need to show up in
+        getter appropriately once set.
+        """
+        project_ids = [4, 5, 6]
+        errors_replacer.set_project_exclude_groups(
+            4, [1, 2], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
+        errors_replacer.set_project_exclude_groups(
+            5, [3, 4], ReplacerState.ERRORS, ReplacementType.START_MERGE
+        )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (True, [1, 2, 3, 4],)
+        ) == (
+            False,
+            [1, 2, 3, 4],
+            {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
+        )
+
+        errors_replacer.set_project_exclude_groups(
+            4, [1, 2], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
+        errors_replacer.set_project_exclude_groups(
+            5, [3, 4], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
+        errors_replacer.set_project_exclude_groups(
+            6, [5, 6], ReplacerState.ERRORS, ReplacementType.START_UNMERGE
+        )
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        ) == (
+            False,
+            [1, 2, 3, 4, 5, 6],
+            {
+                ReplacementType.EXCLUDE_GROUPS,
+                # start_merge should show up from previous setter on project id 2
+                ReplacementType.START_MERGE,
+                ReplacementType.START_UNMERGE,
+            },
+        )
+        assert errors_replacer.get_projects_query_flags(
+            [4, 5], ReplacerState.ERRORS
+        ) == (
+            False,
+            [1, 2, 3, 4],
+            {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
+        )
+        assert errors_replacer.get_projects_query_flags([4], ReplacerState.ERRORS) == (
+            False,
+            [1, 2],
+            {ReplacementType.EXCLUDE_GROUPS},
+        )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
-        ) == (False, [],)
+        ) == (False, [], set())
+
+    def test_query_time_flags_project_and_groups(self) -> None:
+        """
+        Tests errors_replacer.set_project_needs_final() and
+        errors_replacer.set_project_exclude_groups() work together as expected.
+
+        ReplacementType's are arbitrary, just need to show up in
+        getter appropriately once set.
+        """
+
+        project_ids = [7, 8, 9]
+
+        errors_replacer.set_project_needs_final(
+            7, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+        )
+        errors_replacer.set_project_exclude_groups(
+            7, [1, 2], ReplacerState.ERRORS, ReplacementType.START_MERGE
+        )
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        ) == (
+            True,
+            [1, 2],
+            # exclude_groups from project setter, start_merge from group setter
+            {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
+        )
 
     def test_tombstone_events_process_noop(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)

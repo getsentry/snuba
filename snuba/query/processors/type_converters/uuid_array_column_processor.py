@@ -1,4 +1,5 @@
 import uuid
+from typing import Set
 
 from snuba.query.expressions import (
     Argument,
@@ -12,13 +13,16 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 
 
 class UUIDArrayColumnProcessor(BaseTypeConverter):
+    def __init__(self, columns: Set[str]) -> None:
+        super().__init__(columns)
+
     def _translate_literal(self, exp: Literal) -> Expression:
         try:
             assert isinstance(exp.value, str)
             new_val = str(uuid.UUID(exp.value))
             return FunctionCall(exp.alias, "toUUID", (Literal(None, value=new_val),))
         except (AssertionError, ValueError):
-            raise ColumnTypeError("Not a valid UUID string", report=False)
+            raise ColumnTypeError("Not a valid UUID string", should_report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:

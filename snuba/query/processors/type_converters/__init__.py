@@ -3,7 +3,7 @@ from typing import Set
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.query.conditions import FUNCTION_TO_OPERATOR, ConditionFunctions
+from snuba.query.conditions import ConditionFunctions
 from snuba.query.exceptions import ValidationException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import Any as AnyMatch
@@ -19,19 +19,46 @@ class ColumnTypeError(ValidationException):
 
 
 class BaseTypeConverter(QueryProcessor, ABC):
-    def __init__(self, columns: Set[str]):
+    def __init__(self, columns: Set[str], optimize_ordering: bool = False):
         self.columns = columns
+        self.optimize_ordering = optimize_ordering
         column_match = Or([String(col) for col in columns])
 
         literal = Param("literal", LiteralMatch(AnyMatch(str)))
+
+        ordering_operators = (
+            ConditionFunctions.GT,
+            ConditionFunctions.GTE,
+            ConditionFunctions.LT,
+            ConditionFunctions.LTE,
+        )
 
         operator = Param(
             "operator",
             Or(
                 [
                     String(op)
-                    for op in FUNCTION_TO_OPERATOR
-                    if op not in (ConditionFunctions.IN, ConditionFunctions.NOT_IN)
+                    for op in (
+                        ConditionFunctions.EQ,
+                        ConditionFunctions.NEQ,
+                        ConditionFunctions.IS_NULL,
+                        ConditionFunctions.IS_NOT_NULL,
+                        *(ordering_operators if self.optimize_ordering else ()),
+                    )
+                ]
+            ),
+        )
+
+        unoptimizable_operator = Param(
+            "operator",
+            Or(
+                [
+                    String(op)
+                    for op in (
+                        ConditionFunctions.LIKE,
+                        ConditionFunctions.NOT_LIKE,
+                        *(() if self.optimize_ordering else ordering_operators),
+                    )
                 ]
             ),
         )
@@ -62,6 +89,13 @@ class BaseTypeConverter(QueryProcessor, ABC):
             ),
         )
 
+        self.__unoptimizable_condition_matcher = Or(
+            [
+                FunctionCallMatch(unoptimizable_operator, (literal, col)),
+                FunctionCallMatch(unoptimizable_operator, (col, literal)),
+            ]
+        )
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         query.transform_expressions(
             self._process_expressions, skip_transform_condition=True
@@ -69,9 +103,12 @@ class BaseTypeConverter(QueryProcessor, ABC):
 
         condition = query.get_condition()
         if condition is not None:
-            processed = condition.transform(self.__process_optimizable_condition)
-            if processed == condition:
+            if self.__contains_unoptimizable_condition(condition):
                 processed = condition.transform(self._process_expressions)
+            else:
+                processed = condition.transform(self.__process_optimizable_condition)
+                if condition == processed:
+                    processed = processed.transform(self._process_expressions)
 
             query.set_ast_condition(processed)
 
@@ -80,6 +117,17 @@ class BaseTypeConverter(QueryProcessor, ABC):
         return Column(
             alias=None, table_name=exp.table_name, column_name=exp.column_name
         )
+
+    def __contains_unoptimizable_condition(self, exp: Expression) -> bool:
+        """
+        Returns true if there is an unoptimizable condition, otherwise false.
+        """
+        for e in exp:
+            match = self.__unoptimizable_condition_matcher.match(e)
+            if match is not None:
+                return True
+
+        return False
 
     def __process_optimizable_condition(self, exp: Expression) -> Expression:
         def assert_literal(lit: Expression) -> Literal:
