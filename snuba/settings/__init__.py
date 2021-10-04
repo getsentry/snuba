@@ -146,7 +146,7 @@ TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
 CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 
 # Metric Alerts Subscription Options
-ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
+ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", True)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
