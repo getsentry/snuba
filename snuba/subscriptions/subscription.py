@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID, uuid1
 
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
 from snuba.datasets.factory import enforce_table_writer
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
@@ -24,6 +25,8 @@ class SubscriptionCreator:
 
     def __init__(self, dataset: Dataset):
         self.dataset = dataset
+        self.entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+
         self.__partitioner = TopicSubscriptionDataPartitioner(
             enforce_table_writer(dataset).get_stream_loader().get_default_topic_spec()
         )
@@ -41,7 +44,7 @@ class SubscriptionCreator:
             self.__partitioner.build_partition_id(data), uuid1(),
         )
         RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition
+            redis_client, self.entity_key, identifier.partition
         ).create(
             identifier.uuid, data,
         )
@@ -59,9 +62,10 @@ class SubscriptionDeleter:
 
     def __init__(self, dataset: Dataset, partition: PartitionId):
         self.dataset = dataset
+        self.entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
         self.partition = partition
 
     def delete(self, subscription_id: UUID) -> None:
-        RedisSubscriptionDataStore(redis_client, self.dataset, self.partition).delete(
-            subscription_id
-        )
+        RedisSubscriptionDataStore(
+            redis_client, self.entity_key, self.partition
+        ).delete(subscription_id)

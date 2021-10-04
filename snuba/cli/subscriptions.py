@@ -14,6 +14,7 @@ from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
 from arroyo.synchronized import SynchronizedConsumer
 
 from snuba import environment, settings
+from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
@@ -114,6 +115,9 @@ def subscriptions(
 
     dataset = get_dataset(dataset_name)
 
+    entity = dataset.get_default_entity()
+    entity_key = ENTITY_NAME_LOOKUP[entity]
+
     storage = dataset.get_default_entity().get_writable_storage()
     assert (
         storage is not None
@@ -200,7 +204,7 @@ def subscriptions(
                     {
                         index: SubscriptionScheduler(
                             RedisSubscriptionDataStore(
-                                redis_client, dataset, PartitionId(index)
+                                redis_client, entity_key, PartitionId(index)
                             ),
                             PartitionId(index),
                             cache_ttl=timedelta(seconds=schedule_ttl),

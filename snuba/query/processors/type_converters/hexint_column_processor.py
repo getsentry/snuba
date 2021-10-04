@@ -13,7 +13,7 @@ class HexIntColumnProcessor(BaseTypeConverter):
             assert isinstance(exp.value, str)
             return Literal(alias=exp.alias, value=int(exp.value, 16))
         except (AssertionError, ValueError):
-            raise ColumnTypeError("Invalid hexint", report=False)
+            raise ColumnTypeError("Invalid hexint", should_report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:

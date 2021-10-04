@@ -11,6 +11,7 @@ from typing import Iterator, Mapping, MutableMapping, Optional, Sequence, Type
 
 from snuba import state
 from snuba.redis import redis_client as rds
+from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger("snuba.state.rate_limit")
 
@@ -32,7 +33,7 @@ class RateLimitParameters:
     concurrent_limit: Optional[int]
 
 
-class RateLimitExceeded(Exception):
+class RateLimitExceeded(SerializableException):
     """
     Exception thrown when the rate limit is exceeded
     """

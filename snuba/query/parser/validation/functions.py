@@ -106,10 +106,10 @@ class FunctionCallsValidator(ExpressionValidator):
             for validator in global_validators:
                 validator.validate(exp.function_name, exp.parameters, data_source)
         except InvalidFunctionCall as exception:
-            raise InvalidExpressionException(
+            raise InvalidExpressionException.from_args(
                 exp,
                 f"Illegal call to function {exp.function_name}: {str(exception)}",
-                report=False,
+                should_report=False,
             ) from exception
 
         # Then do entity specific validation, if there are any
@@ -134,8 +134,8 @@ class FunctionCallsValidator(ExpressionValidator):
                     exp.function_name, exp.parameters, data_source
                 )
             except InvalidFunctionCall as exception:
-                raise InvalidExpressionException(
+                raise InvalidExpressionException.from_args(
                     exp,
                     f"Illegal call to function {exp.function_name}: {str(exception)}",
-                    report=False,
+                    should_report=False,
                 ) from exception

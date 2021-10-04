@@ -7,7 +7,6 @@ class EntityKey(Enum):
     """
 
     DISCOVER = "discover"
-    ERRORS = "errors"
     EVENTS = "events"
     GROUPS = "groups"
     GROUPASSIGNEE = "groupassignee"
