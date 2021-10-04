@@ -224,7 +224,6 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 effective_timeout,
             )
-
             notification_received = (
                 self.__client.blpop(
                     build_notify_queue_key(task_ident), effective_timeout
@@ -246,7 +245,7 @@ class RedisCache(Cache[TValue]):
                         return self.__codec.decode(upsteam_error_payload)
 
                     raise ExecutionError(
-                        "no value at key: this means the original process executing the query crashed before the exception could be handled or we were not able to set the cache result"
+                        "no value at key: this means the original process executing the query crashed before the exception could be handled or an error was thrown setting the cache result"
                     )
                 else:
                     return self.__codec.decode(raw_value)

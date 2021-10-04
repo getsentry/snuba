@@ -20,8 +20,8 @@ local value_ttl = ARGV[4]
 -- responsible for executing. If it doesn't exist or does not match the current
 -- task ID, we must have overrun the timeout.
 -- TODO: This may still be able to safely set the cache value?
-local task_id = redis.call('GET', task_id_key)
-if not task_id or task_id ~= task_id then
+local cached_task_id = redis.call('GET', task_id_key)
+if not cached_task_id or cached_task_id ~= task_id then
     return {err="invalid task id"}
 end
 
@@ -32,7 +32,7 @@ end
 
 -- Move the data from the waiting queue to the notify queue.
 redis.call('RENAME', wait_queue_key, notify_queue_key)
-redis.call('PEXPIRE', notify_queue_key, notify_queue_ttl)
+redis.call('EXPIRE', notify_queue_key, notify_queue_ttl)
 
 -- Remove one item (representing our own entry) from the notify queue.
 redis.call('LPOP', notify_queue_key)
