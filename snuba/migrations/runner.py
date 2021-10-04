@@ -290,7 +290,7 @@ class Runner:
                 migration_key = MigrationKey(group, migration_id)
                 status = get_status(migration_key)
                 if status == Status.IN_PROGRESS:
-                    raise MigrationInProgress(migration_key)
+                    raise MigrationInProgress(str(migration_key))
                 if status == Status.NOT_STARTED:
                     group_migrations.append(migration_key)
                 elif status == Status.COMPLETED and len(group_migrations):
