@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, Sequence
+from typing import Callable, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -182,14 +182,24 @@ class ModifyColumn(SqlOperation):
         storage_set: StorageSetKey,
         table_name: str,
         column: Column[MigrationModifiers],
+        ttl_month: Optional[Tuple[str, int]] = None,
     ):
         super().__init__(storage_set)
         self.__table_name = table_name
         self.__column = column
+        self.__ttl_month = ttl_month
 
     def format_sql(self) -> str:
         column = self.__column.for_schema()
-        return f"ALTER TABLE {self.__table_name} MODIFY COLUMN {column};"
+        return f"ALTER TABLE {self.__table_name} MODIFY COLUMN {column}{self.optional_ttl_clause};"
+
+    @property
+    def optional_ttl_clause(self) -> str:
+        if self.__ttl_month is None:
+            return ""
+
+        ttl_column, ttl_month = self.__ttl_month
+        return f" TTL {ttl_column} + INTERVAL {ttl_month} MONTH"
 
 
 class AddIndex(SqlOperation):
