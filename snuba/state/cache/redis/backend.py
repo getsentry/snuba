@@ -236,11 +236,12 @@ class RedisCache(Cache[TValue]):
 
             if notification_received:
                 # There should be a value waiting for us at the result key.
-                raw_value = self.__client.get(result_key)
+                raw_value, upsteam_error_payload = self.__client.mget(
+                    [result_key, error_key]
+                )
                 # If there is no value, that means that the client responsible
                 # for generating the cache value errored while generating it.
                 if raw_value is None:
-                    upsteam_error_payload = self.__client.get(error_key)
                     if upsteam_error_payload:
                         return self.__codec.decode(upsteam_error_payload)
 
