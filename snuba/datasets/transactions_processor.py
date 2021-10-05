@@ -297,9 +297,11 @@ class TransactionsMessageProcessor(MessageProcessor):
             ):
                 return
 
+            processed_spans = []
+
             processed_root_span = self._process_span(trace_context)
             if processed_root_span is not None:
-                processed_spans = [processed_root_span]
+                processed_spans.append(processed_root_span)
 
             for span in data.get("spans", []):
                 processed_span = self._process_span(span)
