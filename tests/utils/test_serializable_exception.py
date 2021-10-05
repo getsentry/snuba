@@ -1,3 +1,5 @@
+from sentry_sdk.utils import single_exception_from_error_tuple
+
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -53,3 +55,23 @@ def test_subclass_deserialization() -> None:
         MySubException().to_dict()
     )
     assert isinstance(deserialized_sub_exception, MyException)
+
+
+def test_sentry_integration() -> None:
+    # tests that when the exception is captured by sentry,
+    # the exception message is not swallowed by deserialization
+    ex = MySubException("message")
+    try:
+        raise ex
+    except SerializableException as e:
+        assert (
+            single_exception_from_error_tuple(MySubException, e, tb=None)["value"]
+            == "message"
+        )
+    try:
+        raise SerializableException.from_dict(ex.to_dict())
+    except SerializableException as e2:
+        assert (
+            single_exception_from_error_tuple(MySubException, e2, tb=None)["value"]
+            == "message"
+        )
