@@ -177,8 +177,8 @@ class RedisCache(Cache[TValue]):
                         self.__codec.encode_exception(error_value),
                         # the error data only needs to be present for long enough such that
                         # the waiting clients know that they all have their queries rejected.
-                        # thus we set it to only one second
-                        1,
+                        # thus we set it to only three seconds
+                        get_config("error_cache_expiry_sec", 3),
                     ]
                 )
                 # we want the result key to only store real query results in it as the TTL
