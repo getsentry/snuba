@@ -12,6 +12,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
     SubscriptionDataCodec,
+    SubscriptionScheduledTaskEncoder,
     SubscriptionTaskResultEncoder,
 )
 from snuba.subscriptions.data import (
@@ -24,6 +25,7 @@ from snuba.subscriptions.data import (
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.entity_subscription import (
+    EntitySubscription,
     EventsSubscription,
     SessionsSubscription,
     SubscriptionType,
@@ -36,6 +38,7 @@ from snuba.utils.scheduler import ScheduledTask
 def build_legacy_subscription_data(
     organization: Optional[int] = None,
 ) -> LegacySubscriptionData:
+    entity_subscription: EntitySubscription
     if not organization:
         entity_subscription = EventsSubscription(data_dict={})
     else:
@@ -52,7 +55,10 @@ def build_legacy_subscription_data(
     )
 
 
-def build_snql_subscription_data(organization=None) -> SnQLSubscriptionData:
+def build_snql_subscription_data(
+    organization: Optional[int] = None,
+) -> SnQLSubscriptionData:
+    entity_subscription: EntitySubscription
     if not organization:
         entity_subscription = EventsSubscription(data_dict={})
     else:
@@ -68,7 +74,10 @@ def build_snql_subscription_data(organization=None) -> SnQLSubscriptionData:
     )
 
 
-def build_delegate_subscription_data(organization=None) -> DelegateSubscriptionData:
+def build_delegate_subscription_data(
+    organization: Optional[int] = None,
+) -> DelegateSubscriptionData:
+    entity_subscription: EntitySubscription
     if not organization:
         entity_subscription = EventsSubscription(data_dict={})
     else:
@@ -102,7 +111,9 @@ DELEGATE_CASES = [
 ]
 
 
-def assert_entity_subscription_on_subscription_class(organization, subscription):
+def assert_entity_subscription_on_subscription_class(
+    organization: Optional[int], subscription: SubscriptionData,
+) -> None:
     if organization:
         assert isinstance(subscription.entity_subscription, SessionsSubscription)
         assert subscription.entity_subscription.organization == organization
@@ -344,3 +355,41 @@ def test_sessions_subscription_task_result_encoder() -> None:
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
+
+
+def test_subscription_task_encoder() -> None:
+    encoder = SubscriptionScheduledTaskEncoder(EntityKey.EVENTS)
+
+    subscription_data = SnQLSubscriptionData(
+        project_id=1,
+        query="MATCH events SELECT count()",
+        time_window=timedelta(minutes=1),
+        resolution=timedelta(minutes=1),
+        entity_subscription=EventsSubscription(data_dict={}),
+    )
+
+    subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")
+
+    epoch = datetime(1970, 1, 1)
+
+    task = ScheduledTask(
+        timestamp=epoch,
+        task=Subscription(
+            SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
+        ),
+    )
+
+    encoded = encoder.encode(task)
+
+    assert encoded == (
+        b"{"
+        b'"timestamp":"1970-01-01T00:00:00",'
+        b'"task":{'
+        b'"identifier":"1/91b46cb6224f11ecb2ddacde48001122",'
+        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}}'
+        b"}"
+    )
+
+    decoded = encoder.decode(encoded)
+
+    assert decoded == task
