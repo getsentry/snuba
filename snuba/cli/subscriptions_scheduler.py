@@ -8,7 +8,8 @@ from arroyo.processing import StreamProcessor
 
 from snuba import environment
 from snuba.environment import setup_logging, setup_sentry
-from snuba.subscriptions.scheduler_consumer import SchedulerBuilder, Tick
+from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 

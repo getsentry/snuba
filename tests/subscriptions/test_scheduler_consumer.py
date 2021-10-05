@@ -19,7 +19,8 @@ from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
-from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer, Tick
+from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
+from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
