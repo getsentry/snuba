@@ -5,13 +5,13 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from threading import Thread
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, cast
 from unittest import mock
 
 import pytest
 import rapidjson
 
-from snuba.redis import redis_client
+from snuba.redis import RedisClientType, redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
@@ -210,13 +210,80 @@ def test_transient_error(backend: Cache[bytes]) -> None:
 
     setter = execute(transient_error)
     # if this sleep were removed, the waiter would also raise
-    # SomeTransientException, but because we (temporarily) set
-    # the error value timeout to be 1s, it will go through and execute
-    # the query
-    time.sleep(1.01)
+    # SomeTransientException because it would be in the waiting queue and would
+    # have the error value propogated to it
+    time.sleep(0.01)
     waiter = execute(functioning_query)
 
     with pytest.raises(SomeTransientException):
         setter.result()
 
     assert waiter.result() == b"hello"
+
+
+def test_notify_queue_ttl() -> None:
+    # Tests that waiting clients can be notified of the cache status
+    # even with network delays. This test will break if the notify queue
+    # TTL is set below 200ms
+
+    pop_calls = 0
+    num_waiters = 9
+
+    class DelayedRedisClient:
+        def __init__(self, redis_client):
+            self._client = redis_client
+
+        def __getattr__(self, attr: str):
+            # simulate the queue pop taking longer than expected.
+            # the notification queue TTL is 60 seconds so running into a timeout
+            # shouldn't happen (unless something has drastically changed in the TTL
+            # time or use)
+            if attr == "blpop":
+                nonlocal pop_calls
+                pop_calls += 1
+                time.sleep(0.5)
+            return getattr(self._client, attr)
+
+    codec = PassthroughCodec()
+
+    delayed_backend: Cache[bytes] = RedisCache(
+        cast(RedisClientType, DelayedRedisClient(redis_client)),
+        "test",
+        codec,
+        ThreadPoolExecutor(),
+    )
+    key = "key"
+    try:
+
+        def normal_function() -> bytes:
+            # this sleep makes sure that all waiting clients
+            # are put into the waiting queue
+            time.sleep(0.5)
+            return b"hello-cached"
+
+        def normal_function_uncached() -> bytes:
+            return b"hello-not-cached"
+
+        def cached_query() -> bytes:
+            return delayed_backend.get_readthrough(key, normal_function, noop, 10)
+
+        def uncached_query() -> bytes:
+            return delayed_backend.get_readthrough(
+                key, normal_function_uncached, noop, 10
+            )
+
+        setter = execute(cached_query)
+        waiters = []
+        time.sleep(0.1)
+        for _ in range(num_waiters):
+            waiters.append(execute(uncached_query))
+
+        # make sure that all clients actually did hit the cache
+        assert setter.result() == b"hello-cached"
+        for w in waiters:
+            assert w.result() == b"hello-cached"
+        # make sure that all the waiters actually did hit the notification queue
+        # and didn't just get a direct cache hit
+        assert pop_calls == num_waiters
+    finally:
+        redis_client.flushdb()
