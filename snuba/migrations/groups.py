@@ -116,6 +116,7 @@ class TransactionsLoader(DirectoryLoader):
             "0009_transactions_fix_title_and_message",
             "0010_transactions_nullable_trace_id",
             "0011_transactions_add_span_op_breakdowns",
+            "0012_transactions_add_spans",
         ]
 
 
