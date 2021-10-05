@@ -121,6 +121,7 @@ if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         processor=SessionsProcessor(),
         default_topic=Topic.SESSIONS,
         commit_log_topic=Topic.SESSIONS_COMMIT_LOG,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_SESSIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_SESSIONS,
     )
 else:
