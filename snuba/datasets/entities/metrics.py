@@ -48,8 +48,9 @@ class TagsTypeTransformer(QueryProcessor):
 
             key = exp.key
             if not isinstance(key.value, str) or not key.value.isdigit():
-                raise InvalidExpressionException(
-                    exp, "Expected a string key containing an integer in subscriptable."
+                raise InvalidExpressionException.from_args(
+                    exp,
+                    "Expected a string key containing an integer in subscriptable.",
                 )
 
             return SubscriptableReference(

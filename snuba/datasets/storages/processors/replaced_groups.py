@@ -46,17 +46,19 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         set_final = False
         if project_ids:
-            query_is_final, exclude_group_ids = get_projects_query_flags(
-                list(project_ids), self.__replacer_state_name,
-            )
+            (
+                query_is_final,
+                exclude_group_ids,
+                replacement_types,
+            ) = get_projects_query_flags(list(project_ids), self.__replacer_state_name,)
+            tags = {replacement_type: "True" for replacement_type in replacement_types}
+            tags["referrer"] = request_settings.referrer
+            tags["parent_api"] = request_settings.get_parent_api()
             if query_is_final:
+                tags["cause"] = "final_flag"
+
                 metrics.increment(
-                    "final",
-                    tags={
-                        "cause": "final_flag",
-                        "referrer": request_settings.referrer,
-                        "parent_api": request_settings.get_parent_api(),
-                    },
+                    "final", tags=tags,
                 )
             if not query_is_final and exclude_group_ids:
                 if self._query_overlaps_replacements(query):
@@ -66,6 +68,12 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                         "max_group_ids_exclude",
                         settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
                     )
+                    assert isinstance(max_group_ids_exclude, int)
+                    if len(exclude_group_ids) > max_group_ids_exclude:
+                        tags["cause"] = "max_groups"
+                        metrics.increment(
+                            "final", tags=tags,
+                        )
                     assert isinstance(max_group_ids_exclude, int)
                     if len(exclude_group_ids) > max_group_ids_exclude:
                         metrics.increment(

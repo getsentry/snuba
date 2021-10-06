@@ -294,10 +294,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         self._process_tags(processed, event_dict)
         self._process_measurements(processed, event_dict)
         self._process_breakdown(processed, event_dict)
-        self._process_contexts_and_user(processed, event_dict)
         self._process_request_data(processed, event_dict)
         self._process_sdk_data(processed, event_dict)
         processed["partition"] = metadata.partition
         processed["offset"] = metadata.offset
+
+        # the following operation modifies the event_dict and is therefore *not* order-independent
+        self._process_contexts_and_user(processed, event_dict)
 
         return InsertBatch([processed], None)

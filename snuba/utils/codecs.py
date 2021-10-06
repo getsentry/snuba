@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
+from snuba.utils.serializable_exception import SerializableException
+
 TEncoded = TypeVar("TEncoded")
 
 TDecoded = TypeVar("TDecoded")
@@ -25,6 +27,12 @@ class Codec(
 
 
 T = TypeVar("T")
+
+
+class ExceptionAwareCodec(Codec[TEncoded, TDecoded]):
+    @abstractmethod
+    def encode_exception(self, value: SerializableException) -> TEncoded:
+        raise NotImplementedError
 
 
 class PassthroughCodec(Generic[T], Codec[T, T]):

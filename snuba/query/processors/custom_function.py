@@ -13,7 +13,7 @@ from snuba.request.request_settings import RequestSettings
 
 class InvalidCustomFunctionCall(InvalidExpressionException):
     def __str__(self) -> str:
-        return f"Invalid custom function call {self.expression}: {self.message}"
+        return f"Invalid custom function call {self.extra_data.get('expression', '')}: {self.message}"
 
 
 def replace_in_expression(
@@ -91,10 +91,10 @@ class CustomFunction(QueryProcessor):
                         query.get_from_clause(),
                     )
                 except InvalidFunctionCall as exception:
-                    raise InvalidCustomFunctionCall(
+                    raise InvalidCustomFunctionCall.from_args(
                         expression,
                         f"Illegal call to function {expression.function_name}: {str(exception)}",
-                        report=False,
+                        should_report=False,
                     ) from exception
 
                 resolved_params = {

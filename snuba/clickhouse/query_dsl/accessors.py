@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Sequence, Set, Tuple, cast
+from typing import Optional, Sequence, Set, Tuple, Union, cast
 
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_in_condition_pattern,
 )
-from snuba.query.data_source.simple import Table
+from snuba.query.data_source.simple import Entity, Table
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
@@ -134,7 +134,8 @@ def get_time_range_expressions(
 
 
 def get_time_range(
-    query: ProcessableQuery[Table], timestamp_field: str
+    query: Union[ProcessableQuery[Table], ProcessableQuery[Entity]],
+    timestamp_field: str,
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
     """
     Finds the minimal time range for this query. Which means, it finds

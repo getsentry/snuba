@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload to codecov
         run: |
-          bash <(curl -s https://codecov.io/bash)
+          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   sentry:
     needs: [snuba-image]
@@ -139,6 +139,9 @@ jobs:
     strategy:
       matrix:
         instance: [0, 1]
+
+    env:
+      USE_INDEXER: 1
 
     steps:
       # Checkout codebase
