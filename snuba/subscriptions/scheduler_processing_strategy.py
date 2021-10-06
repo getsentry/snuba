@@ -100,35 +100,45 @@ class TickBuffer(ProcessingStrategy[Tick]):
         if len(self.__buffers[tick_partition]) > 1:
             return
 
-        earliest_ts = message.payload.timestamps.upper
-        earliest_ts_partitions = {message.payload.partition}
+        while True:
+            earliest_ts = message.payload.timestamps.upper
+            earliest_ts_partitions = {message.payload.partition}
 
-        for partition_index in self.__buffers:
-            if partition_index == message.payload.partition:
+            for partition_index in self.__buffers:
+                if partition_index == message.payload.partition:
+                    continue
+
+                buffer = self.__buffers[partition_index]
+                if len(buffer) == 0:
+                    return
+
+                tick = buffer[0].payload
+
+                partition_ts = tick.timestamps.upper
+
+                if partition_ts < earliest_ts:
+                    earliest_ts = tick.timestamps.upper
+                    earliest_ts_partitions = {tick.partition}
+
+                elif partition_ts == earliest_ts:
+                    earliest_ts_partitions.add(tick.partition)
+
+            for partition_index in earliest_ts_partitions:
+                self.__next_step.submit(self.__buffers[partition_index].popleft())
+
+            # Record the lag between the fastest and slowest partition if we got to this point
+            self.__metrics.timing(
+                "partition_lag_ms",
+                (self.__latest_ts - earliest_ts).total_seconds() * 1000,
+            )
+
+            # Exit the while loop if any buffer is empty, otherwise repeat
+            for partition in earliest_ts_partitions:
+                if len(self.__buffers[partition]) == 0:
+                    break
+            else:
                 continue
-
-            buffer = self.__buffers[partition_index]
-            if len(buffer) == 0:
-                return
-
-            tick = buffer[0].payload
-
-            partition_ts = tick.timestamps.upper
-
-            if partition_ts < earliest_ts:
-                earliest_ts = tick.timestamps.upper
-                earliest_ts_partitions = {tick.partition}
-
-            elif partition_ts == earliest_ts:
-                earliest_ts_partitions.add(tick.partition)
-
-        for partition_index in earliest_ts_partitions:
-            self.__next_step.submit(self.__buffers[partition_index].popleft())
-
-        # Record the lag between the fastest and slowest partition if we got to this point
-        self.__metrics.timing(
-            "partition_lag_ms", (self.__latest_ts - earliest_ts).total_seconds() * 1000
-        )
+            break
 
     def close(self) -> None:
         pass
