@@ -282,7 +282,7 @@ class MeasureCommitLogOrderMetrics(ProcessingStrategy[KafkaPayload]):
         current_message = MessageDetails(commit.offset, commit.orig_message_ts)
 
         # Record metrics about in order vs out of order messages
-        last_message = self.__previous_messages[commit.partition]
+        last_message = self.__previous_messages.get(commit.partition)
         if last_message is not None:
             current_message = MessageDetails(commit.offset, commit.orig_message_ts)
             try:
