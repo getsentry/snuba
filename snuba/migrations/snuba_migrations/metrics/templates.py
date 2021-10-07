@@ -14,7 +14,10 @@ from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-DEFAULT_GRANULARITY = 60
+#: The granularity used for the initial materialized views.
+#: This might differ from snuba.datasets.metrics.DEFAULT_GRANULARITY at
+#: a later point.
+ORIGINAL_GRANULARITY = 60
 
 PRE_VALUE_BUCKETS_COLUMNS: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
@@ -237,7 +240,7 @@ def get_reverse_table_migration(table_name: str) -> Sequence[operations.SqlOpera
 
 
 def get_mv_name(metric_type: str, granularity: int) -> str:
-    if granularity == DEFAULT_GRANULARITY:
+    if granularity == ORIGINAL_GRANULARITY:
         return f"metrics_{metric_type}_mv_local"
 
     return f"metrics_{metric_type}_mv_{granularity}s_local"
@@ -253,7 +256,7 @@ class MigrationArgs(TypedDict):
 
 
 def get_migration_args_for_sets(
-    granularity: int = DEFAULT_GRANULARITY,
+    granularity: int = ORIGINAL_GRANULARITY,
 ) -> MigrationArgs:
     return {
         "source_table_name": "metrics_buckets_local",
@@ -268,7 +271,7 @@ def get_migration_args_for_sets(
 
 
 def get_migration_args_for_counters(
-    granularity: int = DEFAULT_GRANULARITY,
+    granularity: int = ORIGINAL_GRANULARITY,
 ) -> MigrationArgs:
     return {
         "source_table_name": "metrics_counters_buckets_local",
@@ -283,7 +286,7 @@ def get_migration_args_for_counters(
 
 
 def get_migration_args_for_distributions(
-    granularity: int = DEFAULT_GRANULARITY,
+    granularity: int = ORIGINAL_GRANULARITY,
 ) -> MigrationArgs:
     return {
         "source_table_name": "metrics_distributions_buckets_local",
