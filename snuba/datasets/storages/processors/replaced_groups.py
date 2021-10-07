@@ -118,5 +118,5 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 list(project_ids), self.__replacer_state_name
             )
             if latest_replacement_time:
-                return datetime.fromtimestamp(latest_replacement_time) < query_from
+                return datetime.fromtimestamp(latest_replacement_time) > query_from
         return True
