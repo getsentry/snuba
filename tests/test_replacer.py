@@ -520,6 +520,15 @@ class TestReplacer:
         assert _issue_count() == []
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
+    def test_latest_replacement_time_by_projects(self) -> None:
+        project_ids = [1, 2, 3]
+        assert (
+            errors_replacer.get_latest_replacement_time_by_projects(
+                project_ids, ReplacerState.ERRORS
+            )
+            is None
+        )
+
     def test_query_time_flags_project(self) -> None:
         """
         Tests errors_replacer.set_project_needs_final()

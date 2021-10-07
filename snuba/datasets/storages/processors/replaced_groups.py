@@ -1,6 +1,6 @@
 import logging
 from dataclasses import replace
-from typing import Optional
+from typing import Optional, Set
 
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
@@ -9,7 +9,11 @@ from snuba.clickhouse.query_dsl.accessors import (
     get_object_ids_in_query_ast,
     get_time_range,
 )
-from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
+from snuba.datasets.errors_replacer import (
+    ReplacerState,
+    get_latest_replacement_time_by_projects,
+    get_projects_query_flags,
+)
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
@@ -61,7 +65,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     "final", tags=tags,
                 )
             if not query_is_final and exclude_group_ids:
-                if self._query_overlaps_replacements(query):
+                if self._query_overlaps_replacements(query, project_ids):
                     # If the number of groups to exclude exceeds our limit, the query
                     # should just use final instead of the exclusion set.
                     max_group_ids_exclude = get_config(
@@ -101,8 +105,18 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         query.set_from_clause(replace(query.get_from_clause(), final=set_final))
 
-    def _query_overlaps_replacements(self, query: Query) -> bool:
+    def _query_overlaps_replacements(self, query: Query, project_ids: Set[int]) -> bool:
         query_from, query_to = get_time_range(query, "timestamp")
+
         if query_from and query_to:
             pass
+        elif query_from:
+            pass
+        elif query_to:
+            pass
+
+        _ = get_latest_replacement_time_by_projects(
+            list(project_ids), self.__replacer_state_name
+        )
+
         return True

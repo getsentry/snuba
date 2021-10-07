@@ -314,6 +314,29 @@ def process_exclude_groups_and_replacement_types_results(
     return needs_final, exclude_groups, replacement_types
 
 
+def get_latest_replacement_time_by_projects(
+    project_ids: Sequence[int], state_name: Optional[ReplacerState]
+) -> Optional[float]:
+    p = redis_client.pipeline()
+
+    for project_id in project_ids:
+        key, _ = get_project_exclude_groups_key_and_type_key(project_id, state_name)
+
+        p.zrevrangebyscore(
+            key, float("inf"), float("-inf"), withscores=True, start=0, num=1
+        )
+
+    results = p.execute()
+
+    latest_replacements = results[len(project_ids) :]
+
+    return (
+        max([time for [(_, time)] in latest_replacements])
+        if latest_replacements
+        else None
+    )
+
+
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def __init__(
         self,
