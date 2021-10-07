@@ -27,6 +27,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
+from snuba.state import is_project_in_rollout_group
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ UNKNOWN_SPAN_STATUS = 2
 
 
 EventDict = Dict[str, Any]
+SpanDict = Dict[str, Any]
 RetentionDays = int
 
 
@@ -273,6 +275,62 @@ class TransactionsMessageProcessor(MessageProcessor):
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
 
+    def _process_span(self, span_dict: SpanDict) -> Optional[Tuple[str, int, float]]:
+        op = span_dict.get("op")
+        group = span_dict.get("hash")
+        exclusive_time = span_dict.get("exclusive_time")
+
+        if op is None or group is None or exclusive_time is None:
+            return None
+
+        return op, int(group, 16), exclusive_time
+
+    def _process_spans(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        data = event_dict["data"]
+        trace_context = data["contexts"]["trace"]
+
+        try:
+            if not is_project_in_rollout_group(
+                "write_span_columns_projects", processed["project_id"]
+            ):
+                return
+
+            processed_spans = []
+
+            processed_root_span = self._process_span(trace_context)
+            if processed_root_span is not None:
+                processed_spans.append(processed_root_span)
+
+            for span in data.get("spans", []):
+                processed_span = self._process_span(span)
+                if processed_span is not None:
+                    processed_spans.append(processed_span)
+
+            processed["spans.op"] = []
+            processed["spans.group"] = []
+            processed["spans.exclusive_time"] = []
+
+            for op, group, exclusive_time in sorted(processed_spans):
+                processed["spans.op"].append(op)
+                processed["spans.group"].append(group)
+                processed["spans.exclusive_time"].append(exclusive_time)
+
+            # The hash and exclusive_time is being stored in the spans columns
+            # so there is no need to store it again in the context array.
+            trace_context.pop("hash", None)
+            trace_context.pop("exclusive_time", None)
+
+        except Exception:
+            # Not failing the event in this case just yet, because we are still
+            # developing this feature.
+            logger.warning(
+                "Invalid span fields.",
+                extra={"trace_context": trace_context},
+                exc_info=True,
+            )
+
     def process_message(
         self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -294,6 +352,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         self._process_tags(processed, event_dict)
         self._process_measurements(processed, event_dict)
         self._process_breakdown(processed, event_dict)
+        self._process_spans(processed, event_dict)
         self._process_request_data(processed, event_dict)
         self._process_sdk_data(processed, event_dict)
         processed["partition"] = metadata.partition
