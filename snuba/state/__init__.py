@@ -256,3 +256,15 @@ def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
         logger.exception(ex)
 
     return queries
+
+
+def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
+    project_rollout_setting = get_config(rollout_key, "")
+    if project_rollout_setting:
+        # The expected format is [project,project,...]
+        project_rollout_setting = project_rollout_setting[1:-1]
+        if project_rollout_setting:
+            for p in project_rollout_setting.split(","):
+                if int(p.strip()) == project_id:
+                    return True
+    return False
