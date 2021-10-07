@@ -1,5 +1,6 @@
 import logging
 from dataclasses import replace
+from datetime import datetime
 from typing import Optional, Set
 
 from snuba import environment, settings
@@ -106,17 +107,16 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         query.set_from_clause(replace(query.get_from_clause(), final=set_final))
 
     def _query_overlaps_replacements(self, query: Query, project_ids: Set[int]) -> bool:
-        query_from, query_to = get_time_range(query, "timestamp")
-
-        if query_from and query_to:
-            pass
-        elif query_from:
-            pass
-        elif query_to:
-            pass
-
-        _ = get_latest_replacement_time_by_projects(
-            list(project_ids), self.__replacer_state_name
-        )
-
+        """
+        Given a Query and a set of project ids the query "touches", returns whether
+        or not this Query's time range overlaps with any replacement for any of the
+        projects.
+        """
+        query_from, _ = get_time_range(query, "timestamp")
+        if query_from:
+            latest_replacement_time = get_latest_replacement_time_by_projects(
+                list(project_ids), self.__replacer_state_name
+            )
+            if latest_replacement_time:
+                return datetime.fromtimestamp(latest_replacement_time) < query_from
         return True

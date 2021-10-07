@@ -317,24 +317,27 @@ def process_exclude_groups_and_replacement_types_results(
 def get_latest_replacement_time_by_projects(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
 ) -> Optional[float]:
+    """
+    Given project ids, returns the highest timestamp for any group
+    exclude replacement in the projects.
+    """
     p = redis_client.pipeline()
 
     for project_id in project_ids:
         key, _ = get_project_exclude_groups_key_and_type_key(project_id, state_name)
-
+        # Gets the item with the highest score for a key, along with the score itself
         p.zrevrangebyscore(
             key, float("inf"), float("-inf"), withscores=True, start=0, num=1
         )
-
+    # results are in the form [[(str, float)], [(str, float)], ...]
     results = p.execute()
 
-    latest_replacements = results[len(project_ids) :]
-
-    return (
-        max([time for [(_, time)] in latest_replacements])
-        if latest_replacements
-        else None
-    )
+    latest_replacements = set()
+    for result in results:
+        if result and isinstance(result, list):
+            [(_, timestamp)] = result
+            latest_replacements.add(timestamp)
+    return max(latest_replacements) if latest_replacements else None
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):

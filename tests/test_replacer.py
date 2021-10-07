@@ -2,6 +2,7 @@ import importlib
 import re
 from datetime import datetime, timedelta
 from functools import partial
+from typing import MutableMapping
 
 import pytz
 import simplejson as json
@@ -522,12 +523,76 @@ class TestReplacer:
 
     def test_latest_replacement_time_by_projects(self) -> None:
         project_ids = [1, 2, 3]
+        p = redis_client.pipeline()
+
+        # No replacements
         assert (
             errors_replacer.get_latest_replacement_time_by_projects(
                 project_ids, ReplacerState.ERRORS
             )
             is None
         )
+
+        # One replacement per project, ascending timestamp per replacement
+        exclude_groups_keys = [
+            errors_replacer.get_project_exclude_groups_key_and_type_key(
+                project_id, ReplacerState.ERRORS
+            )
+            for project_id in project_ids
+        ]
+        group_id_data_asc: MutableMapping[str, float] = {"a": 0.0}
+        for exclude_groups_key, _ in exclude_groups_keys:
+            group_id_data_asc["a"] += 1.0
+            p.zadd(exclude_groups_key, **group_id_data_asc)
+        p.execute()
+        assert (
+            errors_replacer.get_latest_replacement_time_by_projects(
+                project_ids, ReplacerState.ERRORS
+            )
+            == 3.0
+        )
+        redis_client.flushdb()
+
+        # One replacement per project, descending timestamp per replacement
+        exclude_groups_keys = [
+            errors_replacer.get_project_exclude_groups_key_and_type_key(
+                project_id, ReplacerState.ERRORS
+            )
+            for project_id in project_ids
+        ]
+        group_id_data_desc: MutableMapping[str, float] = {"a": 4.0}
+        for exclude_groups_key, _ in exclude_groups_keys:
+            group_id_data_desc["a"] -= 1.0
+            p.zadd(exclude_groups_key, **group_id_data_desc)
+        p.execute()
+        assert (
+            errors_replacer.get_latest_replacement_time_by_projects(
+                project_ids, ReplacerState.ERRORS
+            )
+            == 3.0
+        )
+        redis_client.flushdb()
+
+        # Multiple replacements per project
+        exclude_groups_keys = [
+            errors_replacer.get_project_exclude_groups_key_and_type_key(
+                project_id, ReplacerState.ERRORS
+            )
+            for project_id in project_ids
+        ]
+        group_id_data_multiple: MutableMapping[str, float] = {"a": 5.0, "b": 4.0}
+        for exclude_groups_key, _ in exclude_groups_keys:
+            group_id_data_multiple["a"] -= 1.0
+            group_id_data_multiple["b"] -= 1.0
+            p.zadd(exclude_groups_key, **group_id_data_multiple)
+        p.execute()
+        assert (
+            errors_replacer.get_latest_replacement_time_by_projects(
+                project_ids, ReplacerState.ERRORS
+            )
+            == 4.0
+        )
+        redis_client.flushdb()
 
     def test_query_time_flags_project(self) -> None:
         """
@@ -536,6 +601,7 @@ class TestReplacer:
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
         """
+        redis_client.flushdb()
         project_ids = [1, 2, 3]
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
@@ -572,6 +638,7 @@ class TestReplacer:
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
         """
+        redis_client.flushdb()
         project_ids = [4, 5, 6]
         errors_replacer.set_project_exclude_groups(
             4, [1, 2], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
@@ -632,7 +699,7 @@ class TestReplacer:
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
         """
-
+        redis_client.flushdb()
         project_ids = [7, 8, 9]
 
         errors_replacer.set_project_needs_final(
