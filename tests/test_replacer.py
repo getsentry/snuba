@@ -533,13 +533,14 @@ class TestReplacer:
             is None
         )
 
-        # One replacement per project, ascending timestamp per replacement
         exclude_groups_keys = [
             errors_replacer.get_project_exclude_groups_key_and_type_key(
                 project_id, ReplacerState.ERRORS
             )
             for project_id in project_ids
         ]
+
+        # One replacement per project, ascending timestamp per replacement
         group_id_data_asc: MutableMapping[str, float] = {"a": 0.0}
         for exclude_groups_key, _ in exclude_groups_keys:
             group_id_data_asc["a"] += 1.0
@@ -554,12 +555,6 @@ class TestReplacer:
         redis_client.flushdb()
 
         # One replacement per project, descending timestamp per replacement
-        exclude_groups_keys = [
-            errors_replacer.get_project_exclude_groups_key_and_type_key(
-                project_id, ReplacerState.ERRORS
-            )
-            for project_id in project_ids
-        ]
         group_id_data_desc: MutableMapping[str, float] = {"a": 4.0}
         for exclude_groups_key, _ in exclude_groups_keys:
             group_id_data_desc["a"] -= 1.0
@@ -574,17 +569,26 @@ class TestReplacer:
         redis_client.flushdb()
 
         # Multiple replacements per project
-        exclude_groups_keys = [
-            errors_replacer.get_project_exclude_groups_key_and_type_key(
-                project_id, ReplacerState.ERRORS
-            )
-            for project_id in project_ids
-        ]
         group_id_data_multiple: MutableMapping[str, float] = {"a": 5.0, "b": 4.0}
         for exclude_groups_key, _ in exclude_groups_keys:
             group_id_data_multiple["a"] -= 1.0
             group_id_data_multiple["b"] -= 1.0
             p.zadd(exclude_groups_key, **group_id_data_multiple)
+        p.execute()
+        assert (
+            errors_replacer.get_latest_replacement_time_by_projects(
+                project_ids, ReplacerState.ERRORS
+            )
+            == 4.0
+        )
+        redis_client.flushdb()
+
+        # Replacements for some projects
+        group_id_data_some: MutableMapping[str, float] = {"a": 5.0, "b": 4.0}
+        for exclude_groups_key, _ in exclude_groups_keys[1:]:
+            group_id_data_some["a"] -= 1.0
+            group_id_data_some["b"] -= 1.0
+            p.zadd(exclude_groups_key, **group_id_data_some)
         p.execute()
         assert (
             errors_replacer.get_latest_replacement_time_by_projects(
