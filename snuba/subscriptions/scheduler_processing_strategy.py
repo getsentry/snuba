@@ -64,10 +64,14 @@ class TickBuffer(ProcessingStrategy[Tick]):
         # just for recording the partition lag.
         self.__latest_ts: Optional[datetime] = None
 
+        self.__closed = False
+
     def poll(self) -> None:
-        pass
+        self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
+        assert not self.__closed
+
         # If the scheduler mode is immediate or there is only one partition
         # immediately submit message to the next step.
         # We don't keep any latest_ts values as it is not relevant.
@@ -133,18 +137,21 @@ class TickBuffer(ProcessingStrategy[Tick]):
             )
 
             # Exit the while loop if any buffer is empty, otherwise repeat
-            for partition in earliest_ts_partitions:
-                if len(self.__buffers[partition]) == 0:
-                    break
-            else:
-                continue
-            break
+            if any(
+                [
+                    len(self.__buffers[partition]) == 0
+                    for partition in earliest_ts_partitions
+                ]
+            ):
+                break
 
     def close(self) -> None:
-        pass
+        self.__closed = True
 
     def terminate(self) -> None:
-        pass
+        self.__closed = True
+        self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
-        pass
+        self.__next_step.close()
+        self.__next_step.join(timeout)
