@@ -4,12 +4,10 @@ from typing import Any, Optional
 
 import click
 from arroyo import configure_metrics
-from arroyo.processing import StreamProcessor
 
 from snuba import environment
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
-from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
@@ -65,7 +63,7 @@ def subscriptions_scheduler(
         entity_name, consumer_group, auto_offset_reset, delay_seconds, metrics,
     )
 
-    processor: StreamProcessor[Tick] = builder.build_consumer()
+    processor = builder.build_consumer()
 
     def handler(signum: int, frame: Any) -> None:
         processor.signal_shutdown()
