@@ -27,14 +27,14 @@ from snuba.request.request_settings import HTTPRequestSettings
     ],
 )
 @pytest.mark.parametrize(
-    "input_granularity, output_granularity",
-    [(None, DEFAULT_GRANULARITY), (10, 10), (60, 60)],
+    "requested_granularity, query_granularity",
+    [(None, DEFAULT_GRANULARITY), (10, 10), (60, 60), (90, 10), (120, 60), (13, 60)],
 )
 def test_granularity_added(
     entity_key: EntityKey,
     column: str,
-    input_granularity: Optional[int],
-    output_granularity: int,
+    requested_granularity: Optional[int],
+    query_granularity: int,
 ) -> None:
     query = Query(
         QueryEntity(entity_key, ColumnSet([])),
@@ -42,7 +42,7 @@ def test_granularity_added(
         condition=binary_condition(
             ConditionFunctions.EQ, Column(None, None, "metric_id"), Literal(None, 123)
         ),
-        granularity=(input_granularity),
+        granularity=(requested_granularity),
     )
 
     GranularityProcessor().process_query(query, HTTPRequestSettings())
@@ -55,7 +55,7 @@ def test_granularity_added(
             binary_condition(
                 ConditionFunctions.EQ,
                 Column(None, None, "granularity"),
-                Literal(None, output_granularity),
+                Literal(None, query_granularity),
             ),
             binary_condition(
                 ConditionFunctions.EQ,
@@ -63,5 +63,5 @@ def test_granularity_added(
                 Literal(None, 123),
             ),
         ),
-        granularity=(input_granularity),
+        granularity=(requested_granularity),
     )
