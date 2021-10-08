@@ -198,7 +198,8 @@ class SchedulerBuilder:
         self,
         entity_name: str,
         consumer_group: str,
-        followed_consumer_group: str,
+        # TODO: Temporarily optional
+        followed_consumer_group: Optional[str],
         auto_offset_reset: str,
         delay_seconds: Optional[int],
         metrics: MetricsBackend,
@@ -239,9 +240,12 @@ class SchedulerBuilder:
         )
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[KafkaPayload]:
-        return SubscriptionSchedulerProcessingFactory(self.__partitions, self.__metrics)
+        return SubscriptionSchedulerProcessingFactory(
+            self.__followed_consumer_group, self.__partitions, self.__metrics
+        )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
+        assert self.__followed_consumer_group is not None
         return CommitLogTickConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
@@ -271,10 +275,12 @@ class MeasureCommitLogOrderMetrics(ProcessingStrategy[KafkaPayload]):
 
     def __init__(
         self,
+        followed_consumer_group: Optional[str],
         partitions: int,
         metrics: MetricsBackend,
         commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
+        self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
         self.__partitions = partitions
         self.__metrics = metrics
@@ -288,6 +294,12 @@ class MeasureCommitLogOrderMetrics(ProcessingStrategy[KafkaPayload]):
 
         assert commit.partition.index < self.__partitions
         assert commit.orig_message_ts is not None
+
+        if (
+            self.__followed_consumer_group is not None
+            and commit.group != self.__followed_consumer_group
+        ):
+            return
 
         current_message = MessageDetails(commit.offset, commit.orig_message_ts)
 
@@ -376,11 +388,19 @@ class MeasurePartitionLag(ProcessingStrategy[Tick]):
 
 
 class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
-    def __init__(self, partitions: int, metrics: MetricsBackend) -> None:
+    def __init__(
+        self,
+        followed_consumer_group: Optional[str],
+        partitions: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__followed_consumer_group = followed_consumer_group
         self.__partitions = partitions
         self.__metrics = metrics
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
-        return MeasureCommitLogOrderMetrics(self.__partitions, self.__metrics, commit)
+        return MeasureCommitLogOrderMetrics(
+            self.__followed_consumer_group, self.__partitions, self.__metrics, commit
+        )

@@ -46,7 +46,8 @@ def subscriptions_scheduler(
     *,
     entity_name: str,
     consumer_group: str,
-    followed_consumer_group: str,
+    # TODO: Temporarily optional
+    followed_consumer_group: Optional[str],
     auto_offset_reset: str,
     schedule_ttl: int,
     log_level: Optional[str],
