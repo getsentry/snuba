@@ -1,18 +1,12 @@
 from collections import deque
 from datetime import datetime
-from enum import Enum
 from typing import Deque, Mapping, Optional, cast
 
 from arroyo import Message
 from arroyo.processing.strategies import ProcessingStrategy
 
-from snuba.subscriptions.utils import Tick
+from snuba.subscriptions.utils import SchedulerMode, Tick
 from snuba.utils.metrics import MetricsBackend
-
-
-class SchedulerMode(Enum):
-    IMMEDIATE = "immediate"
-    WAIT_FOR_SLOWEST_PARTITION = "wait-for-slowest"
 
 
 class TickBuffer(ProcessingStrategy[Tick]):

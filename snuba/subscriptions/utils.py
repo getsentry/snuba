@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import NamedTuple
 
 from snuba.utils.types import Interval
+
+
+class SchedulerMode(Enum):
+    IMMEDIATE = "immediate"
+    WAIT_FOR_SLOWEST_PARTITION = "wait-for-slowest"
 
 
 class Tick(NamedTuple):

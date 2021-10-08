@@ -3,8 +3,8 @@ from unittest import mock
 
 from arroyo import Message, Partition, Topic
 
-from snuba.subscriptions.scheduler_processing_strategy import SchedulerMode, TickBuffer
-from snuba.subscriptions.utils import Tick
+from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
+from snuba.subscriptions.utils import SchedulerMode, Tick
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
