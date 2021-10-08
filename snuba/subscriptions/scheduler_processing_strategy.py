@@ -73,9 +73,14 @@ class TickBuffer(ProcessingStrategy[Tick]):
         assert not self.__closed
 
         # If the scheduler mode is immediate or there is only one partition
+        # or max_ticks_buffered_per_partition is set to 0,
         # immediately submit message to the next step.
         # We don't keep any latest_ts values as it is not relevant.
-        if self.__mode == SchedulerMode.IMMEDIATE or self.__partitions == 1:
+        if (
+            self.__mode == SchedulerMode.IMMEDIATE
+            or self.__partitions == 1
+            or self.__max_ticks_buffered_per_partition == 0
+        ):
             self.__next_step.submit(message)
             return
 
