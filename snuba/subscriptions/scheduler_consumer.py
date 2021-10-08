@@ -94,9 +94,13 @@ class CommitLogTickConsumer(Consumer[Tick]):
     # between B and C, since the message B was the first message received by
     # the consumer.
     def __init__(
-        self, consumer: Consumer[KafkaPayload], time_shift: Optional[timedelta] = None
+        self,
+        consumer: Consumer[KafkaPayload],
+        followed_consumer_group: str,
+        time_shift: Optional[timedelta] = None,
     ) -> None:
         self.__consumer = consumer
+        self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
         self.__time_shift = time_shift if time_shift is not None else timedelta()
 
@@ -118,6 +122,9 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         commit = commit_codec.decode(message.payload)
         assert commit.orig_message_ts is not None
+
+        if commit.group != self.__followed_consumer_group:
+            return None
 
         previous_message = self.__previous_messages.get(commit.partition)
 
@@ -191,6 +198,8 @@ class SchedulerBuilder:
         self,
         entity_name: str,
         consumer_group: str,
+        # TODO: Temporarily optional
+        followed_consumer_group: Optional[str],
         auto_offset_reset: str,
         delay_seconds: Optional[int],
         metrics: MetricsBackend,
@@ -212,6 +221,7 @@ class SchedulerBuilder:
         self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
         self.__consumer_group = consumer_group
+        self.__followed_consumer_group = followed_consumer_group
         self.__auto_offset_reset = auto_offset_reset
         self.__delay_seconds = delay_seconds
         self.__metrics = metrics
@@ -230,9 +240,12 @@ class SchedulerBuilder:
         )
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[KafkaPayload]:
-        return SubscriptionSchedulerProcessingFactory(self.__partitions, self.__metrics)
+        return SubscriptionSchedulerProcessingFactory(
+            self.__followed_consumer_group, self.__partitions, self.__metrics
+        )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
+        assert self.__followed_consumer_group is not None
         return CommitLogTickConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
@@ -241,6 +254,7 @@ class SchedulerBuilder:
                     auto_offset_reset=self.__auto_offset_reset,
                 ),
             ),
+            followed_consumer_group=self.__followed_consumer_group,
             time_shift=(
                 timedelta(seconds=self.__delay_seconds * -1)
                 if self.__delay_seconds is not None
@@ -261,10 +275,12 @@ class MeasureCommitLogOrderMetrics(ProcessingStrategy[KafkaPayload]):
 
     def __init__(
         self,
+        followed_consumer_group: Optional[str],
         partitions: int,
         metrics: MetricsBackend,
         commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
+        self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
         self.__partitions = partitions
         self.__metrics = metrics
@@ -278,6 +294,12 @@ class MeasureCommitLogOrderMetrics(ProcessingStrategy[KafkaPayload]):
 
         assert commit.partition.index < self.__partitions
         assert commit.orig_message_ts is not None
+
+        if (
+            self.__followed_consumer_group is not None
+            and commit.group != self.__followed_consumer_group
+        ):
+            return
 
         current_message = MessageDetails(commit.offset, commit.orig_message_ts)
 
@@ -366,11 +388,19 @@ class MeasurePartitionLag(ProcessingStrategy[Tick]):
 
 
 class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
-    def __init__(self, partitions: int, metrics: MetricsBackend) -> None:
+    def __init__(
+        self,
+        followed_consumer_group: Optional[str],
+        partitions: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__followed_consumer_group = followed_consumer_group
         self.__partitions = partitions
         self.__metrics = metrics
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
-        return MeasureCommitLogOrderMetrics(self.__partitions, self.__metrics, commit)
+        return MeasureCommitLogOrderMetrics(
+            self.__followed_consumer_group, self.__partitions, self.__metrics, commit
+        )
