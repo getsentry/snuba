@@ -23,6 +23,7 @@ from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdE
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.request.request_settings import RequestSettings
+from snuba.subscriptions.utils import SchedulerMode
 from snuba.utils.streams.topics import Topic
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
@@ -121,6 +122,7 @@ if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         processor=SessionsProcessor(),
         default_topic=Topic.SESSIONS,
         commit_log_topic=Topic.SESSIONS_COMMIT_LOG,
+        subscription_scheduler_mode=SchedulerMode.WAIT_FOR_SLOWEST_PARTITION,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_SESSIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_SESSIONS,
     )

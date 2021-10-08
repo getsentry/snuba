@@ -17,6 +17,7 @@ from snuba.datasets.storages.events_common import (
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
+from snuba.subscriptions.utils import SchedulerMode
 from snuba.utils.streams.topics import Topic
 
 schema = WritableTableSchema(
@@ -39,6 +40,7 @@ storage = WritableTableStorage(
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS_LEGACY,
         commit_log_topic=Topic.COMMIT_LOG,
+        subscription_scheduler_mode=SchedulerMode.IMMEDIATE,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_EVENTS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),

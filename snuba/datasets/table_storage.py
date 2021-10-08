@@ -17,6 +17,7 @@ from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
+from snuba.subscriptions.utils import SchedulerMode
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
@@ -67,17 +68,21 @@ class KafkaStreamLoader:
         pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
         replacement_topic_spec: Optional[KafkaTopicSpec] = None,
         commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
+        subscription_scheduler_mode: Optional[SchedulerMode] = None,
         subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
-        assert (subscription_scheduled_topic_spec is None) == (
-            subscription_result_topic_spec is None
+        assert (
+            (subscription_scheduler_mode is None)
+            == (subscription_scheduled_topic_spec is None)
+            == (subscription_result_topic_spec is None)
         )
 
         self.__processor = processor
         self.__default_topic_spec = default_topic_spec
         self.__replacement_topic_spec = replacement_topic_spec
         self.__commit_log_topic_spec = commit_log_topic_spec
+        self.__subscription_scheduler_mode = subscription_scheduler_mode
         self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
@@ -101,6 +106,9 @@ class KafkaStreamLoader:
     def get_commit_log_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__commit_log_topic_spec
 
+    def get_subscription_scheduler_mode(self) -> Optional[SchedulerMode]:
+        return self.__subscription_scheduler_mode
+
     def get_subscription_scheduled_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_scheduled_topic_spec
 
@@ -114,6 +122,7 @@ def build_kafka_stream_loader_from_settings(
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
     replacement_topic: Optional[Topic] = None,
     commit_log_topic: Optional[Topic] = None,
+    subscription_scheduler_mode: Optional[SchedulerMode] = None,
     subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
@@ -150,6 +159,7 @@ def build_kafka_stream_loader_from_settings(
         pre_filter,
         replacement_topic_spec,
         commit_log_topic_spec,
+        subscription_scheduler_mode=subscription_scheduler_mode,
         subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
     )
