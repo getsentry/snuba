@@ -1,5 +1,6 @@
 from abc import ABC
-from typing import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Mapping, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -11,8 +12,12 @@ from snuba.clickhouse.columns import (
     SchemaModifiers,
     UInt,
 )
+from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
+from snuba.clickhouse.translators.snuba.allowed import (
+    CurriedFunctionCallMapper,
+    FunctionCallMapper,
+)
 from snuba.clickhouse.translators.snuba.mappers import (
-    ColumnToFunction,
     FunctionNameMapper,
     SubscriptableMapper,
 )
@@ -24,7 +29,13 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -136,10 +147,85 @@ class MetricsCountersEntity(MetricsEntity):
         )
 
 
-def merge_mapper(name: str) -> ColumnToFunction:
-    return ColumnToFunction(
-        None, name, f"{name}Merge", (ColumnExpr(None, None, name),),
+def _build_parameters(
+    expression: Union[FunctionCall, CurriedFunctionCall],
+    children_translator: SnubaClickhouseStrictTranslator,
+    aggregated_col_name: str,
+) -> Tuple[Expression, ...]:
+    assert isinstance(expression.parameters[0], ColumnExpr)
+    return (
+        ColumnExpr(None, expression.parameters[0].table_name, aggregated_col_name),
+        *[p.accept(children_translator) for p in expression.parameters[1:]],
     )
+
+
+@dataclass(frozen=True)
+class AggregateFunctionMapper(FunctionCallMapper):
+    """
+    Turns expressions like max(value) into maxMerge(max)
+    or maxIf(value, condition) into maxMergeIf(max, condition)
+    """
+
+    from_name: str
+    to_name: str
+    aggr_col_name: str
+
+    def attempt_map(
+        self,
+        expression: FunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCall]:
+
+        if (
+            expression.function_name != self.from_name
+            or len(expression.parameters) == 0
+            or not isinstance(expression.parameters[0], ColumnExpr)
+        ):
+            return None
+
+        return FunctionCall(
+            expression.alias,
+            self.to_name,
+            _build_parameters(expression, children_translator, self.aggr_col_name),
+        )
+
+
+@dataclass(frozen=True)
+class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
+    """
+    Turns expressions like quantiles(0.9)(value) into quantilesMerge(0.9)(percentiles)
+    or quantilesIf(0.9)(value, condition) into quantilesMergeIf(0.9)(percentiles, condition)
+    """
+
+    from_name: str
+    to_name: str
+    aggr_col_name: str
+
+    def attempt_map(
+        self,
+        expression: CurriedFunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[CurriedFunctionCall]:
+
+        if (
+            expression.internal_function.function_name != self.from_name
+            or len(expression.parameters) == 0
+            or not isinstance(expression.parameters[0], ColumnExpr)
+        ):
+            return None
+
+        return CurriedFunctionCall(
+            expression.alias,
+            FunctionCall(
+                None,
+                self.to_name,
+                tuple(
+                    p.accept(children_translator)
+                    for p in expression.internal_function.parameters
+                ),
+            ),
+            _build_parameters(expression, children_translator, self.aggr_col_name),
+        )
 
 
 class MetricsDistributionsEntity(MetricsEntity):
@@ -162,18 +248,24 @@ class MetricsDistributionsEntity(MetricsEntity):
             ],
             mappers=TranslationMappers(
                 functions=[
-                    FunctionNameMapper("percentiles", "quantilesMerge"),
-                    FunctionNameMapper("percentilesIf", "quantilesMergeIf"),
-                    FunctionNameMapper("min", "minMerge"),
-                    FunctionNameMapper("minIf", "minMergeIf"),
-                    FunctionNameMapper("max", "maxMerge"),
-                    FunctionNameMapper("maxIf", "maxMergeIf"),
-                    FunctionNameMapper("avg", "avgMerge"),
-                    FunctionNameMapper("avgIf", "avgMergeIf"),
-                    FunctionNameMapper("sum", "sumMerge"),
-                    FunctionNameMapper("sumIf", "sumMergeIf"),
-                    FunctionNameMapper("count", "countMerge"),
-                    FunctionNameMapper("countIf", "countMergeIf"),
+                    AggregateFunctionMapper("min", "minMerge", "min"),
+                    AggregateFunctionMapper("minIf", "minMergeIf", "min"),
+                    AggregateFunctionMapper("max", "maxMerge", "max"),
+                    AggregateFunctionMapper("maxIf", "maxMergeIf", "max"),
+                    AggregateFunctionMapper("avg", "avgMerge", "avg"),
+                    AggregateFunctionMapper("avgIf", "avgMergeIf", "avg"),
+                    AggregateFunctionMapper("sum", "sumMerge", "sum"),
+                    AggregateFunctionMapper("sumIf", "sumMergeIf", "sum"),
+                    AggregateFunctionMapper("count", "countMerge", "count"),
+                    AggregateFunctionMapper("countIf", "countMergeIf", "count"),
+                ],
+                curried_functions=[
+                    AggregateCurriedFunctionMapper(
+                        "quantiles", "quantilesMerge", "percentiles"
+                    ),
+                    AggregateCurriedFunctionMapper(
+                        "quantilesIf", "quantilesMergeIf", "percentiles"
+                    ),
                 ],
             ),
         )
