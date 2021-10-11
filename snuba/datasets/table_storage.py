@@ -17,7 +17,7 @@ from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
-from snuba.subscriptions.utils import SchedulerMode
+from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
@@ -68,7 +68,7 @@ class KafkaStreamLoader:
         pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
         replacement_topic_spec: Optional[KafkaTopicSpec] = None,
         commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
-        subscription_scheduler_mode: Optional[SchedulerMode] = None,
+        subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
         subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
@@ -106,7 +106,7 @@ class KafkaStreamLoader:
     def get_commit_log_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__commit_log_topic_spec
 
-    def get_subscription_scheduler_mode(self) -> Optional[SchedulerMode]:
+    def get_subscription_scheduler_mode(self) -> Optional[SchedulingWatermarkMode]:
         return self.__subscription_scheduler_mode
 
     def get_subscription_scheduled_topic_spec(self) -> Optional[KafkaTopicSpec]:
@@ -122,7 +122,7 @@ def build_kafka_stream_loader_from_settings(
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
     replacement_topic: Optional[Topic] = None,
     commit_log_topic: Optional[Topic] = None,
-    subscription_scheduler_mode: Optional[SchedulerMode] = None,
+    subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
     subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
