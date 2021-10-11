@@ -29,8 +29,7 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "--followed-consumer-group",
-    # TODO: Temporarily set to false for roll out, should be required afterwards
-    required=False,
+    required=True,
     help="Name of the consumer group to follow",
 )
 @click.option(
@@ -46,8 +45,7 @@ def subscriptions_scheduler(
     *,
     entity_name: str,
     consumer_group: str,
-    # TODO: Temporarily optional
-    followed_consumer_group: Optional[str],
+    followed_consumer_group: str,
     auto_offset_reset: str,
     schedule_ttl: int,
     log_level: Optional[str],
