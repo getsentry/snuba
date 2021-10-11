@@ -1,3 +1,4 @@
+from snuba.query.expressions import FunctionCall
 from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String
@@ -6,6 +7,13 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.query.processors.null_column_caster import NullColumnCaster
+from snuba.query.data_source.simple import Table
+from snuba.query.expressions import Literal, Column
+from snuba.query import SelectedExpression
+
+
+from snuba.clickhouse.query import Query
+
 
 columns1 = ColumnSet(
     [
@@ -53,9 +61,27 @@ Storage2 = ReadableTableStorage(
 )
 
 
-def test_caster():
-    import pdb
+merged_columns = ColumnSet(
+    [
+        ("timestamp", DateTime()),
+        ("environment", String(Modifiers(nullable=True))),
+        ("release", String(Modifiers(nullable=False))),
+    ]
+)
 
-    pdb.set_trace()
+def test_caster():
     caster = NullColumnCaster([Storage1, Storage2])
-    assert caster._mismatched_null_columns == {"environment", "release"}
+    assert caster._mismatched_null_columns.keys() == {"environment", "release"}
+    Query(
+        Table("discover", merged_columns),
+        selected_columns=[
+            SelectedExpression(
+                name="_snuba_count_unique_sdk_version",
+                expression=FunctionCall(None, "ifNull", (
+                    FunctionCall(None, "uniq", (Column(None, None, "environment"),)),
+                    Literal(None, 0)
+                ))
+            )
+        ],
+
+
