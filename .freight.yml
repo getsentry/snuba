@@ -31,7 +31,11 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
+    name: events-subscriptions-scheduler
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-subscriptions-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: sessions-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: cdc-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}

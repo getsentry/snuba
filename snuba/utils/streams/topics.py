@@ -11,10 +11,13 @@ class Topic(Enum):
     EVENT_REPLACEMENTS_LEGACY = "event-replacements-legacy"
     COMMIT_LOG = "snuba-commit-log"
     CDC = "cdc"
-    METRICS = "ingest-metrics"
+    METRICS = "snuba-metrics"
     OUTCOMES = "outcomes"
     SESSIONS = "ingest-sessions"
     SESSIONS_COMMIT_LOG = "snuba-sessions-commit-log"
+    SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
+    SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
+    SUBSCRIPTION_SCHEDULED_SESSIONS = "scheduled-subscriptions-sessions"
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
     SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
@@ -22,7 +25,10 @@ class Topic(Enum):
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
-    config = {Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"}}
+    config = {
+        Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
+    }
     if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         config.update({Topic.SESSIONS: {"message.timestamp.type": "LogAppendTime"}})
     return config.get(topic, {})

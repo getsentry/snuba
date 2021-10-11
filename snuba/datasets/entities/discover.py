@@ -1,8 +1,7 @@
-import random
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Mapping, Optional, Sequence, Set, Union
 
 from snuba import environment, settings, state
 from snuba.clickhouse.columns import (
@@ -68,8 +67,6 @@ from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.threaded_function_delegator import Result
-from snuba.web import QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "snuplicator.sampling")
 
@@ -262,8 +259,14 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         ("transaction_op", String(Modifiers(nullable=True))),
         ("transaction_status", UInt(8, Modifiers(nullable=True))),
         ("duration", UInt(32, Modifiers(nullable=True))),
-        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
-        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
+        ("measurements", Nested([("key", String()), ("value", Float(64))])),
+        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))])),
+        (
+            "spans",
+            Nested(
+                [("op", String()), ("group", UInt(64)), ("exclusive_time", Float(64))]
+            ),
+        ),
     ]
 )
 
@@ -318,75 +321,6 @@ def is_in_experiment(query: LogicalQuery, referrer: str) -> bool:
         test_projects = {int(test_projects_raw)}
 
     return project_ids.issubset(test_projects)
-
-
-def sampling_selector_func(query: LogicalQuery, referrer: str) -> Tuple[str, List[str]]:
-    if is_in_experiment(query, referrer):
-        sample_query_rate = state.get_config(
-            "snuplicator-sampling-experiment-rate", 0.0
-        )
-        assert isinstance(sample_query_rate, float)
-        if random.random() < sample_query_rate:
-            return "primary", ["sampler"]
-
-    return "primary", []
-
-
-def sampling_callback_func(
-    query: LogicalQuery,
-    settings: RequestSettings,
-    referrer: str,
-    primary_result: Optional[Result[QueryResult]],
-    results: List[Result[QueryResult]],
-) -> None:
-    if not is_in_experiment(query, referrer):
-        return
-
-    if primary_result is None and not results:
-        metrics.increment(
-            "query_result",
-            tags={"match": "empty", "primary": "none", "referrer": referrer},
-        )
-        return
-
-    if primary_result is None:
-        primary_result = results.pop(0)
-
-    primary_function_id = primary_result.function_id
-    primary_result_data = primary_result.result.result["data"]
-    secondary_result = results.pop(0) if len(results) > 0 else None
-
-    # compare results
-    comparison = "one_result"
-    if secondary_result:
-        metrics.timing(
-            "query_result_timing",
-            secondary_result.execution_time,
-            tags={"function": secondary_result.function_id},
-        )
-        secondary_result_data = secondary_result.result.result["data"]
-
-        primary_found_keys = set(row["tags_key"] for row in primary_result_data)
-        secondary_found_keys = set(row["tags_key"] for row in secondary_result_data)
-
-        if primary_found_keys == secondary_found_keys:
-            comparison = "match"
-        else:
-            comparison = "no_match"
-
-    metrics.increment(
-        "query_result",
-        tags={
-            "match": comparison,
-            "primary": primary_function_id,
-            "referrer": referrer,
-        },
-    )
-    metrics.timing(
-        "query_result_timing",
-        primary_result.execution_time,
-        tags={"function": primary_function_id},
-    )
 
 
 class DiscoverEntity(Entity):
@@ -544,18 +478,7 @@ class DiscoverEntity(Entity):
         pipeline_builder: Union[PipelineDelegator, SimplePipelineBuilder]
         if settings.ERRORS_ROLLOUT_ALL:
             storage = discover_storage
-            sampled_pipeline_builder = SampledSimplePipelineBuilder(
-                query_plan_builder=discover_storage_plan_builder
-            )
-
-            pipeline_builder = PipelineDelegator(
-                query_pipeline_builders={
-                    "primary": discover_pipeline_builder,
-                    "sampler": sampled_pipeline_builder,
-                },
-                selector_func=sampling_selector_func,
-                callback_func=sampling_callback_func,
-            )
+            pipeline_builder = discover_pipeline_builder
         else:
             storage = events_storage
             pipeline_builder = events_pipeline_builder

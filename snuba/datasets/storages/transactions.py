@@ -75,6 +75,12 @@ columns = ColumnSet(
         ("_contexts_flattened", String()),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
         ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
+        (
+            "spans",
+            Nested(
+                [("op", String()), ("group", UInt(64)), ("exclusive_time", Float(64))]
+            ),
+        ),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
@@ -137,6 +143,7 @@ storage = WritableTableStorage(
         processor=TransactionsMessageProcessor(),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_TRANSACTIONS,
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],

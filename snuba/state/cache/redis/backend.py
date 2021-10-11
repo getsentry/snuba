@@ -15,8 +15,9 @@ from snuba.state.cache.abstract import (
     ExecutionTimeoutError,
     TValue,
 )
-from snuba.utils.codecs import Codec
+from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class RedisCache(Cache[TValue]):
         self,
         client: RedisClientType,
         prefix: str,
-        codec: Codec[bytes, TValue],
+        codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
     ) -> None:
         self.__client = client
@@ -93,6 +94,11 @@ class RedisCache(Cache[TValue]):
         # (or lack thereof.)
         result_key = self.__build_key(key)
 
+        # if we hit an error, we want to communicate that to waiting clients
+        # but we do not want it to be considered a true value. hence we store
+        # the error info in a different key
+        error_key = self.__build_key(key, "error")
+
         # The wait queue (a Redis list) is used to identify clients that are
         # currently "subscribed" to the evaluation of the function and awaiting
         # its result. The first member of this queue is a special case -- it is
@@ -139,6 +145,7 @@ class RedisCache(Cache[TValue]):
             logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
+
             # If we were the first in line, we need to execute the function.
             # We'll also get back the task identity to use for sending
             # notifications and approximately how long we have to run the
@@ -151,6 +158,7 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 task_timeout,
             )
+            redis_key_to_write_to = result_key
 
             argv = [task_ident, 60]
             try:
@@ -162,6 +170,21 @@ class RedisCache(Cache[TValue]):
                 )
             except concurrent.futures.TimeoutError as error:
                 raise TimeoutError("timed out waiting for value") from error
+            except Exception as e:
+                error_value = SerializableException.from_standard_exception_instance(e)
+                argv.extend(
+                    [
+                        self.__codec.encode_exception(error_value),
+                        # the error data only needs to be present for long enough such that
+                        # the waiting clients know that they all have their queries rejected.
+                        # thus we set it to only three seconds
+                        get_config("error_cache_expiry_sec", 3),
+                    ]
+                )
+                # we want the result key to only store real query results in it as the TTL
+                # of a cached query can be fairly long (minutes).
+                redis_key_to_write_to = error_key
+                raise e
             finally:
                 # Regardless of whether the function succeeded or failed, we
                 # need to mark the task as completed. If there is no result
@@ -170,7 +193,7 @@ class RedisCache(Cache[TValue]):
                 try:
                     self.__script_set(
                         [
-                            result_key,
+                            redis_key_to_write_to,
                             wait_queue_key,
                             task_ident_key,
                             build_notify_queue_key(task_ident),
@@ -201,7 +224,6 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 effective_timeout,
             )
-
             notification_received = (
                 self.__client.blpop(
                     build_notify_queue_key(task_ident), effective_timeout
@@ -214,15 +236,18 @@ class RedisCache(Cache[TValue]):
 
             if notification_received:
                 # There should be a value waiting for us at the result key.
-                raw_value = self.__client.get(result_key)
-
+                raw_value, upsteam_error_payload = self.__client.mget(
+                    [result_key, error_key]
+                )
                 # If there is no value, that means that the client responsible
                 # for generating the cache value errored while generating it.
                 if raw_value is None:
-                    # TODO: If we wanted to get clever, this could include the
-                    # error message from the other client, or a Sentry ID or
-                    # something.
-                    raise ExecutionError("no value at key")
+                    if upsteam_error_payload:
+                        return self.__codec.decode(upsteam_error_payload)
+
+                    raise ExecutionError(
+                        "no value at key: this means the original process executing the query crashed before the exception could be handled or an error was thrown setting the cache result"
+                    )
                 else:
                     return self.__codec.decode(raw_value)
             else:
