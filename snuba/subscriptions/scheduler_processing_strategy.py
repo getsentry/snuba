@@ -5,7 +5,7 @@ from typing import Deque, Mapping, Optional, cast
 from arroyo import Message
 from arroyo.processing.strategies import ProcessingStrategy
 
-from snuba.subscriptions.utils import SchedulerMode, Tick
+from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 
 
@@ -35,13 +35,13 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
     def __init__(
         self,
-        mode: SchedulerMode,
+        mode: SchedulingWatermarkMode,
         partitions: int,
         max_ticks_buffered_per_partition: Optional[int],
         next_step: ProcessingStrategy[Tick],
         metrics: MetricsBackend,
     ) -> None:
-        if mode == SchedulerMode.WAIT_FOR_SLOWEST_PARTITION:
+        if mode == SchedulingWatermarkMode.GLOBAL:
             assert max_ticks_buffered_per_partition is not None
 
         self.__mode = mode
@@ -71,7 +71,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         # immediately submit message to the next step.
         # We don't keep any latest_ts values as it is not relevant.
         if (
-            self.__mode == SchedulerMode.IMMEDIATE
+            self.__mode == SchedulingWatermarkMode.PARTITION
             or self.__partitions == 1
             or self.__max_ticks_buffered_per_partition == 0
         ):

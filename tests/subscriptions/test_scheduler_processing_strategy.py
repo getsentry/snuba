@@ -4,7 +4,7 @@ from unittest import mock
 from arroyo import Message, Partition, Topic
 
 from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
-from snuba.subscriptions.utils import SchedulerMode, Tick
+from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
@@ -16,7 +16,9 @@ def test_tick_buffer_immediate() -> None:
 
     next_step = mock.Mock()
 
-    strategy = TickBuffer(SchedulerMode.IMMEDIATE, 2, None, next_step, metrics_backend)
+    strategy = TickBuffer(
+        SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics_backend
+    )
 
     topic = Topic("messages")
     partition = Partition(topic, 0)
@@ -50,7 +52,7 @@ def test_tick_buffer_wait_slowest() -> None:
 
     # Create strategy with 2 partitions
     strategy = TickBuffer(
-        SchedulerMode.WAIT_FOR_SLOWEST_PARTITION, 2, 10, next_step, metrics_backend
+        SchedulingWatermarkMode.GLOBAL, 2, 10, next_step, metrics_backend,
     )
 
     topic = Topic("messages")

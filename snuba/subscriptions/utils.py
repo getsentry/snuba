@@ -7,9 +7,9 @@ from typing import NamedTuple
 from snuba.utils.types import Interval
 
 
-class SchedulerMode(Enum):
-    IMMEDIATE = "immediate"
-    WAIT_FOR_SLOWEST_PARTITION = "wait-for-slowest"
+class SchedulingWatermarkMode(Enum):
+    PARTITION = "partition"
+    GLOBAL = "global"
 
 
 class Tick(NamedTuple):
@@ -27,3 +27,6 @@ class Tick(NamedTuple):
             self.offsets,
             Interval(self.timestamps.lower + delta, self.timestamps.upper + delta),
         )
+
+
+from enum import Enum
