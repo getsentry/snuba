@@ -159,6 +159,20 @@ def _build_parameters(
     )
 
 
+def _should_transform_aggregation(
+    function_name: str,
+    expected_function_name: str,
+    column_to_map: str,
+    function_call: Union[FunctionCall, CurriedFunctionCall],
+) -> bool:
+    return (
+        function_name == expected_function_name
+        and len(function_call.parameters) > 0
+        and isinstance(function_call.parameters[0], ColumnExpr)
+        and function_call.parameters[0].column_name == column_to_map
+    )
+
+
 @dataclass(frozen=True)
 class AggregateFunctionMapper(FunctionCallMapper):
     """
@@ -176,12 +190,8 @@ class AggregateFunctionMapper(FunctionCallMapper):
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
-
-        if (
-            expression.function_name != self.from_name
-            or len(expression.parameters) == 0
-            or not isinstance(expression.parameters[0], ColumnExpr)
-            or expression.parameters[0].column_name != self.column_to_map
+        if not _should_transform_aggregation(
+            expression.function_name, self.from_name, self.column_to_map, expression
         ):
             return None
 
@@ -209,12 +219,11 @@ class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
         expression: CurriedFunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[CurriedFunctionCall]:
-
-        if (
-            expression.internal_function.function_name != self.from_name
-            or len(expression.parameters) == 0
-            or not isinstance(expression.parameters[0], ColumnExpr)
-            or expression.parameters[0].column_name != self.column_to_map
+        if not _should_transform_aggregation(
+            expression.internal_function.function_name,
+            self.from_name,
+            self.column_to_map,
+            expression,
         ):
             return None
 
