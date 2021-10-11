@@ -23,6 +23,7 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
         "event-replacements",
         "event-replacements-legacy",
         "snuba-commit-log",
+        "snuba-sessions-commit-log",
         "cdc",
         "snuba-metrics",
         "outcomes",
