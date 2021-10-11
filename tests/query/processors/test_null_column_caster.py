@@ -1,3 +1,5 @@
+import pytest
+
 from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
@@ -67,44 +69,53 @@ merged_columns = ColumnSet(
 )
 
 
-def test_caster():
-    caster = NullColumnCaster([Storage1, Storage2])
-    assert caster._mismatched_null_columns.keys() == {"mismatched1", "mismatched2"}
-    q = Query(
-        Table("discover", merged_columns),
-        selected_columns=[
-            SelectedExpression(
-                name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None, "uniq", (Column(None, None, "mismatched1"),)
-                ),
-            )
-        ],
-    )
-
-    expected_q = Query(
-        Table("discover", merged_columns),
-        selected_columns=[
-            SelectedExpression(
-                name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(
-                    None,
-                    "uniq",
-                    (
-                        FunctionCall(
-                            None,
-                            "cast",
-                            (
-                                Column(None, None, "mismatched1"),
-                                Literal(None, "Nullable(String)"),
+test_data = [
+    pytest.param(
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "mismatched1"),)
+                    ),
+                )
+            ],
+        ),
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None,
+                        "uniq",
+                        (
+                            FunctionCall(
+                                None,
+                                "cast",
+                                (
+                                    Column(None, None, "mismatched1"),
+                                    Literal(None, "Nullable(String)"),
+                                ),
                             ),
                         ),
                     ),
-                ),
-            )
-        ],
+                )
+            ],
+        ),
+        id="cast string to null",
     )
+]
 
-    caster.process_query(q, HTTPRequestSettings())
 
-    assert q == expected_q, expected_q
+def test_find_mismatched_columns():
+    caster = NullColumnCaster([Storage1, Storage2])
+    assert caster.mismatched_null_columns.keys() == {"mismatched1", "mismatched2"}
+
+
+@pytest.mark.parametrize("input_q, expected_q", test_data)
+def test_caster(input_q, expected_q):
+    caster = NullColumnCaster([Storage1, Storage2])
+    caster.process_query(input_q, HTTPRequestSettings())
+    assert input_q == expected_q

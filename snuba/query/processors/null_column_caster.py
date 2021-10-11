@@ -33,12 +33,16 @@ class NullColumnCaster(QueryProcessor):
 
     def __init__(self, merge_table_sources: Sequence[ReadableTableStorage]):
         self.__merge_table_sources = merge_table_sources
-        self._mismatched_null_columns = self._find_mismatched_null_columns()
+        self.__mismatched_null_columns = self._find_mismatched_null_columns()
+
+    @property
+    def mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
+        return self.__mismatched_null_columns
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def cast_column_to_nullable(exp: Expression) -> Expression:
             if isinstance(exp, Column):
-                if exp.column_name in self._mismatched_null_columns:
+                if exp.column_name in self.mismatched_null_columns:
                     return FunctionCall(
                         exp.alias,
                         "cast",
@@ -46,7 +50,7 @@ class NullColumnCaster(QueryProcessor):
                             exp,
                             Literal(
                                 None,
-                                f"Nullable({self._mismatched_null_columns[exp.column_name].type.for_schema()})",
+                                f"Nullable({self.mismatched_null_columns[exp.column_name].type.for_schema()})",
                             ),
                         ),
                     )
