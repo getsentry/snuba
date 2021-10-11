@@ -1,25 +1,22 @@
-from snuba.query.expressions import FunctionCall
 from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String
+from snuba.clickhouse.columns import String, UInt
+from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.query.processors.null_column_caster import NullColumnCaster
-from snuba.query.data_source.simple import Table
-from snuba.query.expressions import Literal, Column
 from snuba.query import SelectedExpression
-
-
-from snuba.clickhouse.query import Query
-
+from snuba.query.data_source.simple import Table
+from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.processors.null_column_caster import NullColumnCaster
+from snuba.request.request_settings import HTTPRequestSettings
 
 columns1 = ColumnSet(
     [
-        ("timestamp", DateTime()),
-        ("environment", String(Modifiers(nullable=True))),
-        ("release", String(Modifiers(nullable=True))),
+        ("not_mismatched", DateTime()),
+        ("mismatched1", String(Modifiers(nullable=True))),
+        ("mismatched2", UInt(64, Modifiers(nullable=True))),
     ]
 )
 
@@ -27,8 +24,8 @@ columns1 = ColumnSet(
 columns2 = ColumnSet(
     [
         ("timestamp", DateTime()),
-        ("environment", String()),
-        ("release", String(Modifiers(nullable=False))),
+        ("mismatched1", String()),  # non-nullable by default
+        ("mismatched2", UInt(64, Modifiers(nullable=False))),
     ]
 )
 
@@ -64,24 +61,50 @@ Storage2 = ReadableTableStorage(
 merged_columns = ColumnSet(
     [
         ("timestamp", DateTime()),
-        ("environment", String(Modifiers(nullable=True))),
-        ("release", String(Modifiers(nullable=False))),
+        ("mismatched1", String(Modifiers(nullable=True))),
+        ("mismatched2", String(Modifiers(nullable=False))),
     ]
 )
 
+
 def test_caster():
     caster = NullColumnCaster([Storage1, Storage2])
-    assert caster._mismatched_null_columns.keys() == {"environment", "release"}
-    Query(
+    assert caster._mismatched_null_columns.keys() == {"mismatched1", "mismatched2"}
+    q = Query(
         Table("discover", merged_columns),
         selected_columns=[
             SelectedExpression(
                 name="_snuba_count_unique_sdk_version",
-                expression=FunctionCall(None, "ifNull", (
-                    FunctionCall(None, "uniq", (Column(None, None, "environment"),)),
-                    Literal(None, 0)
-                ))
+                expression=FunctionCall(
+                    None, "uniq", (Column(None, None, "mismatched1"),)
+                ),
             )
         ],
+    )
 
+    expected_q = Query(
+        Table("discover", merged_columns),
+        selected_columns=[
+            SelectedExpression(
+                name="_snuba_count_unique_sdk_version",
+                expression=FunctionCall(
+                    None,
+                    "uniq",
+                    (
+                        FunctionCall(
+                            None,
+                            "cast",
+                            (
+                                Column(None, None, "mismatched1"),
+                                Literal(None, "Nullable(String)"),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        ],
+    )
 
+    caster.process_query(q, HTTPRequestSettings())
+
+    assert q == expected_q, expected_q
