@@ -140,6 +140,15 @@ TEST_CASES = [
         ),
         id="Test distribution quantiles",
     ),
+    pytest.param(
+        "metrics_distributions",
+        "avg(something_else)",
+        EntityKey.METRICS_DISTRIBUTIONS,
+        FunctionCall(
+            None, "avg", (Column("_snuba_something_else", None, "something_else"),),
+        ),
+        id="Test that a column other than value is not transformed",
+    ),
 ]
 
 

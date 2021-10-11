@@ -166,6 +166,7 @@ class AggregateFunctionMapper(FunctionCallMapper):
     or maxIf(value, condition) into maxMergeIf(max, condition)
     """
 
+    column_to_map: str
     from_name: str
     to_name: str
     aggr_col_name: str
@@ -180,6 +181,7 @@ class AggregateFunctionMapper(FunctionCallMapper):
             expression.function_name != self.from_name
             or len(expression.parameters) == 0
             or not isinstance(expression.parameters[0], ColumnExpr)
+            or expression.parameters[0].column_name != self.column_to_map
         ):
             return None
 
@@ -197,6 +199,7 @@ class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
     or quantilesIf(0.9)(value, condition) into quantilesMergeIf(0.9)(percentiles, condition)
     """
 
+    column_to_map: str
     from_name: str
     to_name: str
     aggr_col_name: str
@@ -211,6 +214,7 @@ class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
             expression.internal_function.function_name != self.from_name
             or len(expression.parameters) == 0
             or not isinstance(expression.parameters[0], ColumnExpr)
+            or expression.parameters[0].column_name != self.column_to_map
         ):
             return None
 
@@ -248,23 +252,25 @@ class MetricsDistributionsEntity(MetricsEntity):
             ],
             mappers=TranslationMappers(
                 functions=[
-                    AggregateFunctionMapper("min", "minMerge", "min"),
-                    AggregateFunctionMapper("minIf", "minMergeIf", "min"),
-                    AggregateFunctionMapper("max", "maxMerge", "max"),
-                    AggregateFunctionMapper("maxIf", "maxMergeIf", "max"),
-                    AggregateFunctionMapper("avg", "avgMerge", "avg"),
-                    AggregateFunctionMapper("avgIf", "avgMergeIf", "avg"),
-                    AggregateFunctionMapper("sum", "sumMerge", "sum"),
-                    AggregateFunctionMapper("sumIf", "sumMergeIf", "sum"),
-                    AggregateFunctionMapper("count", "countMerge", "count"),
-                    AggregateFunctionMapper("countIf", "countMergeIf", "count"),
+                    AggregateFunctionMapper("value", "min", "minMerge", "min"),
+                    AggregateFunctionMapper("value", "minIf", "minMergeIf", "min"),
+                    AggregateFunctionMapper("value", "max", "maxMerge", "max"),
+                    AggregateFunctionMapper("value", "maxIf", "maxMergeIf", "max"),
+                    AggregateFunctionMapper("value", "avg", "avgMerge", "avg"),
+                    AggregateFunctionMapper("value", "avgIf", "avgMergeIf", "avg"),
+                    AggregateFunctionMapper("value", "sum", "sumMerge", "sum"),
+                    AggregateFunctionMapper("value", "sumIf", "sumMergeIf", "sum"),
+                    AggregateFunctionMapper("value", "count", "countMerge", "count"),
+                    AggregateFunctionMapper(
+                        "value", "countIf", "countMergeIf", "count"
+                    ),
                 ],
                 curried_functions=[
                     AggregateCurriedFunctionMapper(
-                        "quantiles", "quantilesMerge", "percentiles"
+                        "value", "quantiles", "quantilesMerge", "percentiles"
                     ),
                     AggregateCurriedFunctionMapper(
-                        "quantilesIf", "quantilesMergeIf", "percentiles"
+                        "value", "quantilesIf", "quantilesMergeIf", "percentiles"
                     ),
                 ],
             ),
