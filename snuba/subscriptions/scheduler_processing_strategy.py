@@ -1,3 +1,4 @@
+import logging
 from collections import deque
 from datetime import datetime
 from typing import Deque, Mapping, Optional, cast
@@ -7,6 +8,8 @@ from arroyo.processing.strategies import ProcessingStrategy
 
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
+
+logger = logging.getLogger(__name__)
 
 
 class TickBuffer(ProcessingStrategy[Tick]):
@@ -93,6 +96,9 @@ class TickBuffer(ProcessingStrategy[Tick]):
         if len(self.__buffers[tick_partition]) > cast(
             int, self.__max_ticks_buffered_per_partition
         ):
+            logger.warning(
+                f"Tick buffer exceeded {self.__max_ticks_buffered_per_partition} for partition {tick_partition}"
+            )
             self.__next_step.submit(self.__buffers[tick_partition].popleft())
             return
 
