@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet, DateTime
@@ -64,7 +66,7 @@ merged_columns = ColumnSet(
     [
         ("timestamp", DateTime()),
         ("mismatched1", String(Modifiers(nullable=True))),
-        ("mismatched2", String(Modifiers(nullable=False))),
+        ("mismatched2", String(Modifiers(nullable=True))),
     ]
 )
 
@@ -206,6 +208,10 @@ def test_find_mismatched_columns():
 
 @pytest.mark.parametrize("input_q, expected_q", test_data)
 def test_caster(input_q, expected_q):
-    caster = NullColumnCaster([Storage1, Storage2])
-    caster.process_query(input_q, HTTPRequestSettings())
-    assert input_q == expected_q
+    for caster in (
+        NullColumnCaster([Storage2, Storage1]),
+        NullColumnCaster([Storage1, Storage2]),
+    ):
+        input_query = deepcopy(input_q)
+        caster.process_query(input_query, HTTPRequestSettings())
+        assert input_query == expected_q

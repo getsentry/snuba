@@ -9,6 +9,13 @@ from snuba.query.functions import AGGREGATION_FUNCTIONS
 from snuba.request.request_settings import RequestSettings
 
 
+def _col_is_nullable(col: FlattenedColumn) -> bool:
+    modifiers = col.type.get_modifiers()
+    if isinstance(modifiers, SchemaModifiers):
+        return modifiers.nullable
+    return False
+
+
 class NullColumnCaster(QueryProcessor):
     """
     In the case of merge tables (e.g. discover), if the column is nullable on
@@ -49,10 +56,7 @@ class NullColumnCaster(QueryProcessor):
         col_name_to_nullable: Dict[str, bool] = {}
         for table_storage in self.__merge_table_sources:
             for col in table_storage.get_schema().get_columns():
-                col_is_nullable = False
-                modifiers = col.type.get_modifiers()
-                if isinstance(modifiers, SchemaModifiers):
-                    col_is_nullable = modifiers.nullable
+                col_is_nullable = _col_is_nullable(col)
                 other_storage_column_is_nullable = col_name_to_nullable.get(
                     col.name, None
                 )
@@ -83,15 +87,25 @@ class NullColumnCaster(QueryProcessor):
         def cast_column_to_nullable(exp: Expression) -> Expression:
             if isinstance(exp, Column):
                 if exp.column_name in self.mismatched_null_columns:
+                    # depending on the order of the storage, this dictionary will contain
+                    # either the nullable or non-nullable version of the column. No matter
+                    # which one is in there, due to the mismatch on the merge table it needs to
+                    # be cast as nullable anyways
+                    mismatched_column = self.mismatched_null_columns[exp.column_name]
+                    col_is_nullable = _col_is_nullable(mismatched_column)
+                    col_type = mismatched_column.type.for_schema()
+                    cast_str = col_type if col_is_nullable else f"Nullable({col_type})"
                     return FunctionCall(
                         exp.alias,
                         "cast",
                         (
-                            exp,
-                            Literal(
+                            # move the alias up to the cast function
+                            Column(
                                 None,
-                                f"Nullable({self.mismatched_null_columns[exp.column_name].type.for_schema()})",
+                                table_name=exp.table_name,
+                                column_name=exp.column_name,
                             ),
+                            Literal(None, cast_str),
                         ),
                     )
             return exp
