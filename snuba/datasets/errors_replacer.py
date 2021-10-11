@@ -7,7 +7,7 @@ import uuid
 from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from functools import cached_property
 from typing import (
@@ -318,25 +318,44 @@ def get_latest_replacement_time_by_projects(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
 ) -> Optional[datetime]:
     """
-    Given project ids, returns the highest timestamp for any group
-    exclude replacement in the projects.
+    Given project ids, finds highest timestamps for any FINAL project
+    and group exclude replacemetns and returns returns the highest
+    timestamp found.
     """
     p = redis_client.pipeline()
 
     for project_id in project_ids:
-        key, _ = get_project_exclude_groups_key_and_type_key(project_id, state_name)
+        exclude_groups_key, _ = get_project_exclude_groups_key_and_type_key(
+            project_id, state_name
+        )
+        project_needs_final_key, _ = get_project_needs_final_key_and_type_key(
+            project_id, state_name
+        )
         # Gets the item with the highest score for a key, along with the score itself
         p.zrevrangebyscore(
-            key, float("inf"), float("-inf"), withscores=True, start=0, num=1
+            exclude_groups_key,
+            float("inf"),
+            float("-inf"),
+            withscores=True,
+            start=0,
+            num=1,
         )
-    # results are in the form [[(str, float)], [(str, float)], ...]
+        # Get the TTL for final per project
+        p.ttl(project_needs_final_key)
+
+    # results are in the form [[(str, float)], int, [(str, float)], int, ...]
     results = p.execute()
 
     latest_replacements = set()
     for result in results:
-        if result and isinstance(result, list):
-            [(_, timestamp)] = result
-            latest_replacements.add(timestamp)
+        if result:
+            if isinstance(result, list):
+                [(_, timestamp)] = result
+                latest_replacements.add(timestamp)
+            elif isinstance(result, int) and result >= 0:
+                latest_replacements.add(
+                    (datetime.now() + timedelta(seconds=result)).timestamp()
+                )
     return (
         datetime.fromtimestamp(max(latest_replacements))
         if latest_replacements

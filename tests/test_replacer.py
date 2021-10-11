@@ -524,17 +524,11 @@ class TestReplacer:
     def test_latest_replacement_time_by_projects(self) -> None:
         project_ids = [1, 2, 3]
         p = redis_client.pipeline()
-        # SECONDS_IN_DAY = 86400
-        # JAN_1_2021 = 1609488000.0
         JAN_1_2021 = datetime(2021, 1, 1)
         ONE_DAY = timedelta(days=1)
         JAN_3_2021, JAN_4_2021, JAN_5_2021 = (
             JAN_1_2021 + i * ONE_DAY for i in range(2, 5)
         )
-
-        # JAN_3_2021, JAN_4_2021, JAN_5_2021 = (
-        #     JAN_1_2021 + i * SECONDS_IN_DAY for i in range(2, 5)
-        # )
 
         # No replacements
         assert (
@@ -550,6 +544,53 @@ class TestReplacer:
             )
             for project_id in project_ids
         ]
+
+        project_needs_final_keys = [
+            errors_replacer.get_project_needs_final_key_and_type_key(
+                project_id, ReplacerState.ERRORS
+            )
+            for project_id in project_ids
+        ]
+
+        # No replacements or needs final
+        assert (
+            errors_replacer.get_latest_replacement_time_by_projects(
+                project_ids, ReplacerState.ERRORS
+            )
+            is None
+        )
+
+        # All projects need final
+        expire = 0
+        for project_needs_final_key, _ in project_needs_final_keys:
+            expire += 10
+            p.set(project_needs_final_key, True, ex=expire)
+        p.execute()
+        latest_replacement_time = errors_replacer.get_latest_replacement_time_by_projects(
+            project_ids, ReplacerState.ERRORS
+        )
+        expected_time = datetime.now() + timedelta(seconds=30)
+        assert (
+            latest_replacement_time is not None
+            and abs((latest_replacement_time - expected_time).total_seconds()) < 1
+        )
+        redis_client.flushdb()
+
+        # Some projects need final
+        expire = 0
+        for project_needs_final_key, _ in project_needs_final_keys[1:]:
+            expire += 10
+            p.set(project_needs_final_key, True, ex=expire)
+        p.execute()
+        latest_replacement_time = errors_replacer.get_latest_replacement_time_by_projects(
+            project_ids, ReplacerState.ERRORS
+        )
+        expected_time = datetime.now() + timedelta(seconds=20)
+        assert (
+            latest_replacement_time is not None
+            and abs((latest_replacement_time - expected_time).total_seconds()) < 1
+        )
+        redis_client.flushdb()
 
         # One replacement per project, ascending timestamp per replacement
         group_id_data_asc: MutableMapping[str, float] = {"a": JAN_1_2021.timestamp()}
