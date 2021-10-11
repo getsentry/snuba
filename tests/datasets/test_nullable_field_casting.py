@@ -23,10 +23,9 @@ span_id_as_uint64 = int(span_id_hex, 16)
     "entity, expected_table_name",
     [pytest.param(get_entity(EntityKey.DISCOVER), "discover", id="discover",)],
 )
-def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
+def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> None:
     dataset_name = "discover"
 
-    # The client queries by contexts[trace.span_id] even though that's not how we store it
     query_str = f"""MATCH (discover)
     SELECT
         uniq(sdk_version)
