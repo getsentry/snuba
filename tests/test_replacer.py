@@ -526,17 +526,7 @@ class TestReplacer:
         p = redis_client.pipeline()
         JAN_1_2021 = datetime(2021, 1, 1)
         ONE_DAY = timedelta(days=1)
-        JAN_3_2021, JAN_4_2021, JAN_5_2021 = (
-            JAN_1_2021 + i * ONE_DAY for i in range(2, 5)
-        )
-
-        # No replacements
-        assert (
-            errors_replacer.get_latest_replacement_time_by_projects(
-                project_ids, ReplacerState.ERRORS
-            )
-            is None
-        )
+        JAN_4_2021, JAN_5_2021 = (JAN_1_2021 + i * ONE_DAY for i in range(3, 5))
 
         exclude_groups_keys = [
             errors_replacer.get_project_exclude_groups_key_and_type_key(
@@ -592,7 +582,7 @@ class TestReplacer:
         )
         redis_client.flushdb()
 
-        # One replacement per project, ascending timestamp per replacement
+        # One exclude group per project
         group_id_data_asc: MutableMapping[str, float] = {"a": JAN_1_2021.timestamp()}
         for exclude_groups_key, _ in exclude_groups_keys:
             group_id_data_asc["a"] += ONE_DAY.total_seconds()
@@ -606,21 +596,7 @@ class TestReplacer:
         )
         redis_client.flushdb()
 
-        # One replacement per project, descending timestamp per replacement
-        group_id_data_desc: MutableMapping[str, float] = {"a": JAN_4_2021.timestamp()}
-        for exclude_groups_key, _ in exclude_groups_keys:
-            group_id_data_desc["a"] -= ONE_DAY.total_seconds()
-            p.zadd(exclude_groups_key, **group_id_data_desc)
-        p.execute()
-        assert (
-            errors_replacer.get_latest_replacement_time_by_projects(
-                project_ids, ReplacerState.ERRORS
-            )
-            == JAN_3_2021
-        )
-        redis_client.flushdb()
-
-        # Multiple replacements per project
+        # Multiple exclude groups per project
         group_id_data_multiple: MutableMapping[str, float] = {
             "a": JAN_5_2021.timestamp(),
             "b": JAN_4_2021.timestamp(),
@@ -638,7 +614,7 @@ class TestReplacer:
         )
         redis_client.flushdb()
 
-        # Replacements for some projects
+        # Exclude group for some projects
         group_id_data_some: MutableMapping[str, float] = {
             "a": JAN_5_2021.timestamp(),
             "b": JAN_4_2021.timestamp(),
