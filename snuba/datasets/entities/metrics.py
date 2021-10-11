@@ -12,8 +12,8 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
-    ColumnToCurriedFunction,
     ColumnToFunction,
+    FunctionNameMapper,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -24,16 +24,10 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import (
-    Expression,
-    FunctionCall,
-    Literal,
-    SubscriptableReference,
-)
+from snuba.query.expressions import Expression, Literal, SubscriptableReference
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
@@ -104,7 +98,6 @@ class MetricsEntity(Entity, ABC):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            BasicFunctionsProcessor(),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
             ProjectRateLimiterProcessor(project_column="project_id"),
             TagsTypeTransformer(),
@@ -120,13 +113,9 @@ class MetricsSetsEntity(MetricsEntity):
                 Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
             ],
             mappers=TranslationMappers(
-                columns=[
-                    ColumnToFunction(
-                        None,
-                        "value",
-                        "uniqCombined64Merge",
-                        (ColumnExpr(None, None, "value"),),
-                    ),
+                functions=[
+                    FunctionNameMapper("uniq", "uniqCombined64Merge"),
+                    FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
         )
@@ -139,10 +128,9 @@ class MetricsCountersEntity(MetricsEntity):
             readable_storage_key=StorageKey.METRICS_COUNTERS,
             value_schema=[Column("value", AggregateFunction("sum", [Float(64)]))],
             mappers=TranslationMappers(
-                columns=[
-                    ColumnToFunction(
-                        None, "value", "sumMerge", (ColumnExpr(None, None, "value"),),
-                    ),
+                functions=[
+                    FunctionNameMapper("sum", "sumMerge"),
+                    FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
         )
@@ -173,25 +161,19 @@ class MetricsDistributionsEntity(MetricsEntity):
                 Column("count", AggregateFunction("count", [Float(64)])),
             ],
             mappers=TranslationMappers(
-                columns=[
-                    ColumnToCurriedFunction(
-                        None,
-                        "percentiles",
-                        FunctionCall(
-                            None,
-                            "quantilesMerge",
-                            tuple(
-                                Literal(None, quant)
-                                for quant in [0.5, 0.75, 0.9, 0.95, 0.99]
-                            ),
-                        ),
-                        (ColumnExpr(None, None, "percentiles"),),
-                    ),
-                    merge_mapper("min"),
-                    merge_mapper("max"),
-                    merge_mapper("avg"),
-                    merge_mapper("sum"),
-                    merge_mapper("count"),
+                functions=[
+                    FunctionNameMapper("percentiles", "quantilesMerge"),
+                    FunctionNameMapper("percentilesIf", "quantilesMergeIf"),
+                    FunctionNameMapper("min", "minMerge"),
+                    FunctionNameMapper("minIf", "minMergeIf"),
+                    FunctionNameMapper("max", "maxMerge"),
+                    FunctionNameMapper("maxIf", "maxMergeIf"),
+                    FunctionNameMapper("avg", "avgMerge"),
+                    FunctionNameMapper("avgIf", "avgMergeIf"),
+                    FunctionNameMapper("sum", "sumMerge"),
+                    FunctionNameMapper("sumIf", "sumMergeIf"),
+                    FunctionNameMapper("count", "countMerge"),
+                    FunctionNameMapper("countIf", "countMergeIf"),
                 ],
             ),
         )

@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
+    FunctionCallMapper,
     SubscriptableReferenceMapper,
     ValidColumnMappings,
 )
@@ -253,5 +254,34 @@ mapping_pattern = FunctionCall(
         ),
     ),
 )
+
+
+@dataclass(frozen=True)
+class FunctionNameMapper(FunctionCallMapper):
+    """
+    Translates a function name into another preserving aliases
+    and parameters. Parameters are translated on their own through
+    the children translator.
+    """
+
+    from_name: str
+    to_name: str
+
+    def attempt_map(
+        self,
+        expression: FunctionCallExpr,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCallExpr]:
+        if expression.function_name != self.from_name:
+            return None
+
+        return FunctionCallExpr(
+            alias=expression.alias,
+            function_name=self.to_name,
+            parameters=tuple(
+                exp.accept(children_translator) for exp in expression.parameters
+            ),
+        )
+
 
 # TODO: build more of these mappers.
