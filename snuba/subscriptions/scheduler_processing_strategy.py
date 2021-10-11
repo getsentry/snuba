@@ -109,7 +109,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         if len(self.__buffers[tick_partition]) > 1:
             return
 
-        while True:
+        while all(len(buffer) > 0 for buffer in self.__buffers.values()):
             earliest_ts = message.payload.timestamps.upper
             earliest_ts_partitions = {message.payload.partition}
 
@@ -140,15 +140,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 "partition_lag_ms",
                 (self.__latest_ts - earliest_ts).total_seconds() * 1000,
             )
-
-            # Exit the while loop if any buffer is empty, otherwise repeat
-            if any(
-                [
-                    len(self.__buffers[partition]) == 0
-                    for partition in earliest_ts_partitions
-                ]
-            ):
-                break
 
     def close(self) -> None:
         self.__closed = True
