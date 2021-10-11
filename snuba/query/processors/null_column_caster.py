@@ -10,8 +10,42 @@ from snuba.request.request_settings import RequestSettings
 
 
 class NullColumnCaster(QueryProcessor):
+    """
+    In the case of merge tables (e.g. discover), if the column is nullable on
+    one of the tables but not nullable in the other, clickhouse can throw an error.
+
+    Example:
+
+    This query will fail:
+
+    >>> SELECT uniq(sdk_version) AS _snuba_sdk_version
+    >>> FROM discover_dist
+    >>> WHERE
+    >>>     in((project_id AS _snuba_project_id), tuple(5433960))
+    >>> LIMIT 1
+    >>> OFFSET 0
+
+    >>> Error:
+    >>> "Conversion from AggregateFunction(uniq, LowCardinality(String)) to"
+    >>> "AggregateFunction(uniq, LowCardinality(Nullable(String))) is not supported"
+
+    This QueryProcessor will find aggregations on mismatched nullable fields and cast them
+    to nullable. This will turn the above query into:
+
+    >>> SELECT uniq(cast(sdk_version, Nullable(String))) AS _snuba_sdk_version
+    >>> FROM discover_dist
+    >>> WHERE
+    >>>     in((project_id AS _snuba_project_id), tuple(5433960))
+    >>> LIMIT 1
+    >>> OFFSET 0
+
+    And clickhouse will not throw an error since the column will be interpreted as nullable
+
+
+    """
+
     def _find_mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
-        res: Dict[str, FlattenedColumn] = {}
+        mismatched_col_name_to_col: Dict[str, FlattenedColumn] = {}
         col_name_to_nullable: Dict[str, bool] = {}
         for table_storage in self.__merge_table_sources:
             for col in table_storage.get_schema().get_columns():
@@ -26,12 +60,18 @@ class NullColumnCaster(QueryProcessor):
                     other_storage_column_is_nullable is not None
                     and other_storage_column_is_nullable != col_is_nullable
                 ):
-                    res[col.name] = col
+                    mismatched_col_name_to_col[col.name] = col
                 col_name_to_nullable[col.name] = col_is_nullable
 
-        return res
+        return mismatched_col_name_to_col
 
     def __init__(self, merge_table_sources: Sequence[ReadableTableStorage]):
+        """
+        Args:
+            merge_table_sources: sequence of the storages which make up the merge table,
+            This is necessary to find which fields need to be cast to nullable
+
+        """
         self.__merge_table_sources = merge_table_sources
         self.__mismatched_null_columns = self._find_mismatched_null_columns()
 

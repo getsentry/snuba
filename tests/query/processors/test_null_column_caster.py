@@ -105,7 +105,97 @@ test_data = [
             ],
         ),
         id="cast string to null",
-    )
+    ),
+    pytest.param(
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "mismatched2"),)
+                    ),
+                )
+            ],
+        ),
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None,
+                        "uniq",
+                        (
+                            FunctionCall(
+                                None,
+                                "cast",
+                                (
+                                    Column(None, None, "mismatched2"),
+                                    Literal(None, "Nullable(UInt64)"),
+                                ),
+                            ),
+                        ),
+                    ),
+                )
+            ],
+        ),
+        id="cast UInt64 to null",
+    ),
+    pytest.param(
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "not_mismatched"),)
+                    ),
+                )
+            ],
+        ),
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None, "uniq", (Column(None, None, "not_mismatched"),)
+                    ),
+                )
+            ],
+        ),
+        id="don't cast non-mismatched fields",
+    ),
+    pytest.param(
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None,
+                        "and",
+                        (Column(None, None, "mismatched"), Literal(None, "True")),
+                    ),
+                )
+            ],
+        ),
+        Query(
+            Table("discover", merged_columns),
+            selected_columns=[
+                SelectedExpression(
+                    name="_snuba_count_unique_sdk_version",
+                    expression=FunctionCall(
+                        None,
+                        "and",
+                        (Column(None, None, "mismatched"), Literal(None, "True")),
+                    ),
+                )
+            ],
+        ),
+        id="don't cast non-aggregate functions",
+    ),
 ]
 
 
