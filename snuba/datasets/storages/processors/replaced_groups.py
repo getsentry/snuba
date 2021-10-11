@@ -1,6 +1,5 @@
 import logging
 from dataclasses import replace
-from datetime import datetime
 from typing import Optional, Set
 
 from snuba import environment, settings
@@ -55,54 +54,42 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 query_is_final,
                 exclude_group_ids,
                 replacement_types,
-            ) = get_projects_query_flags(list(project_ids), self.__replacer_state_name,)
+            ) = get_projects_query_flags(list(project_ids), self.__replacer_state_name)
             tags = {replacement_type: "True" for replacement_type in replacement_types}
             tags["referrer"] = request_settings.referrer
             tags["parent_api"] = request_settings.get_parent_api()
             if query_is_final:
                 tags["cause"] = "final_flag"
-
                 metrics.increment(
                     "final", tags=tags,
                 )
-            if not query_is_final and exclude_group_ids:
-                if self._query_overlaps_replacements(query, project_ids):
-                    # If the number of groups to exclude exceeds our limit, the query
-                    # should just use final instead of the exclusion set.
-                    max_group_ids_exclude = get_config(
-                        "max_group_ids_exclude",
-                        settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+                set_final = True
+            elif exclude_group_ids and self._query_overlaps_replacements(
+                query, project_ids
+            ):
+                # If the number of groups to exclude exceeds our limit, the query
+                # should just use final instead of the exclusion set.
+                max_group_ids_exclude = get_config(
+                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+                )
+                assert isinstance(max_group_ids_exclude, int)
+                if len(exclude_group_ids) > max_group_ids_exclude:
+                    tags["cause"] = "max_groups"
+                    metrics.increment(
+                        "final", tags=tags,
                     )
-                    assert isinstance(max_group_ids_exclude, int)
-                    if len(exclude_group_ids) > max_group_ids_exclude:
-                        tags["cause"] = "max_groups"
-                        metrics.increment(
-                            "final", tags=tags,
+                    set_final = True
+                else:
+                    query.add_condition_to_ast(
+                        not_in_condition(
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (Column(None, None, "group_id"),),
+                            ),
+                            [Literal(None, p) for p in exclude_group_ids],
                         )
-                    assert isinstance(max_group_ids_exclude, int)
-                    if len(exclude_group_ids) > max_group_ids_exclude:
-                        metrics.increment(
-                            "final",
-                            tags={
-                                "cause": "max_groups",
-                                "referrer": request_settings.referrer,
-                                "parent_api": request_settings.get_parent_api(),
-                            },
-                        )
-                        set_final = True
-                    else:
-                        query.add_condition_to_ast(
-                            not_in_condition(
-                                FunctionCall(
-                                    None,
-                                    "assumeNotNull",
-                                    (Column(None, None, "group_id"),),
-                                ),
-                                [Literal(None, p) for p in exclude_group_ids],
-                            )
-                        )
-            else:
-                set_final = query_is_final
+                    )
 
         query.set_from_clause(replace(query.get_from_clause(), final=set_final))
 
@@ -118,5 +105,5 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 list(project_ids), self.__replacer_state_name
             )
             if latest_replacement_time:
-                return datetime.fromtimestamp(latest_replacement_time) > query_from
+                return latest_replacement_time > query_from
         return True

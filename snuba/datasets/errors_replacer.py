@@ -316,7 +316,7 @@ def process_exclude_groups_and_replacement_types_results(
 
 def get_latest_replacement_time_by_projects(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Optional[float]:
+) -> Optional[datetime]:
     """
     Given project ids, returns the highest timestamp for any group
     exclude replacement in the projects.
@@ -337,7 +337,11 @@ def get_latest_replacement_time_by_projects(
         if result and isinstance(result, list):
             [(_, timestamp)] = result
             latest_replacements.add(timestamp)
-    return max(latest_replacements) if latest_replacements else None
+    return (
+        datetime.fromtimestamp(max(latest_replacements))
+        if latest_replacements
+        else None
+    )
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
