@@ -303,33 +303,3 @@ def get_migration_args_for_distributions(
         ),
         "granularity": granularity,
     }
-
-
-def drop_views(granularity: int) -> Sequence[operations.SqlOperation]:
-    """ Drop all materialized metrics views for a given granularity.
-
-    Used in backward migrations
-    """
-    return [
-        operations.DropTable(
-            storage_set=StorageSetKey.METRICS,
-            table_name=get_mv_name(metric_type, granularity),
-        )
-        for metric_type in ("sets", "counters", "distributions")
-    ]
-
-
-def create_views(granularity: int) -> Sequence[operations.SqlOperation]:
-    """ Create all materialized metrics views for a given granularity.
-
-    Used in forward migrations
-    """
-    return [
-        get_forward_view_migration_local(**get_migration_args_for_sets(granularity)),
-        get_forward_view_migration_local(
-            **get_migration_args_for_counters(granularity)
-        ),
-        get_forward_view_migration_local(
-            **get_migration_args_for_distributions(granularity)
-        ),
-    ]
