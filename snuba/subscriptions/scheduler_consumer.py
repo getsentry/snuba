@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from datetime import datetime, timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
@@ -15,6 +13,7 @@ from arroyo.types import Position
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 from snuba.utils.types import Interval, InvalidRangeError
@@ -25,23 +24,6 @@ logger = logging.getLogger(__name__)
 class MessageDetails(NamedTuple):
     offset: int
     orig_message_ts: datetime
-
-
-class Tick(NamedTuple):
-    partition: int
-    offsets: Interval[int]
-    timestamps: Interval[datetime]
-
-    def time_shift(self, delta: timedelta) -> Tick:
-        """
-        Returns a new ``Tick`` instance that has had the bounds of its time
-        interval shifted by the provided delta.
-        """
-        return Tick(
-            self.partition,
-            self.offsets,
-            Interval(self.timestamps.lower + delta, self.timestamps.upper + delta),
-        )
 
 
 class CommitLogTickConsumer(Consumer[Tick]):
