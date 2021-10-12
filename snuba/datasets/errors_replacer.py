@@ -217,14 +217,21 @@ def set_project_needs_final(
 
 def get_projects_query_flags(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Tuple[bool, Sequence[int], Set[str]]:
+) -> Tuple[bool, Sequence[int], Set[str], Optional[datetime]]:
     """\
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
     3. Trim groups to exclude ZSET for each Project
     4. Fetch replacement types for each Project
+    5. Fetch latest exclude groups replacement type for each Project
+    6. Fetch TTL for needs final replacement for each Project
 
-    Returns (needs_final, group_ids_to_exclude, replacement_types)
+    Returns (
+        needs_final,
+        group_ids_to_exclude,
+        replacement_types,
+        latest_replacement_type
+    )
     """
 
     s_project_ids = set(project_ids)
@@ -259,6 +266,14 @@ def get_projects_query_flags(
         p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
         p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
 
+    for exclude_groups_key, _ in exclude_groups_keys_and_types:
+        p.zrevrange(
+            exclude_groups_key, 0, 0, withscores=True,
+        )
+
+    for needs_final_key, _ in needs_final_keys_and_type_keys:
+        p.ttl(needs_final_key)
+
     results = p.execute()
 
     return process_exclude_groups_and_replacement_types_results(
@@ -268,7 +283,7 @@ def get_projects_query_flags(
 
 def process_exclude_groups_and_replacement_types_results(
     results: List[Any], len_projects: int
-) -> Tuple[bool, Sequence[int], Set[str]]:
+) -> Tuple[bool, Sequence[int], Set[str], Optional[datetime]]:
     """
     Helper function for `get_projects_query_flags`.
     `results` is in the form:
@@ -276,12 +291,16 @@ def process_exclude_groups_and_replacement_types_results(
         needs_final...,
         exclude_groups...,
         needs_final_replacement_types...,
-        groups_replacement_types...
+        groups_replacement_types...,
+        latest_exclude_groups_replacements...,
+        latest_project_needs_final_replacements...
     ]
     - `needs_final` slice is `len_projects` long
     - `excludes_groups` slice is `len_projects * 2` long
     - `needs_final_replacement_types` slice is `len_projects` long
     - `groups_replacement_types` slice is `len_projects * 2` long
+    - `latest_exclude_groups_replacements` slice is `len_projects` long
+    - `latest_project_needs_final_replacements` slice is `len_projects` long
 
     The `len_projects * 2` long slices are in the form:
     int, list, int, list, ...
@@ -292,7 +311,9 @@ def process_exclude_groups_and_replacement_types_results(
     needs_final = any(results[:len_projects])
     exclude_groups_results = results[len_projects : len_projects * 3]
     projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
-    groups_replacement_types_result = results[len_projects * 4 :]
+    groups_replacement_types_result = results[len_projects * 4 : len_projects * 6]
+    latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
+    latest_project_needs_final_result = results[len_projects * 7 :]
 
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
@@ -311,51 +332,27 @@ def process_exclude_groups_and_replacement_types_results(
 
     replacement_types = groups_replacement_types.union(needs_final_replacement_types)
 
-    return needs_final, exclude_groups, replacement_types
-
-
-def get_latest_replacement_time_by_projects(
-    project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Optional[datetime]:
-    """
-    Given project ids, finds highest timestamps for any FINAL project
-    and group exclude replacemetns and returns returns the highest
-    timestamp found.
-    """
-    p = redis_client.pipeline()
-
-    for project_id in project_ids:
-        exclude_groups_key, _ = get_project_exclude_groups_key_and_type_key(
-            project_id, state_name
-        )
-        project_needs_final_key, _ = get_project_needs_final_key_and_type_key(
-            project_id, state_name
-        )
-        # Gets the item with the highest score for a key, along with the score itself
-        p.zrevrange(
-            exclude_groups_key, 0, 0, withscores=True,
-        )
-        # Get the TTL for final per project
-        p.ttl(project_needs_final_key)
-
-    # results are in the form [[(str, float)], int, [(str, float)], int, ...]
-    results = p.execute()
-
     latest_replacements = set()
-    for result in results:
-        if result:
-            if isinstance(result, list):
-                [(_, timestamp)] = result
-                latest_replacements.add(timestamp)
-            elif isinstance(result, int) and result >= 0:
-                latest_replacements.add(
-                    (datetime.now() + timedelta(seconds=result)).timestamp()
-                )
-    return (
+    for latest_exclude_groups in latest_exclude_groups_result:
+        if latest_exclude_groups:
+            [(_, timestamp)] = latest_exclude_groups
+            latest_replacements.add(timestamp)
+
+    for latest_project_needs_final in latest_project_needs_final_result:
+        if latest_project_needs_final and latest_project_needs_final >= 0:
+            latest_replacements.add(
+                (
+                    datetime.now() + timedelta(seconds=latest_project_needs_final)
+                ).timestamp()
+            )
+
+    latest_replacement_time = (
         datetime.fromtimestamp(max(latest_replacements))
         if latest_replacements
         else None
     )
+
+    return needs_final, exclude_groups, replacement_types, latest_replacement_time
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):

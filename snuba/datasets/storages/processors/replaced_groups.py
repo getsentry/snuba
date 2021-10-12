@@ -1,6 +1,7 @@
 import logging
 from dataclasses import replace
-from typing import Optional, Set
+from datetime import datetime
+from typing import Optional
 
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
@@ -9,11 +10,7 @@ from snuba.clickhouse.query_dsl.accessors import (
     get_object_ids_in_query_ast,
     get_time_range,
 )
-from snuba.datasets.errors_replacer import (
-    ReplacerState,
-    get_latest_replacement_time_by_projects,
-    get_projects_query_flags,
-)
+from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
@@ -54,6 +51,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 query_is_final,
                 exclude_group_ids,
                 replacement_types,
+                latest_replacement_time,
             ) = get_projects_query_flags(list(project_ids), self.__replacer_state_name)
             tags = {replacement_type: "True" for replacement_type in replacement_types}
             tags["referrer"] = request_settings.referrer
@@ -65,7 +63,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 )
                 set_final = True
             elif exclude_group_ids and self._query_overlaps_replacements(
-                query, project_ids
+                query, latest_replacement_time
             ):
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.
@@ -93,17 +91,17 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         query.set_from_clause(replace(query.get_from_clause(), final=set_final))
 
-    def _query_overlaps_replacements(self, query: Query, project_ids: Set[int]) -> bool:
+    def _query_overlaps_replacements(
+        self, query: Query, latest_replacement_time: Optional[datetime],
+    ) -> bool:
         """
         Given a Query and a set of project ids the query "touches", returns whether
         or not this Query's time range overlaps with any replacement for any of the
         projects.
         """
         query_from, _ = get_time_range(query, "timestamp")
-        if query_from:
-            latest_replacement_time = get_latest_replacement_time_by_projects(
-                list(project_ids), self.__replacer_state_name
-            )
-            if latest_replacement_time:
-                return latest_replacement_time > query_from
-        return True
+        return (
+            latest_replacement_time > query_from
+            if latest_replacement_time and query_from
+            else True
+        )
