@@ -95,9 +95,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         self, query: Query, latest_replacement_time: Optional[datetime],
     ) -> bool:
         """
-        Given a Query and a set of project ids the query "touches", returns whether
-        or not this Query's time range overlaps with any replacement for any of the
-        projects.
+        Given a Query and the latest replacement time for any project
+        this query touches, returns whether or not this Query's time
+        range overlaps that replacement.
         """
         query_from, _ = get_time_range(query, "timestamp")
         return (

@@ -7,7 +7,7 @@ import uuid
 from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from functools import cached_property
 from typing import (
@@ -206,13 +206,12 @@ def set_project_needs_final(
     project_id: int,
     state_name: Optional[ReplacerState],
     replacement_type: ReplacementType,
-) -> Optional[bool]:
+) -> None:
     key, type_key = get_project_needs_final_key_and_type_key(project_id, state_name)
     p = redis_client.pipeline()
-    p.set(key, True, ex=settings.REPLACER_KEY_TTL)
+    p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
     p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
-    [final_was_set, _] = p.execute()
-    return bool(final_was_set)
+    p.execute()
 
 
 def get_projects_query_flags(
@@ -224,7 +223,6 @@ def get_projects_query_flags(
     3. Trim groups to exclude ZSET for each Project
     4. Fetch replacement types for each Project
     5. Fetch latest exclude groups replacement type for each Project
-    6. Fetch TTL for needs final replacement for each Project
 
     Returns (
         needs_final,
@@ -271,9 +269,6 @@ def get_projects_query_flags(
             exclude_groups_key, 0, 0, withscores=True,
         )
 
-    for needs_final_key, _ in needs_final_keys_and_type_keys:
-        p.ttl(needs_final_key)
-
     results = p.execute()
 
     return process_exclude_groups_and_replacement_types_results(
@@ -292,15 +287,13 @@ def process_exclude_groups_and_replacement_types_results(
         exclude_groups...,
         needs_final_replacement_types...,
         groups_replacement_types...,
-        latest_exclude_groups_replacements...,
-        latest_project_needs_final_replacements...
+        latest_exclude_groups_replacements...
     ]
     - `needs_final` slice is `len_projects` long
     - `excludes_groups` slice is `len_projects * 2` long
     - `needs_final_replacement_types` slice is `len_projects` long
     - `groups_replacement_types` slice is `len_projects * 2` long
     - `latest_exclude_groups_replacements` slice is `len_projects` long
-    - `latest_project_needs_final_replacements` slice is `len_projects` long
 
     The `len_projects * 2` long slices are in the form:
     int, list, int, list, ...
@@ -308,12 +301,33 @@ def process_exclude_groups_and_replacement_types_results(
     the redis sorted set used to track when the items were zadded.
     """
 
-    needs_final = any(results[:len_projects])
+    needs_final_result = results[:len_projects]
     exclude_groups_results = results[len_projects : len_projects * 3]
     projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
     groups_replacement_types_result = results[len_projects * 4 : len_projects * 6]
     latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
-    latest_project_needs_final_result = results[len_projects * 7 :]
+
+    needs_final = any(needs_final_result)
+    latest_replacements = set()
+
+    if needs_final:
+        latest_need_final_replacement_times = [
+            # Backwards compatibility: Before it was simply "True" at each key,
+            # now it's the timestamp at which the key was added.
+            # This should stay for at least 24h after this change is deployed.
+            # `and timestamp != b"True"` can be removed when there are no
+            # longer any "key:True" entries
+            float(timestamp)
+            for timestamp in needs_final_result
+            if timestamp and timestamp != b"True"
+        ]
+        latest_needs_final_replacement = (
+            max(latest_need_final_replacement_times)
+            if latest_need_final_replacement_times
+            else None
+        )
+        if latest_needs_final_replacement:
+            latest_replacements.add(latest_needs_final_replacement)
 
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
@@ -332,19 +346,10 @@ def process_exclude_groups_and_replacement_types_results(
 
     replacement_types = groups_replacement_types.union(needs_final_replacement_types)
 
-    latest_replacements = set()
     for latest_exclude_groups in latest_exclude_groups_result:
         if latest_exclude_groups:
             [(_, timestamp)] = latest_exclude_groups
             latest_replacements.add(timestamp)
-
-    for latest_project_needs_final in latest_project_needs_final_result:
-        if latest_project_needs_final and latest_project_needs_final >= 0:
-            latest_replacements.add(
-                (
-                    datetime.now() + timedelta(seconds=latest_project_needs_final)
-                ).timestamp()
-            )
 
     latest_replacement_time = (
         datetime.fromtimestamp(max(latest_replacements))
@@ -439,12 +444,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         return processed
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
-        if self.__state_name == ReplacerState.EVENTS:
-            # Backward compatibility with the old keys already in Redis, we will let double write
-            # the old key structure and the new one for a while then we can get rid of the old one.
-            compatibility_double_write = True
-        else:
-            compatibility_double_write = False
+
+        # Backward compatibility with the old keys already in Redis, we will let double write
+        # the old key structure and the new one for a while then we can get rid of the old one.
+        compatibility_double_write = self.__state_name == ReplacerState.EVENTS
 
         project_id = replacement.get_project_id()
         query_time_flags = replacement.get_query_time_flags()

@@ -548,15 +548,15 @@ class TestReplacer:
         assert latest_replacement_time is None
 
         # All projects need final
-        expire = 0
+        time_offset = 0
         for project_needs_final_key, _ in project_needs_final_keys:
-            expire += 10
-            p.set(project_needs_final_key, True, ex=expire)
+            p.set(project_needs_final_key, now.timestamp() + time_offset)
+            time_offset += 10
         p.execute()
         (_, _, _, latest_replacement_time) = errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
         )
-        expected_time = now + timedelta(seconds=30)
+        expected_time = now + timedelta(seconds=20)
         assert (
             latest_replacement_time is not None
             and abs((latest_replacement_time - expected_time).total_seconds()) < 1
@@ -564,15 +564,15 @@ class TestReplacer:
         redis_client.flushdb()
 
         # Some projects need final
-        expire = 0
+        time_offset = 0
         for project_needs_final_key, _ in project_needs_final_keys[1:]:
-            expire += 10
-            p.set(project_needs_final_key, True, ex=expire)
+            p.set(project_needs_final_key, now.timestamp() + time_offset)
+            time_offset += 10
         p.execute()
         (_, _, _, latest_replacement_time) = errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
         )
-        expected_time = now + timedelta(seconds=20)
+        expected_time = now + timedelta(seconds=10)
         assert (
             latest_replacement_time is not None
             and abs((latest_replacement_time - expected_time).total_seconds()) < 1
