@@ -15,9 +15,6 @@ from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
 
-span_id_hex = "1337dedbeef42069"
-span_id_as_uint64 = int(span_id_hex, 16)
-
 
 @pytest.mark.parametrize(
     "entity, expected_table_name",
@@ -26,13 +23,12 @@ span_id_as_uint64 = int(span_id_hex, 16)
 def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> None:
     dataset_name = "discover"
 
-    query_str = f"""MATCH (discover)
+    query_str = """MATCH (discover)
     SELECT
         uniq(sdk_version)
     WHERE
         timestamp >= toDateTime('2021-07-25T15:02:10') AND
         timestamp < toDateTime('2021-07-26T15:02:10') AND
-        contexts[trace.span_id] = '{span_id_hex}' AND
         project_id IN tuple(5492900)
     """
 
