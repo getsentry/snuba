@@ -21,7 +21,7 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.arrayjoin_spans_optimizer import ArrayJoinSpansOptimizer
+from snuba.query.processors.arrayjoin_optimizer import ArrayJoinOptimizer
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
@@ -129,7 +129,9 @@ storage = WritableTableStorage(
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
-        ArrayJoinSpansOptimizer(),
+        ArrayJoinOptimizer(
+            "spans", ["op", "group"], ["exclusive_time"], use_bf_index=True
+        ),
         HexIntArrayColumnProcessor({"spans.group"}),
         PrewhereProcessor(
             [

@@ -20,10 +20,10 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.processors.arrayjoin_spans_optimizer import (
-    ArrayJoinSpansOptimizer,
-    get_filtered_mapping_keys_column,
-    get_filtered_mapping_keys_tuple,
+from snuba.query.processors.arrayjoin_optimizer import (
+    ArrayJoinOptimizer,
+    get_multiple_columns_filters,
+    get_single_column_filters,
 )
 from snuba.request.request_settings import HTTPRequestSettings
 from tests.query.processors.query_builders import build_query
@@ -90,14 +90,14 @@ spans_op_filter_tests = [
 
 
 @pytest.mark.parametrize("query, expected_result", spans_op_filter_tests)
-def test_get_filtered_mapping_keys_column(
+def test_get_single_column_filters(
     query: ClickhouseQuery, expected_result: Set[Expression]
 ) -> None:
     """
     Test the algorithm identifies conditions on op/group that can potentially
     be pre-filtered through arrayFilter.
     """
-    assert set(get_filtered_mapping_keys_column(query, "spans.op")) == expected_result
+    assert set(get_single_column_filters(query, "spans.op")) == expected_result
 
 
 spans_op_group_tuple_filter_tests = [
@@ -241,7 +241,7 @@ spans_op_group_tuple_filter_tests = [
 
 
 @pytest.mark.parametrize("query, expected_result", spans_op_group_tuple_filter_tests)
-def test_get_filtered_mapping_keys_tuple(
+def test_get_multiple_columns_filters(
     query: ClickhouseQuery, expected_result: Set[Expression]
 ) -> None:
     """
@@ -249,7 +249,7 @@ def test_get_filtered_mapping_keys_tuple(
     be pre-filtered through arrayFilter.
     """
     assert (
-        set(get_filtered_mapping_keys_tuple(query, "spans.op", "spans.group"))
+        set(get_multiple_columns_filters(query, ("spans.op", "spans.group")))
         == expected_result
     )
 
@@ -257,7 +257,7 @@ def test_get_filtered_mapping_keys_tuple(
 def array_join_col(ops=None, groups=None, op_groups=None):
     conditions: List[Expression] = []
 
-    argument_name = "triple"
+    argument_name = "arg"
     argument = Argument(None, argument_name)
 
     if ops:
@@ -718,7 +718,7 @@ def test_spans_processor(
     expected_conditions: Optional[Expression],
 ) -> None:
     request_settings = HTTPRequestSettings()
-    processor = ArrayJoinSpansOptimizer()
+    processor = ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time"])
     processor.process_query(query, request_settings)
     assert query.get_selected_columns() == expected_selected_columns
     assert query.get_condition() == expected_conditions
