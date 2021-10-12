@@ -263,6 +263,7 @@ def get_projects_query_flags(
         p.zremrangebyscore(
             exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
         )
+        # TODO: put this into another for loop to make post processing easier
         # get up to date excluded groups
         p.zrevrangebyscore(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
@@ -276,6 +277,7 @@ def get_projects_query_flags(
         # cleanup the old exclude group replacement types
         p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
         # get the new exclude group replacement types
+        # TODO: put this into another for loop to make post processing easier
         p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
 
     # retrieve the latest replaced group id's timestamp such that queries
@@ -293,17 +295,21 @@ def get_projects_query_flags(
 
 
 def _process_exclude_groups_and_replacement_types_results(
-    results: List[Any], len_projects: int
+    results: List[Any],
+    len_projects: int
+    # TODO: make return type a dataclass to clearly communicate purpose
 ) -> Tuple[bool, Sequence[int], Set[str], Optional[datetime]]:
     """
     Helper function for `get_projects_query_flags`.
-    `results` is in the form:
+    Given raw redis result output, return something that makes sense
+
+    `results` is a flat list of all the redis call results of get_projects_query_flags
     [
-        needs_final...,
-        exclude_groups...,
-        needs_final_replacement_types...,
-        groups_replacement_types...,
-        latest_exclude_groups_replacements...
+        needs_final: Sequence[timestamp]...,
+        exclude_groups: Sequence[..(num_removed_elements(don't care), List[group_id] )]...,
+        needs_final_replacement_types: Sequece[Optional[str]]...,
+        groups_replacement_types: Sequence[..(num_removed, str)]...,
+        latest_exclude_groups_replacements: Sequence[Optional[Tuple[group_id, datetime]]]...
     ]
     - `needs_final` slice is `len_projects` long
     - `excludes_groups` slice is `len_projects * 2` long
@@ -311,10 +317,16 @@ def _process_exclude_groups_and_replacement_types_results(
     - `groups_replacement_types` slice is `len_projects * 2` long
     - `latest_exclude_groups_replacements` slice is `len_projects` long
 
+    [needs_final   |exclude_groups    |...]
+    [ len(projects)|len(projects) * 2 |   ]
+
     The `len_projects * 2` long slices are in the form:
     int, list, int, list, ...
-    Only the lists are necessary, the ints are scores from
-    the redis sorted set used to track when the items were zadded.
+    Only the lists are necessary, the ints for number of items removed
+    during the zremrangebyscore calls.
+
+
+
     """
 
     needs_final_result = results[:len_projects]
@@ -324,8 +336,26 @@ def _process_exclude_groups_and_replacement_types_results(
     latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
 
     needs_final = any(needs_final_result)
-    latest_replacements = set()
 
+    exclude_groups = sorted(
+        {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
+    )
+
+    needs_final_replacement_types = {
+        replacement_type.decode("utf-8")
+        for replacement_type in projects_replacment_types_result
+        if replacement_type
+    }
+
+    groups_replacement_types = {
+        replacement_type.decode("utf-8")
+        for replacement_type in sum(groups_replacement_types_result[1::2], [])
+    }
+
+    replacement_types = groups_replacement_types.union(needs_final_replacement_types)
+
+    # TODO: make this its own helper function
+    latest_replacements = set()
     if needs_final:
         latest_need_final_replacement_times = [
             # Backwards compatibility: Before it was simply "True" at each key,
@@ -344,23 +374,6 @@ def _process_exclude_groups_and_replacement_types_results(
         )
         if latest_needs_final_replacement:
             latest_replacements.add(latest_needs_final_replacement)
-
-    exclude_groups = sorted(
-        {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
-    )
-
-    needs_final_replacement_types = {
-        replacement_type.decode("utf-8")
-        for replacement_type in projects_replacment_types_result
-        if replacement_type
-    }
-
-    groups_replacement_types = {
-        replacement_type.decode("utf-8")
-        for replacement_type in sum(groups_replacement_types_result[1::2], [])
-    }
-
-    replacement_types = groups_replacement_types.union(needs_final_replacement_types)
 
     for latest_exclude_groups in latest_exclude_groups_result:
         if latest_exclude_groups:
