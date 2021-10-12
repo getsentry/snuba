@@ -718,7 +718,9 @@ def test_spans_processor(
     expected_conditions: Optional[Expression],
 ) -> None:
     request_settings = HTTPRequestSettings()
-    processor = ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time"])
+    processor = ArrayJoinOptimizer(
+        "spans", ["op", "group"], ["exclusive_time"], use_bf_index=True
+    )
     processor.process_query(query, request_settings)
     assert query.get_selected_columns() == expected_selected_columns
     assert query.get_condition() == expected_conditions
