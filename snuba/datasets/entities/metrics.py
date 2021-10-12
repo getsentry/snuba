@@ -39,9 +39,13 @@ from snuba.query.expressions import (
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
+from snuba.query.processors.granularity_processor import GranularityProcessor
 from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.query.validation.validators import (
+    EntityRequiredColumnValidator,
+    GranularityValidator,
+)
 from snuba.request.request_settings import RequestSettings
 
 
@@ -100,7 +104,10 @@ class MetricsEntity(Entity, ABC):
             ),
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
+            validators=[
+                EntityRequiredColumnValidator({"org_id", "project_id"}),
+                GranularityValidator(minimum=10),
+            ],
             required_time_column="timestamp",
         )
 
@@ -109,6 +116,7 @@ class MetricsEntity(Entity, ABC):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            GranularityProcessor(),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
             ProjectRateLimiterProcessor(project_column="project_id"),
             TagsTypeTransformer(),

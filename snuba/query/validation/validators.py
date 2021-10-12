@@ -116,3 +116,21 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
                 raise InvalidQueryException(
                     f"invalid clause {field} in subscription query"
                 )
+
+
+class GranularityValidator(QueryValidator):
+    """ Verify that the given granularity is a multiple of the configured value """
+
+    def __init__(self, minimum: int, required: bool = False):
+        self.minimum = minimum
+        self.required = required
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        granularity = query.get_granularity()
+        if granularity is None:
+            if self.required:
+                raise InvalidQueryException("Granularity is missing")
+        elif granularity < self.minimum or (granularity % self.minimum) != 0:
+            raise InvalidQueryException(
+                f"granularity must be multiple of {self.minimum}"
+            )

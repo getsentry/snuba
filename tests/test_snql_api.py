@@ -527,3 +527,25 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert response.status_code == 200
+
+    def test_nullable_query(self):
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": """
+                MATCH (discover)
+                SELECT uniq(sdk_version) AS count_unique_sdk_version
+                WHERE
+                    timestamp >= toDateTime('2021-08-18T18:34:04') AND
+                    timestamp < toDateTime('2021-09-01T18:34:04') AND
+                    project_id IN tuple(5433960)
+                LIMIT 1 OFFSET 0
+                """,
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": False,
+                }
+            ),
+        )
+        assert response.status_code == 200
