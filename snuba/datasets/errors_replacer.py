@@ -332,13 +332,8 @@ def get_latest_replacement_time_by_projects(
             project_id, state_name
         )
         # Gets the item with the highest score for a key, along with the score itself
-        p.zrevrangebyscore(
-            exclude_groups_key,
-            float("inf"),
-            float("-inf"),
-            withscores=True,
-            start=0,
-            num=1,
+        p.zrevrange(
+            exclude_groups_key, 0, 0, withscores=True,
         )
         # Get the TTL for final per project
         p.ttl(project_needs_final_key)
