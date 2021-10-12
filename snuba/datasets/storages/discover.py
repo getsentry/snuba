@@ -13,8 +13,10 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.errors import storage as error_storage
 from snuba.datasets.storages.errors_common import mandatory_conditions
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
+from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -23,6 +25,7 @@ from snuba.query.processors.empty_tag_condition_processor import (
 )
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.null_column_caster import NullColumnCaster
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
@@ -105,6 +108,7 @@ storage = ReadableTableStorage(
                 "project_id",
             ]
         ),
+        NullColumnCaster([transactions_storage, error_storage]),
     ],
     query_splitters=[
         ColumnSplitQueryStrategy(
