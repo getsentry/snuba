@@ -56,6 +56,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             tags = {replacement_type: "True" for replacement_type in replacement_types}
             tags["referrer"] = request_settings.referrer
             tags["parent_api"] = request_settings.get_parent_api()
+            # TODO: verify whether or not query_is_final matters if the query does not overlap
+            # with the latest replacement
             if query_is_final:
                 tags["cause"] = "final_flag"
                 metrics.increment(
