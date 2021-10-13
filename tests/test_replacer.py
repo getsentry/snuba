@@ -13,7 +13,7 @@ from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets import errors_replacer
-from snuba.datasets.errors_replacer import NeedsFinal, ReplacerState
+from snuba.datasets.errors_replacer import NeedsFinal, ProjectsQueryFlags, ReplacerState
 from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -526,14 +526,14 @@ class TestReplacer:
         p = redis_client.pipeline()
 
         exclude_groups_keys = [
-            errors_replacer.get_project_exclude_groups_key_and_type_key(
+            errors_replacer.build_project_exclude_groups_key_and_type_key(
                 project_id, ReplacerState.ERRORS
             )
             for project_id in project_ids
         ]
 
         project_needs_final_keys = [
-            errors_replacer.get_project_needs_final_key_and_type_key(
+            errors_replacer.build_project_needs_final_key_and_type_key(
                 project_id, ReplacerState.ERRORS
             )
             for project_id in project_ids
@@ -542,10 +542,10 @@ class TestReplacer:
         now = datetime.now()
 
         # No replacements or needs final
-        (_, _, _, latest_replacement_time) = errors_replacer.get_projects_query_flags(
+        flags = errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
         )
-        assert latest_replacement_time is None
+        assert flags.latest_replacement_time is None
 
         # All projects need final
         time_offset = 0
@@ -553,13 +553,13 @@ class TestReplacer:
             p.set(project_needs_final_key, now.timestamp() + time_offset)
             time_offset += 10
         p.execute()
-        (_, _, _, latest_replacement_time) = errors_replacer.get_projects_query_flags(
+        flags = errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
         )
         expected_time = now + timedelta(seconds=20)
         assert (
-            latest_replacement_time is not None
-            and abs((latest_replacement_time - expected_time).total_seconds()) < 1
+            flags.latest_replacement_time is not None
+            and abs((flags.latest_replacement_time - expected_time).total_seconds()) < 1
         )
         redis_client.flushdb()
 
@@ -569,13 +569,13 @@ class TestReplacer:
             p.set(project_needs_final_key, now.timestamp() + time_offset)
             time_offset += 10
         p.execute()
-        (_, _, _, latest_replacement_time) = errors_replacer.get_projects_query_flags(
+        flags = errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
         )
         expected_time = now + timedelta(seconds=10)
         assert (
-            latest_replacement_time is not None
-            and abs((latest_replacement_time - expected_time).total_seconds()) < 1
+            flags.latest_replacement_time is not None
+            and abs((flags.latest_replacement_time - expected_time).total_seconds()) < 1
         )
         redis_client.flushdb()
 
@@ -586,12 +586,12 @@ class TestReplacer:
             p.zadd(exclude_groups_key, **group_id_data_asc)
         p.execute()
         expected_time = now + timedelta(seconds=30)
-        (_, _, _, latest_replacement_time) = errors_replacer.get_projects_query_flags(
+        flags = errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
         )
         assert (
-            latest_replacement_time is not None
-            and abs((latest_replacement_time - expected_time).total_seconds()) < 1
+            flags.latest_replacement_time is not None
+            and abs((flags.latest_replacement_time - expected_time).total_seconds()) < 1
         )
         redis_client.flushdb()
 
@@ -606,12 +606,12 @@ class TestReplacer:
             p.zadd(exclude_groups_key, **group_id_data_multiple)
         p.execute()
         expected_time = now
-        (_, _, _, latest_replacement_time) = errors_replacer.get_projects_query_flags(
+        flags = errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
         )
         assert (
-            latest_replacement_time is not None
-            and abs((latest_replacement_time - expected_time).total_seconds()) < 1
+            flags.latest_replacement_time is not None
+            and abs((flags.latest_replacement_time - expected_time).total_seconds()) < 1
         )
         redis_client.flushdb()
 
@@ -626,47 +626,41 @@ class TestReplacer:
         project_ids = [1, 2, 3]
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (False, [], set(), None)
+        ) == ProjectsQueryFlags(False, [], set(), None)
 
         errors_replacer.set_project_needs_final(
             100, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.ERRORS
-        ) == (False, [], set(), None)
+        ) == ProjectsQueryFlags(False, [], set(), None)
 
         errors_replacer.set_project_needs_final(
             1, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
-        (
-            needs_final,
-            exclude_groups,
-            replacement_types,
-            _,
-        ) = errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS)
-        assert (needs_final, exclude_groups, replacement_types) == (
-            True,
-            [],
-            {ReplacementType.EXCLUDE_GROUPS},
+        flags = errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
         )
+        assert (
+            flags.needs_final,
+            flags.group_ids_to_exclude,
+            flags.replacement_types,
+        ) == (True, [], {ReplacementType.EXCLUDE_GROUPS},)
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
-        ) == (False, [], set(), None)
+        ) == ProjectsQueryFlags(False, [], set(), None)
 
         errors_replacer.set_project_needs_final(
             2, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
-        (
-            needs_final,
-            exclude_groups,
-            replacement_types,
-            _,
-        ) = errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS)
-        assert (needs_final, exclude_groups, replacement_types) == (
-            True,
-            [],
-            {ReplacementType.EXCLUDE_GROUPS},
+        flags = errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
         )
+        assert (
+            flags.needs_final,
+            flags.group_ids_to_exclude,
+            flags.replacement_types,
+        ) == (True, [], {ReplacementType.EXCLUDE_GROUPS},)
 
     def test_query_time_flags_groups(self) -> None:
         """
@@ -683,13 +677,14 @@ class TestReplacer:
         errors_replacer.set_project_exclude_groups(
             5, [3, 4], ReplacerState.ERRORS, ReplacementType.START_MERGE
         )
-        (
-            needs_final,
-            exclude_groups,
-            replacement_types,
-            _,
-        ) = errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS)
-        assert (needs_final, exclude_groups, replacement_types) == (
+        flags = errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        )
+        assert (
+            flags.needs_final,
+            flags.group_ids_to_exclude,
+            flags.replacement_types,
+        ) == (
             False,
             [1, 2, 3, 4],
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
@@ -705,13 +700,14 @@ class TestReplacer:
             6, [5, 6], ReplacerState.ERRORS, ReplacementType.START_UNMERGE
         )
 
-        (
-            needs_final,
-            exclude_groups,
-            replacement_types,
-            _,
-        ) = errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS)
-        assert (needs_final, exclude_groups, replacement_types) == (
+        flags = errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        )
+        assert (
+            flags.needs_final,
+            flags.group_ids_to_exclude,
+            flags.replacement_types,
+        ) == (
             False,
             [1, 2, 3, 4, 5, 6],
             {
@@ -721,31 +717,25 @@ class TestReplacer:
                 ReplacementType.START_UNMERGE,
             },
         )
-        (
-            needs_final,
-            exclude_groups,
-            replacement_types,
-            _,
-        ) = errors_replacer.get_projects_query_flags([4, 5], ReplacerState.ERRORS)
-        assert (needs_final, exclude_groups, replacement_types) == (
+        flags = errors_replacer.get_projects_query_flags([4, 5], ReplacerState.ERRORS)
+        assert (
+            flags.needs_final,
+            flags.group_ids_to_exclude,
+            flags.replacement_types,
+        ) == (
             False,
             [1, 2, 3, 4],
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
-        (
-            needs_final,
-            exclude_groups,
-            replacement_types,
-            _,
-        ) = errors_replacer.get_projects_query_flags([4], ReplacerState.ERRORS)
-        assert (needs_final, exclude_groups, replacement_types) == (
-            False,
-            [1, 2],
-            {ReplacementType.EXCLUDE_GROUPS},
-        )
+        flags = errors_replacer.get_projects_query_flags([4], ReplacerState.ERRORS)
+        assert (
+            flags.needs_final,
+            flags.group_ids_to_exclude,
+            flags.replacement_types,
+        ) == (False, [1, 2], {ReplacementType.EXCLUDE_GROUPS},)
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
-        ) == (False, [], set(), None)
+        ) == ProjectsQueryFlags(False, [], set(), None)
 
     def test_query_time_flags_project_and_groups(self) -> None:
         """
@@ -764,13 +754,14 @@ class TestReplacer:
         errors_replacer.set_project_exclude_groups(
             7, [1, 2], ReplacerState.ERRORS, ReplacementType.START_MERGE
         )
-        (
-            needs_final,
-            exclude_groups,
-            replacement_types,
-            _,
-        ) = errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS)
-        assert (needs_final, exclude_groups, replacement_types) == (
+        flags = errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        )
+        assert (
+            flags.needs_final,
+            flags.group_ids_to_exclude,
+            flags.replacement_types,
+        ) == (
             True,
             [1, 2],
             # exclude_groups from project setter, start_merge from group setter

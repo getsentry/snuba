@@ -181,7 +181,6 @@ def set_project_exclude_groups(
 
     Add replacement type for this replacement.
     """
-
     now = time.time()
     key, type_key = build_project_exclude_groups_key_and_type_key(
         project_id, state_name
@@ -215,8 +214,6 @@ def set_project_needs_final(
     state_name: Optional[ReplacerState],
     replacement_type: ReplacementType,
 ) -> None:
-    """
-    """
     key, type_key = build_project_needs_final_key_and_type_key(project_id, state_name)
     p = redis_client.pipeline()
     p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
@@ -224,9 +221,17 @@ def set_project_needs_final(
     p.execute()
 
 
+@dataclass
+class ProjectsQueryFlags:
+    needs_final: bool
+    group_ids_to_exclude: Sequence[int]
+    replacement_types: Set[str]
+    latest_replacement_time: Optional[datetime]
+
+
 def get_projects_query_flags(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Tuple[bool, Sequence[int], Set[str], Optional[datetime]]:
+) -> ProjectsQueryFlags:
     """
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
@@ -295,10 +300,8 @@ def get_projects_query_flags(
 
 
 def _process_exclude_groups_and_replacement_types_results(
-    results: List[Any],
-    len_projects: int
-    # TODO: make return type a dataclass to clearly communicate purpose
-) -> Tuple[bool, Sequence[int], Set[str], Optional[datetime]]:
+    results: List[Any], len_projects: int
+) -> ProjectsQueryFlags:
     """
     Helper function for `get_projects_query_flags`.
     Given raw redis result output, return something that makes sense
@@ -324,9 +327,6 @@ def _process_exclude_groups_and_replacement_types_results(
     int, list, int, list, ...
     Only the lists are necessary, the ints for number of items removed
     during the zremrangebyscore calls.
-
-
-
     """
 
     needs_final_result = results[:len_projects]
@@ -354,7 +354,20 @@ def _process_exclude_groups_and_replacement_types_results(
 
     replacement_types = groups_replacement_types.union(needs_final_replacement_types)
 
-    # TODO: make this its own helper function
+    latest_replacement_time = _process_latest_replacements(
+        needs_final, needs_final_result, latest_exclude_groups_result
+    )
+
+    return ProjectsQueryFlags(
+        needs_final, exclude_groups, replacement_types, latest_replacement_time
+    )
+
+
+def _process_latest_replacements(
+    needs_final: bool,
+    needs_final_result: List[Any],
+    latest_exclude_groups_result: List[Any],
+) -> Optional[datetime]:
     latest_replacements = set()
     if needs_final:
         latest_need_final_replacement_times = [
@@ -380,13 +393,11 @@ def _process_exclude_groups_and_replacement_types_results(
             [(_, timestamp)] = latest_exclude_groups
             latest_replacements.add(timestamp)
 
-    latest_replacement_time = (
+    return (
         datetime.fromtimestamp(max(latest_replacements))
         if latest_replacements
         else None
     )
-
-    return needs_final, exclude_groups, replacement_types, latest_replacement_time
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):

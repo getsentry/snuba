@@ -10,7 +10,11 @@ from snuba.clickhouse.query_dsl.accessors import (
     get_object_ids_in_query_ast,
     get_time_range,
 )
-from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
+from snuba.datasets.errors_replacer import (
+    ProjectsQueryFlags,
+    ReplacerState,
+    get_projects_query_flags,
+)
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
@@ -47,49 +51,50 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         set_final = False
         if project_ids:
-            (
-                query_is_final,
-                exclude_group_ids,
-                replacement_types,
-                latest_replacement_time,
-            ) = get_projects_query_flags(list(project_ids), self.__replacer_state_name)
-            tags = {replacement_type: "True" for replacement_type in replacement_types}
-            tags["referrer"] = request_settings.referrer
-            tags["parent_api"] = request_settings.get_parent_api()
-            # TODO: verify whether or not query_is_final matters if the query does not overlap
-            # with the latest replacement
-            if query_is_final:
-                tags["cause"] = "final_flag"
-                metrics.increment(
-                    "final", tags=tags,
-                )
-                set_final = True
-            elif exclude_group_ids and self._query_overlaps_replacements(
-                query, latest_replacement_time
-            ):
-                # If the number of groups to exclude exceeds our limit, the query
-                # should just use final instead of the exclusion set.
-                max_group_ids_exclude = get_config(
-                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
-                )
-                assert isinstance(max_group_ids_exclude, int)
-                if len(exclude_group_ids) > max_group_ids_exclude:
-                    tags["cause"] = "max_groups"
+            flags: ProjectsQueryFlags = get_projects_query_flags(
+                list(project_ids), self.__replacer_state_name
+            )
+            # Continue process if the query's time range overlaps with any replacements
+            if self._query_overlaps_replacements(query, flags.latest_replacement_time):
+
+                tags = {
+                    replacement_type: "True"
+                    for replacement_type in flags.replacement_types
+                }
+                tags["referrer"] = request_settings.referrer
+                tags["parent_api"] = request_settings.get_parent_api()
+
+                if flags.needs_final:
+                    tags["cause"] = "final_flag"
                     metrics.increment(
                         "final", tags=tags,
                     )
                     set_final = True
-                else:
-                    query.add_condition_to_ast(
-                        not_in_condition(
-                            FunctionCall(
-                                None,
-                                "assumeNotNull",
-                                (Column(None, None, "group_id"),),
-                            ),
-                            [Literal(None, p) for p in exclude_group_ids],
-                        )
+                elif flags.group_ids_to_exclude:
+                    # If the number of groups to exclude exceeds our limit, the query
+                    # should just use final instead of the exclusion set.
+                    max_group_ids_exclude = get_config(
+                        "max_group_ids_exclude",
+                        settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
                     )
+                    assert isinstance(max_group_ids_exclude, int)
+                    if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
+                        tags["cause"] = "max_groups"
+                        metrics.increment(
+                            "final", tags=tags,
+                        )
+                        set_final = True
+                    else:
+                        query.add_condition_to_ast(
+                            not_in_condition(
+                                FunctionCall(
+                                    None,
+                                    "assumeNotNull",
+                                    (Column(None, None, "group_id"),),
+                                ),
+                                [Literal(None, p) for p in flags.group_ids_to_exclude],
+                            )
+                        )
 
         query.set_from_clause(replace(query.get_from_clause(), final=set_final))
 
