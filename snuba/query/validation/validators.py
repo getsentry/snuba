@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Set
+from typing import Any, Optional, Set
 
 from snuba.query import Query
 from snuba.query.conditions import (
@@ -34,6 +34,11 @@ class QueryValidator(ABC):
 
 
 class EntityRequiredColumnValidator(QueryValidator):
+    """
+    Certain entities require the Query to filter by certain required columns.
+    This validator checks if the Query contains filters by all of the required columns.
+    """
+
     def __init__(self, required_filter_columns: Set[str]) -> None:
         self.required_columns = required_filter_columns
 
@@ -53,6 +58,22 @@ class EntityRequiredColumnValidator(QueryValidator):
             raise InvalidQueryException(
                 f"missing required conditions for {', '.join(missing)}"
             )
+
+
+class EntityContainsColumnsValidator(QueryValidator):
+    """
+    Ensures that all columns in the query actually exist in the entity.
+    """
+
+    # TODO: should be entity: Entity but that's a circular import
+    def __init__(self, entity: Any) -> None:
+        self.entity = entity
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        column_set = self.entity.get_data_model()
+        query_columns = query.get_all_ast_referenced_columns()
+        print("data model columns", column_set)
+        print("query columns", query_columns)
 
 
 class NoTimeBasedConditionValidator(QueryValidator):

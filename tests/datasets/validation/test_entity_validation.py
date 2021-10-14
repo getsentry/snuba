@@ -11,7 +11,10 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.query.validation.validators import (
+    EntityContainsColumnsValidator,
+    EntityRequiredColumnValidator,
+)
 
 tests = [
     pytest.param(
@@ -70,7 +73,9 @@ tests = [
 
 
 @pytest.mark.parametrize("key, condition", tests)  # type: ignore
-def test_entity_validation(key: EntityKey, condition: Optional[Expression]) -> None:
+def test_entity_required_column_validation(
+    key: EntityKey, condition: Optional[Expression]
+) -> None:
     query = LogicalQuery(
         QueryEntity(key, get_entity(key).get_data_model()),
         selected_columns=[
@@ -100,7 +105,7 @@ invalid_tests = [
 
 
 @pytest.mark.parametrize("key, condition", invalid_tests)  # type: ignore
-def test_entity_validation_failure(
+def test_entity_required_column_validation_failure(
     key: EntityKey, condition: Optional[Expression]
 ) -> None:
     query = LogicalQuery(
@@ -114,3 +119,31 @@ def test_entity_validation_failure(
     validator = EntityRequiredColumnValidator({"project_id"})
     with pytest.raises(InvalidQueryException):
         validator.validate(query)
+
+
+def test_entity_contains_columns_valiator() -> None:
+    key = EntityKey.EVENTS
+
+    entity = get_entity(key)
+
+    query_entity = QueryEntity(key, entity.get_data_model())
+    bad_query = LogicalQuery(
+        query_entity,
+        selected_columns=[
+            SelectedExpression("asdf", Column("_snuba_asdf", None, "asdf")),
+        ],
+    )
+
+    good_query = LogicalQuery(
+        query_entity,
+        selected_columns=[
+            SelectedExpression("time", Column("_snuba_time", None, "time")),
+        ],
+    )
+
+    validator = EntityContainsColumnsValidator(entity)
+
+    with pytest.raises(InvalidQueryException):
+        validator.validate(bad_query)
+
+    validator.validate(good_query)

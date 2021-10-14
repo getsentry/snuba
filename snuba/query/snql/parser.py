@@ -1175,6 +1175,9 @@ def validate_entities_with_query(
 ) -> None:
     if isinstance(query, LogicalQuery):
         entity = get_entity(query.get_from_clause().key)
+
+        # Call the function here
+
         try:
             for v in entity.get_validators():
                 v.validate(query)
@@ -1195,6 +1198,8 @@ def validate_entities_with_query(
             for alias, node in alias_map.items():
                 assert isinstance(node.data_source, QueryEntity)  # mypy
                 entity = get_entity(node.data_source.key)
+
+                # Later we need to call the validator here as well
                 try:
                     for v in entity.get_validators():
                         v.validate(query)
