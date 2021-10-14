@@ -91,6 +91,11 @@ class TickConsumer(Consumer[Tick]):
     # between B and C, since the message B was the first message received by
     # the consumer.
 
+    # If a min_interval value is passed a tick interval will not be returned
+    # unless the time range of that interval is larger than the minimum
+    # required timedelta. This effectively mimimizes the number of ticks
+    # created and passed to the processing strategy.
+
     def __init__(
         self,
         consumer: Consumer[Any],
