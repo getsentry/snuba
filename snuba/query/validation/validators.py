@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Optional, Set
+from typing import Optional, Set
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.query import Query
 from snuba.query.conditions import (
     ConditionFunctions,
@@ -65,15 +66,21 @@ class EntityContainsColumnsValidator(QueryValidator):
     Ensures that all columns in the query actually exist in the entity.
     """
 
-    # TODO: should be entity: Entity but that's a circular import
-    def __init__(self, entity: Any) -> None:
-        self.entity = entity
+    def __init__(self, entity_data_model: ColumnSet) -> None:
+        self.entity_data_model = entity_data_model
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
-        column_set = self.entity.get_data_model()
         query_columns = query.get_all_ast_referenced_columns()
-        print("data model columns", column_set)
-        print("query columns", query_columns)
+
+        missing = set()
+        for column in query_columns:
+            if column.column_name not in self.entity_data_model:
+                missing.add(column.column_name)
+
+        if missing:
+            raise InvalidQueryException(
+                f"query column(s) {', '.join(missing)} do not exist"
+            )
 
 
 class NoTimeBasedConditionValidator(QueryValidator):

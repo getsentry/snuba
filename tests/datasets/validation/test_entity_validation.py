@@ -137,11 +137,13 @@ def test_entity_contains_columns_valiator() -> None:
     good_query = LogicalQuery(
         query_entity,
         selected_columns=[
-            SelectedExpression("time", Column("_snuba_time", None, "time")),
+            SelectedExpression(
+                "timestamp", Column("_snuba_timestamp", None, "timestamp")
+            ),
         ],
     )
 
-    validator = EntityContainsColumnsValidator(entity)
+    validator = EntityContainsColumnsValidator(entity.get_data_model())
 
     with pytest.raises(InvalidQueryException):
         validator.validate(bad_query)
