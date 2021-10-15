@@ -82,6 +82,18 @@ logger = logging.getLogger(__name__)
     help="Max length of time to buffer messages in memory before writing to Kafka.",
 )
 @click.option(
+    "--queued-max-messages-kbytes",
+    default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+    type=int,
+    help="Maximum number of kilobytes per topic+partition in the local consumer queue.",
+)
+@click.option(
+    "--queued-min-messages",
+    default=settings.DEFAULT_QUEUED_MIN_MESSAGES,
+    type=int,
+    help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
+)
+@click.option(
     "--max-query-workers",
     type=int,
     help="Maximum number of worker threads to use for concurrent query execution",
@@ -103,6 +115,8 @@ def subscriptions(
     bootstrap_servers: Sequence[str],
     max_batch_size: int,
     max_batch_time_ms: int,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
     max_query_workers: Optional[int],
     schedule_ttl: int,
     result_topic: Optional[str],
@@ -146,6 +160,8 @@ def subscriptions(
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
                     bootstrap_servers=bootstrap_servers,
+                    queued_max_messages_kbytes=queued_max_messages_kbytes,
+                    queued_min_messages=queued_min_messages,
                 ),
             ),
             KafkaConsumer(
