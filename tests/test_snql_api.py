@@ -528,7 +528,7 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
 
-    def test_nullable_query(self):
+    def test_nullable_query(self) -> None:
         response = self.post(
             "/discover/snql",
             data=json.dumps(
@@ -549,3 +549,63 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
+    def test_invalid_column(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": """
+                MATCH (discover)
+                SELECT fake_column
+                WHERE
+                    timestamp >= toDateTime('2021-08-18T18:34:04') AND
+                    timestamp < toDateTime('2021-09-01T18:34:04') AND
+                    project_id IN tuple(5433960)
+                LIMIT 1 OFFSET 0
+                """,
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": False,
+                }
+            ),
+        )
+        # TODO: when validation works this should be:
+        # assert response.status_code == 400
+        # assert (
+        #     json.loads(response.data)["error"]["message"]
+        #     == "validation failed for entity discover: query column(s) fake_column do not exist"
+        # )
+        assert response.status_code == 500
+
+    def test_valid_columns_composite_query(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
+                    SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    WHERE e.project_id = {self.project_id}
+                    AND gm.project_id = {self.project_id}
+                    AND e.timestamp >= toDateTime('2021-01-01')
+                    AND e.timestamp < toDateTime('2021-01-02')
+                    """
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+    def test_invalid_columns_composite_query(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
+                    SELECT e.sdafdsf, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    WHERE e.project_id = {self.project_id}
+                    AND gm.project_id = {self.project_id}
+                    """
+                }
+            ),
+        )
+        assert response.status_code == 400

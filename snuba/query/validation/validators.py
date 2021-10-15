@@ -1,5 +1,7 @@
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from enum import Enum
 from typing import Optional, Set
 
 from snuba.clickhouse.columns import ColumnSet
@@ -10,6 +12,14 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
+
+logger = logging.getLogger(__name__)
+
+
+class ColumnValidationMode(Enum):
+    DO_NOTHING = 0
+    WARN = 1
+    ERROR = 2
 
 
 class QueryValidator(ABC):
@@ -66,21 +76,31 @@ class EntityContainsColumnsValidator(QueryValidator):
     Ensures that all columns in the query actually exist in the entity.
     """
 
-    def __init__(self, entity_data_model: ColumnSet) -> None:
+    def __init__(
+        self, entity_data_model: ColumnSet, validation_mode: ColumnValidationMode
+    ) -> None:
+        self.validation_mode = validation_mode
         self.entity_data_model = entity_data_model
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        if self.validation_mode == ColumnValidationMode.DO_NOTHING:
+            return
+
         query_columns = query.get_all_ast_referenced_columns()
 
         missing = set()
         for column in query_columns:
-            if column.column_name not in self.entity_data_model:
+            if column.table_name == alias and column.column_name not in {
+                c.name for c in self.entity_data_model.columns
+            }:
                 missing.add(column.column_name)
 
         if missing:
-            raise InvalidQueryException(
-                f"query column(s) {', '.join(missing)} do not exist"
-            )
+            error_message = f"query column(s) {', '.join(missing)} do not exist"
+            if self.validation_mode == ColumnValidationMode.ERROR:
+                raise InvalidQueryException(error_message)
+            elif self.validation_mode == ColumnValidationMode.WARN:
+                logger.warning(error_message)
 
 
 class NoTimeBasedConditionValidator(QueryValidator):

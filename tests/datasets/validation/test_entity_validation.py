@@ -5,6 +5,7 @@ import pytest
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity import ColumnValidationMode
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -72,7 +73,7 @@ tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", tests)  # type: ignore
+@pytest.mark.parametrize("key, condition", tests)
 def test_entity_required_column_validation(
     key: EntityKey, condition: Optional[Expression]
 ) -> None:
@@ -104,7 +105,7 @@ invalid_tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", invalid_tests)  # type: ignore
+@pytest.mark.parametrize("key, condition", invalid_tests)
 def test_entity_required_column_validation_failure(
     key: EntityKey, condition: Optional[Expression]
 ) -> None:
@@ -143,7 +144,9 @@ def test_entity_contains_columns_valiator() -> None:
         ],
     )
 
-    validator = EntityContainsColumnsValidator(entity.get_data_model())
+    validator = EntityContainsColumnsValidator(
+        entity.get_data_model(), validation_mode=ColumnValidationMode.ERROR
+    )
 
     with pytest.raises(InvalidQueryException):
         validator.validate(bad_query)
