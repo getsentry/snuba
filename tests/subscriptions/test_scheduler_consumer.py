@@ -19,7 +19,8 @@ from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
-from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer, Tick
+from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
+from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
@@ -31,7 +32,6 @@ from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
-@pytest.mark.skip(reason="Skipping for measure commit log order experiment")
 def test_scheduler_consumer() -> None:
     settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)
@@ -47,7 +47,7 @@ def test_scheduler_consumer() -> None:
     stream_loader = storage.get_table_writer().get_stream_loader()
 
     builder = scheduler_consumer.SchedulerBuilder(
-        entity_name, str(uuid.uuid1().hex), "latest", None, metrics_backend
+        entity_name, str(uuid.uuid1().hex), "events", "latest", None, metrics_backend
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
@@ -116,6 +116,7 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     epoch = datetime.fromtimestamp(clock.time())
 
     topic = Topic("messages")
+    followed_consumer_group = "events"
 
     broker.create_topic(topic, partitions=1)
 
@@ -124,13 +125,17 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     for partition, offsets in enumerate([[0, 1, 2], [0]]):
         for offset in offsets:
             payload = commit_codec.encode(
-                Commit("events", Partition(topic, partition), offset, epoch)
+                Commit(
+                    followed_consumer_group, Partition(topic, partition), offset, epoch
+                )
             )
             producer.produce(Partition(topic, 0), payload).result()
 
     inner_consumer = broker.get_consumer("group")
 
-    consumer = CommitLogTickConsumer(inner_consumer, time_shift=time_shift)
+    consumer = CommitLogTickConsumer(
+        inner_consumer, followed_consumer_group, time_shift=time_shift
+    )
 
     if time_shift is None:
         time_shift = timedelta()
@@ -235,6 +240,7 @@ def test_tick_consumer_non_monotonic() -> None:
     epoch = datetime.fromtimestamp(clock.time())
 
     topic = Topic("messages")
+    followed_consumer_group = "events"
     partition = Partition(topic, 0)
 
     broker.create_topic(topic, partitions=1)
@@ -243,7 +249,7 @@ def test_tick_consumer_non_monotonic() -> None:
 
     inner_consumer = broker.get_consumer("group")
 
-    consumer = CommitLogTickConsumer(inner_consumer)
+    consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
 
     def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert inner_consumer.tell() == {partition: 0}
@@ -254,7 +260,8 @@ def test_tick_consumer_non_monotonic() -> None:
     consumer.subscribe([topic], on_assign=assignment_callback)
 
     producer.produce(
-        partition, commit_codec.encode(Commit("events", partition, 0, epoch))
+        partition,
+        commit_codec.encode(Commit(followed_consumer_group, partition, 0, epoch)),
     ).result()
 
     clock.sleep(1)
@@ -262,7 +269,7 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit("events", partition, 1, epoch + timedelta(seconds=1))
+            Commit(followed_consumer_group, partition, 1, epoch + timedelta(seconds=1))
         ),
     ).result()
 
@@ -287,7 +294,8 @@ def test_tick_consumer_non_monotonic() -> None:
     clock.sleep(-1)
 
     producer.produce(
-        partition, commit_codec.encode(Commit("events", partition, 2, epoch)),
+        partition,
+        commit_codec.encode(Commit(followed_consumer_group, partition, 2, epoch)),
     ).result()
 
     with assert_changes(consumer.tell, {partition: 2}, {partition: 3}):
@@ -298,7 +306,7 @@ def test_tick_consumer_non_monotonic() -> None:
     producer.produce(
         partition,
         commit_codec.encode(
-            Commit("events", partition, 3, epoch + timedelta(seconds=2))
+            Commit(followed_consumer_group, partition, 3, epoch + timedelta(seconds=2))
         ),
     ).result()
 

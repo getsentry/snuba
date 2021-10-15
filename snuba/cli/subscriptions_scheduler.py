@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--entity",
     "entity_name",
-    default="events",
+    required=True,
     type=click.Choice(["events", "transactions"]),
     help="The entity to target",
 )
@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
     "--consumer-group",
     default="snuba-subscription-scheduler",
     help="Consumer group used for consuming the commit log topic.",
+)
+@click.option(
+    "--followed-consumer-group",
+    required=True,
+    help="Name of the consumer group to follow",
 )
 @click.option(
     "--auto-offset-reset",
@@ -40,6 +45,7 @@ def subscriptions_scheduler(
     *,
     entity_name: str,
     consumer_group: str,
+    followed_consumer_group: str,
     auto_offset_reset: str,
     schedule_ttl: int,
     log_level: Optional[str],
@@ -60,7 +66,12 @@ def subscriptions_scheduler(
     configure_metrics(StreamMetricsAdapter(metrics))
 
     builder = SchedulerBuilder(
-        entity_name, consumer_group, auto_offset_reset, delay_seconds, metrics,
+        entity_name,
+        consumer_group,
+        followed_consumer_group,
+        auto_offset_reset,
+        delay_seconds,
+        metrics,
     )
 
     processor = builder.build_consumer()

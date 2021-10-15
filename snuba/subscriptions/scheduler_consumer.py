@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from datetime import datetime, timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
@@ -15,6 +13,7 @@ from arroyo.types import Position
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 from snuba.utils.types import Interval, InvalidRangeError
@@ -25,23 +24,6 @@ logger = logging.getLogger(__name__)
 class MessageDetails(NamedTuple):
     offset: int
     orig_message_ts: datetime
-
-
-class Tick(NamedTuple):
-    partition: int
-    offsets: Interval[int]
-    timestamps: Interval[datetime]
-
-    def time_shift(self, delta: timedelta) -> Tick:
-        """
-        Returns a new ``Tick`` instance that has had the bounds of its time
-        interval shifted by the provided delta.
-        """
-        return Tick(
-            self.partition,
-            self.offsets,
-            Interval(self.timestamps.lower + delta, self.timestamps.upper + delta),
-        )
 
 
 class CommitLogTickConsumer(Consumer[Tick]):
@@ -94,9 +76,13 @@ class CommitLogTickConsumer(Consumer[Tick]):
     # between B and C, since the message B was the first message received by
     # the consumer.
     def __init__(
-        self, consumer: Consumer[KafkaPayload], time_shift: Optional[timedelta] = None
+        self,
+        consumer: Consumer[KafkaPayload],
+        followed_consumer_group: str,
+        time_shift: Optional[timedelta] = None,
     ) -> None:
         self.__consumer = consumer
+        self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
         self.__time_shift = time_shift if time_shift is not None else timedelta()
 
@@ -118,6 +104,9 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         commit = commit_codec.decode(message.payload)
         assert commit.orig_message_ts is not None
+
+        if commit.group != self.__followed_consumer_group:
+            return None
 
         previous_message = self.__previous_messages.get(commit.partition)
 
@@ -191,6 +180,7 @@ class SchedulerBuilder:
         self,
         entity_name: str,
         consumer_group: str,
+        followed_consumer_group: str,
         auto_offset_reset: str,
         delay_seconds: Optional[int],
         metrics: MetricsBackend,
@@ -212,24 +202,19 @@ class SchedulerBuilder:
         self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
         self.__consumer_group = consumer_group
+        self.__followed_consumer_group = followed_consumer_group
         self.__auto_offset_reset = auto_offset_reset
         self.__delay_seconds = delay_seconds
         self.__metrics = metrics
 
-    def build_consumer(self) -> StreamProcessor[KafkaPayload]:
+    def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
-            KafkaConsumer(
-                build_kafka_consumer_configuration(
-                    self.__commit_log_topic_spec.topic,
-                    self.__consumer_group,
-                    auto_offset_reset=self.__auto_offset_reset,
-                ),
-            ),
+            self.__build_tick_consumer(),
             Topic(self.__commit_log_topic_spec.topic_name),
             self.__build_strategy_factory(),
         )
 
-    def __build_strategy_factory(self) -> ProcessingStrategyFactory[KafkaPayload]:
+    def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
         return SubscriptionSchedulerProcessingFactory(self.__partitions, self.__metrics)
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
@@ -241,76 +226,13 @@ class SchedulerBuilder:
                     auto_offset_reset=self.__auto_offset_reset,
                 ),
             ),
+            followed_consumer_group=self.__followed_consumer_group,
             time_shift=(
                 timedelta(seconds=self.__delay_seconds * -1)
                 if self.__delay_seconds is not None
                 else None
             ),
         )
-
-
-class MeasureCommitLogOrderMetrics(ProcessingStrategy[KafkaPayload]):
-    """
-    This is an extremely minimalistic strategy that does absolutely nothing
-    except measure the extent to which commits are monotonically ordered
-    by partition in the snuba-commit-log.
-
-    It is intended to be temporary code to help debug some invalid interval
-    issues with the tick consumer in production.
-    """
-
-    def __init__(
-        self,
-        partitions: int,
-        metrics: MetricsBackend,
-        commit: Callable[[Mapping[Partition, Position]], None],
-    ) -> None:
-        self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
-        self.__partitions = partitions
-        self.__metrics = metrics
-        self.__commit = commit
-
-    def poll(self) -> None:
-        pass
-
-    def submit(self, message: Message[KafkaPayload]) -> None:
-        commit = commit_codec.decode(message.payload)
-
-        assert commit.partition.index < self.__partitions
-        assert commit.orig_message_ts is not None
-
-        current_message = MessageDetails(commit.offset, commit.orig_message_ts)
-
-        # Record metrics about in order vs out of order messages
-        last_message = self.__previous_messages.get(commit.partition)
-        if last_message is not None:
-            current_message = MessageDetails(commit.offset, commit.orig_message_ts)
-            try:
-                Interval(last_message.orig_message_ts, current_message.orig_message_ts)
-                self.__metrics.increment(
-                    "build_interval",
-                    tags={"valid": "true", "partition": str(commit.partition.index)},
-                )
-            except InvalidRangeError:
-                self.__metrics.increment(
-                    "build_interval",
-                    tags={"valid": "false", "partition": str(commit.partition.index)},
-                )
-
-        # Update self.__previous_messages
-        self.__previous_messages[commit.partition] = current_message
-
-        # Commit the offset for every message no matter what
-        self.__commit({message.partition: Position(message.offset, message.timestamp)})
-
-    def close(self) -> None:
-        pass
-
-    def terminate(self) -> None:
-        pass
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
 
 
 class MeasurePartitionLag(ProcessingStrategy[Tick]):
@@ -365,12 +287,12 @@ class MeasurePartitionLag(ProcessingStrategy[Tick]):
         pass
 
 
-class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
-    def __init__(self, partitions: int, metrics: MetricsBackend) -> None:
+class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
+    def __init__(self, partitions: int, metrics: MetricsBackend,) -> None:
         self.__partitions = partitions
         self.__metrics = metrics
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
-    ) -> ProcessingStrategy[KafkaPayload]:
-        return MeasureCommitLogOrderMetrics(self.__partitions, self.__metrics, commit)
+    ) -> ProcessingStrategy[Tick]:
+        return MeasurePartitionLag(self.__partitions, self.__metrics, commit)
