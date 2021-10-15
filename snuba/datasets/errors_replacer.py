@@ -314,18 +314,13 @@ def _process_exclude_groups_and_replacement_types_results(
         groups_replacement_types: Sequence[..(num_removed, str)]...,
         latest_exclude_groups_replacements: Sequence[Optional[Tuple[group_id, datetime]]]...
     ]
-    - `needs_final` slice is `len_projects` long
     - `excludes_groups` slice is `len_projects * 2` long
-    - `needs_final_replacement_types` slice is `len_projects` long
     - `groups_replacement_types` slice is `len_projects * 2` long
-    - `latest_exclude_groups_replacements` slice is `len_projects` long
-
-    [needs_final   |exclude_groups    |...]
-    [ len(projects)|len(projects) * 2 |   ]
+    - The rest of the slices are all `len_projects` long
 
     The `len_projects * 2` long slices are in the form:
     int, list, int, list, ...
-    Only the lists are necessary, the ints for number of items removed
+    Only the lists are necessary, the ints are the number of items removed
     during the zremrangebyscore calls.
     """
 
@@ -380,13 +375,8 @@ def _process_latest_replacements(
             for timestamp in needs_final_result
             if timestamp and timestamp != b"True"
         ]
-        latest_needs_final_replacement = (
-            max(latest_need_final_replacement_times)
-            if latest_need_final_replacement_times
-            else None
-        )
-        if latest_needs_final_replacement:
-            latest_replacements.add(latest_needs_final_replacement)
+        if latest_need_final_replacement_times:
+            latest_replacements.add(max(latest_need_final_replacement_times))
 
     for latest_exclude_groups in latest_exclude_groups_result:
         if latest_exclude_groups:
