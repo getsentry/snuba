@@ -21,3 +21,7 @@ class InvalidExpressionException(ValidationException):
         cls, expression: Expression, message: str, should_report: bool = True,
     ) -> "InvalidExpressionException":
         return cls(message, should_report=should_report, expression=repr(expression))
+
+
+class InvalidGranularityException(InvalidQueryException):
+    pass

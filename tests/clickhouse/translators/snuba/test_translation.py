@@ -7,6 +7,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
     ColumnToLiteral,
     ColumnToMapping,
+    FunctionNameMapper,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import (
@@ -275,6 +276,31 @@ test_data = [
             ),
         ),
         id="complex translator with tags and columns",
+    ),
+    pytest.param(
+        TranslationMappers(
+            functions=[FunctionNameMapper("uniq", "uniqCombined64Merge")],
+            columns=[ColumnToColumn(None, "col", None, "col2")],
+        ),
+        FunctionCall("test", "uniq", (Column(None, None, "col"),)),
+        FunctionCall("test", "uniqCombined64Merge", (Column(None, None, "col2"),)),
+        id="Function name mapper",
+    ),
+    pytest.param(
+        TranslationMappers(
+            functions=[FunctionNameMapper("quantiles", "quantilesMerge")],
+        ),
+        CurriedFunctionCall(
+            "test",
+            FunctionCall(None, "quantiles", (Literal(None, 0.99),)),
+            (Column(None, None, "value"),),
+        ),
+        CurriedFunctionCall(
+            "test",
+            FunctionCall(None, "quantilesMerge", (Literal(None, 0.99),)),
+            (Column(None, None, "value"),),
+        ),
+        id="Curried function relies on Function name mapper",
     ),
 ]
 

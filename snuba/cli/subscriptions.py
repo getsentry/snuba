@@ -90,6 +90,7 @@ logger = logging.getLogger(__name__)
 @click.option("--result-topic")
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
+@click.option("--min-tick-interval-ms", type=click.IntRange(1, 1000))
 def subscriptions(
     *,
     dataset_name: str,
@@ -107,6 +108,7 @@ def subscriptions(
     result_topic: Optional[str],
     log_level: Optional[str],
     delay_seconds: Optional[int],
+    min_tick_interval_ms: Optional[int],
 ) -> None:
     """Evaluates subscribed queries for a dataset."""
 
@@ -164,6 +166,9 @@ def subscriptions(
         time_shift=(
             timedelta(seconds=delay_seconds * -1) if delay_seconds is not None else None
         ),
+        min_interval=timedelta(milliseconds=min_tick_interval_ms)
+        if min_tick_interval_ms is not None
+        else None,
     )
 
     producer = ProducerEncodingWrapper(

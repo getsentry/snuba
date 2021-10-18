@@ -19,7 +19,8 @@ from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
-from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer, Tick
+from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
+from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
@@ -31,7 +32,6 @@ from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
-@pytest.mark.skip(reason="Skipping for measure commit log order experiment")
 def test_scheduler_consumer() -> None:
     settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)

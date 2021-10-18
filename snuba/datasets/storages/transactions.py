@@ -37,6 +37,7 @@ from snuba.query.processors.type_converters.hexint_column_processor import (
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
+from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 from snuba.web.split import TimeSplitQueryStrategy
 
@@ -149,6 +150,7 @@ storage = WritableTableStorage(
         processor=TransactionsMessageProcessor(),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
+        subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_TRANSACTIONS,
     ),

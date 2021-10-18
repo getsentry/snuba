@@ -272,3 +272,31 @@ def test_tick_consumer_non_monotonic() -> None:
             ),
             epoch + timedelta(seconds=2),
         )
+
+
+def test_tick_consumer_min_interval() -> None:
+    clock = TestingClock()
+    broker: Broker[int] = Broker(MemoryMessageStorage(), clock)
+
+    topic = Topic("messages")
+
+    broker.create_topic(topic, partitions=2)
+
+    producer = broker.get_producer()
+    for payload in range(3):
+        producer.produce(Partition(topic, 0), payload).result()
+        clock.sleep(1.0)
+
+    inner_consumer = broker.get_consumer("group")
+
+    consumer = TickConsumer(inner_consumer, min_interval=timedelta(seconds=2))
+
+    consumer.subscribe([topic])
+
+    assert consumer.poll() is None
+    assert consumer.poll() is None
+    message = consumer.poll()
+    assert message is not None
+    tick = message.payload
+    assert tick.offsets.upper - tick.offsets.lower == 2
+    assert tick.timestamps.upper - tick.timestamps.lower == timedelta(seconds=2)
