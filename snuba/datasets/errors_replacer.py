@@ -238,13 +238,6 @@ def get_projects_query_flags(
     3. Clean up the old replacement types and groups
     4. Fetch replacement types for each Project
     5. Fetch latest exclude groups replacement type for each Project
-
-    Returns (
-        needs_final,
-        group_ids_to_exclude,
-        replacement_types,
-        latest_replacement_time
-    )
     """
 
     s_project_ids = set(project_ids)
@@ -368,9 +361,6 @@ def _process_latest_replacements(
         latest_need_final_replacement_times = [
             # Backwards compatibility: Before it was simply "True" at each key,
             # now it's the timestamp at which the key was added.
-            # This should stay for at least 24h after this change is deployed.
-            # `and timestamp != b"True"` can be removed when there are no
-            # longer any "key:True" entries
             float(timestamp)
             for timestamp in needs_final_result
             if timestamp and timestamp != b"True"
