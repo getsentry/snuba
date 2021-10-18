@@ -20,11 +20,12 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.processors.arrayjoin_optimizer import (
-    ArrayJoinOptimizer,
+from snuba.query.processors.abstract_array_join_optimizer import (
     get_multiple_columns_filters,
     get_single_column_filters,
 )
+from snuba.query.processors.arrayjoin_optimizer import ArrayJoinOptimizer
+from snuba.query.processors.bloom_filter_optimizer import BloomFilterOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 from tests.query.processors.query_builders import build_query
 
@@ -383,7 +384,11 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
+            FunctionCall(
+                None,
+                "hasAny",
+                (spans_ops, FunctionCall(None, "array", (Literal(None, "db"),))),
+            ),
             binary_condition(
                 ConditionFunctions.EQ,
                 tupleElement("spans_op", array_join_col(ops=["db"]), Literal(None, 1)),
@@ -423,10 +428,15 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            binary_condition(
-                BooleanFunctions.OR,
-                FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
-                FunctionCall(None, "has", (spans_ops, Literal(None, "http"))),
+            FunctionCall(
+                None,
+                "hasAny",
+                (
+                    spans_ops,
+                    FunctionCall(
+                        None, "array", (Literal(None, "db"), Literal(None, "http"))
+                    ),
+                ),
             ),
             in_condition(
                 tupleElement(
@@ -468,7 +478,11 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
+            FunctionCall(
+                None,
+                "hasAny",
+                (spans_groups, FunctionCall(None, "array", (Literal(None, "a" * 16),))),
+            ),
             binary_condition(
                 ConditionFunctions.EQ,
                 tupleElement(
@@ -514,10 +528,17 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            binary_condition(
-                BooleanFunctions.OR,
-                FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
-                FunctionCall(None, "has", (spans_groups, Literal(None, "b" * 16))),
+            FunctionCall(
+                None,
+                "hasAny",
+                (
+                    spans_groups,
+                    FunctionCall(
+                        None,
+                        "array",
+                        (Literal(None, "a" * 16), Literal(None, "b" * 16)),
+                    ),
+                ),
             ),
             in_condition(
                 tupleElement(
@@ -571,8 +592,19 @@ span_processor_tests = [
             BooleanFunctions.AND,
             binary_condition(
                 BooleanFunctions.AND,
-                FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
-                FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
+                FunctionCall(
+                    None,
+                    "hasAny",
+                    (spans_ops, FunctionCall(None, "array", (Literal(None, "db"),)),),
+                ),
+                FunctionCall(
+                    None,
+                    "hasAny",
+                    (
+                        spans_groups,
+                        FunctionCall(None, "array", (Literal(None, "a" * 16),)),
+                    ),
+                ),
             ),
             binary_condition(
                 ConditionFunctions.EQ,
@@ -653,15 +685,27 @@ span_processor_tests = [
             BooleanFunctions.AND,
             binary_condition(
                 BooleanFunctions.AND,
-                binary_condition(
-                    BooleanFunctions.OR,
-                    FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
-                    FunctionCall(None, "has", (spans_ops, Literal(None, "http"))),
+                FunctionCall(
+                    None,
+                    "hasAny",
+                    (
+                        spans_ops,
+                        FunctionCall(
+                            None, "array", (Literal(None, "db"), Literal(None, "http"))
+                        ),
+                    ),
                 ),
-                binary_condition(
-                    BooleanFunctions.OR,
-                    FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
-                    FunctionCall(None, "has", (spans_groups, Literal(None, "b" * 16))),
+                FunctionCall(
+                    None,
+                    "hasAny",
+                    (
+                        spans_groups,
+                        FunctionCall(
+                            None,
+                            "array",
+                            (Literal(None, "a" * 16), Literal(None, "b" * 16)),
+                        ),
+                    ),
                 ),
             ),
             binary_condition(
@@ -718,9 +762,13 @@ def test_spans_processor(
     expected_conditions: Optional[Expression],
 ) -> None:
     request_settings = HTTPRequestSettings()
-    processor = ArrayJoinOptimizer(
-        "spans", ["op", "group"], ["exclusive_time"], use_bf_index=True
+    bloom_filter_processor = BloomFilterOptimizer(
+        "spans", ["op", "group"], ["exclusive_time"]
     )
-    processor.process_query(query, request_settings)
+    bloom_filter_processor.process_query(query, request_settings)
+    array_join_processor = ArrayJoinOptimizer(
+        "spans", ["op", "group"], ["exclusive_time"]
+    )
+    array_join_processor.process_query(query, request_settings)
     assert query.get_selected_columns() == expected_selected_columns
     assert query.get_condition() == expected_conditions

@@ -22,6 +22,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.arrayjoin_optimizer import ArrayJoinOptimizer
+from snuba.query.processors.bloom_filter_optimizer import BloomFilterOptimizer
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
@@ -130,9 +131,11 @@ storage = WritableTableStorage(
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
-        ArrayJoinOptimizer(
-            "spans", ["op", "group"], ["exclusive_time"], use_bf_index=True
-        ),
+        # the bloom filter optimizer should occur before the array join optimizer
+        # on the span columns because the array join optimizer will rewrite the
+        # same conditions the bloom filter optimizer is looking for
+        BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time"]),
+        ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time"]),
         HexIntArrayColumnProcessor({"spans.group"}),
         PrewhereProcessor(
             [
