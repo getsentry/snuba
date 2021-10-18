@@ -10,7 +10,7 @@ from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
+from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
 
 
 class GroupAssigneeEntity(Entity):
