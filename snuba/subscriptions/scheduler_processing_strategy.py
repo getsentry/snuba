@@ -1,10 +1,10 @@
 import logging
 from collections import deque
-from datetime import datetime
-from typing import Deque, Mapping, Optional, cast
+from typing import Callable, Deque, Mapping, MutableMapping, Optional, cast
 
-from arroyo import Message
+from arroyo import Message, Partition
 from arroyo.processing.strategies import ProcessingStrategy
+from arroyo.types import Position
 
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
@@ -43,6 +43,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         max_ticks_buffered_per_partition: Optional[int],
         next_step: ProcessingStrategy[Tick],
         metrics: MetricsBackend,
+        commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         if mode == SchedulingWatermarkMode.GLOBAL:
             assert max_ticks_buffered_per_partition is not None
@@ -52,14 +53,18 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__max_ticks_buffered_per_partition = max_ticks_buffered_per_partition
         self.__next_step = next_step
         self.__metrics = metrics
+        self.__commit = commit
 
         self.__buffers: Mapping[int, Deque[Message[Tick]]] = {
             index: deque() for index in range(self.__partitions)
         }
 
-        # Stores the latest timestamp we received for any partition. This is
-        # just for recording the partition lag.
-        self.__latest_ts: Optional[datetime] = None
+        # Store the last message we received for each partition so know when
+        # to commit offsets.
+        self.__latest_messages_by_partition: MutableMapping[
+            int, Optional[Message[Tick]]
+        ] = {index: None for index in range(self.__partitions)}
+        self.__last_committed_offset: Optional[int] = None
 
         self.__closed = False
 
@@ -67,6 +72,10 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
+        self._submit_messages(message)
+        self._commit_offsets(message)
+
+    def _submit_messages(self, message: Message[Tick]) -> None:
         assert not self.__closed
 
         # If the scheduler mode is immediate or there is only one partition
@@ -80,13 +89,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
         ):
             self.__next_step.submit(message)
             return
-
-        # Update the latest_ts for metrics
-        if (
-            self.__latest_ts is None
-            or message.payload.timestamps.upper > self.__latest_ts
-        ):
-            self.__latest_ts = message.payload.timestamps.upper
 
         tick_partition = message.payload.partition
         self.__buffers[tick_partition].append(message)
@@ -135,10 +137,50 @@ class TickBuffer(ProcessingStrategy[Tick]):
             for partition_index in earliest_ts_partitions:
                 self.__next_step.submit(self.__buffers[partition_index].popleft())
 
-            # Record the lag between the fastest and slowest partition if we got to this point
+    def _commit_offsets(self, message: Message[Tick]) -> None:
+        """
+        Regardless of the scheduler mode we only commit offsets based on the slowest
+        partition. This guarantees that all subscriptions are scheduled at
+        least once and we do not miss any even if the scheduler restarts and loses
+        its state. If the scheduler restarts an one partition is far behind, it
+        can lead to the same subscription being scheduled more than once especially
+        if we are in `partition` mode.
+        """
+        assert message.partition.index == 0, "Commit log cannot be partitioned"
+
+        tick_partition = message.payload.partition
+        self.__latest_messages_by_partition[tick_partition] = message
+
+        slowest = message
+        fastest = message
+        for partition_message in self.__latest_messages_by_partition.values():
+            if partition_message is None:
+                return
+
+            partition_timestamp = partition_message.payload.timestamps.upper
+
+            if partition_timestamp < slowest.payload.timestamps.upper:
+                slowest = partition_message
+
+            if partition_timestamp > fastest.payload.timestamps.upper:
+                fastest = partition_message
+
+        if (
+            self.__last_committed_offset is None
+            or slowest.offset > self.__last_committed_offset
+        ):
+            self.__commit(
+                {message.partition: Position(slowest.offset, slowest.timestamp)}
+            )
+            self.__last_committed_offset = slowest.offset
+
+            # Record the lag between the fastest and slowest partition when we commit
             self.__metrics.timing(
                 "partition_lag_ms",
-                (self.__latest_ts - earliest_ts).total_seconds() * 1000,
+                (
+                    fastest.payload.timestamps.upper - slowest.payload.timestamps.upper
+                ).total_seconds()
+                * 1000,
             )
 
     def close(self) -> None:

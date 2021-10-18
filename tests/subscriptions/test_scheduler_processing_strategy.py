@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from unittest import mock
 
 from arroyo import Message, Partition, Topic
+from arroyo.types import Position
 
 from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
@@ -16,8 +17,15 @@ def test_tick_buffer_immediate() -> None:
 
     next_step = mock.Mock()
 
+    commit_function = mock.Mock()
+
     strategy = TickBuffer(
-        SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics_backend
+        SchedulingWatermarkMode.PARTITION,
+        2,
+        None,
+        next_step,
+        metrics_backend,
+        commit_function,
     )
 
     topic = Topic("messages")
@@ -40,6 +48,24 @@ def test_tick_buffer_immediate() -> None:
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args == mock.call(message)
     assert metrics_backend.calls == []
+    assert commit_function.call_count == 0
+
+    strategy.submit(
+        Message(
+            partition,
+            5,
+            Tick(
+                1,
+                offsets=Interval(11, 12),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
+            ),
+            epoch,
+            6,
+        )
+    )
+
+    assert commit_function.call_count == 1
+    assert commit_function.call_args == mock.call({partition: Position(5, epoch)})
 
 
 def test_tick_buffer_wait_slowest() -> None:
@@ -50,9 +76,16 @@ def test_tick_buffer_wait_slowest() -> None:
 
     next_step = mock.Mock()
 
+    commit_function = mock.Mock()
+
     # Create strategy with 2 partitions
     strategy = TickBuffer(
-        SchedulingWatermarkMode.GLOBAL, 2, 10, next_step, metrics_backend,
+        SchedulingWatermarkMode.GLOBAL,
+        2,
+        10,
+        next_step,
+        metrics_backend,
+        commit_function,
     )
 
     topic = Topic("messages")
@@ -93,6 +126,7 @@ def test_tick_buffer_wait_slowest() -> None:
 
     assert next_step.submit.call_count == 0
     assert metrics_backend.calls == []
+    assert commit_function.call_count == 0
 
     # Message in partition 1 has the lowest timestamp so we submit to the next step
     message_1_0 = Message(
@@ -113,8 +147,13 @@ def test_tick_buffer_wait_slowest() -> None:
     assert metrics_backend.calls == [
         Timing("partition_lag_ms", 6000.0, None),
     ]
+    assert commit_function.call_count == 1
+    assert commit_function.call_args == mock.call(
+        {commit_log_partition: Position(6, now)}
+    )
 
     next_step.reset_mock()
+    commit_function.reset_mock()
     metrics_backend.calls = []
     # Message in partition 1 has the same timestamp as the earliest message
     # in partition 0. Both should be submitted to the next step.
@@ -141,8 +180,13 @@ def test_tick_buffer_wait_slowest() -> None:
     assert metrics_backend.calls == [
         Timing("partition_lag_ms", 5000.0, None),
     ]
+    assert commit_function.call_count == 1
+    assert commit_function.call_args == mock.call(
+        {commit_log_partition: Position(7, now)}
+    )
 
     next_step.reset_mock()
+    commit_function.reset_mock()
     metrics_backend.calls = []
 
     # Submit another message to partition 1 with the same timestamp as
@@ -150,7 +194,7 @@ def test_tick_buffer_wait_slowest() -> None:
     # the partition lag should be 0 now.
     message_1_2 = Message(
         commit_log_partition,
-        7,
+        8,
         Tick(
             1,
             offsets=Interval(130, 140),
@@ -159,7 +203,7 @@ def test_tick_buffer_wait_slowest() -> None:
             ),
         ),
         now,
-        8,
+        9,
     )
     strategy.submit(message_1_2)
 
@@ -171,8 +215,13 @@ def test_tick_buffer_wait_slowest() -> None:
     assert metrics_backend.calls == [
         Timing("partition_lag_ms", 0.0, None),
     ]
+    assert commit_function.call_count == 1
+    assert commit_function.call_args == mock.call(
+        {commit_log_partition: Position(8, now)}
+    )
 
     next_step.reset_mock()
+    commit_function.reset_mock()
     metrics_backend.calls = []
 
     # Submit 11 more messages to partition 0. Since we hit
@@ -182,7 +231,7 @@ def test_tick_buffer_wait_slowest() -> None:
     for i in range(11):
         message = Message(
             commit_log_partition,
-            8 + i,
+            9 + i,
             Tick(
                 1,
                 offsets=Interval(4 + i, 5 + i),
@@ -192,7 +241,7 @@ def test_tick_buffer_wait_slowest() -> None:
                 ),
             ),
             now + timedelta(seconds=i),
-            9 + i,
+            10 + i,
         )
         messages.append(message)
         strategy.submit(message)
@@ -200,3 +249,4 @@ def test_tick_buffer_wait_slowest() -> None:
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(messages[0])]
     assert metrics_backend.calls == []
+    assert commit_function.calls == []
