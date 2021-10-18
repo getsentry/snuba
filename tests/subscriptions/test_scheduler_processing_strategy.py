@@ -249,4 +249,4 @@ def test_tick_buffer_wait_slowest() -> None:
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(messages[0])]
     assert metrics_backend.calls == []
-    assert commit_function.calls == []
+    assert commit_function.call_count == 0
