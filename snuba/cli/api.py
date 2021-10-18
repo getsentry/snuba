@@ -28,10 +28,9 @@ def api(
             host, port = bind.split(":", 1)
             port = int(port)
         else:
-            host = bind
-            port = settings.PORT
+            raise click.ClickException("bind can only be in the format <host>:<port>")
     else:
-        host, port = "0.0.0.0", settings.PORT
+        host, port = settings.HOST, settings.PORT
 
     if debug:
         if processes > 1 or threads > 1:
