@@ -15,6 +15,7 @@ from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger("snuba.state.rate_limit")
 
+ORGANIZATION_RATE_LIMIT_NAME = "organization"
 PROJECT_RATE_LIMIT_NAME = "project"
 GLOBAL_RATE_LIMIT_NAME = "global"
 TABLE_RATE_LIMIT_NAME = "table"
