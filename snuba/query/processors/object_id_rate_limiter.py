@@ -9,6 +9,8 @@ from snuba.state.rate_limit import (
     RateLimitParameters,
 )
 
+DEFAULT_LIMIT = 1000
+
 
 class ObjectIDRateLimiterProcessor(QueryProcessor):
     """
@@ -42,15 +44,18 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         # TODO: Add logic for multiple IDs
         obj_id = obj_ids.pop()
 
-        orl, ocl = get_configs(
-            [(self.per_second_name, 1000), (self.concurrent_name, 1000)]
+        object_rate_limit, object_concurrent_limit = get_configs(
+            [
+                (self.per_second_name, DEFAULT_LIMIT),
+                (self.concurrent_name, DEFAULT_LIMIT),
+            ]
         )
 
         # Specific objects can have their rate limits overridden
         (per_second, concurr) = get_configs(
             [
-                (f"{self.per_second_name}_{obj_id}", orl),
-                (f"{self.concurrent_name}_{obj_id}", ocl),
+                (f"{self.per_second_name}_{obj_id}", object_rate_limit),
+                (f"{self.concurrent_name}_{obj_id}", object_concurrent_limit),
             ]
         )
 
