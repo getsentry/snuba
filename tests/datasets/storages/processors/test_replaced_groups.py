@@ -34,20 +34,14 @@ def build_in(project_column: str, projects: Sequence[int]) -> Expression:
 
 
 def build_time_range(query_from: datetime, query_to: datetime) -> Expression:
-    return FunctionCall(
-        None,
-        BooleanFunctions.AND,
-        (
-            FunctionCall(
-                None,
-                "greaterOrEquals",
-                (Column(None, None, "timestamp"), Literal(None, query_from)),
-            ),
-            FunctionCall(
-                None,
-                "less",
-                (Column(None, None, "timestamp"), Literal(None, query_to)),
-            ),
+    return build_and(
+        FunctionCall(
+            None,
+            "greaterOrEquals",
+            (Column(None, None, "timestamp"), Literal(None, query_from)),
+        ),
+        FunctionCall(
+            None, "less", (Column(None, None, "timestamp"), Literal(None, query_to)),
         ),
     )
 
