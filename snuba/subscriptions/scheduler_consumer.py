@@ -11,6 +11,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.synchronized import commit_codec
 from arroyo.types import Position
 
+from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
@@ -213,6 +214,10 @@ class SchedulerBuilder:
         self.__delay_seconds = delay_seconds
         self.__metrics = metrics
 
+        self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
+            entity_name, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
+        )
+
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
             self.__build_tick_consumer(),
@@ -222,7 +227,7 @@ class SchedulerBuilder:
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
         return SubscriptionSchedulerProcessingFactory(
-            self.__mode, self.__partitions, self.__metrics
+            self.__mode, self.__partitions, self.__buffer_size, self.__metrics
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
@@ -262,24 +267,28 @@ class Noop(ProcessingStrategy[Tick]):
 
 class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     def __init__(
-        self, mode: SchedulingWatermarkMode, partitions: int, metrics: MetricsBackend
+        self,
+        mode: SchedulingWatermarkMode,
+        partitions: int,
+        buffer_size: int,
+        metrics: MetricsBackend,
     ) -> None:
         self.__mode = mode
         self.__partitions = partitions
+        self.__buffer_size = buffer_size
         self.__metrics = metrics
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[Tick]:
-        # TODO: Temporarily hardcoding mode and max ticks for testing
+        # TODO: Temporarily hardcoding global mode for testing
         mode = SchedulingWatermarkMode.GLOBAL
-        max_ticks_buffered_per_partition = 1000
         next_step = Noop()
 
         return TickBuffer(
             mode,
             self.__partitions,
-            max_ticks_buffered_per_partition,
+            self.__buffer_size,
             next_step,
             self.__metrics,
             commit,
