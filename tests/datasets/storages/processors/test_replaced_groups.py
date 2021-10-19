@@ -93,8 +93,10 @@ def teardown_function() -> None:
 
 def test_query_set_final(query: ClickhouseQuery) -> None:
     enforcer = PostReplacementConsistencyEnforcer("project_id", None)
+
     enforcer._set_query_final(query, True)
     assert query.get_from_clause().final
+
     enforcer._set_query_final(query, False)
     assert not query.get_from_clause().final
 
@@ -144,26 +146,20 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         "project_id", ReplacerState.EVENTS
     ).process_query(query, HTTPRequestSettings())
 
-    assert query.get_condition() == FunctionCall(
-        None,
-        BooleanFunctions.AND,
-        (
-            FunctionCall(
-                None,
-                "notIn",
-                (
-                    FunctionCall(
-                        None, "assumeNotNull", (Column(None, None, "group_id"),)
-                    ),
-                    FunctionCall(
-                        None,
-                        "tuple",
-                        (Literal(None, 100), Literal(None, 101), Literal(None, 102),),
-                    ),
+    assert query.get_condition() == build_and(
+        FunctionCall(
+            None,
+            "notIn",
+            (
+                FunctionCall(None, "assumeNotNull", (Column(None, None, "group_id"),)),
+                FunctionCall(
+                    None,
+                    "tuple",
+                    (Literal(None, 100), Literal(None, 101), Literal(None, 102),),
                 ),
             ),
-            build_in("project_id", [2]),
         ),
+        build_in("project_id", [2]),
     )
     assert not query.get_from_clause().final
 
@@ -212,12 +208,12 @@ def test_query_overlaps_replacements_processor(
 ) -> None:
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
 
-    # replacment time unknown, default to "overlaps" and shouldn't be final
+    # replacement time unknown, default to "overlaps" but no groups to exclude so shouldn't be final
     enforcer._set_query_final(query_with_timestamp, True)
     enforcer.process_query(query_with_timestamp, HTTPRequestSettings())
     assert not query_with_timestamp.get_from_clause().final
 
-    # overlaps replacement and should be final
+    # overlaps replacement and should be final due to too many groups to exclude
     state.set_config("max_group_ids_exclude", 2)
     set_project_exclude_groups(
         2,

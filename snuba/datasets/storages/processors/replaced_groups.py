@@ -102,6 +102,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
     def _set_query_final(self, query: Query, final: bool) -> None:
         """
         Set the 'final' clause of a Query.
+        A query set as final will force ClickHouse to perform a merge
+        on the results of the query. This is very performance heavy and
+        should be avoided whenever possible.
         """
         query.set_from_clause(replace(query.get_from_clause(), final=final))
 
