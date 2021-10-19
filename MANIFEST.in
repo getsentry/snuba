@@ -1,2 +1,2 @@
-include setup.py MANIFEST.in README.md
+include setup.py MANIFEST.in README.rst
 recursive-include snuba *

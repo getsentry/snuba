@@ -4,7 +4,7 @@ import time
 
 
 class TestCli(object):
-    def test_consumer_cli(self):
+    def test_consumer_cli(self) -> None:
         """
         Check that the consumer daemon runs until it is killed
         """

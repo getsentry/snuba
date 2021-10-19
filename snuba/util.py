@@ -1,47 +1,50 @@
-from contextlib import contextmanager
-from datetime import date, datetime, timedelta
-from dateutil.parser import parse as dateutil_parse
-from functools import wraps
-from typing import (
-    Any,
-    Iterator,
-    List,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+import inspect
 import logging
 import numbers
 import re
+from datetime import date, datetime, timedelta
+from enum import Enum
+from functools import partial, wraps
+from typing import (
+    Any,
+    Callable,
+    List,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Pattern,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
+
 import _strptime  # NOQA fixes _strptime deferred import issue
+import sentry_sdk
+from dateutil.parser import parse as dateutil_parse
 
 from snuba import settings
-from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.query.parsing import ParsingContext
+from snuba.clickhouse.escaping import escape_string
 from snuba.query.schema import CONDITION_OPERATORS
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.types import Tags
 
 logger = logging.getLogger("snuba.util")
 
 
+T = TypeVar("T")
+
 # example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
-QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
+PART_RE = r"\('(?P<timestamp>\d{4}-\d{2}-\d{2})',\s*(?P<retention>\d+)\)"
+
+QUOTED_LITERAL_RE = re.compile(r"^'[\s\S]*'$")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
-TOPK_FUNCTION_RE = re.compile(r"^top([1-9]\d*)$")
-APDEX_FUNCTION_RE = re.compile(r"^apdex\(\s*([^,]+)+\s*,\s*([\d]+)+\s*\)$")
 
 
-def local_dataset_mode() -> bool:
-    return settings.DATASET_MODE == "local"
-
-
-def to_list(value: Any) -> List[Any]:
+def to_list(value: Union[T, List[T]]) -> List[T]:
     return value if isinstance(value, list) else [value]
 
 
@@ -56,48 +59,6 @@ def qualified_column(column_name: str, alias: str = "") -> str:
 def parse_datetime(value: str, alignment: int = 1) -> datetime:
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
-
-
-def function_expr(fn: str, args_expr: str = "") -> str:
-    """
-    Generate an expression for a given function name and an already-evaluated
-    args expression. This is a place to define convenience functions that evaluate
-    to more complex expressions.
-
-    """
-    if fn.startswith("apdex("):
-        match = APDEX_FUNCTION_RE.match(fn)
-        if match:
-            return "(countIf({col} <= {satisfied}) + (countIf(({col} > {satisfied}) AND ({col} <= {tolerated})) / 2)) / count()".format(
-                col=escape_identifier(match.group(1)),
-                satisfied=match.group(2),
-                tolerated=int(match.group(2)) * 4,
-            )
-        raise ValueError("Invalid format for apdex()")
-
-    # For functions with no args, (or static args) we allow them to already
-    # include them as part of the function name, eg, "count()" or "sleep(1)"
-    if not args_expr and fn.endswith(")"):
-        return fn
-
-    # Convenience topK function eg "top10", "top3" etc.
-    topk = TOPK_FUNCTION_RE.match(fn)
-    if topk:
-        return "topK({})({})".format(topk.group(1), args_expr)
-
-    # turn uniq() into ifNull(uniq(), 0) so it doesn't return null where
-    # a number was expected.
-    if fn == "uniq":
-        return "ifNull({}({}), 0)".format(fn, args_expr)
-
-    # emptyIfNull(col) is a simple pseudo function supported by Snuba that expands
-    # to the actual clickhouse function ifNull(col, '') Until we figure out the best
-    # way to disambiguate column names from string literals in complex functions.
-    if fn == "emptyIfNull" and args_expr:
-        return "ifNull({}, '')".format(args_expr)
-
-    # default: just return fn(args_expr)
-    return "{}({})".format(fn, args_expr)
 
 
 # TODO: Fix the type of Tuple concatenation when mypy supports it.
@@ -137,27 +98,6 @@ def is_function(column_expr: Any, depth: int = 0) -> Optional[Tuple[Any, ...]]:
         return None
 
 
-def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
-    """
-    Return the correct expression to use in the final SQL. Keeps a cache of
-    the previously created expressions and aliases, so it knows when it can
-    subsequently replace a redundant expression with an alias.
-
-    1. If the expression and alias are equal, just return that.
-    2. Otherwise, if the expression is new, add it to the cache and its alias so
-       it can be reused later and return `expr AS alias`
-    3. If the expression has been aliased before, return the alias
-    """
-
-    if expr == alias:
-        return expr
-    elif parsing_context.is_alias_present(alias):
-        return alias
-    else:
-        parsing_context.add_alias(alias)
-        return "({} AS {})".format(expr, alias)
-
-
 def is_condition(cond_or_list: Sequence[Any]) -> bool:
     return (
         # A condition is:
@@ -170,27 +110,6 @@ def is_condition(cond_or_list: Sequence[Any]) -> bool:
         # and the first element looks like a column name or expression
         isinstance(cond_or_list[0], (str, tuple, list))
     )
-
-
-def columns_in_expr(expr: Any) -> Sequence[str]:
-    """
-    Get the set of columns that are referenced by a single column expression.
-    Either it is a simple string with the column name, or a nested function
-    that could reference multiple columns
-    """
-    cols = []
-    # TODO possibly exclude quoted args to functions as those are
-    # string literals, not column names.
-    if isinstance(expr, str):
-        cols.append(expr.lstrip("-"))
-    elif (
-        isinstance(expr, (list, tuple))
-        and len(expr) >= 2
-        and isinstance(expr[1], (list, tuple))
-    ):
-        for func_arg in expr[1]:
-            cols.extend(columns_in_expr(func_arg))
-    return cols
 
 
 def tuplify(nested: Any) -> Any:
@@ -209,9 +128,9 @@ def escape_literal(
         return escape_string(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
-        return "toDateTime('{}')".format(value.isoformat())
+        return "toDateTime('{}', 'Universal')".format(value.isoformat())
     elif isinstance(value, date):
-        return "toDate('{}')".format(value.isoformat())
+        return "toDate('{}', 'Universal')".format(value.isoformat())
     elif isinstance(value, (list, tuple)):
         return "({})".format(", ".join(escape_literal(v) for v in value))
     elif isinstance(value, numbers.Number):
@@ -222,69 +141,109 @@ def escape_literal(
         raise ValueError("Do not know how to escape {} for SQL".format(type(value)))
 
 
-def time_request(name):
-    def decorator(func):
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def time_request(name: str) -> Callable[[F], F]:
+    def decorator(func: F) -> F:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             kwargs["timer"] = Timer(name)
             return func(*args, **kwargs)
 
-        return wrapper
+        return cast(F, wrapper)
 
     return decorator
 
 
 class Part(NamedTuple):
+    name: str
     date: datetime
     retention_days: int
 
 
-def decode_part_str(part_str: str) -> Part:
-    match = PART_RE.match(part_str)
+class PartSegment(Enum):
+    RETENTION_DAYS = "retention_days"
+    DATE = "date"
+
+
+re_cache: MutableMapping[str, Pattern[Any]] = {}
+
+
+def decode_part_str(part_str: str, part_format: Sequence[PartSegment]) -> Part:
+    def get_re(format: Sequence[PartSegment]) -> Pattern[Any]:
+        cache_key = ",".join([segment.value for segment in format])
+
+        PARTSEGMENT_RE = {
+            PartSegment.DATE: "('(?P<date>\d{4}-\d{2}-\d{2})')",
+            PartSegment.RETENTION_DAYS: "(?P<retention_days>\d+)",
+        }
+
+        SEP = ",\s*"
+
+        try:
+            return re_cache[cache_key]
+        except KeyError:
+            re_cache[cache_key] = re.compile(
+                f"\({SEP.join([PARTSEGMENT_RE[s] for s in part_format])}\)"
+            )
+
+        return re_cache[cache_key]
+
+    match = get_re(part_format).match(part_str)
+
     if not match:
         raise ValueError("Unknown part name/format: " + str(part_str))
 
-    date_str, retention_days = match.groups()
-    date = datetime.strptime(date_str, "%Y-%m-%d")
+    date_str = match.group("date")
+    retention_days = match.group("retention_days")
 
-    return Part(date, int(retention_days))
+    if date_str and retention_days:
+        return Part(
+            part_str, datetime.strptime(date_str, "%Y-%m-%d"), int(retention_days)
+        )
+
+    else:
+        raise ValueError("Unknown part name/format: " + str(part_str))
 
 
-def force_bytes(s: Any) -> Any:
+def force_bytes(s: Union[bytes, str]) -> bytes:
     if isinstance(s, bytes):
         return s
-    return s.encode("utf-8", "replace")
-
-
-@contextmanager
-def settings_override(overrides: Mapping[str, Any]) -> Iterator[None]:
-    previous = {}
-    for k, v in overrides.items():
-        previous[k] = getattr(settings, k, None)
-        setattr(settings, k, v)
-
-    try:
-        yield
-    finally:
-        for k, v in previous.items():
-            setattr(settings, k, v)
+    elif isinstance(s, str):
+        return s.encode("utf-8", "replace")
+    else:
+        raise TypeError(f"cannot convert {type(s).__name__} to bytes")
 
 
 def create_metrics(
-    host: str, port: int, prefix: str, tags: Optional[Tags] = None
+    prefix: str,
+    tags: Optional[Tags] = None,
+    sample_rates: Optional[Mapping[str, float]] = None,
 ) -> MetricsBackend:
-    """Create a DogStatsd object with the specified prefix and tags. Prefixes
-    must start with `snuba.<category>`, for example: `snuba.processor`."""
+    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
+    with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
+    Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
+    """
+    host: Optional[str] = settings.DOGSTATSD_HOST
+    port: Optional[int] = settings.DOGSTATSD_PORT
+
+    if host is None and port is None:
+        from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+
+        return DummyMetricsBackend()
+    elif host is None or port is None:
+        raise ValueError(
+            f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
+        )
+
     from datadog import DogStatsd
+
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
-    bits = prefix.split(".", 2)
-    assert (
-        len(bits) >= 2 and bits[0] == "snuba"
-    ), "prefix must be like `snuba.<category>`"
-
     return DatadogMetricsBackend(
-        DogStatsd(
+        partial(
+            DogStatsd,
             host=host,
             port=port,
             namespace=prefix,
@@ -292,4 +251,24 @@ def create_metrics(
             if tags is not None
             else None,
         ),
+        sample_rates,
     )
+
+
+def with_span(op: str = "function") -> Callable[[F], F]:
+    """ Wraps a function call in a Sentry AM span
+    """
+
+    def decorator(func: F) -> F:
+        frame_info = inspect.stack()[1]
+        filename = frame_info.filename
+
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
+                span.set_data("filename", filename)
+                return func(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return decorator

@@ -1,15 +1,13 @@
-from tests.base import BaseTest
-
+import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Tuple
 
-from datetime import datetime, timedelta
-
-import uuid
-
+from snuba import settings
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
-from snuba.consumer import KafkaMessageMetadata
-from snuba.processor import ProcessorAction
+from snuba.processor import InsertBatch
+from snuba.state import set_config
 
 
 @dataclass
@@ -32,10 +30,12 @@ class TransactionEvent:
     release: str
     sdk_name: Optional[str]
     sdk_version: Optional[str]
+    http_method: Optional[str]
+    http_referer: Optional[str]
     geo: Mapping[str, str]
     status: str
 
-    def serialize(self) -> Mapping[str, Any]:
+    def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
             2,
             "insert",
@@ -86,6 +86,8 @@ class TransactionEvent:
                             "span_id": "b70840cd33074881",
                             "data": {},
                             "op": "http",
+                            "hash": "b" * 16,
+                            "exclusive_time": 0.1234,
                         }
                     ],
                     "platform": self.platform,
@@ -102,6 +104,20 @@ class TransactionEvent:
                     "datetime": "2019-08-08T22:29:53.917000Z",
                     "timestamp": self.timestamp,
                     "start_timestamp": self.start_timestamp,
+                    "measurements": {
+                        "lcp": {"value": 32.129},
+                        "lcp.elementSize": {"value": 4242},
+                        "fid": {"value": None},
+                        "invalid": None,
+                        "invalid2": {},
+                    },
+                    "breakdowns": {
+                        "span_ops": {
+                            "ops.db": {"value": 62.512},
+                            "ops.http": {"value": 109.774},
+                            "total.time": {"value": 172.286},
+                        }
+                    },
                     "contexts": {
                         "trace": {
                             "sampled": True,
@@ -110,7 +126,10 @@ class TransactionEvent:
                             "type": "trace",
                             "span_id": self.span_id,
                             "status": self.status,
-                        }
+                            "hash": "a" * 16,
+                            "exclusive_time": 1.2345,
+                        },
+                        "experiments": {"test1": 1, "test2": 2},
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -125,14 +144,31 @@ class TransactionEvent:
                         "email": self.user_email,
                         "geo": self.geo,
                     },
+                    "request": {
+                        "url": "http://127.0.0.1:/query",
+                        "headers": [
+                            ["Accept-Encoding", "identity"],
+                            ["Content-Length", "398"],
+                            ["Host", "127.0.0.1:"],
+                            ["Referer", self.http_referer],
+                            ["Trace", "8fa73032d-1"],
+                        ],
+                        "data": "",
+                        "method": self.http_method,
+                        "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
+                    },
                     "transaction": self.transaction_name,
                 },
             },
         )
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
-        start_timestamp = datetime.fromtimestamp(self.start_timestamp)
-        finish_timestamp = datetime.fromtimestamp(self.timestamp)
+        start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
+        finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
+
+        spans = sorted(
+            [(self.op, int("a" * 16, 16), 1.2345), ("http", int("b" * 16, 16), 0.1234)]
+        )
 
         ret = {
             "deleted": 0,
@@ -160,11 +196,11 @@ class TransactionEvent:
             "user_email": self.user_email,
             "tags.key": ["environment", "sentry:release", "sentry:user", "we|r=d"],
             "tags.value": [self.environment, self.release, self.user_id, "tag"],
+            # Notice that we do not store trace.trace_id or trace.span_id in contexts
+            # this is because it is redundant (as it is also stored as a promoted column)
             "contexts.key": [
                 "trace.sampled",
-                "trace.trace_id",
                 "trace.op",
-                "trace.span_id",
                 "trace.status",
                 "geo.country_code",
                 "geo.region",
@@ -172,9 +208,7 @@ class TransactionEvent:
             ],
             "contexts.value": [
                 "True",
-                self.trace_id,
                 self.op,
-                self.span_id,
                 self.status,
                 self.geo["country_code"],
                 self.geo["region"],
@@ -182,15 +216,18 @@ class TransactionEvent:
             ],
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
+            "http_method": self.http_method,
+            "http_referer": self.http_referer,
             "offset": meta.offset,
             "partition": meta.partition,
             "retention_days": 90,
-            "_tags_flattened": f"|environment={self.environment}||sentry:release={self.release}||sentry:user={self.user_id}||we\\|r\\=d=tag|",
-            "_contexts_flattened": (
-                f"|geo.city={self.geo['city']}||geo.country_code={self.geo['country_code']}||geo.region={self.geo['region']}|"
-                f"|trace.op={self.op}||trace.sampled=True||trace.span_id={self.span_id}||trace.status={str(self.status)}|"
-                f"|trace.trace_id={self.trace_id}|"
-            ),
+            "measurements.key": ["lcp", "lcp.elementSize"],
+            "measurements.value": [32.129, 4242.0],
+            "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
+            "span_op_breakdowns.value": [62.512, 109.774, 172.286],
+            "spans.op": [span[0] for span in spans],
+            "spans.group": [span[1] for span in spans],
+            "spans.exclusive_time": [span[2] for span in spans],
         }
 
         if self.ipv4:
@@ -200,13 +237,13 @@ class TransactionEvent:
         return ret
 
 
-class TestTransactionsProcessor(BaseTest):
-    def __get_timestamps(slef) -> Tuple[float, float]:
-        timestamp = datetime.utcnow() - timedelta(seconds=5)
+class TestTransactionsProcessor:
+    def __get_timestamps(self) -> Tuple[float, float]:
+        timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
 
-    def test_skip_non_transactions(self):
+    def test_skip_non_transactions(self) -> None:
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -228,17 +265,21 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
         # Force an invalid event
         payload[2]["data"]["type"] = "error"
 
-        meta = KafkaMessageMetadata(offset=1, partition=2)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
-    def test_missing_trace_context(self):
+    def test_missing_trace_context(self) -> None:
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -260,17 +301,25 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
         # Force an invalid event
         del payload[2]["data"]["contexts"]
 
-        meta = KafkaMessageMetadata(offset=1, partition=2)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
-    def test_base_process(self):
+    def test_base_process(self) -> None:
+        old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+        set_config("write_span_columns_projects", "[1]")
+
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -292,12 +341,14 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
-        meta = KafkaMessageMetadata(offset=1, partition=2,)
-
-        processor = TransactionsMessageProcessor()
-        ret = processor.process_message(message.serialize(), meta)
-
-        assert ret.action == ProcessorAction.INSERT
-        assert ret.data == [message.build_result(meta)]
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        assert TransactionsMessageProcessor().process_message(
+            message.serialize(), meta
+        ) == InsertBatch([message.build_result(meta)], None)
+        settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context

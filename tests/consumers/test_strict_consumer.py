@@ -1,14 +1,14 @@
-import pytest
+from unittest.mock import MagicMock, patch
 
+import pytest
 from confluent_kafka import KafkaError
-from unittest.mock import patch
-from unittest.mock import MagicMock
 
 from snuba.consumers.strict_consumer import (
     CommitDecision,
     NoPartitionAssigned,
     StrictConsumer,
 )
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from tests.backends.confluent_kafka import (
     FakeConfluentKafkaConsumer,
     build_confluent_kafka_message,
@@ -16,11 +16,13 @@ from tests.backends.confluent_kafka import (
 
 
 class TestStrictConsumer:
+    broker_config = get_default_kafka_configuration(bootstrap_servers=["somewhere"])
+
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
             topic="my_topic",
-            bootstrap_servers="somewhere",
             group_id="something",
+            broker_config=self.broker_config,
             initial_auto_offset_reset="earliest",
             partition_assignment_timeout=1,
             on_partitions_assigned=None,

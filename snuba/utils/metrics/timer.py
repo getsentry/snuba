@@ -1,5 +1,5 @@
 from itertools import groupby
-from typing import Optional, Mapping, MutableSequence, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping, MutableSequence, Optional, Tuple
 
 from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -37,6 +37,21 @@ class Timer:
     def __diff_ms(self, start: float, end: float) -> int:
         return int((end - start) * 1000)
 
+    def get_duration_group(self) -> str:
+        if self.__data is None:
+            return "unknown"
+
+        duration_ms = self.__data["duration_ms"]
+        duration_group = "<10s"
+        if duration_ms >= 30000:
+            duration_group = ">30s"
+        elif duration_ms >= 20000:
+            duration_group = ">20s"
+        elif duration_ms >= 10000:
+            duration_group = ">10s"
+
+        return duration_group
+
     def finish(self) -> TimerData:
         if self.__data is None:
             start = self.__marks[0][1]
@@ -45,6 +60,7 @@ class Timer:
                 (name, self.__diff_ms(self.__marks[i][1], ts))
                 for i, (name, ts) in enumerate(self.__marks[1:])
             ]
+
             self.__data = {
                 "timestamp": int(start),
                 "duration_ms": self.__diff_ms(start, end),
@@ -53,6 +69,7 @@ class Timer:
                     for key, group in groupby(sorted(durations), key=lambda x: x[0])
                 },
             }
+
         return self.__data
 
     def for_json(self) -> TimerData:

@@ -1,16 +1,13 @@
 from __future__ import annotations
-import re
 
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence, Type
+from typing import Any, List, Mapping, Optional, Sequence, Type
 
-from snuba.processor import MessageProcessor, ProcessorAction, ProcessedMessage
+from snuba.consumers.types import KafkaMessageMetadata
+from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.writer import WriterTableRow
-
-KAFKA_ONLY_PARTITION = (
-    0  # CDC only works with single partition topics. So partition must be 0
-)
 
 POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
@@ -97,7 +94,7 @@ class CdcProcessor(MessageProcessor):
         old_key = dict(zip(key["keynames"], key["keyvalues"]))
         new_key = {key: columnvalues[columnnames.index(key)] for key in key["keynames"]}
 
-        ret = []
+        ret: List[WriterTableRow] = []
         if old_key != new_key:
             ret.extend(self._process_delete(offset, key))
 
@@ -113,21 +110,21 @@ class CdcProcessor(MessageProcessor):
     ) -> Sequence[WriterTableRow]:
         return []
 
-    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
-
-        partition = metadata.partition
-        assert (
-            partition == KAFKA_ONLY_PARTITION
-        ), "CDC can only work with single partition topics for consistency"
 
         offset = metadata.offset
         event = value["event"]
+        timestamp: Optional[datetime] = None
         if event == "begin":
             messages = self._process_begin(offset)
         elif event == "commit":
             messages = self._process_commit(offset)
         elif event == "change":
+            if "timestamp" in value:
+                timestamp = parse_postgres_datetime(value["timestamp"])
             table_name = value["table"]
             if table_name != self.pg_table:
                 return None
@@ -158,4 +155,4 @@ class CdcProcessor(MessageProcessor):
         if not messages:
             return None
 
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=messages,)
+        return InsertBatch(messages, timestamp)

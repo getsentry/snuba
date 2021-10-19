@@ -1,8 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
-
-from typing_extensions import Protocol
-
+from typing import Any, Generic, Protocol, TypeVar
 
 TComparable = TypeVar("TComparable", contravariant=True)
 
@@ -52,9 +49,16 @@ T = TypeVar("T", bound=Comparable[Any])
 
 
 @dataclass(frozen=True)
+class InvalidRangeError(ValueError, Generic[T]):
+    lower: T
+    upper: T
+
+
+@dataclass(frozen=True)
 class Interval(Generic[T]):
     lower: T
     upper: T
 
     def __post_init__(self) -> None:
-        assert self.upper >= self.lower
+        if not self.upper >= self.lower:
+            raise InvalidRangeError(self.lower, self.upper)

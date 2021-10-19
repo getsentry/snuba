@@ -1,109 +1,83 @@
 import calendar
-import pytest
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from typing import Optional
 
-from tests.base import BaseEventsTest
+import pytest
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import (
-    InvalidMessageType,
-    InvalidMessageVersion,
-    ProcessedMessage,
-    ProcessorAction,
-)
-from snuba.datasets.events_processor import (
+from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_http,
     extract_user,
 )
+from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.processor import (
+    InsertBatch,
+    InvalidMessageType,
+    InvalidMessageVersion,
+    ProcessedMessage,
+    ReplacementBatch,
+)
+from tests.fixtures import get_raw_event
 
 
-class TestEventsProcessor(BaseEventsTest):
-    def test_simple(self):
-        processed = (
-            enforce_table_writer(self.dataset)
+class TestEventsProcessor:
+    def setup_method(self, test_method) -> None:
+        self.metadata = KafkaMessageMetadata(0, 0, datetime.now())
+        self.event = get_raw_event()
+
+        self.processor = (
+            get_writable_storage(StorageKey.EVENTS)
+            .get_table_writer()
             .get_stream_loader()
             .get_processor()
-            .process_message(self.event)
         )
 
-        for field in ("event_id", "project_id", "message", "platform"):
-            assert processed.data[0][field] == self.event[field]
-
-    def test_simple_version_0(self):
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((0, "insert", self.event))
-        )
-
-        for field in ("event_id", "project_id", "message", "platform"):
-            assert processed.data[0][field] == self.event[field]
-
-    def test_simple_version_1(self):
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(
-            (0, "insert", self.event)
-        ) == processor.process_message((1, "insert", self.event, {}))
-
-    def test_invalid_type_version_0(self):
-        with pytest.raises(InvalidMessageType):
-            enforce_table_writer(
-                self.dataset
-            ).get_stream_loader().get_processor().process_message(
-                (0, "invalid", self.event)
-            )
-
-    def test_invalid_version(self):
+    def test_invalid_version(self) -> None:
         with pytest.raises(InvalidMessageVersion):
-            enforce_table_writer(
-                self.dataset
-            ).get_stream_loader().get_processor().process_message(
-                (2 ** 32 - 1, "insert", self.event)
+            self.processor.process_message(
+                (2 ** 32 - 1, "insert", self.event), self.metadata,
             )
 
-    def test_invalid_format(self):
+    def test_invalid_format(self) -> None:
         with pytest.raises(InvalidMessageVersion):
-            enforce_table_writer(
-                self.dataset
-            ).get_stream_loader().get_processor().process_message(
-                (-1, "insert", self.event)
+            self.processor.process_message(
+                (-1, "insert", self.event), self.metadata,
             )
 
-    def test_unexpected_obj(self):
+    def __process_insert_event(self, event: InsertEvent) -> Optional[ProcessedMessage]:
+        return self.processor.process_message((2, "insert", event, {}), self.metadata)
+
+    def test_has_trace_and_span_id(self) -> None:
+        processed_message = self.__process_insert_event(self.event)
+        assert isinstance(processed_message, InsertBatch)
+        assert "trace.trace_id" in processed_message.rows[0]["contexts.key"]
+        assert "trace.span_id" in processed_message.rows[0]["contexts.key"]
+
+    def test_unexpected_obj(self) -> None:
         self.event["message"] = {"what": "why is this in the message"}
 
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
+        processed = self.__process_insert_event(self.event)
+        assert isinstance(processed, InsertBatch)
+        assert processed.rows[0]["message"] == '{"what": "why is this in the message"}'
 
-        assert processed.data[0]["message"] == '{"what": "why is this in the message"}'
-
-    def test_hash_invalid_primary_hash(self):
+    def test_hash_invalid_primary_hash(self) -> None:
         self.event[
             "primary_hash"
         ] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode("unicode-escape")
 
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
+        processed = self.__process_insert_event(self.event)
+        assert isinstance(processed, InsertBatch)
+        assert processed.rows[0]["primary_hash"] == "a52ccc1a61c2258e918b43b5aff50db1"
 
-        assert processed.data[0]["primary_hash"] == "a52ccc1a61c2258e918b43b5aff50db1"
-
-    def test_extract_required(self):
+    def test_extract_required(self) -> None:
         now = datetime.utcnow()
         event = {
             "event_id": "1" * 32,
@@ -117,9 +91,7 @@ class TestEventsProcessor(BaseEventsTest):
             event,
             datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT),
         )
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_required(output, event)
+        self.processor.extract_required(output, event)
         assert output == {
             "event_id": "11111111111111111111111111111111",
             "project_id": 100,
@@ -128,196 +100,98 @@ class TestEventsProcessor(BaseEventsTest):
             "retention_days": settings.DEFAULT_RETENTION_DAYS,
         }
 
-    def test_extract_common(self):
+    def test_extract_common(self) -> None:
         now = datetime.utcnow().replace(microsecond=0)
         event = {
             "primary_hash": "a" * 32,
             "message": "the message",
             "platform": "the_platform",
-        }
-        data = {
-            "received": int(calendar.timegm(now.timetuple())),
-            "culprit": "the culprit",
-            "type": "error",
-            "version": 6,
-            "title": "FooError",
-            "location": "bar.py",
-            "modules": OrderedDict([("foo", "1.0"), ("bar", "2.0"), ("baz", None)]),
+            "data": {
+                "received": int(calendar.timegm(now.timetuple())),
+                "culprit": "the culprit",
+                "type": "error",
+                "version": 6,
+                "title": "FooError",
+                "location": "bar.py",
+                "modules": OrderedDict([("foo", "1.0"), ("bar", "2.0"), ("baz", None)]),
+            },
         }
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
+        self.processor.extract_common(output, event, self.metadata)
         assert output == {
-            "message": u"the message",
             "platform": u"the_platform",
-            "primary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "received": now,
-            "culprit": "the culprit",
-            "type": "error",
             "version": "6",
             "modules.name": [u"foo", u"bar", u"baz"],
             "modules.version": [u"1.0", u"2.0", u""],
-            "title": "FooError",
             "location": "bar.py",
-            "search_message": None,
         }
 
-    def test_extract_common_search_message(self):
-        now = datetime.utcnow().replace(microsecond=0)
-        event = {
-            "primary_hash": "a" * 32,
-            "message": "the message",
-            "platform": "the_platform",
-            "search_message": "the search message",
-        }
-        data = {
-            "received": int(calendar.timegm(now.timetuple())),
-        }
-        output = {}
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
-        assert output["search_message"] == "the search message"
-
-        # with optional short message
-        now = datetime.utcnow().replace(microsecond=0)
-        event = {
-            "primary_hash": "a" * 32,
-            "message": "the message",
-            "platform": "the_platform",
-            "search_message": "the search message",
-        }
-        data = {
-            "received": int(calendar.timegm(now.timetuple())),
-            "message": "the short message",
-        }
-        output = {}
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
-        assert output["search_message"] == "the search message"
-        assert output["message"] == "the short message"
-
-    def test_v1_delete_groups_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "delete_groups", {}))
-            is None
-        )
-
-    def test_v1_merge_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "merge", {}))
-            is None
-        )
-
-    def test_v1_unmerge_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "unmerge", {}))
-            is None
-        )
-
-    def test_v2_invalid_type(self):
+    def test_v2_invalid_type(self) -> None:
         with pytest.raises(InvalidMessageType):
             assert (
-                enforce_table_writer(self.dataset)
-                .get_stream_loader()
-                .get_processor()
-                .process_message((2, "__invalid__", {}))
+                self.processor.process_message((2, "__invalid__", {}), self.metadata)
                 == 1
             )
 
-    def test_v2_start_delete_groups(self):
+    def test_v2_start_delete_groups(self) -> None:
         project_id = 1
-        message = (2, "start_delete_groups", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
-        )
+        message = (2, ReplacementType.START_DELETE_GROUPS, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_delete_groups(self):
+    def test_v2_end_delete_groups(self) -> None:
         project_id = 1
-        message = (2, "end_delete_groups", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
-        )
+        message = (2, ReplacementType.END_DELETE_GROUPS, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_start_merge(self):
+    def test_v2_start_merge(self) -> None:
         project_id = 1
-        message = (2, "start_merge", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
-        )
+        message = (2, ReplacementType.START_MERGE, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_merge(self):
+    def test_v2_end_merge(self) -> None:
         project_id = 1
-        message = (2, "end_merge", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
-        )
+        message = (2, ReplacementType.END_MERGE, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_start_unmerge(self):
+    def test_v2_start_unmerge(self) -> None:
         project_id = 1
-        message = (2, "start_unmerge", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
-        )
+        message = (2, ReplacementType.START_UNMERGE, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_unmerge(self):
+    def test_v2_end_unmerge(self) -> None:
         project_id = 1
-        message = (2, "end_unmerge", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
-        )
+        message = (2, ReplacementType.END_UNMERGE, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_start_delete_tag(self):
+    def test_v2_start_delete_tag(self) -> None:
         project_id = 1
-        message = (2, "start_delete_tag", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
-        )
+        message = (2, ReplacementType.START_DELETE_TAG, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_delete_tag(self):
+    def test_v2_end_delete_tag(self) -> None:
         project_id = 1
-        message = (2, "end_delete_tag", {"project_id": project_id})
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
-        )
+        message = (2, ReplacementType.END_DELETE_TAG, {"project_id": project_id})
+        assert self.processor.process_message(
+            message, self.metadata
+        ) == ReplacementBatch(str(project_id), [message])
 
-    def test_extract_sdk(self):
+    def test_extract_sdk(self) -> None:
         sdk = {
             "integrations": ["logback"],
             "name": "sentry-java",
@@ -325,9 +199,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_sdk(output, sdk)
+        self.processor.extract_sdk(output, sdk)
 
         assert output == {
             "sdk_name": u"sentry-java",
@@ -335,7 +207,7 @@ class TestEventsProcessor(BaseEventsTest):
             "sdk_integrations": [u"logback"],
         }
 
-    def test_extract_tags(self):
+    def test_extract_tags(self) -> None:
         orig_tags = {
             "sentry:user": "the_user",
             "level": "the_level",
@@ -353,9 +225,7 @@ class TestEventsProcessor(BaseEventsTest):
         tags = orig_tags.copy()
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_promoted_tags(output, tags)
+        self.processor.extract_promoted_tags(output, tags)
 
         assert output == {
             "sentry:dist": "the_dist",
@@ -380,20 +250,18 @@ class TestEventsProcessor(BaseEventsTest):
             "tags.value": [v for k, v in valid_items],
         }
 
-    def test_extract_tags_empty_string(self):
+    def test_extract_tags_empty_string(self) -> None:
         # verify our text field extraction doesn't coerce '' to None
         tags = {
             "environment": "",
         }
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_promoted_tags(output, tags)
+        self.processor.extract_promoted_tags(output, tags)
 
         assert output["environment"] == u""
 
-    def test_extract_contexts(self):
+    def test_extract_contexts(self) -> None:
         contexts = {
             "app": {"device_app_hash": "the_app_device_uuid"},
             "os": {
@@ -447,11 +315,7 @@ class TestEventsProcessor(BaseEventsTest):
         tags = orig_tags.copy()
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_promoted_contexts(
-            output, contexts, tags
-        )
+        self.processor.extract_promoted_contexts(output, contexts, tags)
 
         assert output == {
             "app_device": u"the_app_device_uuid",
@@ -498,14 +362,17 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        extra_output["contexts.key"], extra_output["contexts.value"] = extract_extra_contexts(contexts)
+        (
+            extra_output["contexts.key"],
+            extra_output["contexts.value"],
+        ) = extract_extra_contexts(contexts)
 
         assert extra_output == {
             "contexts.key": ["extra.int", "extra.float", "extra.str", "extra.\\ud83c"],
             "contexts.value": [u"0", u"1.3", u"string", u"invalid utf-8 surrogate"],
         }
 
-    def test_extract_user(self):
+    def test_extract_user(self) -> None:
         user = {
             "id": "user_id",
             "email": "user_email",
@@ -523,7 +390,7 @@ class TestEventsProcessor(BaseEventsTest):
             "username": u"user_username",
         }
 
-    def test_extract_geo(self):
+    def test_extract_geo(self) -> None:
         geo = {
             "country_code": "US",
             "city": "San Francisco",
@@ -531,9 +398,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_geo(output, geo)
+        self.processor.extract_geo(output, geo)
 
         assert output == {
             "geo_country_code": "US",
@@ -541,23 +406,26 @@ class TestEventsProcessor(BaseEventsTest):
             "geo_region": "CA",
         }
 
-    def test_extract_http(self):
-        http = {
+    def test_extract_http(self) -> None:
+        request = {
             "method": "GET",
             "headers": [
                 ["Referer", "https://sentry.io"],
                 ["Host", "https://google.com"],
             ],
+            "url": "the_url",
         }
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_http(output, http)
+        extract_http(output, request)
 
-        assert output == {"http_method": u"GET", "http_referer": u"https://sentry.io"}
+        assert output == {
+            "http_method": u"GET",
+            "http_referer": u"https://sentry.io",
+            "http_url": "the_url",
+        }
 
-    def test_extract_stacktraces(self):
+    def test_extract_stacktraces(self) -> None:
         stacks = [
             {
                 "module": "java.lang",
@@ -634,13 +502,13 @@ class TestEventsProcessor(BaseEventsTest):
                 "value": "/ by zero",
             }
         ]
-        output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_stacktraces(output, stacks)
+        output = {"project_id": 1}
+
+        self.processor.extract_stacktraces(output, stacks)
 
         assert output == {
+            "project_id": 1,
             "exception_frames.abs_path": [
                 u"Thread.java",
                 u"ExecJavaMojo.java",
@@ -696,7 +564,7 @@ class TestEventsProcessor(BaseEventsTest):
             "exception_stacks.mechanism_type": [u"promise"],
         }
 
-    def test_null_values_dont_throw(self):
+    def test_null_values_dont_throw(self) -> None:
         event = {
             "event_id": "bce76c2473324fa387b33564eacf34a0",
             "group_id": 1,
@@ -735,6 +603,14 @@ class TestEventsProcessor(BaseEventsTest):
             calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
         )
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().process_insert(event)
+        self.__process_insert_event(event)
+
+    def test_none_tags_dont_throw(self) -> None:
+        self.event["tags"] = [
+            [None, "no-key"],
+            ["no-value", None],
+            None,
+        ]
+
+        processed = self.__process_insert_event(self.event)
+        assert isinstance(processed, InsertBatch)

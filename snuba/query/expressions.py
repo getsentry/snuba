@@ -2,21 +2,29 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
-from typing import (
-    Callable,
-    Generic,
-    Iterator,
-    Optional,
-    TypeVar,
-    Tuple,
-    Union,
-)
+from datetime import date, datetime
+from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
+
+from snuba import settings
 
 TVisited = TypeVar("TVisited")
+# dataclasses have their own built in repr, we override it
+# under usual circumstances to get more readable expressions.
+
+# The dataclass repr is created by the @dataclass decorator at
+# class definition time, therefore we have to know up front whether we
+# will be using the dataclass repr or not
+# Sometimes however, we want the raw data, and this allows us to print that out
+_AUTO_REPR = not settings.PRETTY_FORMAT_EXPRESSIONS
+
+# This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
+@dataclass(frozen=True, repr=_AUTO_REPR)
+class _Expression:
+    # TODO: Make it impossible to assign empty string as an alias.
+    alias: Optional[str]
 
 
-@dataclass(frozen=True)
-class Expression(ABC):
+class Expression(_Expression, ABC):
     """
     A node in the Query AST. This can be a leaf or an intermediate node.
     It represents an expression that can be resolved to a value. This
@@ -25,8 +33,6 @@ class Expression(ABC):
 
     All expressions can have an optional alias.
     """
-
-    alias: Optional[str]
 
     @abstractmethod
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
@@ -62,6 +68,17 @@ class Expression(ABC):
         """
         raise NotImplementedError
 
+    def __repr__(self) -> str:
+        """returns a stringified version of the expression AST that is concise and easy to parse visually.
+        Not expected to be used for anything except debugging
+        (it does a lot of string copies to construct the string)
+        """
+        if settings.PRETTY_FORMAT_EXPRESSIONS:
+            visitor = StringifyVisitor()
+            return self.accept(visitor)
+        else:
+            return super().__repr__()
+
 
 class ExpressionVisitor(ABC, Generic[TVisited]):
     """
@@ -77,37 +94,141 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     """
 
     @abstractmethod
-    def visitLiteral(self, exp: Literal) -> TVisited:
+    def visit_literal(self, exp: Literal) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitColumn(self, exp: Column) -> TVisited:
+    def visit_column(self, exp: Column) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitFunctionCall(self, exp: FunctionCall) -> TVisited:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TVisited:
+    def visit_function_call(self, exp: FunctionCall) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitArgument(self, exp: Argument) -> TVisited:
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitLambda(self, exp: Lambda) -> TVisited:
+    def visit_argument(self, exp: Argument) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_lambda(self, exp: Lambda) -> TVisited:
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
+class StringifyVisitor(ExpressionVisitor[str]):
+    """Visitor implementation to turn an expression into a string format
+    Usage:
+        # Any expression class supported by the visitor will do
+        >>> exp: Expression = Expression()
+        >>> visitor = StringifyVisitor()
+        >>> exp_str = exp.accept(visitor)
+    """
+
+    def __init__(self, level: int = 0, initial_indent: int = 0) -> None:
+        # keeps track of the level of the AST we are currently in,
+        # this is necessary for nice indentation
+
+        # before recursively going into subnodes increment this counter,
+        # decrement it after the recursion is done
+        self.__level = level
+
+        # the initial indent that the repr string should have
+        self.__initial_indent = initial_indent
+
+    def _get_line_prefix(self) -> str:
+        # every line in the tree needs to be indented based on the tree level
+        # to make things look pretty
+        return "  " * (self.__initial_indent + self.__level)
+
+    def _get_alias_str(self, exp: Expression) -> str:
+        # Every expression has an optional alias so we handle that here
+        return f" AS `{exp.alias}`" if exp.alias else ""
+
+    def visit_literal(self, exp: Literal) -> str:
+        literal_str = None
+        if isinstance(exp.value, str):
+            literal_str = f"'{exp.value}'"
+        elif isinstance(exp.value, datetime):
+            literal_str = f"datetime({exp.value.isoformat()})"
+        elif isinstance(exp.value, date):
+            literal_str = f"date({exp.value.isoformat()})"
+        else:
+            literal_str = f"{exp.value}"
+        res = f"{self._get_line_prefix()}{literal_str}{self._get_alias_str(exp)}"
+        return res
+
+    def visit_column(self, exp: Column) -> str:
+        column_str = (
+            f"{exp.table_name}.{exp.column_name}"
+            if exp.table_name
+            else f"{exp.column_name}"
+        )
+        return f"{self._get_line_prefix()}{column_str}{self._get_alias_str(exp)}"
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
+        # we want to visit the literal node to format it properly
+        # but for the subscritable reference we don't need it to
+        # be indented or newlined. Hence we remove the prefix
+        # from the string
+        literal_str = exp.key.accept(self)[len(self._get_line_prefix()) :]
+
+        # if the subscripted column is aliased, we wrap it with parens to make life
+        # easier for the viewer
+        column_str = (
+            f"({exp.column.accept(self)})"
+            if exp.column.alias is not None
+            else f"{exp.column.accept(self)}"
+        )
+
+        # this line will already have the necessary prefix due to the visit_column
+        # function
+        subscripted_column_str = f"{column_str}[{literal_str}]"
+        # after we know that, all we need to do as add the alias
+        return f"{subscripted_column_str}{self._get_alias_str(exp)}"
+
+    def visit_function_call(self, exp: FunctionCall) -> str:
+        self.__level += 1
+        param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
+        self.__level -= 1
+        return f"{self._get_line_prefix()}{exp.function_name}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
+        self.__level += 1
+        param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
+        self.__level -= 1
+        # The internal function repr will already have the
+        # prefix appropriate for the level, we don't need to
+        # insert it here
+        return f"{exp.internal_function.accept(self)}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+
+    def visit_argument(self, exp: Argument) -> str:
+        return f"{self._get_line_prefix()}{exp.name}{self._get_alias_str(exp)}"
+
+    def visit_lambda(self, exp: Lambda) -> str:
+        params_str = ",".join(exp.parameters)
+        self.__level += 1
+        transformation_str = exp.transformation.accept(self)
+        self.__level -= 1
+        return f"{self._get_line_prefix()}({params_str} ->\n{transformation_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+
+
+OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
+
+
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Literal(Expression):
     """
     A literal in the SQL expression
     """
 
-    value: Union[None, bool, str, float, int]
+    value: OptionalScalarType
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
@@ -116,17 +237,17 @@ class Literal(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitLiteral(self)
+        return visitor.visit_literal(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Column(Expression):
     """
     Represent a column in the schema of the dataset.
     """
 
-    column_name: str
     table_name: Optional[str]
+    column_name: str
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
@@ -135,10 +256,47 @@ class Column(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitColumn(self)
+        return visitor.visit_column(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=_AUTO_REPR)
+class SubscriptableReference(Expression):
+    """
+    Accesses one entry of a subscriptable column (for example key based access on
+    a mapping column like tags[key]).
+
+    The only subscriptable column we support now in the query language is a key-value
+    mapping, the key is required to be a literal (not any expression) and the subscriptable
+    column cannot be the result of an expression itself (func(asd)[key] is not allowed).
+    These constraints could be relaxed should we decided to support them in the query language.
+    """
+
+    column: Column
+    key: Literal
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visit_subscriptable_reference(self)
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        transformed = replace(
+            self, column=self.column.transform(func), key=self.key.transform(func),
+        )
+        return func(transformed)
+
+    def __iter__(self) -> Iterator[Expression]:
+        # Since column is a column and key is a literal and since none of
+        # them is a composite expression we would achieve the same result by yielding
+        # directly the column and the key instead of iterating over them.
+        # We iterate over them so that this would work correctly independently from
+        # any future changes on their __iter__ methods as long as they remain Expressions.
+        for sub in self.column:
+            yield sub
+        for sub in self.key:
+            yield sub
+        yield self
+
+
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class FunctionCall(Expression):
     """
     Represents an expression that resolves to a function call on Clickhouse.
@@ -184,10 +342,10 @@ class FunctionCall(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitFunctionCall(self)
+        return visitor.visit_function_call(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class CurriedFunctionCall(Expression):
     """
     This function call represent a function with currying: f(x)(y).
@@ -231,10 +389,10 @@ class CurriedFunctionCall(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitCurriedFunctionCall(self)
+        return visitor.visit_curried_function_call(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Argument(Expression):
     """
     A bound variable in a lambda expression. This is used to refer to variables
@@ -250,10 +408,10 @@ class Argument(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitArgument(self)
+        return visitor.visit_argument(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Lambda(Expression):
     """
     A lambda expression in the form (x,y,z -> transform(x,y,z))
@@ -282,4 +440,4 @@ class Lambda(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitLambda(self)
+        return visitor.visit_lambda(self)

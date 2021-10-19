@@ -1,39 +1,159 @@
+from typing import Any, MutableMapping
+
 import pytest
-from typing import Sequence
-from tests.base import BaseDatasetTest
 
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
-from snuba.query.query import Condition, Query
-from snuba.request.request_settings import RequestSettings
-
-
-def get_dataset_source(dataset_name):
-    return (
-        get_dataset(dataset_name)
-        .get_dataset_schemas()
-        .get_read_schema()
-        .get_data_source()
-    )
-
+from snuba.query.parser import parse_query
 
 test_data = [
-    ([["type", "=", "transaction"]], "transactions",),
-    ([["type", "!=", "transaction"]], "events",),
-    ([], "events",),
-    ([["duration", "=", 0]], "transactions",),
+    ({"conditions": [["type", "=", "transaction"]]}, EntityKey.DISCOVER_TRANSACTIONS),
+    (
+        {"conditions": [["type", "=", "transaction"], ["duration", ">", 1000]]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    ({"conditions": [["type", "=", "error"]]}, EntityKey.DISCOVER_EVENTS),
+    (
+        {"conditions": [[["type", "=", "error"], ["type", "=", "transaction"]]]},
+        EntityKey.DISCOVER,
+    ),
+    (
+        {
+            "conditions": [
+                [
+                    [
+                        "or",
+                        [
+                            ["equals", ["type", "transaction"]],
+                            ["equals", ["type", "default"]],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ]
+            ]
+        },
+        EntityKey.DISCOVER,
+    ),
+    (
+        {
+            "conditions": [
+                [
+                    [
+                        "and",
+                        [
+                            ["equals", ["duration", 10]],
+                            ["notEquals", ["type", "error"]],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ]
+            ]
+        },
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    (
+        {
+            "conditions": [
+                [
+                    [
+                        "and",
+                        [
+                            ["notEquals", ["type", "transaction"]],
+                            ["notEquals", ["type", "error"]],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ]
+            ]
+        },
+        EntityKey.DISCOVER_EVENTS,
+    ),
+    ({"conditions": [["type", "!=", "transaction"]]}, EntityKey.DISCOVER_EVENTS),
+    ({"conditions": []}, EntityKey.DISCOVER),
+    ({"conditions": [["duration", "=", 0]]}, EntityKey.DISCOVER_TRANSACTIONS),
+    (
+        {"conditions": [["event_id", "=", "asdasdasd"], ["duration", "=", 0]]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    (
+        {"conditions": [["group_id", "=", "asdasdasd"], ["duration", "=", 0]]},
+        EntityKey.DISCOVER,
+    ),
+    (
+        {
+            "conditions": [
+                [
+                    [
+                        "and",
+                        [
+                            ["notEquals", ["type", "transaction"]],
+                            ["notEquals", ["type", "error"]],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
+                ["duration", "=", 0],
+            ]
+        },
+        EntityKey.DISCOVER_EVENTS,
+    ),
+    (
+        {
+            "conditions": [
+                [
+                    [
+                        "and",
+                        [
+                            ["notEquals", ["type", "default"]],
+                            ["notEquals", ["type", "error"]],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
+                ["duration", "=", 0],
+            ]
+        },
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    # # No conditions, other referenced columns
+    ({"selected_columns": ["group_id"]}, EntityKey.DISCOVER_EVENTS),
+    ({"selected_columns": ["span_id"]}, EntityKey.DISCOVER),
+    ({"selected_columns": ["group_id", "span_id"]}, EntityKey.DISCOVER_EVENTS),
+    (
+        {"aggregations": [["max", "duration", "max_duration"]]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    (
+        {"aggregations": [["apdex(duration, 300)", None, "apdex_duration_300"]]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    (
+        {"aggregations": [["failure_rate()", None, "failure_rate"]]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    ({"aggregations": [["isHandled()", None, "handled"]]}, EntityKey.DISCOVER_EVENTS),
+    ({"aggregations": [["notHandled()", None, "handled"]]}, EntityKey.DISCOVER_EVENTS),
+    (
+        {"selected_columns": ["measurements[lcp.elementSize]"]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
+    (
+        {"selected_columns": ["span_op_breakdowns[ops.http]"]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
 ]
 
 
-class TestDiscover(BaseDatasetTest):
-    @pytest.mark.parametrize("conditions, expected_dataset", test_data)
-    def test_data_source(self, conditions: Sequence[Condition], expected_dataset: str):
-        query = Query({"conditions": conditions}, get_dataset_source("discover"))
+@pytest.mark.parametrize("query_body, expected_entity", test_data)
+def test_data_source(
+    query_body: MutableMapping[str, Any], expected_entity: EntityKey,
+) -> None:
+    dataset = get_dataset("discover")
+    query = parse_query(query_body, dataset)
 
-        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-        for processor in get_dataset("discover").get_query_processors():
-            processor.process_query(query, request_settings)
-
-        assert (
-            query.get_data_source().format_from()
-            == get_dataset_source(expected_dataset).format_from()
-        )
+    assert query.get_from_clause().key == expected_entity

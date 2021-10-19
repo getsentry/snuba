@@ -1,0 +1,20 @@
+minVersion: "0.23.1"
+changelogPolicy: none
+artifactProvider:
+  name: none
+statusProvider:
+  name: github
+  config:
+    contexts:
+      - 'build-on-branch-push (sentryio)'
+targets:
+  - id: release
+    name: docker
+    source: us.gcr.io/sentryio/snuba
+    target: getsentry/snuba
+  - id: latest
+    name: docker
+    source: us.gcr.io/sentryio/snuba
+    target: getsentry/snuba
+    targetFormat: '{{{target}}}:latest'
+  - name: github

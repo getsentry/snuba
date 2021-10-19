@@ -1,61 +1,74 @@
-import logging
+from typing import Optional
 
 import click
 
-from snuba import settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.storage import ReadableTableStorage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
+from snuba.environment import setup_logging
 
 
 @click.command()
 @click.option(
-    "--clickhouse-host",
-    default=settings.CLICKHOUSE_HOST,
-    help="Clickhouse server to write to.",
+    "--clickhouse-host", help="Clickhouse server to write to.",
 )
 @click.option(
-    "--clickhouse-port",
-    default=settings.CLICKHOUSE_PORT,
-    type=int,
-    help="Clickhouse native port to write to.",
-)
-@click.option("--database", default="default", help="Name of the database to target.")
-@click.option(
-    "--dataset",
-    "dataset_name",
-    default="events",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to target",
+    "--clickhouse-port", type=int, help="Clickhouse native port to write to.",
 )
 @click.option(
-    "--timeout",
-    default=10000,
-    type=int,
-    help="Clickhouse connection send/receive timeout, must be long enough for OPTIMIZE to complete.",
+    "--storage",
+    "storage_name",
+    type=click.Choice(["events", "errors", "transactions"]),
+    help="The storage to target",
+    required=True,
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def optimize(
     *,
-    clickhouse_host: str,
-    clickhouse_port: int,
-    database: str,
-    dataset_name: str,
-    timeout: int,
-    log_level: str
+    clickhouse_host: Optional[str],
+    clickhouse_port: Optional[int],
+    storage_name: str,
+    log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
+
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.optimize import run_optimize, logger
+    from snuba.optimize import logger, run_optimize
 
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    setup_logging(log_level)
 
-    dataset = get_dataset(dataset_name)
-    table = enforce_table_writer(dataset).get_schema().get_local_table_name()
+    storage: ReadableTableStorage
+
+    storage_key = StorageKey(storage_name)
+    storage = get_storage(storage_key)
+
+    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    clickhouse = ClickhousePool(
-        clickhouse_host, clickhouse_port, send_receive_timeout=timeout
-    )
-    num_dropped = run_optimize(clickhouse, database, table, before=today)
+
+    database = storage.get_cluster().get_database()
+
+    # TODO: In distributed mode, optimize currently must be run once for each node
+    # with the host and port of that node provided via the CLI. In the future,
+    # passing this information won't be necessary, and running this command once
+    # will ensure that optimize is performed on all of the individual nodes for
+    # that cluster.
+    if clickhouse_host and clickhouse_port:
+        connection = ClickhousePool(
+            clickhouse_host,
+            clickhouse_port,
+            clickhouse_user,
+            clickhouse_password,
+            database,
+            send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
+        )
+    elif not storage.get_cluster().is_single_node():
+        raise click.ClickException("Provide Clickhouse host and port for optimize")
+    else:
+        connection = storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.OPTIMIZE
+        )
+
+    num_dropped = run_optimize(connection, storage, database, before=today)
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

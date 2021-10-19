@@ -1,5 +1,7 @@
 import click
 
+from snuba import settings
+
 
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
@@ -8,36 +10,26 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
     "Starts all Snuba processes for local development."
     import os
     import sys
-    from subprocess import list2cmdline, call
+    from subprocess import call, list2cmdline
+
     from honcho.manager import Manager
 
     os.environ["PYTHONUNBUFFERED"] = "1"
 
     if bootstrap:
-        cmd = ["snuba", "bootstrap", "--force"]
+        cmd = ["snuba", "bootstrap", "--force", "--no-migrate"]
         if not workers:
             cmd.append("--no-kafka")
         returncode = call(cmd)
         if returncode > 0:
             sys.exit(returncode)
 
-    daemons = [
-        (
-            "api",
-            [
-                "uwsgi",
-                "--master",
-                "--manage-script-name",
-                "--wsgi-file",
-                "snuba/views.py",
-                "--http",
-                "0.0.0.0:1218",
-                "--http-keepalive",
-                "--need-app",
-                "--die-on-term",
-            ],
-        ),
-    ]
+        # Run migrations
+        returncode = call(["snuba", "migrations", "migrate", "--force"])
+        if returncode > 0:
+            sys.exit(returncode)
+
+    daemons = [("api", ["snuba", "api"])]
 
     if not workers:
         os.execvp(daemons[0][1][0], daemons[0][1])
@@ -50,19 +42,121 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "consumer",
                 "--auto-offset-reset=latest",
                 "--log-level=debug",
-                "--dataset=transactions",
+                "--storage=transactions",
                 "--consumer-group=transactions_group",
+                "--commit-log-topic=snuba-commit-log",
+            ],
+        ),
+        (
+            "sessions-consumer",
+            [
+                "snuba",
+                "consumer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=sessions_raw",
+                "--consumer-group=sessions_group",
+            ],
+        ),
+        (
+            "outcomes-consumer",
+            [
+                "snuba",
+                "consumer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=outcomes_raw",
+                "--consumer-group=outcomes_group",
             ],
         ),
         (
             "consumer",
-            ["snuba", "consumer", "--auto-offset-reset=latest", "--log-level=debug"],
+            [
+                "snuba",
+                "consumer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=errors",
+            ],
         ),
         (
             "replacer",
-            ["snuba", "replacer", "--auto-offset-reset=latest", "--log-level=debug"],
+            [
+                "snuba",
+                "replacer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=errors",
+            ],
+        ),
+        (
+            "subscriptions-consumer-events",
+            [
+                "snuba",
+                "subscriptions",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--max-batch-size=1",
+                "--consumer-group=snuba-events-subscriptions-consumers",
+                "--dataset=events",
+                "--commit-log-topic=snuba-commit-log",
+                "--commit-log-group=snuba-consumers",
+                "--delay-seconds=1",
+                "--schedule-ttl=10",
+                "--max-query-workers=1",
+            ],
+        ),
+        (
+            "subscriptions-consumer-transactions",
+            [
+                "snuba",
+                "subscriptions",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--max-batch-size=1",
+                "--consumer-group=snuba-transactions-subscriptions-consumers",
+                "--dataset=transactions",
+                "--commit-log-topic=snuba-commit-log",
+                "--commit-log-group=transactions_group",
+                "--delay-seconds=1",
+                "--schedule-ttl=10",
+                "--max-query-workers=1",
+            ],
+        ),
+        (
+            "cdc-consumer",
+            [
+                "snuba",
+                "multistorage-consumer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=groupedmessages",
+                "--storage=groupassignees",
+                "--consumer-group=cdc_group",
+            ],
         ),
     ]
+
+    if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
+        daemons += [
+            (
+                "subscriptions-consumer-sessions",
+                [
+                    "snuba",
+                    "subscriptions",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--max-batch-size=1",
+                    "--consumer-group=snuba-sessions-subscriptions-consumers",
+                    "--dataset=sessions",
+                    "--commit-log-topic=snuba-sessions-commit-log",
+                    "--commit-log-group=sessions_group",
+                    "--delay-seconds=1",
+                    "--schedule-ttl=10",
+                    "--max-query-workers=1",
+                ],
+            )
+        ]
 
     manager = Manager()
     for name, cmd in daemons:

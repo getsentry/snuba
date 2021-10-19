@@ -1,27 +1,43 @@
 from __future__ import absolute_import
 
-from confluent_kafka import Producer
-from contextlib import contextmanager
 import logging
 import random
 import re
-import simplejson as json
 import time
-import uuid
 from functools import partial
-from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Mapping,
+    Optional,
+    Sequence,
+    SupportsFloat,
+    SupportsInt,
+    Tuple,
+)
 
-from snuba import settings
-from snuba.redis import redis_client as rds
+import simplejson as json
+from confluent_kafka import KafkaError
+from confluent_kafka import Message as KafkaMessage
+from confluent_kafka import Producer
 
+from snuba import environment, settings
+from snuba.redis import redis_client
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.configuration_builder import (
+    build_default_kafka_producer_configuration,
+)
+from snuba.utils.streams.topics import Topic
 
+metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
 kfk = None
+rds = redis_client
 
 ratelimit_prefix = "snuba-ratelimit:"
 query_lock_prefix = "snuba-query-lock:"
-query_cache_prefix = "snuba-query-cache:"
 config_hash = "snuba-config"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
@@ -47,44 +63,10 @@ def get_rates(bucket: str, rollup: int = 60) -> Sequence[Any]:
     bucket = "{}{}".format(ratelimit_prefix, bucket)
     pipe = rds.pipeline(transaction=False)
     rate_history_s = get_config("rate_history_sec", 3600)
+    assert rate_history_s is not None
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, "({:f}".format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
-
-
-@contextmanager
-def deduper(query_id: Optional[str]) -> Iterator[bool]:
-    """
-    A simple redis distributed lock on a query_id to prevent multiple
-    concurrent queries running with the same id. Blocks subsequent
-    queries until the first is finished.
-
-    When used in conjunction with caching this means that the subsequent
-    queries can then use the cached result from the first query.
-    """
-
-    unlock = """
-        if redis.call('get', KEYS[1]) == ARGV[1]
-        then
-            return redis.call('del', KEYS[1])
-        else
-            return 0
-        end
-    """
-
-    if query_id is None:
-        yield False
-    else:
-        lock = "{}{}".format(query_lock_prefix, query_id)
-        nonce = uuid.uuid4()
-        try:
-            is_dupe = False
-            while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
-                is_dupe = True
-                time.sleep(0.01)
-            yield is_dupe
-        finally:
-            rds.eval(unlock, 1, lock, nonce)
 
 
 # Runtime Configuration
@@ -98,10 +80,10 @@ class memoize:
     def __init__(self, timeout: int = 1) -> None:
         self.timeout = timeout
         self.saved = None
-        self.at = 0
+        self.at = 0.0
 
-    def __call__(self, func):
-        def wrapper():
+    def __call__(self, func: Callable[[], Any]) -> Callable[[], Any]:
+        def wrapper() -> Any:
             now = time.time()
             if now > self.at + self.timeout or self.saved is None:
                 self.saved, self.at = func(), now
@@ -110,13 +92,15 @@ class memoize:
         return wrapper
 
 
-def numeric(value: Optional[Any]) -> Optional[Any]:
+def numeric(value: Any) -> Any:
     try:
+        assert isinstance(value, (str, SupportsInt))
         return int(value)
-    except ValueError:
+    except (ValueError, AssertionError):
         try:
+            assert isinstance(value, (str, SupportsFloat))
             return float(value)
-        except ValueError:
+        except (ValueError, AssertionError):
             return value
 
 
@@ -142,8 +126,8 @@ def abtest(value: Optional[Any]) -> Optional[Any]:
             i += int(weight or 1)
             if i >= r:
                 return numeric(v)
-    else:
-        return value
+
+    return value
 
 
 def set_config(key: str, value: Optional[Any], user: Optional[str] = None) -> None:
@@ -226,20 +210,35 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
-def record_query(data: Mapping[str, Optional[Any]]) -> None:
+def _record_query_delivery_callback(
+    error: Optional[KafkaError], message: KafkaMessage
+) -> None:
+    metrics.increment(
+        "record_query.delivery_callback",
+        tags={"status": "success" if error is None else "failure"},
+    )
+
+    if error is not None:
+        logger.warning("Could not record query due to error: %r", error)
+
+
+def record_query(query_metadata: Mapping[str, Any]) -> None:
     global kfk
     max_redis_queries = 200
     try:
-        data = safe_dumps(data)
-        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
+        data = safe_dumps(query_metadata)
+        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(  # type: ignore
             queries_list, 0, max_redis_queries - 1
         ).execute()
 
         if kfk is None:
-            kfk = Producer({"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)})
+            kfk = Producer(build_default_kafka_producer_configuration())
 
+        kfk.poll(0)  # trigger queued delivery callbacks
         kfk.produce(
-            settings.QUERIES_TOPIC, data.encode("utf-8"),
+            settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),
+            data.encode("utf-8"),
+            on_delivery=_record_query_delivery_callback,
         )
     except Exception as ex:
         logger.exception("Could not record query due to error: %r", ex)
@@ -259,13 +258,13 @@ def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
     return queries
 
 
-def get_result(query_id: str) -> Any:
-    key = "{}{}".format(query_cache_prefix, query_id)
-    result = rds.get(key)
-    return result and json.loads(result)
-
-
-def set_result(query_id: str, result: Mapping[str, Optional[Any]]) -> Any:
-    timeout = get_config("cache_expiry_sec", 1)
-    key = "{}{}".format(query_cache_prefix, query_id)
-    return rds.set(key, json.dumps(result), ex=timeout)
+def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
+    project_rollout_setting = get_config(rollout_key, "")
+    if project_rollout_setting:
+        # The expected format is [project,project,...]
+        project_rollout_setting = project_rollout_setting[1:-1]
+        if project_rollout_setting:
+            for p in project_rollout_setting.split(","):
+                if int(p.strip()) == project_id:
+                    return True
+    return False

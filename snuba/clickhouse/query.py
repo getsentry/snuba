@@ -1,150 +1,72 @@
-from abc import ABC, abstractmethod
+from typing import Callable, Iterable, Optional, Sequence
 
-from snuba import settings as snuba_settings
-from snuba import util
-from snuba.query.columns import (
-    column_expr,
-    conditions_expr,
-)
-from snuba.datasets.dataset import Dataset
-from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.query import LimitBy, OrderBy
+from snuba.query import ProcessableQuery as AbstractQuery
+from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
+from snuba.query.expressions import Expression as SnubaExpression
+from snuba.query.expressions import ExpressionVisitor
 
-
-class ClickhouseQuery(ABC):
-    """
-    Generates and represents a Clickhouse query from a Request
-    and a snuba Query
-    """
-
-    @abstractmethod
-    def format_sql(self) -> str:
-        raise NotImplementedError
+# This defines the type of a Clickhouse query expression. It is used to make
+# the interface of the expression translator more intuitive.
+Expression = SnubaExpression
 
 
-class DictClickhouseQuery(ClickhouseQuery):
-    """
-    Legacy Clickhouse query that transforms the Snuba Query based
-    on the original query body dictionary into a string during construction
-    without additional processing.
-
-    To be used until the AST is not complete.
-    """
-
+class Query(AbstractQuery[Table]):
     def __init__(
-        self, dataset: Dataset, query: Query, settings: RequestSettings,
+        self,
+        from_clause: Optional[Table],
+        # New data model to replace the one based on the dictionary
+        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        array_join: Optional[Expression] = None,
+        condition: Optional[Expression] = None,
+        prewhere: Optional[Expression] = None,
+        groupby: Optional[Sequence[Expression]] = None,
+        having: Optional[Expression] = None,
+        order_by: Optional[Sequence[OrderBy]] = None,
+        limitby: Optional[LimitBy] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        totals: bool = False,
+        granularity: Optional[int] = None,
     ) -> None:
-        parsing_context = ParsingContext()
+        self.__prewhere = prewhere
 
-        aggregate_exprs = [
-            column_expr(dataset, col, query, parsing_context, alias, agg)
-            for (agg, col, alias) in query.get_aggregations()
-        ]
-        groupby = util.to_list(query.get_groupby())
-        group_exprs = [
-            column_expr(dataset, gb, query, parsing_context) for gb in groupby
-        ]
-        column_names = query.get_selected_columns() or []
-        selected_cols = [
-            column_expr(dataset, util.tuplify(colname), query, parsing_context)
-            for colname in column_names
-        ]
-        select_clause = u"SELECT {}".format(
-            ", ".join(group_exprs + aggregate_exprs + selected_cols)
+        super().__init__(
+            from_clause=from_clause,
+            selected_columns=selected_columns,
+            array_join=array_join,
+            condition=condition,
+            groupby=groupby,
+            having=having,
+            order_by=order_by,
+            limitby=limitby,
+            limit=limit,
+            offset=offset,
+            totals=totals,
+            granularity=granularity,
         )
 
-        from_clause = u"FROM {}".format(query.get_data_source().format_from())
+    def _get_expressions_impl(self) -> Iterable[Expression]:
+        return self.__prewhere or []
 
-        if query.get_final():
-            from_clause = u"{} FINAL".format(from_clause)
+    def _transform_expressions_impl(
+        self, func: Callable[[Expression], Expression]
+    ) -> None:
+        self.__prewhere = self.__prewhere.transform(func) if self.__prewhere else None
 
-        if not query.get_data_source().supports_sample():
-            sample_rate = None
-        else:
-            if query.get_sample():
-                sample_rate = query.get_sample()
-            elif settings.get_turbo():
-                sample_rate = snuba_settings.TURBO_SAMPLE_RATE
-            else:
-                sample_rate = None
+    def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
+        if self.__prewhere is not None:
+            self.__prewhere = self.__prewhere.accept(visitor)
 
-        if sample_rate:
-            from_clause = u"{} SAMPLE {}".format(from_clause, sample_rate)
+    def get_prewhere_ast(self) -> Optional[Expression]:
+        """
+        Temporary method until pre where management is moved to Clickhouse query
+        """
+        return self.__prewhere
 
-        join_clause = ""
-        if query.get_arrayjoin():
-            join_clause = u"ARRAY JOIN {}".format(query.get_arrayjoin())
+    def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
+        self.__prewhere = condition
 
-        where_clause = ""
-        if query.get_conditions():
-            where_clause = u"WHERE {}".format(
-                conditions_expr(dataset, query.get_conditions(), query, parsing_context)
-            )
-
-        prewhere_clause = ""
-        if query.get_prewhere():
-            prewhere_clause = u"PREWHERE {}".format(
-                conditions_expr(dataset, query.get_prewhere(), query, parsing_context)
-            )
-
-        group_clause = ""
-        if groupby:
-            group_clause = "GROUP BY ({})".format(
-                ", ".join(
-                    column_expr(dataset, gb, query, parsing_context) for gb in groupby
-                )
-            )
-            if query.has_totals():
-                group_clause = "{} WITH TOTALS".format(group_clause)
-
-        having_clause = ""
-        having_conditions = query.get_having()
-        if having_conditions:
-            assert groupby, "found HAVING clause with no GROUP BY"
-            having_clause = u"HAVING {}".format(
-                conditions_expr(dataset, having_conditions, query, parsing_context)
-            )
-
-        order_clause = ""
-        if query.get_orderby():
-            orderby = [
-                column_expr(dataset, util.tuplify(ob), query, parsing_context)
-                for ob in util.to_list(query.get_orderby())
-            ]
-            orderby = [
-                u"{} {}".format(ob.lstrip("-"), "DESC" if ob.startswith("-") else "ASC")
-                for ob in orderby
-            ]
-            order_clause = u"ORDER BY {}".format(", ".join(orderby))
-
-        limitby_clause = ""
-        if query.get_limitby() is not None:
-            limitby_clause = "LIMIT {} BY {}".format(*query.get_limitby())
-
-        limit_clause = ""
-        if query.get_limit() is not None:
-            limit_clause = "LIMIT {}, {}".format(query.get_offset(), query.get_limit())
-
-        self.__formatted_query = " ".join(
-            [
-                c
-                for c in [
-                    select_clause,
-                    from_clause,
-                    join_clause,
-                    prewhere_clause,
-                    where_clause,
-                    group_clause,
-                    having_clause,
-                    order_clause,
-                    limitby_clause,
-                    limit_clause,
-                ]
-                if c
-            ]
-        )
-
-    def format_sql(self) -> str:
-        """Produces a SQL string from the parameters."""
-        return self.__formatted_query
+    def _eq_functions(self) -> Sequence[str]:
+        return tuple(super()._eq_functions()) + ("get_prewhere_ast",)

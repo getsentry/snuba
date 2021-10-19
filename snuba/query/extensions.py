@@ -1,6 +1,6 @@
 from abc import ABC
 
-from snuba.query.query_processor import ExtensionQueryProcessor
+from snuba.query.processors import ExtensionQueryProcessor
 from snuba.schemas import Schema
 
 

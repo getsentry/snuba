@@ -1,10 +1,11 @@
 import logging
 from typing import Optional, Tuple
 
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing import StreamProcessor
+
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
-from snuba.utils.streams.batching import BatchingConsumer
-from snuba.utils.streams.consumer import KafkaPayload
+from snuba.stateful_consumer import ConsumerStateCompletionEvent, ConsumerStateData
 from snuba.utils.state_machine import State
 
 logger = logging.getLogger("snuba.snapshot-catchup")
@@ -22,7 +23,7 @@ class CatchingUpState(State[ConsumerStateCompletionEvent, Optional[ConsumerState
     def __init__(self, consumer_builder: ConsumerBuilder) -> None:
         super().__init__()
         self.__consumer_builder = consumer_builder
-        self.__consumer: Optional[BatchingConsumer[KafkaPayload]] = None
+        self.__consumer: Optional[StreamProcessor[KafkaPayload]] = None
 
     def signal_shutdown(self) -> None:
         if self.__consumer:

@@ -1,24 +1,39 @@
 import calendar
+import uuid
 from datetime import datetime, timedelta
-from functools import partial
+from typing import Any, Callable, Tuple, Union
+
+import pytest
 import pytz
 import simplejson as json
-import uuid
 
 from snuba import settings, state
-from snuba.datasets.factory import enforce_table_writer
-
+from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
+from tests.helpers import write_processed_messages
 
 
 class TestTransactionsApi(BaseApiTest):
-    def setup_method(self, test_method, dataset_name="transactions"):
-        super().setup_method(test_method, dataset_name)
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "transactions"
+
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    def setup_method(self, test_method: Any) -> None:
+        super().setup_method(test_method)
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
-        self.environments = [u"prød", "test"]  # 2 environments
+        self.environments = ["prød", "test"]  # 2 environments
         self.platforms = ["a", "b"]  # 2 platforms
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
@@ -28,9 +43,10 @@ class TestTransactionsApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.minutes)
+        self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()
 
-    def teardown_method(self, test_method):
+    def teardown_method(self, test_method: Any) -> None:
         # Reset rate limits
         state.delete_config("global_concurrent_limit")
         state.delete_config("global_per_second_limit")
@@ -39,7 +55,7 @@ class TestTransactionsApi(BaseApiTest):
         state.delete_config("project_per_second_limit")
         state.delete_config("date_align_seconds")
 
-    def generate_fizzbuzz_events(self):
+    def generate_fizzbuzz_events(self) -> None:
         """
         Generate a deterministic set of events across a time range.
         """
@@ -52,7 +68,7 @@ class TestTransactionsApi(BaseApiTest):
                     trace_id = "7400045b25c443b885914600aa83ad04"
                     span_id = "8841662216cc598b"
                     processed = (
-                        enforce_table_writer(self.dataset)
+                        self.storage.get_table_writer()
                         .get_stream_loader()
                         .get_processor()
                         .process_message(
@@ -79,17 +95,14 @@ class TestTransactionsApi(BaseApiTest):
                                         ),
                                         "type": "transaction",
                                         "transaction": "/api/do_things",
-                                        # XXX(dcramer): would be nice to document why these have to be naive
                                         "start_timestamp": datetime.timestamp(
-                                            (
-                                                self.base_time + timedelta(minutes=tick)
-                                            ).replace(tzinfo=None)
+                                            (self.base_time + timedelta(minutes=tick))
                                         ),
                                         "timestamp": datetime.timestamp(
                                             (
                                                 self.base_time
                                                 + timedelta(minutes=tick, seconds=1)
-                                            ).replace(tzinfo=None)
+                                            )
                                         ),
                                         "tags": {
                                             # Sentry
@@ -115,6 +128,17 @@ class TestTransactionsApi(BaseApiTest):
                                                 "status": "0",
                                             },
                                         },
+                                        "measurements": {
+                                            "lcp": {"value": 32.129},
+                                            "lcp.elementSize": {"value": 4242},
+                                        },
+                                        "breakdowns": {
+                                            "span_ops": {
+                                                "ops.db": {"value": 62.512},
+                                                "ops.http": {"value": 109.774},
+                                                "total.time": {"value": 172.286},
+                                            }
+                                        },
                                         "spans": [
                                             {
                                                 "op": "db",
@@ -134,24 +158,21 @@ class TestTransactionsApi(BaseApiTest):
                                         ],
                                     },
                                 },
-                            )
+                            ),
+                            KafkaMessageMetadata(0, 0, self.base_time),
                         )
                     )
-                    events.extend(processed.data)
-        self.write_processed_events(events)
+                    if processed:
+                        events.append(processed)
+        write_processed_messages(self.storage, events)
 
-    def test_read_ip(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+    def test_read_ip(self) -> None:
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": [
-                        "transaction_name",
-                        "ip_address_v4",
-                        "ip_address_v6",
-                    ],
+                    "selected_columns": ["transaction_name", "ip_address"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
@@ -161,13 +182,11 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) > 1, data
-        assert "ip_address_v4" in data["data"][0]
-        assert "ip_address_v6" in data["data"][0]
+        assert "ip_address" in data["data"][0]
 
-    def test_read_lowcard(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+    def test_read_lowcard(self) -> None:
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -184,10 +203,9 @@ class TestTransactionsApi(BaseApiTest):
         assert "platform" in data["data"][0]
         assert data["data"][0]["transaction_op"] == "http"
 
-    def test_start_ts_microsecond_truncation(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+    def test_start_ts_microsecond_truncation(self) -> None:
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -221,10 +239,9 @@ class TestTransactionsApi(BaseApiTest):
         assert len(data["data"]) > 1, data
         assert "transaction_name" in data["data"][0]
 
-    def test_split_query(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+    def test_split_query(self) -> None:
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -244,10 +261,9 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) > 1, data
 
-    def test_column_formatting(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+    def test_column_formatting(self) -> None:
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -266,13 +282,12 @@ class TestTransactionsApi(BaseApiTest):
         assert len(first_event_id) == 32
         assert data["data"][0]["ip_address"] == "8.8.8.8"
 
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["event_id", "project_id"],
+                    "selected_columns": ["event_id", "span_id", "project_id"],
                     "conditions": [["event_id", "=", first_event_id]],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
@@ -284,11 +299,50 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1
         assert data["data"][0]["event_id"] == first_event_id
+        assert data["data"][0]["span_id"] == "8841662216cc598b"
 
-    def test_apdex_function(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+    def test_trace_column_formatting(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["trace_id", "ip_address", "project_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert len(data["data"]) == 180
+        first_trace_id = data["data"][0]["trace_id"]
+        assert len(first_trace_id) == 32
+        assert data["data"][0]["ip_address"] == "8.8.8.8"
+
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["trace_id", "project_id"],
+                    "conditions": [["trace_id", "=", first_trace_id]],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 180
+        assert data["data"][0]["trace_id"] == first_trace_id
+
+    def test_apdex_function(self) -> None:
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -296,9 +350,12 @@ class TestTransactionsApi(BaseApiTest):
                     "aggregations": [["apdex(duration, 300)", "", "apdex_score"]],
                     "orderby": "transaction_name",
                     "groupby": ["transaction_name", "duration"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
+
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1, data
@@ -309,3 +366,263 @@ class TestTransactionsApi(BaseApiTest):
             # we select duration to make debugging easier on failure
             "duration": 1000,
         }
+
+    def test_failure_rate_function(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["transaction_name", "duration"],
+                    "aggregations": [["failure_rate()", "", "error_percentage"]],
+                    "orderby": "transaction_name",
+                    "groupby": ["transaction_name", "duration"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "error_percentage" in data["data"][0]
+        assert data["data"][0] == {
+            "transaction_name": "/api/do_things",
+            "error_percentage": 0,
+            # we select duration to make debugging easier on failure
+            "duration": 1000,
+        }
+
+    def test_individual_measurement(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        "measurements[lcp]",
+                        "measurements[asd]",
+                    ],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] == 32.129
+        assert data["data"][0]["measurements[asd]"] is None
+
+    def test_individual_breakdown(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        "span_op_breakdowns[ops.db]",
+                        "span_op_breakdowns[ops.http]",
+                        "span_op_breakdowns[total.time]",
+                        "span_op_breakdowns[not_found]",
+                    ],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "span_op_breakdowns[ops.db]" in data["data"][0]
+        assert "span_op_breakdowns[ops.http]" in data["data"][0]
+        assert "span_op_breakdowns[total.time]" in data["data"][0]
+        assert data["data"][0]["span_op_breakdowns[ops.db]"] == 62.512
+        assert data["data"][0]["span_op_breakdowns[ops.http]"] == 109.774
+        assert data["data"][0]["span_op_breakdowns[total.time]"] == 172.286
+        assert data["data"][0]["span_op_breakdowns[not_found]"] is None
+
+    def test_arrayjoin_measurements(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        ["arrayJoin", ["measurements.key"], "key"],
+                        ["arrayJoin", ["measurements.value"], "value"],
+                    ],
+                    "limit": 4,
+                    "orderby": ["event_id", "key"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 4, data
+        assert data["data"][0]["key"] == "lcp"
+        assert data["data"][0]["value"] == 32.129
+        assert data["data"][1]["key"] == "lcp.elementSize"
+        assert data["data"][1]["value"] == 4242
+        assert data["data"][2]["key"] == "lcp"
+        assert data["data"][2]["value"] == 32.129
+        assert data["data"][3]["key"] == "lcp.elementSize"
+        assert data["data"][3]["value"] == 4242
+
+    def test_arrayjoin_span_op_breakdowns(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        ["arrayJoin", ["span_op_breakdowns.key"], "key"],
+                        ["arrayJoin", ["span_op_breakdowns.value"], "value"],
+                    ],
+                    "limit": 4,
+                    "orderby": ["event_id", "key"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 4, data
+        assert data["data"][0]["key"] == "ops.db"
+        assert data["data"][0]["value"] == 62.512
+        assert data["data"][1]["key"] == "ops.http"
+        assert data["data"][1]["value"] == 109.774
+        assert data["data"][2]["key"] == "total.time"
+        assert data["data"][2]["value"] == 172.286
+        assert data["data"][3]["key"] == "ops.db"
+        assert data["data"][3]["value"] == 62.512
+
+    def test_escaping_strings(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff\\"]],
+                    "limit": 4,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_escaping_newlines(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [["transaction", "LIKE", "stuff \n stuff"]],
+                    "limit": 4,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_escaping_not_newlines(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [["transaction", "LIKE", "stuff \\n stuff"]],
+                    "limit": 4,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_escaping_datetimes(self) -> None:
+        # Datetimes come in bizarre formats
+        date_val = (self.base_time - self.skew).isoformat()
+        date_val = date_val[: date_val.index("+")] + ".000000Z"
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [
+                        ["transaction", "=", "fake/transaction"],
+                        ["finish_ts", ">=", date_val],
+                        [["toStartOfHour", ["finish_ts"]], ">=", date_val],
+                    ],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_span_id(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id", "span_id"],
+                    "conditions": [["span_id", "=", "8841662216cc598b"]],
+                    "limit": 1,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert data["data"][0]["span_id"] == "8841662216cc598b"
+
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id", "span_id"],
+                    "conditions": [["span_id", "IN", ["8841662216cc598b"]]],
+                    "limit": 1,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert data["data"][0]["span_id"] == "8841662216cc598b"

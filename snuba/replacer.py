@@ -1,424 +1,383 @@
 import logging
 import time
-from collections import deque
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence
+from functools import partial
+from typing import Callable, List, Mapping, Optional, Sequence
 
 import simplejson as json
+from arroyo import Message
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies.batching import AbstractBatchWorker
 
-from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.clickhouse.native import ClickhousePool
-from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
-from snuba.redis import redis_client
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.consumer import KafkaPayload
-from snuba.utils.streams.types import Message
-
-from . import settings
-
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+    ClickhouseNode,
+)
+from snuba.datasets.storage import WritableTableStorage
+from snuba.processor import InvalidMessageVersion
+from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
+from snuba.utils.metrics import MetricsBackend
+from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
 
+executor = ThreadPoolExecutor()
 
-EXCLUDE_GROUPS = object()
-NEEDS_FINAL = object()
-
-
-def get_project_exclude_groups_key(project_id):
-    return "project_exclude_groups:%s" % project_id
+NODES_REFRESH_PERIOD = 10
 
 
-def set_project_exclude_groups(project_id, group_ids):
-    """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
-    remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
-    the entire ZSET incase it's rarely touched."""
+class ShardedConnectionPool(ABC):
+    """
+    Provides Clickhouse connection to a sharded cluster.
 
-    now = time.time()
-    key = get_project_exclude_groups_key(project_id)
-    p = redis_client.pipeline()
-
-    p.zadd(key, **{str(group_id): now for group_id in group_ids})
-    p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
-    p.expire(key, int(settings.REPLACER_KEY_TTL))
-
-    p.execute()
-
-
-def get_project_needs_final_key(project_id):
-    return "project_needs_final:%s" % project_id
-
-
-def set_project_needs_final(project_id):
-    return redis_client.set(
-        get_project_needs_final_key(project_id), True, ex=settings.REPLACER_KEY_TTL
-    )
-
-
-def get_projects_query_flags(project_ids):
-    """\
-    1. Fetch `needs_final` for each Project
-    2. Fetch groups to exclude for each Project
-    3. Trim groups to exclude ZSET for each Project
-
-    Returns (needs_final, group_ids_to_exclude)
+    This class takes care of keeping a list of valid nodes up to date
+    and to implement any sort of load balancing strategy.
     """
 
-    project_ids = set(project_ids)
-    now = time.time()
-    p = redis_client.pipeline()
+    @abstractmethod
+    def get_connections(self) -> Mapping[int, Sequence[ClickhouseNode]]:
+        """
+        Returns a sequence of valid connections for each shard.
+        The first connection in each sequence is the connection
+        that should be used first. The following ones, instead
+        are backup in case the first fails.
 
-    needs_final_keys = [
-        get_project_needs_final_key(project_id) for project_id in project_ids
-    ]
-    for needs_final_key in needs_final_keys:
-        p.get(needs_final_key)
-
-    exclude_groups_keys = [
-        get_project_exclude_groups_key(project_id) for project_id in project_ids
-    ]
-    for exclude_groups_key in exclude_groups_keys:
-        p.zremrangebyscore(
-            exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
-        )
-        p.zrevrangebyscore(
-            exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
-        )
-
-    results = p.execute()
-
-    needs_final = any(results[: len(project_ids)])
-    exclude_groups = sorted(
-        {int(group_id) for group_id in sum(results[(len(project_ids) + 1) :: 2], [])}
-    )
-
-    return (needs_final, exclude_groups)
+        The sequences do not have to have the same number of
+        connections but that would be weird.
+        """
+        raise NotImplementedError
 
 
-@dataclass(frozen=True)
-class Replacement:
-    count_query_template: str
-    insert_query_template: str
-    query_args: Mapping[str, Any]
-    query_time_flags: Any
+class RoundRobinConnectionPool(ShardedConnectionPool):
+    """
+    Sharded connection pool that loads the valid nodes from the
+    Clickhouse system.clusters table, then provides up to three
+    connections for each shard picking them with a round robin
+    policy.
+
+    TODO: Consider moving this logic and the executor to the
+          Clickhouse native module.
+
+    The goal is to evenly distribute the queries across the
+    nodes.
+
+    The sequence of connections for each shard is a sliding
+    window over the list of available connections. This window
+    wrap around when it reaches the end of the list and moves
+    by one node each time `get_connections` is invoked.
+    """
+
+    def __init__(self, cluster: ClickhouseCluster,) -> None:
+        self.__cluster = cluster
+        self.__counter = 0
+        self.__nodes: Mapping[int, List[ClickhouseNode]] = defaultdict(list)
+        self.__nodes_refreshed_at = time.time()
+
+    def __get_nodes(self) -> Mapping[int, Sequence[ClickhouseNode]]:
+        now = time.time()
+        if not self.__nodes or now - self.__nodes_refreshed_at > NODES_REFRESH_PERIOD:
+            all_nodes = self.__cluster.get_local_nodes()
+
+            self.__nodes = defaultdict(list)
+            # We pick up to three replicas per shard. The order will be the
+            # one provided by the get_local_nodes. For the correctness the order
+            # in which these nodes are tried does not matter.
+            for n in all_nodes:
+                if n.replica is not None and n.shard is not None:
+                    self.__nodes[n.shard].append(n)
+
+            self.__nodes_refreshed_at = now
+        return self.__nodes
+
+    def get_connections(self) -> Mapping[int, Sequence[ClickhouseNode]]:
+        def wrapping_slice(
+            lst: Sequence[ClickhouseNode], offset: int, size: int
+        ) -> Sequence[ClickhouseNode]:
+            if len(lst) >= offset + size:
+                return lst[offset : offset + size]
+            else:
+                return [*lst[offset:], *lst[: offset + size - len(lst)]]
+
+        all_nodes = self.__get_nodes()
+
+        ret = {
+            shard: wrapping_slice(
+                shard_nodes, self.__counter % len(shard_nodes), min(3, len(shard_nodes))
+            )
+            for shard, shard_nodes in all_nodes.items()
+        }
+        self.__counter += 1
+        return ret
+
+
+class InsertExecutor(ABC):
+    """
+    Executes the Replacement insert query.
+
+    Each implementation provides a different execution policy.
+    """
+
+    @abstractmethod
+    def execute(self, replacement: Replacement, record_counts: int) -> int:
+        """
+        Executes the query according to the policy implemented by this
+        class.
+        """
+        raise NotImplementedError
+
+
+# Used by InsertExecutors to run the query
+RunQuery = Callable[[ClickhousePool, str, int, MetricsBackend], None]
+
+
+class QueryNodeExecutor(InsertExecutor):
+    """
+    InsertExecutor that runs one query only on the main query node
+    in the cluster. The query can be on a distributed table if the
+    cluster has multiple nodes or on a local table if the cluster
+    has one node only.
+    This relies on Clickhouse to forward the replacement query to
+    each storage node.
+    """
+
+    def __init__(
+        self,
+        runner: RunQuery,
+        connection: ClickhousePool,
+        table: str,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__connection = connection
+        self.__table = table
+        self.__metrics = metrics
+        self.__runner = runner
+
+    def execute(self, replacement: Replacement, records_count: int) -> int:
+        query = replacement.get_insert_query(self.__table)
+        if query is None:
+            return 0
+        self.__runner(self.__connection, query, records_count, self.__metrics)
+        return records_count
+
+
+class ShardedExecutor(InsertExecutor):
+    """
+    Executes a replacement query on each individual shard in parallel.
+
+    It implements some basic retry logic by trying a different replica
+    if the first attempt fails.
+    It also falls back on a DistributedExecutor if everything fails.
+    """
+
+    def __init__(
+        self,
+        runner: RunQuery,
+        thread_pool: ThreadPoolExecutor,
+        cluster: ClickhouseCluster,
+        main_connection_pool: ShardedConnectionPool,
+        local_table_name: str,
+        backup_executor: InsertExecutor,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__thread_pool = thread_pool
+        self.__cluster = cluster
+        self.__connection_pool = main_connection_pool
+        self.__local_table_name = local_table_name
+        self.__backup_executor = backup_executor
+        self.__metrics = metrics
+        self.__runner = runner
+
+    def __run_multiple_replicas(
+        self,
+        nodes: Sequence[ClickhouseNode],
+        query: str,
+        records_count: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        """
+        Makes multiple attempts to run the query.
+        One per connection provided.
+        """
+        for remaining_attempts in range(len(nodes), 0, -1):
+            try:
+                connection = self.__cluster.get_node_connection(
+                    ClickhouseClientSettings.REPLACE,
+                    nodes[len(nodes) - remaining_attempts],
+                )
+                self.__runner(
+                    connection, query, records_count, metrics,
+                )
+                return
+            except Exception as e:
+                if remaining_attempts == 1:
+                    raise
+                logger.warning(
+                    "Replacement processing failed on the main connection", exc_info=e,
+                )
+
+    def execute(self, replacement: Replacement, records_count: int) -> int:
+        try:
+            query = replacement.get_insert_query(self.__local_table_name)
+            if query is None:
+                return 0
+            result_futures = []
+            for nodes in self.__connection_pool.get_connections().values():
+                result_futures.append(
+                    self.__thread_pool.submit(
+                        partial(
+                            self.__run_multiple_replicas,
+                            nodes=nodes,
+                            query=query,
+                            records_count=records_count,
+                            metrics=self.__metrics,
+                        )
+                    )
+                )
+            for result in as_completed(result_futures):
+                e = result.exception()
+                if e is not None:
+                    raise e
+            return records_count
+
+        except Exception as e:
+            count = self.__backup_executor.execute(replacement, records_count)
+            logger.warning(
+                "Replacement processing failed on the main connection", exc_info=e,
+            )
+            return count
 
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
-    def __init__(
-        self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend
-    ) -> None:
-        self.clickhouse = clickhouse
-        self.dataset = dataset
+    def __init__(self, storage: WritableTableStorage, metrics: MetricsBackend) -> None:
+        self.__storage = storage
+
         self.metrics = metrics
-        self.__all_column_names = [
-            col.escaped
-            for col in enforce_table_writer(dataset).get_schema().get_columns()
-        ]
-        self.__required_columns = [
-            col.escaped for col in dataset.get_required_columns()
-        ]
+        processor = storage.get_table_writer().get_replacer_processor()
+        assert (
+            processor
+        ), f"This storage writer does not support replacements {storage.get_storage_key().value}"
+        self.__replacer_processor = processor
+        self.__database_name = storage.get_cluster().get_database()
+
+        self.__sharded_pool = RoundRobinConnectionPool(self.__storage.get_cluster())
+        self.__rate_limiter = RateLimiter("replacements")
+
+    def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
+        """
+        Some replacements need to be executed on each storage node of the
+        cluster instead that through a query node on distributed tables.
+        This happens when the number of shards changes and specific rows
+        resolve to a different node than they were doing before.
+
+        example: writing the tombstone for an event id. When we change the
+        shards number the tombstone may end up on a different shard than
+        the original row.
+
+        This returns the InsertExecutor that implements the appropriate
+        policy for the replacement provided. So it can return either a basic
+        DistributedExecutor or a ShardedExecutor to write on each storage
+        node.
+        """
+
+        def run_query(
+            connection: ClickhousePool,
+            query: str,
+            records_count: int,
+            metrics: MetricsBackend,
+        ) -> None:
+            t = time.time()
+
+            logger.debug("Executing replace query: %s" % query)
+            connection.execute_robust(query)
+            duration = int((time.time() - t) * 1000)
+
+            logger.info("Replacing %s rows took %sms" % (records_count, duration))
+            metrics.timing(
+                "replacements.count", records_count, tags={"host": connection.host},
+            )
+            metrics.timing(
+                "replacements.duration", duration, tags={"host": connection.host},
+            )
+
+        query_table_name = self.__replacer_processor.get_schema().get_table_name()
+        local_table_name = self.__replacer_processor.get_schema().get_local_table_name()
+        cluster = self.__storage.get_cluster()
+
+        query_connection = cluster.get_query_connection(
+            ClickhouseClientSettings.REPLACE
+        )
+        write_every_node = replacement.should_write_every_node()
+        query_node_executor = QueryNodeExecutor(
+            runner=run_query,
+            connection=query_connection,
+            table=query_table_name,
+            metrics=self.metrics,
+        )
+        if not write_every_node or cluster.is_single_node():
+            return query_node_executor
+
+        return ShardedExecutor(
+            runner=run_query,
+            cluster=cluster,
+            thread_pool=executor,
+            main_connection_pool=self.__sharded_pool,
+            local_table_name=local_table_name,
+            backup_executor=query_node_executor,
+            metrics=self.metrics,
+        )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
-        message = json.loads(message.payload.value)
-        version = message[0]
+        seq_message = json.loads(message.payload.value)
+        version = seq_message[0]
 
         if version == 2:
-            type_, event = message[1:3]
-
-            if type_ in (
-                "start_delete_groups",
-                "start_merge",
-                "start_unmerge",
-                "start_delete_tag",
-            ):
-                return None
-            elif type_ == "end_delete_groups":
-                processed = process_delete_groups(event, self.__required_columns)
-            elif type_ == "end_merge":
-                processed = process_merge(event, self.__all_column_names)
-            elif type_ == "end_unmerge":
-                processed = process_unmerge(event, self.__all_column_names)
-            elif type_ == "end_delete_tag":
-                processed = process_delete_tag(event, self.dataset)
-            else:
-                raise InvalidMessageType("Invalid message type: {}".format(type_))
+            return self.__replacer_processor.process_message(
+                ReplacementMessage(seq_message[1], seq_message[2])
+            )
         else:
-            raise InvalidMessageVersion("Unknown message format: " + str(message))
-
-        return processed
+            raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
 
     def flush_batch(self, batch: Sequence[Replacement]) -> None:
+        need_optimize = False
+        clickhouse_read = self.__storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.REPLACE
+        )
+
         for replacement in batch:
-            query_args = {
-                **replacement.query_args,
-                "dist_read_table_name": self.dataset.get_dataset_schemas()
-                .get_read_schema()
-                .get_data_source()
-                .format_from(),
-                "dist_write_table_name": enforce_table_writer(self.dataset)
-                .get_schema()
-                .get_table_name(),
-            }
-            count = self.clickhouse.execute_robust(
-                replacement.count_query_template % query_args
-            )[0][0]
-            if count == 0:
-                continue
+            table_name = self.__replacer_processor.get_schema().get_table_name()
+            count_query = replacement.get_count_query(table_name)
 
-            # query_time_flags == (type, project_id, [...data...])
-            flag_type, project_id = replacement.query_time_flags[:2]
-            if flag_type == NEEDS_FINAL:
-                set_project_needs_final(project_id)
-            elif flag_type == EXCLUDE_GROUPS:
-                group_ids = replacement.query_time_flags[2]
-                set_project_exclude_groups(project_id, group_ids)
+            if count_query is not None:
+                count = clickhouse_read.execute_robust(count_query)[0][0]
+                if count == 0:
+                    continue
+            else:
+                count = 0
 
-            t = time.time()
-            query = replacement.insert_query_template % query_args
-            logger.debug("Executing replace query: %s" % query)
-            self.clickhouse.execute_robust(query)
-            duration = int((time.time() - t) * 1000)
-            logger.info("Replacing %s rows took %sms" % (count, duration))
-            self.metrics.timing("replacements.count", count)
-            self.metrics.timing("replacements.duration", duration)
-
-
-def process_delete_groups(message, required_columns) -> Optional[Replacement]:
-    group_ids = message["group_ids"]
-    if not group_ids:
-        return None
-
-    assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
-
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND group_id IN (%(group_ids)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(dist_write_table_name)s (%(required_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    query_args = {
-        "required_columns": ", ".join(required_columns),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
-        "group_ids": ", ".join(str(gid) for gid in group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
-
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
-
-    return Replacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
-    )
-
-
-SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
-
-
-def process_merge(message, all_column_names) -> Optional[Replacement]:
-    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
-    # this is only for performance of the backlog.
-    txn = message.get("transaction_id")
-    if txn:
-        if txn in SEEN_MERGE_TXN_CACHE:
-            return None
-        else:
-            SEEN_MERGE_TXN_CACHE.append(txn)
-
-    previous_group_ids = message["previous_group_ids"]
-    if not previous_group_ids:
-        return None
-
-    assert all(isinstance(gid, int) for gid in previous_group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
-        all_column_names,
-    )
-
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND group_id IN (%(previous_group_ids)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
-        "previous_group_ids": ", ".join(str(gid) for gid in previous_group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
-
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], previous_group_ids)
-
-    return Replacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
-    )
-
-
-def process_unmerge(message, all_column_names) -> Optional[Replacement]:
-    hashes = message["hashes"]
-    if not hashes:
-        return None
-
-    assert all(isinstance(h, str) for h in hashes)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
-        all_column_names,
-    )
-
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND group_id = %(previous_group_id)s
-        AND primary_hash IN (%(hashes)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "previous_group_id": message["previous_group_id"],
-        "project_id": message["project_id"],
-        "hashes": ", ".join("'%s'" % _hashify(h) for h in hashes),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
-
-    query_time_flags = (NEEDS_FINAL, message["project_id"])
-
-    return Replacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
-    )
-
-
-def process_delete_tag(message, dataset) -> Optional[Replacement]:
-    tag = message["tag"]
-    if not tag:
-        return None
-
-    assert isinstance(tag, str)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = dataset.get_tag_column_map()["tags"].get(tag, tag)
-    is_promoted = tag in dataset.get_promoted_tags()["tags"]
-
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    if is_promoted:
-        where += "AND %(tag_column)s IS NOT NULL"
-    else:
-        where += "AND has(`tags.key`, %(tag_str)s)"
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    select_columns = []
-    all_columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
-    for col in all_columns:
-        if is_promoted and col.flattened == tag_column_name:
-            select_columns.append("NULL")
-        elif col.flattened == "tags.key":
-            select_columns.append(
-                "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
-                % escape_string(tag)
+            need_optimize = (
+                self.__replacer_processor.pre_replacement(replacement, count)
+                or need_optimize
             )
-        elif col.flattened == "tags.value":
-            select_columns.append(
-                "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
-                % escape_string(tag)
+
+            query_executor = self.__get_insert_executor(replacement)
+            with self.__rate_limiter as state:
+                self.metrics.increment("insert_state", tags={"state": state[0].value})
+                count = query_executor.execute(replacement, count)
+
+            self.__replacer_processor.post_replacement(replacement, count)
+
+        if need_optimize:
+            from snuba.optimize import run_optimize
+
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            num_dropped = run_optimize(
+                clickhouse_read, self.__storage, self.__database_name, before=today,
             )
-        else:
-            select_columns.append(col.escaped)
-
-    all_column_names = [col.escaped for col in all_columns]
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
-        "tag_str": escape_string(tag),
-        "tag_column": escape_identifier(tag_column_name),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(dist_read_table_name)s FINAL
-    """
-        + where
-    )
-
-    query_time_flags = (NEEDS_FINAL, message["project_id"])
-
-    return Replacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
-    )
+            logger.info(
+                "Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host)
+            )

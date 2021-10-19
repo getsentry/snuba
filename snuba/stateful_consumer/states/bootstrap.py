@@ -1,22 +1,23 @@
 import json
 import logging
+from typing import Optional, Set, Tuple
 
-from typing import Optional, Sequence, Set, Tuple
 from confluent_kafka import Message
 
 from snuba import settings
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
-from snuba.datasets.cdc import CdcDataset
-from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
+from snuba.datasets.cdc import CdcStorage
 from snuba.snapshots import SnapshotId
+from snuba.stateful_consumer import ConsumerStateCompletionEvent, ConsumerStateData
 from snuba.stateful_consumer.control_protocol import (
-    parse_control_message,
-    SnapshotInit,
     SnapshotAbort,
+    SnapshotInit,
     SnapshotLoaded,
     TransactionData,
+    parse_control_message,
 )
 from snuba.utils.state_machine import State
+from snuba.utils.streams.types import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.snapshot-load")
 
@@ -189,20 +190,20 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
     def __init__(
         self,
         topic: str,
-        bootstrap_servers: Sequence[str],
+        broker_config: KafkaBrokerConfig,
         group_id: str,
-        dataset: CdcDataset,
+        storage: CdcStorage,
     ):
         self.__consumer = StrictConsumer(
             topic=topic,
-            bootstrap_servers=bootstrap_servers,
+            broker_config=broker_config,
             group_id=group_id,
             initial_auto_offset_reset="earliest",
             partition_assignment_timeout=settings.SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT,
             on_message=self.__handle_msg,
         )
 
-        self.__recovery_state = RecoveryState(dataset.get_postgres_table())
+        self.__recovery_state = RecoveryState(storage.get_postgres_table())
 
     def __handle_msg(self, message: Message) -> CommitDecision:
         value = json.loads(message.value())

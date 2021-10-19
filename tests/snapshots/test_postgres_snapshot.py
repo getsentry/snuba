@@ -1,4 +1,8 @@
-import os  # NOQA
+from snuba.snapshots import (
+    ColumnConfig,
+    DateFormatPrecision,
+    DateTimeFormatterConfig,
+)  # NOQA
 import pytest
 
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
@@ -15,15 +19,24 @@ META_FILE = """
     "content": [
         {
             "table": "sentry_groupedmessage",
+            "zip": false,
             "columns": [
-                "id", "status"
+                {"name": "id"},
+                {"name": "status"}
             ]
         },
         {
             "table": "sentry_groupasignee",
+            "zip": true,
             "columns": [
-                "id",
-                "project_id"
+                {"name": "id"},
+                {
+                    "name": "a_date",
+                    "formatter": {
+                        "type": "datetime",
+                        "precision": "second"
+                    }
+                }
             ]
         }
     ],
@@ -63,20 +76,38 @@ class TestPostgresSnapshot:
         assert descriptor.xmin == 3372750
         assert descriptor.xip_list == []
         tables = {
-            table_config.table: table_config.columns
+            table_config.table: (table_config.columns, table_config.zip)
             for table_config in descriptor.tables
         }
         assert "sentry_groupedmessage" in tables
-        assert tables["sentry_groupedmessage"] == ["id", "status"]
+        assert tables["sentry_groupedmessage"] == (
+            [ColumnConfig("id"), ColumnConfig("status")],
+            False,
+        )
         assert "sentry_groupasignee" in tables
-        assert tables["sentry_groupasignee"] == ["id", "project_id"]
+        assert tables["sentry_groupasignee"] == (
+            [
+                ColumnConfig("id"),
+                ColumnConfig(
+                    "a_date",
+                    formatter=DateTimeFormatterConfig(
+                        precision=DateFormatPrecision.SECOND
+                    ),
+                ),
+            ],
+            True,
+        )
 
-        with snapshot.get_table_file("sentry_groupedmessage") as table:
+        with snapshot.get_parsed_table_file("sentry_groupedmessage") as table:
             line = next(table)
             assert line == {
                 "id": "0",
                 "status": "1",
             }
+
+        with snapshot.get_preprocessed_table_file("sentry_groupedmessage") as table:
+            line = next(table)
+            assert line == b"id,status\n0,1\n"
 
     def test_parse_invalid_snapshot(self, tmp_path):
         snapshot_base = self.__prepare_directory(
@@ -87,5 +118,5 @@ class TestPostgresSnapshot:
         )
         with pytest.raises(ValueError, match=".+sentry_groupedmessage.+status.+"):
             snapshot = PostgresSnapshot.load("snuba", snapshot_base)
-            with snapshot.get_table_file("sentry_groupedmessage") as table:
+            with snapshot.get_parsed_table_file("sentry_groupedmessage") as table:
                 next(table)

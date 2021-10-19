@@ -1,11 +1,14 @@
-import logging
 import signal
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import click
 
-from snuba import settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba import environment, settings
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.environment import setup_logging, setup_sentry
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 
 @click.command()
@@ -18,28 +21,14 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
     help="Consumer group use for consuming the replacements topic.",
 )
 @click.option(
-    "--bootstrap-server",
-    default=settings.DEFAULT_BROKERS,
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--clickhouse-host",
-    default=settings.CLICKHOUSE_HOST,
-    help="Clickhouse server to write to.",
-)
-@click.option(
-    "--clickhouse-port",
-    default=settings.CLICKHOUSE_PORT,
-    type=int,
-    help="Clickhouse native port to write to.",
-)
-@click.option(
-    "--dataset",
-    "dataset_name",
-    default="events",
-    type=click.Choice(["events"]),
-    help="The dataset to consume/run replacements for (currently only events supported)",
+    "--storage",
+    "storage_name",
+    type=click.Choice(["events", "errors"]),
+    help="The storage to consume/run replacements for (currently only events supported)",
+    required=True,
 )
 @click.option(
     "--max-batch-size",
@@ -71,105 +60,69 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-@click.option(
-    "--dogstatsd-host",
-    default=settings.DOGSTATSD_HOST,
-    help="Host to send DogStatsD metrics to.",
-)
-@click.option(
-    "--dogstatsd-port",
-    default=settings.DOGSTATSD_PORT,
-    type=int,
-    help="Port to send DogStatsD metrics to.",
-)
+@click.option("--log-level", help="Logging level to use.")
 def replacer(
     *,
     replacements_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    clickhouse_host: str,
-    clickhouse_port: int,
-    dataset_name: str,
+    storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    log_level: str,
-    dogstatsd_host: str,
-    dogstatsd_port: int,
+    log_level: Optional[str] = None,
 ) -> None:
 
-    import sentry_sdk
-    from snuba import util
-    from snuba.clickhouse.native import ClickhousePool
+    from arroyo import Topic, configure_metrics
+    from arroyo.backends.kafka import KafkaConsumer
+    from arroyo.processing import StreamProcessor
+    from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
+
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.streams.batching import BatchingConsumer
-    from snuba.utils.streams.codecs import PassthroughCodec
-    from snuba.utils.streams.consumer import (
-        KafkaConsumer,
-        KafkaPayload,
-        TransportError,
+    from snuba.utils.streams.configuration_builder import (
         build_kafka_consumer_configuration,
     )
-    from snuba.utils.streams.types import Topic
 
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    dataset = get_dataset(dataset_name)
+    setup_logging(log_level)
+    setup_sentry()
 
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    storage_key = StorageKey(storage_name)
+    storage = get_writable_storage(storage_key)
+    metrics_tags = {"group": consumer_group, "storage": storage_name}
 
-    stream_loader = enforce_table_writer(dataset).get_stream_loader()
+    stream_loader = storage.get_table_writer().get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
     assert (
         default_replacement_topic_spec is not None
-    ), f"Dataset {dataset} does not have a replacement topic."
+    ), f"Storage {storage.get_storage_key().value} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
-    metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, "snuba.replacer", tags={"group": consumer_group}
-    )
+    metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags)
 
-    client_settings = {
-        # Replacing existing rows requires reconstructing the entire tuple for each
-        # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
-        # the default settings it's common for ClickHouse to go over the default max_memory_usage
-        # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
-        # max_memory_usage gives the query more breathing room.
-        "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
-        "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
-        # Don't use up production cache for the count() queries.
-        "use_uncompressed_cache": 0,
-    }
+    configure_metrics(StreamMetricsAdapter(metrics))
 
-    clickhouse = ClickhousePool(
-        host=clickhouse_host, port=clickhouse_port, client_settings=client_settings,
-    )
-
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    replacer = BatchingConsumer(
+    replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
+                default_replacement_topic_spec.topic,
                 bootstrap_servers=bootstrap_server,
                 group_id=consumer_group,
                 auto_offset_reset=auto_offset_reset,
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
             ),
-            codec=codec,
         ),
         Topic(replacements_topic),
-        worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
-        max_batch_size=max_batch_size,
-        max_batch_time=max_batch_time_ms,
-        metrics=metrics,
-        recoverable_errors=[TransportError],
+        BatchProcessingStrategyFactory(
+            worker=ReplacerWorker(storage, metrics=metrics),
+            max_batch_size=max_batch_size,
+            max_batch_time=max_batch_time_ms,
+        ),
     )
 
-    def handler(signum, frame) -> None:
+    def handler(signum: int, frame: Any) -> None:
         replacer.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)

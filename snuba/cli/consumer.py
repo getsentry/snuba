@@ -1,14 +1,17 @@
-import logging
 import signal
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import click
+from arroyo import configure_metrics
 
-from snuba import settings
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.datasets.cdc import CdcDataset
+from snuba import environment, settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_cdc_storage
+from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 
 @click.command()
@@ -30,11 +33,11 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--dataset",
-    "dataset_name",
-    default="events",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to target",
+    "--storage",
+    "storage_name",
+    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
+    help="The storage to target",
+    required=True,
 )
 @click.option(
     "--max-batch-size",
@@ -66,23 +69,24 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-@click.option(
-    "--dogstatsd-host",
-    default=settings.DOGSTATSD_HOST,
-    help="Host to send DogStatsD metrics to.",
-)
-@click.option(
-    "--dogstatsd-port",
-    default=settings.DOGSTATSD_PORT,
-    type=int,
-    help="Port to send DogStatsD metrics to.",
-)
+@click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--stateful-consumer",
     default=False,
     type=bool,
     help="Runs a stateful consumer (that manages snapshots) instead of a basic one.",
+)
+@click.option(
+    "--processes", type=int,
+)
+@click.option(
+    "--input-block-size", type=int,
+)
+@click.option(
+    "--output-block-size", type=int,
+)
+@click.option(
+    "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
 def consumer(
     *,
@@ -92,29 +96,34 @@ def consumer(
     control_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    dataset_name: str,
+    storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    log_level: str,
-    dogstatsd_host: str,
-    dogstatsd_port: int,
     stateful_consumer: bool,
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
+    log_level: Optional[str] = None,
+    profile_path: Optional[str] = None,
 ) -> None:
 
-    import sentry_sdk
+    setup_logging(log_level)
+    setup_sentry()
 
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
+    storage_key = StorageKey(storage_name)
 
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "consumer",
+        tags={"group": consumer_group, "storage": storage_key.value},
     )
-    dataset = get_dataset(dataset_name)
+    configure_metrics(StreamMetricsAdapter(metrics))
 
     consumer_builder = ConsumerBuilder(
-        dataset_name=dataset_name,
+        storage_key=storage_key,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
@@ -125,22 +134,26 @@ def consumer(
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
-        dogstatsd_host=dogstatsd_host,
-        dogstatsd_port=dogstatsd_port,
+        metrics=metrics,
+        processes=processes,
+        input_block_size=input_block_size,
+        output_block_size=output_block_size,
+        profile_path=profile_path,
     )
 
     if stateful_consumer:
-        assert isinstance(
-            dataset, CdcDataset
-        ), "Only CDC dataset have a control topic thus are supported."
+        storage = get_cdc_storage(storage_key)
+        assert (
+            storage is not None
+        ), "Only CDC storages have a control topic thus are supported."
         context = ConsumerStateMachine(
             consumer_builder=consumer_builder,
-            topic=control_topic or dataset.get_default_control_topic(),
+            topic=control_topic or storage.get_default_control_topic(),
             group_id=consumer_group,
-            dataset=dataset,
+            storage=storage,
         )
 
-        def handler(signum, frame) -> None:
+        def handler(signum: int, frame: Any) -> None:
             context.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
@@ -150,7 +163,7 @@ def consumer(
     else:
         consumer = consumer_builder.build_base_consumer()
 
-        def handler(signum, frame) -> None:
+        def handler(signum: int, frame: Any) -> None:
             consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)

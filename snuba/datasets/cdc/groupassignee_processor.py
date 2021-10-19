@@ -15,7 +15,7 @@ from snuba.writer import WriterTableRow
 
 @dataclass(frozen=True)
 class GroupAssigneeRecord:
-    date_added: datetime
+    date_added: Union[datetime, str]
     user_id: Optional[int]
     team_id: Optional[int]
 

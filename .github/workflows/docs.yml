@@ -1,0 +1,34 @@
+name: Snuba Docs
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  docs:
+    name: Sphinx
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
+      - name: Build docs
+        run: |
+          pip install virtualenv
+          make snubadocs
+      - uses: peaceiris/actions-gh-pages@v3.7.3
+        name: Publish to GitHub Pages
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/build
+          force_orphan: true
+
+      - name: Archive Docs
+        uses: actions/upload-artifact@v2
+        with:
+          name: docs
+          path: docs/build

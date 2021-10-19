@@ -1,42 +1,29 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Mapping, List, Sequence
+from typing import List, Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnSet
-from snuba.query.types import Condition
+from snuba.clickhouse.columns import ColumnSet, ColumnType, Nullable, TModifiers
+from snuba.query.expressions import FunctionCall
 
 
+# TODO: Remove this abstraction entirely. It is not providing anything
+# anymore since we are not making the query class depend on this and
+# we are not using it anymore to create tables.
 class RelationalSource(ABC):
     """
-    Abstract representation of the datamodel in the schema. This includes the
-    list of the tables that compose this datamodel with their columns as well as
-    their relationships expressed as relational joins.
+    Abstract representation of the datamodel in the schema.
 
     This class and its subclasses are the go-to place to inspect the structure
     of the datamodel, either during query or when writing.
-
-    This implies our data model is defined in a relational way. Should we move
-    away from this assumption, this will change.
     """
-
-    @abstractmethod
-    def format_from(self) -> str:
-        """
-        Builds the SQL representation of the data source for the FROM clause
-        when querying.
-        """
-        # Not using the __str__ method because this is moving towards a more
-        # abstract method that will receive a FormatStrategy (clickhouse specific)
-        # that would do the actual formatting work
-        raise NotImplementedError
 
     @abstractmethod
     def get_columns(self) -> ColumnSet:
         raise NotImplementedError
 
     @abstractmethod
-    def get_mandatory_conditions(self) -> Sequence[Condition]:
+    def get_mandatory_conditions(self) -> Sequence[FunctionCall]:
         """
         Returns the mandatory conditions to apply on Clickhouse when
         querying this RelationalSource, if any.
@@ -44,27 +31,6 @@ class RelationalSource(ABC):
         model consistent (like excluding rows that were tombstoned).
         """
         raise NotImplementedError
-
-    @abstractmethod
-    def get_prewhere_candidates(self) -> Sequence[str]:
-        """
-        Returns the list of keys that can be promoted to PREWHERE conditions
-        if found in the conditions field of the query.
-        pre where keys depend on the actual table used to run the query, so,
-        since the query processors can change the datasource of the query, the
-        list of candidates must be associated to the data source itself and not
-        to the dataset.
-        """
-        raise NotImplementedError
-
-    def supports_sample(self) -> bool:
-        """
-        TODO: This is a temporary method to prevent Clickhouse query to try to
-        add the SAMPLE clause to a JOIN expression, where SAMPLE not only is formatted
-        differently, but would have to be rethought since, in a join SAMPLE would
-        have to be applied table by table.
-        """
-        return True
 
 
 class Schema(ABC):
@@ -92,25 +58,32 @@ class Schema(ABC):
     def get_columns(self) -> ColumnSet:
         return self.get_data_source().get_columns()
 
-    def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+    def get_column_differences(
+        self, expected_columns: Mapping[str, ColumnType[TModifiers]]
+    ) -> List[str]:
         """
         Returns a list of differences between the expected_columns and the columns described in the schema.
         """
         errors: List[str] = []
 
-        for column_name, column_type in expected_columns.items():
-            if column_name not in self.get_columns():
+        for column in self.get_columns():
+            if column.flattened not in expected_columns:
                 errors.append(
-                    "Column '%s' exists in local ClickHouse but not in schema!"
-                    % column_name
+                    "Column '%s' exists in schema but not local ClickHouse!"
+                    % column.name
                 )
                 continue
 
-            expected_type = self.get_columns()[column_name].type.for_schema()
-            if column_type != expected_type:
+            expected_type = expected_columns[column.flattened]
+
+            if column.type.get_raw() != expected_type.get_raw() or column.type.has_modifier(
+                Nullable
+            ) != expected_type.has_modifier(
+                Nullable
+            ):
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
-                    % (column_name, expected_type, column_type)
+                    % (column.name, expected_type, column)
                 )
 
         return errors

@@ -1,65 +1,109 @@
 import ipaddress
 import re
-
-from datetime import datetime
-from enum import Enum
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from hashlib import md5
-import simplejson as json
-from typing import Any, NamedTuple, Optional, Sequence, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
+import simplejson as json
+
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
+from snuba.utils.serializable_exception import SerializableException
+from snuba.writer import WriterTableRow
 
 HASH_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+MAX_UINT16 = 2 ** 16 - 1
 MAX_UINT32 = 2 ** 32 - 1
+NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 
-class ProcessorAction(Enum):
-    INSERT = 0
-    REPLACE = 1
+class InsertBatch(NamedTuple):
+    rows: Sequence[WriterTableRow]
+    origin_timestamp: Optional[datetime]
 
 
-class ProcessedMessage(NamedTuple):
-    action: ProcessorAction
-    data: Sequence[Any]
+class ReplacementBatch(NamedTuple):
+    key: str
+    values: Sequence[Any]
 
 
-class MessageProcessor(object):
+ProcessedMessage = Union[InsertBatch, ReplacementBatch]
+
+
+class MessageProcessor(ABC):
     """
     The Processor is responsible for converting an incoming message body from the
     event stream into a row or statement to be inserted or executed against clickhouse.
     """
 
-    def process_message(self, message, metadata=None,) -> Optional[ProcessedMessage]:
+    @abstractmethod
+    def process_message(
+        self, message: Any, metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 
-class InvalidMessageType(Exception):
+class InvalidMessageType(SerializableException):
     pass
 
 
-class InvalidMessageVersion(Exception):
+class InvalidMessageVersion(SerializableException):
     pass
 
 
-def _as_dict_safe(value):
+TKey = TypeVar("TKey")
+TValue = TypeVar("TValue")
+
+
+def _as_dict_safe(
+    value: Union[None, Iterable[Tuple[TKey, TValue]], Dict[TKey, TValue]],
+) -> MutableMapping[TKey, TValue]:
     if value is None:
         return {}
     if isinstance(value, dict):
         return value
     rv = {}
     for item in value:
-        if item is not None:
+        if item is not None and item[0] is not None:
             rv[item[0]] = item[1]
     return rv
 
 
-def _collapse_uint32(n):
-    if (n is None) or (n < 0) or (n > MAX_UINT32):
+def _collapse_uint16(n: Any) -> Optional[int]:
+    if n is None:
         return None
-    return n
+
+    i = int(n)
+    if (i < 0) or (i > MAX_UINT16):
+        return None
+
+    return i
 
 
-def _boolify(s):
+def _collapse_uint32(n: Any) -> Optional[int]:
+    if n is None:
+        return None
+
+    i = int(n)
+    if (i < 0) or (i > MAX_UINT32):
+        return None
+
+    return i
+
+
+def _boolify(s: Any) -> Optional[bool]:
     if s is None:
         return None
 
@@ -76,24 +120,20 @@ def _boolify(s):
     return None
 
 
-def _floatify(s):
-    if not s:
+def _floatify(s: Any) -> Optional[float]:
+    if s is None:
         return None
 
     if isinstance(s, float):
         return s
 
     try:
-        s = float(s)
+        return float(s)
     except (ValueError, TypeError):
         return None
-    else:
-        return s
-
-    return None
 
 
-def _unicodify(s):
+def _unicodify(s: Any) -> Optional[str]:
     if s is None:
         return None
 
@@ -103,19 +143,22 @@ def _unicodify(s):
     return str(s).encode("utf8", errors="backslashreplace").decode("utf8")
 
 
-def _hashify(h):
+def _hashify(h: str) -> str:
     if HASH_RE.match(h):
         return h
     return md5(force_bytes(h)).hexdigest()
 
 
-def _ensure_valid_date(dt):
+epoch = datetime(1970, 1, 1)
+
+
+def _ensure_valid_date(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
         return None
-    seconds = (dt - datetime(1970, 1, 1)).total_seconds()
+    seconds = (dt - epoch).total_seconds()
     if _collapse_uint32(seconds) is None:
         return None
-    return dt
+    return epoch + timedelta(seconds=seconds)
 
 
 def _ensure_valid_ip(
@@ -128,7 +171,15 @@ def _ensure_valid_ip(
     ip = _unicodify(ip)
     if ip:
         try:
-            return ipaddress.ip_address(ip)
+            ip_address = ipaddress.ip_address(ip)
+            # Looking into ip_address code, it can either return one of the
+            # two or raise. Anyway, if we received anything else the places where
+            # we use this method would fail.
+            if not isinstance(
+                ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)
+            ):
+                return None
+            return ip_address
         except ValueError:
             pass
 

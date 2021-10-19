@@ -17,7 +17,7 @@ def main() -> None:
 """
 
 
-for loader, module_name, is_pkg in walk_packages(__path__, __name__ + "."):
+for loader, module_name, is_pkg in walk_packages(__path__, __name__ + "."):  # type: ignore  # mypy issue #1422
     module = __import__(module_name, globals(), locals(), ["__name__"])
     cmd = getattr(module, module_name.rsplit(".", 1)[-1])
     if isinstance(cmd, click.Command):

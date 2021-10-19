@@ -1,15 +1,17 @@
-import logging
-import click
 import json
+import logging
 from typing import Optional, Sequence
 
-from confluent_kafka import Producer
+import click
+from confluent_kafka import KafkaError, Message, Producer
 
 from snuba import settings
-from snuba.datasets.cdc import CdcDataset
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import CDC_STORAGES, get_cdc_storage
+from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
-from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLoaded
+from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 
 
 @click.command()
@@ -18,48 +20,45 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--dataset",
-    "dataset_name",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to bulk load",
+    "--storage",
+    "storage_name",
+    type=click.Choice([storage_key.value for storage_key in CDC_STORAGES.keys()]),
+    help="The CDC storage to confirm load",
 )
 @click.option(
     "--source",
-    help="Source of the dump. Depending on the dataset it may have different meaning.",
+    help="Source of the dump. Depending on the storage it may have different meaning.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def confirm_load(
     *,
     control_topic: Optional[str],
     bootstrap_server: Sequence[str],
-    dataset_name: str,
-    source: Optional[str],
-    log_level: str
+    storage_name: str,
+    source: str,
+    log_level: Optional[str] = None,
 ) -> None:
     """
     Confirms the snapshot has been loaded by sending the
     snapshot-loaded message on the control topic.
     """
-    import sentry_sdk
 
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    setup_logging(log_level)
+    setup_sentry()
 
     logger = logging.getLogger("snuba.loaded-snapshot")
     logger.info(
-        "Sending load completion message for dataset %s, from source %s",
-        dataset_name,
+        "Sending load completion message for storage %s, from source %s",
+        storage_name,
         source,
     )
 
-    dataset = get_dataset(dataset_name)
-    assert isinstance(
-        dataset, CdcDataset
-    ), "Only CDC dataset have a control topic thus are supported."
+    storage_key = StorageKey(storage_name)
+    storage = get_cdc_storage(storage_key)
 
-    control_topic = control_topic or dataset.get_default_control_topic()
+    stream_loader = storage.get_table_writer().get_stream_loader()
+
+    control_topic = control_topic or storage.get_default_control_topic()
 
     snapshot_source = PostgresSnapshot.load(
         product=settings.SNAPSHOT_LOAD_PRODUCT, path=source,
@@ -67,17 +66,15 @@ def confirm_load(
 
     descriptor = snapshot_source.get_descriptor()
 
-    if not bootstrap_server:
-        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset, settings.DEFAULT_BROKERS,
-        )
-
     producer = Producer(
-        {
-            "bootstrap.servers": ",".join(bootstrap_server),
-            "partitioner": "consistent",
-            "message.max.bytes": 50000000,  # 50MB, default is 1MB
-        }
+        build_kafka_producer_configuration(
+            stream_loader.get_default_topic_spec().topic,
+            bootstrap_servers=bootstrap_server,
+            override_params={
+                "partitioner": "consistent",
+                "message.max.bytes": 50000000,  # 50MB, default is 1MB
+            },
+        )
     )
 
     msg = SnapshotLoaded(
@@ -88,7 +85,7 @@ def confirm_load(
     )
     json_string = json.dumps(msg.to_dict())
 
-    def delivery_callback(error, message) -> None:
+    def delivery_callback(error: KafkaError, message: Message) -> None:
         if error is not None:
             raise error
         else:

@@ -1,15 +1,88 @@
-from tests.base import BaseEventsTest
-
+import uuid
 from datetime import datetime, timedelta
+from typing import Callable
 
-from snuba import optimize
+import pytest
+
+from snuba import optimize, settings
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.processor import InsertBatch
+from tests.helpers import write_processed_messages
+
+test_data = [
+    pytest.param(
+        StorageKey.EVENTS,
+        lambda dt: InsertBatch(
+            [
+                {
+                    "event_id": uuid.uuid4().hex,
+                    "project_id": 1,
+                    "group_id": 1,
+                    "deleted": 0,
+                    "timestamp": dt,
+                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                }
+            ],
+            None,
+        ),
+        id="events",
+    ),
+    pytest.param(
+        StorageKey.ERRORS,
+        lambda dt: InsertBatch(
+            [
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "project_id": 1,
+                    "group_id": 1,
+                    "deleted": 0,
+                    "timestamp": dt,
+                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                }
+            ],
+            None,
+        ),
+        id="errors",
+    ),
+    pytest.param(
+        StorageKey.TRANSACTIONS,
+        lambda dt: InsertBatch(
+            [
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "project_id": 1,
+                    "deleted": 0,
+                    "finish_ts": dt,
+                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                }
+            ],
+            None,
+        ),
+        id="transactions",
+    ),
+]
 
 
-class TestOptimize(BaseEventsTest):
-    def test(self):
+class TestOptimize:
+    @pytest.mark.parametrize(
+        "storage_key, create_event_row_for_date", test_data,
+    )
+    def test_optimize(
+        self,
+        storage_key: StorageKey,
+        create_event_row_for_date: Callable[[datetime], InsertBatch],
+    ) -> None:
+        storage = get_writable_storage(storage_key)
+        cluster = storage.get_cluster()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+        table = storage.get_table_writer().get_schema().get_local_table_name()
+        database = cluster.get_database()
+
         # no data, 0 partitions to optimize
         parts = optimize.get_partitions_to_optimize(
-            self.clickhouse, self.database, self.table
+            clickhouse, storage, database, table
         )
         assert parts == []
 
@@ -17,49 +90,59 @@ class TestOptimize(BaseEventsTest):
         base_monday = base - timedelta(days=base.weekday())
 
         # 1 event, 0 unoptimized parts
-        self.write_processed_records(self.create_event_for_date(base))
+        write_processed_messages(storage, [create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(
-            self.clickhouse, self.database, self.table
+            clickhouse, storage, database, table
         )
         assert parts == []
 
         # 2 events in the same part, 1 unoptimized part
-        self.write_processed_records(self.create_event_for_date(base))
+        write_processed_messages(storage, [create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(
-            self.clickhouse, self.database, self.table
+            clickhouse, storage, database, table
         )
-        assert parts == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
-        self.write_processed_records(self.create_event_for_date(base))
+        write_processed_messages(storage, [create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(
-            self.clickhouse, self.database, self.table
+            clickhouse, storage, database, table
         )
-        assert parts == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
 
         # 3 events in one part, 2 in another, 2 unoptimized parts
         a_month_earlier = base_monday - timedelta(days=31)
         a_month_earlier_monday = a_month_earlier - timedelta(
             days=a_month_earlier.weekday()
         )
-        self.write_processed_records(self.create_event_for_date(a_month_earlier_monday))
-        self.write_processed_records(self.create_event_for_date(a_month_earlier_monday))
-        parts = optimize.get_partitions_to_optimize(
-            self.clickhouse, self.database, self.table
+        write_processed_messages(
+            storage, [create_event_row_for_date(a_month_earlier_monday)]
         )
-        assert parts == [(base_monday, 90), (a_month_earlier_monday, 90)]
+        write_processed_messages(
+            storage, [create_event_row_for_date(a_month_earlier_monday)]
+        )
+        parts = optimize.get_partitions_to_optimize(
+            clickhouse, storage, database, table
+        )
+        assert [(p.date, p.retention_days) for p in parts] == [
+            (base_monday, 90),
+            (a_month_earlier_monday, 90),
+        ]
 
         # respects before (base is properly excluded)
-        assert list(
-            optimize.get_partitions_to_optimize(
-                self.clickhouse, self.database, self.table, before=base
+        assert [
+            (p.date, p.retention_days)
+            for p in list(
+                optimize.get_partitions_to_optimize(
+                    clickhouse, storage, database, table, before=base
+                )
             )
-        ) == [(a_month_earlier_monday, 90)]
+        ] == [(a_month_earlier_monday, 90)]
 
-        optimize.optimize_partitions(self.clickhouse, self.database, self.table, parts)
+        optimize.optimize_partitions(clickhouse, database, table, parts)
 
         # all parts should be optimized
         parts = optimize.get_partitions_to_optimize(
-            self.clickhouse, self.database, self.table
+            clickhouse, storage, database, table
         )
         assert parts == []

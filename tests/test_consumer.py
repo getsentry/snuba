@@ -1,103 +1,202 @@
-import calendar
-from datetime import datetime, timedelta
-import simplejson as json
+import functools
+import itertools
+import json
+import pickle
+from datetime import datetime
+from pickle import PickleBuffer
+from typing import MutableSequence, Optional
+from unittest.mock import Mock, call
 
-from snuba.consumer import ConsumerWorker
-from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import ProcessedMessage, ProcessorAction
-from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
-from tests.base import BaseEventsTest
+import pytest
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
+from arroyo.types import Position
+
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.consumers.consumer import (
+    InsertBatchWriter,
+    JSONRowInsertBatch,
+    MultistorageConsumerProcessingStrategyFactory,
+    ProcessedMessageBatchWriter,
+    ReplacementBatchWriter,
+    process_message,
+)
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storage import Storage
+from snuba.processor import InsertBatch, ReplacementBatch
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
+from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
-class TestConsumer(BaseEventsTest):
-
-    metrics = DummyMetricsBackend()
-
-    def test_offsets(self):
-        event = self.event
-
-        message: Message[KafkaPayload] = Message(
-            Partition(Topic("events"), 456),
-            123,
-            KafkaPayload(
-                None, json.dumps((0, "insert", event)).encode("utf-8")
-            ),  # event doesn't really matter
+def test_streaming_consumer_strategy() -> None:
+    messages = (
+        Message(
+            Partition(Topic("events"), 0),
+            i,
+            KafkaPayload(None, b"{}", []),
             datetime.now(),
         )
+        for i in itertools.count()
+    )
 
-        replacement_topic = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_replacement_topic_spec()
-        )
-        test_worker = ConsumerWorker(
-            self.dataset,
-            FakeConfluentKafkaProducer(),
-            replacement_topic.topic_name,
-            self.metrics,
-        )
-        batch = [test_worker.process_message(message)]
-        test_worker.flush_batch(batch)
+    replacements_producer = FakeConfluentKafkaProducer()
 
-        assert self.clickhouse.execute(
-            "SELECT project_id, event_id, offset, partition FROM %s" % self.table
-        ) == [(self.event["project_id"], self.event["event_id"], 123, 456)]
+    processor = Mock()
+    processor.process_message.side_effect = [
+        None,
+        InsertBatch([{}], None),
+        ReplacementBatch("key", [{}]),
+    ]
 
-    def test_skip_too_old(self):
-        replacement_topic = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_replacement_topic_spec()
-        )
-        test_worker = ConsumerWorker(
-            self.dataset,
-            FakeConfluentKafkaProducer(),
-            replacement_topic.topic_name,
-            self.metrics,
+    writer = Mock()
+
+    metrics = TestingMetricsBackend()
+
+    def write_step() -> ProcessedMessageBatchWriter:
+        return ProcessedMessageBatchWriter(
+            insert_batch_writer=InsertBatchWriter(
+                writer, MetricsWrapper(metrics, "insertions")
+            ),
+            replacement_batch_writer=ReplacementBatchWriter(
+                replacements_producer, Topic("replacements")
+            ),
         )
 
-        event = self.event
-        old_timestamp = datetime.utcnow() - timedelta(days=300)
-        old_timestamp_str = old_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        event["datetime"] = old_timestamp_str
-        event["data"]["datetime"] = old_timestamp_str
-        event["data"]["received"] = int(calendar.timegm(old_timestamp.timetuple()))
+    factory = KafkaConsumerStrategyFactory(
+        None,
+        functools.partial(process_message, processor),
+        write_step,
+        max_batch_size=10,
+        max_batch_time=60,
+        processes=None,
+        input_block_size=None,
+        output_block_size=None,
+    )
 
-        message: Message[KafkaPayload] = Message(
-            Partition(Topic("events"), 1),
-            42,
-            KafkaPayload(None, json.dumps((0, "insert", event)).encode("utf-8")),
-            datetime.now(),
-        )
+    commit_function = Mock()
+    strategy = factory.create(commit_function)
 
-        assert test_worker.process_message(message) is None
+    for i in range(3):
+        strategy.poll()
+        strategy.submit(next(messages))
 
-    def test_produce_replacement_messages(self):
-        producer = FakeConfluentKafkaProducer()
-        replacement_topic = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_replacement_topic_spec()
-        )
-        test_worker = ConsumerWorker(
-            self.dataset, producer, replacement_topic.topic_name, self.metrics
-        )
+    assert metrics.calls == []
 
-        test_worker.flush_batch(
-            [
-                ProcessedMessage(
-                    action=ProcessorAction.REPLACE, data=[("1", {"project_id": 1})],
-                ),
-                ProcessedMessage(
-                    action=ProcessorAction.REPLACE, data=[("2", {"project_id": 2})],
-                ),
-            ]
-        )
+    processor.process_message.side_effect = [{}]
 
-        assert [(m._topic, m._key, m._value) for m in producer.messages] == [
-            ("event-replacements", b"1", b'{"project_id": 1}'),
-            ("event-replacements", b"2", b'{"project_id": 2}'),
-        ]
+    with pytest.raises(TypeError):
+        strategy.poll()
+        strategy.submit(next(messages))
+
+    def get_number_of_insertion_metrics() -> int:
+        count = 0
+        for c in metrics.calls:
+            if isinstance(c, Timing) and c.name == "insertions.latency_ms":
+                count += 1
+        return count
+
+    expected_write_count = 1
+
+    with assert_changes(
+        get_number_of_insertion_metrics, 0, expected_write_count
+    ), assert_changes(
+        lambda: writer.write.call_count, 0, expected_write_count
+    ), assert_changes(
+        lambda: len(replacements_producer.messages), 0, 1
+    ):
+        strategy.close()
+        strategy.join()
+
+
+def test_json_row_batch_pickle_simple() -> None:
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
+    assert pickle.loads(pickle.dumps(batch)) == batch
+
+
+def test_json_row_batch_pickle_out_of_band() -> None:
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
+
+    buffers: MutableSequence[PickleBuffer] = []
+    data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)
+    assert pickle.loads(data, buffers=[b.raw() for b in buffers]) == batch
+
+
+def get_row_count(storage: Storage) -> int:
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+
+    return int(
+        storage.get_cluster()
+        .get_query_connection(ClickhouseClientSettings.INSERT)
+        .execute(f"SELECT count() FROM {schema.get_local_table_name()}")[0][0]
+    )
+
+
+@pytest.mark.parametrize(
+    "processes, input_block_size, output_block_size",
+    [
+        pytest.param(1, int(32 * 1e6), int(64 * 1e6), id="multiprocessing"),
+        pytest.param(None, None, None, id="no multiprocessing"),
+    ],
+)
+def test_multistorage_strategy(
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
+) -> None:
+    from snuba.datasets.storages import groupassignees, groupedmessages
+    from tests.datasets.cdc.test_groupassignee import TestGroupassignee
+    from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
+
+    commit = Mock()
+
+    storages = [groupassignees.storage, groupedmessages.storage]
+
+    strategy = MultistorageConsumerProcessingStrategyFactory(
+        storages,
+        10,
+        10,
+        processes,
+        input_block_size,
+        output_block_size,
+        TestingMetricsBackend(),
+    ).create(commit)
+
+    payloads = [
+        KafkaPayload(None, b"{}", [("table", b"ignored")]),
+        KafkaPayload(
+            None,
+            json.dumps(TestGroupassignee.INSERT_MSG).encode("utf8"),
+            [("table", groupassignees.storage.get_postgres_table().encode("utf8"))],
+        ),
+        KafkaPayload(
+            None,
+            json.dumps(TestGroupedMessage.INSERT_MSG).encode("utf8"),
+            [("table", groupedmessages.storage.get_postgres_table().encode("utf8"))],
+        ),
+    ]
+
+    now = datetime.now()
+
+    messages = [
+        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
+        for offset, payload in enumerate(payloads)
+    ]
+
+    with assert_changes(
+        lambda: get_row_count(groupassignees.storage), 0, 1
+    ), assert_changes(lambda: get_row_count(groupedmessages.storage), 0, 1):
+
+        for message in messages:
+            strategy.submit(message)
+
+        with assert_changes(
+            lambda: commit.call_args_list,
+            [],
+            [call({Partition(Topic("topic"), 0): Position(3, now)})],
+        ):
+            strategy.close()
+            strategy.join()

@@ -1,46 +1,46 @@
-from datetime import datetime
-from semaphore.consts import SPAN_STATUS_NAME_TO_CODE
-from typing import Optional, Sequence
-
+import logging
+import numbers
 import uuid
+from datetime import datetime
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Tuple
 
-from snuba import settings
-from snuba.processor import (
-    _as_dict_safe,
-    MessageProcessor,
-    ProcessorAction,
-    ProcessedMessage,
-    _ensure_valid_date,
-    _ensure_valid_ip,
-    _unicodify,
-)
-from snuba.datasets.events_processor import (
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
+
+from snuba import environment, settings
+from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.events_format import (
+    EventTooOld,
     enforce_retention,
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_http,
+    extract_nested,
     extract_user,
 )
-from snuba.util import create_metrics
-
-
-metrics = create_metrics(
-    settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.transactions.processor"
+from snuba.processor import (
+    InsertBatch,
+    MessageProcessor,
+    ProcessedMessage,
+    _as_dict_safe,
+    _ensure_valid_date,
+    _ensure_valid_ip,
+    _unicodify,
 )
+from snuba.state import is_project_in_rollout_group
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+logger = logging.getLogger(__name__)
+
+metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
 
 UNKNOWN_SPAN_STATUS = 2
 
-ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
 
-
-def escape_field(field: str) -> str:
-    """
-    We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
-    that we can always rebuild the tags from the map. When looking for tags with LIKE
-    there should be no issue. But there may be other cases.
-    """
-    return field.translate(ESCAPE_TRANSLATION)
+EventDict = Dict[str, Any]
+SpanDict = Dict[str, Any]
+RetentionDays = int
 
 
 class TransactionsMessageProcessor(MessageProcessor):
@@ -51,32 +51,21 @@ class TransactionsMessageProcessor(MessageProcessor):
         "sentry:dist",
     }
 
-    def __merge_nested_field(self, keys: Sequence[str], values: Sequence[str]) -> str:
-        # We need to guarantee the content of the merged string is sorted otherwise we
-        # will not be able to run a LIKE operation over multiple fields at the same time.
-        # Tags are pre sorted, but it seems contexts are not, so to make this generic
-        # we ensure the invariant is respected here.
-        pairs = sorted(zip(keys, values))
-        pairs = [f"|{escape_field(k)}={escape_field(v)}|" for k, v in pairs]
-        # The result is going to be:
-        # |tag:val||tag:val|
-        # This gives the guarantee we will always have a delimiter on both side of the
-        # tag pair, thus we can univocally identify a tag with a LIKE expression even if
-        # the value or the tag name in the query is a substring of a real tag.
-        return "".join(pairs)
-
-    def __extract_timestamp(self, field):
-        timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
+    def __extract_timestamp(self, field: int) -> Tuple[datetime, int]:
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
             timestamp = datetime.utcnow()
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
-        action_type = ProcessorAction.INSERT
-        processed = {"deleted": 0}
+    def _structure_and_validate_message(
+        self, message: Tuple[int, str, Dict[str, Any]]
+    ) -> Optional[Tuple[EventDict, RetentionDays]]:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
+
         version = message[0]
         if version not in (0, 1, 2):
             return None
@@ -88,104 +77,288 @@ class TransactionsMessageProcessor(MessageProcessor):
         event_type = data.get("type")
         if event_type != "transaction":
             return None
-        extract_base(processed, event)
-        processed["retention_days"] = enforce_retention(
-            event, datetime.fromtimestamp(data["timestamp"]),
-        )
+
         if not data.get("contexts", {}).get("trace"):
             return None
-
-        transaction_ctx = data["contexts"]["trace"]
-        trace_id = transaction_ctx["trace_id"]
         try:
-            processed["event_id"] = str(uuid.UUID(processed["event_id"]))
-            processed["trace_id"] = str(uuid.UUID(trace_id))
-            processed["span_id"] = int(transaction_ctx["span_id"], 16)
-            processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
-            processed["transaction_name"] = _unicodify(data["transaction"])
-            processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
-                data["start_timestamp"],
+            # We are purposely using a naive datetime here to work with the
+            # rest of the codebase. We can be confident that clients are only
+            # sending UTC dates.
+            retention_days = enforce_retention(
+                event, datetime.utcfromtimestamp(data["timestamp"])
             )
+        except EventTooOld:
+            return None
 
-            status = transaction_ctx.get("status", None)
-            if status:
-                int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
-            else:
-                int_status = UNKNOWN_SPAN_STATUS
+        return event, retention_days
 
-            processed["transaction_status"] = int_status
+    def _process_base_event_values(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict
+    ) -> MutableMapping[str, Any]:
 
-            if data["timestamp"] - data["start_timestamp"] < 0:
-                # Seems we have some negative durations in the DB
-                metrics.increment("negative_duration")
-        except Exception:
-            # all these fields are required but we saw some events go through here
-            # in the past.  For now bail.
-            return
+        extract_base(processed, event_dict)
+
+        transaction_ctx = event_dict["data"]["contexts"]["trace"]
+        trace_id = transaction_ctx["trace_id"]
+        processed["event_id"] = str(uuid.UUID(processed["event_id"]))
+        processed["trace_id"] = str(uuid.UUID(trace_id))
+        processed["span_id"] = int(transaction_ctx["span_id"], 16)
+        processed["transaction_op"] = _unicodify(transaction_ctx.get("op") or "")
+        processed["transaction_name"] = _unicodify(
+            event_dict["data"].get("transaction") or ""
+        )
+        processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
+            event_dict["data"]["start_timestamp"],
+        )
+        status = transaction_ctx.get("status", None)
+        if status:
+            int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
+        else:
+            int_status = UNKNOWN_SPAN_STATUS
+
+        processed["transaction_status"] = int_status
+        if event_dict["data"]["timestamp"] - event_dict["data"]["start_timestamp"] < 0:
+            # Seems we have some negative durations in the DB
+            metrics.increment("negative_duration")
+
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
-            data["timestamp"],
+            event_dict["data"]["timestamp"],
         )
 
         duration_secs = (processed["finish_ts"] - processed["start_ts"]).total_seconds()
         processed["duration"] = max(int(duration_secs * 1000), 0)
 
-        processed["platform"] = _unicodify(event["platform"])
+        processed["platform"] = _unicodify(event_dict["platform"])
+        return processed
 
-        tags = _as_dict_safe(data.get("tags", None))
+    def _process_tags(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+
+        tags: Mapping[str, Any] = _as_dict_safe(event_dict["data"].get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = self.__merge_nested_field(
-            processed["tags.key"], processed["tags.value"]
-        )
-
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
-            "sentry:release", event.get("release"),
+            "sentry:release", event_dict.get("release"),
         )
         processed["environment"] = promoted_tags.get("environment")
+        processed["user"] = promoted_tags.get("sentry:user", "")
+        processed["dist"] = _unicodify(
+            promoted_tags.get("sentry:dist", event_dict["data"].get("dist")),
+        )
 
-        contexts = _as_dict_safe(data.get("contexts", None))
+    def _process_measurements(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        measurements = event_dict["data"].get("measurements")
+        if measurements is not None:
+            try:
+                (
+                    processed["measurements.key"],
+                    processed["measurements.value"],
+                ) = extract_nested(
+                    measurements,
+                    lambda value: float(value["value"])
+                    if (
+                        value is not None
+                        and isinstance(value.get("value"), numbers.Number)
+                    )
+                    else None,
+                )
+            except Exception:
+                # Not failing the event in this case just yet, because we are still
+                # developing this feature.
+                logger.error(
+                    "Invalid measurements field.",
+                    extra={"measurements": measurements},
+                    exc_info=True,
+                )
 
-        user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
+    def _process_breakdown(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        breakdowns = event_dict["data"].get("breakdowns")
+        if breakdowns is not None:
+            span_op_breakdowns = breakdowns.get("span_ops")
+            if span_op_breakdowns is not None:
+                try:
+                    (
+                        processed["span_op_breakdowns.key"],
+                        processed["span_op_breakdowns.value"],
+                    ) = extract_nested(
+                        span_op_breakdowns,
+                        lambda value: float(value["value"])
+                        if (
+                            value is not None
+                            and isinstance(value.get("value"), numbers.Number)
+                        )
+                        else None,
+                    )
+                except Exception:
+                    # Not failing the event in this case just yet, because we are still
+                    # developing this feature.
+                    logger.error(
+                        "Invalid breakdowns.span_ops field.",
+                        extra={"span_op_breakdowns": span_op_breakdowns},
+                        exc_info=True,
+                    )
+
+    def _process_contexts_and_user(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        contexts: MutableMapping[str, Any] = _as_dict_safe(
+            event_dict["data"].get("contexts", None)
+        )
+        user_dict = (
+            event_dict["data"].get(
+                "user", event_dict["data"].get("sentry.interfaces.User", None)
+            )
+            or {}
+        )
         geo = user_dict.get("geo", None) or {}
+
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
 
+        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
+            processed["project_id"], set()
+        )
+        for context in skipped_contexts:
+            if context in contexts:
+                del contexts[context]
+
+        transaction_ctx = contexts.get("trace", {})
+        # We store trace_id and span_id as promoted columns and on the query level
+        # we make sure that all queries on contexts[trace.trace_id/span_id] use those promoted
+        # columns instead. So we don't need to store them in the contexts array as well
+        transaction_ctx.pop("trace_id", None)
+        transaction_ctx.pop("span_id", None)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
-        processed["_contexts_flattened"] = self.__merge_nested_field(
-            processed["contexts.key"], processed["contexts.value"]
-        )
 
-        processed["dist"] = _unicodify(
-            promoted_tags.get("sentry:dist", data.get("dist")),
-        )
-
-        user_data = {}
+        user_data: MutableMapping[str, Any] = {}
         extract_user(user_data, user_dict)
-        processed["user"] = promoted_tags.get("sentry:user", "")
         processed["user_name"] = user_data["username"]
         processed["user_id"] = user_data["user_id"]
         processed["user_email"] = user_data["email"]
         ip_address = _ensure_valid_ip(user_data["ip_address"])
-
         if ip_address:
             if ip_address.version == 4:
                 processed["ip_address_v4"] = str(ip_address)
             elif ip_address.version == 6:
                 processed["ip_address_v6"] = str(ip_address)
 
-        if metadata is not None:
-            processed["partition"] = metadata.partition
-            processed["offset"] = metadata.offset
+    def _process_request_data(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        request = (
+            event_dict["data"].get(
+                "request", event_dict["data"].get("sentry.interfaces.Http", None)
+            )
+            or {}
+        )
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        processed["http_method"] = http_data["http_method"]
+        processed["http_referer"] = http_data["http_referer"]
 
-        sdk = data.get("sdk", None) or {}
-        processed["sdk_name"] = _unicodify(sdk.get("name", ""))
-        processed["sdk_version"] = _unicodify(sdk.get("version", ""))
+    def _process_sdk_data(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        sdk = event_dict["data"].get("sdk", None) or {}
+        processed["sdk_name"] = _unicodify(sdk.get("name") or "")
+        processed["sdk_version"] = _unicodify(sdk.get("version") or "")
 
         if processed["sdk_name"] == "":
             metrics.increment("missing_sdk_name")
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
 
-        return ProcessedMessage(action=action_type, data=[processed],)
+    def _process_span(self, span_dict: SpanDict) -> Optional[Tuple[str, int, float]]:
+        op = span_dict.get("op")
+        group = span_dict.get("hash")
+        exclusive_time = span_dict.get("exclusive_time")
+
+        if op is None or group is None or exclusive_time is None:
+            return None
+
+        return op, int(group, 16), exclusive_time
+
+    def _process_spans(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> None:
+        data = event_dict["data"]
+        trace_context = data["contexts"]["trace"]
+
+        try:
+            if not is_project_in_rollout_group(
+                "write_span_columns_projects", processed["project_id"]
+            ):
+                return
+
+            processed_spans = []
+
+            processed_root_span = self._process_span(trace_context)
+            if processed_root_span is not None:
+                processed_spans.append(processed_root_span)
+
+            for span in data.get("spans", []):
+                processed_span = self._process_span(span)
+                if processed_span is not None:
+                    processed_spans.append(processed_span)
+
+            processed["spans.op"] = []
+            processed["spans.group"] = []
+            processed["spans.exclusive_time"] = []
+
+            for op, group, exclusive_time in sorted(processed_spans):
+                processed["spans.op"].append(op)
+                processed["spans.group"].append(group)
+                processed["spans.exclusive_time"].append(exclusive_time)
+
+            # The hash and exclusive_time is being stored in the spans columns
+            # so there is no need to store it again in the context array.
+            trace_context.pop("hash", None)
+            trace_context.pop("exclusive_time", None)
+
+        except Exception:
+            # Not failing the event in this case just yet, because we are still
+            # developing this feature.
+            logger.warning(
+                "Invalid span fields.",
+                extra={"trace_context": trace_context},
+                exc_info=True,
+            )
+
+    def process_message(
+        self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
+        event_dict, retention_days = self._structure_and_validate_message(message) or (
+            None,
+            None,
+        )
+        if not event_dict:
+            return None
+        processed: MutableMapping[str, Any] = {
+            "deleted": 0,
+            "retention_days": retention_days,
+        }
+        # The following helper functions should be able to be applied in any order.
+        # At time of writing, there are no reads of the values in the `processed`
+        # dictionary to inform values in other functions.
+        # Ideally we keep continue that rule
+        self._process_base_event_values(processed, event_dict)
+        self._process_tags(processed, event_dict)
+        self._process_measurements(processed, event_dict)
+        self._process_breakdown(processed, event_dict)
+        self._process_spans(processed, event_dict)
+        self._process_request_data(processed, event_dict)
+        self._process_sdk_data(processed, event_dict)
+        processed["partition"] = metadata.partition
+        processed["offset"] = metadata.offset
+
+        # the following operation modifies the event_dict and is therefore *not* order-independent
+        self._process_contexts_and_user(processed, event_dict)
+
+        return InsertBatch([processed], None)

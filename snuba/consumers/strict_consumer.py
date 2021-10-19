@@ -1,17 +1,20 @@
-from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
-from enum import Enum
-from typing import Callable, Mapping, Optional, Sequence, Tuple
-
 import logging
+from enum import Enum
+from typing import Callable, MutableMapping, Optional, Sequence, Tuple
+
+from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
+
+from snuba.utils.serializable_exception import SerializableException
+from snuba.utils.streams.types import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.kafka-consumer")
 
 
-class NoPartitionAssigned(Exception):
+class NoPartitionAssigned(SerializableException):
     pass
 
 
-class PartitionReassigned(Exception):
+class PartitionReassigned(SerializableException):
     pass
 
 
@@ -31,7 +34,7 @@ class StrictConsumer:
     It waits for a partition to be assigned before actually consuming. If no
     partition is assigned within a timeout it fails.
     It also moves the responsibility of deciding what to commit to the user
-    compared to the BatchingConsumer
+    compared to other stream processing implementations.
 
     This is not supposed to be used for continuously consume a topic but to
     catch up on a topic from the beginning to the state it is at the time we start.
@@ -41,7 +44,7 @@ class StrictConsumer:
     def __init__(
         self,
         topic: str,
-        bootstrap_servers: Sequence[str],
+        broker_config: KafkaBrokerConfig,
         group_id: str,
         initial_auto_offset_reset: str,
         partition_assignment_timeout: int,
@@ -61,19 +64,21 @@ class StrictConsumer:
         self.__topic = topic
         self.__consuming = False
 
-        consumer_config = {
-            "enable.auto.commit": False,
-            "bootstrap.servers": ",".join(bootstrap_servers),
-            "group.id": group_id,
-            "enable.partition.eof": "true",
-            "auto.offset.reset": initial_auto_offset_reset,
+        consumer_config: KafkaBrokerConfig = {
+            **broker_config,
+            **{
+                "enable.auto.commit": False,
+                "group.id": group_id,
+                "enable.partition.eof": "true",
+                "auto.offset.reset": initial_auto_offset_reset,
+            },
         }
 
         self.__consumer = self._create_consumer(consumer_config)
 
         def _on_partitions_assigned(
             consumer: Consumer, partitions: Sequence[TopicPartition],
-        ):
+        ) -> None:
             logger.info("New partitions assigned: %r", partitions)
             if self.__consuming:
                 # In order to ensure the topic is consumed front to back
@@ -87,15 +92,15 @@ class StrictConsumer:
 
         def _on_partitions_revoked(
             consumer: Consumer, partitions: Sequence[TopicPartition],
-        ):
+        ) -> None:
             logger.info("Partitions revoked: %r", partitions)
             if self.__on_partitions_revoked:
                 self.__on_partitions_revoked(consumer, partitions)
 
         logger.debug(
-            "Subscribing strict consuemr to topic %s on broker %r",
+            "Subscribing strict consumer to topic %s on broker %r",
             topic,
-            bootstrap_servers,
+            broker_config.get("bootstrap.servers"),
         )
         self.__consumer.subscribe(
             [topic],
@@ -103,7 +108,7 @@ class StrictConsumer:
             on_revoke=_on_partitions_revoked,
         )
 
-    def _create_consumer(self, config) -> Consumer:
+    def _create_consumer(self, config: KafkaBrokerConfig) -> Consumer:
         return Consumer(config)
 
     def run(self) -> None:
@@ -117,7 +122,7 @@ class StrictConsumer:
             len(partitions_metadata) == 1
         ), f"Strict consumer only supports one partition topics. Found {len(partitions_metadata)} partitions"
 
-        watermarks: Mapping[Tuple[int, str], int] = {}
+        watermarks: MutableMapping[Tuple[int, str], int] = {}
 
         logger.debug("Starting Strict Consumer event loop")
         while not self.__shutdown:

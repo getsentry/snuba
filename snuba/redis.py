@@ -1,13 +1,17 @@
 from __future__ import absolute_import
 
-from redis.client import StrictRedis
-from redis.exceptions import BusyLoadingError, ConnectionError
+from typing import Any, Union
+
 from rediscluster import StrictRedisCluster
 
+from redis.client import StrictRedis
+from redis.exceptions import BusyLoadingError, ConnectionError
 from snuba import settings
 
+RedisClientType = Union[StrictRedis, StrictRedisCluster]
 
-class RetryingStrictRedisCluster(StrictRedisCluster):
+
+class RetryingStrictRedisCluster(StrictRedisCluster):  # type: ignore #  Missing type stubs in client lib
     """
     Execute a command with cluster reinitialization retry logic.
     Should a cluster respond with a ConnectionError or BusyLoadingError the
@@ -15,7 +19,7 @@ class RetryingStrictRedisCluster(StrictRedisCluster):
     again with the most up to date view of the world.
     """
 
-    def execute_command(self, *args, **kwargs):
+    def execute_command(self, *args: Any, **kwargs: Any) -> Any:
         try:
             return super(self.__class__, self).execute_command(*args, **kwargs)
         except (
@@ -27,6 +31,8 @@ class RetryingStrictRedisCluster(StrictRedisCluster):
             return super(self.__class__, self).execute_command(*args, **kwargs)
 
 
+redis_client: RedisClientType
+
 if settings.USE_REDIS_CLUSTER:
     startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
     if startup_nodes is None:
@@ -35,6 +41,8 @@ if settings.USE_REDIS_CLUSTER:
         startup_nodes=startup_nodes,
         socket_keepalive=True,
         password=settings.REDIS_PASSWORD,
+        # HACK(mattrobenolt): See https://github.com/Grokzen/redis-py-cluster/pull/353
+        max_connections_per_node=True,
     )
 else:
     redis_client = StrictRedis(

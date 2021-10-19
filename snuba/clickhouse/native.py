@@ -1,43 +1,69 @@
 import logging
 import queue
+import re
 import time
-from typing import Iterable, Mapping, Optional
+from datetime import date, datetime
+from typing import Any, Mapping, Optional, Sequence, Union
+from uuid import UUID
 
 from clickhouse_driver import Client, errors
+from dateutil.tz import tz
 
-from snuba import settings
-from snuba.clickhouse.columns import Array
-from snuba.clickhouse.query import ClickhouseQuery
-from snuba.reader import Reader, Result, transform_columns
-from snuba.writer import BatchWriter, WriterTableRow
-
+from snuba import environment, settings, state
+from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.formatter.nodes import FormattedQuery
+from snuba.reader import Reader, Result, build_result_transformer
+from snuba.utils.metrics.gauge import ThreadSafeGauge
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse")
+
+Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
+
+metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
 
 class ClickhousePool(object):
     def __init__(
         self,
-        host=settings.CLICKHOUSE_HOST,
-        port=settings.CLICKHOUSE_PORT,
-        connect_timeout=1,
-        send_receive_timeout=300,
-        max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
-        client_settings={},
-    ):
+        host: str,
+        port: int,
+        user: str,
+        password: str,
+        database: str,
+        connect_timeout: int = 1,
+        send_receive_timeout: Optional[int] = 300,
+        max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
+        client_settings: Mapping[str, Any] = {},
+    ) -> None:
         self.host = host
         self.port = port
+        self.user = user
+        self.password = password
+        self.database = database
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
 
-        self.pool = queue.LifoQueue(max_pool_size)
+        self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
+        self.__gauge = ThreadSafeGauge(metrics, "connections")
 
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
 
-    def execute(self, *args, **kwargs):
+    # This will actually return an int if an INSERT query is run, but we never capture the
+    # output of INSERT queries so I left this as a Sequence.
+    def execute(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: Optional[str] = None,
+        settings: Optional[Mapping[str, Any]] = None,
+        types_check: bool = False,
+        columnar: bool = False,
+    ) -> Sequence[Any]:
         """
         Execute a clickhouse query with a single quick retry in case of
         connection failure.
@@ -54,24 +80,51 @@ class ClickhousePool(object):
                 attempts_remaining -= 1
                 # Lazily create connection instances
                 if conn is None:
+                    self.__gauge.increment()
                     conn = self._create_conn()
 
                 try:
-                    result = conn.execute(*args, **kwargs)
+                    result: Sequence[Any] = conn.execute(
+                        query,
+                        params=params,
+                        with_column_types=with_column_types,
+                        query_id=query_id,
+                        settings=settings,
+                        types_check=types_check,
+                        columnar=columnar,
+                    )
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
+                    metrics.increment("connection_error")
                     # Force a reconnection next time
                     conn = None
+                    self.__gauge.decrement()
                     if attempts_remaining == 0:
-                        raise e
+                        if isinstance(e, errors.Error):
+                            raise ClickhouseError(e.message, code=e.code) from e
+                        else:
+                            raise e
                     else:
                         # Short sleep to make sure we give the load
                         # balancer a chance to mark a bad host as down.
                         time.sleep(0.1)
+                except errors.Error as e:
+                    raise ClickhouseError(e.message, code=e.code) from e
         finally:
             self.pool.put(conn, block=False)
 
-    def execute_robust(self, *args, **kwargs):
+        return []
+
+    def execute_robust(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: Optional[str] = None,
+        settings: Optional[Mapping[str, Any]] = None,
+        types_check: bool = False,
+        columnar: bool = False,
+    ) -> Sequence[Any]:
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
         attempts, (infinite in the case of too many simultaneous queries
@@ -82,9 +135,18 @@ class ClickhousePool(object):
         loop will be doubled by the retry in execute()
         """
         attempts_remaining = 3
+
         while True:
             try:
-                return self.execute(*args, **kwargs)
+                return self.execute(
+                    query,
+                    params=params,
+                    with_column_types=with_column_types,
+                    query_id=query_id,
+                    settings=settings,
+                    types_check=types_check,
+                    columnar=columnar,
+                )
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
                 logger.warning(
@@ -94,24 +156,35 @@ class ClickhousePool(object):
                 )
                 attempts_remaining -= 1
                 if attempts_remaining <= 0:
-                    raise
-
+                    if isinstance(e, errors.Error):
+                        raise ClickhouseError(e.message, code=e.code) from e
+                    else:
+                        raise e
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
                 logger.warning("Write to ClickHouse failed: %s (retrying)", str(e))
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     # Try forever if the server is overloaded.
-                    time.sleep(1)
+                    sleep_seconds = state.get_config(
+                        "simultaneous_queries_sleep_seconds", 1
+                    )
+                    assert sleep_seconds is not None
+                    time.sleep(float(sleep_seconds))
                     continue
                 else:
                     # Quit immediately for other types of server errors.
-                    raise
+                    raise ClickhouseError(e.message, code=e.code) from e
+            except errors.Error as e:
+                raise ClickhouseError(e.message, code=e.code) from e
 
-    def _create_conn(self):
+    def _create_conn(self) -> Client:
         return Client(
             host=self.host,
             port=self.port,
+            user=self.user,
+            password=self.password,
+            database=self.database,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
             settings=self.client_settings,
@@ -127,75 +200,107 @@ class ClickhousePool(object):
             pass
 
 
-class NativeDriverReader(Reader[ClickhouseQuery]):
-    def __init__(self, client) -> None:
+def transform_date(value: date) -> str:
+    """
+    Convert a timezone-naive date object into an ISO 8601 formatted date and
+    time string respresentation.
+    """
+    # XXX: Both Python and ClickHouse date objects do not have time zones, so
+    # just assume UTC. (Ideally, we'd have just left these as timezone naive to
+    # begin with and not done this transformation at all, since the time
+    # portion has no benefit or significance here.)
+    return datetime(*value.timetuple()[:6]).replace(tzinfo=tz.tzutc()).isoformat()
+
+
+def transform_datetime(value: datetime) -> str:
+    """
+    Convert a timezone-naive datetime object into an ISO 8601 formatted date
+    and time string representation.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=tz.tzutc())
+    else:
+        value = value.astimezone(tz.tzutc())
+    return value.isoformat()
+
+
+def transform_uuid(value: UUID) -> str:
+    """
+    Convert a UUID object into a string representation.
+    """
+    return str(value)
+
+
+transform_column_types = build_result_transformer(
+    [
+        (re.compile(r"^Date(\(.+\))?$"), transform_date),
+        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (re.compile(r"^UUID$"), transform_uuid),
+    ]
+)
+
+
+class NativeDriverReader(Reader):
+    def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
-    def __transform_result(self, result, with_totals: bool) -> Result:
+    def __transform_result(self, result: Sequence[Any], with_totals: bool) -> Result:
         """
         Transform a native driver response into a response that is
         structurally similar to a ClickHouse-flavored JSON response.
         """
         data, meta = result
 
-        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
-        meta = [{"name": m[0], "type": m[1]} for m in meta]
+        # XXX: Rows are represented as mappings that are keyed by column or
+        # alias, which is problematic when the result set contains duplicate
+        # names. To ensure that the column headers and row data are consistent
+        # duplicated names are discarded at this stage.
+        columns = {c[0]: i for i, c in enumerate(meta)}
 
+        data = [
+            {column: row[index] for column, index in columns.items()} for row in data
+        ]
+
+        meta = [
+            {"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]
+        ]
+
+        new_result: Result = {}
         if with_totals:
             assert len(data) > 0
             totals = data.pop(-1)
-            result = {"data": data, "meta": meta, "totals": totals}
+            new_result = {"data": data, "meta": meta, "totals": totals}
         else:
-            result = {"data": data, "meta": meta}
+            new_result = {"data": data, "meta": meta}
 
-        return transform_columns(result)
+        transform_column_types(new_result)
+
+        return new_result
 
     def execute(
         self,
-        query: ClickhouseQuery,
-        # TODO: move Clickhouse specific arguments into DictClickhouseQuery
+        query: FormattedQuery,
+        # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
-        query_id: Optional[str] = None,
         with_totals: bool = False,
+        robust: bool = False,
     ) -> Result:
-        if settings is None:
-            settings = {}
+        settings = {**settings} if settings is not None else {}
 
-        kwargs = {}
-        if query_id is not None:
-            kwargs["query_id"] = query_id
+        query_id = None
+        if "query_id" in settings:
+            query_id = settings.pop("query_id")
 
-        sql = query.format_sql()
-        return self.__transform_result(
-            self.__client.execute(
-                sql, with_column_types=True, settings=settings, **kwargs
-            ),
-            with_totals=with_totals,
+        execute_func = (
+            self.__client.execute_robust if robust is True else self.__client.execute
         )
 
-
-class NativeDriverBatchWriter(BatchWriter):
-    def __init__(self, schema, connection):
-        self.__schema = schema
-        self.__connection = connection
-
-    def __row_to_column_list(self, columns, row):
-        values = []
-        for col in columns:
-            value = row.get(col.flattened, None)
-            if value is None and isinstance(col.type, Array):
-                value = []
-            values.append(value)
-        return values
-
-    def write(self, rows: Iterable[WriterTableRow]):
-        columns = self.__schema.get_columns()
-        self.__connection.execute_robust(
-            "INSERT INTO %(table)s (%(colnames)s) VALUES"
-            % {
-                "colnames": ", ".join(col.escaped for col in columns),
-                "table": self.__schema.get_table_name(),
-            },
-            [self.__row_to_column_list(columns, row) for row in rows],
-            types_check=False,
+        return self.__transform_result(
+            execute_func(
+                query.get_sql(),
+                with_column_types=True,
+                query_id=query_id,
+                settings=settings,
+            ),
+            with_totals=with_totals,
         )

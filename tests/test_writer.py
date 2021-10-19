@@ -1,61 +1,78 @@
+import gzip
+from typing import Optional
+
 import pytest
-
-from typing import Iterable
-
-from tests.base import BaseEventsTest
-from snuba.clickhouse.http import ClickHouseError, HTTPBatchWriter
-from snuba.datasets.factory import enforce_table_writer
-from snuba import settings
-from snuba.writer import WriterTableRow
+import rapidjson
+from snuba.clickhouse.errors import ClickhouseWriterError
+from snuba.clickhouse.formatter.nodes import FormattedQuery
+from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
-class FakeHTTPWriter(HTTPBatchWriter):
-    def chunk(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
-        return self._prepare_chunks(rows)
+class TestHTTPBatchWriter:
+    dataset = get_dataset("events")
+    metrics = DummyMetricsBackend(strict=True)
 
-
-class TestHTTPBatchWriter(BaseEventsTest):
-    def test_error_handling(self):
-        try:
-            enforce_table_writer(self.dataset).get_writer(table_name="invalid").write(
-                [{"x": "y"}]
-            )
-        except ClickHouseError as error:
-            assert error.code == 60
-            assert error.type == "DB::Exception"
-        else:
-            assert False, "expected error"
-
-        try:
-            enforce_table_writer(self.dataset).get_writer().write(
-                [{"timestamp": "invalid"}]
-            )
-        except ClickHouseError as error:
-            assert error.code == 41
-            assert error.type == "DB::Exception"
-        else:
-            assert False, "expected error"
-
-    test_data = [
-        (1, [b"a", b"b", b"c"], [b"a", b"b", b"c"],),
-        (0, [b"a", b"b", b"c"], [b"abc"],),
-        (2, [b"a", b"b", b"c"], [b"ab", b"c"],),
-        (2, [b"a", b"b", b"c", b"d"], [b"ab", b"cd"],),
-        (100000, [b"a", b"b", b"c"], [b"abc"],),
-        (5, [], [],),
-    ]
-
-    @pytest.mark.parametrize("chunk_size, input, expected_chunks", test_data)
-    def test_chunks(self, chunk_size, input, expected_chunks):
-        writer = FakeHTTPWriter(
-            None,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
-            lambda a: a,
-            None,
-            "mysterious_inexistent_table",
-            chunk_size,
+    def test_empty_batch(self) -> None:
+        enforce_table_writer(self.dataset).get_batch_writer(metrics=self.metrics).write(
+            []
         )
-        chunks = writer.chunk(input)
-        for chunk, expected in zip(chunks, expected_chunks):
-            assert chunk == expected
+
+    def test_error_handling(self) -> None:
+        table_writer = enforce_table_writer(self.dataset)
+
+        with pytest.raises(ClickhouseWriterError) as error:
+            table_writer.get_batch_writer(
+                table_name="invalid", metrics=self.metrics
+            ).write([rapidjson.dumps({"x": "y"}).encode("utf-8")])
+
+        assert error.value.code == 60
+
+        with pytest.raises(ClickhouseWriterError) as error:
+            table_writer.get_batch_writer(metrics=self.metrics).write(
+                [b"{}", rapidjson.dumps({"timestamp": "invalid"}).encode("utf-8")]
+            )
+
+        assert error.value.code == 41
+        assert error.value.row == 2
+
+
+DATA = """project_id,id,status,last_seen,first_seen,active_at,first_release_id
+2,1409156,0,2021-03-13 00:43:02,2021-03-13 00:43:02,2021-03-13 00:43:02,
+2,1409157,0,2021-03-13 00:43:02,2021-03-13 00:43:02,2021-03-13 00:43:02,
+"""
+
+
+class FakeQuery(FormattedQuery):
+    def get_sql(self, format: Optional[str] = None) -> str:
+        return "SELECT count() FROM groupedmessage_local;"
+
+
+def test_gzip_load() -> None:
+    content = gzip.compress(DATA.encode("utf-8"))
+
+    dataset = get_dataset("groupedmessage")
+    metrics = DummyMetricsBackend(strict=True)
+    writer = enforce_table_writer(dataset).get_bulk_writer(
+        metrics,
+        "gzip",
+        [
+            "project_id",
+            "id",
+            "status",
+            "last_seen",
+            "first_seen",
+            "active_at",
+            "first_release_id",
+        ],
+        options=None,
+        table_name="groupedmessage_local",
+    )
+
+    writer.write([content])
+
+    cluster = dataset.get_default_entity().get_all_storages()[0].get_cluster()
+    reader = cluster.get_reader()
+
+    ret = reader.execute(FakeQuery([]))
+    assert ret["data"][0] == {"count()": 2}

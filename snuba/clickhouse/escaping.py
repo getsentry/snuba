@@ -29,7 +29,9 @@ def escape_expression(expr: Optional[str], regex: Pattern[str]) -> Optional[str]
         # backticks as it is not part of the column name, but used by the query
         # generator to signify the sort order if we are sorting by this column.
         col = ESCAPE_COL_RE.sub(r"\\\1", expr)
-        return "{}`{}`".format(*NEGATE_RE.match(col).groups())
+        negate_match = NEGATE_RE.match(col)
+        assert negate_match is not None
+        return "{}`{}`".format(*negate_match.groups())
 
 
 def escape_alias(alias: Optional[str]) -> Optional[str]:
