@@ -137,7 +137,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         ),
     ]
 
-    if settings.ENABLE_DEV_FEATURES:
+    if settings.ENABLE_DEV_FEATURES and "metrics" not in settings.DISABLED_DATASETS:
         daemons += [
             (
                 "metrics-consumer",
