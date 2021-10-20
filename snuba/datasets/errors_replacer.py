@@ -325,15 +325,14 @@ class ProjectsQueryFlags:
         Builds Redis calls in the pipeline p to get all necessary replacements
         data for the given set of project ids.
 
-        All queried data has been previously set in `set_project_needs_final`
-        or `set_project_exclude_groups` functions above.
+        All queried data has been previously set in setter functions
+        above this class.
         """
         needs_final_keys_and_type_keys = [
             build_project_needs_final_key_and_type_key(project_id, state_name)
             for project_id in project_ids
         ]
 
-        # Data stored is the timestamp at which a 'project needs final' replacement occured
         for needs_final_key, _ in needs_final_keys_and_type_keys:
             p.get(needs_final_key)
 
@@ -346,7 +345,6 @@ class ProjectsQueryFlags:
             p, [groups_key for groups_key, _ in exclude_groups_keys_and_types],
         )
 
-        # get the replacement types for metrics purposes
         for _, needs_final_type_key in needs_final_keys_and_type_keys:
             p.get(needs_final_type_key)
 
@@ -354,7 +352,7 @@ class ProjectsQueryFlags:
             p, [type_key for _, type_key in exclude_groups_keys_and_types]
         )
 
-        # retrieve the latest replaced group id's timestamp
+        # retrieve the latest timestamp for any exclude groups replacement
         for exclude_groups_key, _ in exclude_groups_keys_and_types:
             p.zrevrange(
                 exclude_groups_key, 0, 0, withscores=True,
@@ -366,7 +364,7 @@ class ProjectsQueryFlags:
     ) -> None:
         """
         Remove stale data per key according to TTL.
-        Get new data per key.
+        Get latest data per key.
 
         Split across two loops to avoid intertwining Redis calls and
         consequentially, their results.
