@@ -388,16 +388,21 @@ class TestTransactionsProcessor:
         )
 
         payload = message.serialize()
-        # minus an extra 1 because the transaction is a span
-        num_spans_required = (
-            settings.MAX_SPANS_PER_TRANSACTION - len(payload[2]["data"]["spans"]) - 1
-        )
-        payload[2]["data"]["spans"] += [payload[2]["data"]["spans"][-1]] * (
+        # force the number of spans to exceed the limit
+        payload[2]["data"]["spans"] = [payload[2]["data"]["spans"][0]] * (
             settings.MAX_SPANS_PER_TRANSACTION * 2
         )
+
         result = message.build_result(meta)
-        for key in ["spans.op", "spans.group", "spans.exclusive_time"]:
-            result[key] = ([result[key][0]] * num_spans_required) + result[key]
+        spans = sorted(
+            # there should be an exact numberly 1 navigation span and
+            [("navigation", int("a" * 16, 16), 1.2345)]
+            # MAX_SPANS_PER_TRANSACTION - 1 http spans after being dropped
+            + [("http", int("b" * 16, 16), 0.1234)]
+            * (settings.MAX_SPANS_PER_TRANSACTION - 1)
+        )
+        for i, key in enumerate(["spans.op", "spans.group", "spans.exclusive_time"]):
+            result[key] = [span[i] for span in spans]
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta
