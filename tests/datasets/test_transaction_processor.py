@@ -352,3 +352,54 @@ class TestTransactionsProcessor:
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
+
+    def test_too_many_spans(self) -> None:
+        old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+        set_config("write_span_columns_projects", "[1]")
+
+        start, finish = self.__get_timestamps()
+        message = TransactionEvent(
+            event_id="e5e062bf2e1d4afd96fd2f90b6770431",
+            trace_id="7400045b25c443b885914600aa83ad04",
+            span_id="8841662216cc598b",
+            transaction_name="/organizations/:orgId/issues/",
+            status="cancelled",
+            op="navigation",
+            timestamp=finish,
+            start_timestamp=start,
+            platform="python",
+            dist="",
+            user_name="me",
+            user_id="myself",
+            user_email="me@myself.com",
+            ipv4="127.0.0.1",
+            ipv6=None,
+            environment="prod",
+            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+            sdk_name="sentry.python",
+            sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
+            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+        )
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+
+        payload = message.serialize()
+        # minus an extra 1 because the transaction is a span
+        num_spans_required = (
+            settings.MAX_SPANS_PER_TRANSACTION - len(payload[2]["data"]["spans"]) - 1
+        )
+        payload[2]["data"]["spans"] += [payload[2]["data"]["spans"][-1]] * (
+            settings.MAX_SPANS_PER_TRANSACTION * 2
+        )
+        result = message.build_result(meta)
+        for key in ["spans.op", "spans.group", "spans.exclusive_time"]:
+            result[key] = ([result[key][0]] * num_spans_required) + result[key]
+
+        assert TransactionsMessageProcessor().process_message(
+            payload, meta
+        ) == InsertBatch([result], None)
+        settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context

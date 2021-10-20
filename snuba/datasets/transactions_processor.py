@@ -297,15 +297,37 @@ class TransactionsMessageProcessor(MessageProcessor):
             ):
                 return
 
+            num_processed = 0
             processed_spans = []
 
             processed_root_span = self._process_span(trace_context)
             if processed_root_span is not None:
+                num_processed += 1
                 processed_spans.append(processed_root_span)
 
             for span in data.get("spans", []):
+                # The number of spans should not exceed 1000 as enforced by SDKs.
+                # As a safety precaution, enforce a hard limit on the number of
+                # spans we actually store .
+                if num_processed >= settings.MAX_SPANS_PER_TRANSACTION:
+                    has_root_span = 0 if processed_root_span is None else 1
+                    num_spans = has_root_span + len(data.get("spans", []))
+                    spans_dropped = settings.MAX_SPANS_PER_TRANSACTION - num_spans
+
+                    logger.warning(
+                        "Too many spans found",
+                        extra={
+                            "trace_context": trace_context,
+                            "num_spans": num_spans,
+                            "spans_dropped": spans_dropped,
+                        },
+                    )
+                    break
+
                 processed_span = self._process_span(span)
+
                 if processed_span is not None:
+                    num_processed += 1
                     processed_spans.append(processed_span)
 
             processed["spans.op"] = []
