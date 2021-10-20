@@ -23,6 +23,8 @@ from typing import (
     Union,
 )
 
+from rediscluster.pipeline import StrictClusterPipeline
+
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
@@ -241,7 +243,6 @@ def get_projects_query_flags(
     """
 
     s_project_ids = set(project_ids)
-    now = time.time()
     p = redis_client.pipeline()
 
     needs_final_keys_and_type_keys = [
@@ -256,27 +257,19 @@ def get_projects_query_flags(
         build_project_exclude_groups_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
-    for exclude_groups_key, _ in exclude_groups_keys_and_types:
-        # remove stale excluded groups
-        p.zremrangebyscore(
-            exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
-        )
-        # TODO: put this into another for loop to make post processing easier
-        # get up to date excluded groups
-        p.zrevrangebyscore(
-            exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
-        )
+
+    _remove_stale_and_load_new_sorted_set_data(
+        p,
+        [exclude_groups_key for exclude_groups_key, _ in exclude_groups_keys_and_types],
+    )
 
     # get the replacement types for metrics purposes
     for _, needs_final_type_key in needs_final_keys_and_type_keys:
         p.get(needs_final_type_key)
 
-    for _, type_key in exclude_groups_keys_and_types:
-        # cleanup the old exclude group replacement types
-        p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
-        # get the new exclude group replacement types
-        # TODO: put this into another for loop to make post processing easier
-        p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
+    _remove_stale_and_load_new_sorted_set_data(
+        p, [type_key for _, type_key in exclude_groups_keys_and_types]
+    )
 
     # retrieve the latest replaced group id's timestamp such that queries
     # which are processing data after it, do not have to be marked as final
@@ -292,6 +285,26 @@ def get_projects_query_flags(
     )
 
 
+def _remove_stale_and_load_new_sorted_set_data(
+    p: StrictClusterPipeline, keys: list[str]
+) -> None:
+    """
+    Remove stale data according to TTL.
+    Get new data per key.
+
+    Split across two loops to avoid have results intertwined:
+    [x, y, x, y, x, y]
+    vs
+    [x, x, x, y, y, y]
+    """
+    now = time.time()
+
+    for key in keys:
+        p.zremrangebyscore(key, float("-inf"), now - settings.REPLACER_KEY_TTL)
+    for key in keys:
+        p.zrevrangebyscore(key, float("inf"), now - settings.REPLACER_KEY_TTL)
+
+
 def _process_exclude_groups_and_replacement_types_results(
     results: List[Any], len_projects: int
 ) -> ProjectsQueryFlags:
@@ -302,31 +315,29 @@ def _process_exclude_groups_and_replacement_types_results(
     `results` is a flat list of all the redis call results of get_projects_query_flags
     [
         needs_final: Sequence[timestamp]...,
-        exclude_groups: Sequence[..(num_removed_elements(don't care), List[group_id] )]...,
+        _: Sequence[num_removed_elements]...,
+        exclude_groups: Sequence[List[group_id]]...,
         needs_final_replacement_types: Sequece[Optional[str]]...,
-        groups_replacement_types: Sequence[..(num_removed, str)]...,
+        _: Sequemce[num_removed_elements]...,
+        groups_replacement_types: Sequence[List[str]]...,
         latest_exclude_groups_replacements: Sequence[Optional[Tuple[group_id, datetime]]]...
     ]
-    - `excludes_groups` slice is `len_projects * 2` long
-    - `groups_replacement_types` slice is `len_projects * 2` long
-    - The rest of the slices are all `len_projects` long
-
-    The `len_projects * 2` long slices are in the form:
-    int, list, int, list, ...
-    Only the lists are necessary, the ints are the number of items removed
-    during the zremrangebyscore calls.
+    - The _ slices are the results of `zremrangebyscore` calls, unecessary data
     """
-
     needs_final_result = results[:len_projects]
-    exclude_groups_results = results[len_projects : len_projects * 3]
+    exclude_groups_results = results[len_projects * 2 : len_projects * 3]
     projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
-    groups_replacement_types_result = results[len_projects * 4 : len_projects * 6]
+    groups_replacement_types_results = results[len_projects * 5 : len_projects * 6]
     latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
 
     needs_final = any(needs_final_result)
 
     exclude_groups = sorted(
-        {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
+        {
+            int(group_id)
+            for exclude_groups_result in exclude_groups_results
+            for group_id in exclude_groups_result
+        }
     )
 
     needs_final_replacement_types = {
@@ -337,7 +348,8 @@ def _process_exclude_groups_and_replacement_types_results(
 
     groups_replacement_types = {
         replacement_type.decode("utf-8")
-        for replacement_type in sum(groups_replacement_types_result[1::2], [])
+        for groups_replacement_types_result in groups_replacement_types_results
+        for replacement_type in groups_replacement_types_result
     }
 
     replacement_types = groups_replacement_types.union(needs_final_replacement_types)
