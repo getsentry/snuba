@@ -27,7 +27,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.state import is_project_in_rollout_group
+from snuba.state import get_config, is_project_in_rollout_group
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -297,6 +297,10 @@ class TransactionsMessageProcessor(MessageProcessor):
             ):
                 return
 
+            max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
+            if not isinstance(max_spans_per_transaction, int):
+                max_spans_per_transaction = 2000
+
             num_processed = 0
             processed_spans = []
 
@@ -309,19 +313,8 @@ class TransactionsMessageProcessor(MessageProcessor):
                 # The number of spans should not exceed 1000 as enforced by SDKs.
                 # As a safety precaution, enforce a hard limit on the number of
                 # spans we actually store .
-                if num_processed >= settings.MAX_SPANS_PER_TRANSACTION:
-                    has_root_span = 0 if processed_root_span is None else 1
-                    num_spans = has_root_span + len(data.get("spans", []))
-                    spans_dropped = settings.MAX_SPANS_PER_TRANSACTION - num_spans
-
-                    logger.warning(
-                        "Too many spans found",
-                        extra={
-                            "trace_context": trace_context,
-                            "num_spans": num_spans,
-                            "spans_dropped": spans_dropped,
-                        },
-                    )
+                if num_processed >= max_spans_per_transaction:
+                    metrics.increment("too_many_spans")
                     break
 
                 processed_span = self._process_span(span)

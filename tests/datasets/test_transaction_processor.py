@@ -357,6 +357,7 @@ class TestTransactionsProcessor:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
         set_config("write_span_columns_projects", "[1]")
+        set_config("max_spans_per_transaction", 1)
 
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
@@ -388,21 +389,13 @@ class TestTransactionsProcessor:
         )
 
         payload = message.serialize()
-        # force the number of spans to exceed the limit
-        payload[2]["data"]["spans"] = [payload[2]["data"]["spans"][0]] * (
-            settings.MAX_SPANS_PER_TRANSACTION * 2
-        )
 
+        # there are 2 spans in the transaction but only 1
+        # will be inserted because of the limit set above
         result = message.build_result(meta)
-        spans = sorted(
-            # there should be an exact numberly 1 navigation span and
-            [("navigation", int("a" * 16, 16), 1.2345)]
-            # MAX_SPANS_PER_TRANSACTION - 1 http spans after being dropped
-            + [("http", int("b" * 16, 16), 0.1234)]
-            * (settings.MAX_SPANS_PER_TRANSACTION - 1)
-        )
-        for i, key in enumerate(["spans.op", "spans.group", "spans.exclusive_time"]):
-            result[key] = [span[i] for span in spans]
+        result["spans.op"] = ["navigation"]
+        result["spans.group"] = [int("a" * 16, 16)]
+        result["spans.exclusive_time"] = [1.2345]
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta

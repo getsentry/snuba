@@ -149,9 +149,6 @@ CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 
-# The maximum number of spans to store in the array columns for each transaction.
-MAX_SPANS_PER_TRANSACTION = 2000
-
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
