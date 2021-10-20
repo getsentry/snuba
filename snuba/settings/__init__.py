@@ -18,7 +18,7 @@ ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS: Set[str] = {"metrics"}
+DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -141,7 +141,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"metrics", "querylog", "spans_experimental"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
