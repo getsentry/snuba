@@ -40,7 +40,7 @@ RUN set -ex; \
         libc6-dev \
         liblz4-dev \
         libpcre3-dev \
-        wget \
+        wget  \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
