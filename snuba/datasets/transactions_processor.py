@@ -291,15 +291,14 @@ class TransactionsMessageProcessor(MessageProcessor):
         data = event_dict["data"]
         trace_context = data["contexts"]["trace"]
 
+        max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
+        assert isinstance(max_spans_per_transaction, int)
+
         try:
             if not is_project_in_rollout_group(
                 "write_span_columns_projects", processed["project_id"]
             ):
                 return
-
-            max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
-            if not isinstance(max_spans_per_transaction, int):
-                max_spans_per_transaction = 2000
 
             num_processed = 0
             processed_spans = []
