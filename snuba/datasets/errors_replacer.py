@@ -193,7 +193,7 @@ def set_project_exclude_groups(
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
-    # also store the replacement type data for metrics purposes
+    # store the replacement type data
     replacement_type_data: Mapping[str, float] = {replacement_type: now}
     p.zadd(type_key, **replacement_type_data)
     p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
@@ -257,29 +257,22 @@ def get_projects_query_flags(
         for project_id in s_project_ids
     ]
     for exclude_groups_key, _ in exclude_groups_keys_and_types:
-        # remove stale excluded groups
         p.zremrangebyscore(
             exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
         )
         # TODO: put this into another for loop to make post processing easier
-        # get up to date excluded groups
         p.zrevrangebyscore(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
         )
 
-    # get the replacement types for metrics purposes
     for _, needs_final_type_key in needs_final_keys_and_type_keys:
         p.get(needs_final_type_key)
 
     for _, type_key in exclude_groups_keys_and_types:
-        # cleanup the old exclude group replacement types
         p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
-        # get the new exclude group replacement types
         # TODO: put this into another for loop to make post processing easier
         p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
 
-    # retrieve the latest replaced group id's timestamp such that queries
-    # which are processing data after it, do not have to be marked as final
     for exclude_groups_key, _ in exclude_groups_keys_and_types:
         p.zrevrange(
             exclude_groups_key, 0, 0, withscores=True,
