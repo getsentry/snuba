@@ -195,7 +195,7 @@ def set_project_exclude_groups(
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
-    # also store the replacement type data for metrics purposes
+    # store the replacement type data
     replacement_type_data: Mapping[str, float] = {replacement_type: now}
     p.zadd(type_key, **replacement_type_data)
     p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
