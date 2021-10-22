@@ -165,28 +165,6 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     assert query.get_from_clause().final
 
 
-def test_query_overlaps_replacements_method(
-    query: ClickhouseQuery, query_with_timestamp: ClickhouseQuery,
-) -> None:
-    enforcer = PostReplacementConsistencyEnforcer("project_id", None)
-    # query from < latest replacement time < query to
-    assert enforcer._query_overlaps_replacements(
-        query_with_timestamp, datetime(2021, 1, 1, 10)
-    )
-    # query to < latest replacement time
-    assert enforcer._query_overlaps_replacements(
-        query_with_timestamp, datetime(2021, 2, 1)
-    )
-    # latest replacement time < query from
-    assert not enforcer._query_overlaps_replacements(
-        query_with_timestamp, datetime(2020, 1, 1)
-    )
-    # replacement time unknown, default to overlaps
-    assert enforcer._query_overlaps_replacements(query_with_timestamp, None)
-    # query time range unknown, default to overlaps
-    assert enforcer._query_overlaps_replacements(query, datetime(2021, 2, 1))
-
-
 def test_query_overlaps_replacements_processor(
     query: ClickhouseQuery,
     query_with_timestamp: ClickhouseQuery,
