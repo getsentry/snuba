@@ -142,6 +142,9 @@ jobs:
 
     env:
       USE_INDEXER: 1
+      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
+      MATRIX_INSTANCE_TOTAL: 2
+      MIGRATIONS_TEST_MIGRATE: 1
 
     steps:
       # Checkout codebase
