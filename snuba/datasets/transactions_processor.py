@@ -291,8 +291,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         data = event_dict["data"]
         trace_context = data["contexts"]["trace"]
 
-        max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
-        assert isinstance(max_spans_per_transaction, int)
+        try:
+            max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
+            assert isinstance(max_spans_per_transaction, (int, float))
+        except Exception:
+            metrics.increment("bad_config.max_spans_per_transaction")
+            max_spans_per_transaction = 2000
 
         try:
             if not is_project_in_rollout_group(
