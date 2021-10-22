@@ -85,16 +85,6 @@ def teardown_function() -> None:
     redis_client.flushdb()
 
 
-def test_query_set_final(query: ClickhouseQuery) -> None:
-    enforcer = PostReplacementConsistencyEnforcer("project_id", None)
-
-    enforcer._set_query_final(query, True)
-    assert query.get_from_clause().final
-
-    enforcer._set_query_final(query, False)
-    assert not query.get_from_clause().final
-
-
 def test_with_turbo(query: ClickhouseQuery) -> None:
     PostReplacementConsistencyEnforcer("project_id", None).process_query(
         query, HTTPRequestSettings(turbo=True)
@@ -198,7 +188,9 @@ def test_query_overlaps_replacements_method(
 
 
 def test_query_overlaps_replacements_processor(
-    query_with_timestamp: ClickhouseQuery, query_with_future_timestamp: ClickhouseQuery
+    query: ClickhouseQuery,
+    query_with_timestamp: ClickhouseQuery,
+    query_with_future_timestamp: ClickhouseQuery,
 ) -> None:
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
 
@@ -215,9 +207,14 @@ def test_query_overlaps_replacements_processor(
         ReplacerState.EVENTS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
-    enforcer._set_query_final(query_with_timestamp, True)
+    enforcer._set_query_final(query_with_timestamp, False)
     enforcer.process_query(query_with_timestamp, HTTPRequestSettings())
     assert query_with_timestamp.get_from_clause().final
+
+    # query time range unknown and should be final due to too many groups to exclude
+    enforcer._set_query_final(query, False)
+    enforcer.process_query(query, HTTPRequestSettings())
+    assert query.get_from_clause().final
 
     # doesn't overlap replacements
     enforcer._set_query_final(query_with_future_timestamp, True)
