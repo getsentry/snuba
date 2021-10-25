@@ -10,11 +10,7 @@ from snuba.clickhouse.query_dsl.accessors import (
     get_object_ids_in_query_ast,
     get_time_range,
 )
-from snuba.datasets.errors_replacer import (
-    ProjectsQueryFlags,
-    ReplacerState,
-    get_projects_query_flags,
-)
+from snuba.datasets.errors_replacer import ProjectsQueryFlags, ReplacerState
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
@@ -53,7 +49,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             self._set_query_final(query, False)
             return
 
-        flags: ProjectsQueryFlags = get_projects_query_flags(
+        flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
             list(project_ids), self.__replacer_state_name
         )
         if not self._query_overlaps_replacements(query, flags.latest_replacement_time):
