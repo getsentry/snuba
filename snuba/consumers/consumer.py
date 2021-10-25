@@ -102,6 +102,8 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
                     (write_finish - message.payload.origin_timestamp.timestamp())
                     * 1000,
                 )
+        self.__metrics.timing("batch_write_ms", write_finish - write_start)
+        self.__metrics.increment("batch_write_msgs", len(self.__messages))
 
         logger.debug(
             "Waited %0.4f seconds for %r rows to be written to %r.",
