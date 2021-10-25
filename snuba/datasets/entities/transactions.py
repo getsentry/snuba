@@ -21,11 +21,11 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.performance_expressions import (
     apdex_processor,
     failure_rate_processor,
 )
-from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension

@@ -69,40 +69,46 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         )
 
 
-class SubscriptionScheduledTaskEncoder(Codec[bytes, ScheduledTask[Subscription]]):
+class SubscriptionScheduledTaskEncoder(
+    Codec[KafkaPayload, ScheduledTask[Subscription]]
+):
     """
-    Encodes/decodes a scheduled subscription to bytes for Kafka.
+    Encodes/decodes a scheduled subscription to Kafka payload.
     Does not support non SnQL subscriptions.
     """
 
     def __init__(self, entity_key: EntityKey) -> None:
         self.__entity_key = entity_key
 
-    def encode(self, value: ScheduledTask[Subscription]) -> bytes:
+    def encode(self, value: ScheduledTask[Subscription]) -> KafkaPayload:
         assert isinstance(value.task.data, SnQLSubscriptionData)
 
-        return cast(
-            bytes,
-            rapidjson.dumps(
-                {
-                    "timestamp": value.timestamp.isoformat(),
-                    "task": {
-                        "identifier": str(value.task.identifier),
-                        "data": value.task.data.to_dict(),
-                    },
-                }
+        return KafkaPayload(
+            str(value.task.identifier).encode("utf-8"),
+            cast(
+                str,
+                rapidjson.dumps(
+                    {
+                        "timestamp": value.timestamp.isoformat(),
+                        "task": {"data": value.task.data.to_dict()},
+                    }
+                ),
             ).encode("utf-8"),
+            [],
         )
 
-    def decode(self, value: bytes) -> ScheduledTask[Subscription]:
-        scheduled_subscription_dict = rapidjson.loads(value.decode("utf-8"))
+    def decode(self, value: KafkaPayload) -> ScheduledTask[Subscription]:
+        payload_value = value.value
+
+        assert value.key is not None
+        subscription_identifier = value.key.decode("utf-8")
+
+        scheduled_subscription_dict = rapidjson.loads(payload_value.decode("utf-8"))
         assert scheduled_subscription_dict["task"]["data"]["type"] == "snql"
         return ScheduledTask(
             datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
             Subscription(
-                SubscriptionIdentifier.from_string(
-                    scheduled_subscription_dict["task"]["identifier"]
-                ),
+                SubscriptionIdentifier.from_string(subscription_identifier),
                 SnQLSubscriptionData.from_dict(
                     scheduled_subscription_dict["task"]["data"], self.__entity_key
                 ),
