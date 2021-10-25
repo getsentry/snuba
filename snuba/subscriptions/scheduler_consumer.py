@@ -14,7 +14,7 @@ from arroyo.types import Position
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
+from snuba.subscriptions.scheduler_processing_strategy import CommitableTick, TickBuffer
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
@@ -248,12 +248,15 @@ class SchedulerBuilder:
         )
 
 
-class Noop(ProcessingStrategy[Tick]):
+class NextStep(ProcessingStrategy[CommitableTick]):
+    def __init__(self, commit: Callable[[Mapping[Partition, Position]], None]) -> None:
+        self.__commit = commit
+
     def poll(self) -> None:
         pass
 
-    def submit(self, message: Message[Tick]) -> None:
-        pass
+    def submit(self, message: Message[CommitableTick]) -> None:
+        self.__commit({message.partition: Position(message.offset, message.timestamp)})
 
     def close(self) -> None:
         pass
@@ -283,13 +286,8 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     ) -> ProcessingStrategy[Tick]:
         # TODO: Temporarily hardcoding global mode for testing
         mode = SchedulingWatermarkMode.GLOBAL
-        next_step = Noop()
+        next_step = NextStep(commit)
 
         return TickBuffer(
-            mode,
-            self.__partitions,
-            self.__buffer_size,
-            next_step,
-            self.__metrics,
-            commit,
+            mode, self.__partitions, self.__buffer_size, next_step, self.__metrics,
         )

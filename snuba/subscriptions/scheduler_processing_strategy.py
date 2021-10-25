@@ -1,15 +1,19 @@
 import logging
 from collections import deque
-from typing import Callable, Deque, Mapping, MutableMapping, Optional, cast
+from typing import Deque, Mapping, MutableMapping, NamedTuple, Optional, cast
 
-from arroyo import Message, Partition
+from arroyo import Message
 from arroyo.processing.strategies import ProcessingStrategy
-from arroyo.types import Position
 
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 
 logger = logging.getLogger(__name__)
+
+
+class CommitableTick(NamedTuple):
+    tick: Tick
+    should_commit: bool
 
 
 class TickBuffer(ProcessingStrategy[Tick]):
@@ -41,9 +45,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
         mode: SchedulingWatermarkMode,
         partitions: int,
         max_ticks_buffered_per_partition: Optional[int],
-        next_step: ProcessingStrategy[Tick],
+        next_step: ProcessingStrategy[CommitableTick],
         metrics: MetricsBackend,
-        commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         if mode == SchedulingWatermarkMode.GLOBAL:
             assert max_ticks_buffered_per_partition is not None
@@ -53,7 +56,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__max_ticks_buffered_per_partition = max_ticks_buffered_per_partition
         self.__next_step = next_step
         self.__metrics = metrics
-        self.__commit = commit
 
         self.__buffers: Mapping[int, Deque[Message[Tick]]] = {
             index: deque() for index in range(self.__partitions)
@@ -65,6 +67,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
             int, Optional[Message[Tick]]
         ] = {index: None for index in range(self.__partitions)}
         self.__last_committed_offset: Optional[int] = None
+        self.__max_offset_to_commit: Optional[int] = None
 
         self.__closed = False
 
@@ -72,11 +75,10 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
-        self._submit_messages(message)
-        self._commit_offsets(message)
-
-    def _submit_messages(self, message: Message[Tick]) -> None:
         assert not self.__closed
+
+        # Update self.__max_offset_to_commit
+        self.__update_max_offset_to_commit(message)
 
         # If the scheduler mode is immediate or there is only one partition
         # or max_ticks_buffered_per_partition is set to 0,
@@ -87,7 +89,21 @@ class TickBuffer(ProcessingStrategy[Tick]):
             or self.__partitions == 1
             or self.__max_ticks_buffered_per_partition == 0
         ):
-            self.__next_step.submit(message)
+
+            should_commit = self.__should_commit(message)
+
+            self.__next_step.submit(
+                Message(
+                    message.partition,
+                    message.offset,
+                    CommitableTick(message.payload, should_commit),
+                    message.timestamp,
+                    message.next_offset,
+                )
+            )
+            if should_commit:
+                self.__last_committed_offset = message.offset
+
             return
 
         tick_partition = message.payload.partition
@@ -101,7 +117,24 @@ class TickBuffer(ProcessingStrategy[Tick]):
             logger.warning(
                 f"Tick buffer exceeded {self.__max_ticks_buffered_per_partition} for partition {tick_partition}"
             )
-            self.__next_step.submit(self.__buffers[tick_partition].popleft())
+
+            earliest_message = self.__buffers[tick_partition].popleft()
+
+            should_commit = self.__should_commit(earliest_message)
+
+            self.__next_step.submit(
+                Message(
+                    earliest_message.partition,
+                    earliest_message.offset,
+                    CommitableTick(earliest_message.payload, should_commit),
+                    earliest_message.timestamp,
+                    earliest_message.next_offset,
+                )
+            )
+
+            if should_commit:
+                self.__last_committed_offset = earliest_message.offset
+
             return
 
         # If there are any empty buffers, we can't submit anything yet.
@@ -135,9 +168,22 @@ class TickBuffer(ProcessingStrategy[Tick]):
                     earliest_ts_partitions.add(tick.partition)
 
             for partition_index in earliest_ts_partitions:
-                self.__next_step.submit(self.__buffers[partition_index].popleft())
+                current_message = self.__buffers[partition_index].popleft()
+                should_commit = self.__should_commit(current_message)
+                self.__next_step.submit(
+                    Message(
+                        current_message.partition,
+                        current_message.offset,
+                        CommitableTick(current_message.payload, should_commit),
+                        current_message.timestamp,
+                        current_message.next_offset,
+                    )
+                )
 
-    def _commit_offsets(self, message: Message[Tick]) -> None:
+                if should_commit:
+                    self.__last_committed_offset = current_message.offset
+
+    def __update_max_offset_to_commit(self, message: Message[Tick]) -> None:
         """
         Regardless of the scheduler mode we only commit offsets based on the slowest
         partition. This guarantees that all subscriptions are scheduled at
@@ -145,6 +191,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
         its state. If the scheduler restarts an one partition is far behind, it
         can lead to the same subscription being scheduled more than once especially
         if we are in `partition` mode.
+
+        Also records the partition lag.
         """
         assert message.partition.index == 0, "Commit log cannot be partitioned"
 
@@ -157,31 +205,37 @@ class TickBuffer(ProcessingStrategy[Tick]):
             if partition_message is None:
                 return
 
-            partition_timestamp = partition_message.payload.timestamps.upper
+            partition_timestamp = partition_message.payload.timestamps.lower
 
-            if partition_timestamp < slowest.payload.timestamps.upper:
+            if partition_timestamp < slowest.payload.timestamps.lower:
                 slowest = partition_message
 
-            if partition_timestamp > fastest.payload.timestamps.upper:
+            if partition_timestamp > fastest.payload.timestamps.lower:
                 fastest = partition_message
 
         if (
-            self.__last_committed_offset is None
-            or slowest.offset > self.__last_committed_offset
+            self.__max_offset_to_commit is None
+            or slowest.offset > self.__max_offset_to_commit
         ):
-            self.__commit(
-                {message.partition: Position(slowest.offset, slowest.timestamp)}
-            )
-            self.__last_committed_offset = slowest.offset
+            self.__max_offset_to_commit = slowest.offset
 
-            # Record the lag between the fastest and slowest partition when we commit
+            # Record the lag between the fastest and slowest partition
             self.__metrics.timing(
                 "partition_lag_ms",
                 (
-                    fastest.payload.timestamps.upper - slowest.payload.timestamps.upper
+                    fastest.payload.timestamps.lower - slowest.payload.timestamps.lower
                 ).total_seconds()
                 * 1000,
             )
+
+    def __should_commit(self, message: Message[Tick]) -> bool:
+        return (
+            self.__last_committed_offset is None
+            or message.offset > self.__last_committed_offset
+        ) and (
+            self.__max_offset_to_commit is not None
+            and message.offset <= self.__max_offset_to_commit
+        )
 
     def close(self) -> None:
         self.__closed = True
