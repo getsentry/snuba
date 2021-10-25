@@ -31,7 +31,10 @@ from snuba.query.logical import Query
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
+from snuba.query.processors.object_id_rate_limiter import (
+    OrganizationRateLimiterProcessor,
+    ProjectRateLimiterProcessor,
+)
 from snuba.query.processors.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
@@ -285,6 +288,7 @@ class SessionsEntity(Entity):
             TimeSeriesProcessor(
                 {"bucketed_started": "started"}, ("started", "received")
             ),
+            OrganizationRateLimiterProcessor(org_column="org_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
         ]
 
@@ -320,4 +324,5 @@ class OrgSessionsEntity(Entity):
             TimeSeriesProcessor(
                 {"bucketed_started": "started"}, ("started", "received")
             ),
+            OrganizationRateLimiterProcessor(org_column="org_id"),
         ]

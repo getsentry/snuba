@@ -9,6 +9,7 @@ LOG_FORMAT = "%(asctime)s %(message)s"
 TESTING = False
 DEBUG = True
 
+HOST = "0.0.0.0"
 PORT = 1218
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
