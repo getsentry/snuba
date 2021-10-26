@@ -24,8 +24,6 @@ from snuba.query.matchers import (
 )
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
-    DelegateSubscriptionData,
-    LegacySubscriptionData,
     PartitionId,
     SnQLSubscriptionData,
     Subscription,
@@ -76,16 +74,8 @@ class Datetime(Pattern[datetime]):
 
 
 @pytest.fixture(
-    ids=["Legacy", "SnQL", "Delegate", "Crash Rate Alert Delegate"],
+    ids=["SnQL", "Crash Rate Alert Delegate"],
     params=[
-        LegacySubscriptionData(
-            project_id=1,
-            conditions=[],
-            aggregations=[["count()", "", "count"]],
-            time_window=timedelta(minutes=60),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(),
-        ),
         SnQLSubscriptionData(
             project_id=1,
             query=("MATCH (events) SELECT count() AS count"),
@@ -93,26 +83,8 @@ class Datetime(Pattern[datetime]):
             resolution=timedelta(minutes=1),
             entity_subscription=create_entity_subscription(),
         ),
-        DelegateSubscriptionData(
-            project_id=1,
-            conditions=[],
-            aggregations=[["count()", "", "count"]],
-            query=("MATCH (events) SELECT count() AS count"),
-            time_window=timedelta(minutes=60),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(),
-        ),
-        DelegateSubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
-            conditions=[],
-            aggregations=[
-                [
-                    "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
-                    None,
-                    "_crash_rate_alert_aggregate",
-                ],
-                ["identity(sessions)", None, "_total_sessions"],
-            ],
             query=(
                 """MATCH (sessions) SELECT if(greater(sessions,0),
                 divide(sessions_crashed,sessions),null)
