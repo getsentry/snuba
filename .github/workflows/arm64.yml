@@ -1,0 +1,24 @@
+name: docker arm64
+on:
+  push:
+    branches:
+      - master
+  # XXX: Temp
+  pull_request:
+
+jobs:
+  linting:
+    name: "Docker Arm64"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+      - name: Docker
+        run: |
+          docker --version
+          docker buildx version
+          docker buildx create --name mybuilder --use
+          docker buildx inspect --bootstrap
+          docker buildx build --platform linux/arm64 -t getsnuba/snuba:buildx-test --use .
+          docker buildx imagetools inspect getsnuba/snuba:buildx-test
