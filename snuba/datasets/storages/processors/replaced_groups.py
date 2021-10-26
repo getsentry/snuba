@@ -1,7 +1,7 @@
 import logging
 from dataclasses import replace
 from datetime import datetime
-from typing import Optional
+from typing import MutableMapping, Optional
 
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
@@ -64,9 +64,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         tags["parent_api"] = request_settings.get_parent_api()
 
         if not self._query_overlaps_replacements(query, flags.latest_replacement_time):
-            metrics.increment(
-                "avoided_final", tags=tags,
-            )
+            self._query_avoids_final_metric(flags, tags)
             self._set_query_final(query, False)
             return
 
@@ -126,3 +124,26 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if latest_replacement_time and query_from
             else True
         )
+
+    def _query_avoids_final_metric(
+        self, flags: ProjectsQueryFlags, tags: MutableMapping[str, str]
+    ) -> None:
+        """
+        Datadog metric to count how many queries would have been set to final
+        if the replacements overlap check had not been introduced.
+        """
+        if flags.needs_final:
+            tags["cause"] = "final_flag"
+            metrics.increment(
+                "avoided_final", tags=tags,
+            )
+        elif flags.group_ids_to_exclude:
+            max_group_ids_exclude = get_config(
+                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+            )
+            assert isinstance(max_group_ids_exclude, int)
+            if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
+                tags["cause"] = "max_groups"
+                metrics.increment(
+                    "avoided_final", tags=tags,
+                )
