@@ -14,7 +14,10 @@ from arroyo.types import Position
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.subscriptions.scheduler_processing_strategy import CommitableTick, TickBuffer
+from snuba.subscriptions.scheduler_processing_strategy import (
+    CommittableTick,
+    TickBuffer,
+)
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
@@ -248,14 +251,14 @@ class SchedulerBuilder:
         )
 
 
-class NextStep(ProcessingStrategy[CommitableTick]):
+class NextStep(ProcessingStrategy[CommittableTick]):
     def __init__(self, commit: Callable[[Mapping[Partition, Position]], None]) -> None:
         self.__commit = commit
 
     def poll(self) -> None:
         pass
 
-    def submit(self, message: Message[CommitableTick]) -> None:
+    def submit(self, message: Message[CommittableTick]) -> None:
         self.__commit({message.partition: Position(message.offset, message.timestamp)})
 
     def close(self) -> None:

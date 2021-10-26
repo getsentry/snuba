@@ -3,7 +3,10 @@ from unittest import mock
 
 from arroyo import Message, Partition, Topic
 
-from snuba.subscriptions.scheduler_processing_strategy import CommitableTick, TickBuffer
+from snuba.subscriptions.scheduler_processing_strategy import (
+    CommittableTick,
+    TickBuffer,
+)
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend, Timing
@@ -11,11 +14,11 @@ from tests.backends.metrics import TestingMetricsBackend, Timing
 
 def make_message_for_next_step(
     message: Message[Tick], should_commit: bool
-) -> Message[CommitableTick]:
+) -> Message[CommittableTick]:
     return Message(
         message.partition,
         message.offset,
-        CommitableTick(message.payload, should_commit),
+        CommittableTick(message.payload, should_commit),
         message.timestamp,
         message.next_offset,
     )

@@ -11,7 +11,7 @@ from snuba.utils.metrics import MetricsBackend
 logger = logging.getLogger(__name__)
 
 
-class CommitableTick(NamedTuple):
+class CommittableTick(NamedTuple):
     tick: Tick
     should_commit: bool
 
@@ -45,7 +45,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         mode: SchedulingWatermarkMode,
         partitions: int,
         max_ticks_buffered_per_partition: Optional[int],
-        next_step: ProcessingStrategy[CommitableTick],
+        next_step: ProcessingStrategy[CommittableTick],
         metrics: MetricsBackend,
     ) -> None:
         if mode == SchedulingWatermarkMode.GLOBAL:
@@ -96,7 +96,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 Message(
                     message.partition,
                     message.offset,
-                    CommitableTick(message.payload, should_commit),
+                    CommittableTick(message.payload, should_commit),
                     message.timestamp,
                     message.next_offset,
                 )
@@ -126,7 +126,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 Message(
                     earliest_message.partition,
                     earliest_message.offset,
-                    CommitableTick(earliest_message.payload, should_commit),
+                    CommittableTick(earliest_message.payload, should_commit),
                     earliest_message.timestamp,
                     earliest_message.next_offset,
                 )
@@ -174,7 +174,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
                     Message(
                         current_message.partition,
                         current_message.offset,
-                        CommitableTick(current_message.payload, should_commit),
+                        CommittableTick(current_message.payload, should_commit),
                         current_message.timestamp,
                         current_message.next_offset,
                     )
