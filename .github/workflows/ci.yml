@@ -7,7 +7,7 @@ on:
 
 jobs:
   linting:
-    name: 'pre-commit hooks' # (includes Python formatting + linting)
+    name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -26,7 +26,7 @@ jobs:
           pre-commit run --files $(git diff --diff-filter=d --name-only master)
 
   typing:
-    name: 'mypy typing'
+    name: "mypy typing"
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -92,6 +92,39 @@ jobs:
           docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
           docker push ghcr.io/getsentry/snuba-ci:latest
 
+  # For now, we cannot build linux/arm64 images on Linux hosts since
+  # |docker buildx ls| does not list arm64 as an option
+  snuba-arm64-image:
+    name: "Docker Arm64 build"
+    timeout-minutes: 60
+    runs-on: macos-11
+    env:
+      SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci:latest
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+
+      - name: Docker
+        run: |
+          brew install --cask docker
+          sudo /Applications/Docker.app/Contents/MacOS/Docker --unattended --install-privileged-components
+          open -a /Applications/Docker.app --args --unattended --accept-license
+          echo "We are waiting for Docker to be up and running. It can take over 2 minutes..."
+          while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
+          docker run --privileged --rm tonistiigi/binfmt --install all
+          docker buildx version
+          docker buildx ls
+          docker buildx create --name mybuilderFoo --use
+          docker buildx inspect --bootstrap
+          docker buildx build --platform linux/arm64 -t $SNUBA_IMAGE --load .
+
+      # XXX: We should only publish if we're on master
+      - name: Publish
+        if: github.repository_owner != 'getsentry'
+        run: |
+          docker images
+          docker push $SNUBA_IMAGE
+
   tests:
     needs: [linting, snuba-image]
     name: Tests and code coverage
@@ -99,7 +132,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ['test', 'test_distributed']
+        snuba_settings: ["test", "test_distributed"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
