@@ -13,16 +13,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-18.04, ubuntu-20.04, macos-11]
+        os: [ubuntu-20.04, macos-11]
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+
       - name: Docker
         run: |
           set -x
-          brew info docker
-          brew install --cask docker
+          if [ $(uname) == 'Darwin' ]; then
+            brew info --cask docker
+            brew install --cask docker
+          else
+            brew info docker
+          fi
           docker --version
           docker buildx version
           docker buildx create --name mybuilder --use
