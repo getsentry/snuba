@@ -2020,8 +2020,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                 data=json.dumps(
                     {
                         "project_id": 1,
-                        "conditions": [["platform", "IN", ["a"]]],
-                        "aggregations": [["count()", "", "count"]],
+                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
                     }
@@ -2040,8 +2039,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             data=json.dumps(
                 {
                     "project_id": 1,
-                    "conditions": [["platform", "IN", ["a"]]],
-                    "aggregations": [["count()", "", "count"]],
+                    "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
                     "time_window": 0,
                     "resolution": 1,
                 }
@@ -2123,8 +2121,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
             data=json.dumps(
                 {
                     "project_id": 1,
-                    "conditions": [],
-                    "aggregations": [["count()", "", "count"]],
+                    "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
                     "time_window": int(timedelta(minutes=10).total_seconds()),
                     "resolution": int(timedelta(minutes=1).total_seconds()),
                 }
