@@ -10,10 +10,10 @@ jobs:
   linting:
     name: "Docker Arm64"
     timeout-minutes: 2
-    strategy:
     runs-on: ${{ matrix.os }}
-    matrix:
-      os: [ubuntu-18.04, ubuntu-20.04, macos-11]
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, ubuntu-20.04, macos-11]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code

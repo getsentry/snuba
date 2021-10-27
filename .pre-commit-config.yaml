@@ -33,5 +33,9 @@ repos:
     hooks:
       - id: isort
         name: isort (python)
+  - repo: https://github.com/sirosen/check-jsonschema
+    rev: 0.5.1
+    hooks:
+    - id: check-github-actions
 default_language_version:
   python: python3.8

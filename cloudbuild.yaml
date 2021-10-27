@@ -6,6 +6,8 @@ steps:
       - "-e"
       - "-c"
       - |
+        curl -Ls https://github.com/docker/buildx/releases/download/v0.6.3/buildx-v0.6.3.linux-arm64 -o ~/.docker/cli-plugins/docker-buildx
+        chmod +x  ~/.docker/cli-plugins/docker-buildx
         docker --version
         docker buildx version
         docker buildx create --name mybuilder --use
