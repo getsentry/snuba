@@ -6,7 +6,6 @@ from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
 from snuba.datasets.factory import enforce_table_writer
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
-    DelegateSubscriptionData,
     PartitionId,
     SubscriptionData,
     SubscriptionIdentifier,
@@ -32,13 +31,7 @@ class SubscriptionCreator:
         )
 
     def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
-        # We want to test the query out here to make sure it's valid and can run
-        # If there is a delegate subscription, we need to run both the SnQL and Legacy validator
-        if isinstance(data, DelegateSubscriptionData):
-            self._test_request(data.to_snql(), timer)
-            self._test_request(data.to_legacy(), timer)
-        else:
-            self._test_request(data, timer)
+        self._test_request(data, timer)
 
         identifier = SubscriptionIdentifier(
             self.__partitioner.build_partition_id(data), uuid1(),
