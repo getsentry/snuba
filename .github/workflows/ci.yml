@@ -93,10 +93,14 @@ jobs:
           docker push ghcr.io/getsentry/snuba-ci:latest
 
   # For now, we cannot build linux/arm64 images on Linux hosts since
-  # |docker buildx ls| does not list arm64 as an option
+  # |docker buildx ls| does not list arm64 as an option.
+  #
+  # This step does not have a set timeout because it is very slow. This is due
+  # because emulation required (this is running on an Intel host rather than an arm64 host)
+  # and that many Python packages do not have arm wheels, thus, requirying to build them from source.
+  # Upgrading Python package versions + giving access to a cache could improve things a lot
   snuba-arm64-image:
     name: "Docker Arm64 build"
-    timeout-minutes: 60
     runs-on: macos-11
     env:
       SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci:latest
