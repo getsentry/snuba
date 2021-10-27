@@ -46,10 +46,10 @@ MATCH clause that are currently supported:
 ``MATCH (<entity> [SAMPLE n])``
 
 This is equivalent to all of our current queries. This is querying data from
-a single entity (Errors, Transactions etc.) It is possible to add an optional
+a single entity (Events, Transactions etc.) It is possible to add an optional
 sample to the query by adding it with the entity.
 
-Example ``MATCH (errors)``.
+Example ``MATCH (events)``.
 
 **Subquery:**
 
