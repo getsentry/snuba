@@ -9,12 +9,7 @@ from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
-from snuba.subscriptions.data import (
-    DelegateSubscriptionData,
-    LegacySubscriptionData,
-    SnQLSubscriptionData,
-    SubscriptionData,
-)
+from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
@@ -24,17 +19,6 @@ from tests.subscriptions import BaseSubscriptionTest
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 TESTS_CREATE = [
-    pytest.param(
-        LegacySubscriptionData(
-            project_id=123,
-            conditions=[["platform", "IN", ["a"]]],
-            aggregations=[["count()", "", "count"]],
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(),
-        ),
-        id="Legacy subscription",
-    ),
     pytest.param(
         SnQLSubscriptionData(
             project_id=123,
@@ -50,38 +34,12 @@ TESTS_CREATE = [
         ),
         id="SnQL subscription",
     ),
-    pytest.param(
-        DelegateSubscriptionData(
-            project_id=123,
-            conditions=[["platform", "IN", ["a"]]],
-            aggregations=[["count()", "", "count"]],
-            query=(
-                "MATCH (events) "
-                "SELECT count() AS count "
-                "WHERE "
-                "platform IN tuple('a')"
-            ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(),
-        ),
-        id="Delegate subscription",
-    ),
 ]
 
 TESTS_CREATE_SESSIONS = [
     pytest.param(
-        DelegateSubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
-            conditions=[],
-            aggregations=[
-                [
-                    "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
-                    None,
-                    "_crash_rate_alert_aggregate",
-                ],
-                ["identity(sessions)", None, "_total_sessions"],
-            ],
             query=(
                 """MATCH (sessions) SELECT if(greater(sessions,0),
                 divide(sessions_crashed,sessions),null)
@@ -99,17 +57,6 @@ TESTS_CREATE_SESSIONS = [
 
 TESTS_INVALID = [
     pytest.param(
-        LegacySubscriptionData(
-            project_id=123,
-            conditions=[["platfo", "IN", ["a"]]],
-            aggregations=[["count()", "", "count"]],
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(),
-        ),
-        id="Legacy subscription",
-    ),
-    pytest.param(
         SnQLSubscriptionData(
             project_id=123,
             query=(
@@ -123,23 +70,6 @@ TESTS_INVALID = [
             entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
-    ),
-    pytest.param(
-        DelegateSubscriptionData(
-            project_id=123,
-            conditions=[["platform", "IN", ["a"]]],
-            aggregations=[["count()", "", "count"]],
-            query=(
-                "MATCH (events) "
-                "SELECT count() AS count "
-                "WHERE "
-                "platfo IN tuple('a')"
-            ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(),
-        ),
-        id="Delegate subscription",
     ),
 ]
 
@@ -173,12 +103,11 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                LegacySubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     resolution=timedelta(minutes=1),
                     time_window=timedelta(minutes=10),
-                    conditions=[["platfo", "IN", ["a"]]],
-                    aggregations=[["count()", "", "count"]],
+                    query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -188,12 +117,11 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                LegacySubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     resolution=timedelta(minutes=1),
                     time_window=timedelta(minutes=10),
-                    conditions=[["platform", "IN", ["a"]]],
-                    aggregations=[["cout()", "", "count"]],
+                    query="MATCH (events) SELECT cout() AS count WHERE platform IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -203,12 +131,11 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                LegacySubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     resolution=timedelta(minutes=1),
                     time_window=timedelta(),
-                    conditions=[["platfo", "IN", ["a"]]],
-                    aggregations=[["count()", "", "count"]],
+                    query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -233,12 +160,11 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
         with raises(InvalidSubscriptionError):
             creator.create(
-                LegacySubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     resolution=timedelta(minutes=1),
                     time_window=timedelta(hours=48),
-                    conditions=[["platfo", "IN", ["a"]]],
-                    aggregations=[["count()", "", "count"]],
+                    query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -248,12 +174,11 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                LegacySubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     resolution=timedelta(),
                     time_window=timedelta(minutes=1),
-                    conditions=[["platfo", "IN", ["a"]]],
-                    aggregations=[["count()", "", "count"]],
+                    query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -282,10 +207,9 @@ class TestSessionsSubscriptionCreator:
 class TestSubscriptionDeleter(BaseSubscriptionTest):
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
-        subscription = LegacySubscriptionData(
+        subscription = SnQLSubscriptionData(
             project_id=1,
-            conditions=[],
-            aggregations=[["count()", "", "count"]],
+            query="MATCH (events) SELECT count() AS count",
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
             entity_subscription=create_entity_subscription(),
