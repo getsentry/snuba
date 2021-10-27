@@ -89,7 +89,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     name=metric_name, tags=tags,
                 )
                 set_final = True
-            else:
+            elif query_overlaps_replacement:
                 query.add_condition_to_ast(
                     not_in_condition(
                         FunctionCall(
