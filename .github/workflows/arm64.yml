@@ -24,29 +24,31 @@ jobs:
       # github.com/docker/buildx 0.6.3+azure 266c0eac611d64fcc0c72d80206aa364e826758d
       #
       # Mac 11
-      #
+      # Docker version 20.10.8, build 3967b7d
+      # github.com/docker/buildx v0.6.3 266c0eac611d64fcc0c72d80206aa364e826758d
       #
       # Docker Buildx is included in Docker Desktop and Docker Linux packages when installed using the DEB or RPM packages.
       - name: Docker
         run: |
-          set -x
+
           if [ $(uname) == 'Darwin' ]; then
             brew install --cask docker
             sudo /Applications/Docker.app/Contents/MacOS/Docker --unattended --install-privileged-components
             open -a /Applications/Docker.app --args --unattended --accept-license
+            echo "We are waiting for Docker to be up and running. It can take over 2 minutes..."
             while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
           else
             curl -Ls https://github.com/docker/buildx/releases/download/v0.6.3/buildx-v0.6.3.linux-arm64 -o ~/.docker/cli-plugins/docker-buildx
             chmod +x  ~/.docker/cli-plugins/docker-buildx
           fi
+          set -x
           docker --version
           which docker
           ls -l $(which docker)
+          docker run --privileged --rm tonistiigi/binfmt --install all
           docker buildx version
           docker buildx ls
           docker buildx create --name mybuilderFoo --use
           docker buildx inspect --bootstrap
-          docker buildx build . -t armenzg/foo
-          docker buildx imagetools inspect armenzg/foo
-          # docker buildx build --platform linux/arm64 -t getsnuba/snuba:buildx-test .
-          # docker buildx imagetools inspect getsnuba/snuba:buildx-test
+          docker buildx build --platform linux/arm64 -t getsnuba/snuba:buildx-test .
+          docker buildx imagetools inspect getsnuba/snuba:buildx-test
