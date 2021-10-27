@@ -9,13 +9,17 @@ on:
 jobs:
   linting:
     name: "Docker Arm64"
-    runs-on: ubuntu-latest
     timeout-minutes: 2
+    strategy:
+    runs-on: ${{ matrix.os }}
+    matrix:
+      os: [ubuntu-18.04, ubuntu-20.04, macos-11]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
       - name: Docker
         run: |
+          set -x
           docker --version
           docker buildx version
           docker buildx create --name mybuilder --use
