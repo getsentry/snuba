@@ -30,8 +30,13 @@ jobs:
           set -x
           if [ $(uname) == 'Darwin' ]; then
             brew install --cask docker
+            sudo /Applications/Docker.app/Contents/MacOS/Docker --unattended --install-privileged-components
+            open -a /Applications/Docker.app --args --unattended --accept-license
+            while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
           fi
           docker --version
+          which docker
+          ls -l $(which docker)
           docker buildx version
           docker buildx ls
           docker buildx create --name mybuilder --use
