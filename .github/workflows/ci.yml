@@ -7,7 +7,7 @@ on:
 
 jobs:
   linting:
-    name: "pre-commit hooks" # (includes Python formatting + linting)
+    name: 'pre-commit hooks' # (includes Python formatting + linting)
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -26,7 +26,7 @@ jobs:
           pre-commit run --files $(git diff --diff-filter=d --name-only master)
 
   typing:
-    name: "mypy typing"
+    name: 'mypy typing'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -41,7 +41,7 @@ jobs:
           make install-python-dependencies
       - name: Run mypy
         run: |
-          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba
+          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba tests/subscriptions
 
   snuba-image:
     name: Build snuba CI image
@@ -132,7 +132,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ["test", "test_distributed"]
+        snuba_settings: ['test', 'test_distributed']
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
