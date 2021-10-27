@@ -1,21 +1,4 @@
 steps:
-  - name: "gcr.io/cloud-builders/docker"
-    secretEnv: ["DOCKER_PASSWORD"]
-    entrypoint: "bash"
-    args:
-      - "-e"
-      - "-c"
-      - |
-        docker --version
-        curl -Ls https://github.com/docker/buildx/releases/download/v0.6.3/buildx-v0.6.3.linux-arm64 -o ~/.docker/cli-plugins/docker-buildx
-        chmod +x  ~/.docker/cli-plugins/docker-buildx
-        docker --version
-        docker buildx version
-        docker buildx ls
-        docker buildx create --name mybuilder --use
-        docker buildx inspect --bootstrap
-        docker buildx build --platform linux/arm64 -t $$DOCKER_REPO:buildx-test --push .
-        docker buildx imagetools inspect $$DOCKER_REPO:buildx-test
   - name: "gcr.io/kaniko-project/executor:v1.5.1"
     id: runtime-image
     waitFor: ["-"]
@@ -42,7 +25,7 @@ steps:
       - "--rm"
       - snuba-test
     env:
-      - "SNUBA_SETTINGS=test"
+      - 'SNUBA_SETTINGS=test'
   # Clean up after tests
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: unit-tests-cleanup
@@ -116,7 +99,7 @@ steps:
         docker tag $$SNUBA_IMAGE $$DOCKER_REPO:nightly
         docker push $$DOCKER_REPO:nightly
 # This is needed for Freight to find matching builds
-images: ["us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA"]
+images: ['us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
 timeout: 2640s
 options:
   # We need more memory for Webpack builds & e2e onpremise tests
