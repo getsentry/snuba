@@ -89,21 +89,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
             or self.__partitions == 1
             or self.__max_ticks_buffered_per_partition == 0
         ):
-
-            should_commit = self.__should_commit(message)
-
-            self.__next_step.submit(
-                Message(
-                    message.partition,
-                    message.offset,
-                    CommittableTick(message.payload, should_commit),
-                    message.timestamp,
-                    message.next_offset,
-                )
-            )
-            if should_commit:
-                self.__last_committed_offset = message.offset
-
+            self.__submit_to_next_step(message)
             return
 
         tick_partition = message.payload.partition
@@ -120,21 +106,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
             earliest_message = self.__buffers[tick_partition].popleft()
 
-            should_commit = self.__should_commit(earliest_message)
-
-            self.__next_step.submit(
-                Message(
-                    earliest_message.partition,
-                    earliest_message.offset,
-                    CommittableTick(earliest_message.payload, should_commit),
-                    earliest_message.timestamp,
-                    earliest_message.next_offset,
-                )
-            )
-
-            if should_commit:
-                self.__last_committed_offset = earliest_message.offset
-
+            self.__submit_to_next_step(earliest_message)
             return
 
         # If there are any empty buffers, we can't submit anything yet.
@@ -168,20 +140,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
                     earliest_ts_partitions.add(tick.partition)
 
             for partition_index in earliest_ts_partitions:
-                current_message = self.__buffers[partition_index].popleft()
-                should_commit = self.__should_commit(current_message)
-                self.__next_step.submit(
-                    Message(
-                        current_message.partition,
-                        current_message.offset,
-                        CommittableTick(current_message.payload, should_commit),
-                        current_message.timestamp,
-                        current_message.next_offset,
-                    )
-                )
-
-                if should_commit:
-                    self.__last_committed_offset = current_message.offset
+                self.__submit_to_next_step(self.__buffers[partition_index].popleft())
 
     def __update_max_offset_to_commit(self, message: Message[Tick]) -> None:
         """
@@ -227,6 +186,21 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 ).total_seconds()
                 * 1000,
             )
+
+    def __submit_to_next_step(self, message: Message[Tick]) -> None:
+        should_commit = self.__should_commit(message)
+
+        self.__next_step.submit(
+            Message(
+                message.partition,
+                message.offset,
+                CommittableTick(message.payload, should_commit),
+                message.timestamp,
+                message.next_offset,
+            )
+        )
+        if should_commit:
+            self.__last_committed_offset = message.offset
 
     def __should_commit(self, message: Message[Tick]) -> bool:
         return (
