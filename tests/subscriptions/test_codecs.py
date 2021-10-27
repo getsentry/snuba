@@ -381,11 +381,12 @@ def test_subscription_task_encoder() -> None:
 
     encoded = encoder.encode(task)
 
-    assert encoded == (
+    assert encoded.key == b"1/91b46cb6224f11ecb2ddacde48001122"
+
+    assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"task":{'
-        b'"identifier":"1/91b46cb6224f11ecb2ddacde48001122",'
         b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}}'
         b"}"
     )

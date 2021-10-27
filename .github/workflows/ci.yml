@@ -41,7 +41,7 @@ jobs:
           make install-python-dependencies
       - name: Run mypy
         run: |
-          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba
+          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba tests/subscriptions
 
   snuba-image:
     name: Build snuba CI image
@@ -142,6 +142,9 @@ jobs:
 
     env:
       USE_INDEXER: 1
+      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
+      MATRIX_INSTANCE_TOTAL: 2
+      MIGRATIONS_TEST_MIGRATE: 1
 
     steps:
       # Checkout codebase
@@ -185,7 +188,7 @@ jobs:
         with:
           workdir: sentry
           cache-files-hash: ${{ hashFiles('sentry/requirements**.txt') }}
-          python-version: 3.6
+          python-version: 3.8
           snuba: false
           kafka: true
           clickhouse: true
