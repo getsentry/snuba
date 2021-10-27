@@ -66,8 +66,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__latest_messages_by_partition: MutableMapping[
             int, Optional[Message[Tick]]
         ] = {index: None for index in range(self.__partitions)}
-        self.__last_committed_offset: Optional[int] = None
-        self.__max_offset_to_commit: Optional[int] = None
+        self.__offset_low_watermark: Optional[int] = None
+        self.__offset_high_watermark: Optional[int] = None
 
         self.__closed = False
 
@@ -77,8 +77,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
     def submit(self, message: Message[Tick]) -> None:
         assert not self.__closed
 
-        # Update self.__max_offset_to_commit
-        self.__update_max_offset_to_commit(message)
+        # Update self.__offset_high_watermark
+        self.__update_offset_high_watermark(message)
 
         # If the scheduler mode is immediate or there is only one partition
         # or max_ticks_buffered_per_partition is set to 0,
@@ -142,7 +142,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
             for partition_index in earliest_ts_partitions:
                 self.__submit_to_next_step(self.__buffers[partition_index].popleft())
 
-    def __update_max_offset_to_commit(self, message: Message[Tick]) -> None:
+    def __update_offset_high_watermark(self, message: Message[Tick]) -> None:
         """
         Regardless of the scheduler mode we only commit offsets based on the slowest
         partition. This guarantees that all subscriptions are scheduled at
@@ -173,10 +173,10 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 fastest = partition_message
 
         if (
-            self.__max_offset_to_commit is None
-            or slowest.offset > self.__max_offset_to_commit
+            self.__offset_high_watermark is None
+            or slowest.offset > self.__offset_high_watermark
         ):
-            self.__max_offset_to_commit = slowest.offset
+            self.__offset_high_watermark = slowest.offset
 
             # Record the lag between the fastest and slowest partition
             self.__metrics.timing(
@@ -200,15 +200,15 @@ class TickBuffer(ProcessingStrategy[Tick]):
             )
         )
         if should_commit:
-            self.__last_committed_offset = message.offset
+            self.__offset_low_watermark = message.offset
 
     def __should_commit(self, message: Message[Tick]) -> bool:
         return (
-            self.__last_committed_offset is None
-            or message.offset > self.__last_committed_offset
+            self.__offset_low_watermark is None
+            or message.offset > self.__offset_low_watermark
         ) and (
-            self.__max_offset_to_commit is not None
-            and message.offset <= self.__max_offset_to_commit
+            self.__offset_high_watermark is not None
+            and message.offset <= self.__offset_high_watermark
         )
 
     def close(self) -> None:
