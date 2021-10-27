@@ -56,15 +56,19 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         flags: ProjectsQueryFlags = get_projects_query_flags(
             list(project_ids), self.__replacer_state_name
         )
-        if not self._query_overlaps_replacements(query, flags.latest_replacement_time):
-            self._set_query_final(query, False)
-            return
 
         tags = {
             replacement_type: "True" for replacement_type in flags.replacement_types
         }
         tags["referrer"] = request_settings.referrer
         tags["parent_api"] = request_settings.get_parent_api()
+
+        if not self._query_overlaps_replacements(query, flags.latest_replacement_time):
+            metrics.increment(
+                "avoided_final", tags=tags,
+            )
+            self._set_query_final(query, False)
+            return
 
         set_final = False
 

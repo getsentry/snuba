@@ -137,6 +137,23 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         ),
     ]
 
+    if settings.ENABLE_DEV_FEATURES and "metrics" not in settings.DISABLED_DATASETS:
+        daemons += [
+            (
+                "metrics-consumer",
+                [
+                    "snuba",
+                    "multistorage-consumer",
+                    "--storage=metrics_counters_buckets",
+                    "--storage=metrics_distributions_buckets",
+                    "--storage=metrics_buckets",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--consumer-group=metrics_group",
+                ],
+            ),
+        ]
+
     if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         daemons += [
             (
