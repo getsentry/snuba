@@ -1,6 +1,5 @@
-from functools import partial
-
 import pytest
+from typing import Union
 
 from snuba.clickhouse.query import Query
 from snuba.datasets.entities import EntityKey
@@ -9,11 +8,13 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column, FunctionCall, Literal, StringifyVisitor
 from snuba.reader import Reader
-from snuba.request import Language
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
 
 
 @pytest.mark.parametrize(
@@ -42,15 +43,14 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
     }
 
     dataset = get_dataset(dataset_name)
-    parser = partial(parse_snql_query, [])
 
     schema = RequestSchema.build_with_extensions(
-        entity.get_extensions(), HTTPRequestSettings, Language.SNQL,
+        entity.get_extensions(), HTTPRequestSettings
     )
 
     request = build_request(
         query_body,
-        parser,
+        parse_snql_query,
         HTTPRequestSettings,
         schema,
         dataset,
@@ -59,7 +59,11 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
     )
     # --------------------------------------------------------------------
 
-    def query_verifier(query: Query, settings: RequestSettings, reader: Reader) -> None:
+    def query_verifier(
+        query: Union[Query, CompositeQuery[Table]],
+        settings: RequestSettings,
+        reader: Reader,
+    ) -> QueryResult:
         # The only reason this extends StringifyVisitor is because it has all the other
         # visit methods implemented.
         class NullCastingVerifier(StringifyVisitor):
@@ -84,6 +88,11 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
             verifier = NullCastingVerifier()
             select_expr.expression.accept(verifier)
             assert verifier.sdk_version_cast_to_null
+
+        return QueryResult(
+            result={"meta": [], "data": [], "totals": {}},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        )
 
     entity.get_query_pipeline_builder().build_execution_pipeline(
         request, query_verifier

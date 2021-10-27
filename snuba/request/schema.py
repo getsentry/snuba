@@ -11,7 +11,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SNQL_QUERY_SCHEMA
-from snuba.request import Language
 from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.request.request_settings import (
     HTTPRequestSettings,
@@ -37,12 +36,10 @@ class RequestSchema:
         settings_schema: Schema,
         extensions_schemas: Mapping[str, Schema],
         settings_class: Type[RequestSettings] = HTTPRequestSettings,
-        language: Language = Language.LEGACY,
     ):
         self.__query_schema = query_schema
         self.__settings_schema = settings_schema
         self.__extension_schemas = extensions_schemas
-        self.__language = language
 
         self.__composite_schema: MutableMapping[str, Any] = {
             "type": "object",
@@ -86,26 +83,12 @@ class RequestSchema:
         cls,
         extensions: Mapping[str, QueryExtension],
         settings_class: Type[RequestSettings],
-        language: Language,
     ) -> RequestSchema:
-        if language == Language.SNQL:
-            generic_schema = SNQL_QUERY_SCHEMA
-            extensions_schemas = {}
-        else:
-            generic_schema = GENERIC_QUERY_SCHEMA
-            extensions_schemas = {
-                extension_key: extension.get_schema()
-                for extension_key, extension in extensions.items()
-            }
+        generic_schema = SNQL_QUERY_SCHEMA
+        extensions_schemas: Mapping[str, Schema] = {}
 
         settings_schema = SETTINGS_SCHEMAS[settings_class]
-        return cls(
-            generic_schema,
-            settings_schema,
-            extensions_schemas,
-            settings_class,
-            language,
-        )
+        return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
 
     def validate(self, value: MutableMapping[str, Any]) -> RequestParts:
         try:

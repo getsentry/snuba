@@ -2,8 +2,7 @@ import importlib
 import re
 import uuid
 from datetime import datetime, timedelta
-from functools import partial
-from typing import Any, Tuple
+from typing import Any, Callable, Optional, Tuple, Union
 
 import pytest
 import pytz
@@ -27,24 +26,40 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestReplacer:
-    def setup_method(self):
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "events"
+
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    def setup_method(self) -> None:
         from snuba.web.views import application
 
         assert application.testing is True
 
         self.app = application.test_client()
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         self.storage = get_writable_storage(StorageKey.ERRORS)
         self.replacer = replacer.ReplacerWorker(
             self.storage, DummyMetricsBackend(strict=True)
         )
 
+        self.minutes = 180
+        self.base_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(minutes=self.minutes)
+
         self.project_id = 1
         self.event = get_raw_event()
         settings.ERRORS_ROLLOUT_ALL = True
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         importlib.reload(settings)
 
     def _wrap(self, msg: Tuple[Any, ...]) -> Message[KafkaPayload]:
@@ -55,42 +70,47 @@ class TestReplacer:
             datetime.now(),
         )
 
-    def _clear_redis_and_force_merge(self):
+    def _clear_redis_and_force_merge(self) -> None:
         redis_client.flushdb()
         cluster = self.storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         run_optimize(clickhouse, self.storage, cluster.get_database())
 
-    def _issue_count(self, project_id, group_id=None):
+    def _issue_count(self, project_id: int, group_id: Optional[int] = None) -> Any:
         args = {
             "project": [project_id],
+            "selected_columns": [],
             "aggregations": [["count()", "", "count"]],
             "groupby": ["group_id"],
+            "from_date": (self.base_time - timedelta(minutes=self.minutes)).isoformat(),
+            "to_date": (
+                self.base_time + timedelta(minutes=2 * self.minutes)
+            ).isoformat(),
         }
 
         if group_id:
-            args.setdefault("conditions", []).append(("group_id", "=", group_id))
+            args.setdefault("conditions", list()).append(("group_id", "=", group_id))
 
-        return json.loads(self.app.post("/events/query", data=json.dumps(args)).data)[
-            "data"
-        ]
+        return json.loads(self.post(json.dumps(args)).data)["data"]
 
-    def _get_group_id(self, project_id: int, event_id: str):
+    def _get_group_id(self, project_id: int, event_id: str) -> Optional[int]:
         args = {
             "project": [project_id],
             "selected_columns": ["group_id"],
             "conditions": [
                 ["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]
             ],
+            "from_date": (self.base_time - timedelta(minutes=self.minutes)).isoformat(),
+            "to_date": (
+                self.base_time + timedelta(minutes=2 * self.minutes)
+            ).isoformat(),
         }
 
-        data = json.loads(self.app.post("/events/query", data=json.dumps(args)).data)[
-            "data"
-        ]
+        data = json.loads(self.post(json.dumps(args)).data)["data"]
         if not data:
             return None
 
-        return data[0]["group_id"]
+        return int(data[0]["group_id"])
 
     def test_delete_groups_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
@@ -105,7 +125,7 @@ class TestReplacer:
         )
 
         replacement = self.replacer.process_message(self._wrap(message))
-
+        assert replacement is not None
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
             == "SELECT count() FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
