@@ -9,7 +9,7 @@ on:
 jobs:
   linting:
     name: "Docker Arm64"
-    timeout-minutes: 2
+    timeout-minutes: 60
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -19,17 +19,21 @@ jobs:
       - uses: actions/checkout@v2
         name: Checkout code
 
+      # Unbuntu 20
+      # Docker version 20.10.9+azure-1, build c2ea9bc90bacf19bdbe37fd13eec8772432aca99
+      # github.com/docker/buildx 0.6.3+azure 266c0eac611d64fcc0c72d80206aa364e826758d
+      # Mac 11
+      #
+      #
       - name: Docker
         run: |
           set -x
           if [ $(uname) == 'Darwin' ]; then
-            brew info --cask docker
             brew install --cask docker
-          else
-            brew info docker
           fi
           docker --version
           docker buildx version
+          docker buildx ls
           docker buildx create --name mybuilder --use
           docker buildx inspect --bootstrap
           # docker buildx build --platform linux/arm64 -t getsnuba/snuba:buildx-test .
