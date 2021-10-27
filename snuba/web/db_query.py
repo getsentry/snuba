@@ -293,6 +293,8 @@ def execute_query_with_rate_limits(
                 tags={"table": stats.get("clickhouse_table", "")},
             )
 
+        # This is a temporary metric that will be removed once the organization
+        # rate limit has been tuned.
         org_rate_limit_stats = rate_limit_stats_container.get_stats(
             ORGANIZATION_RATE_LIMIT_NAME
         )
