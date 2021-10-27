@@ -142,9 +142,6 @@ jobs:
 
     env:
       USE_INDEXER: 1
-      # Copied from https://github.com/getsentry/sentry/blob/6ed50d7643ec30689f2f22514b2882b5d654a949/.github/workflows/acceptance.yml#L157-L158
-      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
-      MATRIX_INSTANCE_TOTAL: 2
 
     steps:
       # Checkout codebase
