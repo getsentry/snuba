@@ -1,7 +1,7 @@
 import logging
 from dataclasses import replace
 from datetime import datetime
-from typing import MutableMapping, Optional
+from typing import Optional
 
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
@@ -63,17 +63,17 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         tags["referrer"] = request_settings.referrer
         tags["parent_api"] = request_settings.get_parent_api()
 
-        if not self._query_overlaps_replacements(query, flags.latest_replacement_time):
-            self._query_avoids_final_metric(flags, tags)
-            self._set_query_final(query, False)
-            return
+        query_overlaps_replacement = self._query_overlaps_replacements(
+            query, flags.latest_replacement_time
+        )
+        metric_name = "final" if query_overlaps_replacement else "avoid_final"
 
         set_final = False
 
         if flags.needs_final:
             tags["cause"] = "final_flag"
             metrics.increment(
-                "final", tags=tags,
+                name=metric_name, tags=tags,
             )
             set_final = True
         elif flags.group_ids_to_exclude:
@@ -86,7 +86,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
                 tags["cause"] = "max_groups"
                 metrics.increment(
-                    "final", tags=tags,
+                    name=metric_name, tags=tags,
                 )
                 set_final = True
             else:
@@ -99,7 +99,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     )
                 )
 
-        self._set_query_final(query, set_final)
+        self._set_query_final(query, set_final and query_overlaps_replacement)
 
     def _set_query_final(self, query: Query, final: bool) -> None:
         """
@@ -124,26 +124,3 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if latest_replacement_time and query_from
             else True
         )
-
-    def _query_avoids_final_metric(
-        self, flags: ProjectsQueryFlags, tags: MutableMapping[str, str]
-    ) -> None:
-        """
-        Datadog metric to count how many queries would have been set to final
-        if the replacements overlap check had not been introduced.
-        """
-        if flags.needs_final:
-            tags["cause"] = "final_flag"
-            metrics.increment(
-                "avoided_final", tags=tags,
-            )
-        elif flags.group_ids_to_exclude:
-            max_group_ids_exclude = get_config(
-                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
-            )
-            assert isinstance(max_group_ids_exclude, int)
-            if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
-                tags["cause"] = "max_groups"
-                metrics.increment(
-                    "avoided_final", tags=tags,
-                )
