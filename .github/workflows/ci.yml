@@ -117,6 +117,7 @@ jobs:
           while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
 
       - name: Create Image
+        run: |
           docker buildx create --name arm64-builder --use
           docker buildx inspect --bootstrap
           docker buildx build --platform linux/arm64 \
