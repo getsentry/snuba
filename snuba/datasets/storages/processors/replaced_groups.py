@@ -63,19 +63,17 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         tags["referrer"] = request_settings.referrer
         tags["parent_api"] = request_settings.get_parent_api()
 
-        if not self._query_overlaps_replacements(query, flags.latest_replacement_time):
-            metrics.increment(
-                "avoided_final", tags=tags,
-            )
-            self._set_query_final(query, False)
-            return
+        query_overlaps_replacement = self._query_overlaps_replacements(
+            query, flags.latest_replacement_time
+        )
+        metric_name = "final" if query_overlaps_replacement else "avoid_final"
 
         set_final = False
 
         if flags.needs_final:
             tags["cause"] = "final_flag"
             metrics.increment(
-                "final", tags=tags,
+                name=metric_name, tags=tags,
             )
             set_final = True
         elif flags.group_ids_to_exclude:
@@ -88,10 +86,10 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
                 tags["cause"] = "max_groups"
                 metrics.increment(
-                    "final", tags=tags,
+                    name=metric_name, tags=tags,
                 )
                 set_final = True
-            else:
+            elif query_overlaps_replacement:
                 query.add_condition_to_ast(
                     not_in_condition(
                         FunctionCall(
@@ -101,7 +99,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     )
                 )
 
-        self._set_query_final(query, set_final)
+        self._set_query_final(query, set_final and query_overlaps_replacement)
 
     def _set_query_final(self, query: Query, final: bool) -> None:
         """
