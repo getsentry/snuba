@@ -16,6 +16,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions.scheduler_processing_strategy import (
     CommittableTick,
+    ProvideCommitStrategy,
     TickBuffer,
 )
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
@@ -293,5 +294,9 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         next_step = NextStep(commit)
 
         return TickBuffer(
-            mode, self.__partitions, self.__buffer_size, next_step, self.__metrics,
+            mode,
+            self.__partitions,
+            self.__buffer_size,
+            ProvideCommitStrategy(self.__partitions, next_step),
+            self.__metrics,
         )
