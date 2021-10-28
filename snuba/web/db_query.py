@@ -300,14 +300,10 @@ def execute_query_with_rate_limits(
         )
         if org_rate_limit_stats is not None:
             metrics.gauge(
-                name="org_concurrent",
-                value=org_rate_limit_stats.concurrent,
-                tags={"table": stats.get("clickhouse_table", "")},
+                name="org_concurrent", value=org_rate_limit_stats.concurrent,
             )
             metrics.gauge(
-                name="org_per_second",
-                value=org_rate_limit_stats.rate,
-                tags={"table": stats.get("clickhouse_table", "")},
+                name="org_per_second", value=org_rate_limit_stats.rate,
             )
 
         return execute_query(
