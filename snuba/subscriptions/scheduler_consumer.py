@@ -189,6 +189,7 @@ class SchedulerBuilder:
         auto_offset_reset: str,
         delay_seconds: Optional[int],
         metrics: MetricsBackend,
+        load_factor: int,
     ) -> None:
         self.__entity = get_entity(EntityKey(entity_name))
 
