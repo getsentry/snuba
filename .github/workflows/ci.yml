@@ -103,31 +103,38 @@ jobs:
     name: "Docker Arm64 build"
     runs-on: macos-11
     env:
-      SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci:latest
+      SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
 
-      - name: Docker
+      - name: Set up Docker
         run: |
           brew install --cask docker
           sudo /Applications/Docker.app/Contents/MacOS/Docker --unattended --install-privileged-components
           open -a /Applications/Docker.app --args --unattended --accept-license
           echo "We are waiting for Docker to be up and running. It can take over 2 minutes..."
           while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
-          docker run --privileged --rm tonistiigi/binfmt --install all
-          docker buildx version
-          docker buildx ls
-          docker buildx create --name mybuilderFoo --use
-          docker buildx inspect --bootstrap
-          docker buildx build --platform linux/arm64 -t $SNUBA_IMAGE --load .
 
-      # XXX: We should only publish if we're on master
+      - name: Create Image
+          docker buildx create --name arm64-builder --use
+          docker buildx inspect --bootstrap
+          docker buildx build --platform linux/arm64 \
+          -t $SNUBA_IMAGE:${{ github.sha }} \
+          -t $SNUBA_IMAGE:latest \
+          --load .
+
       - name: Publish
-        if: github.repository_owner != 'getsentry'
+        # Forks cannot push to the getsentry org
+        if: github.repository_owner == 'getsentry'
+        env:
+          branch: ${{ github.ref }}
         run: |
           docker images
-          docker push $SNUBA_IMAGE
+          docker push $SNUBA_IMAGE:${{ github.sha }}
+          if [ "${branch}" == 'refs/head/master']; then
+            docker push $SNUBA_IMAGE:latest
+          fi
 
   tests:
     needs: [linting, snuba-image]
