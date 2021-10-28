@@ -120,10 +120,8 @@ jobs:
         run: |
           docker buildx create --name arm64-builder --use
           docker buildx inspect --bootstrap
-          docker buildx build --platform linux/arm64 \
-          -t $SNUBA_IMAGE:${{ github.sha }} \
-          -t $SNUBA_IMAGE:latest \
-          --load .
+          docker buildx build --platform linux/arm64 --cache-from $SNUBA_IMAGE:latest \
+            -t $SNUBA_IMAGE:${{ github.sha }} -t $SNUBA_IMAGE:latest --load .
 
       - name: Publish
         # Forks cannot push to the getsentry org
