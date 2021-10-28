@@ -116,6 +116,10 @@ jobs:
           echo "We are waiting for Docker to be up and running. It can take over 2 minutes..."
           while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
 
+      - name: Registry login
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
       - name: Create Image
         run: |
           docker buildx create --name arm64-builder --use
