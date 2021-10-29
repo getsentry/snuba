@@ -427,6 +427,7 @@ def dataset_query(
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
+
         cause = exception.__cause__
         if isinstance(cause, RateLimitExceeded):
             status = 429
