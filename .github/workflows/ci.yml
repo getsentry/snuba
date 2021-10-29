@@ -7,7 +7,7 @@ on:
 
 jobs:
   linting:
-    name: 'pre-commit hooks' # (includes Python formatting + linting)
+    name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -26,7 +26,7 @@ jobs:
           pre-commit run --files $(git diff --diff-filter=d --name-only master)
 
   typing:
-    name: 'mypy typing'
+    name: "mypy typing"
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -67,14 +67,14 @@ jobs:
 
       # These are pulled in order to be able to use docker layer caching
       - name: Pull snuba CI images
-        if: github.repository_owner != 'getsentry'
+        if: github.repository_owner == 'getsentry'
         run: |
           docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
             docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
 
       - name: Build snuba docker image for CI
-        if: github.repository_owner != 'getsentry'
+        if: github.repository_owner == 'getsentry'
         run: |
           docker build . \
             -t ghcr.io/getsentry/snuba-ci:latest \
@@ -86,7 +86,7 @@ jobs:
             --target testing
 
       - name: Publish images for cache
-        if: github.repository_owner != 'getsentry'
+        if: github.repository_owner == 'getsentry'
         run: |
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
           docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -99,7 +99,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ['test', 'test_distributed']
+        snuba_settings: ["test", "test_distributed"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
