@@ -1,7 +1,6 @@
 import functools
 import logging
 import os
-import textwrap
 import time
 from datetime import datetime
 from functools import partial
@@ -428,16 +427,6 @@ def dataset_query(
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
-        sentry_sdk.add_breadcrumb(
-            category="query_error",
-            level="info",
-            message="Offending snql query",
-            data={
-                "query": textwrap.wrap(
-                    body.get("query", ""), 100, break_long_words=False
-                )
-            },
-        )
         cause = exception.__cause__
         if isinstance(cause, RateLimitExceeded):
             status = 429
