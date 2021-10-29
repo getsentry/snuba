@@ -133,7 +133,6 @@ jobs:
         env:
           branch: ${{ github.ref }}
         run: |
-          docker images
           docker push $SNUBA_IMAGE:${{ github.sha }}
           if [ "${branch}" == 'refs/head/master']; then
             docker push $SNUBA_IMAGE:latest
@@ -181,7 +180,7 @@ jobs:
   sentry:
     needs: [snuba-image]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     strategy:
       matrix:
