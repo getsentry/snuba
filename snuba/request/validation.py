@@ -128,7 +128,7 @@ def build_request(
         sentry_sdk.add_breadcrumb(
             category="query_info",
             level="info",
-            message="snql query",
+            message="snuba_query_raw",
             data={
                 "query": textwrap.wrap(repr(request.body), 100, break_long_words=False)
             },
