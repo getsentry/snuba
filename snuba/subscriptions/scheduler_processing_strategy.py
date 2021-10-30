@@ -1,15 +1,29 @@
 import logging
 from collections import deque
+from concurrent.futures import as_completed
 from datetime import datetime
-from typing import Deque, Mapping, Optional, cast
+from typing import Callable, Deque, Mapping, NamedTuple, Optional, cast
 
-from arroyo import Message
+from arroyo import Message, Partition, Topic
+from arroyo.backends.abstract import Producer
+from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
+from arroyo.types import Position
 
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
+from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.scheduler import Scheduler
 
 logger = logging.getLogger(__name__)
+
+
+class CommittableTick(NamedTuple):
+    tick: Tick
+    should_commit: bool
 
 
 class TickBuffer(ProcessingStrategy[Tick]):
@@ -151,3 +165,72 @@ class TickBuffer(ProcessingStrategy[Tick]):
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
+
+
+class ScheduleSubscriptions(ProcessingStrategy[CommittableTick]):
+    """"
+    This strategy is responsible for scheduling all of the subscriptions
+    for a given tick.
+
+    The subscriptions to be scheduled are those that:
+    - Have the same partition index as the tick received, and
+    - Are scheduled to be run within the time interval defined by the tick
+
+    For backward compatibility, this assumes that the number of partitions of
+    the subscription storage matches the number of partitions of the main topic
+    being subscribed to.
+
+    The subscriptions to be scheduled are are encoded and produced to the
+    scheduled topic to be picked up by the subscription executor to run
+    the actual query later.
+
+    If all of the scheduled subscription messages for the tick are successfully
+    produced, and tick specifies `should_commit` = True, then the offset is committed.
+    """
+
+    def __init__(
+        self,
+        entity_key: EntityKey,
+        schedulers: Mapping[int, Scheduler[Subscription]],
+        producer: Producer[KafkaPayload],
+        scheduled_topic_spec: KafkaTopicSpec,
+        commit: Callable[[Mapping[Partition, Position]], None],
+    ) -> None:
+        self.__schedulers = schedulers
+        self.__encoder = SubscriptionScheduledTaskEncoder(entity_key)
+        self.__producer = producer
+        self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
+        self.__commit = commit
+        self.__closed = False
+
+    def poll(self) -> None:
+        pass
+
+    def submit(self, message: Message[CommittableTick]) -> None:
+        assert not self.__closed
+
+        tick = message.payload.tick
+
+        tasks = self.__schedulers[tick.partition].find(tick.timestamps)
+        futures = [
+            self.__producer.produce(self.__scheduled_topic, self.__encoder.encode(task))
+            for task in tasks
+        ]
+
+        for future in as_completed(futures):
+            future.result()
+
+        # If all messages are successfully produced and should_commit = True, commit the offset
+        if message.payload.should_commit is True:
+            self.__commit(
+                {message.partition: Position(message.offset, message.timestamp)}
+            )
+
+    def close(self) -> None:
+        self.__closed = True
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        pass

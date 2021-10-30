@@ -1,10 +1,28 @@
+import uuid
 from datetime import datetime, timedelta
 from unittest import mock
 
 from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.types import Position
+from arroyo.utils.clock import TestingClock
 
-from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.redis import redis_client
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.entity_subscription import EventsSubscription
+from snuba.subscriptions.scheduler import SubscriptionScheduler
+from snuba.subscriptions.scheduler_processing_strategy import (
+    CommittableTick,
+    ScheduleSubscriptions,
+    TickBuffer,
+)
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
@@ -200,3 +218,79 @@ def test_tick_buffer_wait_slowest() -> None:
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(messages[0])]
     assert metrics_backend.calls == []
+
+
+def test_schedule_subscriptions() -> None:
+    epoch = datetime(1970, 1, 1)
+    metrics_backend = TestingMetricsBackend()
+    partition_index = 0
+    entity_key = EntityKey.EVENTS
+    topic = Topic("scheduled-subscriptions-events")
+    partition = Partition(topic, 0)
+
+    clock = TestingClock()
+    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+
+    broker.create_topic(topic, partitions=1)
+
+    producer = broker.get_producer()
+    consumer = broker.get_consumer("group")
+    consumer.subscribe([topic])
+
+    store = RedisSubscriptionDataStore(
+        redis_client, entity_key, PartitionId(partition_index)
+    )
+    store.create(
+        uuid.uuid4(),
+        SnQLSubscriptionData(
+            project_id=1,
+            time_window=timedelta(minutes=1),
+            resolution=timedelta(minutes=1),
+            query="MATCH events SELECT count()",
+            entity_subscription=EventsSubscription(data_dict={}),
+        ),
+    )
+
+    schedulers = {
+        partition_index: SubscriptionScheduler(
+            store,
+            PartitionId(partition_index),
+            cache_ttl=timedelta(seconds=300),
+            metrics=metrics_backend,
+        )
+    }
+
+    commit = mock.Mock()
+
+    strategy = ScheduleSubscriptions(
+        entity_key,
+        schedulers,
+        producer,
+        KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
+        commit,
+    )
+
+    message = Message(
+        partition,
+        1,
+        CommittableTick(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+            ),
+            True,
+        ),
+        epoch,
+        2,
+    )
+
+    strategy.submit(message)
+
+    # 2 subscriptions were scheduled (1 per minute)
+    assert consumer.poll() is not None
+    assert consumer.poll() is not None
+    assert consumer.poll() is None
+
+    # Offset was committed
+    assert commit.call_args_list == [mock.call({partition: Position(1, epoch)})]
