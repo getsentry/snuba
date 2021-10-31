@@ -75,6 +75,13 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--mock-write",
+    is_flag=True,
+    type=bool,
+    default=False,
+    help="Only simulates writes. It does not write anything.",
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -87,6 +94,7 @@ def multistorage_consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    mock_write: bool = False,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -219,6 +227,7 @@ def multistorage_consumer(
             input_block_size=input_block_size,
             output_block_size=output_block_size,
             metrics=metrics,
+            mock=mock_write,
         ),
     )
 

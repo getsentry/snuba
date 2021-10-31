@@ -92,6 +92,13 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
+@click.option(
+    "--mock-write",
+    is_flag=True,
+    type=bool,
+    default=False,
+    help="Only simulates writes. It does not write anything.",
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -112,6 +119,7 @@ def consumer(
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
+    mock_write: bool = False,
 ) -> None:
 
     setup_logging(log_level)
@@ -147,6 +155,7 @@ def consumer(
         max_batch_time_ms=max_batch_time_ms,
         metrics=metrics,
         profile_path=profile_path,
+        mock=mock_write,
     )
 
     if stateful_consumer:
