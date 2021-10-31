@@ -3,12 +3,7 @@ from typing import Sequence
 from uuid import uuid1
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import (
-    LegacySubscriptionData,
-    PartitionId,
-    SnQLSubscriptionData,
-    SubscriptionData,
-)
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
@@ -18,10 +13,9 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
     def subscription(self) -> Sequence[SubscriptionData]:
         return [
-            LegacySubscriptionData(
+            SnQLSubscriptionData(
                 project_id=self.project_id,
-                conditions=[["platform", "IN", ["a"]]],
-                aggregations=[["count()", "", "count"]],
+                query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 time_window=timedelta(minutes=500),
                 resolution=timedelta(minutes=1),
                 entity_subscription=create_entity_subscription(),
@@ -30,7 +24,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 project_id=self.project_id,
                 time_window=timedelta(minutes=500),
                 resolution=timedelta(minutes=1),
-                query="MATCH events SELECT count() WHERE in(platform, 'a')",
+                query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 entity_subscription=create_entity_subscription(),
             ),
         ]

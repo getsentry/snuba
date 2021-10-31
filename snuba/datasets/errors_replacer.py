@@ -157,7 +157,7 @@ class LegacyReplacement(Replacement):
         return self.count_query_template % args
 
 
-def get_project_exclude_groups_key_and_type_key(
+def build_project_exclude_groups_key_and_type_key(
     project_id: int, state_name: Optional[ReplacerState]
 ) -> Tuple[str, str]:
     key = f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
@@ -168,25 +168,32 @@ def set_project_exclude_groups(
     project_id: int,
     group_ids: Sequence[int],
     state_name: Optional[ReplacerState],
+    #  replacement type is just for metrics, not necessary for functionality
     replacement_type: ReplacementType,
 ) -> None:
     """
+    This method is called when a replacement comes in. For a specific project, record
+    the group ids which were deleted as a result of this replacement
+
     Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
     the entire ZSET incase it's rarely touched.
 
     Add replacement type for this replacement.
     """
-
     now = time.time()
-    key, type_key = get_project_exclude_groups_key_and_type_key(project_id, state_name)
+    key, type_key = build_project_exclude_groups_key_and_type_key(
+        project_id, state_name
+    )
     p = redis_client.pipeline()
 
     group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
     p.zadd(key, **group_id_data)
+    # remove group id deletions that should have been merged by now
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
+    # store the replacement type data
     replacement_type_data: Mapping[str, float] = {replacement_type: now}
     p.zadd(type_key, **replacement_type_data)
     p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
@@ -195,7 +202,7 @@ def set_project_exclude_groups(
     p.execute()
 
 
-def get_project_needs_final_key_and_type_key(
+def build_project_needs_final_key_and_type_key(
     project_id: int, state_name: Optional[ReplacerState]
 ) -> Tuple[str, str]:
     key = f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
@@ -206,25 +213,31 @@ def set_project_needs_final(
     project_id: int,
     state_name: Optional[ReplacerState],
     replacement_type: ReplacementType,
-) -> Optional[bool]:
-    key, type_key = get_project_needs_final_key_and_type_key(project_id, state_name)
+) -> None:
+    key, type_key = build_project_needs_final_key_and_type_key(project_id, state_name)
     p = redis_client.pipeline()
-    p.set(key, True, ex=settings.REPLACER_KEY_TTL)
+    p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
     p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
-    [final_was_set, _] = p.execute()
-    return bool(final_was_set)
+    p.execute()
+
+
+@dataclass
+class ProjectsQueryFlags:
+    needs_final: bool
+    group_ids_to_exclude: Sequence[int]
+    replacement_types: Set[str]
+    latest_replacement_time: Optional[datetime]
 
 
 def get_projects_query_flags(
     project_ids: Sequence[int], state_name: Optional[ReplacerState]
-) -> Tuple[bool, Sequence[int], Set[str]]:
-    """\
+) -> ProjectsQueryFlags:
+    """
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
-    3. Trim groups to exclude ZSET for each Project
+    3. Clean up the old replacement types and groups
     4. Fetch replacement types for each Project
-
-    Returns (needs_final, group_ids_to_exclude, replacement_types)
+    5. Fetch latest exclude groups replacement type for each Project
     """
 
     s_project_ids = set(project_ids)
@@ -232,7 +245,7 @@ def get_projects_query_flags(
     p = redis_client.pipeline()
 
     needs_final_keys_and_type_keys = [
-        get_project_needs_final_key_and_type_key(project_id, state_name)
+        build_project_needs_final_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
 
@@ -240,14 +253,14 @@ def get_projects_query_flags(
         p.get(needs_final_key)
 
     exclude_groups_keys_and_types = [
-        get_project_exclude_groups_key_and_type_key(project_id, state_name)
+        build_project_exclude_groups_key_and_type_key(project_id, state_name)
         for project_id in s_project_ids
     ]
-
     for exclude_groups_key, _ in exclude_groups_keys_and_types:
         p.zremrangebyscore(
             exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
         )
+        # TODO: put this into another for loop to make post processing easier
         p.zrevrangebyscore(
             exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
         )
@@ -257,42 +270,53 @@ def get_projects_query_flags(
 
     for _, type_key in exclude_groups_keys_and_types:
         p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
+        # TODO: put this into another for loop to make post processing easier
         p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
+
+    for exclude_groups_key, _ in exclude_groups_keys_and_types:
+        p.zrevrange(
+            exclude_groups_key, 0, 0, withscores=True,
+        )
 
     results = p.execute()
 
-    return process_exclude_groups_and_replacement_types_results(
+    return _process_exclude_groups_and_replacement_types_results(
         results, len(s_project_ids)
     )
 
 
-def process_exclude_groups_and_replacement_types_results(
+def _process_exclude_groups_and_replacement_types_results(
     results: List[Any], len_projects: int
-) -> Tuple[bool, Sequence[int], Set[str]]:
+) -> ProjectsQueryFlags:
     """
     Helper function for `get_projects_query_flags`.
-    `results` is in the form:
+    Given raw redis result output, return something that makes sense
+
+    `results` is a flat list of all the redis call results of get_projects_query_flags
     [
-        needs_final...,
-        exclude_groups...,
-        needs_final_replacement_types...,
-        groups_replacement_types...
+        needs_final: Sequence[timestamp]...,
+        exclude_groups: Sequence[..(num_removed_elements(don't care), List[group_id] )]...,
+        needs_final_replacement_types: Sequece[Optional[str]]...,
+        groups_replacement_types: Sequence[..(num_removed, str)]...,
+        latest_exclude_groups_replacements: Sequence[Optional[Tuple[group_id, datetime]]]...
     ]
-    - `needs_final` slice is `len_projects` long
     - `excludes_groups` slice is `len_projects * 2` long
-    - `needs_final_replacement_types` slice is `len_projects` long
     - `groups_replacement_types` slice is `len_projects * 2` long
+    - The rest of the slices are all `len_projects` long
 
     The `len_projects * 2` long slices are in the form:
     int, list, int, list, ...
-    Only the lists are necessary, the ints are scores from
-    the redis sorted set used to track when the items were zadded.
+    Only the lists are necessary, the ints are the number of items removed
+    during the zremrangebyscore calls.
     """
 
-    needs_final = any(results[:len_projects])
+    needs_final_result = results[:len_projects]
     exclude_groups_results = results[len_projects : len_projects * 3]
     projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
-    groups_replacement_types_result = results[len_projects * 4 :]
+    groups_replacement_types_result = results[len_projects * 4 : len_projects * 6]
+    latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
+
+    needs_final = any(needs_final_result)
 
     exclude_groups = sorted(
         {int(group_id) for group_id in sum(exclude_groups_results[1::2], [])}
@@ -311,7 +335,42 @@ def process_exclude_groups_and_replacement_types_results(
 
     replacement_types = groups_replacement_types.union(needs_final_replacement_types)
 
-    return needs_final, exclude_groups, replacement_types
+    latest_replacement_time = _process_latest_replacements(
+        needs_final, needs_final_result, latest_exclude_groups_result
+    )
+
+    return ProjectsQueryFlags(
+        needs_final, exclude_groups, replacement_types, latest_replacement_time
+    )
+
+
+def _process_latest_replacements(
+    needs_final: bool,
+    needs_final_result: List[Any],
+    latest_exclude_groups_result: List[Any],
+) -> Optional[datetime]:
+    latest_replacements = set()
+    if needs_final:
+        latest_need_final_replacement_times = [
+            # Backwards compatibility: Before it was simply "True" at each key,
+            # now it's the timestamp at which the key was added.
+            float(timestamp)
+            for timestamp in needs_final_result
+            if timestamp and timestamp != b"True"
+        ]
+        if latest_need_final_replacement_times:
+            latest_replacements.add(max(latest_need_final_replacement_times))
+
+    for latest_exclude_groups in latest_exclude_groups_result:
+        if latest_exclude_groups:
+            [(_, timestamp)] = latest_exclude_groups
+            latest_replacements.add(timestamp)
+
+    return (
+        datetime.fromtimestamp(max(latest_replacements))
+        if latest_replacements
+        else None
+    )
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
@@ -398,12 +457,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         return processed
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
-        if self.__state_name == ReplacerState.EVENTS:
-            # Backward compatibility with the old keys already in Redis, we will let double write
-            # the old key structure and the new one for a while then we can get rid of the old one.
-            compatibility_double_write = True
-        else:
-            compatibility_double_write = False
+
+        # Backward compatibility with the old keys already in Redis, we will let double write
+        # the old key structure and the new one for a while then we can get rid of the old one.
+        compatibility_double_write = self.__state_name == ReplacerState.EVENTS
 
         project_id = replacement.get_project_id()
         query_time_flags = replacement.get_query_time_flags()

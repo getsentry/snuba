@@ -7,7 +7,7 @@ on:
 
 jobs:
   linting:
-    name: 'pre-commit hooks' # (includes Python formatting + linting)
+    name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -26,7 +26,7 @@ jobs:
           pre-commit run --files $(git diff --diff-filter=d --name-only master)
 
   typing:
-    name: 'mypy typing'
+    name: "mypy typing"
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -41,7 +41,7 @@ jobs:
           make install-python-dependencies
       - name: Run mypy
         run: |
-          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba
+          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba tests/subscriptions
 
   snuba-image:
     name: Build snuba CI image
@@ -67,14 +67,14 @@ jobs:
 
       # These are pulled in order to be able to use docker layer caching
       - name: Pull snuba CI images
-        if: github.repository_owner != 'getsentry'
+        if: github.repository_owner == 'getsentry'
         run: |
           docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
             docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
 
       - name: Build snuba docker image for CI
-        if: github.repository_owner != 'getsentry'
+        if: github.repository_owner == 'getsentry'
         run: |
           docker build . \
             -t ghcr.io/getsentry/snuba-ci:latest \
@@ -86,11 +86,57 @@ jobs:
             --target testing
 
       - name: Publish images for cache
-        if: github.repository_owner != 'getsentry'
+        if: github.repository_owner == 'getsentry'
         run: |
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
           docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
           docker push ghcr.io/getsentry/snuba-ci:latest
+
+  # For now, we cannot build linux/arm64 images on Linux hosts since
+  # |docker buildx ls| does not list arm64 as an option.
+  #
+  # This step does not have a set timeout because it is very slow. This is due
+  # because emulation required (this is running on an Intel host rather than an arm64 host)
+  # and that many Python packages do not have arm wheels, thus, requirying to build them from source.
+  # Upgrading Python package versions + giving access to a cache could improve things a lot
+  snuba-arm64-image:
+    name: "Docker Arm64 build"
+    runs-on: macos-11
+    env:
+      SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+
+      - name: Set up Docker
+        run: |
+          brew install --cask docker
+          sudo /Applications/Docker.app/Contents/MacOS/Docker --unattended --install-privileged-components
+          open -a /Applications/Docker.app --args --unattended --accept-license
+          echo "We are waiting for Docker to be up and running. It can take over 2 minutes..."
+          while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
+
+      - name: Registry login
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
+      - name: Create Image
+        run: |
+          docker buildx create --name arm64-builder --use
+          docker buildx inspect --bootstrap
+          docker buildx build --platform linux/arm64 --cache-from $SNUBA_IMAGE:latest \
+            -t $SNUBA_IMAGE:${{ github.sha }} -t $SNUBA_IMAGE:latest --load .
+
+      - name: Publish
+        # Forks cannot push to the getsentry org
+        if: github.repository_owner == 'getsentry'
+        env:
+          branch: ${{ github.ref }}
+        run: |
+          docker push $SNUBA_IMAGE:${{ github.sha }}
+          if [ "${branch}" == 'refs/head/master']; then
+            docker push $SNUBA_IMAGE:latest
+          fi
 
   tests:
     needs: [linting, snuba-image]
@@ -99,7 +145,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ['test', 'test_distributed']
+        snuba_settings: ["test", "test_distributed"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -134,7 +180,7 @@ jobs:
   sentry:
     needs: [snuba-image]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
 
     strategy:
       matrix:
@@ -142,6 +188,9 @@ jobs:
 
     env:
       USE_INDEXER: 1
+      # XXX: MATRIX_INSTANCE_TOTAL must be hardcoded to the length of strategy.matrix.instance.
+      MATRIX_INSTANCE_TOTAL: 2
+      MIGRATIONS_TEST_MIGRATE: 1
 
     steps:
       # Checkout codebase
@@ -185,7 +234,7 @@ jobs:
         with:
           workdir: sentry
           cache-files-hash: ${{ hashFiles('sentry/requirements**.txt') }}
-          python-version: 3.6
+          python-version: 3.8
           snuba: false
           kafka: true
           clickhouse: true

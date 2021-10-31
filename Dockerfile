@@ -44,6 +44,8 @@ RUN set -ex; \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
+    # Since there's no confluent-kafka wheel for aarch64, remove when there is
+    [ $(uname -m) = "aarch64" ] && apt-get install -y librdkafka-dev --no-install-recommends; \
     \
     pip install -r requirements.txt; \
     \

@@ -41,6 +41,12 @@ logger = logging.getLogger(__name__)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
+@click.option(
+    "--load-factor",
+    type=int,
+    default=1,
+    help="Temporary option to simulate additional load. To be removed after testing.",
+)
 def subscriptions_scheduler(
     *,
     entity_name: str,
@@ -50,6 +56,7 @@ def subscriptions_scheduler(
     schedule_ttl: int,
     log_level: Optional[str],
     delay_seconds: Optional[int],
+    load_factor: int = 1
 ) -> None:
     """
     Currently the subscriptions scheduler just consumes the commit log and records
@@ -72,6 +79,8 @@ def subscriptions_scheduler(
         auto_offset_reset,
         delay_seconds,
         metrics,
+        # TODO: Just for testing, should be removed before the scheduler is actually used
+        load_factor,
     )
 
     processor = builder.build_consumer()

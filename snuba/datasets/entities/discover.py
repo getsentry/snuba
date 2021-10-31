@@ -58,7 +58,7 @@ from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
+from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
