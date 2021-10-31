@@ -179,6 +179,30 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
         )
 
 
+class MockReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
+    """
+    Fake replacement writer used to run consumer load tests.
+    Contrarily to the mock writer. THis one does not introduce a delay.
+    This is because replacement are rare enough that adding the
+    delay would not change the result of the test.
+    """
+
+    def poll(self) -> None:
+        pass
+
+    def submit(self, message: Message[ReplacementBatch]) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def terminate(self) -> None:
+        pass
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        pass
+
+
 class ProcessedMessageBatchWriter(
     ProcessingStep[Union[None, JSONRowInsertBatch, ReplacementBatch]]
 ):

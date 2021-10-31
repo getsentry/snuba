@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from random import randint
+from time import sleep
 from typing import Any, Generic, Iterable, List, Mapping, TypeVar
 
+from snuba import settings
+from snuba.datasets.storages import StorageKey
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
 logger = logging.getLogger("snuba.writer")
@@ -68,3 +72,20 @@ class BufferedWriterWrapper(Generic[TEncoded, TDecoded]):
         self.__buffer.append(self.__encoder.encode(row))
         if len(self.__buffer) >= self.__buffer_size:
             self.__flush()
+
+
+class MockBatchWriter(BatchWriter[bytes]):
+    """
+    A fake batch writer used for consumer load tests.
+
+    This simulates a write on the DB by introducing a latency defined
+    in a setting.
+    """
+
+    def __init__(self, storage_key: StorageKey) -> None:
+        latencies = settings.MOCK_WRITER_LATENCIES
+        self.__latency = latencies.get(storage_key.value, latencies["deffault"])
+
+    def write(self, values: Iterable[bytes]) -> None:
+        latency_deviation = settings.MOCK_LATENCY_STD_DEVIATTION
+        sleep(self.__latency + (randint(-latency_deviation, latency_deviation) / 1000))
