@@ -150,7 +150,9 @@ CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 
 # The mock write latency to be applied when "writing" with the mock writer.
-MOCK_WRITER_LATENCIES = {"default": 0.1}
+# This is expressed in milliseconds
+MOCK_WRITER_LATENCIES = {"default": 100}
+# Deviation to apply to the above. In milliseconds
 MOCK_LATENCY_STD_DEVIATTION = 50
 
 
