@@ -11,7 +11,11 @@ from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
 
-from snuba.consumers.consumer import build_batch_writer, process_message
+from snuba.consumers.consumer import (
+    build_batch_writer,
+    build_mock_batch_writer,
+    process_message,
+)
 from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -66,6 +70,7 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
+        mock: bool = False,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -132,6 +137,7 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
+        self.__mock = mock
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -202,6 +208,10 @@ class ConsumerBuilder:
                     self.producer if self.replacements_topic is not None else None
                 ),
                 replacements_topic=self.replacements_topic,
+            )
+            if not self.__mock
+            else build_mock_batch_writer(
+                self.storage, bool(self.replacements_topic), self.metrics
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,

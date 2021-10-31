@@ -41,7 +41,7 @@ from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.writer import BatchWriter
+from snuba.writer import BatchWriter, MockBatchWriter
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -209,7 +209,7 @@ class ProcessedMessageBatchWriter(
     def __init__(
         self,
         insert_batch_writer: InsertBatchWriter,
-        replacement_batch_writer: Optional[ReplacementBatchWriter] = None,
+        replacement_batch_writer: Optional[ProcessingStep[ReplacementBatch]] = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
@@ -305,6 +305,25 @@ def build_batch_writer(
 
         return ProcessedMessageBatchWriter(
             insert_batch_writer, replacement_batch_writer
+        )
+
+    return build_writer
+
+
+def build_mock_batch_writer(
+    storage: WritableTableStorage, with_replacements: bool, metrics: MetricsBackend,
+) -> Callable[[], ProcessedMessageBatchWriter]:
+    def build_writer() -> ProcessedMessageBatchWriter:
+        return ProcessedMessageBatchWriter(
+            InsertBatchWriter(
+                MockBatchWriter(storage.get_storage_key()),
+                MetricsWrapper(
+                    metrics,
+                    "mock_insertions",
+                    {"storage": storage.get_storage_key().value},
+                ),
+            ),
+            MockReplacementBatchWriter() if with_replacements is not None else None,
         )
 
     return build_writer
@@ -453,6 +472,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         metrics: MetricsBackend,
+        mock: bool = False,
     ):
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -472,6 +492,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
+        self.__mock = mock
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
@@ -530,6 +551,26 @@ class MultistorageConsumerProcessingStrategyFactory(
             replacement_batch_writer,
         )
 
+    def __build_mock_batch_writer(
+        self, storage: WritableTableStorage
+    ) -> ProcessedMessageBatchWriter:
+        stream_loader = storage.get_table_writer().get_stream_loader()
+        replacement_topic_spec = stream_loader.get_replacement_topic_spec()
+        replacement_writer = (
+            MockReplacementBatchWriter() if replacement_topic_spec is not None else None
+        )
+        return ProcessedMessageBatchWriter(
+            InsertBatchWriter(
+                MockBatchWriter(storage.get_storage_key()),
+                MetricsWrapper(
+                    self.__metrics,
+                    "mock_insertions",
+                    {"storage": storage.get_storage_key().value},
+                ),
+            ),
+            replacement_writer,
+        )
+
     def __build_collector(
         self,
     ) -> ProcessingStep[
@@ -538,6 +579,8 @@ class MultistorageConsumerProcessingStrategyFactory(
         return MultistorageCollector(
             {
                 storage.get_storage_key(): self.__build_batch_writer(storage)
+                if not self.__mock
+                else self.__build_mock_batch_writer(storage)
                 for storage in self.__storages
             }
         )
