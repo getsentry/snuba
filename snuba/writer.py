@@ -84,7 +84,7 @@ class MockBatchWriter(BatchWriter[bytes]):
 
     def __init__(self, storage_key: StorageKey) -> None:
         latencies = settings.MOCK_WRITER_LATENCIES
-        self.__latency = latencies.get(storage_key.value, latencies["deffault"])
+        self.__latency = latencies.get(storage_key.value, latencies["default"])
 
     def write(self, values: Iterable[bytes]) -> None:
         latency_deviation = settings.MOCK_LATENCY_STD_DEVIATTION
