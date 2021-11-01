@@ -168,8 +168,8 @@ jobs:
         run: |
           docker build . \
             -t snuba-test \
-            --cache-from $SNUBA_IMAGE:${{ needs.snuba-image.outputs.branch }} \
             --cache-from $SNUBA_IMAGE:latest \
+            --cache-from $SNUBA_IMAGE:${{ needs.snuba-image.outputs.branch }} \
             --target testing
 
       - name: Docker set up
