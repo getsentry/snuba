@@ -4,6 +4,8 @@ on:
     branches:
       - master
   pull_request:
+env:
+  SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci
 
 jobs:
   linting:
@@ -65,32 +67,28 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
-      # These are pulled in order to be able to use docker layer caching
-      - name: Pull snuba CI images
-        if: github.repository_owner == 'getsentry'
-        run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-
       - name: Build snuba docker image for CI
         if: github.repository_owner == 'getsentry'
         run: |
           docker build . \
-            -t ghcr.io/getsentry/snuba-ci:latest \
-            -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:latest \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --cache-from $SNUBA_IMAGE:latest \
+            --cache-from $SNUBA_IMAGE:${{ steps.branch.outputs.branch }} \
+            -t $SNUBA_IMAGE:latest \
+            -t $SNUBA_IMAGE:${{ steps.branch.outputs.branch }} \
+            -t $SNUBA_IMAGE:${{ github.sha }} \
             --target testing
 
       - name: Publish images for cache
         if: github.repository_owner == 'getsentry'
         run: |
-          docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-          docker push ghcr.io/getsentry/snuba-ci:latest
+          # Useful to speed up CI on re-runs
+          docker push $SNUBA_IMAGE:${{ steps.branch.outputs.branch }}
+          if [ "${branch}" == 'refs/head/master']; then
+            # Useful for regression testing on Sentry's checkout
+            docker push $SNUBA_IMAGE:${{ github.sha }}
+            # The latest tag should only be publish on `master`
+            docker push $SNUBA_IMAGE:latest
+          fi
 
   # For now, we cannot build linux/arm64 images on Linux hosts since
   # |docker buildx ls| does not list arm64 as an option.
@@ -103,10 +101,20 @@ jobs:
     name: "Docker Arm64 build"
     runs-on: macos-11
     env:
-      SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci
+      # `sentry devservices up snuba` picks up the `amd64` version of the image
+      # For now, we will publish to a different name until we want to officially
+      # support the image on Docker Hub
+      # NOTE: This image has only been tested for local development
+      SNUBA_IMAGE: ghcr.io/getsentry/snuba-arm64-dev
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+
+      - name: Get branch name
+        id: branch
+        # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
+        # it can be used as a docker tag
+        run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
 
       - name: Set up Docker
         run: |
@@ -123,18 +131,24 @@ jobs:
       - name: Create Image
         run: |
           docker buildx create --name arm64-builder --use
-          docker buildx inspect --bootstrap
-          docker buildx build --platform linux/arm64 --cache-from $SNUBA_IMAGE:latest \
-            -t $SNUBA_IMAGE:${{ github.sha }} -t $SNUBA_IMAGE:latest --load .
+          docker buildx build --platform linux/arm64 \
+            --cache-from $SNUBA_IMAGE:latest \
+            --cache-from $SNUBA_IMAGE:${{ steps.branch.outputs.branch }} \
+            -t $SNUBA_IMAGE:latest \
+            -t $SNUBA_IMAGE:${{ steps.branch.outputs.branch }} \
+            -t $SNUBA_IMAGE:${{ github.sha }} \
+            --load .
 
       - name: Publish
         # Forks cannot push to the getsentry org
         if: github.repository_owner == 'getsentry'
-        env:
-          branch: ${{ github.ref }}
         run: |
-          docker push $SNUBA_IMAGE:${{ github.sha }}
-          if [ "${branch}" == 'refs/head/master']; then
+          # Useful to speed up CI on re-runs
+          docker push $SNUBA_IMAGE::${{ steps.branch.outputs.branch }}
+          if [ "${{ steps.branch.outputs.branch }}" == 'master']; then
+            # Useful for regression testing on Sentry's checkout
+            docker push $SNUBA_IMAGE:${{ github.sha }}
+            # The latest tag should only be publish on `master`
             docker push $SNUBA_IMAGE:latest
           fi
 
@@ -150,19 +164,12 @@ jobs:
       - uses: actions/checkout@v2
         name: Checkout code
 
-      - name: Pull snuba CI images
-        run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-
-      - name: Build snuba docker image for CI
+      - name: Build testing image
         run: |
           docker build . \
             -t snuba-test \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --cache-from $SNUBA_IMAGE:${{ needs.snuba-image.outputs.branch }} \
+            --cache-from $SNUBA_IMAGE:latest \
             --target testing
 
       - name: Docker set up
@@ -197,19 +204,12 @@ jobs:
       - name: Checkout snuba
         uses: actions/checkout@v2
 
-      - name: Pull snuba CI images
-        run: |
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-
-      - name: Build snuba docker image for CI
+      - name: Build test image
         run: |
           docker build . \
             -t snuba-test \
-            --cache-from ghcr.io/getsentry/snuba-ci:latest \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
-            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --cache-from $SNUBA_IMAGE:latest \
+            --cache-from $SNUBA_IMAGE:${{ needs.snuba-image.outputs.branch }} \
             --target testing
 
       # Checkout Sentry and run integration tests against latest snuba
