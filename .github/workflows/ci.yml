@@ -85,8 +85,7 @@ jobs:
           docker push $SNUBA_IMAGE:${{ steps.branch.outputs.branch }}
           if [ "${branch}" == 'refs/head/master']; then
             # Useful for regression testing on Sentry's checkout
-            docker push $SNUBA_IMAGE:${{ github.sha }}
-            # The latest tag should only be publish on `master`
+            # The latest tag should only be published on `master`
             docker push $SNUBA_IMAGE:latest
           fi
 
@@ -143,12 +142,12 @@ jobs:
         # Forks cannot push to the getsentry org
         if: github.repository_owner == 'getsentry'
         run: |
-          # Useful to speed up CI on re-runs
+          # Useful to speed up CI
           docker push $SNUBA_IMAGE::${{ steps.branch.outputs.branch }}
           if [ "${{ steps.branch.outputs.branch }}" == 'master']; then
             # Useful for regression testing on Sentry's checkout
             docker push $SNUBA_IMAGE:${{ github.sha }}
-            # The latest tag should only be publish on `master`
+            # The latest tag should only be published on `master`
             docker push $SNUBA_IMAGE:latest
           fi
 
