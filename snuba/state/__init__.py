@@ -258,8 +258,15 @@ def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
     return queries
 
 
-def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
+def is_project_in_rollout_list(rollout_key: str, project_id: int) -> bool:
+    """
+    Helper function for doing selective rollouts by project ids. The config
+    value is assumed to be a string of the form `[project,project,...]`.
+
+    Returns `True` if `project_id` is present in the config.
+    """
     project_rollout_setting = get_config(rollout_key, "")
+    assert isinstance(project_rollout_setting, str)
     if project_rollout_setting:
         # The expected format is [project,project,...]
         project_rollout_setting = project_rollout_setting[1:-1]
@@ -267,4 +274,18 @@ def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
             for p in project_rollout_setting.split(","):
                 if int(p.strip()) == project_id:
                     return True
+    return False
+
+
+def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
+    """
+    Helper function for doing consistent incremental rollouts by project ids.
+    The config value is assumed to be an integer between 0 and 100.
+
+    Returns `True` if `project_id` falls within the rollout group.
+    """
+    project_rollout_percentage = get_config(rollout_key, 0)
+    assert isinstance(project_rollout_percentage, (int, float))
+    if project_rollout_percentage:
+        return project_id % 100 < project_rollout_percentage
     return False
