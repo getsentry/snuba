@@ -142,7 +142,7 @@ jobs:
         if: github.repository_owner == 'getsentry'
         run: |
           # Useful to speed up CI
-          docker push $SNUBA_IMAGE::${{ steps.branch.outputs.branch }}
+          docker push $SNUBA_IMAGE:${{ steps.branch.outputs.branch }}
           if [ "${{ steps.branch.outputs.branch }}" == 'master']; then
             # Useful for regression testing on Sentry's checkout
             docker push $SNUBA_IMAGE:${{ github.sha }}
