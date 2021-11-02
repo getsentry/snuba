@@ -25,3 +25,6 @@ install-python-dependencies:
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
 	sphinx-build -W -b html docs/source docs/build
+
+build-admin:
+	cd snuba/admin && yarn install && yarn run build

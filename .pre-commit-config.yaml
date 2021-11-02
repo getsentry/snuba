@@ -1,3 +1,9 @@
+exclude: >
+    (?x)(
+        ^snuba/admin/dist/|
+        ^snuba/admin/static/
+    )
+
 repos:
   - repo: https://github.com/psf/black
     rev: 19.10b0
