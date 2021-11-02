@@ -1,23 +1,21 @@
-import React from 'react';
+import React from "react";
 
-import { NAV_ITEMS } from './data';
+import { NAV_ITEMS } from "./data";
 
 type Props = {
-	active: string
-}
-
+  active: string;
+};
 
 function Body(props: Props) {
-	const activeItem = NAV_ITEMS.find(item => item.id === props.active)!;
+  const activeItem = NAV_ITEMS.find((item) => item.id === props.active)!;
 
-	return <div style={bodyStyle}>{activeItem.display}</div>
+  return <div style={bodyStyle}>{activeItem.display}</div>;
 }
 
 const bodyStyle = {
-	width: '100%',
-	margin: '20px',
-	fontSize: 20,
-}
-
+  width: "100%",
+  margin: "20px",
+  fontSize: 20,
+};
 
 export default Body;
