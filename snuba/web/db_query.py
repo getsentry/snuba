@@ -35,6 +35,7 @@ from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
     GLOBAL_RATE_LIMIT_NAME,
+    ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
@@ -290,6 +291,19 @@ def execute_query_with_rate_limits(
                 name="global_concurrent",
                 value=global_rate_limit_stats.concurrent,
                 tags={"table": stats.get("clickhouse_table", "")},
+            )
+
+        # This is a temporary metric that will be removed once the organization
+        # rate limit has been tuned.
+        org_rate_limit_stats = rate_limit_stats_container.get_stats(
+            ORGANIZATION_RATE_LIMIT_NAME
+        )
+        if org_rate_limit_stats is not None:
+            metrics.gauge(
+                name="org_concurrent", value=org_rate_limit_stats.concurrent,
+            )
+            metrics.gauge(
+                name="org_per_second", value=org_rate_limit_stats.rate,
             )
 
         return execute_query(
