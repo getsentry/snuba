@@ -6,6 +6,13 @@ import Nav from "./nav";
 import Body from "./body";
 import { NAV_ITEMS } from "./data";
 
+const ADMIN_HOST = process.env.ADMIN_HOST;
+const ADMIN_PORT = process.env.ADMIN_PORT;
+
+if (!ADMIN_HOST || !ADMIN_PORT) {
+  throw new Error("Invalid host/port provided");
+}
+
 const bodyStyle = {
   height: "100%",
   display: "flex",

@@ -12,8 +12,8 @@ DEBUG = True
 HOST = "0.0.0.0"
 PORT = 1218
 
-ADMIN_HOST = "0.0.0.0"
-ADMIN_PORT = 1219
+ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
+ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 

@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Union
+from typing import Optional
 
 import click
 
@@ -7,30 +7,16 @@ from snuba.environment import setup_logging
 
 
 @click.command()
-@click.option("--bind", help="Address to listen on.")
 @click.option("--debug", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--processes", default=1)
 @click.option("--threads", default=1)
 def admin(
-    *,
-    bind: Optional[str],
-    debug: bool,
-    log_level: Optional[str],
-    processes: int,
-    threads: int,
+    *, debug: bool, log_level: Optional[str], processes: int, threads: int,
 ) -> None:
     from snuba import settings
 
-    port: Union[int, str]
-    if bind:
-        if ":" in bind:
-            host, port = bind.split(":", 1)
-            port = int(port)
-        else:
-            raise click.ClickException("bind can only be in the format <host>:<port>")
-    else:
-        host, port = settings.ADMIN_HOST, settings.ADMIN_PORT
+    host, port = settings.ADMIN_HOST, settings.ADMIN_PORT
 
     if debug:
         if processes > 1 or threads > 1:
