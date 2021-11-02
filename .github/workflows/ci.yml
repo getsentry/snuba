@@ -67,6 +67,14 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
+      # These are pulled in order to be able to use docker layer caching
+      - name: Pull snuba CI images
+        if: github.repository_owner == 'getsentry'
+        run: |
+          docker pull ${SNUBA_IMAGE}:${{ github.sha }} || \
+            docker pull ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} || \
+            docker pull ${SNUBA_IMAGE}:latest || true
+
       - name: Build snuba docker image for CI
         if: github.repository_owner == 'getsentry'
         run: |
@@ -127,6 +135,11 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
+      - name: Pull snuba CI images
+        run: |
+          docker pull ${SNUBA_IMAGE}:${{ needs.snuba-image.outputs.branch }} || \
+            docker pull ${SNUBA_IMAGE}:latest || true
+
       - name: Create Image
         run: |
           docker buildx create --name arm64-builder --use
@@ -163,6 +176,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+
+      - name: Pull snuba CI images
+        run: |
+          docker pull ${SNUBA_IMAGE}:${{ needs.snuba-image.outputs.branch }} || \
+            docker pull ${SNUBA_IMAGE}:latest || true
 
       - name: Build testing image
         run: |
@@ -202,6 +220,11 @@ jobs:
       # Checkout codebase
       - name: Checkout snuba
         uses: actions/checkout@v2
+
+      - name: Pull Snuba CI images
+        run: |
+          docker pull ${SNUBA_IMAGE}:${{ needs.snuba-image.outputs.branch }} || \
+            docker pull ${SNUBA_IMAGE}:latest || true
 
       - name: Build test image
         run: |
