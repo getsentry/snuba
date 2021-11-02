@@ -9,6 +9,19 @@
       body {
         font-family: -apple-system,BlinkMacSystemFont,sans-serif
       }
+
+      /* Hack since we can't put hover/active pseudo selectors in inline styles */
+      .nav-link:hover {
+        background-color: #efefef;
+      }
+      .nav-link:active {
+        background-color: #cfcfcf;
+      }
+
+      .nav-link-active:hover {
+        background-color: #efefef;
+      }
+
     </style>
   </head>
   <body>
