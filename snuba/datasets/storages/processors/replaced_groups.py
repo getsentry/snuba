@@ -84,11 +84,28 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             )
             assert isinstance(max_group_ids_exclude, int)
             if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
-                tags["cause"] = "max_groups"
-                metrics.increment(
-                    name=metric_name, tags=tags,
-                )
-                set_final = True
+
+                groups_in_query = get_object_ids_in_query_ast(query, "group_id")
+                all_groups_to_exclude = set(flags.group_ids_to_exclude)
+
+                if groups_in_query:
+                    groups_to_exclude = all_groups_to_exclude.union(groups_in_query)
+                    if len(groups_to_exclude) > max_group_ids_exclude:
+                        tags["cause"] = "max_groups"
+                        metrics.increment(
+                            name=metric_name, tags=tags,
+                        )
+                        set_final = True
+                    else:
+                        metrics.increment(
+                            name="avoid_final", tags=tags,
+                        )
+                else:
+                    tags["cause"] = "max_groups"
+                    metrics.increment(
+                        name=metric_name, tags=tags,
+                    )
+                    set_final = True
             elif query_overlaps_replacement:
                 query.add_condition_to_ast(
                     not_in_condition(
