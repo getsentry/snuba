@@ -106,7 +106,7 @@ eval("\n\nif (false) {} else {\n  module.exports = __webpack_require__(/*! ./cjs
   \*************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
-eval("\nvar __importDefault = (this && this.__importDefault) || function (mod) {\n    return (mod && mod.__esModule) ? mod : { \"default\": mod };\n};\nObject.defineProperty(exports, \"__esModule\", ({ value: true }));\nvar react_1 = __importDefault(__webpack_require__(/*! react */ \"./node_modules/react/index.js\"));\nvar data_1 = __webpack_require__(/*! ./data */ \"./static/data.tsx\");\nfunction Body(props) {\n    var activeItem = data_1.NAV_ITEMS.find(function (item) { return item.id === props.active; });\n    return react_1.default.createElement(\"div\", { style: bodyStyle }, activeItem.display);\n}\nvar bodyStyle = {\n    width: \"100%\",\n    margin: \"20px\",\n    fontSize: 20,\n};\nexports[\"default\"] = Body;\n\n\n//# sourceURL=webpack://snuba-admin/./static/body.tsx?");
+eval("\nvar __importDefault = (this && this.__importDefault) || function (mod) {\n    return (mod && mod.__esModule) ? mod : { \"default\": mod };\n};\nObject.defineProperty(exports, \"__esModule\", ({ value: true }));\nvar react_1 = __importDefault(__webpack_require__(/*! react */ \"./node_modules/react/index.js\"));\nvar data_1 = __webpack_require__(/*! ./data */ \"./static/data.tsx\");\nfunction Body(props) {\n    var activeItem = data_1.NAV_ITEMS.find(function (item) { return item.id === props.active; });\n    return (react_1.default.createElement(\"div\", { style: bodyStyle },\n        react_1.default.createElement(\"div\", null, activeItem.display),\n        activeItem.component()));\n}\nvar bodyStyle = {\n    width: \"100%\",\n    margin: \"20px\",\n    fontSize: 20,\n};\nexports[\"default\"] = Body;\n\n\n//# sourceURL=webpack://snuba-admin/./static/body.tsx?");
 
 /***/ }),
 
@@ -114,9 +114,9 @@ eval("\nvar __importDefault = (this && this.__importDefault) || function (mod) {
 /*!*************************!*\
   !*** ./static/data.tsx ***!
   \*************************/
-/***/ ((__unused_webpack_module, exports) => {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
-eval("\nObject.defineProperty(exports, \"__esModule\", ({ value: true }));\nexports.NAV_ITEMS = void 0;\nvar NAV_ITEMS = [\n    { id: \"overview\", display: \"Overview\" },\n    { id: \"config\", display: \"Runtime config\" },\n    { id: \"clickhouse\", display: \"ClickHouse\" },\n];\nexports.NAV_ITEMS = NAV_ITEMS;\n\n\n//# sourceURL=webpack://snuba-admin/./static/data.tsx?");
+eval("\nvar __importDefault = (this && this.__importDefault) || function (mod) {\n    return (mod && mod.__esModule) ? mod : { \"default\": mod };\n};\nObject.defineProperty(exports, \"__esModule\", ({ value: true }));\nexports.NAV_ITEMS = void 0;\nvar runtime_config_1 = __importDefault(__webpack_require__(/*! ./runtime_config */ \"./static/runtime_config.tsx\"));\nfunction Placeholder() {\n    return null;\n}\nvar NAV_ITEMS = [\n    { id: \"overview\", display: \"Overview\", component: Placeholder },\n    { id: \"config\", display: \"Runtime config\", component: runtime_config_1.default },\n    { id: \"clickhouse\", display: \"ClickHouse\", component: Placeholder },\n];\nexports.NAV_ITEMS = NAV_ITEMS;\n\n\n//# sourceURL=webpack://snuba-admin/./static/data.tsx?");
 
 /***/ }),
 
@@ -147,6 +147,26 @@ eval("\nvar __createBinding = (this && this.__createBinding) || (Object.create ?
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 eval("\nvar __importDefault = (this && this.__importDefault) || function (mod) {\n    return (mod && mod.__esModule) ? mod : { \"default\": mod };\n};\nObject.defineProperty(exports, \"__esModule\", ({ value: true }));\nvar react_1 = __importDefault(__webpack_require__(/*! react */ \"./node_modules/react/index.js\"));\nvar theme_1 = __webpack_require__(/*! ./theme */ \"./static/theme.tsx\");\nvar data_1 = __webpack_require__(/*! ./data */ \"./static/data.tsx\");\nfunction Nav(props) {\n    var active = props.active, navigate = props.navigate;\n    return (react_1.default.createElement(\"nav\", { style: navStyle },\n        react_1.default.createElement(\"ul\", { style: ulStyle }, data_1.NAV_ITEMS.map(function (item) {\n            return item.id === active ? (react_1.default.createElement(\"li\", { key: item.id, style: { color: theme_1.COLORS.NAV_ACTIVE_TEXT } },\n                react_1.default.createElement(\"a\", { className: \"nav-link-active\", style: linkStyle }, item.display))) : (react_1.default.createElement(\"li\", { key: item.id, style: { color: theme_1.COLORS.NAV_INACTIVE_TEXT } },\n                react_1.default.createElement(\"a\", { className: \"nav-link\", style: linkStyle, onClick: function () { return navigate(item.id); } }, item.display)));\n        }))));\n}\nvar navStyle = {\n    borderRight: \"1px solid #cbcbcb\",\n    width: \"250px\",\n};\nvar ulStyle = {\n    listStyleType: \"none\",\n    margin: 0,\n    padding: 0,\n};\nvar linkStyle = {\n    display: \"block\",\n    cursor: \"pointer\",\n    padding: \"20px\",\n};\nexports[\"default\"] = Nav;\n\n\n//# sourceURL=webpack://snuba-admin/./static/nav.tsx?");
+
+/***/ }),
+
+/***/ "./static/runtime_config.tsx":
+/*!***********************************!*\
+  !*** ./static/runtime_config.tsx ***!
+  \***********************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+eval("\nvar __importDefault = (this && this.__importDefault) || function (mod) {\n    return (mod && mod.__esModule) ? mod : { \"default\": mod };\n};\nObject.defineProperty(exports, \"__esModule\", ({ value: true }));\nvar react_1 = __importDefault(__webpack_require__(/*! react */ \"./node_modules/react/index.js\"));\nvar table_1 = __importDefault(__webpack_require__(/*! ./table */ \"./static/table.tsx\"));\nfunction RuntimeConfig() {\n    return react_1.default.createElement(table_1.default, null);\n}\nexports[\"default\"] = RuntimeConfig;\n\n\n//# sourceURL=webpack://snuba-admin/./static/runtime_config.tsx?");
+
+/***/ }),
+
+/***/ "./static/table.tsx":
+/*!**************************!*\
+  !*** ./static/table.tsx ***!
+  \**************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+eval("\nvar __importDefault = (this && this.__importDefault) || function (mod) {\n    return (mod && mod.__esModule) ? mod : { \"default\": mod };\n};\nObject.defineProperty(exports, \"__esModule\", ({ value: true }));\nvar react_1 = __importDefault(__webpack_require__(/*! react */ \"./node_modules/react/index.js\"));\nfunction Table() {\n    return (react_1.default.createElement(\"table\", null,\n        react_1.default.createElement(\"thead\", null,\n            react_1.default.createElement(\"tr\", null,\n                react_1.default.createElement(\"th\", null, \"header\"))),\n        react_1.default.createElement(\"tbody\", null,\n            react_1.default.createElement(\"tr\", null,\n                react_1.default.createElement(\"td\", null, \"test\")))));\n}\nexports[\"default\"] = Table;\n\n\n//# sourceURL=webpack://snuba-admin/./static/table.tsx?");
 
 /***/ }),
 

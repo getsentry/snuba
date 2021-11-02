@@ -9,7 +9,12 @@ type Props = {
 function Body(props: Props) {
   const activeItem = NAV_ITEMS.find((item) => item.id === props.active)!;
 
-  return <div style={bodyStyle}>{activeItem.display}</div>;
+  return (
+    <div style={bodyStyle}>
+      <div>{activeItem.display}</div>
+      {activeItem.component()}
+    </div>
+  );
 }
 
 const bodyStyle = {
