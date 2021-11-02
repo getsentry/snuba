@@ -168,6 +168,12 @@ class MetricsLoader(DirectoryLoader):
             "0007_metrics_sets_granularity_10",
             "0008_metrics_counters_granularity_10",
             "0009_metrics_distributions_granularity_10",
+            "0010_metrics_sets_granularity_1h",
+            "0011_metrics_counters_granularity_1h",
+            "0012_metrics_distributions_granularity_1h",
+            "0013_metrics_sets_granularity_1d",
+            "0014_metrics_counters_granularity_1d",
+            "0015_metrics_distributions_granularity_1d",
         ]
 
 

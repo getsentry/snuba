@@ -1,4 +1,5 @@
 import functools
+from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
 from arroyo import Topic
@@ -29,6 +30,25 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
 )
 
 
+@dataclass(frozen=True)
+class KafkaParameters:
+    raw_topic: Optional[str]
+    replacements_topic: Optional[str]
+    bootstrap_servers: Sequence[str]
+    group_id: str
+    commit_log_topic: Optional[str]
+    auto_offset_reset: str
+    queued_max_messages_kbytes: int
+    queued_min_messages: int
+
+
+@dataclass(frozen=True)
+class ProcessingParameters:
+    processes: Optional[int]
+    input_block_size: Optional[int]
+    output_block_size: Optional[int]
+
+
 class ConsumerBuilder:
     """
     Simplifies the initialization of a consumer by merging parameters that
@@ -39,25 +59,16 @@ class ConsumerBuilder:
     def __init__(
         self,
         storage_key: StorageKey,
-        raw_topic: Optional[str],
-        replacements_topic: Optional[str],
+        kafka_params: KafkaParameters,
+        processing_params: ProcessingParameters,
         max_batch_size: int,
         max_batch_time_ms: int,
-        bootstrap_servers: Sequence[str],
-        group_id: str,
-        commit_log_topic: Optional[str],
-        auto_offset_reset: str,
-        queued_max_messages_kbytes: int,
-        queued_min_messages: int,
         metrics: MetricsBackend,
-        processes: Optional[int],
-        input_block_size: Optional[int],
-        output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
-        self.bootstrap_servers = bootstrap_servers
+        self.bootstrap_servers = kafka_params.bootstrap_servers
         topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
@@ -66,11 +77,11 @@ class ConsumerBuilder:
         )
 
         self.broker_config = get_default_kafka_configuration(
-            topic, bootstrap_servers=bootstrap_servers
+            topic, bootstrap_servers=kafka_params.bootstrap_servers
         )
         self.producer_broker_config = build_kafka_producer_configuration(
             topic,
-            bootstrap_servers=bootstrap_servers,
+            bootstrap_servers=kafka_params.bootstrap_servers,
             override_params={
                 "partitioner": "consistent",
                 "message.max.bytes": 50000000,  # 50MB, default is 1MB
@@ -80,14 +91,14 @@ class ConsumerBuilder:
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
         self.raw_topic: Topic
-        if raw_topic is not None:
-            self.raw_topic = Topic(raw_topic)
+        if kafka_params.raw_topic is not None:
+            self.raw_topic = Topic(kafka_params.raw_topic)
         else:
             self.raw_topic = Topic(stream_loader.get_default_topic_spec().topic_name)
 
         self.replacements_topic: Optional[Topic]
-        if replacements_topic is not None:
-            self.replacements_topic = Topic(replacements_topic)
+        if kafka_params.replacements_topic is not None:
+            self.replacements_topic = Topic(kafka_params.replacements_topic)
         else:
             replacement_topic_spec = stream_loader.get_replacement_topic_spec()
             if replacement_topic_spec is not None:
@@ -96,8 +107,8 @@ class ConsumerBuilder:
                 self.replacements_topic = None
 
         self.commit_log_topic: Optional[Topic]
-        if commit_log_topic is not None:
-            self.commit_log_topic = Topic(commit_log_topic)
+        if kafka_params.commit_log_topic is not None:
+            self.commit_log_topic = Topic(kafka_params.commit_log_topic)
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
@@ -113,13 +124,13 @@ class ConsumerBuilder:
 
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
-        self.group_id = group_id
-        self.auto_offset_reset = auto_offset_reset
-        self.queued_max_messages_kbytes = queued_max_messages_kbytes
-        self.queued_min_messages = queued_min_messages
-        self.processes = processes
-        self.input_block_size = input_block_size
-        self.output_block_size = output_block_size
+        self.group_id = kafka_params.group_id
+        self.auto_offset_reset = kafka_params.auto_offset_reset
+        self.queued_max_messages_kbytes = kafka_params.queued_max_messages_kbytes
+        self.queued_min_messages = kafka_params.queued_min_messages
+        self.processes = processing_params.processes
+        self.input_block_size = processing_params.input_block_size
+        self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
 
         if commit_retry_policy is None:
