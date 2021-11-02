@@ -1,6 +1,7 @@
-from flask import Flask, Response
+from flask import Flask, Response, jsonify, make_response, request
+from prettytable import PrettyTable
 
-from snuba.admin.clickhouse.system_queries import run_query
+from snuba.admin.clickhouse.system_queries import SystemQuery, run_query
 
 application = Flask(__name__, static_url_path="", static_folder="dist")
 
@@ -10,24 +11,22 @@ def root() -> Response:
     return application.send_static_file("index.html")
 
 
-@application.route("/clickhouse")
+@application.route("/clickhouse_queries")
+def clickhouse_queries() -> Response:
+    res = [q.to_json() for q in SystemQuery.all_queries()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/clickhouse", methods=["POST"])
 def clickhouse() -> str:
-    sql = """
-    SELECT
-      count(),
-      is_currently_executing
-    FROM system.replication_queue
-    GROUP BY is_currently_executing
-    """
-    sql = """
-    SELECT
-        active,
-        count()
-    FROM system.parts
-    GROUP BY active
-    """
-    results, columns = run_query("localhost", "transactions", sql)
-    from prettytable import PrettyTable
+    # TODO: You can do something like this to get all the hosts:
+    # SELECT * FROM system.clusters
+    req = request.get_json()
+    results, columns = run_query(
+        req.get("host", "localhost"),
+        req.get("storage", "transactions"),
+        req.get("query_name"),
+    )
 
     res = PrettyTable()
     res.field_names = [name for name, _ in columns]
