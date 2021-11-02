@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - master
-  # XXX: Temporarily for the PR
   pull_request:
 
 jobs:
@@ -47,7 +46,8 @@ jobs:
 
       - name: Pull snuba CI images
         run: |
-          docker pull ${SNUBA_IMAGE}:latest || true
+          docker pull ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} || \
+            docker pull ${SNUBA_IMAGE}:latest || true
 
       - name: Create Image
         run: |
@@ -65,7 +65,11 @@ jobs:
         # Forks cannot push to the getsentry org
         if: github.repository_owner == 'getsentry'
         run: |
-          # Useful for regression testing on Sentry's checkout
-          docker push ${SNUBA_IMAGE}:${{ github.sha }}
-          # The latest tag should only be published on `master`
-          docker push ${SNUBA_IMAGE}:latest
+          # Useful to speed up PRs
+          docker push ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }}
+          if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
+            # Useful for regression testing on Sentry's checkout
+            docker push ${SNUBA_IMAGE}:${{ github.sha }}
+            # The latest tag should only be published on `master`
+            docker push ${SNUBA_IMAGE}:latest
+          fi

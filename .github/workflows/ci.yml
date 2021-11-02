@@ -71,8 +71,7 @@ jobs:
       - name: Pull snuba CI images
         if: github.repository_owner == 'getsentry'
         run: |
-          docker pull ${SNUBA_IMAGE}:${{ github.sha }} || \
-            docker pull ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} || \
+          docker pull ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} || \
             docker pull ${SNUBA_IMAGE}:latest || true
 
       - name: Build snuba docker image for CI
@@ -84,7 +83,6 @@ jobs:
             --cache-from ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
             -t ${SNUBA_IMAGE}:latest \
             -t ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }} \
-            -t ${SNUBA_IMAGE}:${{ github.sha }} \
             --target testing
 
       - name: Publish images for cache
