@@ -159,13 +159,6 @@ class LegacyReplacement(Replacement):
         return self.count_query_template % args
 
 
-def build_project_exclude_groups_key_and_type_key(
-    project_id: int, state_name: Optional[ReplacerState]
-) -> Tuple[str, str]:
-    key = f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
-    return key, f"{key}-type"
-
-
 def set_project_exclude_groups(
     project_id: int,
     group_ids: Sequence[int],
@@ -184,7 +177,7 @@ def set_project_exclude_groups(
     Add replacement type for this replacement.
     """
     now = time.time()
-    key, type_key = build_project_exclude_groups_key_and_type_key(
+    key, type_key = ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
         project_id, state_name
     )
     p = redis_client.pipeline()
@@ -204,19 +197,14 @@ def set_project_exclude_groups(
     p.execute()
 
 
-def build_project_needs_final_key_and_type_key(
-    project_id: int, state_name: Optional[ReplacerState]
-) -> Tuple[str, str]:
-    key = f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
-    return key, f"{key}-type"
-
-
 def set_project_needs_final(
     project_id: int,
     state_name: Optional[ReplacerState],
     replacement_type: ReplacementType,
 ) -> None:
-    key, type_key = build_project_needs_final_key_and_type_key(project_id, state_name)
+    key, type_key = ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
+        project_id, state_name
+    )
     p = redis_client.pipeline()
     p.set(key, time.time(), ex=settings.REPLACER_KEY_TTL)
     p.set(type_key, replacement_type, ex=settings.REPLACER_KEY_TTL)
@@ -235,9 +223,8 @@ class ProjectsQueryFlags:
     the replacement has not yet been merged in the database. These groups should be
     excluded from the data a Query looks through.
     - replacement_types: A set of all replacement types across replacements for the
-    set of project ids. Useful for metrics.
+    set of project ids.
     - latest_replacement_time: The latest timestamp any replacement occured.
-    Useful for comparing against a Query's time range to set the Query as final or not.
     """
 
     needs_final: bool
@@ -329,7 +316,9 @@ class ProjectsQueryFlags:
         above this class.
         """
         needs_final_keys_and_type_keys = [
-            build_project_needs_final_key_and_type_key(project_id, state_name)
+            ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
+                project_id, state_name
+            )
             for project_id in project_ids
         ]
 
@@ -337,7 +326,9 @@ class ProjectsQueryFlags:
             p.get(needs_final_key)
 
         exclude_groups_keys_and_types = [
-            build_project_exclude_groups_key_and_type_key(project_id, state_name)
+            ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
+                project_id, state_name
+            )
             for project_id in project_ids
         ]
 
@@ -408,6 +399,20 @@ class ProjectsQueryFlags:
             if latest_replacements
             else None
         )
+
+    @staticmethod
+    def _build_project_needs_final_key_and_type_key(
+        project_id: int, state_name: Optional[ReplacerState]
+    ) -> Tuple[str, str]:
+        key = f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
+        return key, f"{key}-type"
+
+    @staticmethod
+    def _build_project_exclude_groups_key_and_type_key(
+        project_id: int, state_name: Optional[ReplacerState]
+    ) -> Tuple[str, str]:
+        key = f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
+        return key, f"{key}-type"
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
