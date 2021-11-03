@@ -1,6 +1,6 @@
 const path = require('path');
 
-module.exports = {
+module.exports = (env) => ({
     entry: './static/index.tsx',
     module: {
         rules: [
@@ -18,4 +18,4 @@ module.exports = {
         filename: 'bundle.js',
         path: path.resolve(__dirname, 'dist'),
     },
-};
+})

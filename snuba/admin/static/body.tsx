@@ -1,15 +1,23 @@
 import React from "react";
 
 import { NAV_ITEMS } from "./data";
+import Client from "./api_client";
 
 type Props = {
   active: string;
+  api: Client;
 };
 
 function Body(props: Props) {
-  const activeItem = NAV_ITEMS.find((item) => item.id === props.active)!;
+  const { active, ...rest } = props;
+  const activeItem = NAV_ITEMS.find((item) => item.id === active)!;
 
-  return <div style={bodyStyle}>{activeItem.display}</div>;
+  return (
+    <div style={bodyStyle}>
+      <div style={{ marginBottom: "20px" }}>{activeItem.display}</div>
+      {activeItem.component(rest)}
+    </div>
+  );
 }
 
 const bodyStyle = {
