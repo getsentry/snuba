@@ -3,6 +3,9 @@ const COLORS = {
   HEADER_TEXT: "white",
   NAV_ACTIVE_TEXT: "black",
   NAV_INACTIVE_TEXT: "#858585",
+  NAV_BORDER: "#CBCBCB",
+  TABLE_BORDER: "#CBCBCB",
+  SNUBA_BLUE: "#4681e0",
 };
 
 export { COLORS };

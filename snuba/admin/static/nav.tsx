@@ -37,7 +37,7 @@ function Nav(props: NavProps) {
 }
 
 const navStyle = {
-  borderRight: "1px solid #cbcbcb",
+  borderRight: `1px solid ${COLORS.NAV_BORDER}`,
   width: "250px",
 };
 

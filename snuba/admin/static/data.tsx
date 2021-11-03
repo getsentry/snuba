@@ -1,5 +1,5 @@
-import RunttimeConfig from "./runtime_config";
-import ClickhouseSystemQueries from "./clickhouse"
+import ClickhouseSystemQueries from "./clickhouse";
+import RuntimeConfig from "./runtime_config";
 
 function Placeholder() {
   return null;
@@ -7,8 +7,12 @@ function Placeholder() {
 
 const NAV_ITEMS = [
   { id: "overview", display: "Overview", component: Placeholder },
-  { id: "config", display: "Runtime config", component: RunttimeConfig },
-  { id: "clickhouse", display: "ClickHouse🏚️", component: ClickhouseSystemQueries},
+  { id: "config", display: "Runtime config", component: RuntimeConfig },
+  {
+    id: "clickhouse",
+    display: "ClickHouse🏚️",
+    component: ClickhouseSystemQueries,
+  },
 ];
 
 export { NAV_ITEMS };

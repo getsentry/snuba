@@ -1,6 +1,10 @@
+from typing import Dict, Text, Tuple
+
+import simplejson as json
 from flask import Flask, Response, jsonify, make_response, request
 from prettytable import PrettyTable
 
+from snuba import state
 from snuba.admin.clickhouse.system_queries import SystemQuery, run_query
 
 application = Flask(__name__, static_url_path="", static_folder="dist")
@@ -34,3 +38,12 @@ def clickhouse() -> str:
     for row in results:
         res.add_row(row)
     return f"<pre><code>{str(res)}</code></pre>"
+
+
+@application.route("/configs")
+def config() -> Tuple[Text, int, Dict[str, str]]:
+    return (
+        json.dumps(state.get_raw_configs()),
+        200,
+        {"Content-Type": "application/json"},
+    )

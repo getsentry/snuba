@@ -5,18 +5,20 @@ import Header from "./header";
 import Nav from "./nav";
 import Body from "./body";
 import { NAV_ITEMS } from "./data";
+import Client from "./api_client";
 
-const ADMIN_HOST = process.env.ADMIN_HOST;
-const ADMIN_PORT = process.env.ADMIN_PORT;
-
-if (!ADMIN_HOST || !ADMIN_PORT) {
-  throw new Error("Invalid host/port provided");
-}
+const containerStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  height: "100%",
+};
 
 const bodyStyle = {
-  height: "100%",
+  flexGrow: 1,
   display: "flex",
 };
+
+let client = Client();
 
 ReactDOM.render(<App />, document.getElementById("root"));
 
@@ -42,13 +44,13 @@ function App() {
   }
 
   return (
-    <React.Fragment>
+    <div style={containerStyle}>
       <Header />
       <div style={bodyStyle}>
         <Nav active={activeTab} navigate={navigate} />
-        {activeTab && <Body active={activeTab} />}
+        {activeTab && <Body active={activeTab} api={client} />}
       </div>
-    </React.Fragment>
+    </div>
   );
 }
 
