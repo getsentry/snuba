@@ -8,6 +8,12 @@ type SystemQuery = {
     sql: string,
 }
 
+type QueryRequest = {
+    host: string,
+    storage: string,
+    query_name: string,
+}
+
 const ClickhouseSystemQueries = () => {
 
     const [availableQueries, setQueries] = useState<SystemQuery[]>([])
@@ -15,6 +21,17 @@ const ClickhouseSystemQueries = () => {
     async function requestQueries() {
         const res = await fetch("clickhouse_queries")
         setQueries(await res.json());
+    }
+
+    async function runQuery(queryName: string) {
+        const params = {
+            host: "localhost", // TODO (this should be a dropdown)
+            storage: "transactions", // TODO This should be a dropdown
+            query_name: queryName
+        }
+
+        const result = await fetch("run_clickhouse_query", {headers: {"Content-Type": "application/json"}, method: "POST", body: JSON.stringify(params)})
+        console.log(await result.text())
     }
 
     useEffect(() => { requestQueries() }, []);
@@ -34,6 +51,7 @@ const ClickhouseSystemQueries = () => {
                       {item.sql}
                     </code>
                   </pre>
+                  <button onClick={async () => {await runQuery(item.name)}}>{"Run me!"}</button>
                 </li>
             ))}
         </ul>

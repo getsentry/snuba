@@ -17,11 +17,12 @@ def clickhouse_queries() -> Response:
     return make_response(jsonify(res), 200)
 
 
-@application.route("/clickhouse", methods=["POST"])
+@application.route("/run_clickhouse_query", methods=["POST"])
 def clickhouse() -> str:
     # TODO: You can do something like this to get all the hosts:
     # SELECT * FROM system.clusters
     req = request.get_json()
+    print("REQUEST: ", request, req)
     results, columns = run_query(
         req.get("host", "localhost"),
         req.get("storage", "transactions"),
