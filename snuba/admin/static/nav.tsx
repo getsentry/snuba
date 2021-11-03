@@ -14,13 +14,13 @@ function Nav(props: NavProps) {
       <ul style={ulStyle}>
         {NAV_ITEMS.map((item) =>
           item.id === active ? (
-            <li key={item.id} style={{ color: COLORS.NAV_ACTIVE_TEXT }}>
+            <li key={item.id} style={{ color: COLORS.TEXT_DEFAULT }}>
               <a className="nav-link-active" style={linkStyle}>
                 {item.display}
               </a>
             </li>
           ) : (
-            <li key={item.id} style={{ color: COLORS.NAV_INACTIVE_TEXT }}>
+            <li key={item.id} style={{ color: COLORS.TEXT_INACTIVE }}>
               <a
                 className="nav-link"
                 style={linkStyle}
@@ -38,7 +38,7 @@ function Nav(props: NavProps) {
 
 const navStyle = {
   borderRight: `1px solid ${COLORS.NAV_BORDER}`,
-  width: "250px",
+  width: 250,
 };
 
 const ulStyle = {
@@ -50,7 +50,7 @@ const ulStyle = {
 const linkStyle = {
   display: "block",
   cursor: "pointer",
-  padding: "20px",
+  padding: 20,
 };
 
 export default Nav;

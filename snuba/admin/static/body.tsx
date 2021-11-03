@@ -14,7 +14,7 @@ function Body(props: Props) {
 
   return (
     <div style={bodyStyle}>
-      <div style={{ marginBottom: "20px" }}>{activeItem.display}</div>
+      <div style={{ marginBottom: 20 }}>{activeItem.display}</div>
       {activeItem.component(rest)}
     </div>
   );
@@ -22,7 +22,7 @@ function Body(props: Props) {
 
 const bodyStyle = {
   width: "100%",
-  margin: "20px",
+  margin: 20,
   fontSize: 20,
 };
 

@@ -1,21 +1,30 @@
-import React from "react";
+import React, { ReactNode } from "react";
 
 import { COLORS } from "./theme";
 
-type Props = {
-  headerData: any[];
-  rowData: any[][];
+type TableProps = {
+  headerData: ReactNode[];
+  rowData: ReactNode[][];
+  columnWidths: number[];
 };
 
-function Table(props: Props) {
-  const { headerData, rowData } = props;
+function Table(props: TableProps) {
+  const { headerData, rowData, columnWidths } = props;
+
+  const sumColumnWidths = columnWidths.reduce((acc, i) => acc + i, 0);
 
   return (
     <table style={tableStyle}>
       <thead style={headerStyle}>
         <tr>
           {headerData.map((col, idx) => (
-            <th key={idx} style={thStyle}>
+            <th
+              key={idx}
+              style={{
+                ...thStyle,
+                width: `${(columnWidths[idx] * 100) / sumColumnWidths}%`,
+              }}
+            >
               {col}
             </th>
           ))}
@@ -43,9 +52,9 @@ const border = {
 const tableStyle = {
   ...border,
   borderCollapse: "collapse" as const,
-  width: "800px",
-  maxWidth: "100%",
-  fontSize: "16px",
+  width: "100%",
+  fontSize: 16,
+  marginBottom: 20,
 };
 
 const headerStyle = {
@@ -56,13 +65,35 @@ const headerStyle = {
 const thStyle = {
   ...border,
   fontWeight: 600,
-  padding: "10px",
+  padding: 10,
   textAlign: "left" as const,
 };
 
 const tdStyle = {
   ...border,
-  padding: "10px",
+  padding: 10,
 };
 
-export default Table;
+type EditableTableCellProps = {
+  options: { value: any; label: string }[];
+  selected: any;
+  onChange: (value: any) => void;
+};
+
+function SelectableTableCell(props: EditableTableCellProps) {
+  const { options, selected, onChange } = props;
+  return (
+    <div>
+      <select value={selected} onChange={onChange}>
+        <option>Select an option</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export { Table, SelectableTableCell };
