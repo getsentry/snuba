@@ -1,6 +1,6 @@
 from flask import Flask, Response
 
-application = Flask(__name__, static_url_path="", static_folder="dist")
+application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 
 @application.route("/")

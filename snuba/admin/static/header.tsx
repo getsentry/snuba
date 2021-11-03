@@ -4,7 +4,11 @@ import { COLORS } from "./theme";
 function Header() {
   return (
     <header style={headerStyle}>
-      <img style={{ height: "100%" }} src="snuba.svg" alt="Snuba admin" />
+      <img
+        style={{ height: "100%" }}
+        src="./static/snuba.svg"
+        alt="Snuba admin"
+      />
       <span style={adminTextStyle}>ADMIN</span>
     </header>
   );
