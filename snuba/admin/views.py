@@ -15,6 +15,11 @@ def root() -> Response:
     return application.send_static_file("index.html")
 
 
+@application.route("/health")
+def health() -> Response:
+    return Response("OK", 200)
+
+
 @application.route("/test-slack")
 def test_slack() -> Response:
     from typing import Dict, Union
