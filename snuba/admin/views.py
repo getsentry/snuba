@@ -1,4 +1,4 @@
-from typing import Dict, Text, Tuple
+from typing import Dict, Text, Tuple, Union
 
 import simplejson as json
 from flask import Flask, Response, jsonify, make_response, request
@@ -60,8 +60,23 @@ def clickhouse() -> str:
 
 @application.route("/configs")
 def config() -> Tuple[Text, int, Dict[str, str]]:
+    config_data = {
+        k: {"value": v, "type": get_config_type(v)}
+        for (k, v) in state.get_raw_configs().items()
+    }
+
     return (
-        json.dumps(state.get_raw_configs()),
+        json.dumps(config_data),
         200,
         {"Content-Type": "application/json"},
     )
+
+
+def get_config_type(value: Union[str, int, float]) -> str:
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    raise ValueError("Unexpected config type")

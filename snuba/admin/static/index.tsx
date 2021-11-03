@@ -25,7 +25,7 @@ ReactDOM.render(<App />, document.getElementById("root"));
 function App() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
 
-  // state.activeTab is only be null on the initial page load
+  // state.activeTab is only null on the initial page load
   // In this case, attempt to parse window.location.hash to determine
   // the active page
   if (activeTab === null) {
@@ -34,7 +34,7 @@ function App() {
       const tab = getTab(currentHash);
       setActiveTab(tab);
     } catch {
-      setActiveTab(NAV_ITEMS[0].id);
+      navigate(NAV_ITEMS[0].id);
     }
   }
 
