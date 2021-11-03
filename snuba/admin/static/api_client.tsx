@@ -1,4 +1,4 @@
-import { ConfigType } from "./types";
+import { ConfigType } from "./runtime_config/types";
 
 type Config = { key: string; value: string | number; type: ConfigType };
 

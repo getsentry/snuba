@@ -59,7 +59,7 @@ def clickhouse() -> str:
 
 
 @application.route("/configs", methods=["GET", "POST"])
-def config() -> Response:
+def configs() -> Response:
     if request.method == "POST":
         data = json.loads(request.data)
         try:
