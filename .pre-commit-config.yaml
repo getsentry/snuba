@@ -3,8 +3,8 @@ repos:
     rev: 19.10b0
     hooks:
       - id: black
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.4.0
+  - repo: git://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1
     hooks:
       - id: check-case-conflict
       - id: check-merge-conflict
