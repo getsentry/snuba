@@ -11,11 +11,11 @@ def build_text(data: Any, action: str) -> Optional[str]:
     added = f"```{{'{data['option']}': {data['new']}}}```"
     updated = f"{removed} {added}"
 
-    if action == "Removed":
+    if action == "removed":
         return f"{base} :put_litter_in_its_place:\n\n {removed}"
-    elif action == "Added":
+    elif action == "added":
         return f"{base} :new:\n\n {added}"
-    elif action == "Updated":
+    elif action == "updated":
         return f"{base} :up: :date:\n\n {updated}"
     else:
         # todo: raise error, cause slack won't accept this
