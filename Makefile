@@ -28,3 +28,6 @@ snubadocs:
 
 build-admin:
 	cd snuba/admin && yarn install && yarn run build
+
+watch-admin:
+	cd snuba/admin && yarn install && yarn run watch
