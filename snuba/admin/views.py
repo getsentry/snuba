@@ -7,7 +7,7 @@ from prettytable import PrettyTable
 from snuba import state
 from snuba.admin.clickhouse.system_queries import SystemQuery, run_query
 
-application = Flask(__name__, static_url_path="", static_folder="dist")
+application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 
 @application.route("/")
