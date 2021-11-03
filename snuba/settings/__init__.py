@@ -76,6 +76,10 @@ CONFIG_MEMOIZE_TIMEOUT = 10
 # Sentry Options
 SENTRY_DSN = None
 
+# Snuba Admin Options
+SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
+SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
+
 # Snuba Options
 
 SNAPSHOT_LOAD_PRODUCT = "snuba"
