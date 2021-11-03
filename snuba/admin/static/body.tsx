@@ -15,7 +15,7 @@ function Body(props: Props) {
   return (
     <div style={bodyStyle}>
       <div style={{ marginBottom: 20 }}>{activeItem.display}</div>
-      {activeItem.component(rest)}
+      <activeItem.component {...rest} />
     </div>
   );
 }
