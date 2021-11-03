@@ -19,3 +19,7 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 # something and you're at your wit's end, try setting this to False
 # to explore the unrefined Expression structure
 PRETTY_FORMAT_EXPRESSIONS = True
+
+# Admin
+SLACK_API_TOKEN = os.getenv("SLACK_API_TOKEN")
+SNUBA_SLACK_CHANNEL_ID = os.getenv("SNUBA_SLACK_CHANNEL_ID")
