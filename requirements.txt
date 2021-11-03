@@ -29,7 +29,6 @@ more-itertools==4.2.0
 mypy>=0.812,<0.900
 packaging==17.1
 parsimonious==0.8.1
-prettytable==2.3.0
 py==1.10.0
 pyparsing==2.2.0
 pytest==6.1.2
