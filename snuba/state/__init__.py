@@ -4,6 +4,7 @@ import logging
 import random
 import re
 import time
+from dataclasses import dataclass
 from functools import partial
 from typing import (
     Any,
@@ -15,6 +16,7 @@ from typing import (
     SupportsFloat,
     SupportsInt,
     Tuple,
+    Type,
 )
 
 import simplejson as json
@@ -50,6 +52,12 @@ queries_list = "snuba-queries"
 max_query_duration_s = 60
 # Window for determining query rate
 rate_lookback_s = 60
+
+
+@dataclass(frozen=True)
+class MismatchedTypeException(Exception):
+    original_type: Type[Any]
+    new_type: Type[Any]
 
 
 def get_concurrent(bucket: str) -> Any:
@@ -130,24 +138,40 @@ def abtest(value: Optional[Any]) -> Optional[Any]:
     return value
 
 
-def set_config(key: str, value: Optional[Any], user: Optional[str] = None) -> None:
+def set_config(
+    key: str, value: Optional[Any], user: Optional[str] = None, force: bool = False
+) -> None:
     if value is not None:
-        value = "{}".format(value).encode("utf-8")
+        enc_value = "{}".format(value).encode("utf-8")
+    else:
+        enc_value = b""
 
     try:
-        original_value = rds.hget(config_hash, key)
-        if value == original_value:
-            return
+        enc_original_value = rds.hget(config_hash, key)
+        if enc_original_value is not None and value is not None:
+            original_value = numeric(enc_original_value.decode("utf-8"))
+            if value == original_value:
+                return
 
-        change_record = (time.time(), user, original_value, value)
+            if not force and type(value) != type(original_value):
+                raise MismatchedTypeException(type(original_value), type(value))
+
+        change_record = (time.time(), user, enc_original_value, enc_value)
         if value is None:
             rds.hdel(config_hash, key)
             rds.hdel(config_history_hash, key)
         else:
-            rds.hset(config_hash, key, value)
+            rds.hset(config_hash, key, enc_value)
             rds.hset(config_history_hash, key, json.dumps(change_record))
         rds.lpush(config_changes_list, json.dumps((key, change_record)))
         rds.ltrim(config_changes_list, 0, config_changes_list_limit)
+        logger.info(f"Successfully changed option {key} to {value}")
+        # TODO: Link with the notification system
+    except MismatchedTypeException as exc:
+        logger.exception(
+            f"Mismatched types for {key}: Original type: {exc.original_type}, New type: {exc.new_type}"
+        )
+        raise exc
     except Exception as ex:
         logger.exception(ex)
 
