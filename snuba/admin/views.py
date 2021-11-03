@@ -19,7 +19,7 @@ def root() -> Response:
 def test_slack() -> Response:
     from typing import Dict, Union
 
-    from snuba.admin.slack.client import runtime_config_slack_client
+    from snuba.admin.notifications.base import rc_log_client, rc_slack_client
 
     data: Dict[str, Union[str, float, int]] = {
         "option": "enable_events_read_only_table",
@@ -27,9 +27,8 @@ def test_slack() -> Response:
         "new": 1,
     }
 
-    runtime_config_slack_client.notify(
-        action="Removed", option_data=data, user="meredith@sentry.io"
-    )
+    rc_slack_client.notify(action="updated", data=data, user="meredith@sentry.io")
+    rc_log_client.notify(action="updated", data=data, user="meredith@sentry.io")
 
     return application.send_static_file("index.html")
 
