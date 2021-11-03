@@ -1,4 +1,4 @@
-from typing import Dict, Text, Tuple, Union
+from typing import Union
 
 import simplejson as json
 from flask import Flask, Response, jsonify, make_response, request
@@ -58,18 +58,63 @@ def clickhouse() -> str:
     return f"<pre><code>{str(res)}</code></pre>"
 
 
-@application.route("/configs")
-def config() -> Tuple[Text, int, Dict[str, str]]:
-    config_data = {
-        k: {"value": v, "type": get_config_type(v)}
-        for (k, v) in state.get_raw_configs().items()
-    }
+@application.route("/configs", methods=["GET", "POST"])
+def config() -> Response:
+    if request.method == "POST":
+        data = json.loads(request.data)
+        try:
+            key = data["key"]
+            value = data["value"]
+            type = data["type"]
 
-    return (
-        json.dumps(config_data),
-        200,
-        {"Content-Type": "application/json"},
-    )
+            # Ensure correct types as JavaScript does not
+            # distinguish ints and floats
+            if type == "string":
+                assert isinstance(value, str)
+            elif type == "int":
+                assert isinstance(value, int)
+            elif type == "float":
+                if isinstance(value, int):
+                    value = float(value)
+                assert isinstance(value, float)
+            else:
+                raise ValueError("Invalid type")
+
+        except (KeyError, AssertionError, ValueError):
+            return Response(
+                json.dumps({"error": "Invalid config"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+
+        existing_config = state.get_config(key)
+        if existing_config is not None:
+            return Response(
+                json.dumps({"error": f"Config with key {key} exists"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+
+        state.set_config(
+            key, value, user=request.headers.get("X-Goog-Authenticated-User-Email"),
+        )
+
+        # Optimistically return the new config as it will take longer to actually
+        # get saved
+        config = {"key": key, "value": value, "type": type}
+
+        return Response(json.dumps(config), 200, {"Content-Type": "application/json"},)
+
+    else:
+
+        config_data = [
+            {"key": k, "value": v, "type": get_config_type(v)}
+            for (k, v) in state.get_raw_configs().items()
+        ]
+
+        return Response(
+            json.dumps(config_data), 200, {"Content-Type": "application/json"},
+        )
 
 
 def get_config_type(value: Union[str, int, float]) -> str:
