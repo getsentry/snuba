@@ -125,6 +125,14 @@ def build_request(
             "snuba_query_raw",
             textwrap.wrap(repr(request.body), 100, break_long_words=False),
         )
+        sentry_sdk.add_breadcrumb(
+            category="query_info",
+            level="info",
+            message="snuba_query_raw",
+            data={
+                "query": textwrap.wrap(repr(request.body), 100, break_long_words=False)
+            },
+        )
 
         timer.mark("validate_schema")
         return request
