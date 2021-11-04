@@ -38,6 +38,7 @@ class TestState:
     def test_config_types(self) -> None:
         # Tests for bools
         state.set_config("test_bool", False)
+        assert state.get_config("test_bool") is False
         state.set_config("test_bool", True)
         with pytest.raises(MismatchedTypeException):
             state.set_config("test_bool", 0.1)
@@ -47,6 +48,7 @@ class TestState:
 
         # Tests for ints
         state.set_config("test_int", 1)
+        assert state.get_config("test_int") == 1
         state.set_config("test_int", 2)
         with pytest.raises(MismatchedTypeException):
             state.set_config("test_int", 0.1)
@@ -56,6 +58,7 @@ class TestState:
 
         # Tests for floats
         state.set_config("test_float", 0.1)
+        assert state.get_config("test_float") == 0.1
         state.set_config("test_float", 0.2)
         with pytest.raises(MismatchedTypeException):
             state.set_config("test_float", 1)
@@ -65,6 +68,7 @@ class TestState:
 
         # Tests for strings
         state.set_config("test_str", "some_string")
+        assert state.get_config("test_str") == "some_string"
         state.set_config("test_str", "some_other_string")
         with pytest.raises(MismatchedTypeException):
             state.set_config("test_str", 1)

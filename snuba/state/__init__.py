@@ -164,10 +164,9 @@ def set_config(
         change_record = (time.time(), user, enc_original_value, enc_value)
         if value is None:
             rds.hdel(config_hash, key)
-            rds.hdel(config_history_hash, key)
         else:
             rds.hset(config_hash, key, enc_value)
-            rds.hset(config_history_hash, key, json.dumps(change_record))
+        rds.hset(config_history_hash, key, json.dumps(change_record))
         rds.lpush(config_changes_list, json.dumps((key, change_record)))
         rds.ltrim(config_changes_list, 0, config_changes_list_limit)
         logger.info(f"Successfully changed option {key} to {value}")
