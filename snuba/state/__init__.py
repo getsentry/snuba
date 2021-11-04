@@ -184,7 +184,7 @@ def set_configs(
     values: Mapping[str, Optional[Any]], user: Optional[str] = None, force: bool = False
 ) -> None:
     for k, v in values.items():
-        set_config(k, v, user=user, force=force)
+        set_config(k, numeric(v), user=user, force=force)
 
 
 def get_config(key: str, default: Optional[Any] = None) -> Optional[Any]:
