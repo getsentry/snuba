@@ -6,6 +6,10 @@ import { ConfigKey, ConfigValue, ConfigType, RowData } from "./types";
 
 const TYPES = ["string", "int", "float"];
 
+function Space() {
+  return <span style={{ display: "block", margin: 5 }}></span>;
+}
+
 function getReadonlyRow(
   key: ConfigKey,
   value: ConfigValue,
@@ -29,23 +33,31 @@ function getEditableRow(
   key: ConfigKey,
   value: ConfigValue,
   type: ConfigType,
-  cancelEdit: () => void
+  updateValue: (value: ConfigValue) => void,
+  save: () => void,
+  deleteRow: () => void,
+  cancel: () => void
 ): RowData {
   return [
     key,
-    value,
+    <EditableTableCell
+      multiline={false}
+      value={value}
+      onChange={updateValue}
+    />,
     type,
-    // <SelectableTableCell
-    //   options={types.map((type) => ({ value: type, label: type }))}
-    //   selected={type}
-    //   onChange={() => {}}
-    // />,
     <span>
-      <a style={linkStyle} onClick={() => cancelEdit()}>
+      <a style={linkStyle} onClick={() => save()}>
+        <strong>save changes</strong>
+      </a>
+      <Space />
+      <a style={{ ...linkStyle, color: "red" }} onClick={() => deleteRow()}>
+        delete
+      </a>
+      <Space />
+      <a style={linkStyle} onClick={() => cancel()}>
         cancel editing
       </a>
-      <span style={{ display: "block", margin: 5 }}></span>
-      <a style={{ ...linkStyle, color: "red" }}>delete</a>
     </span>,
   ];
 }
@@ -57,6 +69,7 @@ function getNewRow(
   updateKey: (key: ConfigKey) => void,
   updateValue: (value: ConfigValue) => void,
   updateType: (type: ConfigType) => void,
+  cancel: () => void,
   save: () => void
 ): [ReactNode, ReactNode, ReactNode, ReactNode] {
   return [
@@ -67,7 +80,15 @@ function getNewRow(
       selected={type}
       onChange={updateType}
     />,
-    <a onClick={save}>save</a>,
+    <span>
+      <a style={linkStyle} onClick={save}>
+        <strong>save</strong>
+      </a>
+      <Space />
+      <a style={linkStyle} onClick={() => cancel()}>
+        cancel
+      </a>
+    </span>,
   ];
 }
 

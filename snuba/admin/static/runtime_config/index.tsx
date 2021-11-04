@@ -4,7 +4,7 @@ import Client from "../api_client";
 import { ConfigKey, ConfigValue, ConfigType, RowData } from "./types";
 
 import { getReadonlyRow, getEditableRow, getNewRow } from "./row_data";
-import { linkStyle, containerStyle } from "./styles";
+import { linkStyle, containerStyle, paragraphStyle } from "./styles";
 
 function RuntimeConfig(props: { api: Client }) {
   const { api } = props;
@@ -15,7 +15,9 @@ function RuntimeConfig(props: { api: Client }) {
   >(null);
 
   // Key of existing row being edited (if any)
-  const [currentlyEditing, setCurrentlyEditing] = useState<string | null>(null);
+  const [currentlyEditing, setCurrentlyEditing] = useState<ConfigKey | null>(
+    null
+  );
 
   // True if we are adding a brand new config, otherwise false
   const [addingNew, setAddingNew] = useState(false);
@@ -54,14 +56,47 @@ function RuntimeConfig(props: { api: Client }) {
     resetCurrentRowData();
   }
 
+  function enterEditMode(key: ConfigKey, value: ConfigValue, type: ConfigType) {
+    setCurrentRowData({ key, value, type });
+    setCurrentlyEditing(key);
+  }
+
   if (data) {
     const rowData: RowData[] = data.map((row) => {
       const { key, value, type } = row;
       const isEditing = key === currentlyEditing;
+      const showActions = currentlyEditing === null && addingNew === false;
       return isEditing
-        ? getEditableRow(key, value, type, () => setCurrentlyEditing(null))
-        : getReadonlyRow(key, value, type, currentlyEditing === null, () =>
-            setCurrentlyEditing(key)
+        ? getEditableRow(
+            currentRowData.key,
+            currentRowData.value,
+            currentRowData.type,
+            (newValue) => {
+              setCurrentRowData((prev) => {
+                return { ...prev, value: newValue };
+              });
+            },
+            () => {
+              console.log("saving");
+            },
+            () => {
+              if (window.confirm(`Are you sure you want to delete ${key}?`)) {
+                api.deleteConfig(key).then(() => {
+                  setData((prev) => {
+                    if (prev) {
+                      return prev.filter((config) => config.key !== key);
+                    }
+
+                    return prev;
+                  });
+                  resetForm();
+                });
+              }
+            },
+            () => setCurrentlyEditing(null)
+          )
+        : getReadonlyRow(key, value, type, showActions, () =>
+            enterEditMode(key, value, type)
           );
     });
 
@@ -83,6 +118,7 @@ function RuntimeConfig(props: { api: Client }) {
             setCurrentRowData((prev) => {
               return { ...prev, type: newType };
             }),
+          resetForm,
           () => {
             api
               .createNewConfig(
@@ -111,14 +147,17 @@ function RuntimeConfig(props: { api: Client }) {
 
     return (
       <div style={containerStyle}>
+        <p style={paragraphStyle}>These are the current configurations.</p>
         <Table
           headerData={["Key", "Value", "Type", "Actions"]}
           rowData={rowData}
           columnWidths={[3, 5, 2, 1]}
         />
-        <a onClick={addNewConfig} style={linkStyle}>
-          add new
-        </a>
+        {!addingNew && !currentlyEditing && (
+          <a onClick={addNewConfig} style={linkStyle}>
+            add new
+          </a>
+        )}
       </div>
     );
   } else {

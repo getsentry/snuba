@@ -12,4 +12,9 @@ const linkStyle = {
   textDecoration: "underline",
 };
 
-export { containerStyle, linkStyle };
+const paragraphStyle = {
+  fontSize: 15,
+  color: COLORS.TEXT_LIGHTER,
+};
+
+export { containerStyle, linkStyle, paragraphStyle };

@@ -4,6 +4,8 @@ type ConfigKey = string;
 type ConfigValue = string | number;
 type ConfigType = "string" | "int" | "float";
 
+type Config = { key: ConfigKey; value: ConfigValue; type: ConfigType };
+
 type RowData = [ReactNode, ReactNode, ReactNode, ReactNode];
 
-export { ConfigKey, ConfigValue, ConfigType, RowData };
+export { Config, ConfigKey, ConfigValue, ConfigType, RowData };

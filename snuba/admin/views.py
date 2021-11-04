@@ -68,26 +68,25 @@ def configs() -> Response:
     if request.method == "POST":
         data = json.loads(request.data)
         try:
-            key = data["key"]
-            value = data["value"]
-            type = data["type"]
+            key, value, type = data["key"], data["value"], data["type"]
 
             # Ensure correct types as JavaScript does not
             # distinguish ints and floats
             if type == "string":
-                assert isinstance(value, str)
+                assert isinstance(value, str), "Invalid string value"
+                assert value != "", "Empty string not a valid config"
             elif type == "int":
-                assert isinstance(value, int)
+                assert isinstance(value, int), "Invalid int value"
             elif type == "float":
                 if isinstance(value, int):
                     value = float(value)
-                assert isinstance(value, float)
+                assert isinstance(value, float), "Invalid float value"
             else:
                 raise ValueError("Invalid type")
 
-        except (KeyError, AssertionError, ValueError):
+        except (KeyError, AssertionError, ValueError) as exc:
             return Response(
-                json.dumps({"error": "Invalid config"}),
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
                 {"Content-Type": "application/json"},
             )
@@ -104,22 +103,48 @@ def configs() -> Response:
             key, value, user=request.headers.get("X-Goog-Authenticated-User-Email"),
         )
 
-        # Optimistically return the new config as it will take longer to actually
-        # get saved
+        # Optimistically return the new config as it will take longer to refetch
+        # the value
         config = {"key": key, "value": value, "type": type}
 
-        return Response(json.dumps(config), 200, {"Content-Type": "application/json"},)
+        return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
     else:
 
         config_data = [
             {"key": k, "value": v, "type": get_config_type(v)}
-            for (k, v) in state.get_raw_configs().items()
+            for (k, v) in state.get_actually_raw_configs().items()
         ]
 
         return Response(
             json.dumps(config_data), 200, {"Content-Type": "application/json"},
         )
+
+
+# TODO: This API means only characters that are valid in a URL can be
+# used as a config key. Should we support other characters too?
+@application.route("/configs/<config_key>", methods=["PUT", "DELETE"])
+def config(config_key: str) -> Response:
+    if request.method == "DELETE":
+        state.delete_config(config_key)
+        return Response("", 200)
+
+    if request.method == "PUT":
+        data = json.loads(request.data)
+
+        try:
+            key, value, type = data["key"], data["value"], data["type"]
+            print(key, value, type)
+        except (KeyError) as exc:
+            return Response(
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+
+        return Response(json.dumps({}), 200, {"Content-Type": "application/json"})
+
+    raise
 
 
 def get_config_type(value: Union[str, int, float]) -> str:
@@ -130,3 +155,12 @@ def get_config_type(value: Union[str, int, float]) -> str:
     if isinstance(value, float):
         return "float"
     raise ValueError("Unexpected config type")
+
+
+@application.route("/config_auditlog")
+def config_changes() -> Response:
+    return Response(
+        json.dumps(state.get_config_changes()),
+        200,
+        {"Content-Type": "application/json"},
+    )

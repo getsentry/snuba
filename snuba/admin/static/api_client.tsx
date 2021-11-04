@@ -1,14 +1,18 @@
-import { ConfigType } from "./runtime_config/types";
-
-type Config = { key: string; value: string | number; type: ConfigType };
+import {
+  Config,
+  ConfigKey,
+  ConfigValue,
+  ConfigType,
+} from "./runtime_config/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (
-    key: string,
-    value: string | number,
+    key: ConfigKey,
+    value: ConfigValue,
     type: ConfigType
   ) => Promise<Config>;
+  deleteConfig: (key: ConfigKey) => Promise<void>;
 }
 
 function Client() {
@@ -19,11 +23,7 @@ function Client() {
       const url = baseUrl + "configs";
       return fetch(url).then((resp) => resp.json());
     },
-    createNewConfig: (
-      key: string,
-      value: string | number,
-      type: ConfigType
-    ) => {
+    createNewConfig: (key: ConfigKey, value: ConfigValue, type: ConfigType) => {
       const url = baseUrl + "configs";
       const params = { key, value, type };
 
@@ -36,6 +36,19 @@ function Client() {
           return res.json();
         } else {
           throw new Error("Could not create config");
+        }
+      });
+    },
+    deleteConfig: (key: ConfigKey) => {
+      const url = baseUrl + "configs/" + key;
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+      }).then((res) => {
+        if (res.ok) {
+          return;
+        } else {
+          throw new Error("Could not delete config");
         }
       });
     },

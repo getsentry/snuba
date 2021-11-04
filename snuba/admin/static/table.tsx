@@ -83,7 +83,6 @@ function SelectableTableCell(props: {
   return (
     <div>
       <select value={selected} onChange={(evt) => onChange(evt.target.value)}>
-        <option>Select an option</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
