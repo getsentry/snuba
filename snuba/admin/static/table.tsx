@@ -74,45 +74,4 @@ const tdStyle = {
   padding: 10,
 };
 
-function SelectableTableCell(props: {
-  options: { value: any; label: string }[];
-  selected: any;
-  onChange: (value: any) => void;
-}) {
-  const { options, selected, onChange } = props;
-  return (
-    <div>
-      <select value={selected} onChange={(evt) => onChange(evt.target.value)}>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function EditableTableCell(props: {
-  multiline: boolean;
-  value: string | number;
-  onChange: (value: string) => void;
-}) {
-  const { multiline, value, onChange } = props;
-
-  if (multiline) {
-    return (
-      <textarea value={value} onChange={(evt) => onChange(evt.target.value)} />
-    );
-  } else {
-    return (
-      <input
-        type="text"
-        value={value}
-        onChange={(evt) => onChange(evt.target.value)}
-      />
-    );
-  }
-}
-
-export { EditableTableCell, SelectableTableCell, Table };
+export { Table };

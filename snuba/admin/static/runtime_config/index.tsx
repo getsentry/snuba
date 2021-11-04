@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { Table } from "../table";
 import Client from "../api_client";
-import { ConfigType, RowData } from "./types";
+import { ConfigKey, ConfigValue, ConfigType, RowData } from "./types";
 
-import { getReadonlyRow } from "./row_data";
 import { containerStyle, paragraphStyle } from "./styles";
 
 function RuntimeConfig(props: { api: Client }) {
@@ -11,7 +10,7 @@ function RuntimeConfig(props: { api: Client }) {
 
   // Data from the API
   const [data, setData] = useState<
-    { key: string; value: string | number; type: ConfigType }[] | null
+    { key: ConfigKey; value: ConfigValue; type: ConfigType }[] | null
   >(null);
 
   // Load data if it was not previously loaded
@@ -29,9 +28,7 @@ function RuntimeConfig(props: { api: Client }) {
     const rowData: RowData[] = data.map((row) => {
       const { key, value, type } = row;
 
-      const showActions = false;
-
-      return getReadonlyRow(key, value, type, showActions);
+      return [key, value, type];
     });
 
     if (!data) {
@@ -42,9 +39,9 @@ function RuntimeConfig(props: { api: Client }) {
       <div style={containerStyle}>
         <p style={paragraphStyle}>These are the current configurations.</p>
         <Table
-          headerData={["Key", "Value", "Type", "Actions"]}
+          headerData={["Key", "Value", "Type"]}
           rowData={rowData}
-          columnWidths={[3, 5, 2, 1]}
+          columnWidths={[3, 5, 2]}
         />
       </div>
     );

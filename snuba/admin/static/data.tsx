@@ -1,4 +1,3 @@
-import ClickhouseSystemQueries from "./clickhouse";
 import RuntimeConfig from "./runtime_config";
 
 function Placeholder(props: any) {

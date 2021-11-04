@@ -196,13 +196,6 @@ def get_config_changes() -> Sequence[Any]:
     return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
 
 
-def get_uncached_config(key: str) -> Optional[Any]:
-    value = rds.hget(config_hash, key.encode("utf-8"))
-    if value is not None:
-        return numeric(value.decode("utf-8"))
-    return None
-
-
 # Query Recording
 
 
