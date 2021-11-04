@@ -9,3 +9,4 @@ htmlcov/
 snuba.egg-info/
 .DS_Store
 .idea/
+node_modules
