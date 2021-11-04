@@ -196,22 +196,11 @@ def get_config_changes() -> Sequence[Any]:
     return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
 
 
-@memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
-def get_actually_raw_configs() -> Mapping[str, Optional[Any]]:
-    return get_uncached_actually_raw_configs()
-
-
-def get_uncached_actually_raw_configs() -> Mapping[str, Optional[Any]]:
-    try:
-        all_configs = rds.hgetall(config_hash)
-        return {
-            k.decode("utf-8"): v.decode("utf-8")
-            for k, v in all_configs.items()
-            if v is not None
-        }
-    except Exception as ex:
-        logger.exception(ex)
-        return {}
+def get_uncached_config(key: str) -> Optional[Any]:
+    value = rds.hget(config_hash, key.encode("utf-8"))
+    if value is not None:
+        return numeric(value.decode("utf-8"))
+    return None
 
 
 # Query Recording

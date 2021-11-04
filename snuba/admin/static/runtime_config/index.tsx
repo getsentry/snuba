@@ -105,7 +105,6 @@ function RuntimeConfig(props: { api: Client }) {
         getNewRow(
           currentRowData.key,
           currentRowData.value,
-          currentRowData.type,
           (newKey) =>
             setCurrentRowData((prev) => {
               return { ...prev, key: newKey };
@@ -114,18 +113,10 @@ function RuntimeConfig(props: { api: Client }) {
             setCurrentRowData((prev) => {
               return { ...prev, value: newValue };
             }),
-          (newType) =>
-            setCurrentRowData((prev) => {
-              return { ...prev, type: newType };
-            }),
           resetForm,
           () => {
             api
-              .createNewConfig(
-                currentRowData.key,
-                currentRowData.value,
-                currentRowData.type
-              )
+              .createNewConfig(currentRowData.key, currentRowData.value)
               .then((res) => {
                 setData((prev) => {
                   if (prev) {

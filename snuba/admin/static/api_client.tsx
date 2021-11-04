@@ -1,17 +1,8 @@
-import {
-  Config,
-  ConfigKey,
-  ConfigValue,
-  ConfigType,
-} from "./runtime_config/types";
+import { Config, ConfigKey, ConfigValue } from "./runtime_config/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
-  createNewConfig: (
-    key: ConfigKey,
-    value: ConfigValue,
-    type: ConfigType
-  ) => Promise<Config>;
+  createNewConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   deleteConfig: (key: ConfigKey) => Promise<void>;
 }
 
@@ -23,9 +14,9 @@ function Client() {
       const url = baseUrl + "configs";
       return fetch(url).then((resp) => resp.json());
     },
-    createNewConfig: (key: ConfigKey, value: ConfigValue, type: ConfigType) => {
+    createNewConfig: (key: ConfigKey, value: ConfigValue) => {
       const url = baseUrl + "configs";
-      const params = { key, value, type };
+      const params = { key, value };
 
       return fetch(url, {
         headers: { "Content-Type": "application/json" },

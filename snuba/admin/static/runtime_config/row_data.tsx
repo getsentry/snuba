@@ -1,7 +1,7 @@
 import React, { ReactNode } from "react";
 
 import { linkStyle } from "./styles";
-import { EditableTableCell, SelectableTableCell } from "../table";
+import { EditableTableCell } from "../table";
 import { ConfigKey, ConfigValue, ConfigType, RowData } from "./types";
 
 const TYPES = ["string", "int", "float"];
@@ -65,21 +65,15 @@ function getEditableRow(
 function getNewRow(
   key: ConfigKey,
   value: ConfigValue,
-  type: ConfigType,
   updateKey: (key: ConfigKey) => void,
   updateValue: (value: ConfigValue) => void,
-  updateType: (type: ConfigType) => void,
   cancel: () => void,
   save: () => void
 ): [ReactNode, ReactNode, ReactNode, ReactNode] {
   return [
     <EditableTableCell multiline={false} value={key} onChange={updateKey} />,
     <EditableTableCell multiline={true} value={value} onChange={updateValue} />,
-    <SelectableTableCell
-      options={TYPES.map((type) => ({ value: type, label: type }))}
-      selected={type}
-      onChange={updateType}
-    />,
+    null,
     <span>
       <a style={linkStyle} onClick={save}>
         <strong>save</strong>

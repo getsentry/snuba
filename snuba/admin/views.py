@@ -68,30 +68,19 @@ def configs() -> Response:
     if request.method == "POST":
         data = json.loads(request.data)
         try:
-            key, value, type = data["key"], data["value"], data["type"]
+            key, value = data["key"], data["value"]
 
-            # Ensure correct types as JavaScript does not
-            # distinguish ints and floats
-            if type == "string":
-                assert isinstance(value, str), "Invalid string value"
-                assert value != "", "Empty string not a valid config"
-            elif type == "int":
-                assert isinstance(value, int), "Invalid int value"
-            elif type == "float":
-                if isinstance(value, int):
-                    value = float(value)
-                assert isinstance(value, float), "Invalid float value"
-            else:
-                raise ValueError("Invalid type")
+            assert isinstance(key, str), "Invalid key"
+            assert isinstance(value, str), "Invalid value"
 
-        except (KeyError, AssertionError, ValueError) as exc:
+        except (KeyError, AssertionError) as exc:
             return Response(
                 json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
                 {"Content-Type": "application/json"},
             )
 
-        existing_config = state.get_config(key)
+        existing_config = state.get_uncached_config(key)
         if existing_config is not None:
             return Response(
                 json.dumps({"error": f"Config with key {key} exists"}),
@@ -103,17 +92,20 @@ def configs() -> Response:
             key, value, user=request.headers.get("X-Goog-Authenticated-User-Email"),
         )
 
+        evaluated_value = state.get_uncached_config(key)
+        assert evaluated_value is not None
+        evaluated_type = get_config_type(evaluated_value)
+
         # Optimistically return the new config as it will take longer to refetch
         # the value
-        config = {"key": key, "value": value, "type": type}
+        config = {"key": key, "value": evaluated_value, "type": evaluated_type}
 
         return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
     else:
-
         config_data = [
             {"key": k, "value": v, "type": get_config_type(v)}
-            for (k, v) in state.get_actually_raw_configs().items()
+            for (k, v) in state.get_raw_configs().items()
         ]
 
         return Response(
@@ -133,9 +125,19 @@ def config(config_key: str) -> Response:
         data = json.loads(request.data)
 
         try:
-            key, value, type = data["key"], data["value"], data["type"]
-            print(key, value, type)
-        except (KeyError) as exc:
+            key, value = data["key"], data["value"]
+
+            # TODO: This is just a placeholder. It should do other stuff
+            # like check that config actually exists and the types match
+
+            assert isinstance(key, str), "Invalid key"
+            assert isinstance(value, str), "Invalid value"
+
+            state.set_config(
+                key, value, user=request.headers.get("X-Goog-Authenticated-User-Email"),
+            )
+
+        except (KeyError, AssertionError) as exc:
             return Response(
                 json.dumps({"error": f"Invalid config: {str(exc)}"}),
                 400,
