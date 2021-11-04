@@ -1,8 +1,10 @@
-import click
 import json
 from typing import Any, Mapping
 
+import click
+
 from snuba import state
+from snuba.state import MismatchedTypeException, numeric
 
 
 def human_fmt(values: Mapping[Any, Any]) -> str:
@@ -55,18 +57,33 @@ def get(*, key: str, format: str) -> None:
 @config.command()
 @click.argument("key")
 @click.argument("value")
-def set(*, key: str, value: str) -> None:
+@click.option(
+    "--force", is_flag=True, default=False, help="Override type checking of values"
+)
+def set(*, key: str, value: str, force: bool) -> None:
     "Set a single key."
-
-    state.set_config(key, value, user=get_user())
+    try:
+        typed_value = numeric(value)
+        state.set_config(key, typed_value, user=get_user(), force=force)
+    except MismatchedTypeException as exc:
+        print(
+            f"The new value type {exc.new_type} does not match the old value type {exc.original_type}. Use the force option to disable this check"
+        )
 
 
 @config.command("set-many")
 @click.argument("data")
-def set_many(*, data: str) -> None:
+@click.option(
+    "--force", is_flag=True, default=False, help="Override type checking of values"
+)
+def set_many(*, data: str, force: bool) -> None:
     "Set multiple keys, input as JSON."
-
-    state.set_configs(json.loads(data), user=get_user())
+    try:
+        state.set_configs(json.loads(data), user=get_user(), force=force)
+    except MismatchedTypeException as exc:
+        print(
+            f"The new value type {exc.new_type} does not match the old value type {exc.original_type}. Use the force option to disable this check"
+        )
 
 
 @config.command()
@@ -80,7 +97,7 @@ def delete(*, key: str) -> None:
         raise click.ClickException(f"Key {key!r} not found.")
 
     click.echo(human_fmt({key: rv}))
-    click.confirm(f"\nAre you sure you want to delete this?", abort=True)
+    click.confirm("\nAre you sure you want to delete this?", abort=True)
 
     state.delete_config(key, user=get_user())
 

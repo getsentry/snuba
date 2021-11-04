@@ -29,13 +29,22 @@ class TestState:
             [("foo", 100), ("bar", 200), ("noexist", 300), ("noexist-2", None)]
         ) == [1, 2, 300, None]
 
-        state.set_configs({"bar": "quux"})
+        state.set_configs({"bar": "quux"}, force=True)
         all_configs = state.get_all_configs()
         assert all(
             all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)]
         )
 
     def test_config_types(self) -> None:
+        # Tests for bools
+        state.set_config("test_bool", False)
+        state.set_config("test_bool", True)
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_bool", 0.1)
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_bool", "some_string")
+        state.set_config("test_bool", None)
+
         # Tests for ints
         state.set_config("test_int", 1)
         state.set_config("test_int", 2)
@@ -65,9 +74,9 @@ class TestState:
 
         # Tests with force option
         state.set_config("some_key", 1)
-        state.set_config("some_key", 0.1)
+        state.set_config("some_key", 0.1, force=True)
         assert state.get_config("some_key") == 0.1
-        state.set_config("some_key", "some_value")
+        state.set_config("some_key", "some_value", force=True)
         assert state.get_config("some_key") == "some_value"
 
     def test_memoize(self) -> None:
