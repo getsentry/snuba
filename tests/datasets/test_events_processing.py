@@ -22,7 +22,13 @@ def test_events_processing() -> None:
     events_entity = events_dataset.get_default_entity()
 
     query = parse_query(query_body, events_dataset)
-    request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
+    request = Request(
+        id="",
+        body=query_body,
+        query=query,
+        snql_anonymized="",
+        settings=HTTPRequestSettings(referrer=""),
+    )
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader

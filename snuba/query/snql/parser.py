@@ -1298,8 +1298,12 @@ def parse_snql_query(
         Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
     ],
     dataset: Dataset,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Tuple[
+    Union[CompositeQuery[QueryEntity], LogicalQuery], str,
+]:
     query = parse_snql_query_initial(body)
+
+    snql_anonymized = ""  # TODO: anonymize_snql(query)
 
     _post_process(
         query, POST_PROCESSORS,
@@ -1317,4 +1321,4 @@ def parse_snql_query(
 
     # Validating
     _post_process(query, VALIDATORS)
-    return query
+    return query, snql_anonymized

@@ -41,6 +41,7 @@ def test_simple() -> None:
         uuid.UUID("a" * 32).hex,
         request_body,
         query,
+        "",
         HTTPRequestSettings(referrer="search"),
     )
 
@@ -74,6 +75,7 @@ def test_simple() -> None:
             )
         ],
         projects={2},
+        snql_anonymized=request.snql_anonymized,
     ).to_dict()
 
     processor = (
@@ -143,6 +145,7 @@ def test_missing_fields() -> None:
         uuid.UUID("a" * 32).hex,
         request_body,
         query,
+        "",
         HTTPRequestSettings(referrer="search"),
     )
 
@@ -176,6 +179,7 @@ def test_missing_fields() -> None:
             )
         ],
         projects={2},
+        snql_anonymized=request.snql_anonymized,
     ).to_dict()
 
     messages = []

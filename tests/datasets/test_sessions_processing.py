@@ -30,7 +30,13 @@ def test_sessions_processing() -> None:
 
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
-    request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
+    request = Request(
+        id="",
+        body=query_body,
+        query=query,
+        snql_anonymized="",
+        settings=HTTPRequestSettings(referrer=""),
+    )
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
@@ -179,7 +185,13 @@ def test_select_storage(
     subscription_settings = (
         SubscriptionRequestSettings if is_subscription else HTTPRequestSettings
     )
-    request = Request("", query_body, query, subscription_settings(referrer=""))
+    request = Request(
+        id="",
+        body=query_body,
+        query=query,
+        snql_anonymized="",
+        settings=subscription_settings(referrer=""),
+    )
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader

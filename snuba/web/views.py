@@ -408,7 +408,7 @@ def dataset_query(
     if language == Language.SNQL:
         parser: Callable[
             [RequestParts, RequestSettings, Dataset],
-            Union[Query, CompositeQuery[Entity]],
+            Tuple[Union[Query, CompositeQuery[Entity]], str],
         ] = partial(parse_snql_query, [])
     else:
         parser = parse_legacy_query

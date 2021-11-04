@@ -1,7 +1,7 @@
 import random
 import textwrap
 import uuid
-from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union
+from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Tuple, Type, Union
 
 import sentry_sdk
 
@@ -26,7 +26,8 @@ from snuba.request.schema import RequestParts, RequestSchema, apply_query_extens
 from snuba.utils.metrics.timer import Timer
 
 Parser = Callable[
-    [RequestParts, RequestSettings, Dataset], Union[Query, CompositeQuery[Entity]]
+    [RequestParts, RequestSettings, Dataset],
+    Tuple[Union[Query, CompositeQuery[Entity]], str],
 ]
 
 
@@ -35,16 +36,16 @@ def parse_snql_query(
     request_parts: RequestParts,
     settings: RequestSettings,
     dataset: Dataset,
-) -> Union[Query, CompositeQuery[Entity]]:
+) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
     return _parse_snql_query(request_parts.query["query"], custom_processing, dataset)
 
 
 def parse_legacy_query(
     request_parts: RequestParts, settings: RequestSettings, dataset: Dataset,
-) -> Union[Query, CompositeQuery[Entity]]:
+) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
     query = parse_query(request_parts.query, dataset)
     apply_query_extensions(query, request_parts.extensions, settings)
-    return query
+    return query, ""
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
@@ -91,7 +92,7 @@ def build_request(
                     referrer=referrer, consistent=_consistent_override(True, referrer),
                 )
 
-            query = parser(request_parts, settings_obj, dataset)
+            query, snql_anonymized = parser(request_parts, settings_obj, dataset)
 
             project_ids = get_object_ids_in_query_ast(query, "project_id")
             if project_ids is not None and len(project_ids) == 1:
@@ -109,6 +110,7 @@ def build_request(
                 # to be careful with the change.
                 ChainMap(request_parts.query, *request_parts.extensions.values()),
                 query,
+                snql_anonymized,
                 settings_obj,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
