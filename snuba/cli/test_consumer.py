@@ -1,5 +1,5 @@
 import signal
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 import click
 from arroyo import configure_metrics
@@ -11,30 +11,21 @@ from snuba.consumers.consumer_builder import (
     ProcessingParameters,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_cdc_storage
+from snuba.datasets.storages.factory import WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
-from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 
 @click.command()
-@click.option("--raw-events-topic", help="Topic to consume raw events from.")
-@click.option(
-    "--replacements-topic", help="Topic to produce replacement messages info.",
-)
 @click.option(
     "--commit-log-topic",
     help="Topic for committed offsets to be written to, triggering post-processing task(s)",
 )
-@click.option("--control-topic", help="Topic used to control the snapshot")
 @click.option(
     "--consumer-group",
     default="snuba-consumers",
     help="Consumer group use for consuming the raw events topic.",
-)
-@click.option(
-    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--storage",
@@ -75,12 +66,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
-    "--stateful-consumer",
-    default=False,
-    type=bool,
-    help="Runs a stateful consumer (that manages snapshots) instead of a basic one.",
-)
-@click.option(
     "--processes", type=int,
 )
 @click.option(
@@ -92,21 +77,16 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
-def consumer(
+def test_consumer(
     *,
-    raw_events_topic: Optional[str],
-    replacements_topic: Optional[str],
     commit_log_topic: Optional[str],
-    control_topic: Optional[str],
     consumer_group: str,
-    bootstrap_server: Sequence[str],
     storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    stateful_consumer: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
@@ -121,7 +101,7 @@ def consumer(
 
     metrics = MetricsWrapper(
         environment.metrics,
-        "consumer",
+        "test_consumer",
         tags={"group": consumer_group, "storage": storage_key.value},
     )
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -129,9 +109,9 @@ def consumer(
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
         kafka_params=KafkaParameters(
-            raw_topic=raw_events_topic,
-            replacements_topic=replacements_topic,
-            bootstrap_servers=bootstrap_server,
+            raw_topic=None,
+            replacements_topic=None,
+            bootstrap_servers=None,
             group_id=consumer_group,
             commit_log_topic=commit_log_topic,
             auto_offset_reset=auto_offset_reset,
@@ -147,34 +127,15 @@ def consumer(
         max_batch_time_ms=max_batch_time_ms,
         metrics=metrics,
         profile_path=profile_path,
+        is_mock=True,
     )
 
-    if stateful_consumer:
-        storage = get_cdc_storage(storage_key)
-        assert (
-            storage is not None
-        ), "Only CDC storages have a control topic thus are supported."
-        context = ConsumerStateMachine(
-            consumer_builder=consumer_builder,
-            topic=control_topic or storage.get_default_control_topic(),
-            group_id=consumer_group,
-            storage=storage,
-        )
+    consumer = consumer_builder.build_base_consumer()
 
-        def handler(signum: int, frame: Any) -> None:
-            context.signal_shutdown()
+    def handler(signum: int, frame: Any) -> None:
+        consumer.signal_shutdown()
 
-        signal.signal(signal.SIGINT, handler)
-        signal.signal(signal.SIGTERM, handler)
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
 
-        context.run()
-    else:
-        consumer = consumer_builder.build_base_consumer()
-
-        def handler(signum: int, frame: Any) -> None:
-            consumer.signal_shutdown()
-
-        signal.signal(signal.SIGINT, handler)
-        signal.signal(signal.SIGTERM, handler)
-
-        consumer.run()
+    consumer.run()

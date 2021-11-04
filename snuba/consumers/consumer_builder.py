@@ -38,7 +38,7 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
 class KafkaParameters:
     raw_topic: Optional[str]
     replacements_topic: Optional[str]
-    bootstrap_servers: Sequence[str]
+    bootstrap_servers: Optional[Sequence[str]]
     group_id: str
     commit_log_topic: Optional[str]
     auto_offset_reset: str
@@ -70,7 +70,7 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
-        mock: bool = False,
+        is_mock: bool = False,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -137,7 +137,7 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
-        self.__mock = mock
+        self.__is_mock = is_mock
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -209,7 +209,7 @@ class ConsumerBuilder:
                 ),
                 replacements_topic=self.replacements_topic,
             )
-            if not self.__mock
+            if not self.__is_mock
             else build_mock_batch_writer(
                 self.storage, bool(self.replacements_topic), self.metrics
             ),
