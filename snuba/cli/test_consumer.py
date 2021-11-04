@@ -8,6 +8,7 @@ from snuba import environment, settings
 from snuba.consumers.consumer_builder import (
     ConsumerBuilder,
     KafkaParameters,
+    MockParameters,
     ProcessingParameters,
 )
 from snuba.datasets.storages import StorageKey
@@ -77,6 +78,18 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
+@click.option(
+    "--avg-latency-ms",
+    default=100,
+    type=int,
+    help="Average write latency the mock writer will apply",
+)
+@click.option(
+    "--latency-std-deviation-ms",
+    default=10,
+    type=int,
+    help="Std deviation to be applied to the latency",
+)
 def test_consumer(
     *,
     commit_log_topic: Optional[str],
@@ -90,6 +103,8 @@ def test_consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
+    avg_latency_ms: int,
+    latency_std_deviation_ms: int,
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
 ) -> None:
@@ -127,7 +142,9 @@ def test_consumer(
         max_batch_time_ms=max_batch_time_ms,
         metrics=metrics,
         profile_path=profile_path,
-        is_mock=True,
+        mock_parameters=MockParameters(
+            avg_write_latency=avg_latency_ms, std_deviation=latency_std_deviation_ms,
+        ),
     )
 
     consumer = consumer_builder.build_base_consumer()

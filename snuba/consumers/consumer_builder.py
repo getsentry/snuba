@@ -53,6 +53,12 @@ class ProcessingParameters:
     output_block_size: Optional[int]
 
 
+@dataclass(frozen=True)
+class MockParameters:
+    avg_write_latency: int
+    std_deviation: int
+
+
 class ConsumerBuilder:
     """
     Simplifies the initialization of a consumer by merging parameters that
@@ -70,7 +76,7 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
-        is_mock: bool = False,
+        mock_parameters: Optional[MockParameters] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -137,7 +143,7 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
-        self.__is_mock = is_mock
+        self.__mock_parameters = mock_parameters
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -209,9 +215,13 @@ class ConsumerBuilder:
                 ),
                 replacements_topic=self.replacements_topic,
             )
-            if not self.__is_mock
+            if self.__mock_parameters is None
             else build_mock_batch_writer(
-                self.storage, bool(self.replacements_topic), self.metrics
+                self.storage,
+                bool(self.replacements_topic),
+                self.metrics,
+                self.__mock_parameters.avg_write_latency,
+                self.__mock_parameters.std_deviation,
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,

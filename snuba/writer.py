@@ -6,7 +6,6 @@ from random import randint
 from time import sleep
 from typing import Any, Generic, Iterable, List, Mapping, TypeVar
 
-from snuba import settings
 from snuba.datasets.storages import StorageKey
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
@@ -82,15 +81,17 @@ class MockBatchWriter(BatchWriter[bytes]):
     in a setting.
     """
 
-    def __init__(self, storage_key: StorageKey) -> None:
-        latencies = settings.MOCK_WRITER_LATENCIES
-        self.__latency_seconds = (
-            latencies.get(storage_key.value, latencies["default"])
-        ) / 1000
+    def __init__(
+        self, storage_key: StorageKey, avg_write_latency: int, std_deviation: int,
+    ) -> None:
+        self.__latency_seconds = (avg_write_latency) / 1000
+        self.__latency_deviation_ms = std_deviation
 
     def write(self, values: Iterable[bytes]) -> None:
-        latency_deviation_ms = settings.MOCK_LATENCY_STD_DEVIATTION
         sleep(
             self.__latency_seconds
-            + (randint(-latency_deviation_ms, latency_deviation_ms) / 1000)
+            + (
+                randint(-self.__latency_deviation_ms, self.__latency_deviation_ms)
+                / 1000
+            )
         )

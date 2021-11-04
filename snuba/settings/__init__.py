@@ -149,12 +149,6 @@ CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 
-# The mock write latency to be applied when "writing" with the mock writer.
-# This is expressed in milliseconds
-MOCK_WRITER_LATENCIES = {"default": 100}
-# Deviation to apply to the above. In milliseconds
-MOCK_LATENCY_STD_DEVIATTION = 50
-
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

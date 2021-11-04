@@ -311,12 +311,18 @@ def build_batch_writer(
 
 
 def build_mock_batch_writer(
-    storage: WritableTableStorage, with_replacements: bool, metrics: MetricsBackend,
+    storage: WritableTableStorage,
+    with_replacements: bool,
+    metrics: MetricsBackend,
+    avg_write_latency: int,
+    std_deviation: int,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
     def build_writer() -> ProcessedMessageBatchWriter:
         return ProcessedMessageBatchWriter(
             InsertBatchWriter(
-                MockBatchWriter(storage.get_storage_key()),
+                MockBatchWriter(
+                    storage.get_storage_key(), avg_write_latency, std_deviation
+                ),
                 MetricsWrapper(
                     metrics,
                     "mock_insertions",
@@ -472,7 +478,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         metrics: MetricsBackend,
-        mock: bool = False,
     ):
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -492,7 +497,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
-        self.__mock = mock
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
@@ -551,26 +555,6 @@ class MultistorageConsumerProcessingStrategyFactory(
             replacement_batch_writer,
         )
 
-    def __build_mock_batch_writer(
-        self, storage: WritableTableStorage
-    ) -> ProcessedMessageBatchWriter:
-        stream_loader = storage.get_table_writer().get_stream_loader()
-        replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-        replacement_writer = (
-            MockReplacementBatchWriter() if replacement_topic_spec is not None else None
-        )
-        return ProcessedMessageBatchWriter(
-            InsertBatchWriter(
-                MockBatchWriter(storage.get_storage_key()),
-                MetricsWrapper(
-                    self.__metrics,
-                    "mock_insertions",
-                    {"storage": storage.get_storage_key().value},
-                ),
-            ),
-            replacement_writer,
-        )
-
     def __build_collector(
         self,
     ) -> ProcessingStep[
@@ -579,8 +563,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         return MultistorageCollector(
             {
                 storage.get_storage_key(): self.__build_batch_writer(storage)
-                if not self.__mock
-                else self.__build_mock_batch_writer(storage)
                 for storage in self.__storages
             }
         )

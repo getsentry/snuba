@@ -17,7 +17,7 @@ def test_mock_consumer() -> None:
     strategy = KafkaConsumerStrategyFactory(
         None,
         lambda message: None,
-        build_mock_batch_writer(storage, True, TestingMetricsBackend()),
+        build_mock_batch_writer(storage, True, TestingMetricsBackend(), 100, 50),
         max_batch_size=1,
         max_batch_time=1,
         processes=None,
