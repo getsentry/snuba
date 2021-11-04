@@ -1,7 +1,7 @@
 import ClickhouseSystemQueries from "./clickhouse";
 import RuntimeConfig from "./runtime_config";
 
-function Placeholder() {
+function Placeholder(props: any) {
   return null;
 }
 
