@@ -11,7 +11,7 @@ const NAV_ITEMS = [
   {
     id: "clickhouse",
     display: "ClickHouse🏚️",
-    component: ClickhouseSystemQueries,
+    component: Placeholder,
   },
 ];
 
