@@ -1292,12 +1292,13 @@ POST_PROCESSORS = [
 VALIDATORS = [validate_query, validate_entities_with_query]
 
 
+CustomProcessors = Sequence[
+    Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+]
+
+
 def parse_snql_query(
-    body: str,
-    custom_processing: Sequence[
-        Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
-    ],
-    dataset: Dataset,
+    body: str, dataset: Dataset, custom_processing: Optional[CustomProcessors] = None,
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
 
@@ -1306,7 +1307,8 @@ def parse_snql_query(
     )
 
     # Custom processing to tweak the AST before validation
-    _post_process(query, custom_processing)
+    if custom_processing is not None:
+        _post_process(query, custom_processing)
 
     # Time based processing
     _post_process(query, [_replace_time_condition])
