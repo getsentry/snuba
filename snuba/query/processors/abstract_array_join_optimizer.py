@@ -131,17 +131,12 @@ Extractor = Callable[[Expression], Set[T]]
 def skippable_condition_pattern(*column_names: str) -> Callable[[Expression], bool]:
     def is_skippable_condition(conditions: Expression) -> bool:
         for column_name in column_names:
-            has_pattern_str = FunctionCall(
-                String("has"),
-                (Column(column_name=String(column_name)), Literal(Any(str))),
-            )
-            has_pattern_int = FunctionCall(
+            has_pattern = FunctionCall(
                 String("has"),
                 (Column(column_name=String(column_name)), Literal(Any(str))),
             )
             if all(
-                has_pattern_str.match(c) or has_pattern_int.match(c)
-                for c in get_first_level_or_conditions(conditions)
+                has_pattern.match(c) for c in get_first_level_or_conditions(conditions)
             ):
                 return True
         return False
