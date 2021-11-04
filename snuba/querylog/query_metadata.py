@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Mapping, MutableSequence, Optional, Set
 
@@ -66,6 +67,8 @@ class ClickhouseQueryProfile:
 class ClickhouseQueryMetadata:
     sql: str
     sql_anonymized: str
+    start_timestamp: Optional[datetime]
+    end_timestamp: Optional[datetime]
     stats: Mapping[str, Any]
     status: QueryStatus
     profile: ClickhouseQueryProfile
@@ -75,6 +78,8 @@ class ClickhouseQueryMetadata:
         return {
             "sql": self.sql,
             "sql_anonymized": self.sql_anonymized,
+            "start_timestamp": self.start_timestamp,
+            "end_timestamp": self.end_timestamp,
             "stats": self.stats,
             "status": self.status.value,
             "trace_id": self.trace_id,
@@ -89,6 +94,8 @@ class SnubaQueryMetadata:
     """
 
     request: Request
+    start_timestamp: Optional[datetime]
+    end_timestamp: Optional[datetime]
     dataset: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
@@ -102,6 +109,8 @@ class SnubaQueryMetadata:
                 "referrer": self.request.referrer,
             },
             "dataset": self.dataset,
+            "start_timestamp": self.start_timestamp,
+            "end_timestamp": self.end_timestamp,
             "query_list": [q.to_dict() for q in self.query_list],
             "status": self.status.value,
             "timing": self.timer.for_json(),
