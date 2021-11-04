@@ -130,6 +130,11 @@ Extractor = Callable[[Expression], Set[T]]
 
 def skippable_condition_pattern(*column_names: str) -> Callable[[Expression], bool]:
     def is_skippable_condition(conditions: Expression) -> bool:
+        """
+        A condition composed of a bunch of has(column, ...) conditions OR'ed together
+        can be ignored when looking for filter keys because these are the conditions
+        used for the bloom filter index on the array column.
+        """
         for column_name in column_names:
             has_pattern = FunctionCall(
                 String("has"),
