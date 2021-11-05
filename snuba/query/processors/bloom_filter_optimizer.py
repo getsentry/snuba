@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import Dict, Optional, Sequence, Set, Tuple
 
 from snuba.clickhouse.query import Query
-from snuba.query.conditions import combine_and_conditions
+from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
@@ -53,15 +53,13 @@ def generate_bloom_filter_condition(
                 per_key_vals[key].add(val)
 
     conditions = [
-        FunctionCallExpr(
-            None,
-            "hasAny",
-            (
-                ColumnExpr(None, None, key),
+        combine_or_conditions(
+            [
                 FunctionCallExpr(
-                    None, "array", tuple(LiteralExpr(None, val) for val in sorted(vals))
-                ),
-            ),
+                    None, "has", (ColumnExpr(None, None, key), LiteralExpr(None, val)),
+                )
+                for val in sorted(vals)
+            ]
         )
         for key, vals in per_key_vals.items()
     ]
