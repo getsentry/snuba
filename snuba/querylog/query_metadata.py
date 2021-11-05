@@ -75,11 +75,13 @@ class ClickhouseQueryMetadata:
     trace_id: Optional[str] = None
 
     def to_dict(self) -> Mapping[str, Any]:
+        start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
+        end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         return {
             "sql": self.sql,
             "sql_anonymized": self.sql_anonymized,
-            "start_timestamp": self.start_timestamp,
-            "end_timestamp": self.end_timestamp,
+            "start_timestamp": start,
+            "end_timestamp": end,
             "stats": self.stats,
             "status": self.status.value,
             "trace_id": self.trace_id,
@@ -102,6 +104,8 @@ class SnubaQueryMetadata:
     projects: Set[int]
 
     def to_dict(self) -> Dict[str, Any]:
+        start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
+        end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         return {
             "request": {
                 "id": self.request.id,
@@ -109,8 +113,8 @@ class SnubaQueryMetadata:
                 "referrer": self.request.referrer,
             },
             "dataset": self.dataset,
-            "start_timestamp": self.start_timestamp,
-            "end_timestamp": self.end_timestamp,
+            "start_timestamp": start,
+            "end_timestamp": end,
             "query_list": [q.to_dict() for q in self.query_list],
             "status": self.status.value,
             "timing": self.timer.for_json(),
