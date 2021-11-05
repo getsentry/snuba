@@ -1647,5 +1647,11 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
 
     query, snql_anonymized = parse_snql_query(query_body, [], events)
 
+    # print("=" * 40)
+    # print(query_body)
+    # print("=" * 40)
+    # print(snql_anonymized)
+    # print("=" * 40)
+
     eq, reason = query.equals(expected_query)
     assert eq, reason
