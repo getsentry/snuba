@@ -12,7 +12,6 @@ from typing import (
     Optional,
     Sequence,
     SupportsFloat,
-    SupportsInt,
     Tuple,
     Type,
 )
@@ -54,6 +53,7 @@ rate_lookback_s = 60
 
 @dataclass(frozen=True)
 class MismatchedTypeException(Exception):
+    key: str
     original_type: Type[Any]
     new_type: Type[Any]
 
@@ -98,13 +98,13 @@ class memoize:
         return wrapper
 
 
-def get_typed_value_from_string(value: Any) -> Any:
+def get_typed_value(value: Any) -> Any:
     # Return the given value based on its correct type
     # It supports the following types: int, float, string
     if value is None:
         return None
     try:
-        assert isinstance(value, (str, SupportsInt))
+        assert isinstance(value, (str, int))
         return int(value)
     except (ValueError, AssertionError):
         try:
@@ -122,14 +122,12 @@ def set_config(
     try:
         enc_original_value = rds.hget(config_hash, key)
         if enc_original_value is not None and value is not None:
-            original_value = get_typed_value_from_string(
-                enc_original_value.decode("utf-8")
-            )
+            original_value = get_typed_value(enc_original_value.decode("utf-8"))
             if value == original_value:
                 return
 
             if not force and type(value) != type(original_value):
-                raise MismatchedTypeException(type(original_value), type(value))
+                raise MismatchedTypeException(key, type(original_value), type(value))
 
         change_record = (time.time(), user, enc_original_value, enc_value)
         if value is None:
@@ -143,7 +141,7 @@ def set_config(
         logger.info(f"Successfully changed option {key} to {value}")
     except MismatchedTypeException as exc:
         logger.exception(
-            f"Mismatched types for {key}: Original type: {exc.original_type}, New type: {exc.new_type}"
+            f"Mismatched types for {exc.key}: Original type: {exc.original_type}, New type: {exc.new_type}"
         )
         raise exc
     except Exception as ex:
@@ -154,7 +152,7 @@ def set_configs(
     values: Mapping[str, Optional[Any]], user: Optional[str] = None, force: bool = False
 ) -> None:
     for k, v in values.items():
-        set_config(k, get_typed_value_from_string(v), user=user, force=force)
+        set_config(k, get_typed_value(v), user=user, force=force)
 
 
 def get_config(key: str, default: Optional[Any] = None) -> Optional[Any]:
@@ -177,7 +175,7 @@ def get_raw_configs() -> Mapping[str, Optional[Any]]:
     try:
         all_configs = rds.hgetall(config_hash)
         return {
-            k.decode("utf-8"): get_typed_value_from_string(v.decode("utf-8"))
+            k.decode("utf-8"): get_typed_value(v.decode("utf-8"))
             for k, v in all_configs.items()
             if v is not None
         }

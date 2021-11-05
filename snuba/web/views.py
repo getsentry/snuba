@@ -293,6 +293,7 @@ def config(fmt: str = "html") -> Union[Response, RespTuple]:
                             "error": {
                                 "type": "client_error",
                                 "message": "Existing value and New value have different types. Use option force to override check",
+                                "key": str(exc.key),
                                 "original value type": str(exc.original_type),
                                 "new_value_type": str(exc.new_type),
                             }

@@ -36,16 +36,6 @@ class TestState:
         )
 
     def test_config_types(self) -> None:
-        # Tests for bools
-        state.set_config("test_bool", False)
-        assert state.get_config("test_bool") is False
-        state.set_config("test_bool", True)
-        with pytest.raises(MismatchedTypeException):
-            state.set_config("test_bool", 0.1)
-        with pytest.raises(MismatchedTypeException):
-            state.set_config("test_bool", "some_string")
-        state.set_config("test_bool", None)
-
         # Tests for ints
         state.set_config("test_int", 1)
         assert state.get_config("test_int") == 1

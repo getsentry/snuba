@@ -4,7 +4,7 @@ from typing import Any, Mapping
 import click
 
 from snuba import state
-from snuba.state import MismatchedTypeException, get_typed_value_from_string
+from snuba.state import MismatchedTypeException, get_typed_value
 
 
 def human_fmt(values: Mapping[Any, Any]) -> str:
@@ -63,7 +63,7 @@ def get(*, key: str, format: str) -> None:
 def set(*, key: str, value: str, force: bool) -> None:
     "Set a single key."
     try:
-        typed_value = get_typed_value_from_string(value)
+        typed_value = get_typed_value(value)
         state.set_config(key, typed_value, user=get_user(), force=force)
     except MismatchedTypeException as exc:
         print(
@@ -82,7 +82,7 @@ def set_many(*, data: str, force: bool) -> None:
         state.set_configs(json.loads(data), user=get_user(), force=force)
     except MismatchedTypeException as exc:
         print(
-            f"The new value type {exc.new_type} does not match the old value type {exc.original_type}. Use the force option to disable this check"
+            f"Mismatched types for {exc.key}: Original type: {exc.original_type}, New type: {exc.new_type}. Use the force option to disable this check"
         )
 
 
