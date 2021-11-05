@@ -7,6 +7,7 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     get_first_level_and_conditions,
+    get_first_level_or_conditions,
     is_any_binary_condition,
     is_in_condition_pattern,
 )
@@ -84,7 +85,7 @@ class AbstractArrayJoinOptimizer(QueryProcessor):
         # Look for all the filters on a tuple of more than one array joins
         multiple_filtered = {
             tuple(column_names): get_multiple_columns_filters(query, column_names)
-            for length in range(1, len(all_column_names) + 1)
+            for length in range(2, len(all_column_names) + 1)
             # NOTE: This only checks ONE permutation of the tuple, NOT ALL permutations.
             for column_names in combinations(all_column_names, length)
             if all(column_name in selected_array_joins for column_name in column_names)
@@ -127,6 +128,27 @@ T = TypeVar("T", bound=Union[str, Tuple[str, ...]])
 Extractor = Callable[[Expression], Set[T]]
 
 
+def skippable_condition_pattern(*column_names: str) -> Callable[[Expression], bool]:
+    def is_skippable_condition(conditions: Expression) -> bool:
+        """
+        A condition composed of a bunch of has(column, ...) conditions OR'ed together
+        can be ignored when looking for filter keys because these are the conditions
+        used for the bloom filter index on the array column.
+        """
+        for column_name in column_names:
+            has_pattern = FunctionCall(
+                String("has"),
+                (Column(column_name=String(column_name)), Literal(Any(str))),
+            )
+            if all(
+                has_pattern.match(c) for c in get_first_level_or_conditions(conditions)
+            ):
+                return True
+        return False
+
+    return is_skippable_condition
+
+
 def get_single_column_filters(query: Query, column_name: str) -> Sequence[str]:
     pattern = array_join_pattern(column_name)
 
@@ -136,6 +158,7 @@ def get_single_column_filters(query: Query, column_name: str) -> Sequence[str]:
             string_literal_equal_condition_extractor(pattern),
             string_literal_in_condition_extractor(pattern),
         ],
+        skippable_condition_pattern(column_name),
     )
 
 
@@ -150,11 +173,14 @@ def get_multiple_columns_filters(
             tuple_literal_equal_condition_extractor(pattern),
             tuple_literal_in_condition_extractor(pattern),
         ],
+        skippable_condition_pattern(*column_names),
     )
 
 
 def get_filtered_mapping_keys(
-    query: Query, extractors: Sequence[Extractor[T]]
+    query: Query,
+    extractors: Sequence[Extractor[T]],
+    is_skippable_condition: Callable[[Expression], bool],
 ) -> Sequence[T]:
     """
     Identifies the conditions we can apply the arrayFilter optimization on.
@@ -165,7 +191,7 @@ def get_filtered_mapping_keys(
     """
     ast_condition = query.get_condition()
     cond_keys: Optional[Set[T]] = (
-        get_mapping_keys_in_condition(ast_condition, extractors)
+        get_mapping_keys_in_condition(ast_condition, extractors, is_skippable_condition)
         if ast_condition is not None
         else set()
     )
@@ -176,7 +202,7 @@ def get_filtered_mapping_keys(
 
     ast_having = query.get_having()
     having_keys: Optional[Set[T]] = (
-        get_mapping_keys_in_condition(ast_having, extractors)
+        get_mapping_keys_in_condition(ast_having, extractors, is_skippable_condition)
         if ast_having is not None
         else set()
     )
@@ -189,7 +215,9 @@ def get_filtered_mapping_keys(
 
 
 def get_mapping_keys_in_condition(
-    conditions: Expression, extractors: Sequence[Extractor[T]]
+    conditions: Expression,
+    extractors: Sequence[Extractor[T]],
+    is_skippable_condition: Callable[[Expression], bool],
 ) -> Optional[Set[T]]:
     """
     Examines the top level AND conditions and applies the extractor functions to
@@ -201,6 +229,9 @@ def get_mapping_keys_in_condition(
     keys_found: Set[T] = set()
 
     for c in get_first_level_and_conditions(conditions):
+        if is_skippable_condition(c):
+            continue
+
         if is_any_binary_condition(c, BooleanFunctions.OR):
             return None
 
