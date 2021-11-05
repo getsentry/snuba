@@ -94,13 +94,6 @@ class TestState:
         time.sleep(0.1)
         assert rand1 != rand()
 
-    def test_abtest(self) -> None:
-        assert state.abtest("1000:1/2000:1") in (1000, 2000)
-        assert state.abtest("1000/2000") in (1000, 2000)
-        assert state.abtest("1000/2000:5") in (1000, 2000)
-        assert state.abtest("1000/2000:0") == 1000
-        assert state.abtest("1.5:1/-1.5:1") in (1.5, -1.5)
-
 
 def test_safe_dumps():
     assert safe_dumps(ChainMap({"a": 1}, {"b": 2}), sort_keys=True,) == safe_dumps(
