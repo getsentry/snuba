@@ -8,4 +8,12 @@ type Config = { key: ConfigKey; value: ConfigValue; type: ConfigType };
 
 type RowData = [ReactNode, ReactNode, ReactNode];
 
-export { Config, ConfigKey, ConfigValue, ConfigType, RowData };
+type ConfigChange = {
+  key: ConfigKey;
+  user: string | null;
+  timestamp: number;
+  before: ConfigValue | null;
+  after: ConfigValue | null;
+};
+
+export { Config, ConfigKey, ConfigValue, ConfigType, RowData, ConfigChange };
