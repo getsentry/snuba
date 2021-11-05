@@ -117,10 +117,7 @@ def get_typed_value_from_string(value: Any) -> Any:
 def set_config(
     key: str, value: Optional[Any], user: Optional[str] = None, force: bool = False
 ) -> None:
-    if value is not None:
-        enc_value = "{}".format(value).encode("utf-8")
-    else:
-        enc_value = b""
+    enc_value = "{}".format(value).encode("utf-8") if value is not None else None
 
     try:
         enc_original_value = rds.hget(config_hash, key)
@@ -137,9 +134,10 @@ def set_config(
         change_record = (time.time(), user, enc_original_value, enc_value)
         if value is None:
             rds.hdel(config_hash, key)
+            rds.hdel(config_history_hash, key)
         else:
             rds.hset(config_hash, key, enc_value)
-        rds.hset(config_history_hash, key, json.dumps(change_record))
+            rds.hset(config_history_hash, key, json.dumps(change_record))
         rds.lpush(config_changes_list, json.dumps((key, change_record)))
         rds.ltrim(config_changes_list, 0, config_changes_list_limit)
         logger.info(f"Successfully changed option {key} to {value}")
