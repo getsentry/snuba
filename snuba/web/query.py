@@ -141,7 +141,6 @@ def _run_query_pipeline(
     and a Request and returns the results of the query.
 
     This process includes:
-    - Applying dataset specific syntax extensions (QueryExtension)
     - Applying dataset query processors on the abstract Snuba query.
     - Using the dataset provided ClickhouseQueryPlanBuilder to build a ClickhouseQueryPlan. This step
       transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).

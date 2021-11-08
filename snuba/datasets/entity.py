@@ -6,7 +6,6 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
-from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
@@ -37,17 +36,6 @@ class Entity(Describable, ABC):
         self.__join_relationships = join_relationships
         self.__validators = validators
         self.required_time_column = required_time_column
-
-    @abstractmethod
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        """
-        Returns the extensions for this entity.
-        Every extension comes as an instance of QueryExtension.
-        The schema tells Snuba how to parse the query.
-        The processor actually does query processing for this extension.
-        """
-        # TODO: How does this work with JOINs?
-        raise NotImplementedError("entity does not support queries")
 
     @abstractmethod
     def get_query_processors(self) -> Sequence[QueryProcessor]:

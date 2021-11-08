@@ -354,7 +354,7 @@ def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions({}, HTTPRequestSettings)
+        schema = RequestSchema.build(HTTPRequestSettings)
         return render_template(
             "query.html",
             query_template=json.dumps(schema.generate_template(), indent=4),
@@ -375,9 +375,7 @@ def dataset_query(
     referrer = http_request.referrer or "<unknown>"  # mypy
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
-        schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
-        )
+        schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer

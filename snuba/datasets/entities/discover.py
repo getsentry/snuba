@@ -1,7 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import timedelta
-from typing import Mapping, Optional, Sequence, Set, Union
+from typing import Optional, Sequence, Set, Union
 
 from snuba import environment, settings, state
 from snuba.clickhouse.columns import (
@@ -49,7 +48,6 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import Any
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
@@ -61,8 +59,6 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-from snuba.query.project_extension import ProjectExtension
-from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
@@ -504,16 +500,6 @@ class DiscoverEntity(Entity):
             BasicFunctionsProcessor(),
             ProjectRateLimiterProcessor(project_column="project_id"),
         ]
-
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "project": ProjectExtension(project_column="project_id"),
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=5),
-                timestamp_column="timestamp",
-            ),
-        }
 
 
 class DiscoverEventsEntity(BaseEventsEntity):
