@@ -11,7 +11,11 @@ from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
 
-from snuba.consumers.consumer import build_batch_writer, process_message
+from snuba.consumers.consumer import (
+    build_batch_writer,
+    build_mock_batch_writer,
+    process_message,
+)
 from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -34,7 +38,7 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
 class KafkaParameters:
     raw_topic: Optional[str]
     replacements_topic: Optional[str]
-    bootstrap_servers: Sequence[str]
+    bootstrap_servers: Optional[Sequence[str]]
     group_id: str
     commit_log_topic: Optional[str]
     auto_offset_reset: str
@@ -47,6 +51,12 @@ class ProcessingParameters:
     processes: Optional[int]
     input_block_size: Optional[int]
     output_block_size: Optional[int]
+
+
+@dataclass(frozen=True)
+class MockParameters:
+    avg_write_latency: int
+    std_deviation: int
 
 
 class ConsumerBuilder:
@@ -66,6 +76,7 @@ class ConsumerBuilder:
         metrics: MetricsBackend,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
+        mock_parameters: Optional[MockParameters] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -132,6 +143,7 @@ class ConsumerBuilder:
         self.input_block_size = processing_params.input_block_size
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
+        self.__mock_parameters = mock_parameters
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -202,6 +214,14 @@ class ConsumerBuilder:
                     self.producer if self.replacements_topic is not None else None
                 ),
                 replacements_topic=self.replacements_topic,
+            )
+            if self.__mock_parameters is None
+            else build_mock_batch_writer(
+                self.storage,
+                bool(self.replacements_topic),
+                self.metrics,
+                self.__mock_parameters.avg_write_latency,
+                self.__mock_parameters.std_deviation,
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
