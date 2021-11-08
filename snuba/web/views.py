@@ -287,7 +287,7 @@ def config(fmt: str = "html") -> Union[Response, RespTuple]:
 @application.route("/config/changes.json")
 def config_changes() -> RespTuple:
     return (
-        json.dumps(state.get_config_changes()),
+        json.dumps(state.get_config_changes_legacy()),
         200,
         {"Content-Type": "application/json"},
     )

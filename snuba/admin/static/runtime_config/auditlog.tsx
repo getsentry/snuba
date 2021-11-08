@@ -3,11 +3,11 @@ import React, { ReactNode, useState } from "react";
 import Client from "../api_client";
 import { containerStyle, paragraphStyle } from "./styles";
 import { Table } from "../table";
-import { ConfigValue } from "./types";
+import { ConfigChange, ConfigType, ConfigValue } from "./types";
 
 function AuditLog(props: { api: Client }) {
   const { api } = props;
-  const [data, setData] = useState<any[] | null>(null);
+  const [data, setData] = useState<ConfigChange[] | null>(null);
 
   function fetchData() {
     api.getAuditlog().then((res) => {
@@ -23,27 +23,29 @@ function AuditLog(props: { api: Client }) {
     return null;
   }
 
-  const rowData = data.map(({ key, timestamp, user, before, after }) => {
-    const formattedDate = new Date(timestamp * 1000).toLocaleDateString(
-      "en-US",
-      {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        second: "numeric",
-        timeZoneName: "short",
-      }
-    );
+  const rowData = data.map(
+    ({ key, timestamp, user, before, beforeType, after, afterType }) => {
+      const formattedDate = new Date(timestamp * 1000).toLocaleDateString(
+        "en-US",
+        {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          second: "numeric",
+          timeZoneName: "short",
+        }
+      );
 
-    return [
-      formattedDate,
-      user,
-      <code>{key}</code>,
-      getActionDetail(before, after),
-    ];
-  });
+      return [
+        formattedDate,
+        user,
+        <code>{key}</code>,
+        getActionDetail(before, beforeType, after, afterType),
+      ];
+    }
+  );
 
   const usersTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -62,12 +64,33 @@ function AuditLog(props: { api: Client }) {
   );
 }
 
+function getFormattedValue(
+  value: ConfigValue | null,
+  type: ConfigType | null
+): string {
+  if (value === null && type === null) {
+    return "NULL";
+  }
+
+  if (type === "string") {
+    return `"${value}"`;
+  }
+
+  if (value !== null && (type === "int" || type === "float")) {
+    return value;
+  }
+
+  throw new Error("Invalid type");
+}
+
 function getActionDetail(
   before: ConfigValue | null,
-  after: ConfigValue | null
+  beforeType: ConfigType | null,
+  after: ConfigValue | null,
+  afterType: ConfigType | null
 ): ReactNode {
-  const formattedBefore = typeof before === "string" ? `"${before}"` : before;
-  const formatttedAfter = typeof after === "string" ? `"${after}"` : after;
+  const formattedBefore = getFormattedValue(before, beforeType);
+  const formatttedAfter = getFormattedValue(after, afterType);
 
   if (before === null && after !== null) {
     if (after === null) {
