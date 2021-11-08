@@ -1,4 +1,5 @@
 import importlib
+from typing import Union
 
 import pytest
 
@@ -11,6 +12,8 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import factory as storage_factory
 from snuba.query import SelectedExpression
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
@@ -181,12 +184,14 @@ def test_metrics_processing(
     }
 
     metrics_dataset = get_dataset("metrics")
-    query = parse_snql_query(query_body["query"], [], metrics_dataset)
+    query = parse_snql_query(query_body["query"], metrics_dataset)
 
     request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
 
     def query_runner(
-        query: Query, settings: RequestSettings, reader: Reader
+        query: Union[Query, CompositeQuery[Table]],
+        settings: RequestSettings,
+        reader: Reader,
     ) -> QueryResult:
         assert query.get_selected_columns() == [
             SelectedExpression("org_id", Column("_snuba_org_id", None, "org_id"),),
@@ -210,7 +215,10 @@ def test_metrics_processing(
             ),
             SelectedExpression(column_name, translated_value,),
         ]
-        return QueryResult({}, {})
+        return QueryResult(
+            result={"meta": [], "data": [], "totals": {}},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        )
 
     entity = get_entity(entity_key)
     entity.get_query_pipeline_builder().build_execution_pipeline(

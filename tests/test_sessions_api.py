@@ -218,9 +218,8 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
     ) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "sessions",
                     "organization": 1,
@@ -260,9 +259,8 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
     def test_minute_granularity_range(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "sessions",
                     "organization": 1,

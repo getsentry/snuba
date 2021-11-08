@@ -3,7 +3,6 @@ import logging
 import os
 import time
 from datetime import datetime
-from functools import partial
 from typing import (
     Any,
     Callable,
@@ -43,16 +42,12 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.logical import Query
 from snuba.redis import redis_client
-from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
-from snuba.request.schema import RequestParts, RequestSchema
-from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
+from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.schema import RequestSchema
+from snuba.request.validation import build_request, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -350,28 +345,7 @@ def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
         _trace_transaction(dataset)
         # Not sure what language to pass into dataset_query here
-        return dataset_query(dataset, body, timer, Language.LEGACY)
-    else:
-        assert False, "unexpected fallthrough"
-
-
-@application.route("/<dataset:dataset>/query", methods=["GET", "POST"])
-@util.time_request("query")
-def dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
-    if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(),
-            HTTPRequestSettings,
-            Language.LEGACY,
-        )
-        return render_template(
-            "query.html",
-            query_template=json.dumps(schema.generate_template(), indent=4,),
-        )
-    elif http_request.method == "POST":
-        body = parse_request_body(http_request)
-        _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer, Language.LEGACY)
+        return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
 
@@ -380,46 +354,33 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions(
-            {}, HTTPRequestSettings, Language.SNQL,
-        )
+        schema = RequestSchema.build_with_extensions({}, HTTPRequestSettings)
         return render_template(
             "query.html",
-            query_template=json.dumps(schema.generate_template(), indent=4,),
+            query_template=json.dumps(schema.generate_template(), indent=4),
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer, Language.SNQL)
+        return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
 
 
 @with_span()
 def dataset_query(
-    dataset: Dataset, body: MutableMapping[str, Any], timer: Timer, language: Language
+    dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
 ) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
-    metrics.increment(
-        "snql.query.incoming", tags={"referrer": referrer, "language": str(language)}
-    )
-    if language == Language.SNQL:
-        parser: Callable[
-            [RequestParts, RequestSettings, Dataset],
-            Union[Query, CompositeQuery[Entity]],
-        ] = partial(parse_snql_query, [])
-    else:
-        parser = parse_legacy_query
-
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
         )
 
     request = build_request(
-        body, parser, HTTPRequestSettings, schema, dataset, timer, referrer
+        body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer
     )
 
     try:
