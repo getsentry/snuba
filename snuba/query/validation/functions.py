@@ -19,7 +19,7 @@ class AllowedFunctionValidator(FunctionCallValidator):
     """
 
     def validate(
-        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource
+        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource,
     ) -> None:
 
         if is_valid_global_function(func_name):

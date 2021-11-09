@@ -6,7 +6,6 @@ from typing import Sequence, Set, Type, Union
 from snuba.clickhouse.columns import (
     UUID,
     Array,
-    ColumnSet,
     Date,
     DateTime,
     FixedString,
@@ -17,7 +16,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.query.data_source import DataSource
+from snuba.query.data_source import ColumnSet, DataSource
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralType
 from snuba.query.matchers import Any as AnyMatcher
@@ -173,7 +172,7 @@ class SignatureValidator(FunctionCallValidator):
         self.__enforce = enforce
 
     def validate(
-        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource
+        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource,
     ) -> None:
         try:
             self.__validate_impl(func_name, parameters, data_source)
@@ -186,7 +185,7 @@ class SignatureValidator(FunctionCallValidator):
                 )
 
     def __validate_impl(
-        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource
+        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource,
     ) -> None:
         if len(parameters) < len(self.__param_types):
             raise InvalidFunctionCall(

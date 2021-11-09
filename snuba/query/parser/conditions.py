@@ -1,6 +1,6 @@
 from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entities.entity_data_model import Array, EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -24,7 +24,7 @@ class InvalidConditionException(SerializableException):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any, ColumnSet, Set[str]], TExpression],
+    operand_builder: Callable[[Any, EntityColumnSet, Set[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
@@ -48,7 +48,7 @@ def parse_conditions(
     simple_condition_builder: Generates a simple condition made by expression on the
       left hand side, an operator and a literal on the right hand side.
     """
-    from snuba.clickhouse.columns import Array
+    # from snuba.clickhouse.columns import Array
 
     if not conditions:
         return None
@@ -93,8 +93,7 @@ def parse_conditions(
             isinstance(lhs, str)
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
-            and columns[lhs].base_name not in arrayjoin_cols
-            and columns[lhs].flattened not in arrayjoin_cols
+            and columns[lhs].name not in arrayjoin_cols
             and not isinstance(lit, (list, tuple))
         ):
             return unpack_array_condition_builder(

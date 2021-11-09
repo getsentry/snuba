@@ -5,8 +5,9 @@ from typing import Any, Callable, List, Optional, Set, Tuple, TypeVar, Union
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
-from snuba.clickhouse.columns import Array, ColumnSet
+from snuba.clickhouse.columns import Array
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query.conditions import FUNCTION_TO_OPERATOR, ConditionFunctions
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.exceptions import ParsingException
@@ -107,7 +108,7 @@ def parse_function(
     unpack_array_condition_builder: Callable[
         [TExpression, str, Any, Optional[str]], TExpression
     ],
-    dataset_columns: ColumnSet,
+    dataset_columns: EntityColumnSet,
     arrayjoin_cols: Set[str],
     expr: Any,
     depth: int = 0,
@@ -145,7 +146,7 @@ def parse_function(
     if name in FUNCTION_TO_OPERATOR:
         if len(args) == 2 and isinstance(args[0], str) and args[0] in dataset_columns:
             column = dataset_columns[args[0]]
-            if isinstance(column.type.get_raw(), Array):
+            if isinstance(column.type, Array):
                 if (
                     column.flattened not in arrayjoin_cols
                     and column.base_name not in arrayjoin_cols
@@ -197,7 +198,7 @@ def parse_function(
 
 
 def parse_function_to_expr(
-    expr: Any, dataset_columns: ColumnSet, arrayjoin_cols: Set[str]
+    expr: Any, dataset_columns: EntityColumnSet, arrayjoin_cols: Set[str]
 ) -> Expression:
     """
     Parses a function expression in the Snuba syntax and produces an AST Expression.

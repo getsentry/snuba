@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence, Union
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, FlattenedColumn, SchemaModifiers
+from snuba.datasets.entities.entity_data_model import Any, Column, EntityColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -11,6 +12,20 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
 from snuba.utils.describer import Describable, Description, Property
+
+
+def map_column(column: FlattenedColumn) -> Column[SchemaModifiers]:
+    flattened_name = (
+        "{}.{}".format(column.base_name, column.name)
+        if column.base_name
+        else column.name
+    )
+
+    return Column(flattened_name, Any())
+
+
+def convert_to_entity_column_set(column_set: ColumnSet) -> EntityColumnSet:
+    return EntityColumnSet([map_column(col) for col in column_set])
 
 
 class Entity(Describable, ABC):
@@ -24,7 +39,7 @@ class Entity(Describable, ABC):
         *,
         storages: Sequence[Storage],
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
-        abstract_column_set: ColumnSet,
+        abstract_column_set: Union[ColumnSet, EntityColumnSet],
         join_relationships: Mapping[str, JoinRelationship],
         writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
@@ -33,7 +48,12 @@ class Entity(Describable, ABC):
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
         self.__writable_storage = writable_storage
-        self.__data_model = abstract_column_set
+        self.__data_model = (
+            convert_to_entity_column_set(abstract_column_set)
+            if isinstance(abstract_column_set, ColumnSet)
+            else abstract_column_set
+        )
+
         self.__join_relationships = join_relationships
         self.__validators = validators
         self.required_time_column = required_time_column
@@ -59,7 +79,7 @@ class Entity(Describable, ABC):
         """
         return []
 
-    def get_data_model(self) -> ColumnSet:
+    def get_data_model(self) -> EntityColumnSet:
         """
         Now the data model is flat so this is just a simple ColumnSet object. We can expand this
         to also include relationships between entities.
@@ -142,9 +162,7 @@ class Entity(Describable, ABC):
             content=[
                 Description(
                     header="Entity schema",
-                    content=[
-                        column.for_schema() for column in self.get_data_model().columns
-                    ],
+                    content=[column.for_schema() for column in self.get_data_model()],
                 ),
                 Description(header="Relationships", content=relationships),
             ],

@@ -14,10 +14,9 @@ from typing import (
     Union,
 )
 
-from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.datasets.entities import EntityKey
 from snuba.query import ProcessableQuery, TSimpleDataSource
-from snuba.query.data_source import DataSource
+from snuba.query.data_source import ColumnSet, DataSource, QualifiedColumnSet
 from snuba.query.data_source.simple import Entity
 
 

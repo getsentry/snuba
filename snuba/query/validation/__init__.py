@@ -19,6 +19,6 @@ class FunctionCallValidator(ABC):
 
     @abstractmethod
     def validate(
-        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource
+        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource,
     ) -> None:
         raise NotImplementedError

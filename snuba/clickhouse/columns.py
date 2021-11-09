@@ -7,7 +7,6 @@ from typing import (
     Generic,
     Iterator,
     List,
-    Mapping,
     MutableMapping,
     Optional,
     Sequence,
@@ -19,6 +18,7 @@ from typing import (
 )
 
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.query.data_source import ColumnSet as BaseColumnSet
 
 
 class TypeModifier(ABC):
@@ -469,7 +469,7 @@ class Enum(ColumnType[TModifiers]):
         return Enum(self.values)
 
 
-class ColumnSet:
+class ColumnSet(BaseColumnSet):
     """\
     A set of columns, unique by column name.
     Initialized with a list of Column objects or
@@ -538,22 +538,3 @@ class ColumnSet:
             return self[key]
         except KeyError:
             return default
-
-
-class QualifiedColumnSet(ColumnSet):
-    """
-    Works like a Columnset but it represent a list of columns
-    coming from different tables (like the ones we would use in
-    a join).
-    The main difference is that this class keeps track of the
-    structure and to which table each column belongs to.
-    """
-
-    def __init__(self, column_sets: Mapping[str, ColumnSet]) -> None:
-        # Iterate over the structured columns. get_columns() flattens nested
-        # columns. We need them intact here.
-        flat_columns = []
-        for alias, column_set in column_sets.items():
-            for column in column_set.columns:
-                flat_columns.append((f"{alias}.{column.name}", column.type))
-        super().__init__(flat_columns)
