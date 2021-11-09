@@ -7,6 +7,7 @@ from snuba.datasets.entities.entity_data_model import (
     WildcardColumn,
 )
 from snuba.datasets.entity import convert_to_entity_column_set
+from snuba.utils.schemas import FlattenedColumn
 
 
 def test_entity_data_model() -> None:
@@ -27,7 +28,9 @@ def test_entity_data_model() -> None:
     tag_asdf_col = entity_data_model.get("tags[asdf]")
     assert tag_asdf_col is not None
 
-    assert entity_data_model.get("tags[asdf]") == Column("tags", WildcardColumn())
+    assert entity_data_model.get("tags[asdf]") == FlattenedColumn(
+        None, "tags", WildcardColumn()
+    )
     assert entity_data_model.get("asdf") is None
     assert entity_data_model.get("tags[asd   f]") is None
     assert entity_data_model.get("asdf[gkrurrtsjhfkjgh]") is None
