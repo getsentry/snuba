@@ -19,8 +19,15 @@ def test_entity_data_model() -> None:
         ]
     )
 
+    event_id_col = entity_data_model.get("event_id")
+    assert event_id_col is not None
+    assert event_id_col.name == "event_id"
+    assert event_id_col.type == FixedString(32)
+
+    tag_asdf_col = entity_data_model.get("tags[asdf]")
+    assert tag_asdf_col is not None
+
     assert entity_data_model.get("tags[asdf]") == Column("tags", WildcardColumn())
-    assert entity_data_model.get("event_id") == Column("event_id", FixedString(32))
     assert entity_data_model.get("asdf") is None
     assert entity_data_model.get("tags[asd   f]") is None
     assert entity_data_model.get("asdf[gkrurrtsjhfkjgh]") is None

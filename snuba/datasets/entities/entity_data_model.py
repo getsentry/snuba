@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterator, Sequence
+from typing import Iterator, Optional, Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -45,10 +45,12 @@ class EntityColumnSet(ColumnSet):
 
     def __init__(self, columns: Sequence[Column[SchemaModifiers]]) -> None:
         standard_columns = [
-            col for col in columns if not isinstance(col, WildcardColumn)
+            col for col in columns if not isinstance(col.type, WildcardColumn)
         ]
 
-        wildcard_columns = [col for col in columns if isinstance(col, WildcardColumn)]
+        wildcard_columns = [
+            col for col in columns if isinstance(col.type, WildcardColumn)
+        ]
 
         self.__wildcard_column_map = {col.name: col for col in wildcard_columns}
 
@@ -72,10 +74,12 @@ class EntityColumnSet(ColumnSet):
         return False
 
     def __getitem__(self, key: str) -> FlattenedColumn:
-        standard_col = super().__getitem__(key)
-
-        if standard_col:
-            return standard_col
+        try:
+            standard_col = super().__getitem__(key)
+            if standard_col:
+                return standard_col
+        except KeyError:
+            pass
 
         match = NESTED_COL_EXPR_RE.match(key)
 
@@ -85,6 +89,14 @@ class EntityColumnSet(ColumnSet):
                 return self.__wildcard_column_map[wildcard_prefix].type.flatten(key)[0]
 
         raise KeyError(key)
+
+    def get(
+        self, key: str, default: Optional[FlattenedColumn] = None
+    ) -> Optional[FlattenedColumn]:
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
     def __iter__(self) -> Iterator[FlattenedColumn]:
         for col in self._flattened:
