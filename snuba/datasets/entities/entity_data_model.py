@@ -80,9 +80,9 @@ class EntityColumnSet(ColumnSet):
         match = NESTED_COL_EXPR_RE.match(key)
 
         if match is not None:
-            col_name = match[1]
-            if col_name in self.__wildcard_column_map:
-                return self.__wildcard_column_map[col_name].type.flatten(key)[0]
+            wildcard_prefix = match[1]
+            if wildcard_prefix in self.__wildcard_column_map:
+                return self.__wildcard_column_map[wildcard_prefix].type.flatten(key)[0]
 
         raise KeyError(key)
 
