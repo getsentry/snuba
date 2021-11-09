@@ -93,10 +93,10 @@ class EntityColumnSet(ColumnSet):
         raise KeyError(key)
 
     def __iter__(self) -> Iterator[FlattenedColumn]:
-        # Do stuff
-        super().__iter__()
+        for col in self._flattened:
+            yield col
 
-        for col in self.__wildcard_column_map.values():
+        for col in self.__flat_wildcard_columns:
             yield col
 
     def get(
