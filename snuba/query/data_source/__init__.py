@@ -1,5 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Iterator, Mapping, Optional, Sequence, TypeVar
+from typing import (
+    Iterator,
+    Mapping,
+    Optional,
+    Sequence,
+    TypeVar,
+    MutableMapping,
+    List,
+)
 
 from snuba.clickhouse.columns import Column, FlattenedColumn, SchemaModifiers
 
@@ -7,23 +15,42 @@ ColumnType = TypeVar("ColumnType")
 
 
 class ColumnSet(ABC):
-    @property
-    def columns(self) -> Sequence[Column[SchemaModifiers]]:
-        raise NotImplementedError
+    """
+    Base column set extended by both ClickHouse column set and entity column set
+    """
 
-    @abstractmethod
+    def __init__(self, columns: Sequence[Column[SchemaModifiers]]) -> None:
+        self.columns = columns
+
+        self._lookup: MutableMapping[str, FlattenedColumn] = {}
+        self._flattened: List[FlattenedColumn] = []
+        for column in self.columns:
+            self._flattened.extend(column.type.flatten(column.name))
+
+        for col in self._flattened:
+            if col.flattened in self._lookup:
+                raise RuntimeError("Duplicate column: {}".format(col.flattened))
+
+            self._lookup[col.flattened] = col
+            # also store it by the escaped name
+            self._lookup[col.escaped] = col
+
+    def __getitem__(self, key: str) -> FlattenedColumn:
+        return self._lookup[key]
+
     def get(
         self, key: str, default: Optional[FlattenedColumn] = None
     ) -> Optional[FlattenedColumn]:
-        raise NotImplementedError
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
-    @abstractmethod
-    def __iter__(self) -> Iterator[FlattenedColumn]:
-        raise NotImplementedError
-
-    @abstractmethod
     def __contains__(self, key: str) -> bool:
-        raise NotImplementedError
+        return key in self._lookup
+
+    def __iter__(self) -> Iterator[FlattenedColumn]:
+        return iter(self._flattened)
 
 
 class QualifiedColumnSet(ColumnSet):
@@ -38,17 +65,26 @@ class QualifiedColumnSet(ColumnSet):
     def __init__(self, column_sets: Mapping[str, ColumnSet]) -> None:
         # Iterate over the structured columns. get_columns() flattens nested
         # columns. We need them intact here.
-        self.__flat_columns = []
+        flat_columns = []
         for alias, column_set in column_sets.items():
             for column in column_set.columns:
-                self.__flat_columns.append((f"{alias}.{column.name}", column.type))
-        # super().__init__(flat_columns)
+                flat_columns.append((f"{alias}.{column.name}", column.type))
+
+        super().__init__(Column.to_columns(flat_columns))
 
     def get(
         self, key: str, default: Optional[FlattenedColumn] = None
     ) -> Optional[FlattenedColumn]:
         # get from self.__flat_columns
         pass
+
+    def __iter__(self) -> Iterator[FlattenedColumn]:
+        for column in self._flattened:
+            yield column
+
+    def __contains__(self, key: str) -> bool:
+        # TODO: Wildcard column
+        return key in self._lookup
 
 
 class DataSource(ABC):

@@ -21,17 +21,18 @@ from snuba.query.data_source import ColumnSet
 __all__ = [
     "Any",
     "Array",
-    "FixedString",
-    "String",
-    "Float",
-    "WildcardColumn",
-    "EntityColumnSet",
-    "UInt",
-    "DateTime",
     "Column",
+    "DateTime",
+    "EntityColumnSet",
+    "FixedString",
+    "Float",
+    "String",
+    "UInt",
+    "WildcardColumn",
 ]
 
 
+# TODO: Copied here due to circular reference
 NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
@@ -49,47 +50,54 @@ class EntityColumnSet(ColumnSet):
     """
 
     def __init__(self, columns: Sequence[Column[SchemaModifiers]]) -> None:
-        self.__standard_columns = {
-            column.name: column
-            for column in columns
-            if isinstance(column, ValidEntityColumns)
-        }
-        self.__wildcard_columns = {
-            column.name: column
-            for column in columns
-            if isinstance(column, WildcardColumn)
-        }
+        standard_columns = [
+            col for col in columns if not isinstance(col, WildcardColumn)
+        ]
 
-        self.__flattened = [column.type.flatten(column.name)[0] for column in columns]
+        wildcard_columns = [col for col in columns if isinstance(col, WildcardColumn)]
+
+        self.__wildcard_column_map = {col.name: col for col in wildcard_columns}
+
+        self.__flat_wildcard_columns = [
+            column.type.flatten(column.name)[0] for column in wildcard_columns
+        ]
+
+        super().__init__(standard_columns)
 
     def __contains__(self, column_name: str) -> bool:
-        if column_name in self.__standard_columns:
+        if super().__contains__(column_name):
             return True
 
         match = NESTED_COL_EXPR_RE.match(column_name)
 
         if match is not None:
             col_name = match[1]
-            if col_name in self.__wildcard_columns:
+            if col_name in self.__wildcard_column_map:
                 return True
 
         return False
 
     def __getitem__(self, key: str) -> FlattenedColumn:
-        if key in self.__standard_columns:
-            return self.__standard_columns[key].type.flatten(key)[0]
+        standard_col = super().__getitem__(key)
+
+        if standard_col:
+            return standard_col
 
         match = NESTED_COL_EXPR_RE.match(key)
 
         if match is not None:
             col_name = match[1]
-            if col_name in self.__wildcard_columns:
-                return self.__wildcard_columns[col_name].type.flatten(key)[0]
+            if col_name in self.__wildcard_column_map:
+                return self.__wildcard_column_map[col_name].type.flatten(key)[0]
 
         raise KeyError(key)
 
     def __iter__(self) -> Iterator[FlattenedColumn]:
-        return iter(self.__flattened)
+        # Do stuff
+        super().__iter__()
+
+        for col in self.__wildcard_column_map.values():
+            yield col
 
     def get(
         self, column_name: str, default: Optional[FlattenedColumn] = None

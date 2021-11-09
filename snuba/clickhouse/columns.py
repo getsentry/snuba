@@ -487,20 +487,7 @@ class ColumnSet(BaseColumnSet):
             Union[Column[SchemaModifiers], Tuple[str, ColumnType[SchemaModifiers]]]
         ],
     ) -> None:
-        self.columns = Column.to_columns(columns)
-
-        self._lookup: MutableMapping[str, FlattenedColumn] = {}
-        self._flattened: List[FlattenedColumn] = []
-        for column in self.columns:
-            self._flattened.extend(column.type.flatten(column.name))
-
-        for col in self._flattened:
-            if col.flattened in self._lookup:
-                raise RuntimeError("Duplicate column: {}".format(col.flattened))
-
-            self._lookup[col.flattened] = col
-            # also store it by the escaped name
-            self._lookup[col.escaped] = col
+        super().__init__(Column.to_columns(columns))
 
     def __repr__(self) -> str:
         return "ColumnSet({})".format(repr(self.columns))
@@ -521,20 +508,3 @@ class ColumnSet(BaseColumnSet):
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])
         return ColumnSet([*self.columns, *other])
-
-    def __contains__(self, key: str) -> bool:
-        return key in self._lookup
-
-    def __getitem__(self, key: str) -> FlattenedColumn:
-        return self._lookup[key]
-
-    def __iter__(self) -> Iterator[FlattenedColumn]:
-        return iter(self._flattened)
-
-    def get(
-        self, key: str, default: Optional[FlattenedColumn] = None
-    ) -> Optional[FlattenedColumn]:
-        try:
-            return self[key]
-        except KeyError:
-            return default
