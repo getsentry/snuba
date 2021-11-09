@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterator, Optional, Sequence
+from typing import Iterator, Optional, Sequence, cast
 
 from snuba.clickhouse.columns import (
     Array,
@@ -52,13 +52,19 @@ class EntityColumnSet(ColumnSet):
             col for col in columns if isinstance(col.type, WildcardColumn)
         ]
 
-        self.__wildcard_column_map = {col.name: col for col in wildcard_columns}
+        self._wildcard_columns = {col.name: col for col in wildcard_columns}
 
         self.__flat_wildcard_columns = [
             column.type.flatten(column.name)[0] for column in wildcard_columns
         ]
 
         super().__init__(standard_columns)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            super().__eq__(other)
+            and self._wildcard_columns == cast(EntityColumnSet, other)._wildcard_columns
+        )
 
     def __contains__(self, column_name: str) -> bool:
         if super().__contains__(column_name):
@@ -68,7 +74,7 @@ class EntityColumnSet(ColumnSet):
 
         if match is not None:
             col_name = match[1]
-            if col_name in self.__wildcard_column_map:
+            if col_name in self._wildcard_columns:
                 return True
 
         return False
@@ -85,8 +91,8 @@ class EntityColumnSet(ColumnSet):
 
         if match is not None:
             wildcard_prefix = match[1]
-            if wildcard_prefix in self.__wildcard_column_map:
-                return self.__wildcard_column_map[wildcard_prefix].type.flatten(key)[0]
+            if wildcard_prefix in self._wildcard_columns:
+                return self._wildcard_columns[wildcard_prefix].type.flatten(key)[0]
 
         raise KeyError(key)
 
@@ -107,4 +113,4 @@ class EntityColumnSet(ColumnSet):
 
     @property
     def columns(self) -> Sequence[Column[SchemaModifiers]]:
-        return [*super().columns, *self.__wildcard_column_map.values()]
+        return [*super().columns, *self._wildcard_columns.values()]

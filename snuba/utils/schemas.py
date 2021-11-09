@@ -240,6 +240,12 @@ class ColumnSet(ABC):
             # also store it by the escaped name
             self._lookup[col.escaped] = col
 
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self._flattened == cast(ColumnSet, other)._flattened
+        )
+
     def __getitem__(self, key: str) -> FlattenedColumn:
         return self._lookup[key]
 

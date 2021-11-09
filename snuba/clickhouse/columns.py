@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence, Tuple, Union, cast
+from typing import Sequence, Tuple, Union
 
 from snuba.utils.schemas import UUID, AggregateFunction, Any, Array, Column
 from snuba.utils.schemas import ColumnSet as BaseColumnSet
@@ -75,12 +75,6 @@ class ColumnSet(BaseColumnSet):
 
     def __repr__(self) -> str:
         return "ColumnSet({})".format(repr(self.columns))
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self._flattened == cast(ColumnSet, other)._flattened
-        )
 
     def __len__(self) -> int:
         return len(self._flattened)
