@@ -89,7 +89,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 all_groups_to_exclude = set(flags.group_ids_to_exclude)
 
                 if groups_in_query:
-                    groups_to_exclude = all_groups_to_exclude.union(groups_in_query)
+                    groups_to_exclude = all_groups_to_exclude.intersection(
+                        groups_in_query
+                    )
                     if len(groups_to_exclude) > max_group_ids_exclude:
                         tags["cause"] = "max_groups"
                         metrics.increment(
