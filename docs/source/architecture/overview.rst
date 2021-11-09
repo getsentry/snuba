@@ -86,7 +86,9 @@ This sections explains the role Snuba plays within a Sentry deployment showing
 the main data flows. If you are deploying Snuba stand alone, this won't be
 useful for you.
 
-.. image:: /_static/architecture/snuba_deployment.png
+.. image:: /_static/architecture/errors_transactions_deployment.png
+.. image:: /_static/architecture/sessions_deployment.png
+.. image:: /_static/architecture/outcomes_deployment.png
 
 Errors and Transactions data flow
 =================================
