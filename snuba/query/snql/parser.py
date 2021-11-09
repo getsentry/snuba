@@ -1269,7 +1269,8 @@ def _post_process(
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
 ) -> None:
     for func in funcs:
-        func(query)
+        with sentry_sdk.start_span(op="processor", description=func.__name__):
+            func(query)
 
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
