@@ -71,7 +71,7 @@ from snuba.query.parser import (
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
 from snuba.query.schema import POSITIVE_OPERATORS
-from snuba.query.snql.anonymize import format_query_anonymized
+from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -1306,8 +1306,7 @@ def parse_snql_query(
     query = parse_snql_query_initial(body)
 
     query_copy = copy.deepcopy(query)
-    snql_anonymized = format_query_anonymized(query_copy).get_sql()
-    # snql_anonymized = "\n".join(format_snql_anonymized(query))
+    snql_anonymized = format_snql_anonymized(query_copy).get_sql()
 
     _post_process(
         query, POST_PROCESSORS,

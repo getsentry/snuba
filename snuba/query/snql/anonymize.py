@@ -28,15 +28,6 @@ def format_snql_anonymized(
     )
 
 
-def format_query_anonymized(
-    query: Union[LogicalQuery, CompositeQuery[Entity]]
-) -> FormattedQuery:
-
-    return FormattedQuery(
-        _format_query_content(query, AnonymizeAndStringifySnQLVisitor)
-    )
-
-
 class StringQueryFormatter(
     DataSourceVisitor[FormattedNode, Entity], JoinVisitor[FormattedNode, Entity]
 ):
@@ -44,9 +35,7 @@ class StringQueryFormatter(
         self.__expression_formatter_type = expression_formatter_type
 
     def _visit_simple_source(self, data_source: Entity) -> StringNode:
-        sample_val = getattr(
-            data_source, "sample", getattr(data_source, "sampling_rate", None)
-        )
+        sample_val = data_source.sample
         sample_str = f" SAMPLE {sample_val}" if sample_val is not None else ""
         return StringNode(f"{data_source.human_readable_id}{sample_str}")
 
@@ -77,7 +66,7 @@ class StringQueryFormatter(
     def visit_join_clause(self, node: JoinClause[Entity]) -> StringNode:
         left = f"LEFT {node.left_node.accept(self)}"
         type = f"TYPE {node.join_type}"
-        right = f"RIGHT {node.right_node.accept(self)}"
+        right = f"RIGHT {node.right_node.accept(self)}\n"
         on = "".join(
             [
                 f"{c.left.table_alias}.{c.left.column} {c.right.table_alias}.{c.right.column}"
