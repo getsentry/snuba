@@ -1269,7 +1269,11 @@ def _post_process(
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
 ) -> None:
     for func in funcs:
-        with sentry_sdk.start_span(op="processor", description=func.__name__):
+        # custom processors can be partials instead of functions but partials don't
+        # have the __name__ attribute set automatically (and we don't set it manually)
+        description = getattr(func, "__name__", "custom")
+
+        with sentry_sdk.start_span(op="processor", description=description):
             func(query)
 
     if isinstance(query, CompositeQuery):
