@@ -54,10 +54,6 @@ class EntityColumnSet(ColumnSet):
 
         self._wildcard_columns = {col.name: col for col in wildcard_columns}
 
-        self.__flat_wildcard_columns = [
-            column.type.flatten(column.name)[0] for column in wildcard_columns
-        ]
-
         super().__init__(standard_columns)
 
     def __eq__(self, other: object) -> bool:
@@ -92,7 +88,9 @@ class EntityColumnSet(ColumnSet):
         if match is not None:
             wildcard_prefix = match[1]
             if wildcard_prefix in self._wildcard_columns:
-                return self._wildcard_columns[wildcard_prefix].type.flatten(key)[0]
+                return self._wildcard_columns[wildcard_prefix].type.flatten(
+                    wildcard_prefix
+                )[0]
 
         raise KeyError(key)
 
@@ -108,8 +106,8 @@ class EntityColumnSet(ColumnSet):
         for col in self._flattened:
             yield col
 
-        for col in self.__flat_wildcard_columns:
-            yield col
+        for wildcard_col in self._wildcard_columns.values():
+            yield wildcard_col.type.flatten(col.name)[0]
 
     @property
     def columns(self) -> Sequence[Column[SchemaModifiers]]:
