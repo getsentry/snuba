@@ -162,7 +162,9 @@ class Entity(Describable, ABC):
             content=[
                 Description(
                     header="Entity schema",
-                    content=[column.for_schema() for column in self.get_data_model()],
+                    content=[
+                        column.for_schema() for column in self.get_data_model().columns
+                    ],
                 ),
                 Description(header="Relationships", content=relationships),
             ],

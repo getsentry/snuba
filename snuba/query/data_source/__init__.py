@@ -1,56 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import (
-    Iterator,
-    Mapping,
-    Optional,
-    Sequence,
-    TypeVar,
-    MutableMapping,
-    List,
-)
+from typing import Iterator, Mapping, Optional
 
-from snuba.clickhouse.columns import Column, FlattenedColumn, SchemaModifiers
-
-ColumnType = TypeVar("ColumnType")
-
-
-class ColumnSet(ABC):
-    """
-    Base column set extended by both ClickHouse column set and entity column set
-    """
-
-    def __init__(self, columns: Sequence[Column[SchemaModifiers]]) -> None:
-        self.columns = columns
-
-        self._lookup: MutableMapping[str, FlattenedColumn] = {}
-        self._flattened: List[FlattenedColumn] = []
-        for column in self.columns:
-            self._flattened.extend(column.type.flatten(column.name))
-
-        for col in self._flattened:
-            if col.flattened in self._lookup:
-                raise RuntimeError("Duplicate column: {}".format(col.flattened))
-
-            self._lookup[col.flattened] = col
-            # also store it by the escaped name
-            self._lookup[col.escaped] = col
-
-    def __getitem__(self, key: str) -> FlattenedColumn:
-        return self._lookup[key]
-
-    def get(
-        self, key: str, default: Optional[FlattenedColumn] = None
-    ) -> Optional[FlattenedColumn]:
-        try:
-            return self[key]
-        except KeyError:
-            return default
-
-    def __contains__(self, key: str) -> bool:
-        return key in self._lookup
-
-    def __iter__(self) -> Iterator[FlattenedColumn]:
-        return iter(self._flattened)
+from snuba.clickhouse.columns import Column, FlattenedColumn
+from snuba.utils.schemas import ColumnSet
 
 
 class QualifiedColumnSet(ColumnSet):

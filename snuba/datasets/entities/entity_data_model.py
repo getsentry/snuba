@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterator, Optional, Sequence
+from typing import Iterator, Sequence
 
 from snuba.clickhouse.columns import (
     Any,
@@ -16,7 +16,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.query.data_source import ColumnSet
+from snuba.utils.schemas import ColumnSet
 
 __all__ = [
     "Any",
@@ -99,15 +99,6 @@ class EntityColumnSet(ColumnSet):
         for col in self.__flat_wildcard_columns:
             yield col
 
-    def get(
-        self, column_name: str, default: Optional[FlattenedColumn] = None
-    ) -> Optional[FlattenedColumn]:
-        """
-        Returns the column if it exists else default
-
-        tags[asdf]
-        """
-        try:
-            return self[column_name]
-        except KeyError:
-            return default
+    @property
+    def columns(self) -> Sequence[Column[SchemaModifiers]]:
+        return [*super().columns, *self.__wildcard_column_map.values()]

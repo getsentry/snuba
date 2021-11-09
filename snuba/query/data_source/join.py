@@ -16,8 +16,9 @@ from typing import (
 
 from snuba.datasets.entities import EntityKey
 from snuba.query import ProcessableQuery, TSimpleDataSource
-from snuba.query.data_source import ColumnSet, DataSource, QualifiedColumnSet
+from snuba.query.data_source import DataSource, QualifiedColumnSet
 from snuba.query.data_source.simple import Entity
+from snuba.utils.schemas import ColumnSet
 
 
 class JoinType(Enum):
