@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import re
 from typing import Iterator, Sequence
 
 from snuba.clickhouse.columns import (
-    Any,
     Array,
     Column,
     ColumnType,
@@ -16,10 +14,10 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.utils.constants import NESTED_COL_EXPR_RE
 from snuba.utils.schemas import ColumnSet
 
 __all__ = [
-    "Any",
     "Array",
     "Column",
     "DateTime",
@@ -30,10 +28,6 @@ __all__ = [
     "UInt",
     "WildcardColumn",
 ]
-
-
-# TODO: Copied here due to circular reference
-NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 class WildcardColumn(ColumnType[SchemaModifiers]):

@@ -1,8 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence, Union, cast
 
-from snuba.clickhouse.columns import ColumnSet, FlattenedColumn, SchemaModifiers
-from snuba.datasets.entities.entity_data_model import Any, Column, EntityColumnSet
+from snuba.clickhouse.columns import (
+    ColumnSet,
+    ColumnType,
+    FlattenedColumn,
+    SchemaModifiers,
+)
+from snuba.datasets.entities.entity_data_model import Column, EntityColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -21,10 +26,13 @@ def map_column(column: FlattenedColumn) -> Column[SchemaModifiers]:
         else column.name
     )
 
-    return Column(flattened_name, Any())
+    return Column(flattened_name, cast(ColumnType[SchemaModifiers], column.type))
 
 
 def convert_to_entity_column_set(column_set: ColumnSet) -> EntityColumnSet:
+    """
+    Temporary code to map the old ClickHouse style column set to a new one
+    """
     return EntityColumnSet([map_column(col) for col in column_set])
 
 

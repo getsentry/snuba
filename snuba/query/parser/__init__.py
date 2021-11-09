@@ -34,6 +34,7 @@ from snuba.query.parser.exceptions import (
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.parser.validation import validate_query
 from snuba.util import is_function, to_list, tuplify
+from snuba.utils.constants import NESTED_COL_EXPR_RE
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -312,10 +313,6 @@ def _validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
                 )
             else:
                 all_declared_aliases[exp.alias] = exp
-
-
-# A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 def _parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
