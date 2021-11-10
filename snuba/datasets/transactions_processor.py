@@ -27,7 +27,11 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.state import is_project_in_rollout_group
+from snuba.state import (
+    get_config,
+    is_project_in_rollout_group,
+    is_project_in_rollout_list,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -292,20 +296,40 @@ class TransactionsMessageProcessor(MessageProcessor):
         trace_context = data["contexts"]["trace"]
 
         try:
-            if not is_project_in_rollout_group(
+            max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
+            assert isinstance(max_spans_per_transaction, (int, float))
+        except Exception:
+            metrics.increment("bad_config.max_spans_per_transaction")
+            max_spans_per_transaction = 2000
+
+        try:
+            if not is_project_in_rollout_list(
                 "write_span_columns_projects", processed["project_id"]
+            ) and not is_project_in_rollout_group(
+                "write_span_columns_rollout_percentage", processed["project_id"]
             ):
                 return
 
+            num_processed = 0
             processed_spans = []
 
             processed_root_span = self._process_span(trace_context)
             if processed_root_span is not None:
+                num_processed += 1
                 processed_spans.append(processed_root_span)
 
             for span in data.get("spans", []):
+                # The number of spans should not exceed 1000 as enforced by SDKs.
+                # As a safety precaution, enforce a hard limit on the number of
+                # spans we actually store .
+                if num_processed >= max_spans_per_transaction:
+                    metrics.increment("too_many_spans")
+                    break
+
                 processed_span = self._process_span(span)
+
                 if processed_span is not None:
+                    num_processed += 1
                     processed_spans.append(processed_span)
 
             processed["spans.op"] = []

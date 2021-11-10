@@ -2,10 +2,9 @@ from typing import Any, List, Mapping, Optional, Type
 
 import pytest
 
-from snuba.query import Column, binary_condition
-from snuba.query.conditions import ConditionFunctions
+from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import FunctionCall, Literal
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
@@ -127,8 +126,8 @@ TESTS_CONDITIONS_LEGACY_METHOD = [
 @pytest.mark.parametrize("entity_subscription, creation_dict, exception", TESTS)
 def test_basic(
     entity_subscription: Type[EntitySubscription],
-    creation_dict: Mapping[str, any],
-    exception: Optional[Exception],
+    creation_dict: Mapping[str, Any],
+    exception: Optional[Type[Exception]],
 ) -> None:
     if exception is not None:
         with pytest.raises(exception):

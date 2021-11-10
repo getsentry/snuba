@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -21,6 +22,8 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.arrayjoin_optimizer import ArrayJoinOptimizer
+from snuba.query.processors.bloom_filter_optimizer import BloomFilterOptimizer
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
@@ -30,6 +33,7 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.type_converters.hexint_column_processor import (
+    HexIntArrayColumnProcessor,
     HexIntColumnProcessor,
 )
 from snuba.query.processors.type_converters.uuid_column_processor import (
@@ -128,6 +132,12 @@ storage = WritableTableStorage(
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
+        # the bloom filter optimizer should occur before the array join optimizer
+        # on the span columns because the array join optimizer will rewrite the
+        # same conditions the bloom filter optimizer is looking for
+        BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time"]),
+        ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time"]),
+        HexIntArrayColumnProcessor({"spans.group"}),
         PrewhereProcessor(
             [
                 "event_id",
@@ -142,6 +152,7 @@ storage = WritableTableStorage(
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=TransactionsMessageProcessor(),
+        pre_filter=KafkaHeaderFilter("transaction_forwarder", "0"),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,

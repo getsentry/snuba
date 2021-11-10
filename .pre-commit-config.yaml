@@ -1,10 +1,16 @@
+exclude: >
+    (?x)(
+        ^snuba/admin/dist/|
+        ^snuba/admin/static/
+    )
+
 repos:
   - repo: https://github.com/psf/black
     rev: 19.10b0
     hooks:
       - id: black
   - repo: git://github.com/pre-commit/pre-commit-hooks
-    rev: v2.4.0
+    rev: v4.0.1
     hooks:
       - id: check-case-conflict
       - id: check-merge-conflict
