@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
 import pytest
 
@@ -17,7 +17,7 @@ from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
 )
 
-tests = [
+required_column_tests = [
     pytest.param(
         EntityKey.SPANS,
         binary_condition(
@@ -73,7 +73,7 @@ tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", tests)
+@pytest.mark.parametrize("key, condition", required_column_tests)
 def test_entity_required_column_validation(
     key: EntityKey, condition: Optional[Expression]
 ) -> None:
@@ -89,7 +89,7 @@ def test_entity_required_column_validation(
     validator.validate(query)
 
 
-invalid_tests = [
+invalid_required_column_tests = [
     pytest.param(
         EntityKey.EVENTS, None, id="entity has columns, but there are no conditions",
     ),
@@ -105,7 +105,7 @@ invalid_tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", invalid_tests)
+@pytest.mark.parametrize("key, condition", invalid_required_column_tests)
 def test_entity_required_column_validation_failure(
     key: EntityKey, condition: Optional[Expression]
 ) -> None:
@@ -122,40 +122,27 @@ def test_entity_required_column_validation_failure(
         validator.validate(query)
 
 
-def test_entity_contains_columns_valiator() -> None:
-    key = EntityKey.EVENTS
-
-    entity = get_entity(key)
-
-    query_entity = QueryEntity(key, entity.get_data_model())
-    bad_query = LogicalQuery(
-        query_entity,
-        selected_columns=[
-            SelectedExpression("asdf", Column("_snuba_asdf", None, "asdf")),
+entity_contains_columns_tests = [
+    pytest.param(
+        EntityKey.OUTCOMES,
+        [
+            "org_id",
+            "project_id",
+            "key_id",
+            "timestamp",
+            "outcome",
+            "reason",
+            "quantity",
+            "category",
+            "times_seen",
         ],
+        id="Validate Outcomes Entity Columns",
     )
-
-    good_query = LogicalQuery(
-        query_entity,
-        selected_columns=[
-            SelectedExpression(
-                "timestamp", Column("_snuba_timestamp", None, "timestamp")
-            ),
-        ],
-    )
-
-    validator = EntityContainsColumnsValidator(
-        entity.get_data_model(), validation_mode=ColumnValidationMode.ERROR
-    )
-
-    with pytest.raises(InvalidQueryException):
-        validator.validate(bad_query)
-
-    validator.validate(good_query)
+]
 
 
-def test_outcomes_columns_validation() -> None:
-    key = EntityKey.OUTCOMES
+@pytest.mark.parametrize("key, columns", entity_contains_columns_tests)
+def test_outcomes_columns_validation(key: EntityKey, columns: Sequence[str]) -> None:
     entity = get_entity(key)
 
     query_entity = QueryEntity(key, entity.get_data_model())
@@ -170,21 +157,8 @@ def test_outcomes_columns_validation() -> None:
     good_query = LogicalQuery(
         query_entity,
         selected_columns=[
-            SelectedExpression("org_id", Column("_snuba_org_id", None, "org_id")),
-            SelectedExpression(
-                "project_id", Column("_snuba_project_id", None, "project_id")
-            ),
-            SelectedExpression("key_id", Column("_snuba_key_id", None, "key_id")),
-            SelectedExpression(
-                "timestamp", Column("_snuba_timestamp", None, "timestamp")
-            ),
-            SelectedExpression("outcome", Column("_snuba_outcome", None, "outcome")),
-            SelectedExpression("reason", Column("_snuba_reason", None, "reason")),
-            SelectedExpression("quantity", Column("_snuba_quantity", None, "quantity")),
-            SelectedExpression("category", Column("_snuba_category", None, "category")),
-            SelectedExpression(
-                "times_seen", Column("_snuba_times_seen", None, "times_seen")
-            ),
+            SelectedExpression(column, Column(f"_snuba_{columns}", None, column))
+            for column in columns
         ],
     )
 
