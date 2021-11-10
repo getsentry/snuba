@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence, Union, cast
+from typing import Mapping, Optional, Sequence, cast
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -47,7 +47,7 @@ class Entity(Describable, ABC):
         *,
         storages: Sequence[Storage],
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
-        abstract_column_set: Union[ColumnSet, EntityColumnSet],
+        abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
         writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
@@ -56,6 +56,10 @@ class Entity(Describable, ABC):
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
         self.__writable_storage = writable_storage
+
+        # Eventually, the EntityColumnSet should be passed in
+        # For now, just convert it so we have the right
+        # type from here on
         self.__data_model = (
             convert_to_entity_column_set(abstract_column_set)
             if isinstance(abstract_column_set, ColumnSet)

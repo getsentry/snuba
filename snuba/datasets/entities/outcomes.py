@@ -1,13 +1,6 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
-from snuba.datasets.entities.entity_data_model import (
-    Column,
-    DateTime,
-    EntityColumnSet,
-    String,
-    UInt,
-)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
@@ -38,19 +31,7 @@ class OutcomesEntity(Entity):
 
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
-        columns = EntityColumnSet(
-            [
-                Column("org_id", UInt(64)),
-                Column("project_id", UInt(64)),
-                Column("key_id", UInt(64)),
-                Column("timestamp", DateTime()),
-                Column("outcome", UInt(8)),
-                Column("reason", String()),
-                Column("quantity", UInt(64)),
-                Column("category", UInt(8)),
-                Column("times_seen", UInt(64)),
-            ]
-        )
+        read_schema = materialized_storage.get_schema()
 
         super().__init__(
             storages=[writable_storage, materialized_storage],
@@ -62,7 +43,7 @@ class OutcomesEntity(Entity):
                     storage=materialized_storage,
                 ),
             ),
-            abstract_column_set=columns,
+            abstract_column_set=read_schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"org_id"})],
