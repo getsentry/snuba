@@ -6,6 +6,7 @@ from enum import Enum
 from typing import (
     Generic,
     Mapping,
+    MutableSequence,
     NamedTuple,
     Optional,
     Sequence,
@@ -16,9 +17,9 @@ from typing import (
 
 from snuba.datasets.entities import EntityKey
 from snuba.query import ProcessableQuery, TSimpleDataSource
-from snuba.query.data_source import DataSource, QualifiedColumnSet
+from snuba.query.data_source import DataSource
 from snuba.query.data_source.simple import Entity
-from snuba.utils.schemas import ColumnSet
+from snuba.utils.schemas import Column, ColumnSet, SchemaModifiers, WildcardColumn
 
 
 class JoinType(Enum):
@@ -183,3 +184,27 @@ class JoinVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
     @abstractmethod
     def visit_join_clause(self, node: JoinClause[TSimpleDataSource]) -> TReturn:
         raise NotImplementedError
+
+
+class QualifiedColumnSet(ColumnSet):
+    """
+    Works like a Columnset but it represent a list of columns
+    coming from different tables (like the ones we would use in
+    a join).
+    The main difference is that this class keeps track of the
+    structure and to which table each column belongs to.
+    """
+
+    def __init__(self, column_sets: Mapping[str, ColumnSet]) -> None:
+        columns: MutableSequence[Column[SchemaModifiers]] = []
+
+        for alias, column_set in column_sets.items():
+            for column in column_set.columns:
+                if isinstance(column, WildcardColumn):
+                    columns.append(
+                        WildcardColumn(f"{alias}.{column.name}", column.type)
+                    )
+                else:
+                    columns.append(Column(f"{alias}.{column.name}", column.type))
+
+        super().__init__(columns)
