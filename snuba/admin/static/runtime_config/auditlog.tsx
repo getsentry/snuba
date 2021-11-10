@@ -69,7 +69,7 @@ function getActionDetail(
   const formattedBefore = typeof before === "string" ? `"${before}"` : before;
   const formatttedAfter = typeof after === "string" ? `"${after}"` : after;
 
-  if (before === null && after !== null) {
+  if (before === null) {
     if (after === null) {
       // Value was null before and after the change, something went wrong
       throw new Error("Unkknown action");
