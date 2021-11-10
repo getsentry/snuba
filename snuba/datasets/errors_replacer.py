@@ -23,6 +23,8 @@ from typing import (
     Union,
 )
 
+import sentry_sdk
+
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
@@ -240,49 +242,52 @@ def get_projects_query_flags(
     5. Fetch latest exclude groups replacement type for each Project
     """
 
-    s_project_ids = set(project_ids)
-    now = time.time()
-    p = redis_client.pipeline()
+    with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
+        s_project_ids = set(project_ids)
+        now = time.time()
+        p = redis_client.pipeline()
 
-    needs_final_keys_and_type_keys = [
-        build_project_needs_final_key_and_type_key(project_id, state_name)
-        for project_id in s_project_ids
-    ]
+        needs_final_keys_and_type_keys = [
+            build_project_needs_final_key_and_type_key(project_id, state_name)
+            for project_id in s_project_ids
+        ]
 
-    for needs_final_key, _ in needs_final_keys_and_type_keys:
-        p.get(needs_final_key)
+        for needs_final_key, _ in needs_final_keys_and_type_keys:
+            p.get(needs_final_key)
 
-    exclude_groups_keys_and_types = [
-        build_project_exclude_groups_key_and_type_key(project_id, state_name)
-        for project_id in s_project_ids
-    ]
-    for exclude_groups_key, _ in exclude_groups_keys_and_types:
-        p.zremrangebyscore(
-            exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
+        exclude_groups_keys_and_types = [
+            build_project_exclude_groups_key_and_type_key(project_id, state_name)
+            for project_id in s_project_ids
+        ]
+        for exclude_groups_key, _ in exclude_groups_keys_and_types:
+            p.zremrangebyscore(
+                exclude_groups_key, float("-inf"), now - settings.REPLACER_KEY_TTL
+            )
+            # TODO: put this into another for loop to make post processing easier
+            p.zrevrangebyscore(
+                exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
+            )
+
+        for _, needs_final_type_key in needs_final_keys_and_type_keys:
+            p.get(needs_final_type_key)
+
+        for _, type_key in exclude_groups_keys_and_types:
+            p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
+            # TODO: put this into another for loop to make post processing easier
+            p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
+
+        for exclude_groups_key, _ in exclude_groups_keys_and_types:
+            p.zrevrange(
+                exclude_groups_key, 0, 0, withscores=True,
+            )
+
+    with sentry_sdk.start_span(op="function", description="execute_redis_pipeline"):
+        results = p.execute()
+
+    with sentry_sdk.start_span(op="function", description="process_redis_results"):
+        return _process_exclude_groups_and_replacement_types_results(
+            results, len(s_project_ids)
         )
-        # TODO: put this into another for loop to make post processing easier
-        p.zrevrangebyscore(
-            exclude_groups_key, float("inf"), now - settings.REPLACER_KEY_TTL
-        )
-
-    for _, needs_final_type_key in needs_final_keys_and_type_keys:
-        p.get(needs_final_type_key)
-
-    for _, type_key in exclude_groups_keys_and_types:
-        p.zremrangebyscore(type_key, float("-inf"), now - settings.REPLACER_KEY_TTL)
-        # TODO: put this into another for loop to make post processing easier
-        p.zrevrangebyscore(type_key, float("inf"), now - settings.REPLACER_KEY_TTL)
-
-    for exclude_groups_key, _ in exclude_groups_keys_and_types:
-        p.zrevrange(
-            exclude_groups_key, 0, 0, withscores=True,
-        )
-
-    results = p.execute()
-
-    return _process_exclude_groups_and_replacement_types_results(
-        results, len(s_project_ids)
-    )
 
 
 def _process_exclude_groups_and_replacement_types_results(
