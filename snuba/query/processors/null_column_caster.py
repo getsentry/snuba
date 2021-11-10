@@ -51,7 +51,7 @@ class NullColumnCaster(QueryProcessor):
 
     """
 
-    def _find_mismatched_null_columns(self,) -> Dict[str, FlattenedColumn]:
+    def _find_mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
         mismatched_col_name_to_col: Dict[str, FlattenedColumn] = {}
         col_name_to_nullable: Dict[str, bool] = {}
         for table_storage in self.__merge_table_sources:
