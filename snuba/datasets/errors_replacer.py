@@ -23,6 +23,7 @@ from typing import (
     Union,
 )
 
+import sentry_sdk
 from rediscluster.pipeline import StrictClusterPipeline
 
 from snuba import environment, settings
@@ -259,44 +260,52 @@ class ProjectsQueryFlags:
 
         p = redis_client.pipeline()
 
-        cls._query_redis(s_project_ids, state_name, p)
-        results = p.execute()
+        with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
+            cls._query_redis(s_project_ids, state_name, p)
 
-        needs_final_result = results[:len_projects]
-        exclude_groups_results = results[len_projects * 2 : len_projects * 3]
-        projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
-        groups_replacement_types_results = results[len_projects * 5 : len_projects * 6]
-        latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
+        with sentry_sdk.start_span(op="function", description="execute_redis_pipeline"):
+            results = p.execute()
 
-        needs_final = any(needs_final_result)
+        with sentry_sdk.start_span(op="function", description="process_redis_results"):
+            needs_final_result = results[:len_projects]
+            exclude_groups_results = results[len_projects * 2 : len_projects * 3]
+            projects_replacment_types_result = results[
+                len_projects * 3 : len_projects * 4
+            ]
+            groups_replacement_types_results = results[
+                len_projects * 5 : len_projects * 6
+            ]
+            latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
 
-        exclude_groups = sorted(
-            {
-                int(group_id)
-                for exclude_groups_result in exclude_groups_results
-                for group_id in exclude_groups_result
+            needs_final = any(needs_final_result)
+
+            exclude_groups = sorted(
+                {
+                    int(group_id)
+                    for exclude_groups_result in exclude_groups_results
+                    for group_id in exclude_groups_result
+                }
+            )
+
+            needs_final_replacement_types = {
+                replacement_type.decode("utf-8")
+                for replacement_type in projects_replacment_types_result
+                if replacement_type
             }
-        )
 
-        needs_final_replacement_types = {
-            replacement_type.decode("utf-8")
-            for replacement_type in projects_replacment_types_result
-            if replacement_type
-        }
+            groups_replacement_types = {
+                replacement_type.decode("utf-8")
+                for groups_replacement_types_result in groups_replacement_types_results
+                for replacement_type in groups_replacement_types_result
+            }
 
-        groups_replacement_types = {
-            replacement_type.decode("utf-8")
-            for groups_replacement_types_result in groups_replacement_types_results
-            for replacement_type in groups_replacement_types_result
-        }
+            replacement_types = groups_replacement_types.union(
+                needs_final_replacement_types
+            )
 
-        replacement_types = groups_replacement_types.union(
-            needs_final_replacement_types
-        )
-
-        latest_replacement_time = cls._process_latest_replacement(
-            needs_final, needs_final_result, latest_exclude_groups_result
-        )
+            latest_replacement_time = cls._process_latest_replacement(
+                needs_final, needs_final_result, latest_exclude_groups_result
+            )
 
         return cls(
             needs_final, exclude_groups, replacement_types, latest_replacement_time
