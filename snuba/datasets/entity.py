@@ -1,13 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence, cast
+from typing import Mapping, Optional, Sequence
 
-from snuba.clickhouse.columns import (
-    ColumnSet,
-    ColumnType,
-    FlattenedColumn,
-    SchemaModifiers,
-)
-from snuba.datasets.entities.entity_data_model import Column, EntityColumnSet
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -17,23 +11,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
 from snuba.utils.describer import Describable, Description, Property
-
-
-def map_column(column: FlattenedColumn) -> Column[SchemaModifiers]:
-    flattened_name = (
-        "{}.{}".format(column.base_name, column.name)
-        if column.base_name
-        else column.name
-    )
-
-    return Column(flattened_name, cast(ColumnType[SchemaModifiers], column.type))
-
-
-def convert_to_entity_column_set(column_set: ColumnSet) -> EntityColumnSet:
-    """
-    Temporary code to map the old ClickHouse style column set to a new one
-    """
-    return EntityColumnSet([map_column(col) for col in column_set])
+from snuba.utils.schemas import ColumnSet
 
 
 class Entity(Describable, ABC):
@@ -60,11 +38,7 @@ class Entity(Describable, ABC):
         # Eventually, the EntityColumnSet should be passed in
         # For now, just convert it so we have the right
         # type from here on
-        self.__data_model = (
-            convert_to_entity_column_set(abstract_column_set)
-            if isinstance(abstract_column_set, ColumnSet)
-            else abstract_column_set
-        )
+        self.__data_model = EntityColumnSet(abstract_column_set.columns)
 
         self.__join_relationships = join_relationships
         self.__validators = validators

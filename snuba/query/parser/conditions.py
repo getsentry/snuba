@@ -1,6 +1,6 @@
 from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
-from snuba.datasets.entities.entity_data_model import Array, EntityColumnSet
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -14,6 +14,7 @@ from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS, UNARY_OPERATORS
 from snuba.util import is_condition
+from snuba.utils.schemas import Array
 from snuba.utils.serializable_exception import SerializableException
 
 TExpression = TypeVar("TExpression")
@@ -93,7 +94,8 @@ def parse_conditions(
             isinstance(lhs, str)
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
-            and columns[lhs].name not in arrayjoin_cols
+            and columns[lhs].base_name not in arrayjoin_cols
+            and columns[lhs].flattened not in arrayjoin_cols
             and not isinstance(lit, (list, tuple))
         ):
             return unpack_array_condition_builder(

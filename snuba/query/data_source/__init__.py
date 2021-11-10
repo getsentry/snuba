@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Iterator, Mapping, Optional
+from typing import Mapping, MutableSequence
 
-from snuba.clickhouse.columns import Column, FlattenedColumn
-from snuba.datasets.entities.entity_data_model import WildcardColumn
-from snuba.utils.schemas import ColumnSet
+from snuba.clickhouse.columns import Column
+from snuba.utils.schemas import ColumnSet, SchemaModifiers, WildcardColumn
 
 
 class QualifiedColumnSet(ColumnSet):
@@ -16,32 +15,18 @@ class QualifiedColumnSet(ColumnSet):
     """
 
     def __init__(self, column_sets: Mapping[str, ColumnSet]) -> None:
-        flat_columns = []
-        wildcard_columns = []
+        columns: MutableSequence[Column[SchemaModifiers]] = []
 
         for alias, column_set in column_sets.items():
             for column in column_set.columns:
-                if isinstance(column.type, WildcardColumn):
-                    wildcard_columns.append((f"{alias}.{column.name}", column.type))
+                if isinstance(column, WildcardColumn):
+                    columns.append(
+                        WildcardColumn(f"{alias}.{column.name}", column.type)
+                    )
                 else:
-                    flat_columns.append((f"{alias}.{column.name}", column.type))
+                    columns.append(Column(f"{alias}.{column.name}", column.type))
 
-        super().__init__(Column.to_columns(flat_columns))
-
-    def __getitem__(self, key: str) -> FlattenedColumn:
-        return self._lookup[key]
-
-    def get(
-        self, key: str, default: Optional[FlattenedColumn] = None
-    ) -> Optional[FlattenedColumn]:
-        try:
-            return self[key]
-        except KeyError:
-            return default
-
-    def __iter__(self) -> Iterator[FlattenedColumn]:
-        for column in self._flattened:
-            yield column
+        super().__init__(columns)
 
 
 class DataSource(ABC):

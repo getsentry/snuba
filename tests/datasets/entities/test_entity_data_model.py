@@ -1,13 +1,14 @@
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.columns import ColumnSet as PhysicalColumnSet
-from snuba.datasets.entities.entity_data_model import (
-    EntityColumnSet,
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entity import convert_to_entity_column_set
+from snuba.utils.schemas import (
     FixedString,
+    FlattenedColumn,
+    String,
     UInt,
     WildcardColumn,
 )
-from snuba.datasets.entity import convert_to_entity_column_set
-from snuba.utils.schemas import FlattenedColumn
 
 
 def test_entity_data_model() -> None:
@@ -15,8 +16,8 @@ def test_entity_data_model() -> None:
         columns=[
             Column("event_id", FixedString(32)),
             Column("project_id", UInt(64)),
-            Column("tags", WildcardColumn()),
-            Column("contexts", WildcardColumn()),
+            WildcardColumn("tags", String()),
+            WildcardColumn("contexts", String()),
         ]
     )
 
@@ -25,11 +26,8 @@ def test_entity_data_model() -> None:
     assert event_id_col.name == "event_id"
     assert event_id_col.type == FixedString(32)
 
-    tag_asdf_col = entity_data_model.get("tags[asdf]")
-    assert tag_asdf_col is not None
-
     assert entity_data_model.get("tags[asdf]") == FlattenedColumn(
-        None, "tags", WildcardColumn()
+        None, "tags", String()
     )
     assert entity_data_model.get("asdf") is None
     assert entity_data_model.get("tags[asd   f]") is None
@@ -39,8 +37,8 @@ def test_entity_data_model() -> None:
         columns=[
             Column("event_id", FixedString(32)),
             Column("project_id", UInt(64)),
-            Column("tags", WildcardColumn()),
-            Column("contexts", WildcardColumn()),
+            WildcardColumn("tags", String()),
+            WildcardColumn("contexts", String()),
         ]
     )
 

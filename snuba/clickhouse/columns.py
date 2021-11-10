@@ -23,6 +23,7 @@ from snuba.utils.schemas import (
     TypeModifier,
     TypeModifiers,
     UInt,
+    WildcardColumn,
 )
 
 __all__ = (
@@ -71,13 +72,13 @@ class ColumnSet(BaseColumnSet):
             Union[Column[SchemaModifiers], Tuple[str, ColumnType[SchemaModifiers]]]
         ],
     ) -> None:
+        for column in columns:
+            assert not isinstance(column, WildcardColumn)
+
         super().__init__(Column.to_columns(columns))
 
     def __repr__(self) -> str:
         return "ColumnSet({})".format(repr(self.columns))
-
-    def __len__(self) -> int:
-        return len(self._flattened)
 
     def __add__(
         self,
