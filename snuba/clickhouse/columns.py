@@ -26,11 +26,11 @@ from snuba.utils.schemas import (
 )
 
 __all__ = (
-    "ColumnSet",
-    "Array",
     "Any",
     "AggregateFunction",
+    "Array",
     "Column",
+    "ColumnSet",
     "ColumnType",
     "Date",
     "DateTime",

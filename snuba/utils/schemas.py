@@ -222,6 +222,8 @@ class Nullable(TypeModifier):
 class ColumnSet(ABC):
     """
     Base column set extended by both ClickHouse column set and entity column set
+    A base column set class that will be shared by logical (entity) and physical (ClickHouse)
+    data models
     """
 
     def __init__(self, columns: Sequence[Column[SchemaModifiers]]) -> None:
