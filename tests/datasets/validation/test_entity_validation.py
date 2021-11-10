@@ -152,3 +152,47 @@ def test_entity_contains_columns_valiator() -> None:
         validator.validate(bad_query)
 
     validator.validate(good_query)
+
+
+def test_outcomes_columns_validation() -> None:
+    key = EntityKey.OUTCOMES
+    entity = get_entity(key)
+
+    query_entity = QueryEntity(key, entity.get_data_model())
+
+    bad_query = LogicalQuery(
+        query_entity,
+        selected_columns=[
+            SelectedExpression("asdf", Column("_snuba_asdf", None, "asdf")),
+        ],
+    )
+
+    good_query = LogicalQuery(
+        query_entity,
+        selected_columns=[
+            SelectedExpression("org_id", Column("_snuba_org_id", None, "org_id")),
+            SelectedExpression(
+                "project_id", Column("_snuba_project_id", None, "project_id")
+            ),
+            SelectedExpression("key_id", Column("_snuba_key_id", None, "key_id")),
+            SelectedExpression(
+                "timestamp", Column("_snuba_timestamp", None, "timestamp")
+            ),
+            SelectedExpression("outcome", Column("_snuba_outcome", None, "outcome")),
+            SelectedExpression("reason", Column("_snuba_reason", None, "reason")),
+            SelectedExpression("quantity", Column("_snuba_quantity", None, "quantity")),
+            SelectedExpression("category", Column("_snuba_category", None, "category")),
+            SelectedExpression(
+                "times_seen", Column("_snuba_times_seen", None, "times_seen")
+            ),
+        ],
+    )
+
+    validator = EntityContainsColumnsValidator(
+        entity.get_data_model(), validation_mode=ColumnValidationMode.ERROR
+    )
+
+    with pytest.raises(InvalidQueryException):
+        validator.validate(bad_query)
+
+    validator.validate(good_query)

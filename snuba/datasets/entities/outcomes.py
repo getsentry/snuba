@@ -35,6 +35,9 @@ class OutcomesEntity(Entity):
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
         read_schema = materialized_storage.get_schema()
+
+        # TODO: Replace with EntityDataModel
+        data_model = read_schema.get_columns()
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_pipeline_builder=SimplePipelineBuilder(
@@ -45,14 +48,12 @@ class OutcomesEntity(Entity):
                     storage=materialized_storage,
                 ),
             ),
-            abstract_column_set=read_schema.get_columns(),
+            abstract_column_set=data_model,
             join_relationships={},
             writable_storage=writable_storage,
             validators=[
                 EntityRequiredColumnValidator({"org_id"}),
-                EntityContainsColumnsValidator(
-                    self.get_data_model(), ColumnValidationMode.WARN
-                ),
+                EntityContainsColumnsValidator(data_model, ColumnValidationMode.WARN),
             ],
             required_time_column="timestamp",
         )
