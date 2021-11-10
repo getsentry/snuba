@@ -16,6 +16,7 @@ from typing import (
     Union,
 )
 
+import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
@@ -1268,7 +1269,12 @@ def _post_process(
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
 ) -> None:
     for func in funcs:
-        func(query)
+        # custom processors can be partials instead of functions but partials don't
+        # have the __name__ attribute set automatically (and we don't set it manually)
+        description = getattr(func, "__name__", "custom")
+
+        with sentry_sdk.start_span(op="processor", description=description):
+            func(query)
 
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
@@ -1300,23 +1306,28 @@ CustomProcessors = Sequence[
 def parse_snql_query(
     body: str, dataset: Dataset, custom_processing: Optional[CustomProcessors] = None,
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
-    query = parse_snql_query_initial(body)
+    with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
+        query = parse_snql_query_initial(body)
 
-    _post_process(
-        query, POST_PROCESSORS,
-    )
+    with sentry_sdk.start_span(op="processor", description="post_processors"):
+        _post_process(
+            query, POST_PROCESSORS,
+        )
 
     # Custom processing to tweak the AST before validation
-    if custom_processing is not None:
-        _post_process(query, custom_processing)
+    with sentry_sdk.start_span(op="processor", description="custom_processing"):
+        if custom_processing is not None:
+            _post_process(query, custom_processing)
 
     # Time based processing
-    _post_process(query, [_replace_time_condition])
+    with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+        _post_process(query, [_replace_time_condition])
 
     # XXX: Select the entity to be used for the query. This step is temporary. Eventually
     # entity selection will be moved to Sentry and specified for all SnQL queries.
     _post_process(query, [_select_entity_for_dataset(dataset)])
 
     # Validating
-    _post_process(query, VALIDATORS)
+    with sentry_sdk.start_span(op="validate", description="expression_validators"):
+        _post_process(query, VALIDATORS)
     return query
