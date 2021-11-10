@@ -43,6 +43,8 @@ __all__ = (
     "IPv6",
     "Nullable",
     "Nested",
+    "Nested",
+    "Nullable",
     "ReadOnly",
     "SchemaModifiers",
     "String",
