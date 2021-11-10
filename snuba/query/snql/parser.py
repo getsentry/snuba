@@ -63,10 +63,10 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
-    _apply_column_aliases,
-    _expand_aliases,
-    _parse_subscriptables,
-    _validate_aliases,
+    apply_column_aliases,
+    expand_aliases,
+    parse_subscriptables,
+    validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
@@ -1285,10 +1285,10 @@ def _post_process(
 
 POST_PROCESSORS = [
     _parse_datetime_literals,
-    _validate_aliases,
-    _parse_subscriptables,  # -> This should be part of the grammar
-    _apply_column_aliases,
-    _expand_aliases,
+    validate_aliases,
+    parse_subscriptables,  # -> This should be part of the grammar
+    apply_column_aliases,
+    expand_aliases,
     _mangle_query_aliases,
     _array_join_transformation,
     _qualify_columns,

@@ -1,21 +1,10 @@
-import re
-from dataclasses import replace
-from typing import Any, Iterable, List, Optional, Set, Tuple, Union
+from typing import Any, Iterable, List, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba.clickhouse.columns import ColumnSet
-from snuba.query.expressions import (
-    Column,
-    CurriedFunctionCall,
-    Expression,
-    FunctionCall,
-    Literal,
-)
+from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.parser.exceptions import ParsingException
-from snuba.query.parser.functions import parse_function_to_expr
-from snuba.query.parser.strings import parse_string_to_expr
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -39,10 +28,8 @@ from snuba.query.snql.expression_visitor import (
     visit_parameters_list,
     visit_quoted_literal,
 )
-from snuba.util import is_function
 
 FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
-FUNCTION_NAME_RE = re.compile(FUNCTION_NAME_REGEX)
 
 
 minimal_clickhouse_grammar = Grammar(
@@ -166,23 +153,6 @@ class ClickhouseVisitor(NodeVisitor):  # type: ignore
         return generic_visit(node, visited_children)
 
 
-def parse_expression(
-    val: Any, dataset_columns: ColumnSet, arrayjoin: Set[str]
-) -> Expression:
-    """
-    Parse a simple or structured expression encoded in the Snuba query language
-    into an AST Expression.
-    """
-    if is_function(val, 0):
-        return parse_function_to_expr(val, dataset_columns, arrayjoin)
-    if isinstance(val, str):
-        return parse_string_to_expr(val)
-    raise ParsingException(
-        f"Expression to parse can only be a function or a string: {val}",
-        should_report=False,
-    )
-
-
 def parse_clickhouse_function(function: str) -> Expression:
     try:
         expression_tree = minimal_clickhouse_grammar.parse(function)
@@ -192,56 +162,3 @@ def parse_clickhouse_function(function: str) -> Expression:
         ) from cause
 
     return ClickhouseVisitor().visit(expression_tree)  # type: ignore
-
-
-def parse_aggregation(
-    aggregation_function: str,
-    column: Any,
-    alias: Optional[str],
-    dataset_columns: ColumnSet,
-    array_join_cols: Set[str],
-) -> Expression:
-    """
-    Aggregations, unfortunately, support both Snuba syntax and a subset
-    of Clickhouse syntax. In order to preserve this behavior and still build
-    a meaningful AST when parsing the query, we need to do some parsing of
-    the clickhouse expression. (not that we should support this, but it is
-    used in production).
-    """
-
-    if not isinstance(column, (list, tuple)):
-        columns: Iterable[Any] = (column,)
-    else:
-        columns = column
-
-    columns_expr = [
-        parse_expression(column, dataset_columns, array_join_cols)
-        for column in columns
-        if column
-    ]
-
-    matched = FUNCTION_NAME_RE.fullmatch(aggregation_function)
-
-    if matched is not None:
-        return FunctionCall(alias, aggregation_function, tuple(columns_expr))
-
-    parsed_expression = parse_clickhouse_function(aggregation_function)
-
-    if (
-        # Simple Clickhouse expression with no snuba syntax
-        # ["ifNull(count(somthing), something)", None, None]
-        isinstance(parsed_expression, (FunctionCall, CurriedFunctionCall))
-        and not columns_expr
-    ):
-        return replace(parsed_expression, alias=alias)
-
-    elif isinstance(parsed_expression, FunctionCall) and columns_expr:
-        # Mix of clickhouse syntax and snuba syntax that generates a CurriedFunction
-        # ["f(a)", "b", None]
-        return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
-
-    else:
-        raise ParsingException(
-            f"Invalid aggregation format {aggregation_function} {column}",
-            should_report=False,
-        )
