@@ -269,9 +269,7 @@ class ColumnSet(ABC):
             if match is not None:
                 wildcard_prefix = match[1]
                 if wildcard_prefix in self._wildcard_columns:
-                    return self._wildcard_columns[wildcard_prefix].type.flatten(
-                        wildcard_prefix
-                    )[0]
+                    return self._wildcard_columns[wildcard_prefix].type.flatten(key)[0]
 
         raise KeyError(key)
 
@@ -302,7 +300,8 @@ class ColumnSet(ABC):
             yield col
 
         for wildcard_col in self._wildcard_columns.values():
-            yield wildcard_col.type.flatten(col.name)[0]
+            wildcard_name = col.name + "[...]"
+            yield wildcard_col.type.flatten(wildcard_name)[0]
 
     def __len__(self) -> int:
         return len(self._flattened) + len(self._wildcard_columns)
