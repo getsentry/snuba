@@ -3,6 +3,8 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Optional
 
+import sentry_sdk
+
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -47,15 +49,21 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         if request_settings.get_turbo():
             return
 
-        project_ids = get_object_ids_in_query_ast(query, self.__project_column)
+        with sentry_sdk.start_span(
+            op="function", description="get_project_ids_in_query"
+        ):
+            project_ids = get_object_ids_in_query_ast(query, self.__project_column)
 
         if project_ids is None:
             self._set_query_final(query, False)
             return
 
-        flags: ProjectsQueryFlags = get_projects_query_flags(
-            list(project_ids), self.__replacer_state_name
-        )
+        with sentry_sdk.start_span(
+            op="function", description="get_project_query_flags"
+        ):
+            flags: ProjectsQueryFlags = get_projects_query_flags(
+                list(project_ids), self.__replacer_state_name
+            )
 
         tags = {
             replacement_type: "True" for replacement_type in flags.replacement_types
@@ -63,43 +71,51 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         tags["referrer"] = request_settings.referrer
         tags["parent_api"] = request_settings.get_parent_api()
 
-        query_overlaps_replacement = self._query_overlaps_replacements(
-            query, flags.latest_replacement_time
-        )
+        with sentry_sdk.start_span(
+            op="function", description="_query_overlaps_replacements"
+        ):
+            query_overlaps_replacement = self._query_overlaps_replacements(
+                query, flags.latest_replacement_time
+            )
+
         metric_name = "final" if query_overlaps_replacement else "avoid_final"
 
         set_final = False
 
-        if flags.needs_final:
-            tags["cause"] = "final_flag"
-            metrics.increment(
-                name=metric_name, tags=tags,
-            )
-            set_final = True
-        elif flags.group_ids_to_exclude:
-            # If the number of groups to exclude exceeds our limit, the query
-            # should just use final instead of the exclusion set.
-            max_group_ids_exclude = get_config(
-                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
-            )
-            assert isinstance(max_group_ids_exclude, int)
-            if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
-                tags["cause"] = "max_groups"
+        with sentry_sdk.start_span(op="processor", description="process_final"):
+
+            if flags.needs_final:
+                tags["cause"] = "final_flag"
                 metrics.increment(
                     name=metric_name, tags=tags,
                 )
                 set_final = True
-            elif query_overlaps_replacement:
-                query.add_condition_to_ast(
-                    not_in_condition(
-                        FunctionCall(
-                            None, "assumeNotNull", (Column(None, None, "group_id"),),
-                        ),
-                        [Literal(None, p) for p in flags.group_ids_to_exclude],
-                    )
+            elif flags.group_ids_to_exclude:
+                # If the number of groups to exclude exceeds our limit, the query
+                # should just use final instead of the exclusion set.
+                max_group_ids_exclude = get_config(
+                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
                 )
+                assert isinstance(max_group_ids_exclude, int)
+                if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
+                    tags["cause"] = "max_groups"
+                    metrics.increment(
+                        name=metric_name, tags=tags,
+                    )
+                    set_final = True
+                elif query_overlaps_replacement:
+                    query.add_condition_to_ast(
+                        not_in_condition(
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (Column(None, None, "group_id"),),
+                            ),
+                            [Literal(None, p) for p in flags.group_ids_to_exclude],
+                        )
+                    )
 
-        self._set_query_final(query, set_final and query_overlaps_replacement)
+            self._set_query_final(query, set_final and query_overlaps_replacement)
 
     def _set_query_final(self, query: Query, final: bool) -> None:
         """
