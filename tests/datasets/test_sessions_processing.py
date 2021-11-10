@@ -1,3 +1,4 @@
+import json
 from typing import Any, MutableMapping
 
 import pytest
@@ -7,7 +8,8 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.sessions import raw_schema, read_schema
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.parser import parse_query
+from snuba_sdk.legacy import json_to_snql
+from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import (
@@ -20,16 +22,19 @@ from snuba.web import QueryResult
 
 def test_sessions_processing() -> None:
     query_body = {
-        "selected_columns": ["duration_quantiles", "sessions", "users"],
-        "conditions": [
-            ["org_id", "=", 1],
-            ["project_id", "=", 1],
-            ["started", ">", "2020-01-01 12:00:00"],
-        ],
+        "query": """
+        MATCH (sessions)
+        SELECT duration_quantiles, sessions, users
+        WHERE org_id = 1
+        AND project_id = 1
+        AND started >= toDateTime('2020-01-01T12:00:00')
+        AND started < toDateTime('2020-01-02T12:00:00')
+        """,
+        "dataset": "sessions",
     }
 
     sessions = get_dataset("sessions")
-    query = parse_query(query_body, sessions)
+    query = parse_snql_query(query_body["query"], sessions)
     request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
 
     def query_runner(
@@ -86,7 +91,8 @@ selector_tests = [
             "conditions": [
                 ["org_id", "=", 1],
                 ["project_id", "=", 1],
-                ["started", ">", "2020-01-01 12:00:00"],
+                ["started", ">=", "2020-01-01T12:00:00"],
+                ["started", "<", "2020-01-02T12:00:00"],
             ],
         },
         False,
@@ -100,7 +106,8 @@ selector_tests = [
             "conditions": [
                 ["org_id", "=", 1],
                 ["project_id", "=", 1],
-                ["started", ">", "2020-01-01 12:00:00"],
+                ["started", ">=", "2020-01-01T12:00:00"],
+                ["started", "<", "2020-01-02T12:00:00"],
             ],
         },
         False,
@@ -175,7 +182,9 @@ def test_select_storage(
     query_body: MutableMapping[str, Any], is_subscription: bool, expected_table: str
 ) -> None:
     sessions = get_dataset("sessions")
-    query = parse_query(query_body, sessions)
+    snql_query = json_to_snql(query_body, "sessions")
+    query = parse_snql_query(str(snql_query), sessions)
+    query_body = json.loads(snql_query.snuba())
     subscription_settings = (
         SubscriptionRequestSettings if is_subscription else HTTPRequestSettings
     )

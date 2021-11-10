@@ -2,7 +2,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.parser import parse_query
+from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
@@ -11,17 +11,20 @@ from snuba.web import QueryResult
 
 def test_events_processing() -> None:
     query_body = {
-        "selected_columns": ["tags[transaction]", "contexts[browser.name]"],
-        "conditions": [
-            ["project_id", "=", 1],
-            ["timestamp", ">", "2020-01-01 12:00:00"],
-        ],
+        "query": """
+        MATCH (events)
+        SELECT tags[transaction], contexts[browser.name]
+        WHERE project_id = 1
+        AND timestamp >= toDateTime('2020-01-01 12:00:00')
+        AND timestamp < toDateTime('2020-01-02 12:00:00')
+        """,
+        "dataset": "events",
     }
 
     events_dataset = get_dataset("events")
     events_entity = events_dataset.get_default_entity()
 
-    query = parse_query(query_body, events_dataset)
+    query = parse_snql_query(query_body["query"], events_dataset)
     request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
 
     def query_runner(

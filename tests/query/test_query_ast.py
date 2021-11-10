@@ -1,6 +1,8 @@
 from typing import Any, MutableMapping
 
 import pytest
+from snuba_sdk.legacy import json_to_snql
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
@@ -15,7 +17,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.parser import parse_query
+from snuba.query.snql.parser import parse_snql_query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -138,7 +140,7 @@ def test_replace_expression() -> None:
     )
 
 
-def test_get_all_columns() -> None:
+def test_get_all_columns_legacy() -> None:
     query_body = {
         "selected_columns": [
             ["f1", ["column1", "column2"], "f1_alias"],
@@ -150,12 +152,18 @@ def test_get_all_columns() -> None:
             ["uniq", "platform", "uniq_platforms"],
             ["testF", ["platform", ["anotherF", ["field2"]]], "top_platforms"],
         ],
-        "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
+        "conditions": [
+            ["tags[sentry:dist]", "IN", ["dist1", "dist2"]],
+            ["timestamp", ">=", "2020-01-01T12:00:00"],
+            ["timestamp", "<", "2020-01-02T12:00:00"],
+            ["project_id", "=", 1],
+        ],
         "having": [["times_seen", ">", 1]],
         "groupby": [["format_eventid", ["event_id"]]],
     }
     events = get_dataset("events")
-    query = parse_query(query_body, events)
+    snql_query = json_to_snql(query_body, "events")
+    query = parse_snql_query(str(snql_query), events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_column1", None, "column1"),
@@ -166,6 +174,47 @@ def test_get_all_columns() -> None:
         Column("_snuba_times_seen", None, "times_seen"),
         Column("_snuba_event_id", None, "event_id"),
         Column("_snuba_timestamp", None, "timestamp"),
+        Column("_snuba_project_id", None, "project_id"),
+    }
+
+    assert query.get_all_ast_referenced_subscripts() == {
+        SubscriptableReference(
+            "_snuba_tags[sentry:dist]",
+            Column("_snuba_tags", None, "tags"),
+            Literal(None, "sentry:dist"),
+        )
+    }
+
+
+def test_get_all_columns() -> None:
+    query_body = """
+        MATCH (events)
+        SELECT f1(column1, column2) AS f1_alias,
+            f2() AS f2_alias,
+            formatDateTime(timestamp, '%Y-%m-%d') AS formatted_time,
+            count() AS platforms,
+            uniq(platform) AS uniq_platforms,
+            testF(platform, anotherF(field2)) AS top_platforms
+        BY format_eventid(event_id)
+        WHERE tags[sentry:dist] IN tuple('dist1', 'dist2')
+            AND timestamp >= toDateTime('2020-01-01 12:00:00')
+            AND timestamp < toDateTime('2020-01-02 12:00:00')
+            AND project_id = 1
+        HAVING times_seen > 1
+        """
+    events = get_dataset("events")
+    query = parse_snql_query(query_body, events)
+
+    assert query.get_all_ast_referenced_columns() == {
+        Column("_snuba_column1", None, "column1"),
+        Column("_snuba_column2", None, "column2"),
+        Column("_snuba_platform", None, "platform"),
+        Column("_snuba_field2", None, "field2"),
+        Column("_snuba_tags", None, "tags"),
+        Column("_snuba_times_seen", None, "times_seen"),
+        Column("_snuba_event_id", None, "event_id"),
+        Column("_snuba_timestamp", None, "timestamp"),
+        Column("_snuba_project_id", None, "project_id"),
     }
 
     assert query.get_all_ast_referenced_subscripts() == {
@@ -184,7 +233,8 @@ VALIDATION_TESTS = [
             "conditions": [
                 ["event_id", "IN", ["a" * 32, "b" * 32]],
                 ["project_id", "=", 1],
-                ["timestamp", ">", "2020-01-01 12:00:00"],
+                ["timestamp", ">=", "2020-01-01T12:00:00"],
+                ["timestamp", "<", "2020-01-02T12:00:00"],
             ],
         },
         True,
@@ -192,11 +242,12 @@ VALIDATION_TESTS = [
     ),
     pytest.param(
         {
-            "selected_columns": ["project_id", ["f", ["event_id"], "not_event"]],
+            "selected_columns": ["project_id", ["foo", ["event_id"], "not_event"]],
             "conditions": [
                 ["not_event", "IN", ["a" * 32, "b" * 32]],
                 ["project_id", "=", 1],
-                ["timestamp", ">", "2020-01-01 12:00:00"],
+                ["timestamp", ">=", "2020-01-01T12:00:00"],
+                ["timestamp", "<", "2020-01-02T12:00:00"],
             ],
         },
         True,
@@ -204,11 +255,12 @@ VALIDATION_TESTS = [
     ),
     pytest.param(
         {
-            "selected_columns": ["project_id", ["f", ["event_id"], "event_id"]],
+            "selected_columns": ["project_id", ["foo", ["event_id"], "event_id"]],
             "conditions": [
                 ["event_id", "IN", ["a" * 32, "b" * 32]],
                 ["project_id", "=", 1],
-                ["timestamp", ">", "2020-01-01 12:00:00"],
+                ["timestamp", ">=", "2020-01-01T12:00:00"],
+                ["timestamp", "<", "2020-01-02T12:00:00"],
             ],
         },
         True,
@@ -216,11 +268,12 @@ VALIDATION_TESTS = [
     ),
     pytest.param(
         {
-            "selected_columns": ["project_id", ["f", ["event_id"], "event_id"]],
+            "selected_columns": ["project_id", ["foo", ["event_id"], "event_id"]],
             "conditions": [
                 ["whatsthis", "IN", ["a" * 32, "b" * 32]],
                 ["project_id", "=", 1],
-                ["timestamp", ">", "2020-01-01 12:00:00"],
+                ["timestamp", ">=", "2020-01-01T12:00:00"],
+                ["timestamp", "<", "2020-01-02T12:00:00"],
             ],
         },
         False,
@@ -234,7 +287,8 @@ def test_alias_validation(
     query_body: MutableMapping[str, Any], expected_result: bool
 ) -> None:
     events = get_dataset("events")
-    query = parse_query(query_body, events)
+    snql_query = json_to_snql(query_body, "events")
+    query = parse_snql_query(str(snql_query), events)
     settings = HTTPRequestSettings()
     query_plan = (
         events.get_default_entity()
