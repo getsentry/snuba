@@ -1,7 +1,6 @@
 from copy import deepcopy
 
 import pytest
-
 from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
@@ -102,9 +101,9 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("col_type, raw_type, different_type, for_schema", TEST_CASES)
 def test_methods(
-    col_type: ColumnType[Modifier],
-    raw_type: ColumnType[Modifier],
-    different_type: ColumnType[Modifier],
+    col_type: ColumnType,
+    raw_type: ColumnType,
+    different_type: ColumnType,
     for_schema: str,
 ) -> None:
     assert col_type == deepcopy(col_type)

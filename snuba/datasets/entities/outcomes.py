@@ -32,7 +32,6 @@ class OutcomesEntity(Entity):
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
         read_schema = materialized_storage.get_schema()
-
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_pipeline_builder=SimplePipelineBuilder(
