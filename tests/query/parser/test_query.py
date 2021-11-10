@@ -6,9 +6,7 @@ from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -17,6 +15,8 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.logical import Query
 from snuba.query.parser import parse_query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
