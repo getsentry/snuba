@@ -39,8 +39,7 @@ ValidEntityColumns = (WildcardColumn, UInt, Float, String, FixedString)
 
 class EntityColumnSet(ColumnSet):
     """
-    Regular column - types?
-    Wildcard column (wildcard) -> tags[anything], context[anything]
+    Entity data model supports wildcard columns as well as the other types
     """
 
     def __init__(self, columns: Sequence[Column[SchemaModifiers]]) -> None:
