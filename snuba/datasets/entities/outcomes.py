@@ -17,7 +17,6 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import (
     ColumnValidationMode,
-    EntityContainsColumnsValidator,
     EntityRequiredColumnValidator,
 )
 
@@ -51,11 +50,9 @@ class OutcomesEntity(Entity):
             abstract_column_set=data_model,
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[
-                EntityRequiredColumnValidator({"org_id"}),
-                EntityContainsColumnsValidator(data_model, ColumnValidationMode.WARN),
-            ],
+            validators=[EntityRequiredColumnValidator({"org_id"})],
             required_time_column="timestamp",
+            validate_data_model=ColumnValidationMode.WARN,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

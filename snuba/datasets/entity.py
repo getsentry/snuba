@@ -9,8 +9,9 @@ from snuba.query.data_source.join import JoinRelationship
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import (  # EntityContainsColumnsValidator,
+from snuba.query.validation.validators import (
     ColumnValidationMode,
+    EntityContainsColumnsValidator,
     QueryValidator,
 )
 from snuba.utils.describer import Describable, Description, Property
@@ -41,15 +42,14 @@ class Entity(Describable, ABC):
         self.__join_relationships = join_relationships
         self.required_time_column = required_time_column
 
-        # columns_exist_validator = EntityContainsColumnsValidator(
-        #     self.__data_model, validation_mode=validate_data_model
-        # )
-        # self.__validators = (
-        #     [*validators, columns_exist_validator]
-        #     if validators is not None
-        #     else [columns_exist_validator]
-        # )
-        self.__validators = validators or []
+        columns_exist_validator = EntityContainsColumnsValidator(
+            self.__data_model, validation_mode=validate_data_model
+        )
+        self.__validators = (
+            [*validators, columns_exist_validator]
+            if validators is not None
+            else [columns_exist_validator]
+        )
 
     @abstractmethod
     def get_extensions(self) -> Mapping[str, QueryExtension]:

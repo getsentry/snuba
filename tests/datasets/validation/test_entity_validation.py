@@ -5,7 +5,6 @@ import pytest
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import ColumnValidationMode
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -13,6 +12,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.validation.validators import (
+    ColumnValidationMode,
     EntityContainsColumnsValidator,
     EntityRequiredColumnValidator,
 )
