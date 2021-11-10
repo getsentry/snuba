@@ -286,7 +286,7 @@ def get_projects_query_flags(
         op="function", description="execute_redis_pipeline"
     ) as span:
         results = p.execute()
-        span.set_tag("results", results)
+        # getting size of str(results) since sys.getsizeof() doesn't count recursively
         span.set_tag("results_size", sys.getsizeof(str(results)))
 
     with sentry_sdk.start_span(op="function", description="process_redis_results"):
