@@ -526,14 +526,14 @@ class TestReplacer:
         p = redis_client.pipeline()
 
         exclude_groups_keys = [
-            errors_replacer.build_project_exclude_groups_key_and_type_key(
+            errors_replacer.ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
                 project_id, ReplacerState.ERRORS
             )
             for project_id in project_ids
         ]
 
         project_needs_final_keys = [
-            errors_replacer.build_project_needs_final_key_and_type_key(
+            errors_replacer.ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
                 project_id, ReplacerState.ERRORS
             )
             for project_id in project_ids
