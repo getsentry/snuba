@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+import sys
 import time
 import uuid
 from abc import abstractmethod
@@ -281,13 +282,23 @@ def get_projects_query_flags(
                 exclude_groups_key, 0, 0, withscores=True,
             )
 
-    with sentry_sdk.start_span(op="function", description="execute_redis_pipeline"):
+    with sentry_sdk.start_span(
+        op="function", description="execute_redis_pipeline"
+    ) as span:
         results = p.execute()
+        span.set_tag("results", results)
+        span.set_tag("results_size", sys.getsizeof(str(results)))
 
     with sentry_sdk.start_span(op="function", description="process_redis_results"):
-        return _process_exclude_groups_and_replacement_types_results(
+        flags = _process_exclude_groups_and_replacement_types_results(
             results, len(s_project_ids)
         )
+        span.set_tag("projects", s_project_ids)
+        span.set_tag("exclude_groups", flags.group_ids_to_exclude)
+        span.set_tag("len(exclude_groups)", len(flags.group_ids_to_exclude))
+        span.set_tag("latest_replacement_time", flags.latest_replacement_time)
+        span.set_tag("replacement_types", flags.replacement_types)
+        return flags
 
 
 def _process_exclude_groups_and_replacement_types_results(
