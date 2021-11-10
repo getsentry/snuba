@@ -6,8 +6,8 @@ from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
-    LegacySubscriptionData,
     PartitionId,
+    SnQLSubscriptionData,
     Subscription,
     SubscriptionIdentifier,
 )
@@ -28,10 +28,9 @@ class TestSubscriptionScheduler:
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            LegacySubscriptionData(
+            SnQLSubscriptionData(
                 project_id=1,
-                conditions=[],
-                aggregations=[["count()", "", "count"]],
+                query="MATCH (events) SELECT count() AS count",
                 time_window=timedelta(minutes=1),
                 resolution=resolution,
                 entity_subscription=create_entity_subscription(),

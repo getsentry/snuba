@@ -47,7 +47,7 @@ def test_scheduler_consumer() -> None:
     stream_loader = storage.get_table_writer().get_stream_loader()
 
     builder = scheduler_consumer.SchedulerBuilder(
-        entity_name, str(uuid.uuid1().hex), "events", "latest", None, metrics_backend
+        entity_name, str(uuid.uuid1().hex), "events", "latest", None, metrics_backend, 1
     )
     scheduler = builder.build_consumer()
     time.sleep(2)

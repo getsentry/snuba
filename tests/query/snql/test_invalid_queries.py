@@ -111,4 +111,4 @@ def test_failures(query_body: str, message: str) -> None:
     setattr(events_entity, "get_join_relationship", events_mock)
 
     with pytest.raises(ParsingException, match=re.escape(message)):
-        parse_snql_query(query_body, [], events)
+        parse_snql_query(query_body, events)
