@@ -146,7 +146,7 @@ def parse_function(
     if name in FUNCTION_TO_OPERATOR:
         if len(args) == 2 and isinstance(args[0], str) and args[0] in dataset_columns:
             column = dataset_columns[args[0]]
-            if isinstance(column.type, Array):
+            if isinstance(column.type.get_raw(), Array):
                 if (
                     column.flattened not in arrayjoin_cols
                     and column.base_name not in arrayjoin_cols
