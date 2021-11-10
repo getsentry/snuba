@@ -556,11 +556,12 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": """
-                MATCH (discover)
+                MATCH (outcomes)
                 SELECT fake_column
                 WHERE
                     timestamp >= toDateTime('2021-08-18T18:34:04') AND
                     timestamp < toDateTime('2021-09-01T18:34:04') AND
+                    org_id = 1 AND
                     project_id IN tuple(5433960)
                 LIMIT 1 OFFSET 0
                 """,
@@ -570,12 +571,13 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        # TODO: when validation works this should be:
+        # TODO: when validation mode is ERROR this should be:
         # assert response.status_code == 400
         # assert (
         #     json.loads(response.data)["error"]["message"]
         #     == "validation failed for entity discover: query column(s) fake_column do not exist"
         # )
+
         assert response.status_code == 500
 
     def test_valid_columns_composite_query(self) -> None:
