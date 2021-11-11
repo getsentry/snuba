@@ -1,10 +1,11 @@
 from typing import Any, MutableMapping
 
 import pytest
+from snuba_sdk.legacy import json_to_snql
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
-from snuba.query.parser import parse_query
+from snuba.query.snql.parser import parse_snql_query
 
 test_data = [
     ({"conditions": [["type", "=", "transaction"]]}, EntityKey.DISCOVER_TRANSACTIONS),
@@ -154,6 +155,18 @@ def test_data_source(
     query_body: MutableMapping[str, Any], expected_entity: EntityKey,
 ) -> None:
     dataset = get_dataset("discover")
-    query = parse_query(query_body, dataset)
+    # HACK until these are converted to proper SnQL queries
+    if not query_body.get("conditions"):
+        query_body["conditions"] = []
+    query_body["conditions"] += [
+        ["timestamp", ">=", "2020-01-01T12:00:00"],
+        ["timestamp", "<", "2020-01-02T12:00:00"],
+        ["project_id", "=", 1],
+    ]
+    if not query_body.get("selected_columns"):
+        query_body["selected_columns"] = ["project_id"]
+
+    snql_query = json_to_snql(query_body, "discover")
+    query = parse_snql_query(str(snql_query), dataset)
 
     assert query.get_from_clause().key == expected_entity

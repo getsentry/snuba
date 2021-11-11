@@ -219,7 +219,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
                 "meta": [{"name": "count", "type": "UInt64"}],
                 "data": [{"count": 0}],
             }
-        print(result)
+
         assert result == expected_result
 
 
