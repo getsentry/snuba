@@ -2,8 +2,9 @@ from abc import ABC
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet as PhysicalColumnSet
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import FunctionCall
 
@@ -35,10 +36,10 @@ class Entity(SimpleDataSource):
     """
 
     key: EntityKey
-    schema: ColumnSet
+    schema: EntityColumnSet
     sample: Optional[float] = None
 
-    def get_columns(self) -> ColumnSet:
+    def get_columns(self) -> EntityColumnSet:
         return self.schema
 
     @property
@@ -53,7 +54,7 @@ class Table(SimpleDataSource):
     """
 
     table_name: str
-    schema: ColumnSet
+    schema: PhysicalColumnSet
     final: bool = False
     sampling_rate: Optional[float] = None
     # TODO: Move mandatory connditions out of
@@ -61,7 +62,7 @@ class Table(SimpleDataSource):
     # the processors that consume these fields to access the storage.
     mandatory_conditions: Sequence[FunctionCall] = field(default_factory=list)
 
-    def get_columns(self) -> ColumnSet:
+    def get_columns(self) -> PhysicalColumnSet:
         return self.schema
 
     @property
