@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional, Sequence
+from typing import Optional
 
 import pytest
 
@@ -123,26 +123,12 @@ def test_entity_required_column_validation_failure(
 
 
 entity_contains_columns_tests = [
-    pytest.param(
-        EntityKey.OUTCOMES,
-        [
-            "org_id",
-            "project_id",
-            "key_id",
-            "timestamp",
-            "outcome",
-            "reason",
-            "quantity",
-            "category",
-            "times_seen",
-        ],
-        id="Validate Outcomes Entity Columns",
-    )
+    pytest.param(EntityKey.OUTCOMES, id="Validate Outcomes Entity Columns",)
 ]
 
 
-@pytest.mark.parametrize("key, columns", entity_contains_columns_tests)
-def test_outcomes_columns_validation(key: EntityKey, columns: Sequence[str]) -> None:
+@pytest.mark.parametrize("key", entity_contains_columns_tests)
+def test_outcomes_columns_validation(key: EntityKey) -> None:
     entity = get_entity(key)
 
     query_entity = QueryEntity(key, entity.get_data_model())
@@ -157,8 +143,10 @@ def test_outcomes_columns_validation(key: EntityKey, columns: Sequence[str]) -> 
     good_query = LogicalQuery(
         query_entity,
         selected_columns=[
-            SelectedExpression(column, Column(f"_snuba_{columns}", None, column))
-            for column in columns
+            SelectedExpression(
+                column.name, Column(f"_snuba_{column.name}", None, column.name)
+            )
+            for column in entity.get_data_model().columns
         ],
     )
 

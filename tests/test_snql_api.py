@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 
+import pytest
 import simplejson as json
 
 from snuba import state
@@ -564,10 +565,7 @@ class TestSnQLApi(BaseApiTest):
                     org_id = 1 AND
                     project_id IN tuple(5433960)
                 LIMIT 1 OFFSET 0
-                """,
-                    "turbo": False,
-                    "consistent": False,
-                    "debug": False,
+                """
                 }
             ),
         )
@@ -575,9 +573,10 @@ class TestSnQLApi(BaseApiTest):
         # assert response.status_code == 400
         # assert (
         #     json.loads(response.data)["error"]["message"]
-        #     == "validation failed for entity discover: query column(s) fake_column do not exist"
+        #     == "validation failed for entity outcomes: query column(s) fake_column do not exist"
         # )
 
+        # For now it's 500 since it's just a clickhouse error
         assert response.status_code == 500
 
     def test_valid_columns_composite_query(self) -> None:
@@ -597,17 +596,75 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    def test_invalid_columns_composite_query(self) -> None:
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
-                    SELECT e.sdafdsf, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
-                    WHERE e.project_id = {self.project_id}
-                    AND gm.project_id = {self.project_id}
-                    """
-                }
-            ),
-        )
-        assert response.status_code == 400
+    MATCH = "MATCH (e: events) -[grouped]-> (gm: groupedmessage)"
+    SELECT = "SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status"
+    WHERE = "WHERE e.project_id = 1 AND gm.project_id = 1"
+    TIMESTAMPS = "AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')"
+
+    invalid_columns_composite_query_tests = [
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.fsdfsd, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity events: query column(s) fsdfsd do not exist",
+            id="Invalid first Select column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.group_id, gm.fsdfsd, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            id="Invalid second Select column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.fsdfsd
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            id="Invalid By column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    {SELECT}
+                    WHERE e.project_id = 1
+                    AND gm.fsdfsd = 1
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            id="Invalid Where column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.status, gm.group_id, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            id="Mismatched Select columns",
+        ),
+    ]
+
+    @pytest.mark.parametrize(
+        "query, response_code, error_message", invalid_columns_composite_query_tests
+    )
+    def test_invalid_columns_composite_query(
+        self, query: str, response_code: int, error_message: str
+    ) -> None:
+        response = self.post("/discover/snql", data=json.dumps({"query": query}))
+
+        # TODO: when validation mode for events and groupedmessage is ERROR this should be:
+        # assert response.status_code == response_code
+        # assert json.loads(response.data)["error"]["message"] == error_message
+
+        assert response.status_code == 500
