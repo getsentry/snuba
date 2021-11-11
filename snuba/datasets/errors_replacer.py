@@ -286,6 +286,7 @@ def get_projects_query_flags(
         op="function", description="execute_redis_pipeline"
     ) as span:
         results = p.execute()
+
         # getting size of str(results) since sys.getsizeof() doesn't count recursively
         span.set_tag("results_size", sys.getsizeof(str(results)))
 
