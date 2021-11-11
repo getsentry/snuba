@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Set
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import Query
 from snuba.query.conditions import (
     ConditionFunctions,
@@ -77,7 +77,7 @@ class EntityContainsColumnsValidator(QueryValidator):
     """
 
     def __init__(
-        self, entity_data_model: ColumnSet, validation_mode: ColumnValidationMode
+        self, entity_data_model: EntityColumnSet, validation_mode: ColumnValidationMode
     ) -> None:
         self.validation_mode = validation_mode
         self.entity_data_model = entity_data_model

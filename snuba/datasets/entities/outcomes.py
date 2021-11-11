@@ -1,6 +1,8 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.columns import DateTime, String, UInt
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
@@ -19,6 +21,21 @@ from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityRequiredColumnValidator,
 )
+from snuba.utils.schemas import Column
+
+outcomes_data_model = EntityColumnSet(
+    [
+        Column("org_id", UInt(64)),
+        Column("project_id", UInt(64)),
+        Column("key_id", UInt(64)),
+        Column("timestamp", DateTime()),
+        Column("outcome", UInt(8)),
+        Column("reason", String()),
+        Column("quantity", UInt(64)),
+        Column("category", UInt(8)),
+        Column("times_seen", UInt(64)),
+    ]
+)
 
 
 class OutcomesEntity(Entity):
@@ -33,10 +50,7 @@ class OutcomesEntity(Entity):
         writable_storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
-        read_schema = materialized_storage.get_schema()
 
-        # TODO: Replace with EntityDataModel
-        data_model = read_schema.get_columns()
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_pipeline_builder=SimplePipelineBuilder(
@@ -47,7 +61,7 @@ class OutcomesEntity(Entity):
                     storage=materialized_storage,
                 ),
             ),
-            abstract_column_set=data_model,
+            abstract_column_set=outcomes_data_model,
             join_relationships={},
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"org_id"})],
