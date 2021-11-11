@@ -72,7 +72,7 @@ class TestSnQLApi(BaseApiTest):
 
     def test_sessions_query(self) -> None:
         response = self.post(
-            "/discover/snql",
+            "/sessions/snql",
             data=json.dumps(
                 {
                     "dataset": "sessions",
@@ -95,7 +95,7 @@ class TestSnQLApi(BaseApiTest):
 
     def test_join_query(self) -> None:
         response = self.post(
-            "/discover/snql",
+            "/events/snql",
             data=json.dumps(
                 {
                     "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
@@ -201,7 +201,7 @@ class TestSnQLApi(BaseApiTest):
         state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
 
         response = self.post(
-            "/discover/snql",
+            "/transactions/snql",
             data=json.dumps(
                 {
                     "query": """MATCH (s: spans) -[contained]-> (t: transactions)
@@ -217,7 +217,7 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 200
 
         response = self.post(
-            "/discover/snql",
+            "/transactions/snql",
             data=json.dumps(
                 {
                     "query": f"""MATCH (s: spans) -[contained]-> (t: transactions)
@@ -419,7 +419,7 @@ class TestSnQLApi(BaseApiTest):
 
     def test_ifnull_condition_experiment(self) -> None:
         response = self.post(
-            "/events/snql",
+            "/discover/snql",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -553,7 +553,7 @@ class TestSnQLApi(BaseApiTest):
 
     def test_invalid_column(self) -> None:
         response = self.post(
-            "/discover/snql",
+            "/outcomes/snql",
             data=json.dumps(
                 {
                     "query": """
@@ -581,7 +581,7 @@ class TestSnQLApi(BaseApiTest):
 
     def test_valid_columns_composite_query(self) -> None:
         response = self.post(
-            "/discover/snql",
+            "/events/snql",
             data=json.dumps(
                 {
                     "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
@@ -650,7 +650,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity events: query column(s) status do not exist",
             id="Mismatched Select columns",
         ),
     ]
@@ -661,7 +661,7 @@ class TestSnQLApi(BaseApiTest):
     def test_invalid_columns_composite_query(
         self, query: str, response_code: int, error_message: str
     ) -> None:
-        response = self.post("/discover/snql", data=json.dumps({"query": query}))
+        response = self.post("/events/snql", data=json.dumps({"query": query}))
 
         # TODO: when validation mode for events and groupedmessage is ERROR this should be:
         # assert response.status_code == response_code
