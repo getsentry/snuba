@@ -90,9 +90,10 @@ class EntityContainsColumnsValidator(QueryValidator):
 
         missing = set()
         for column in query_columns:
-            if column.table_name == alias and column.column_name not in {
-                c.name for c in self.entity_data_model.columns
-            }:
+            if (
+                column.table_name == alias
+                and column.column_name not in self.entity_data_model
+            ):
                 missing.add(column.column_name)
 
         if missing:
@@ -100,7 +101,7 @@ class EntityContainsColumnsValidator(QueryValidator):
             if self.validation_mode == ColumnValidationMode.ERROR:
                 raise InvalidQueryException(error_message)
             elif self.validation_mode == ColumnValidationMode.WARN:
-                logger.warning(error_message)
+                logger.warning(error_message, exc_info=True)
 
 
 class NoTimeBasedConditionValidator(QueryValidator):

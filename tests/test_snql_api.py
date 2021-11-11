@@ -653,6 +653,16 @@ class TestSnQLApi(BaseApiTest):
             "validation failed for entity events: query column(s) status do not exist",
             id="Mismatched Select columns",
         ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT uniq(toString(e.fdsdsf)), gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity events: query column(s) fdsdsf do not exist",
+            id="Invalid nested column",
+        ),
     ]
 
     @pytest.mark.parametrize(
