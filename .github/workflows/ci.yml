@@ -245,6 +245,7 @@ jobs:
         with:
           repository: getsentry/sentry
           path: sentry
+          ref: armenzg/ci/healthcheck-fix
 
       - name: Setup steps
         id: setup
