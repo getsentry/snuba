@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Any, MutableMapping, Sequence
 
+from snuba_sdk.legacy import json_to_snql
+
 import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
@@ -13,7 +15,7 @@ from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column
-from snuba.query.parser import parse_query
+from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
@@ -309,7 +311,8 @@ def test_col_split_conditions(
     id_column: str, project_column: str, timestamp_column: str, query, expected_result
 ) -> None:
     dataset = get_dataset("events")
-    query = parse_query(query, dataset)
+    snql_query = json_to_snql(query, "events")
+    query = parse_snql_query(str(snql_query), dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
 
     def do_query(
@@ -351,26 +354,17 @@ def test_time_split_ast() -> None:
 
         return QueryResult({"data": []}, {})
 
-    body = {
-        "selected_columns": [
-            "event_id",
-            "level",
-            "logger",
-            "server_name",
-            "transaction",
-            "timestamp",
-            "project_id",
-        ],
-        "conditions": [
-            ("timestamp", ">=", "2019-09-18T10:00:00"),
-            ("timestamp", "<", "2019-09-19T12:00:00"),
-            ("project_id", "IN", [1]),
-        ],
-        "limit": 10,
-        "orderby": ["-timestamp"],
-    }
+    body = """
+        MATCH (events)
+        SELECT event_id, level, logger, server_name, transaction, timestamp, project_id
+        WHERE timestamp >= toDateTime('2019-09-18T10:00:00')
+        AND timestamp < toDateTime('2019-09-19T12:00:00')
+        AND project_id IN tuple(1)
+        ORDER BY timestamp DESC
+        LIMIT 10
+        """
 
-    query = parse_query(body, get_dataset("events"))
+    query = parse_snql_query(body, get_dataset("events"))
     entity = get_entity(query.get_from_clause().key)
     settings = HTTPRequestSettings()
     for p in entity.get_query_processors():

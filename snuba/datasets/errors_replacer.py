@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+import sys
 import time
 import uuid
 from abc import abstractmethod
@@ -242,6 +243,39 @@ class ProjectsQueryFlags:
 
         - Searches through Redis for relevant replacements info
         - Splits up results from pipeline into something that makes sense
+        """
+        s_project_ids = set(project_ids)
+
+        p = redis_client.pipeline()
+
+        with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
+            cls._query_redis(s_project_ids, state_name, p)
+
+        with sentry_sdk.start_span(
+            op="function", description="execute_redis_pipeline"
+        ) as span:
+            results = p.execute()
+            # getting size of str(results) since sys.getsizeof() doesn't count recursively
+            span.set_tag("results_size", sys.getsizeof(str(results)))
+
+        with sentry_sdk.start_span(
+            op="function", description="process_redis_results"
+        ) as span:
+            flags = cls._process_redis_results(results, len(s_project_ids))
+            span.set_tag("projects", s_project_ids)
+            span.set_tag("exclude_groups", flags.group_ids_to_exclude)
+            span.set_tag("len(exclude_groups)", len(flags.group_ids_to_exclude))
+            span.set_tag("latest_replacement_time", flags.latest_replacement_time)
+            span.set_tag("replacement_types", flags.replacement_types)
+
+        return flags
+
+    @classmethod
+    def _process_redis_results(
+        cls, results: List[Any], len_projects: int
+    ) -> ProjectsQueryFlags:
+        """
+        Produces readable data from flattened list of Redis pipeline results.
 
         `results` is a flat list of all the redis call results of _query_redis
         [
@@ -254,62 +288,49 @@ class ProjectsQueryFlags:
             latest_exclude_groups_replacements: Sequence[Optional[Tuple[group_id, datetime]]]...
         ]
         - The _ slices are the results of `zremrangebyscore` calls, unecessary data
+        - Since the Redis commands are built to result in something per project per command,
+        the results can be split up with multiples of `len_projects` as indices
         """
-        s_project_ids = set(project_ids)
-        len_projects = len(s_project_ids)
+        needs_final_result = results[:len_projects]
+        exclude_groups_results = results[len_projects * 2 : len_projects * 3]
+        projects_replacment_types_result = results[len_projects * 3 : len_projects * 4]
+        groups_replacement_types_results = results[len_projects * 5 : len_projects * 6]
+        latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
 
-        p = redis_client.pipeline()
+        needs_final = any(needs_final_result)
 
-        with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
-            cls._query_redis(s_project_ids, state_name, p)
-
-        with sentry_sdk.start_span(op="function", description="execute_redis_pipeline"):
-            results = p.execute()
-
-        with sentry_sdk.start_span(op="function", description="process_redis_results"):
-            needs_final_result = results[:len_projects]
-            exclude_groups_results = results[len_projects * 2 : len_projects * 3]
-            projects_replacment_types_result = results[
-                len_projects * 3 : len_projects * 4
-            ]
-            groups_replacement_types_results = results[
-                len_projects * 5 : len_projects * 6
-            ]
-            latest_exclude_groups_result = results[len_projects * 6 : len_projects * 7]
-
-            needs_final = any(needs_final_result)
-
-            exclude_groups = sorted(
-                {
-                    int(group_id)
-                    for exclude_groups_result in exclude_groups_results
-                    for group_id in exclude_groups_result
-                }
-            )
-
-            needs_final_replacement_types = {
-                replacement_type.decode("utf-8")
-                for replacement_type in projects_replacment_types_result
-                if replacement_type
+        exclude_groups = sorted(
+            {
+                int(group_id)
+                for exclude_groups_result in exclude_groups_results
+                for group_id in exclude_groups_result
             }
+        )
 
-            groups_replacement_types = {
-                replacement_type.decode("utf-8")
-                for groups_replacement_types_result in groups_replacement_types_results
-                for replacement_type in groups_replacement_types_result
-            }
+        needs_final_replacement_types = {
+            replacement_type.decode("utf-8")
+            for replacement_type in projects_replacment_types_result
+            if replacement_type
+        }
 
-            replacement_types = groups_replacement_types.union(
-                needs_final_replacement_types
-            )
+        groups_replacement_types = {
+            replacement_type.decode("utf-8")
+            for groups_replacement_types_result in groups_replacement_types_results
+            for replacement_type in groups_replacement_types_result
+        }
 
-            latest_replacement_time = cls._process_latest_replacement(
-                needs_final, needs_final_result, latest_exclude_groups_result
-            )
+        replacement_types = groups_replacement_types.union(
+            needs_final_replacement_types
+        )
 
-        return cls(
+        latest_replacement_time = cls._process_latest_replacement(
+            needs_final, needs_final_result, latest_exclude_groups_result
+        )
+
+        flags = cls(
             needs_final, exclude_groups, replacement_types, latest_replacement_time
         )
+        return flags
 
     @staticmethod
     def _query_redis(
@@ -360,7 +381,7 @@ class ProjectsQueryFlags:
 
     @staticmethod
     def _remove_stale_and_load_new_sorted_set_data(
-        p: StrictClusterPipeline, keys: list[str]
+        p: StrictClusterPipeline, keys: List[str]
     ) -> None:
         """
         Remove stale data per key according to TTL.
