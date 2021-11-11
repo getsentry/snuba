@@ -1199,7 +1199,7 @@ def validate_entities_with_query(
                 entity = get_entity(node.data_source.key)
                 try:
                     for v in entity.get_validators():
-                        v.validate(query)
+                        v.validate(query, alias)
                 except InvalidQueryException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
