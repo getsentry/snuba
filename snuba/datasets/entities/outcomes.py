@@ -66,7 +66,8 @@ class OutcomesEntity(Entity):
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"org_id"})],
             required_time_column="timestamp",
-            validate_data_model=ColumnValidationMode.WARN,
+            # WARN mode logged way too many events to Sentry
+            validate_data_model=ColumnValidationMode.DO_NOTHING,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
