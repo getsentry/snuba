@@ -9,7 +9,11 @@ from snuba.query.data_source.join import JoinRelationship
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import QueryValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityContainsColumnsValidator,
+    QueryValidator,
+)
 from snuba.utils.describer import Describable, Description, Property
 from snuba.utils.schemas import ColumnSet
 
@@ -30,6 +34,7 @@ class Entity(Describable, ABC):
         writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
+        validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
@@ -41,8 +46,16 @@ class Entity(Describable, ABC):
         self.__data_model = EntityColumnSet(abstract_column_set.columns)
 
         self.__join_relationships = join_relationships
-        self.__validators = validators
         self.required_time_column = required_time_column
+
+        columns_exist_validator = EntityContainsColumnsValidator(
+            self.__data_model, validation_mode=validate_data_model
+        )
+        self.__validators = (
+            [*validators, columns_exist_validator]
+            if validators is not None
+            else [columns_exist_validator]
+        )
 
     @abstractmethod
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -114,7 +127,7 @@ class Entity(Describable, ABC):
         :return: A sequence of validators.
         :rtype: Sequence[QueryValidator]
         """
-        return self.__validators if self.__validators is not None else []
+        return self.__validators
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         """
