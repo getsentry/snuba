@@ -3,9 +3,22 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import chain
-from typing import Generic, List, Optional, Sequence, Tuple, Type, TypeVar, Union, cast
+from typing import (
+    Generic,
+    Iterator,
+    List,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.utils.constants import NESTED_COL_EXPR_RE
 
 
 class TypeModifier(ABC):
@@ -195,6 +208,10 @@ class SchemaModifiers(TypeModifiers):
         return ret
 
 
+class WildcardColumn(Column[SchemaModifiers]):
+    pass
+
+
 @dataclass(frozen=True)
 class ReadOnly(TypeModifier):
     def for_schema(self, content: str) -> str:
@@ -205,6 +222,93 @@ class ReadOnly(TypeModifier):
 class Nullable(TypeModifier):
     def for_schema(self, content: str) -> str:
         return "Nullable({})".format(content)
+
+
+class ColumnSet(ABC):
+    """
+    Base column set extended by both ClickHouse column set and entity column set
+    A base column set class that will be shared by logical (entity) and physical (ClickHouse)
+    data models
+    """
+
+    def __init__(self, columns: Sequence[Column[SchemaModifiers]]) -> None:
+        self.__columns = columns
+
+        self._wildcard_columns = {
+            col.name: col for col in columns if isinstance(col, WildcardColumn)
+        }
+
+        self._lookup: MutableMapping[str, FlattenedColumn] = {}
+        self._flattened: List[FlattenedColumn] = []
+        for column in self.__columns:
+            if not isinstance(column, WildcardColumn):
+                self._flattened.extend(column.type.flatten(column.name))
+
+        for col in self._flattened:
+            if col.flattened in self._lookup:
+                raise RuntimeError("Duplicate column: {}".format(col.flattened))
+
+            self._lookup[col.flattened] = col
+            # also store it by the escaped name
+            self._lookup[col.escaped] = col
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self._flattened == cast(ColumnSet, other)._flattened
+            and self._wildcard_columns == cast(ColumnSet, other)._wildcard_columns
+        )
+
+    def __getitem__(self, key: str) -> FlattenedColumn:
+        if key in self._lookup:
+            return self._lookup[key]
+
+        if self._wildcard_columns:
+            match = NESTED_COL_EXPR_RE.match(key)
+
+            if match is not None:
+                wildcard_prefix = match[1]
+                if wildcard_prefix in self._wildcard_columns:
+                    return self._wildcard_columns[wildcard_prefix].type.flatten(key)[0]
+
+        raise KeyError(key)
+
+    def get(
+        self, key: str, default: Optional[FlattenedColumn] = None
+    ) -> Optional[FlattenedColumn]:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key: str) -> bool:
+        if key in self._lookup:
+            return True
+
+        if self._wildcard_columns:
+            match = NESTED_COL_EXPR_RE.match(key)
+
+            if match is not None:
+                col_name = match[1]
+                if col_name in self._wildcard_columns:
+                    return True
+
+        return False
+
+    def __iter__(self) -> Iterator[FlattenedColumn]:
+        for col in self._flattened:
+            yield col
+
+        for wildcard_col in self._wildcard_columns.values():
+            wildcard_name = col.name + "[...]"
+            yield wildcard_col.type.flatten(wildcard_name)[0]
+
+    def __len__(self) -> int:
+        return len(self._flattened) + len(self._wildcard_columns)
+
+    @property
+    def columns(self) -> Sequence[Column[SchemaModifiers]]:
+        return self.__columns
 
 
 class Any(ColumnType[SchemaModifiers]):
@@ -454,12 +558,3 @@ class Enum(ColumnType[TModifiers]):
 
     def get_raw(self) -> Enum[TModifiers]:
         return Enum(self.values)
-
-
-class ColumnSet(ABC):
-    """\
-    A base column set class that will be shared by logical (entity) and physical (ClickHouse)
-    data models
-    """
-
-    pass

@@ -11,9 +11,13 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityContainsColumnsValidator,
+    EntityRequiredColumnValidator,
+)
 
-tests = [
+required_column_tests = [
     pytest.param(
         EntityKey.SPANS,
         binary_condition(
@@ -69,8 +73,10 @@ tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", tests)  # type: ignore
-def test_entity_validation(key: EntityKey, condition: Optional[Expression]) -> None:
+@pytest.mark.parametrize("key, condition", required_column_tests)
+def test_entity_required_column_validation(
+    key: EntityKey, condition: Optional[Expression]
+) -> None:
     query = LogicalQuery(
         QueryEntity(key, get_entity(key).get_data_model()),
         selected_columns=[
@@ -83,7 +89,7 @@ def test_entity_validation(key: EntityKey, condition: Optional[Expression]) -> N
     validator.validate(query)
 
 
-invalid_tests = [
+invalid_required_column_tests = [
     pytest.param(
         EntityKey.EVENTS, None, id="entity has columns, but there are no conditions",
     ),
@@ -99,8 +105,8 @@ invalid_tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", invalid_tests)  # type: ignore
-def test_entity_validation_failure(
+@pytest.mark.parametrize("key, condition", invalid_required_column_tests)
+def test_entity_required_column_validation_failure(
     key: EntityKey, condition: Optional[Expression]
 ) -> None:
     query = LogicalQuery(
@@ -114,3 +120,41 @@ def test_entity_validation_failure(
     validator = EntityRequiredColumnValidator({"project_id"})
     with pytest.raises(InvalidQueryException):
         validator.validate(query)
+
+
+entity_contains_columns_tests = [
+    pytest.param(EntityKey.OUTCOMES, id="Validate Outcomes Entity Columns",)
+]
+
+
+@pytest.mark.parametrize("key", entity_contains_columns_tests)
+def test_outcomes_columns_validation(key: EntityKey) -> None:
+    entity = get_entity(key)
+
+    query_entity = QueryEntity(key, entity.get_data_model())
+
+    bad_query = LogicalQuery(
+        query_entity,
+        selected_columns=[
+            SelectedExpression("asdf", Column("_snuba_asdf", None, "asdf")),
+        ],
+    )
+
+    good_query = LogicalQuery(
+        query_entity,
+        selected_columns=[
+            SelectedExpression(
+                column.name, Column(f"_snuba_{column.name}", None, column.name)
+            )
+            for column in entity.get_data_model().columns
+        ],
+    )
+
+    validator = EntityContainsColumnsValidator(
+        entity.get_data_model(), validation_mode=ColumnValidationMode.ERROR
+    )
+
+    with pytest.raises(InvalidQueryException):
+        validator.validate(bad_query)
+
+    validator.validate(good_query)

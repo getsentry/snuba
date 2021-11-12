@@ -255,7 +255,7 @@ def _run_and_apply_column_names(
                 "Duplicated alias definition in select clause",
                 extra={
                     "alias": alias,
-                    "name": name,
+                    "column_name": name,
                     "existing_name": alias_name_mapping[alias],
                 },
                 exc_info=True,

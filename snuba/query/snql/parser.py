@@ -22,10 +22,11 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
-from snuba.clickhouse.columns import Array, ColumnSet
+from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -991,10 +992,10 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 def _unpack_array_conditions(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    schema: ColumnSet,
+    schema: EntityColumnSet,
     entity_alias: Optional[str] = None,
 ) -> None:
-    array_columns = set()
+    array_columns: Set[str] = set()
     array_join_col = query.get_arrayjoin()
     array_join = ""
     if array_join_col is not None:
@@ -1198,7 +1199,7 @@ def validate_entities_with_query(
                 entity = get_entity(node.data_source.key)
                 try:
                     for v in entity.get_validators():
-                        v.validate(query)
+                        v.validate(query, alias)
                 except InvalidQueryException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",

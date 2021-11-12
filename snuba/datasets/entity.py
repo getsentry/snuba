@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -9,8 +9,13 @@ from snuba.query.data_source.join import JoinRelationship
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import QueryValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityContainsColumnsValidator,
+    QueryValidator,
+)
 from snuba.utils.describer import Describable, Description, Property
+from snuba.utils.schemas import ColumnSet
 
 
 class Entity(Describable, ABC):
@@ -29,14 +34,28 @@ class Entity(Describable, ABC):
         writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
+        validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
         self.__writable_storage = writable_storage
-        self.__data_model = abstract_column_set
+
+        # Eventually, the EntityColumnSet should be passed in
+        # For now, just convert it so we have the right
+        # type from here on
+        self.__data_model = EntityColumnSet(abstract_column_set.columns)
+
         self.__join_relationships = join_relationships
-        self.__validators = validators
         self.required_time_column = required_time_column
+
+        columns_exist_validator = EntityContainsColumnsValidator(
+            self.__data_model, validation_mode=validate_data_model
+        )
+        self.__validators = (
+            [*validators, columns_exist_validator]
+            if validators is not None
+            else [columns_exist_validator]
+        )
 
     @abstractmethod
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -59,7 +78,7 @@ class Entity(Describable, ABC):
         """
         return []
 
-    def get_data_model(self) -> ColumnSet:
+    def get_data_model(self) -> EntityColumnSet:
         """
         Now the data model is flat so this is just a simple ColumnSet object. We can expand this
         to also include relationships between entities.
@@ -108,7 +127,7 @@ class Entity(Describable, ABC):
         :return: A sequence of validators.
         :rtype: Sequence[QueryValidator]
         """
-        return self.__validators if self.__validators is not None else []
+        return self.__validators
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         """
