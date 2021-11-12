@@ -1,7 +1,7 @@
 import logging
 from typing import List, Mapping
 
-from snuba.clickhouse.columns import Array, String
+from snuba.clickhouse.columns import Array, DateTime, String
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
@@ -18,8 +18,16 @@ from snuba.query.validation.signature import Any, Column, SignatureValidator
 
 logger = logging.getLogger(__name__)
 
+DateTimeValidator = SignatureValidator([Column({DateTime})], enforce=False)
 
 default_validators: Mapping[str, FunctionCallValidator] = {
+    "toStartOfMinute": DateTimeValidator,
+    "toStartOfHour": DateTimeValidator,
+    "toStartOfDay": DateTimeValidator,
+    "toStartOfYear": DateTimeValidator,
+    # Techincally this can be called with either a datetime or string
+    # but seems okay to be more restrictive for now
+    "toUnixTimestamp": DateTimeValidator,
     # like and notLike need to take care of Arrays as well since
     # Arrays are exploded into strings if they are part of the arrayjoin
     # clause.
