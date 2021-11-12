@@ -17,10 +17,7 @@ from snuba.query.processors.object_id_rate_limiter import (
 )
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.query.validation.validators import (
-    ColumnValidationMode,
-    EntityRequiredColumnValidator,
-)
+from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.utils.schemas import Column
 
 outcomes_data_model = EntityColumnSet(
@@ -66,7 +63,8 @@ class OutcomesEntity(Entity):
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"org_id"})],
             required_time_column="timestamp",
-            validate_data_model=ColumnValidationMode.WARN,
+            # Logged way too many events to Sentry
+            # validate_data_model=ColumnValidationMode.WARN,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
