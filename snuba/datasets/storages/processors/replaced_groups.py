@@ -130,7 +130,11 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         this query touches, returns whether or not this Query's time
         range overlaps that replacement.
         """
-        query_from, _ = get_time_range(query, "timestamp")
+        query_from, to = get_time_range(query, "timestamp")
+        print("Latest replacement time")
+        print(latest_replacement_time)
+        print("query from, to")
+        print(f"{query_from} - {to}")
         return (
             latest_replacement_time > query_from
             if latest_replacement_time and query_from
