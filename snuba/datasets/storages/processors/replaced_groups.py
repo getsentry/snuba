@@ -131,7 +131,6 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         range overlaps that replacement.
         """
         query_from, _ = get_time_range(query, "timestamp")
-
         return (
             latest_replacement_time > query_from
             if latest_replacement_time and query_from
