@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping
 
 from snuba.query.logical import Query
 from snuba.request.request_settings import RequestSettings
@@ -29,28 +28,4 @@ class QueryProcessor(ABC):
         # Ideally this should return a query insteadof assuming it mutates the
         # existing one in place. We can move towards an immutable structure
         # after changing Request.
-        raise NotImplementedError
-
-
-ExtensionData = Mapping[str, Any]
-
-
-class ExtensionQueryProcessor:
-    """
-    Common parent class for all the extension processors.
-    Extension processors are provided by the QueryExtensions for a dataset,
-    they are fed with the raw extension data and can make changes to query
-    and settings.
-
-    Extension processors are executed very early in the query parsing phase,
-    this happens right after schema validation.
-    """
-
-    @abstractmethod
-    def process_query(
-        self,
-        query: Query,
-        extension_data: ExtensionData,
-        request_settings: RequestSettings,
-    ) -> None:
         raise NotImplementedError

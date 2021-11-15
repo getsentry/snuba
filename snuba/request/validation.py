@@ -1,7 +1,7 @@
 import random
 import textwrap
 import uuid
-from typing import Any, ChainMap, MutableMapping, Optional, Protocol, Type, Union
+from typing import Any, MutableMapping, Optional, Protocol, Type, Union
 
 import sentry_sdk
 
@@ -107,7 +107,7 @@ def build_request(
                 # TODO: Replace this with the actual query raw body.
                 # this can have an impact on subscriptions so we need
                 # to be careful with the change.
-                ChainMap(request_parts.query, *request_parts.extensions.values()),
+                request_parts.query,
                 query,
                 settings_obj,
             )

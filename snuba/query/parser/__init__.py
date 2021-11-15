@@ -1,4 +1,3 @@
-import re
 from dataclasses import replace
 from typing import Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
@@ -18,6 +17,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
+from snuba.utils.constants import NESTED_COL_EXPR_RE
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "parser")
@@ -49,10 +49,6 @@ def validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
                 )
             else:
                 all_declared_aliases[exp.alias] = exp
-
-
-# A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 def parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
