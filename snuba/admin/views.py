@@ -25,3 +25,13 @@ def configs() -> Response:
     ]
 
     return Response(json.dumps(config_data), 200, {"Content-Type": "application/json"},)
+
+
+@application.route("/config_auditlog")
+def config_changes() -> Response:
+    data = [
+        {"key": key, "timestamp": ts, "user": user, "before": before, "after": after}
+        for [key, [ts, user, before, after]] in state.get_config_changes()
+    ]
+
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"},)

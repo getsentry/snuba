@@ -1,7 +1,8 @@
-import { Config } from "./runtime_config/types";
+import { Config, ConfigChange } from "./runtime_config/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
+  getAuditlog: () => Promise<ConfigChange[]>;
 }
 
 function Client() {
@@ -10,6 +11,10 @@ function Client() {
   return {
     getConfigs: () => {
       const url = baseUrl + "configs";
+      return fetch(url).then((resp) => resp.json());
+    },
+    getAuditlog: () => {
+      const url = baseUrl + "config_auditlog";
       return fetch(url).then((resp) => resp.json());
     },
   };
