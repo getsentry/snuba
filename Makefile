@@ -11,7 +11,7 @@ setup-git:
 	pre-commit install --install-hooks
 
 test:
-	SNUBA_SETTINGS=test pytest -vv
+	SNUBA_SETTINGS=test pytest -vv -v -m "not ci_only"
 
 tests: test
 
