@@ -335,11 +335,13 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["spans.op"] = []
             processed["spans.group"] = []
             processed["spans.exclusive_time"] = []
+            processed["spans.exclusive_time_32"] = []
 
             for op, group, exclusive_time in sorted(processed_spans):
                 processed["spans.op"].append(op)
                 processed["spans.group"].append(group)
                 processed["spans.exclusive_time"].append(exclusive_time)
+                processed["spans.exclusive_time_32"].append(exclusive_time)
 
             # The hash and exclusive_time is being stored in the spans columns
             # so there is no need to store it again in the context array.
