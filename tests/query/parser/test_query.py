@@ -1,25 +1,68 @@
-from typing import Any, MutableMapping
+from datetime import datetime
+from typing import Any, MutableMapping, Optional
 
 import pytest
+from snuba_sdk.legacy import json_to_snql
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.conditions import binary_condition, ConditionFunctions
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
     Column,
+    Expression,
     FunctionCall,
     Lambda,
     Literal,
     SubscriptableReference,
 )
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.logical import Query
-from snuba.query.parser import parse_query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
+from snuba.query.snql.parser import parse_snql_query
+
+
+def with_required(condition: Optional[Expression] = None) -> Expression:
+    required = binary_condition(
+        BooleanFunctions.AND,
+        FunctionCall(
+            None,
+            "greaterOrEquals",
+            (
+                Column("_snuba_timestamp", None, "timestamp"),
+                Literal(None, datetime(2021, 1, 1, 0, 0)),
+            ),
+        ),
+        binary_condition(
+            BooleanFunctions.AND,
+            FunctionCall(
+                None,
+                "less",
+                (
+                    Column("_snuba_timestamp", None, "timestamp"),
+                    Literal(None, datetime(2021, 1, 2, 0, 0)),
+                ),
+            ),
+            FunctionCall(
+                None,
+                "equals",
+                (Column("_snuba_project_id", None, "project_id"), Literal(None, 1),),
+            ),
+        ),
+    )
+
+    if condition:
+        return binary_condition(BooleanFunctions.AND, condition, required)
+
+    return required
+
 
 test_cases = [
     pytest.param(
@@ -55,6 +98,8 @@ test_cases = [
                 Column("_snuba_column2", None, "column2"),
                 Column("_snuba_column3", None, "column3"),
             ],
+            condition=with_required(),
+            limit=1000,
         ),
         id="Select composed by select, groupby and aggregations",
     ),
@@ -79,7 +124,7 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    None,
+                    "format_eventid(event_id)",
                     FunctionCall(
                         None,
                         "format_eventid",
@@ -128,16 +173,20 @@ test_cases = [
                     "f2_alias", FunctionCall("_snuba_f2_alias", "f2", ())
                 ),
             ],
-            condition=binary_condition(
-                "in",
-                SubscriptableReference(
-                    "_snuba_tags[sentry:dist]",
-                    Column("_snuba_tags", None, "tags"),
-                    Literal(None, "sentry:dist"),
-                ),
-                FunctionCall(
-                    None, "tuple", (Literal(None, "dist1"), Literal(None, "dist2"),),
-                ),
+            condition=with_required(
+                binary_condition(
+                    "in",
+                    SubscriptableReference(
+                        "_snuba_tags[sentry:dist]",
+                        Column("_snuba_tags", None, "tags"),
+                        Literal(None, "sentry:dist"),
+                    ),
+                    FunctionCall(
+                        None,
+                        "tuple",
+                        (Literal(None, "dist1"), Literal(None, "dist2"),),
+                    ),
+                )
             ),
             having=binary_condition(
                 "greater",
@@ -151,6 +200,7 @@ test_cases = [
                     (Column("_snuba_event_id", None, "event_id"),),
                 )
             ],
+            limit=1000,
         ),
         id="Format a query with functions in all fields",
     ),
@@ -171,7 +221,7 @@ test_cases = [
                     "column2", Column("_snuba_column2", None, "column2")
                 ),
             ],
-            condition=None,
+            condition=with_required(),
             groupby=None,
             having=None,
             order_by=[
@@ -188,19 +238,25 @@ test_cases = [
                     ),
                 ),
             ],
+            limit=1000,
         ),
         id="Order by with functions",
     ),
     pytest.param(
-        {"selected_columns": [], "groupby": "column1", "orderby": "-column1"},
+        {"selected_columns": ["column1"], "groupby": "column1", "orderby": "-column1"},
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("column1", Column("_snuba_column1", None, "column1"))
+                SelectedExpression(
+                    "column1", Column("_snuba_column1", None, "column1")
+                ),
+                SelectedExpression(
+                    "column1", Column("_snuba_column1", None, "column1")
+                ),
             ],
-            condition=None,
+            condition=with_required(),
             groupby=[Column("_snuba_column1", None, "column1")],
             having=None,
             order_by=[
@@ -208,13 +264,14 @@ test_cases = [
                     OrderByDirection.DESC, Column("_snuba_column1", None, "column1")
                 )
             ],
+            limit=1000,
         ),
         id="Order and group by provided as string",
     ),
     pytest.param(
         {
             "selected_columns": ["column1", "tags[test]"],
-            "groupby": [["f", ["tags[test2]"]]],
+            "groupby": [["foo", ["tags[test2]"]]],
         },
         Query(
             QueryEntity(
@@ -222,10 +279,10 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    name=None,
+                    name="foo(tags[test2])",
                     expression=FunctionCall(
                         None,
-                        "f",
+                        "foo",
                         (
                             SubscriptableReference(
                                 "_snuba_tags[test2]",
@@ -250,7 +307,7 @@ test_cases = [
             groupby=[
                 FunctionCall(
                     None,
-                    "f",
+                    "foo",
                     (
                         SubscriptableReference(
                             "_snuba_tags[test2]",
@@ -260,6 +317,8 @@ test_cases = [
                     ),
                 )
             ],
+            condition=with_required(),
+            limit=1000,
         ),
         id="Unpacks subscriptable references",
     ),
@@ -267,10 +326,10 @@ test_cases = [
         {
             "selected_columns": [
                 "group_id",
-                ["g", ["something"], "issue_id"],
-                ["f", [["z", ["a"]]], "a"],
+                ["goo", ["something"], "issue_id"],
+                ["foo", [["zoo", ["a"]]], "a"],
             ],
-            "conditions": [[["f", ["issue_id"], "group_id"], "=", 1]],
+            "conditions": [[["foo", ["issue_id"], "group_id"], "=", 1]],
             "orderby": ["group_id"],
         },
         Query(
@@ -282,11 +341,11 @@ test_cases = [
                     "group_id",
                     FunctionCall(
                         "_snuba_group_id",
-                        "f",
+                        "foo",
                         (
                             FunctionCall(
                                 "_snuba_issue_id",
-                                "g",
+                                "goo",
                                 (Column("_snuba_something", None, "something"),),
                             ),
                         ),
@@ -296,7 +355,7 @@ test_cases = [
                     "issue_id",
                     FunctionCall(
                         "_snuba_issue_id",
-                        "g",
+                        "goo",
                         (Column("_snuba_something", None, "something"),),
                     ),
                 ),
@@ -304,47 +363,55 @@ test_cases = [
                     "a",
                     FunctionCall(
                         "_snuba_a",
-                        "f",
-                        (FunctionCall(None, "z", (Column(None, None, "a"),)),),
+                        "foo",
+                        (FunctionCall(None, "zoo", (Column(None, None, "a"),)),),
                     ),
                 ),
             ],
-            condition=binary_condition(
-                "equals",
-                FunctionCall(
-                    "_snuba_group_id",
-                    "f",
-                    (
-                        FunctionCall(
-                            "_snuba_issue_id",
-                            "g",
-                            (Column("_snuba_something", None, "something"),),
+            condition=with_required(
+                binary_condition(
+                    "equals",
+                    FunctionCall(
+                        "_snuba_group_id",
+                        "foo",
+                        (
+                            FunctionCall(
+                                "_snuba_issue_id",
+                                "goo",
+                                (Column("_snuba_something", None, "something"),),
+                            ),
                         ),
                     ),
-                ),
-                Literal(None, 1),
+                    Literal(None, 1),
+                )
             ),
             order_by=[
                 OrderBy(
                     OrderByDirection.ASC,
                     FunctionCall(
                         "_snuba_group_id",
-                        "f",
+                        "foo",
                         (
                             FunctionCall(
                                 "_snuba_issue_id",
-                                "g",
+                                "goo",
                                 (Column("_snuba_something", None, "something"),),
                             ),
                         ),
                     ),
                 ),
             ],
+            limit=1000,
         ),
         id="Alias references are expanded",
     ),
     pytest.param(
-        {"selected_columns": [["f", ["column3"], "exp"], ["f", ["column3"], "exp"]]},
+        {
+            "selected_columns": [
+                ["foo", ["column3"], "exp"],
+                ["foo", ["column3"], "exp"],
+            ]
+        },
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -353,21 +420,27 @@ test_cases = [
                 SelectedExpression(
                     "exp",
                     FunctionCall(
-                        "_snuba_exp", "f", (Column("_snuba_column3", None, "column3"),)
+                        "_snuba_exp",
+                        "foo",
+                        (Column("_snuba_column3", None, "column3"),),
                     ),
                 ),
                 SelectedExpression(
                     "exp",
                     FunctionCall(
-                        "_snuba_exp", "f", (Column("_snuba_column3", None, "column3"),)
+                        "_snuba_exp",
+                        "foo",
+                        (Column("_snuba_column3", None, "column3"),),
                     ),
                 ),
             ],
+            condition=with_required(),
+            limit=1000,
         ),
         id="Allowed duplicate alias (same expression)",
     ),
     pytest.param(
-        {"selected_columns": [["f", ["column"], "`exp`"], "`exp`"]},
+        {"selected_columns": [["foo", ["column"], "exp"], "exp"]},
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -376,16 +449,18 @@ test_cases = [
                 SelectedExpression(
                     "exp",
                     FunctionCall(
-                        "_snuba_exp", "f", (Column("_snuba_column", None, "column"),)
+                        "_snuba_exp", "foo", (Column("_snuba_column", None, "column"),)
                     ),
                 ),
                 SelectedExpression(
                     "exp",
                     FunctionCall(
-                        "_snuba_exp", "f", (Column("_snuba_column", None, "column"),)
+                        "_snuba_exp", "foo", (Column("_snuba_column", None, "column"),)
                     ),
                 ),
             ],
+            condition=with_required(),
+            limit=1000,
         ),
         id="De-escape aliases defined by the user",
     ),
@@ -411,7 +486,9 @@ test_cases = [
                     ),
                 ),
             ],
-            array_join=Column(None, None, "exception_stacks.type"),
+            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+            condition=with_required(),
+            limit=1000,
         ),
         id="Format a query with array join",
     ),
@@ -436,33 +513,38 @@ test_cases = [
                     ),
                 ),
             ],
-            condition=FunctionCall(
-                None,
-                "arrayExists",
-                (
-                    Lambda(
-                        None,
-                        ("x",),
-                        FunctionCall(
+            condition=with_required(
+                FunctionCall(
+                    None,
+                    "arrayExists",
+                    (
+                        Lambda(
                             None,
-                            "assumeNotNull",
-                            (
-                                FunctionCall(
-                                    None,
-                                    "like",
-                                    (
-                                        Argument(None, "x"),
-                                        Literal(None, "Arithmetic%"),
+                            ("x",),
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "like",
+                                        (
+                                            Argument(None, "x"),
+                                            Literal(None, "Arithmetic%"),
+                                        ),
                                     ),
                                 ),
                             ),
                         ),
+                        Column(
+                            "_snuba_exception_stacks.type",
+                            None,
+                            "exception_stacks.type",
+                        ),
                     ),
-                    Column(
-                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
-                    ),
-                ),
+                )
             ),
+            limit=1000,
         ),
         id="Format a query with array field in a condition",
     ),
@@ -488,17 +570,22 @@ test_cases = [
                     ),
                 ),
             ],
-            array_join=Column(None, None, "exception_stacks.type"),
-            condition=FunctionCall(
-                None,
-                "like",
-                (
-                    Column(
-                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+            condition=with_required(
+                FunctionCall(
+                    None,
+                    "like",
+                    (
+                        Column(
+                            "_snuba_exception_stacks.type",
+                            None,
+                            "exception_stacks.type",
+                        ),
+                        Literal(None, "Arithmetic%"),
                     ),
-                    Literal(None, "Arithmetic%"),
-                ),
+                )
             ),
+            limit=1000,
         ),
         id="Format a query with array join field in a condition",
     ),
@@ -517,7 +604,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
-                    None,
+                    "arrayJoin(exception_stacks)",
                     FunctionCall(
                         None,
                         "arrayJoin",
@@ -525,16 +612,38 @@ test_cases = [
                     ),
                 ),
             ],
-            condition=FunctionCall(
-                None,
-                "like",
-                (
-                    Column(
-                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+            condition=with_required(
+                FunctionCall(
+                    None,
+                    "arrayExists",
+                    (
+                        Lambda(
+                            None,
+                            ("x",),
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "like",
+                                        (
+                                            Argument(None, "x"),
+                                            Literal(None, "Arithmetic%"),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        Column(
+                            "_snuba_exception_stacks.type",
+                            None,
+                            "exception_stacks.type",
+                        ),
                     ),
-                    Literal(None, "Arithmetic%"),
                 ),
             ),
+            limit=1000,
         ),
         id="Format a query with array join field in a condition and array join in a function",
     ),
@@ -577,76 +686,81 @@ test_cases = [
                     ),
                 ),
             ],
-            condition=binary_condition(
-                ConditionFunctions.EQ,
-                FunctionCall(
-                    None,
-                    "or",
-                    (
-                        FunctionCall(
-                            None,
-                            "arrayExists",
-                            (
-                                Lambda(
-                                    None,
-                                    ("x",),
-                                    FunctionCall(
+            condition=with_required(
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    FunctionCall(
+                        None,
+                        "or",
+                        (
+                            FunctionCall(
+                                None,
+                                "arrayExists",
+                                (
+                                    Lambda(
                                         None,
-                                        "assumeNotNull",
-                                        (
-                                            FunctionCall(
-                                                None,
-                                                "equals",
-                                                (
-                                                    Argument(None, "x"),
-                                                    Literal(
-                                                        None, "ArithmeticException",
+                                        ("x",),
+                                        FunctionCall(
+                                            None,
+                                            "assumeNotNull",
+                                            (
+                                                FunctionCall(
+                                                    None,
+                                                    "equals",
+                                                    (
+                                                        Argument(None, "x"),
+                                                        Literal(
+                                                            None, "ArithmeticException",
+                                                        ),
                                                     ),
                                                 ),
                                             ),
                                         ),
                                     ),
-                                ),
-                                Column(
-                                    "_snuba_exception_stacks.type",
-                                    None,
-                                    "exception_stacks.type",
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
                                 ),
                             ),
-                        ),
-                        FunctionCall(
-                            None,
-                            "arrayExists",
-                            (
-                                Lambda(
-                                    None,
-                                    ("x",),
-                                    FunctionCall(
+                            FunctionCall(
+                                None,
+                                "arrayExists",
+                                (
+                                    Lambda(
                                         None,
-                                        "assumeNotNull",
-                                        (
-                                            FunctionCall(
-                                                None,
-                                                "equals",
-                                                (
-                                                    Argument(None, "x"),
-                                                    Literal(None, "RuntimeException",),
+                                        ("x",),
+                                        FunctionCall(
+                                            None,
+                                            "assumeNotNull",
+                                            (
+                                                FunctionCall(
+                                                    None,
+                                                    "equals",
+                                                    (
+                                                        Argument(None, "x"),
+                                                        Literal(
+                                                            None, "RuntimeException",
+                                                        ),
+                                                    ),
                                                 ),
                                             ),
                                         ),
                                     ),
-                                ),
-                                Column(
-                                    "_snuba_exception_stacks.type",
-                                    None,
-                                    "exception_stacks.type",
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
                                 ),
                             ),
                         ),
                     ),
-                ),
-                Literal(None, 1),
+                    Literal(None, 1),
+                )
             ),
+            limit=1000,
         ),
         id="Format a query with array field in a boolean condition",
     ),
@@ -690,41 +804,44 @@ test_cases = [
                     ),
                 ),
             ],
-            condition=binary_condition(
-                ConditionFunctions.EQ,
-                FunctionCall(
-                    None,
-                    "or",
-                    (
-                        FunctionCall(
-                            None,
-                            "equals",
-                            (
-                                Column(
-                                    "_snuba_exception_stacks.type",
-                                    None,
-                                    "exception_stacks.type",
+            condition=with_required(
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    FunctionCall(
+                        None,
+                        "or",
+                        (
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
+                                    Literal(None, "ArithmeticException"),
                                 ),
-                                Literal(None, "ArithmeticException"),
                             ),
-                        ),
-                        FunctionCall(
-                            None,
-                            "equals",
-                            (
-                                Column(
-                                    "_snuba_exception_stacks.type",
-                                    None,
-                                    "exception_stacks.type",
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
+                                    Literal(None, "RuntimeException"),
                                 ),
-                                Literal(None, "RuntimeException"),
                             ),
                         ),
                     ),
-                ),
-                Literal(None, 1),
+                    Literal(None, 1),
+                )
             ),
-            array_join=Column(None, None, "exception_stacks"),
+            limit=1000,
+            array_join=Column("exception_stacks", None, "exception_stacks"),
         ),
         id="Format a query with array join field in a boolean condition",
     ),
@@ -761,7 +878,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
-                    None,
+                    "arrayJoin(exception_stacks.type)",
                     FunctionCall(
                         None,
                         "arrayJoin",
@@ -775,40 +892,81 @@ test_cases = [
                     ),
                 ),
             ],
-            condition=binary_condition(
-                ConditionFunctions.EQ,
-                FunctionCall(
-                    None,
-                    "or",
-                    (
-                        FunctionCall(
-                            None,
-                            "equals",
-                            (
-                                Column(
-                                    "_snuba_exception_stacks.type",
-                                    None,
-                                    "exception_stacks.type",
+            condition=with_required(
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    FunctionCall(
+                        None,
+                        "or",
+                        (
+                            FunctionCall(
+                                None,
+                                "arrayExists",
+                                (
+                                    Lambda(
+                                        None,
+                                        ("x",),
+                                        FunctionCall(
+                                            None,
+                                            "assumeNotNull",
+                                            (
+                                                FunctionCall(
+                                                    None,
+                                                    "equals",
+                                                    (
+                                                        Argument(None, "x"),
+                                                        Literal(
+                                                            None, "ArithmeticException",
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
                                 ),
-                                Literal(None, "ArithmeticException"),
                             ),
-                        ),
-                        FunctionCall(
-                            None,
-                            "equals",
-                            (
-                                Column(
-                                    "_snuba_exception_stacks.type",
-                                    None,
-                                    "exception_stacks.type",
+                            FunctionCall(
+                                None,
+                                "arrayExists",
+                                (
+                                    Lambda(
+                                        None,
+                                        ("x",),
+                                        FunctionCall(
+                                            None,
+                                            "assumeNotNull",
+                                            (
+                                                FunctionCall(
+                                                    None,
+                                                    "equals",
+                                                    (
+                                                        Argument(None, "x"),
+                                                        Literal(
+                                                            None, "RuntimeException",
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
                                 ),
-                                Literal(None, "RuntimeException"),
                             ),
                         ),
                     ),
+                    Literal(alias=None, value=1),
                 ),
-                Literal(None, 1),
             ),
+            limit=1000,
         ),
         id="Format a query with array join field in a boolean condition and array join in a function",
     ),
@@ -843,54 +1001,57 @@ test_cases = [
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
             groupby=[Column("_snuba_tags_key", None, "tags_key")],
-            condition=binary_condition(
-                ConditionFunctions.EQ,
-                FunctionCall(
-                    None,
-                    "or",
-                    (
-                        FunctionCall(
-                            None,
-                            "equals",
-                            (
-                                FunctionCall(
-                                    None,
-                                    "ifNull",
-                                    (
-                                        SubscriptableReference(
-                                            "_snuba_tags[foo]",
-                                            Column("_snuba_tags", None, "tags"),
-                                            Literal(None, "foo"),
+            condition=with_required(
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    FunctionCall(
+                        None,
+                        "or",
+                        (
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "ifNull",
+                                        (
+                                            SubscriptableReference(
+                                                "_snuba_tags[foo]",
+                                                Column("_snuba_tags", None, "tags"),
+                                                Literal(None, "foo"),
+                                            ),
+                                            Literal(None, ""),
                                         ),
-                                        Literal(None, ""),
                                     ),
+                                    Literal(None, "baz"),
                                 ),
-                                Literal(None, "baz"),
                             ),
-                        ),
-                        FunctionCall(
-                            None,
-                            "equals",
-                            (
-                                FunctionCall(
-                                    None,
-                                    "ifNull",
-                                    (
-                                        SubscriptableReference(
-                                            "_snuba_tags[foo.bar]",
-                                            Column("_snuba_tags", None, "tags"),
-                                            Literal(None, "foo.bar"),
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "ifNull",
+                                        (
+                                            SubscriptableReference(
+                                                "_snuba_tags[foo.bar]",
+                                                Column("_snuba_tags", None, "tags"),
+                                                Literal(None, "foo.bar"),
+                                            ),
+                                            Literal(None, ""),
                                         ),
-                                        Literal(None, ""),
                                     ),
+                                    Literal(None, "qux"),
                                 ),
-                                Literal(None, "qux"),
                             ),
                         ),
                     ),
-                ),
-                Literal(None, 1),
+                    Literal(None, 1),
+                )
             ),
+            limit=1000,
         ),
         id="Format a query with array column nested in function",
     ),
@@ -903,7 +1064,16 @@ def test_format_expressions(
 ) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
-    query = parse_query(query_body, events)
+    # HACK until we migrate these tests to SnQL
+    if not query_body.get("conditions"):
+        query_body["conditions"] = []
+    query_body["conditions"] += [
+        ["timestamp", ">=", "2021-01-01T00:00:00"],
+        ["timestamp", "<", "2021-01-02T00:00:00"],
+        ["project_id", "=", 1],
+    ]
+    snql_query = json_to_snql(query_body, "events")
+    query = parse_snql_query(str(snql_query), events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason
@@ -911,34 +1081,39 @@ def test_format_expressions(
 
 def test_shadowing() -> None:
     with pytest.raises(AliasShadowingException):
-        parse_query(
-            {
-                "selected_columns": [
-                    ["f1", ["column1", "column2"], "f1_alias"],
-                    ["f2", [], "f2_alias"],
-                ],
-                "aggregations": [
-                    ["testF", ["platform", "field2"], "f1_alias"]  # Shadowing!
-                ],
-            },
+        parse_snql_query(
+            """
+            MATCH (events)
+            SELECT f1(column1, column2) AS f1_alias, f2() AS f2_alias, testF(platform, field2) AS f1_alias
+            WHERE project_id = 1
+            AND timestamp >= toDateTime('2020-01-01 12:00:00')
+            AND timestamp < toDateTime('2020-01-02 12:00:00')
+            """,
             get_dataset("events"),
         )
 
 
 def test_circular_aliases() -> None:
     with pytest.raises(CyclicAliasException):
-        parse_query(
-            {
-                "selected_columns": [
-                    ["f1", ["column1", "f2"], "f1"],
-                    ["f2", ["f1"], "f2"],
-                ],
-            },
+        parse_snql_query(
+            """
+            MATCH (events)
+            SELECT f1(column1, f2) AS f1, f2(f1) AS f2
+            WHERE project_id = 1
+            AND timestamp >= toDateTime('2020-01-01 12:00:00')
+            AND timestamp < toDateTime('2020-01-02 12:00:00')
+            """,
             get_dataset("events"),
         )
 
     with pytest.raises(CyclicAliasException):
-        parse_query(
-            {"selected_columns": [["f1", [["f2", ["c"], "f2"]], "c"]]},
+        parse_snql_query(
+            """
+            MATCH (events)
+            SELECT f1(f2(c) AS f2) AS c
+            WHERE project_id = 1
+            AND timestamp >= toDateTime('2020-01-01 12:00:00')
+            AND timestamp < toDateTime('2020-01-02 12:00:00')
+            """,
             get_dataset("events"),
         )

@@ -2,6 +2,8 @@ import importlib
 import os
 from copy import deepcopy
 
+import pytest
+
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters import cluster
@@ -41,6 +43,7 @@ def teardown_function() -> None:
     importlib.reload(runner)
 
 
+@pytest.mark.ci_only
 def test_add_node() -> None:
     host_name = os.environ.get("CLICKHOUSE_HOST", "localhost")
     port = int(os.environ.get("CLICKHOUSE_PORT", 9000))

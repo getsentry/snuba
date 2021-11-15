@@ -3,7 +3,7 @@ import logging
 import pytest
 
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.parser import ParsingException
+from snuba.query.parser.exceptions import ParsingException
 from snuba.web.views import handle_invalid_query
 
 invalid_query_exception_test_cases = [
