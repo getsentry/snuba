@@ -176,7 +176,7 @@ class SnQLSubscriptionData(SubscriptionData):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
     ) -> Request:
-        schema = RequestSchema.build_with_extensions({}, SubscriptionRequestSettings)
+        schema = RequestSchema.build(SubscriptionRequestSettings)
 
         request = build_request(
             {"query": self.query},

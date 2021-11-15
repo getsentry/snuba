@@ -1,12 +1,11 @@
 from abc import ABC
-from typing import Mapping, Sequence
+from typing import Sequence
 from unittest.mock import Mock
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
-from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 
 EVENTS_SCHEMA = ColumnSet(
@@ -39,9 +38,6 @@ GROUPS_ASSIGNEE = ColumnSet(
 
 
 class FakeEntity(Entity, ABC):
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {}
-
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return []
 
