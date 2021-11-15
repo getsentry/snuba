@@ -49,7 +49,13 @@ class TestReplacer:
             self.storage, DummyMetricsBackend(strict=True)
         )
 
-        self.base_time = datetime.now().replace(minute=0, second=0, microsecond=0)
+        # Total query time range is 24h before to 24h after now to account
+        # for local machine time zones
+        self.from_time = datetime.now().replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(days=1)
+
+        self.to_time = self.from_time + timedelta(days=2)
 
         self.project_id = 1
         self.event = get_raw_event()
@@ -78,8 +84,8 @@ class TestReplacer:
             "selected_columns": [],
             "aggregations": [["count()", "", "count"]],
             "groupby": ["group_id"],
-            "from_date": (self.base_time).isoformat(),
-            "to_date": (self.base_time + timedelta(hours=9)).isoformat(),
+            "from_date": self.from_time.isoformat(),
+            "to_date": self.to_time.isoformat(),
         }
 
         if group_id:
@@ -94,8 +100,8 @@ class TestReplacer:
             "conditions": [
                 ["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]
             ],
-            "from_date": (self.base_time).isoformat(),
-            "to_date": (self.base_time + timedelta(hours=9)).isoformat(),
+            "from_date": self.from_time.isoformat(),
+            "to_date": self.to_time.isoformat(),
         }
 
         data = json.loads(self.post(json.dumps(args)).data)["data"]
