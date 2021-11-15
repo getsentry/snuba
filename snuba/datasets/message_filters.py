@@ -21,3 +21,19 @@ class StreamMessageFilter(ABC, Generic[TPayload]):
 class PassthroughKafkaFilter(StreamMessageFilter[KafkaPayload]):
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
         return False
+
+
+class KafkaHeaderFilter(StreamMessageFilter[KafkaPayload]):
+    def __init__(self, header_key: str, header_value: str):
+        self.__header_key = header_key
+        self.__header_value = header_value
+
+    def should_drop(self, message: Message[KafkaPayload]) -> bool:
+        for key, value in message.payload.headers:
+            if key != self.__header_key:
+                continue
+
+            str_value = value.decode("utf-8")
+            return True if str_value == self.__header_value else False
+
+        return False

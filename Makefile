@@ -11,7 +11,7 @@ setup-git:
 	pre-commit install --install-hooks
 
 test:
-	SNUBA_SETTINGS=test pytest -vv
+	SNUBA_SETTINGS=test pytest -vv -v -m "not ci_only"
 
 tests: test
 
@@ -25,3 +25,9 @@ install-python-dependencies:
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
 	sphinx-build -W -b html docs/source docs/build
+
+build-admin:
+	cd snuba/admin && yarn install && yarn run build
+
+watch-admin:
+	cd snuba/admin && yarn install && yarn run watch

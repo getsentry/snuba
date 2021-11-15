@@ -180,9 +180,6 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         assert message.payload == SubscriptionTaskResult(task, future_result)
 
         timestamp_field = "timestamp" if not uses_sessions_dataset else "started"
-        # NOTE: The time series extension is folded back into the request
-        # body, ideally this would reference the timeseries options in
-        # isolation.
         from_pattern = FunctionCall(
             String(ConditionFunctions.GTE),
             (
@@ -219,7 +216,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
                 "meta": [{"name": "count", "type": "UInt64"}],
                 "data": [{"count": 0}],
             }
-        print(result)
+
         assert result == expected_result
 
 

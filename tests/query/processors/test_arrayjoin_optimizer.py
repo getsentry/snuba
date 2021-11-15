@@ -1,6 +1,9 @@
+import json
+from datetime import datetime
 from typing import Any, MutableMapping, Optional, Sequence
 
 import pytest
+from snuba_sdk.legacy import json_to_snql
 
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
@@ -19,7 +22,6 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
     filter_key_values,
@@ -27,6 +29,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     get_filtered_mapping_keys,
     zip_columns,
 )
+from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -163,6 +166,43 @@ def test_get_filtered_mapping_keys(
     assert get_filtered_mapping_keys(query, "tags") == expected_result
 
 
+def with_required(condition: Expression) -> Expression:
+    return binary_condition(
+        BooleanFunctions.AND,
+        condition,
+        binary_condition(
+            BooleanFunctions.AND,
+            FunctionCall(
+                None,
+                "greaterOrEquals",
+                (
+                    Column("_snuba_finish_ts", None, "finish_ts"),
+                    Literal(None, datetime(2021, 1, 1, 0, 0)),
+                ),
+            ),
+            binary_condition(
+                BooleanFunctions.AND,
+                FunctionCall(
+                    None,
+                    "less",
+                    (
+                        Column("_snuba_finish_ts", None, "finish_ts"),
+                        Literal(None, datetime(2021, 1, 2, 0, 0)),
+                    ),
+                ),
+                FunctionCall(
+                    None,
+                    "equals",
+                    (
+                        Column("_snuba_project_id", None, "project_id"),
+                        Literal(None, 1),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 test_data = [
     pytest.param(
         {
@@ -178,9 +218,11 @@ test_data = [
                     name="col1", expression=Column("_snuba_col1", None, "col1")
                 )
             ],
-            condition=in_condition(
-                arrayJoin("_snuba_tags_key", Column(None, None, "tags.key")),
-                [Literal(None, "t1"), Literal(None, "t2")],
+            condition=with_required(
+                in_condition(
+                    arrayJoin("_snuba_tags_key", Column(None, None, "tags.key")),
+                    [Literal(None, "t1"), Literal(None, "t2")],
+                )
             ),
         ),
         id="no tag in select clause",
@@ -224,9 +266,11 @@ test_data = [
                     ),
                 ),
             ],
-            condition=in_condition(
-                Column("_snuba_col", None, "col"),
-                [Literal(None, "t1"), Literal(None, "t2")],
+            condition=with_required(
+                in_condition(
+                    Column("_snuba_col", None, "col"),
+                    [Literal(None, "t1"), Literal(None, "t2")],
+                )
             ),
         ),
         id="tags_key and tags_value in query no filter",
@@ -251,12 +295,16 @@ test_data = [
                     ),
                 )
             ],
-            condition=in_condition(
-                arrayJoin(
-                    "_snuba_tags_key",
-                    filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
+            condition=with_required(
+                in_condition(
+                    arrayJoin(
+                        "_snuba_tags_key",
+                        filter_keys(
+                            Column(None, None, "tags.key"), [Literal(None, "t1")]
+                        ),
+                    ),
+                    [Literal(None, "t1")],
                 ),
-                [Literal(None, "t1")],
             ),
         ),
         id="filter on keys only",
@@ -306,22 +354,24 @@ test_data = [
                     ),
                 ),
             ],
-            condition=in_condition(
-                tupleElement(
-                    "_snuba_tags_key",
-                    arrayJoin(
-                        "snuba_all_tags",
-                        filter_key_values(
-                            zip_columns(
-                                Column(None, None, "tags.key"),
-                                Column(None, None, "tags.value"),
+            condition=with_required(
+                in_condition(
+                    tupleElement(
+                        "_snuba_tags_key",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            filter_key_values(
+                                zip_columns(
+                                    Column(None, None, "tags.key"),
+                                    Column(None, None, "tags.value"),
+                                ),
+                                [Literal(None, "t1")],
                             ),
-                            [Literal(None, "t1")],
                         ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
+                    [Literal(None, "t1")],
                 ),
-                [Literal(None, "t1")],
             ),
         ),
         id="filter on key value pars",
@@ -332,8 +382,10 @@ test_data = [
 
 def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
-    query = parse_query(query_body, dataset)
-    request = Request("a", query_body, query, HTTPRequestSettings(referrer="r"))
+    snql_query = json_to_snql(query_body, "transactions")
+    body = json.loads(snql_query.snuba())
+    query = parse_snql_query(str(snql_query), dataset)
+    request = Request("a", body, query, HTTPRequestSettings(referrer="r"))
     entity = get_entity(query.get_from_clause().key)
     storage = entity.get_writable_storage()
     assert storage is not None
@@ -356,6 +408,13 @@ def test_tags_processor(
     """
     Tests the whole processing in some notable cases.
     """
+    # HACK until we migrate these tests to SnQL
+    # query_body["selected_columns"] = ["project_id"]
+    query_body["conditions"] += [
+        ["finish_ts", ">=", "2021-01-01T00:00:00"],
+        ["finish_ts", "<", "2021-01-02T00:00:00"],
+        ["project_id", "=", 1],
+    ]
     processed = parse_and_process(query_body)
     assert processed.get_selected_columns() == expected_query.get_selected_columns()
     assert processed.get_condition() == expected_query.get_condition()
@@ -409,7 +468,12 @@ def test_aliasing() -> None:
             "aggregations": [],
             "groupby": [],
             "selected_columns": ["tags_value"],
-            "conditions": [["tags_key", "IN", ["t1", "t2"]]],
+            "conditions": [
+                ["tags_key", "IN", ["t1", "t2"]],
+                ["project_id", "=", 1],
+                ["finish_ts", ">=", "2021-01-01T00:00:00"],
+                ["finish_ts", "<", "2021-01-02T00:00:00"],
+            ],
         }
     )
     sql = format_query(processed).get_sql()
@@ -421,5 +485,9 @@ def test_aliasing() -> None:
         "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 2) AS _snuba_tags_value) "
         f"FROM {transactions_table_name} "
-        "WHERE in((tupleElement(snuba_all_tags, 1) AS _snuba_tags_key), tuple('t1', 't2'))"
+        "WHERE in((tupleElement(snuba_all_tags, 1) AS _snuba_tags_key), tuple('t1', 't2')) "
+        "AND equals((project_id AS _snuba_project_id), 1) "
+        "AND greaterOrEquals((finish_ts AS _snuba_finish_ts), toDateTime('2021-01-01T00:00:00', 'Universal')) "
+        "AND less(_snuba_finish_ts, toDateTime('2021-01-02T00:00:00', 'Universal')) "
+        "LIMIT 1000 OFFSET 0"
     )
