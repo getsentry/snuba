@@ -151,6 +151,7 @@ class BaseEventsEntity(Entity, ABC):
                 ),
             )
 
+        # TODO: entity data model is using ClickHouse columns/schema, should be corrected
         schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 

@@ -6,7 +6,6 @@ from typing import Sequence, Set, Type, Union
 from snuba.clickhouse.columns import (
     UUID,
     Array,
-    ColumnSet,
     Date,
     DateTime,
     FixedString,
@@ -25,6 +24,7 @@ from snuba.query.matchers import Column as ColumnMatcher
 from snuba.query.matchers import Literal as LiteralMatcher
 from snuba.query.matchers import Param
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
+from snuba.utils.schemas import ColumnSet
 
 logger = logging.getLogger(__name__)
 
