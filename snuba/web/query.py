@@ -141,7 +141,6 @@ def _run_query_pipeline(
     and a Request and returns the results of the query.
 
     This process includes:
-    - Applying dataset specific syntax extensions (QueryExtension)
     - Applying dataset query processors on the abstract Snuba query.
     - Using the dataset provided ClickhouseQueryPlanBuilder to build a ClickhouseQueryPlan. This step
       transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).
@@ -241,7 +240,7 @@ def _run_and_apply_column_names(
                 "Duplicated alias definition in select clause",
                 extra={
                     "alias": alias,
-                    "name": name,
+                    "column_name": name,
                     "existing_name": alias_name_mapping[alias],
                 },
                 exc_info=True,

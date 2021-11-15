@@ -1,6 +1,6 @@
 from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -14,6 +14,7 @@ from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS, UNARY_OPERATORS
 from snuba.util import is_condition
+from snuba.utils.schemas import Array
 from snuba.utils.serializable_exception import SerializableException
 
 TExpression = TypeVar("TExpression")
@@ -24,7 +25,7 @@ class InvalidConditionException(SerializableException):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any, ColumnSet, Set[str]], TExpression],
+    operand_builder: Callable[[Any, EntityColumnSet, Set[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
@@ -48,7 +49,7 @@ def parse_conditions(
     simple_condition_builder: Generates a simple condition made by expression on the
       left hand side, an operator and a literal on the right hand side.
     """
-    from snuba.clickhouse.columns import Array
+    # from snuba.clickhouse.columns import Array
 
     if not conditions:
         return None

@@ -63,9 +63,7 @@ TESTS = [
 def test_build_request(body: MutableMapping[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
     entity = dataset.get_default_entity()
-    schema = RequestSchema.build_with_extensions(
-        entity.get_extensions(), HTTPRequestSettings
-    )
+    schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         body,
