@@ -1,6 +1,5 @@
 from abc import ABC
-from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Optional, Sequence
 
 from snuba import settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -19,7 +18,6 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
-from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -27,8 +25,6 @@ from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-from snuba.query.project_extension import ProjectExtension
-from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings
 
@@ -181,16 +177,6 @@ class BaseEventsEntity(Entity, ABC):
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
         )
-
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "project": ProjectExtension(project_column="project_id"),
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=5),
-                timestamp_column="timestamp",
-            ),
-        }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
