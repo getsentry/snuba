@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 
 type ConfigKey = string;
-type ConfigValue = string | number;
+type ConfigValue = string;
 type ConfigType = "string" | "int" | "float";
 
 type Config = { key: ConfigKey; value: ConfigValue; type: ConfigType };
@@ -13,7 +13,9 @@ type ConfigChange = {
   user: string | null;
   timestamp: number;
   before: ConfigValue | null;
+  beforeType: ConfigType | null;
   after: ConfigValue | null;
+  afterType: ConfigType | null;
 };
 
 export { Config, ConfigKey, ConfigValue, ConfigType, RowData, ConfigChange };

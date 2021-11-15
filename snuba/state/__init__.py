@@ -192,8 +192,20 @@ def delete_config(key: str, user: Optional[Any] = None) -> None:
     return set_config(key, None, user=user)
 
 
-def get_config_changes() -> Sequence[Any]:
+def get_config_changes_legacy() -> Sequence[Any]:
     return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
+
+
+def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]:
+    """
+    Like get_config_changes_legacy() but ensures that values are cast to their correct type
+    """
+    changes = get_config_changes_legacy()
+
+    return [
+        (key, ts, user, numeric(before), numeric(after))
+        for [key, [ts, user, before, after]] in changes
+    ]
 
 
 # Query Recording
