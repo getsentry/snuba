@@ -2028,7 +2028,9 @@ class TestApi(SimpleAPITest):
             "groupby": "project_id",
             "aggregations": [["count()", "", "count"]],
             "conditions": [["group_id", "=", group_id]],
-            "from_date": (self.base_time - timedelta(minutes=self.minutes)).isoformat(),
+            "from_date": (
+                self.base_time - timedelta(minutes=2 * self.minutes)
+            ).isoformat(),
             "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
         }
         result = json.loads(self.post(json.dumps(query)).data)
