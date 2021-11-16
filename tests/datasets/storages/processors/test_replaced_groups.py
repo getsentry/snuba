@@ -341,15 +341,17 @@ def test_query_has_group_ids(query_with_multiple_group_ids: ClickhouseQuery,) ->
 def test_query_without_group_ids(query: ClickhouseQuery) -> None:
     enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
 
-    # Too many groups to exclude, but query has none of the replaced groups
-    enforcer._set_query_final(query, True)
-    state.set_config("max_group_ids_exclude", 1)
     set_project_exclude_groups(
         2,
         [100, 101, 102],
         ReplacerState.EVENTS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
+
+    # Too many groups to exclude, but query has no group_id condition
+    enforcer._set_query_final(query, True)
+    state.set_config("max_group_ids_exclude", 1)
+
     enforcer.process_query(query, HTTPRequestSettings())
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
@@ -358,12 +360,7 @@ def test_query_without_group_ids(query: ClickhouseQuery) -> None:
     query.set_ast_condition(build_in("project_id", [2]))
     enforcer._set_query_final(query, True)
     state.set_config("max_group_ids_exclude", 3)
-    set_project_exclude_groups(
-        2,
-        [100, 101, 102],
-        ReplacerState.EVENTS,
-        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
-    )
+
     enforcer.process_query(query, HTTPRequestSettings())
     assert query.get_condition() == build_and(
         build_not_in("group_id", [100, 101, 102]), build_in("project_id", [2]),
