@@ -1,5 +1,4 @@
 from datetime import datetime
-from functools import partial
 from typing import Any, MutableMapping
 
 import pytest
@@ -16,50 +15,12 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.request import Language
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
+from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
 
 TESTS = [
-    pytest.param(
-        {
-            "project": [1],
-            "selected_columns": [],
-            "aggregations": [["count()", "", "count"]],
-            "conditions": [],
-            "from_date": "2011-07-01T19:54:15",
-            "to_date": "2018-07-06T19:54:15",
-            "granularity": 60,
-            "groupby": ["time"],
-            "having": [],
-            "limit": 1000,
-            "totals": False,
-            "parent_api": "<unknown>",
-        },
-        Language.LEGACY,
-        binary_condition(
-            BooleanFunctions.AND,
-            binary_condition(
-                BooleanFunctions.AND,
-                binary_condition(
-                    ConditionFunctions.GTE,
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime(2011, 7, 1, 19, 54, 15)),
-                ),
-                binary_condition(
-                    ConditionFunctions.LT,
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime(2018, 7, 6, 19, 54, 15)),
-                ),
-            ),
-            in_condition(
-                Column("_snuba_project_id", None, "project_id"), [Literal(None, 1)]
-            ),
-        ),
-        id="Legacy query",
-    ),
     pytest.param(
         {
             "query": (
@@ -74,7 +35,6 @@ TESTS = [
             ),
             "parent_api": "<unknown>",
         },
-        Language.SNQL,
         binary_condition(
             BooleanFunctions.AND,
             in_condition(
@@ -99,21 +59,15 @@ TESTS = [
 ]
 
 
-@pytest.mark.parametrize("body, language, condition", TESTS)
-def test_build_request(
-    body: MutableMapping[str, Any], language: Language, condition: Expression
-) -> None:
+@pytest.mark.parametrize("body, condition", TESTS)
+def test_build_request(body: MutableMapping[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
     entity = dataset.get_default_entity()
-    schema = RequestSchema.build_with_extensions(
-        entity.get_extensions(), HTTPRequestSettings, language,
-    )
+    schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         body,
-        parse_legacy_query
-        if language == Language.LEGACY
-        else partial(parse_snql_query, []),
+        parse_snql_query,
         HTTPRequestSettings,
         schema,
         dataset,

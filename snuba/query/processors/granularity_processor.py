@@ -7,15 +7,15 @@ from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 #: Granularities for which a materialized view exist, in ascending order
-GRANULARITIES_AVAILABLE = (10, 60)
+GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)
 
 
 class GranularityProcessor(QueryProcessor):
-    """ Use the granularity set on the query to filter on the granularity column """
+    """Use the granularity set on the query to filter on the granularity column"""
 
     @staticmethod
     def __get_granularity(query: Query) -> int:
-        """ Find the best fitting granularity for this query """
+        """Find the best fitting granularity for this query"""
         requested_granularity = query.get_granularity()
 
         if requested_granularity is None:

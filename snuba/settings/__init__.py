@@ -12,6 +12,9 @@ DEBUG = True
 HOST = "0.0.0.0"
 PORT = 1218
 
+ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
+ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
+
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
@@ -72,6 +75,10 @@ CONFIG_MEMOIZE_TIMEOUT = 10
 
 # Sentry Options
 SENTRY_DSN = None
+
+# Snuba Admin Options
+SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
+SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
 
 # Snuba Options
 
@@ -148,6 +155,10 @@ CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
+
+# Subscriptions scheduler buffer size
+SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
+SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

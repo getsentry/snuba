@@ -5,7 +5,11 @@ import click
 from arroyo import configure_metrics
 
 from snuba import environment, settings
-from snuba.consumers.consumer_builder import ConsumerBuilder
+from snuba.consumers.consumer_builder import (
+    ConsumerBuilder,
+    KafkaParameters,
+    ProcessingParameters,
+)
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_cdc_storage
 from snuba.environment import setup_logging, setup_sentry
@@ -124,20 +128,24 @@ def consumer(
 
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
-        raw_topic=raw_events_topic,
-        replacements_topic=replacements_topic,
+        kafka_params=KafkaParameters(
+            raw_topic=raw_events_topic,
+            replacements_topic=replacements_topic,
+            bootstrap_servers=bootstrap_server,
+            group_id=consumer_group,
+            commit_log_topic=commit_log_topic,
+            auto_offset_reset=auto_offset_reset,
+            queued_max_messages_kbytes=queued_max_messages_kbytes,
+            queued_min_messages=queued_min_messages,
+        ),
+        processing_params=ProcessingParameters(
+            processes=processes,
+            input_block_size=input_block_size,
+            output_block_size=output_block_size,
+        ),
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
-        bootstrap_servers=bootstrap_server,
-        group_id=consumer_group,
-        commit_log_topic=commit_log_topic,
-        auto_offset_reset=auto_offset_reset,
-        queued_max_messages_kbytes=queued_max_messages_kbytes,
-        queued_min_messages=queued_min_messages,
         metrics=metrics,
-        processes=processes,
-        input_block_size=input_block_size,
-        output_block_size=output_block_size,
         profile_path=profile_path,
     )
 

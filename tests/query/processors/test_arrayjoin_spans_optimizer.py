@@ -384,11 +384,7 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            FunctionCall(
-                None,
-                "hasAny",
-                (spans_ops, FunctionCall(None, "array", (Literal(None, "db"),))),
-            ),
+            FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
             binary_condition(
                 ConditionFunctions.EQ,
                 tupleElement("spans_op", array_join_col(ops=["db"]), Literal(None, 1)),
@@ -428,15 +424,10 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            FunctionCall(
-                None,
-                "hasAny",
-                (
-                    spans_ops,
-                    FunctionCall(
-                        None, "array", (Literal(None, "db"), Literal(None, "http"))
-                    ),
-                ),
+            binary_condition(
+                BooleanFunctions.OR,
+                FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
+                FunctionCall(None, "has", (spans_ops, Literal(None, "http"))),
             ),
             in_condition(
                 tupleElement(
@@ -478,11 +469,7 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            FunctionCall(
-                None,
-                "hasAny",
-                (spans_groups, FunctionCall(None, "array", (Literal(None, "a" * 16),))),
-            ),
+            FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
             binary_condition(
                 ConditionFunctions.EQ,
                 tupleElement(
@@ -528,17 +515,10 @@ span_processor_tests = [
         ],
         binary_condition(
             BooleanFunctions.AND,
-            FunctionCall(
-                None,
-                "hasAny",
-                (
-                    spans_groups,
-                    FunctionCall(
-                        None,
-                        "array",
-                        (Literal(None, "a" * 16), Literal(None, "b" * 16)),
-                    ),
-                ),
+            binary_condition(
+                BooleanFunctions.OR,
+                FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
+                FunctionCall(None, "has", (spans_groups, Literal(None, "b" * 16))),
             ),
             in_condition(
                 tupleElement(
@@ -592,19 +572,8 @@ span_processor_tests = [
             BooleanFunctions.AND,
             binary_condition(
                 BooleanFunctions.AND,
-                FunctionCall(
-                    None,
-                    "hasAny",
-                    (spans_ops, FunctionCall(None, "array", (Literal(None, "db"),)),),
-                ),
-                FunctionCall(
-                    None,
-                    "hasAny",
-                    (
-                        spans_groups,
-                        FunctionCall(None, "array", (Literal(None, "a" * 16),)),
-                    ),
-                ),
+                FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
+                FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
             ),
             binary_condition(
                 ConditionFunctions.EQ,
@@ -685,27 +654,15 @@ span_processor_tests = [
             BooleanFunctions.AND,
             binary_condition(
                 BooleanFunctions.AND,
-                FunctionCall(
-                    None,
-                    "hasAny",
-                    (
-                        spans_ops,
-                        FunctionCall(
-                            None, "array", (Literal(None, "db"), Literal(None, "http"))
-                        ),
-                    ),
+                binary_condition(
+                    BooleanFunctions.OR,
+                    FunctionCall(None, "has", (spans_ops, Literal(None, "db"))),
+                    FunctionCall(None, "has", (spans_ops, Literal(None, "http"))),
                 ),
-                FunctionCall(
-                    None,
-                    "hasAny",
-                    (
-                        spans_groups,
-                        FunctionCall(
-                            None,
-                            "array",
-                            (Literal(None, "a" * 16), Literal(None, "b" * 16)),
-                        ),
-                    ),
+                binary_condition(
+                    BooleanFunctions.OR,
+                    FunctionCall(None, "has", (spans_groups, Literal(None, "a" * 16))),
+                    FunctionCall(None, "has", (spans_groups, Literal(None, "b" * 16))),
                 ),
             ),
             binary_condition(
