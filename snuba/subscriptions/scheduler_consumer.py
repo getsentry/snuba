@@ -11,9 +11,15 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.synchronized import commit_codec
 from arroyo.types import Position
 
+from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.subscriptions.utils import Tick
+from snuba.subscriptions.scheduler_processing_strategy import (
+    CommittableTick,
+    ProvideCommitStrategy,
+    TickBuffer,
+)
+from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 from snuba.utils.types import Interval, InvalidRangeError
@@ -200,6 +206,11 @@ class SchedulerBuilder:
         assert commit_log_topic_spec is not None
         self.__commit_log_topic_spec = commit_log_topic_spec
 
+        mode = stream_loader.get_subscription_scheduler_mode()
+        assert mode is not None
+
+        self.__mode = mode
+
         self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
         self.__consumer_group = consumer_group
@@ -207,6 +218,10 @@ class SchedulerBuilder:
         self.__auto_offset_reset = auto_offset_reset
         self.__delay_seconds = delay_seconds
         self.__metrics = metrics
+
+        self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
+            entity_name, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
+        )
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
@@ -216,7 +231,9 @@ class SchedulerBuilder:
         )
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
-        return SubscriptionSchedulerProcessingFactory(self.__partitions, self.__metrics)
+        return SubscriptionSchedulerProcessingFactory(
+            self.__mode, self.__partitions, self.__buffer_size, self.__metrics
+        )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
         return CommitLogTickConsumer(
@@ -236,46 +253,14 @@ class SchedulerBuilder:
         )
 
 
-class MeasurePartitionLag(ProcessingStrategy[Tick]):
-    def __init__(
-        self,
-        partitions: int,
-        metrics: MetricsBackend,
-        commit: Callable[[Mapping[Partition, Position]], None],
-    ) -> None:
-        self.__metrics = metrics
-        self.__partitions = partitions
-        self.__partition_timestamps: MutableMapping[int, Optional[datetime]] = {
-            index: None for index in range(partitions)
-        }
+class NextStep(ProcessingStrategy[CommittableTick]):
+    def __init__(self, commit: Callable[[Mapping[Partition, Position]], None]) -> None:
         self.__commit = commit
 
     def poll(self) -> None:
         pass
 
-    def submit(self, message: Message[Tick]) -> None:
-        if self.__partitions != 1:
-            partition_index = message.payload.partition
-
-            partition_timestamp = message.payload.timestamps.upper
-            self.__partition_timestamps[partition_index] = partition_timestamp
-
-            earliest = partition_timestamp
-            latest = partition_timestamp
-
-            for ts in self.__partition_timestamps.values():
-                if ts is None:
-                    return
-
-                if ts < earliest:
-                    earliest = ts
-                if ts > latest:
-                    latest = ts
-
-            self.__metrics.timing(
-                "partition_lag_ms", (latest - earliest).total_seconds() * 1000
-            )
-
+    def submit(self, message: Message[CommittableTick]) -> None:
         self.__commit({message.partition: Position(message.offset, message.timestamp)})
 
     def close(self) -> None:
@@ -289,11 +274,29 @@ class MeasurePartitionLag(ProcessingStrategy[Tick]):
 
 
 class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
-    def __init__(self, partitions: int, metrics: MetricsBackend,) -> None:
+    def __init__(
+        self,
+        mode: SchedulingWatermarkMode,
+        partitions: int,
+        buffer_size: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__mode = mode
         self.__partitions = partitions
+        self.__buffer_size = buffer_size
         self.__metrics = metrics
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[Tick]:
-        return MeasurePartitionLag(self.__partitions, self.__metrics, commit)
+        # TODO: Temporarily hardcoding global mode for testing
+        mode = SchedulingWatermarkMode.GLOBAL
+        next_step = NextStep(commit)
+
+        return TickBuffer(
+            mode,
+            self.__partitions,
+            self.__buffer_size,
+            ProvideCommitStrategy(self.__partitions, next_step),
+            self.__metrics,
+        )
