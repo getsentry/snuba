@@ -28,7 +28,7 @@ function RuntimeConfig(props: { api: Client }) {
     const rowData: RowData[] = data.map((row) => {
       const { key, value, type } = row;
 
-      return [key, value, type];
+      return [<code>{key}</code>, <code>{value}</code>, type];
     });
 
     if (!data) {

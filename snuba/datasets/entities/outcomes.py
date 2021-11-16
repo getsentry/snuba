@@ -30,6 +30,7 @@ outcomes_data_model = EntityColumnSet(
         Column("quantity", UInt(64)),
         Column("category", UInt(8)),
         Column("times_seen", UInt(64)),
+        Column("time", DateTime()),
     ]
 )
 
@@ -63,7 +64,7 @@ class OutcomesEntity(Entity):
             validators=[EntityRequiredColumnValidator({"org_id"})],
             required_time_column="timestamp",
             # WARN mode logged way too many events to Sentry
-            validate_data_model=ColumnValidationMode.DO_NOTHING,
+            validate_data_model=ColumnValidationMode.WARN,
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
