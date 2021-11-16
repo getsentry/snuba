@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Optional, Tuple, Union
 
 import pytest
-import pytz
 import simplejson as json
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
@@ -50,10 +49,13 @@ class TestReplacer:
             self.storage, DummyMetricsBackend(strict=True)
         )
 
-        self.minutes = 180
-        self.base_time = datetime.utcnow().replace(
+        # Total query time range is 24h before to 24h after now to account
+        # for local machine time zones
+        self.from_time = datetime.now().replace(
             minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=self.minutes)
+        ) - timedelta(days=1)
+
+        self.to_time = self.from_time + timedelta(days=2)
 
         self.project_id = 1
         self.event = get_raw_event()
@@ -82,10 +84,8 @@ class TestReplacer:
             "selected_columns": [],
             "aggregations": [["count()", "", "count"]],
             "groupby": ["group_id"],
-            "from_date": (self.base_time - timedelta(minutes=self.minutes)).isoformat(),
-            "to_date": (
-                self.base_time + timedelta(minutes=2 * self.minutes)
-            ).isoformat(),
+            "from_date": self.from_time.isoformat(),
+            "to_date": self.to_time.isoformat(),
         }
 
         if group_id:
@@ -100,10 +100,8 @@ class TestReplacer:
             "conditions": [
                 ["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]
             ],
-            "from_date": (self.base_time - timedelta(minutes=self.minutes)).isoformat(),
-            "to_date": (
-                self.base_time + timedelta(minutes=2 * self.minutes)
-            ).isoformat(),
+            "from_date": self.from_time.isoformat(),
+            "to_date": self.to_time.isoformat(),
         }
 
         data = json.loads(self.post(json.dumps(args)).data)["data"]
@@ -113,7 +111,7 @@ class TestReplacer:
         return int(data[0]["group_id"])
 
     def test_delete_groups_process(self) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
         message = (
             2,
             ReplacementType.END_DELETE_GROUPS,
@@ -151,7 +149,7 @@ class TestReplacer:
         "old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None]
     )
     def test_tombstone_events_process(self, old_primary_hash) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
         message_kwargs = {
             "project_id": self.project_id,
             "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
@@ -191,8 +189,8 @@ class TestReplacer:
         assert replacement.query_time_flags == (None, self.project_id,)
 
     def test_tombstone_events_process_timestamp(self) -> None:
-        from_ts = datetime.now(tz=pytz.utc)
-        to_ts = datetime.now(tz=pytz.utc) + timedelta(3)
+        from_ts = datetime.now()
+        to_ts = datetime.now() + timedelta(3)
         message = (
             2,
             ReplacementType.TOMBSTONE_EVENTS,
@@ -223,7 +221,7 @@ class TestReplacer:
         assert replacement.query_time_flags == (None, self.project_id,)
 
     def test_replace_group_process(self) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
         message = (
             2,
             ReplacementType.REPLACE_GROUP,
@@ -255,7 +253,7 @@ class TestReplacer:
         assert replacement.query_time_flags == (None, self.project_id,)
 
     def test_merge_process(self) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
         message = (
             2,
             ReplacementType.END_MERGE,
@@ -291,7 +289,7 @@ class TestReplacer:
         )
 
     def test_unmerge_process(self) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
         message = (
             2,
             ReplacementType.END_UNMERGE,
@@ -330,7 +328,7 @@ class TestReplacer:
         assert replacement.get_query_time_flags() == errors_replacer.NeedsFinal()
 
     def test_unmerge_hierarchical_process(self) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
 
         message = (
             2,
@@ -368,7 +366,7 @@ class TestReplacer:
         assert replacement.query_time_flags == (None, self.project_id,)
 
     def test_delete_promoted_tag_process(self) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
         message = (
             2,
             ReplacementType.END_DELETE_TAG,
@@ -403,7 +401,7 @@ class TestReplacer:
         )
 
     def test_delete_unpromoted_tag_process(self) -> None:
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.now()
         message = (
             2,
             ReplacementType.END_DELETE_TAG,
@@ -445,7 +443,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.utcnow()
 
         project_id = self.project_id
 
@@ -561,7 +559,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.utcnow()
 
         project_id = self.project_id
 
@@ -600,7 +598,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
-        timestamp = datetime.now(tz=pytz.utc)
+        timestamp = datetime.utcnow()
 
         project_id = self.project_id
 
