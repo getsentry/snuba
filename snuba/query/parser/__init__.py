@@ -23,7 +23,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "parser")
 
 
-def _validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Ensures that no alias has been defined multiple times for different
     expressions in the query. Thus rejecting queries with shadowing.
@@ -51,7 +51,7 @@ def _validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
                 all_declared_aliases[exp.alias] = exp
 
 
-def _parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Turns columns formatted as tags[asd] into SubscriptableReference.
     """
@@ -75,7 +75,7 @@ def _parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> N
     query.transform_expressions(transform)
 
 
-def _apply_column_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def apply_column_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Applies an alias to all the columns in the query equal to the column
     name unless a column already has one or the alias is already defined.
@@ -100,7 +100,7 @@ def _apply_column_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> N
     query.transform_expressions(apply_aliases)
 
 
-def _expand_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def expand_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Recursively expand all the references to aliases in the query. This
     makes life easy to query processors and translators that only have to
