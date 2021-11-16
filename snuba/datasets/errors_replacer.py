@@ -282,8 +282,8 @@ class ProjectsQueryFlags:
             needs_final: Sequence[timestamp]...,
             _: Sequence[num_removed_elements]...,
             exclude_groups: Sequence[List[group_id]]...,
-            needs_final_replacement_types: Sequece[Optional[str]]...,
-            _: Sequemce[num_removed_elements]...,
+            needs_final_replacement_types: Sequence[Optional[str]]...,
+            _: Sequence[num_removed_elements]...,
             groups_replacement_types: Sequence[List[str]]...,
             latest_exclude_groups_replacements: Sequence[Optional[Tuple[group_id, datetime]]]...
         ]

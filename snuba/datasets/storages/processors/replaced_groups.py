@@ -1,7 +1,7 @@
 import logging
 from dataclasses import replace
 from datetime import datetime
-from typing import Optional
+from typing import MutableMapping, Optional, Sequence, Set
 
 import sentry_sdk
 
@@ -34,9 +34,10 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
     """
 
     def __init__(
-        self, project_column: str, replacer_state_name: Optional[ReplacerState]
+        self, project_column: str, replacer_state_name: Optional[ReplacerState],
     ) -> None:
         self.__project_column = project_column
+        self.__groups_column = "group_id"
         # This is used to allow us to keep the replacement state in redis for multiple
         # replacers on multiple tables. replacer_state_name is part of the redis key.
         self.__replacer_state_name = replacer_state_name
@@ -45,10 +46,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         if request_settings.get_turbo():
             return
 
-        with sentry_sdk.start_span(
-            op="function", description="get_project_ids_in_query"
-        ):
-            project_ids = get_object_ids_in_query_ast(query, self.__project_column)
+        project_ids = get_object_ids_in_query_ast(query, self.__project_column)
 
         if project_ids is None:
             self._set_query_final(query, False)
@@ -61,18 +59,11 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 list(project_ids), self.__replacer_state_name
             )
 
-        tags = {
-            replacement_type: "True" for replacement_type in flags.replacement_types
-        }
-        tags["referrer"] = request_settings.referrer
-        tags["parent_api"] = request_settings.get_parent_api()
+        tags = self._initialize_tags(request_settings, flags)
 
-        with sentry_sdk.start_span(
-            op="function", description="_query_overlaps_replacements"
-        ):
-            query_overlaps_replacement = self._query_overlaps_replacements(
-                query, flags.latest_replacement_time
-            )
+        query_overlaps_replacement = self._query_overlaps_replacements(
+            query, flags.latest_replacement_time
+        )
 
         metric_name = "final" if query_overlaps_replacement else "avoid_final"
 
@@ -93,44 +84,46 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
                 )
                 assert isinstance(max_group_ids_exclude, int)
-                if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
-
-                    groups_in_query = get_object_ids_in_query_ast(query, "group_id")
-                    all_groups_to_exclude = set(flags.group_ids_to_exclude)
-
-                    if groups_in_query:
-                        groups_to_exclude = all_groups_to_exclude.intersection(
-                            groups_in_query
-                        )
-                        if len(groups_to_exclude) > max_group_ids_exclude:
-                            tags["cause"] = "max_groups"
-                            metrics.increment(
-                                name=metric_name, tags=tags,
-                            )
-                            set_final = True
-                        else:
-                            metrics.increment(
-                                name="avoid_final", tags=tags,
-                            )
-                    else:
-                        tags["cause"] = "max_groups"
-                        metrics.increment(
-                            name=metric_name, tags=tags,
-                        )
-                        set_final = True
+                groups_to_exclude = self._groups_to_exclude(
+                    query, flags.group_ids_to_exclude
+                )
+                if len(groups_to_exclude) > max_group_ids_exclude:
+                    tags["cause"] = "max_groups"
+                    metrics.increment(
+                        name=metric_name, tags=tags,
+                    )
+                    set_final = True
+                # elif len(flags.group_ids_to_exclude) > max_group_ids_exclude:
+                #     tags["cause"] = "max_groups"
+                #     metrics.increment(
+                #         name="avoid_final", tags=tags,
+                #     )
                 elif query_overlaps_replacement:
                     query.add_condition_to_ast(
                         not_in_condition(
                             FunctionCall(
                                 None,
                                 "assumeNotNull",
-                                (Column(None, None, "group_id"),),
+                                (Column(None, None, self.__groups_column),),
                             ),
-                            [Literal(None, p) for p in flags.group_ids_to_exclude],
+                            [Literal(None, p) for p in groups_to_exclude],
                         )
                     )
 
-        self._set_query_final(query, set_final and query_overlaps_replacement)
+            self._set_query_final(query, set_final and query_overlaps_replacement)
+
+    def _initialize_tags(
+        self, request_settings: RequestSettings, flags: ProjectsQueryFlags
+    ) -> MutableMapping[str, str]:
+        """
+        Initialize tags dictionary for DataDog metrics.
+        """
+        tags = {
+            replacement_type: "True" for replacement_type in flags.replacement_types
+        }
+        tags["referrer"] = request_settings.referrer
+        tags["parent_api"] = request_settings.get_parent_api()
+        return tags
 
     def _set_query_final(self, query: Query, final: bool) -> None:
         """
@@ -155,3 +148,16 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if latest_replacement_time and query_from
             else True
         )
+
+    def _groups_to_exclude(
+        self, query: Query, group_ids_to_exclude: Sequence[int]
+    ) -> Set[int]:
+        groups_in_query = get_object_ids_in_query_ast(query, self.__groups_column)
+        group_ids_to_exclude_set = set(group_ids_to_exclude)
+
+        if groups_in_query:
+            group_ids_to_exclude_set = group_ids_to_exclude_set.intersection(
+                groups_in_query
+            )
+
+        return group_ids_to_exclude_set
