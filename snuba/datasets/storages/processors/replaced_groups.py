@@ -1,7 +1,7 @@
 import logging
 from dataclasses import replace
 from datetime import datetime
-from typing import MutableMapping, Optional, Sequence, Set
+from typing import MutableMapping, Optional, Set
 
 import sentry_sdk
 
@@ -21,6 +21,8 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
+FINAL_METRIC = "final"
+AVOID_FINAL_METRIC = "avoid_final"
 
 
 class PostReplacementConsistencyEnforcer(QueryProcessor):
@@ -34,7 +36,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
     """
 
     def __init__(
-        self, project_column: str, replacer_state_name: Optional[ReplacerState],
+        self, project_column: str, replacer_state_name: Optional[ReplacerState]
     ) -> None:
         self.__project_column = project_column
         self.__groups_column = "group_id"
@@ -65,52 +67,55 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             query, flags.latest_replacement_time
         )
 
-        metric_name = "final" if query_overlaps_replacement else "avoid_final"
+        metric_name = FINAL_METRIC if query_overlaps_replacement else AVOID_FINAL_METRIC
 
         set_final = False
 
-        with sentry_sdk.start_span(op="processor", description="process_final"):
-
-            if flags.needs_final:
-                tags["cause"] = "final_flag"
+        if flags.needs_final:
+            tags["cause"] = "final_flag"
+            metrics.increment(
+                name=metric_name, tags=tags,
+            )
+            set_final = True
+        elif flags.group_ids_to_exclude:
+            # If the number of groups to exclude exceeds our limit, the query
+            # should just use final instead of the exclusion set.
+            max_group_ids_exclude = get_config(
+                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+            )
+            assert isinstance(max_group_ids_exclude, int)
+            groups_to_exclude = self._groups_to_exclude(
+                query, flags.group_ids_to_exclude
+            )
+            if len(groups_to_exclude) > max_group_ids_exclude:
+                tags["cause"] = "max_groups"
                 metrics.increment(
                     name=metric_name, tags=tags,
                 )
                 set_final = True
-            elif flags.group_ids_to_exclude:
-                # If the number of groups to exclude exceeds our limit, the query
-                # should just use final instead of the exclusion set.
-                max_group_ids_exclude = get_config(
-                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
-                )
-                assert isinstance(max_group_ids_exclude, int)
-                groups_to_exclude = self._groups_to_exclude(
-                    query, flags.group_ids_to_exclude
-                )
-                if len(groups_to_exclude) > max_group_ids_exclude:
-                    tags["cause"] = "max_groups"
-                    metrics.increment(
-                        name=metric_name, tags=tags,
+            elif query_overlaps_replacement and groups_to_exclude:
+                query.add_condition_to_ast(
+                    not_in_condition(
+                        FunctionCall(
+                            None,
+                            "assumeNotNull",
+                            (Column(None, None, self.__groups_column),),
+                        ),
+                        [Literal(None, p) for p in groups_to_exclude],
                     )
-                    set_final = True
-                # elif len(flags.group_ids_to_exclude) > max_group_ids_exclude:
-                #     tags["cause"] = "max_groups"
-                #     metrics.increment(
-                #         name="avoid_final", tags=tags,
-                #     )
-                elif query_overlaps_replacement:
-                    query.add_condition_to_ast(
-                        not_in_condition(
-                            FunctionCall(
-                                None,
-                                "assumeNotNull",
-                                (Column(None, None, self.__groups_column),),
-                            ),
-                            [Literal(None, p) for p in groups_to_exclude],
-                        )
-                    )
+                )
 
-            self._set_query_final(query, set_final and query_overlaps_replacement)
+            if (
+                len(flags.group_ids_to_exclude) > max_group_ids_exclude
+                and not set_final
+            ):
+                # Avoided what would have caused the query to be final
+                tags["cause"] = "avoided_max_groups"
+                metrics.increment(
+                    name=AVOID_FINAL_METRIC, tags=tags,
+                )
+
+        self._set_query_final(query, set_final and query_overlaps_replacement)
 
     def _initialize_tags(
         self, request_settings: RequestSettings, flags: ProjectsQueryFlags
@@ -150,14 +155,23 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         )
 
     def _groups_to_exclude(
-        self, query: Query, group_ids_to_exclude: Sequence[int]
+        self, query: Query, group_ids_to_exclude: Set[int]
     ) -> Set[int]:
+        """
+        Given a Query and the group ids to exclude for any project
+        this query touches, returns the intersection of the group ids
+        from the replacements and the group ids this Query explicitly
+        queries for, if any.
+
+        Eg.
+        - The query specifically looks for group ids: {1, 2}
+        - The replacements on the projects require exclusion of groups: {1, 3, 4}
+        - The query only needs to exclude group id 1
+        """
+
         groups_in_query = get_object_ids_in_query_ast(query, self.__groups_column)
-        group_ids_to_exclude_set = set(group_ids_to_exclude)
 
         if groups_in_query:
-            group_ids_to_exclude_set = group_ids_to_exclude_set.intersection(
-                groups_in_query
-            )
+            group_ids_to_exclude = group_ids_to_exclude.intersection(groups_in_query)
 
-        return group_ids_to_exclude_set
+        return group_ids_to_exclude

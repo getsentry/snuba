@@ -230,7 +230,7 @@ class ProjectsQueryFlags:
     """
 
     needs_final: bool
-    group_ids_to_exclude: Sequence[int]
+    group_ids_to_exclude: Set[int]
     replacement_types: Set[str]
     latest_replacement_time: Optional[datetime]
 
@@ -299,13 +299,11 @@ class ProjectsQueryFlags:
 
         needs_final = any(needs_final_result)
 
-        exclude_groups = sorted(
-            {
-                int(group_id)
-                for exclude_groups_result in exclude_groups_results
-                for group_id in exclude_groups_result
-            }
-        )
+        exclude_groups = {
+            int(group_id)
+            for exclude_groups_result in exclude_groups_results
+            for group_id in exclude_groups_result
+        }
 
         needs_final_replacement_types = {
             replacement_type.decode("utf-8")

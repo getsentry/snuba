@@ -616,14 +616,14 @@ class TestReplacer:
         project_ids = [1, 2, 3]
         assert ProjectsQueryFlags.load_from_redis(
             project_ids, ReplacerState.ERRORS
-        ) == ProjectsQueryFlags(False, [], set(), None)
+        ) == ProjectsQueryFlags(False, set(), set(), None)
 
         errors_replacer.set_project_needs_final(
             100, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
         )
         assert ProjectsQueryFlags.load_from_redis(
             project_ids, ReplacerState.ERRORS
-        ) == ProjectsQueryFlags(False, [], set(), None)
+        ) == ProjectsQueryFlags(False, set(), set(), None)
 
         errors_replacer.set_project_needs_final(
             1, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
@@ -633,10 +633,10 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (True, [], {ReplacementType.EXCLUDE_GROUPS},)
+        ) == (True, set(), {ReplacementType.EXCLUDE_GROUPS},)
         assert ProjectsQueryFlags.load_from_redis(
             project_ids, ReplacerState.EVENTS
-        ) == ProjectsQueryFlags(False, [], set(), None)
+        ) == ProjectsQueryFlags(False, set(), set(), None)
 
         errors_replacer.set_project_needs_final(
             2, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
@@ -646,7 +646,7 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (True, [], {ReplacementType.EXCLUDE_GROUPS},)
+        ) == (True, set(), {ReplacementType.EXCLUDE_GROUPS})
 
     def test_query_time_flags_groups(self) -> None:
         """
@@ -670,7 +670,7 @@ class TestReplacer:
             flags.replacement_types,
         ) == (
             False,
-            [1, 2, 3, 4],
+            {1, 2, 3, 4},
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
 
@@ -691,7 +691,7 @@ class TestReplacer:
             flags.replacement_types,
         ) == (
             False,
-            [1, 2, 3, 4, 5, 6],
+            {1, 2, 3, 4, 5, 6},
             {
                 ReplacementType.EXCLUDE_GROUPS,
                 # start_merge should show up from previous setter on project id 2
@@ -706,7 +706,7 @@ class TestReplacer:
             flags.replacement_types,
         ) == (
             False,
-            [1, 2, 3, 4],
+            {1, 2, 3, 4},
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
         flags = ProjectsQueryFlags.load_from_redis([4], ReplacerState.ERRORS)
@@ -714,10 +714,10 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (False, [1, 2], {ReplacementType.EXCLUDE_GROUPS},)
+        ) == (False, {1, 2}, {ReplacementType.EXCLUDE_GROUPS})
         assert ProjectsQueryFlags.load_from_redis(
             project_ids, ReplacerState.EVENTS
-        ) == ProjectsQueryFlags(False, [], set(), None)
+        ) == ProjectsQueryFlags(False, set(), set(), None)
 
     def test_query_time_flags_project_and_groups(self) -> None:
         """
@@ -743,7 +743,7 @@ class TestReplacer:
             flags.replacement_types,
         ) == (
             True,
-            [1, 2],
+            {1, 2},
             # exclude_groups from project setter, start_merge from group setter
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
