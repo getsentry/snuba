@@ -147,7 +147,12 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
     def __init__(self, max_allowed_aggregations: int) -> None:
         self.max_allowed_aggregations = max_allowed_aggregations
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(
+        self,
+        query: Query,
+        alias: Optional[str] = None,
+        check_for_disallowed: bool = True,
+    ) -> None:
         selected = query.get_selected_columns()
         if len(selected) > self.max_allowed_aggregations:
             aggregation_error_text = (
@@ -159,12 +164,13 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
                 f"A maximum of {aggregation_error_text} allowed in the select"
             )
 
-        disallowed = ["groupby", "having", "orderby"]
-        for field in disallowed:
-            if getattr(query, f"get_{field}")():
-                raise InvalidQueryException(
-                    f"invalid clause {field} in subscription query"
-                )
+        if check_for_disallowed:
+            disallowed = ["groupby", "having", "orderby"]
+            for field in disallowed:
+                if getattr(query, f"get_{field}")():
+                    raise InvalidQueryException(
+                        f"invalid clause {field} in subscription query"
+                    )
 
 
 class GranularityValidator(QueryValidator):

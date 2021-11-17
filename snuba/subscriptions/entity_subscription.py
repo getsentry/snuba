@@ -149,10 +149,27 @@ class TransactionsSubscription(BaseEventsSubscription):
     ...
 
 
+class MetricsCountersSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+
+    def validate_query(self, query: Union[CompositeQuery[Entity], Query]) -> None:
+        from_clause = query.get_from_clause()
+        if not isinstance(from_clause, Entity):
+            raise InvalidSubscriptionError("Only simple queries are supported")
+        entity = get_entity(from_clause.key)
+
+        SubscriptionAllowedClausesValidator(self.MAX_ALLOWED_AGGREGATIONS).validate(
+            query, check_for_disallowed=False
+        )
+        if entity.required_time_column:
+            NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
+
+
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
     SessionsSubscription: EntityKey.SESSIONS,
     EventsSubscription: EntityKey.EVENTS,
     TransactionsSubscription: EntityKey.TRANSACTIONS,
+    MetricsCountersSubscription: EntityKey.METRICS_COUNTERS,
 }
 
 ENTITY_KEY_TO_SUBSCRIPTION_MAPPER: Mapping[EntityKey, Type[EntitySubscription]] = {
