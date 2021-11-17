@@ -289,6 +289,23 @@ def test_query_has_group_ids(query_with_multiple_group_ids: ClickhouseQuery,) ->
 
     set_project_exclude_groups(
         2,
+        [110, 120, 130],
+        ReplacerState.EVENTS,
+        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
+    )
+
+    # Set of groups query is looking for and set of groups needing to be excluded is disjoint
+    enforcer._set_query_final(query_with_multiple_group_ids, True)
+
+    state.set_config("max_group_ids_exclude", 0)
+    enforcer.process_query(query_with_multiple_group_ids, HTTPRequestSettings())
+    assert query_with_multiple_group_ids.get_condition() == build_and(
+        build_in("project_id", [2]), build_in("group_id", [101, 102])
+    )
+    assert not query_with_multiple_group_ids.get_from_clause().final
+
+    set_project_exclude_groups(
+        2,
         [101],
         ReplacerState.EVENTS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
