@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Optional, Sequence, cast
@@ -35,14 +36,14 @@ class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
     """
 
     def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
-        self.__parsing_context = (
+        self._parsing_context = (
             parsing_context if parsing_context is not None else ParsingContext()
         )
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
             return formatted_exp
-        elif self.__parsing_context.is_alias_present(alias):
+        elif self._parsing_context.is_alias_present(alias):
             ret = escape_alias(alias)
             # This is for the type checker. escape_alias can return None if
             # we pass None. But here we do not pass None so a None return value
@@ -50,7 +51,7 @@ class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
             assert ret is not None
             return ret
         else:
-            self.__parsing_context.add_alias(alias)
+            self._parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
     @abstractmethod
@@ -219,3 +220,31 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase)
 
     def _format_date_literal(self, exp: Literal) -> str:
         return "$D"
+
+    def _anonimize_alias(self, alias: str) -> str:
+        # there may be an alias that looks like `snuba_tags[something]`
+        # the string between the square brackets has the potential to be PII
+        # This function will anonimize that which is between the brackets.
+        # this may erroneously anonimize aliases with square brackets
+        # if they are input by the user, but that is better than leaking PII
+        between_square_brackets_regex = re.compile(r"(?<=\[).*?(?=\])")
+        alias_as_list = list(alias)
+        for match in between_square_brackets_regex.finditer(alias):
+            start_i, end_i = match.span()
+            alias_as_list[start_i:end_i] = "$" + "A" * (end_i - start_i - 1)
+        return "".join(alias_as_list)
+
+    def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
+        if not alias:
+            return formatted_exp
+        elif self._parsing_context.is_alias_present(alias):
+            # ret = escape_alias(self._anonimize_alias(alias))
+            ret = escape_alias(alias)
+            # This is for the type checker. escape_alias can return None if
+            # we pass None. But here we do not pass None so a None return value
+            # is not valid.
+            assert ret is not None
+            return ret
+        else:
+            self._parsing_context.add_alias(alias)
+            return f"({formatted_exp} AS {escape_alias(self._anonimize_alias(alias))})"
