@@ -168,29 +168,13 @@ test_expressions = [
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
         "(equals(c1, $N) AND equals(c2, $N) OR equals(c3, $N) OR equals(c4, $N)) AND equals(c5, $N)",
     ),  # Formatting infix expressions
-]
-
-
-@pytest.mark.parametrize(
-    "expression, expected_clickhouse, expected_anonymized", test_expressions
-)
-def test_format_expressions(
-    expression: Expression, expected_clickhouse: str, expected_anonymized: str
-) -> None:
-    visitor = ClickhouseExpressionFormatter()
-    anonymized_visitor = ClickHouseExpressionFormatterAnonymized()
-    assert expression.accept(visitor) == expected_clickhouse
-    assert expression.accept(anonymized_visitor) == expected_anonymized
-
-
-test_expressions_2 = [
     (
         FunctionCall(
             "_snuba_tags[some_pii]", "f0", (Column(None, "table1", "param1"),)
         ),
         "(f0(table1.param1) AS `_snuba_tags[some_pii]`)",
         "(f0(table1.param1) AS `_snuba_tags[$AAAAAAA]`)",
-    ),  # Curried function call with hierarchy
+    ),
     (
         FunctionCall(
             "_snuba_tags[some_pii][some_more_pii]",
@@ -199,19 +183,19 @@ test_expressions_2 = [
         ),
         "(f0(table1.param1) AS `_snuba_tags[some_pii][some_more_pii]`)",
         "(f0(table1.param1) AS `_snuba_tags[$AAAAAAA][$AAAAAAAAAAAA]`)",
-    ),  # Curried function call with hierarchy
+    ),
     (
         FunctionCall("snubatagssomepii", "f0", (Column(None, "table1", "param1"),)),
         "(f0(table1.param1) AS snubatagssomepii)",
         "(f0(table1.param1) AS snubatagssomepii)",
-    ),  # Curried function call wi
+    ),
 ]
 
 
 @pytest.mark.parametrize(
-    "expression, expected_clickhouse, expected_anonymized", test_expressions_2
+    "expression, expected_clickhouse, expected_anonymized", test_expressions
 )
-def test_format_expressions_2(
+def test_format_expressions(
     expression: Expression, expected_clickhouse: str, expected_anonymized: str
 ) -> None:
     visitor = ClickhouseExpressionFormatter()
