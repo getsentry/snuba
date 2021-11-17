@@ -22,10 +22,11 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
-from snuba.clickhouse.columns import Array, ColumnSet
+from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -63,10 +64,10 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
-    _apply_column_aliases,
-    _expand_aliases,
-    _parse_subscriptables,
-    _validate_aliases,
+    apply_column_aliases,
+    expand_aliases,
+    parse_subscriptables,
+    validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
@@ -991,10 +992,10 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 def _unpack_array_conditions(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    schema: ColumnSet,
+    schema: EntityColumnSet,
     entity_alias: Optional[str] = None,
 ) -> None:
-    array_columns = set()
+    array_columns: Set[str] = set()
     array_join_col = query.get_arrayjoin()
     array_join = ""
     if array_join_col is not None:
@@ -1198,7 +1199,7 @@ def validate_entities_with_query(
                 entity = get_entity(node.data_source.key)
                 try:
                     for v in entity.get_validators():
-                        v.validate(query)
+                        v.validate(query, alias)
                 except InvalidQueryException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
@@ -1285,10 +1286,10 @@ def _post_process(
 
 POST_PROCESSORS = [
     _parse_datetime_literals,
-    _validate_aliases,
-    _parse_subscriptables,  # -> This should be part of the grammar
-    _apply_column_aliases,
-    _expand_aliases,
+    validate_aliases,
+    parse_subscriptables,  # -> This should be part of the grammar
+    apply_column_aliases,
+    expand_aliases,
     _mangle_query_aliases,
     _array_join_transformation,
     _qualify_columns,

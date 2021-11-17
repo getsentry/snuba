@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from snuba.clickhouse.columns import ColumnSet
+
+from snuba.utils.schemas import ColumnSet
 
 
 class DataSource(ABC):
