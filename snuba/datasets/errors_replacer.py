@@ -221,7 +221,7 @@ class ProjectsQueryFlags:
     FINAL overall.
 
     - needs_final: Whether or not any project was set as final.
-    - group_ids_to_exclude: A list of group id's that have been replaced, and
+    - group_ids_to_exclude: A set of group id's that have been replaced, and
     the replacement has not yet been merged in the database. These groups should be
     excluded from the data a Query looks through.
     - replacement_types: A set of all replacement types across replacements for the

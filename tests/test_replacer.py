@@ -646,7 +646,7 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (True, set(), {ReplacementType.EXCLUDE_GROUPS})
+        ) == (True, set(), {ReplacementType.EXCLUDE_GROUPS},)
 
     def test_query_time_flags_groups(self) -> None:
         """
@@ -714,7 +714,7 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (False, {1, 2}, {ReplacementType.EXCLUDE_GROUPS})
+        ) == (False, {1, 2}, {ReplacementType.EXCLUDE_GROUPS},)
         assert ProjectsQueryFlags.load_from_redis(
             project_ids, ReplacerState.EVENTS
         ) == ProjectsQueryFlags(False, set(), set(), None)
