@@ -42,6 +42,8 @@ steps:
     name: cdc-groupassignee-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: querylog-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: snuba-admin
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba
