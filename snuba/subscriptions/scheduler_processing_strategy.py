@@ -1,13 +1,25 @@
+from __future__ import annotations
+
 import logging
+import time
 from collections import deque
-from concurrent.futures import as_completed
+from concurrent.futures import Future
 from datetime import datetime
-from typing import Callable, Deque, Mapping, MutableMapping, NamedTuple, Optional, cast
+from typing import (
+    Callable,
+    Deque,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+    cast,
+)
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies import ProcessingStrategy
+from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import Position
 
 from snuba.datasets.entities import EntityKey
@@ -268,25 +280,73 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__next_step.join(timeout)
 
 
-class ScheduleSubscriptions(ProcessingStrategy[CommittableTick]):
+class TickSubscription(NamedTuple):
+    tick_message: Message[CommittableTick]
+    subscription_future: Future[Message[KafkaPayload]]
+    should_commit: bool
+
+
+class ScheduledSubscriptionQueue:
+    """
+    Queues ticks with their subscriptions for the ProduceScheduledSubscriptionMessage strategy
+    """
+
+    def __init__(self) -> None:
+        self.__queues: Deque[
+            Tuple[Message[CommittableTick], Deque[Future[Message[KafkaPayload]]]]
+        ] = deque()
+
+    def append(
+        self,
+        tick_message: Message[CommittableTick],
+        futures: Deque[Future[Message[KafkaPayload]]],
+    ) -> None:
+        self.__queues.append((tick_message, futures))
+
+    def peek(self) -> Optional[TickSubscription]:
+        if self.__queues:
+            tick, futures = self.__queues[0]
+            return TickSubscription(tick, futures[0], len(futures) == 1)
+        return None
+
+    def popleft(self) -> TickSubscription:
+        if self.__queues:
+            tick_message, futures = self.__queues[0]
+            subscription_future = futures.popleft()
+            should_commit = len(futures) == 0
+
+            if should_commit:
+                self.__queues.popleft()
+
+            return TickSubscription(tick_message, subscription_future, should_commit)
+
+        raise IndexError()
+
+    def __len__(self) -> int:
+        return sum([len(futures) for (_tick, futures) in self.__queues])
+
+
+class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
     """"
-    This strategy is responsible for scheduling all of the subscriptions
-    for a given tick.
+    This strategy is responsible for producing a message for all of the subscriptions
+    scheduled for a given tick.
 
     The subscriptions to be scheduled are those that:
     - Have the same partition index as the tick received, and
     - Are scheduled to be run within the time interval defined by the tick
+    (taking the jitter into account)
 
-    For backward compatibility, this assumes that the number of partitions of
-    the subscription storage matches the number of partitions of the main topic
-    being subscribed to.
+    The subscriptions to be scheduled are encoded and produced to the
+    scheduled topic to be picked up by the subscription executor which
+    will run the actual query later.
 
-    The subscriptions to be scheduled are are encoded and produced to the
-    scheduled topic to be picked up by the subscription executor to run
-    the actual query later.
+    When a tick is submitted to this strategy, we produce all of it's
+    subscriptions and place it in a queue without waiting to see if they
+    were succesfully produced or not.
 
-    If all of the scheduled subscription messages for the tick are successfully
-    produced, and tick specifies `should_commit` = True, then the offset is committed.
+    On each call to poll(), we remove completed futures from the queue.
+    If all scheduled subscription messages for that tick were succesfully
+    produced and the tick indicates it should be committed, we commit offsets.
     """
 
     def __init__(
@@ -304,28 +364,62 @@ class ScheduleSubscriptions(ProcessingStrategy[CommittableTick]):
         self.__commit = commit
         self.__closed = False
 
+        # Stores each tick with it's futures
+        self.__queue = ScheduledSubscriptionQueue()
+
+        # Not a hard max
+        self.__max_buffer_size = 10000
+
     def poll(self) -> None:
-        pass
+        # Remove completed tasks from the queue and raise if an exception occurred.
+        # This method does not attempt to recover from any exception.
+        # Also commits any offsets required.
+        while True:
+            tick_subscription = self.__queue.peek()
+
+            if tick_subscription is None:
+                break
+
+            if not tick_subscription.subscription_future.done():
+                break
+
+            tick_subscription.subscription_future.result()
+
+            self.__queue.popleft()
+
+            if tick_subscription.should_commit:
+                self.__commit(
+                    {
+                        tick_subscription.tick_message.partition: Position(
+                            tick_subscription.tick_message.offset,
+                            tick_subscription.tick_message.timestamp,
+                        )
+                    }
+                )
 
     def submit(self, message: Message[CommittableTick]) -> None:
         assert not self.__closed
 
+        # If queue is full, raise MessageRejected to tell the stream
+        # processor to pause consuming
+        if len(self.__queue) >= self.__max_buffer_size:
+            raise MessageRejected
+
+        # Otherwise, add the tick message and all of it's subscriptions to
+        # the queue
         tick = message.payload.tick
-
         tasks = self.__schedulers[tick.partition].find(tick.timestamps)
-        futures = [
-            self.__producer.produce(self.__scheduled_topic, self.__encoder.encode(task))
-            for task in tasks
-        ]
-
-        for future in as_completed(futures):
-            future.result()
-
-        # If all messages are successfully produced and should_commit = True, commit the offset
-        if message.payload.should_commit is True:
-            self.__commit(
-                {message.partition: Position(message.offset, message.timestamp)}
-            )
+        self.__queue.append(
+            message,
+            deque(
+                [
+                    self.__producer.produce(
+                        self.__scheduled_topic, self.__encoder.encode(task)
+                    )
+                    for task in tasks
+                ]
+            ),
+        )
 
     def close(self) -> None:
         self.__closed = True
@@ -334,4 +428,13 @@ class ScheduleSubscriptions(ProcessingStrategy[CommittableTick]):
         self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
-        pass
+        start = time.time()
+
+        while self.__queue:
+            remaining = timeout - (time.time() - start) if timeout is not None else None
+
+            if remaining is not None and remaining <= 0:
+                logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
+                break
+
+            self.__queue.popleft().subscription_future.result(remaining)

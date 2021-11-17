@@ -1,25 +1,30 @@
 import uuid
+from collections import deque
+from concurrent.futures import Future
 from datetime import datetime, timedelta
 from unittest import mock
 
+import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
-from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import redis_client
+from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
 from snuba.subscriptions.entity_subscription import EventsSubscription
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
     CommittableTick,
+    ProduceScheduledSubscriptionMessage,
     ProvideCommitStrategy,
-    ScheduleSubscriptions,
+    ScheduledSubscriptionQueue,
     TickBuffer,
+    TickSubscription,
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
@@ -435,16 +440,52 @@ def test_tick_buffer_with_commit_strategy() -> None:
     ]
 
 
-def test_schedule_subscriptions() -> None:
+def test_scheduled_subscription_queue() -> None:
+    queue = ScheduledSubscriptionQueue()
+    assert len(queue) == 0
+    assert queue.peek() is None
+    with pytest.raises(IndexError):
+        queue.popleft()
+
+    epoch = datetime(1970, 1, 1)
+    partition = Partition(Topic("test"), 0)
+
+    tick_message = Message(
+        partition,
+        1,
+        CommittableTick(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+            ),
+            True,
+        ),
+        epoch,
+        2,
+    )
+
+    future: Future[Message[KafkaPayload]] = Future()
+
+    queue.append(tick_message, deque([future]))
+
+    assert len(queue) == 1
+    assert queue.peek() == TickSubscription(tick_message, future, should_commit=True)
+    assert queue.popleft() == TickSubscription(tick_message, future, should_commit=True)
+    assert len(queue) == 0
+
+
+def test_produce_scheduled_subscription_message() -> None:
     epoch = datetime(1970, 1, 1)
     metrics_backend = TestingMetricsBackend()
     partition_index = 0
     entity_key = EntityKey.EVENTS
     topic = Topic("scheduled-subscriptions-events")
-    partition = Partition(topic, 0)
+    partition = Partition(topic, partition_index)
 
     clock = TestingClock()
-    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+    broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
+    broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
 
     broker.create_topic(topic, partitions=1)
 
@@ -477,7 +518,7 @@ def test_schedule_subscriptions() -> None:
 
     commit = mock.Mock()
 
-    strategy = ScheduleSubscriptions(
+    strategy = ProduceScheduledSubscriptionMessage(
         entity_key,
         schedulers,
         producer,
@@ -502,10 +543,25 @@ def test_schedule_subscriptions() -> None:
 
     strategy.submit(message)
 
-    # 2 subscriptions were scheduled (1 per minute)
-    assert consumer.poll() is not None
-    assert consumer.poll() is not None
-    assert consumer.poll() is None
+    # 2 subscriptions should be scheduled (1 for each minute)
 
-    # Offset was committed
-    assert commit.call_args_list == [mock.call({partition: Position(1, epoch)})]
+    codec = SubscriptionScheduledTaskEncoder(entity_key)
+
+    # First message at epoch
+    first_message = broker_storage.consume(partition, 0)
+    assert first_message is not None
+    assert codec.decode(first_message.payload).timestamp == epoch
+
+    # Second message at epoch + 1 minute
+    second_message = broker_storage.consume(partition, 1)
+    assert second_message is not None
+    assert codec.decode(second_message.payload).timestamp == epoch + timedelta(
+        minutes=1
+    )
+
+    # No 3rd message
+    assert broker_storage.consume(partition, 2) is None
+
+    # Close the strategy
+    strategy.close()
+    strategy.join()
