@@ -10,7 +10,7 @@ DEFAULT_GRANULARITY = 60
 
 class MetricsDataset(Dataset):
     def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.METRICS_SETS)
+        super().__init__(default_entity=EntityKey.METRICS_COUNTERS)
 
     def get_all_entities(self) -> Sequence[Entity]:
         return (
