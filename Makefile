@@ -19,10 +19,6 @@ api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
 install-python-dependencies:
-	# This installs confluent-kafka from our GC storage since there's no arm64 wheel
-	# https://github.com/confluentinc/confluent-kafka-python/issues/1190
-	# This is a temp fix for developers on Big Sur
-	pip install https://storage.googleapis.com/python-arm64-wheels/confluent_kafka-1.5.0-cp38-cp38-macosx_11_0_arm64.whl
 	pip install -e .
 	pip install -r requirements-test.txt
 
