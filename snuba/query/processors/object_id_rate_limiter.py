@@ -35,16 +35,12 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         self.concurrent_name = concurrent_name
         self.request_settings_field = request_settings_field
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        # If the settings don't already have an object rate limit, add one
-        existing = request_settings.get_rate_limit_params()
-        for ex in existing:
-            if ex.rate_limit_name == self.rate_limit_name:
-                return
-
+    def get_object_id(
+        self, query: Query, request_settings: RequestSettings
+    ) -> Optional[str]:
         obj_ids = get_object_ids_in_query_ast(query, self.object_column)
         if not obj_ids:
-            return
+            return None
 
         # TODO: Add logic for multiple IDs
         obj_id = str(obj_ids.pop())
@@ -54,6 +50,14 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
             )
             if request_settings_field_val is not None:
                 obj_id = f"{obj_id}_{request_settings_field_val}"
+        return str(obj_id)
+
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        # If the settings don't already have an object rate limit, add one
+        existing = request_settings.get_rate_limit_params()
+        for ex in existing:
+            if ex.rate_limit_name == self.rate_limit_name:
+                return
 
         object_rate_limit, object_concurrent_limit = get_configs(
             [
@@ -61,7 +65,9 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
                 (self.concurrent_name, DEFAULT_LIMIT),
             ]
         )
-
+        obj_id = self.get_object_id(query, request_settings)
+        if obj_id is None:
+            return
         # Specific objects can have their rate limits overridden
         (per_second, concurr) = get_configs(
             [
