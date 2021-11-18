@@ -1,5 +1,6 @@
 import pytest
 
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
@@ -25,12 +26,16 @@ tests = [
 
 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
-def test_org_rate_limit_processor(unprocessed: Expression, project_id: int) -> None:
+def test_referrer_rate_limit_processor(
+    unprocessed: Expression, project_id: int
+) -> None:
     query = Query(
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
+    state.set_config("project_referrer_per_second_limit_1_abusive_delivery", 1000)
+    state.set_config("project_referrer_concurrent_limit_1_abusive_delivery", 1000)
     referrer = "abusive_delivery"
     settings = HTTPRequestSettings()
     settings.referrer = referrer
@@ -43,3 +48,22 @@ def test_org_rate_limit_processor(unprocessed: Expression, project_id: int) -> N
     assert rate_limiter.bucket == f"{project_id}_{referrer}"
     assert rate_limiter.per_second_limit == 1000
     assert rate_limiter.concurrent_limit == 1000
+
+
+@pytest.mark.parametrize("unprocessed, project_id", tests)
+def test_referrer_rate_limit_processor_no_config(
+    unprocessed: Expression, project_id: int
+) -> None:
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=unprocessed,
+    )
+    # don't configure it, rate limit shouldn't fire
+    referrer = "abusive_delivery"
+    settings = HTTPRequestSettings()
+    settings.referrer = referrer
+
+    num_before = len(settings.get_rate_limit_params())
+    ProjectReferrerRateLimiter("project_id").process_query(query, settings)
+    assert len(settings.get_rate_limit_params()) == num_before
