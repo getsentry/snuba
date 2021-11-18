@@ -26,6 +26,7 @@ from snuba.query.processors.empty_tag_condition_processor import (
 )
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.object_id_rate_limiter import ProjectReferrerRateLimiter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.processors.table_rate_limit import TableRateLimit
@@ -182,6 +183,7 @@ query_processors = [
         # merged together by the final.
         omit_if_final=["environment", "release", "group_id"],
     ),
+    ProjectReferrerRateLimiter("project_id"),
     TableRateLimit(),
 ]
 

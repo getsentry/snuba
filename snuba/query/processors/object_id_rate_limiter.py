@@ -1,3 +1,5 @@
+from typing import Optional
+
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -6,6 +8,7 @@ from snuba.state import get_configs
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
+    PROJECT_REFERRER_RATE_LIMIT_NAME,
     RateLimitParameters,
 )
 
@@ -24,11 +27,13 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         rate_limit_name: str,
         per_second_name: str,
         concurrent_name: str,
+        request_settings_field: Optional[str] = None,
     ) -> None:
         self.object_column = object_column
         self.rate_limit_name = rate_limit_name
         self.per_second_name = per_second_name
         self.concurrent_name = concurrent_name
+        self.request_settings_field = request_settings_field
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # If the settings don't already have an object rate limit, add one
@@ -42,7 +47,13 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
             return
 
         # TODO: Add logic for multiple IDs
-        obj_id = obj_ids.pop()
+        obj_id = str(obj_ids.pop())
+        if self.request_settings_field is not None:
+            request_settings_field_val = getattr(
+                request_settings, self.request_settings_field, None
+            )
+            if request_settings_field_val is not None:
+                obj_id = f"{obj_id}_{request_settings_field_val}"
 
         object_rate_limit, object_concurrent_limit = get_configs(
             [
@@ -82,6 +93,17 @@ class OrganizationRateLimiterProcessor(ObjectIDRateLimiterProcessor):
             ORGANIZATION_RATE_LIMIT_NAME,
             "org_per_second_limit",
             "org_concurrent_limit",
+        )
+
+
+class ProjectReferrerRateLimiter(ObjectIDRateLimiterProcessor):
+    def __init__(self, project_column: str) -> None:
+        super().__init__(
+            project_column,
+            PROJECT_REFERRER_RATE_LIMIT_NAME,
+            "project_referrer_per_second_limit",
+            "project_referrer_concurrent_limit",
+            request_settings_field="referrer",
         )
 
 
