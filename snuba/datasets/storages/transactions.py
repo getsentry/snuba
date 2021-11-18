@@ -30,7 +30,6 @@ from snuba.query.processors.empty_tag_condition_processor import (
 )
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
-from snuba.query.processors.object_id_rate_limiter import ProjectReferrerRateLimiter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.type_converters.hexint_column_processor import (
@@ -149,7 +148,6 @@ storage = WritableTableStorage(
                 "title",
             ]
         ),
-        ProjectReferrerRateLimiter("project_id"),
         TableRateLimit(),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
