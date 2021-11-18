@@ -133,19 +133,21 @@ class HTTPWriteBatch:
         elif not chunk_size > 0:
             raise ValueError("chunk size must be greater than zero")
 
-        encoding_header = {"Content-Encoding": encoding} if encoding else {}
+        headers = {
+            "X-ClickHouse-User": user,
+            "Connection": "keep-alive",
+            "Accept-Encoding": "gzip,deflate",
+        }
+        if password != '':
+            headers["X-ClickHouse-Key"] = password
+        if encoding:
+            headers["Content-Encoding"] = encoding
 
         self.__result = executor.submit(
             pool.urlopen,
             "POST",
             "/?" + urlencode({**options, "query": statement.build_statement()}),
-            headers={
-                "X-ClickHouse-User": user,
-                "X-ClickHouse-Key": password,
-                "Connection": "keep-alive",
-                "Accept-Encoding": "gzip,deflate",
-                **encoding_header,
-            },
+            headers=headers,
             body=body,
         )
 
