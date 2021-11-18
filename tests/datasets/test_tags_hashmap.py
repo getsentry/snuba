@@ -9,7 +9,6 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column, FunctionCall, Literal, StringifyVisitor
 from snuba.reader import Reader
-from snuba.request import Language
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
@@ -78,15 +77,12 @@ def test_tags_hashmap() -> None:
     }
 
     dataset = get_dataset(dataset_name)
-    parser = partial(parse_snql_query, [])
 
-    schema = RequestSchema.build_with_extensions(
-        entity.get_extensions(), HTTPRequestSettings, Language.SNQL,
-    )
+    schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         query_body,
-        parser,
+        parse_snql_query,
         HTTPRequestSettings,
         schema,
         dataset,
