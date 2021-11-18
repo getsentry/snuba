@@ -4,7 +4,10 @@ import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 
-from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.message_filters import (
+    KafkaHeaderFilter,
+    KafkaHeaderFilterWithBypass,
+)
 
 test_data = [
     pytest.param(
@@ -39,6 +42,17 @@ test_data = [
         ),
         False,
         id="missing-headers",
+    ),
+    pytest.param(
+        KafkaHeaderFilterWithBypass("should_drop", "1", 1),
+        Message(
+            Partition(Topic("random"), 1),
+            1,
+            KafkaPayload(b"key", b"value", [("should_drop", b"1")]),
+            datetime.now(),
+        ),
+        False,
+        id="bypass-headers-100-pct",
     ),
 ]
 
