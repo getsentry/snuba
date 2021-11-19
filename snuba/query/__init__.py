@@ -34,7 +34,7 @@ from snuba.query.expressions import (
 @dataclass(frozen=True)
 class LimitBy:
     limit: int
-    columns: Sequence[Column]
+    columns: Sequence[Expression]
 
 
 class OrderByDirection(Enum):
@@ -324,10 +324,7 @@ class Query(DataSource, ABC):
         if self.__limitby is not None:
             self.__limitby = LimitBy(
                 self.__limitby.limit,
-                [
-                    cast(Column, column.transform(func))
-                    for column in self.__limitby.columns
-                ],
+                [column.transform(func) for column in self.__limitby.columns],
             )
 
         self._transform_expressions_impl(func)
