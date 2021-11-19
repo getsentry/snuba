@@ -309,7 +309,7 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
             replace(
                 limitby,
                 expression=_process_root(
-                    limitby.expression, subqueries, alias_generator
+                    limitby.columns[0], subqueries, alias_generator
                 ),
             )
         )

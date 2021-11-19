@@ -133,7 +133,7 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=required_condition,
-            limitby=LimitBy(5, Column("_snuba_c", None, "c")),
+            limitby=LimitBy(5, [Column("_snuba_c", None, "c")]),
             limit=1000,
             offset=0,
         ),

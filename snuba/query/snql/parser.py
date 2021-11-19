@@ -621,7 +621,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     ) -> LimitBy:
         _, _, _, limit, _, _, _, column = visited_children
         assert isinstance(limit.value, int)  # mypy
-        return LimitBy(limit.value, column)
+        return LimitBy(limit.value, [column])
 
     def visit_limit_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
