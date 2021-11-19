@@ -147,15 +147,15 @@ class TickBuffer(ProcessingStrategy[Tick]):
     The behavior of the TickBuffer depends on which of the two scheduler
     modes applies.
 
-    If the scheduler mode is IMMEDIATE then there is no buffering and a
+    If the scheduler mode is PARTITION then there is no buffering and a
     message is always immediately submitted to the next processing step.
 
-    If the scheduler mode is WAIT_FOR_SLOWEST_PARTITION then messages are
+    If the scheduler mode is GLOBAL then messages are
     buffered until all partitions are at least up to the timestamp of the
     tick.
 
     `max_ticks_buffered_per_partition` applies if the scheduler mode is
-    WAIT_FOR_SLOWEST_PARTITION. Once the maximum ticks is received for that
+    PARTITION. Once the maximum ticks is received for that
     partition, we start to submit ticks for processing even if that timestamp
     is not received for all partitions yet.
 

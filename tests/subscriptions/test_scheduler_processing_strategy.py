@@ -486,12 +486,8 @@ def test_produce_scheduled_subscription_message() -> None:
     clock = TestingClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
-
     broker.create_topic(topic, partitions=1)
-
     producer = broker.get_producer()
-    consumer = broker.get_consumer("group")
-    consumer.subscribe([topic])
 
     store = RedisSubscriptionDataStore(
         redis_client, entity_key, PartitionId(partition_index)
