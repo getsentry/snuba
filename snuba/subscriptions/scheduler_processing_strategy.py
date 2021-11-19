@@ -301,7 +301,8 @@ class ScheduledSubscriptionQueue:
         tick_message: Message[CommittableTick],
         futures: Deque[Future[Message[KafkaPayload]]],
     ) -> None:
-        self.__queues.append((tick_message, futures))
+        if len(futures) > 0:
+            self.__queues.append((tick_message, futures))
 
     def peek(self) -> Optional[TickSubscription]:
         if self.__queues:
@@ -313,10 +314,13 @@ class ScheduledSubscriptionQueue:
         if self.__queues:
             tick_message, futures = self.__queues[0]
             subscription_future = futures.popleft()
-            should_commit = len(futures) == 0
 
-            if should_commit:
+            is_empty = len(futures) == 0
+
+            if is_empty:
                 self.__queues.popleft()
+
+            should_commit = is_empty and tick_message.payload.should_commit == True
 
             return TickSubscription(tick_message, subscription_future, should_commit)
 
