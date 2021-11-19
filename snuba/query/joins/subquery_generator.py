@@ -308,12 +308,10 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
         query.set_limitby(
             replace(
                 limitby,
-                expression=_process_root(
-                    # TODO: This [0] sucks, shouldn't make it to master
-                    limitby.columns[0],
-                    subqueries,
-                    alias_generator,
-                ),
+                columns=[
+                    _process_root(column, subqueries, alias_generator,)
+                    for column in limitby.columns
+                ],
             )
         )
 
