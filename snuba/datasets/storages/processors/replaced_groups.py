@@ -3,8 +3,6 @@ from dataclasses import replace
 from datetime import datetime
 from typing import MutableMapping, Optional, Set
 
-import sentry_sdk
-
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -54,12 +52,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             self._set_query_final(query, False)
             return
 
-        with sentry_sdk.start_span(
-            op="function", description="get_project_query_flags"
-        ):
-            flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
-                list(project_ids), self.__replacer_state_name
-            )
+        flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
+            list(project_ids), self.__replacer_state_name
+        )
 
         tags = self._initialize_tags(request_settings, flags)
 
