@@ -61,9 +61,9 @@ def test_tags_hashmap() -> None:
         timestamp < toDateTime('2021-08-11T19:45:01') AND
         project_id IN tuple(300688) AND
         type = 'transaction' AND ifNull(tags[duration_group], '') != '' AND
-        ifNull(tags[duration_group], '') = '<10s' AND
         transaction_status = 0 AND
         duration > 500.0 AND
+        ifNull(tags[duration_group], '') = '<10s' AND
         project_id IN tuple(300688)
     LIMIT 50
     """

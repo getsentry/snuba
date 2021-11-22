@@ -1,6 +1,5 @@
 from enum import Enum
 
-from dataclasses import dataclass
 from snuba import environment
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -18,20 +17,10 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Expression
 from snuba.query.expressions import FunctionCall as FunctionExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.matchers import (
-    Any,
-    FunctionCall,
-    Literal,
-    Or,
-    Param,
-    Pattern,
-    String,
-    MatchResult,
-)
+from snuba.query.matchers import Any, FunctionCall, Literal, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from typing import Optional
 
 metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
 
@@ -44,117 +33,21 @@ class ConditionClass(Enum):
     NOT_OPTIMIZABLE = 3
 
 
-class NonEmptyString(String):
-    def match(self, node: Any[str]) -> Optional[MatchResult]:
-        return MatchResult() if isinstance(node, str) and node != "" else None
-
-
-class TagRewriter:
-    def __init__(self, matching_pattern: Pattern[FunctionExpr]) -> None:
-        self.matching_pattern = matching_pattern
-
-    def replace_function(
-        self, to_replace: Expression, match: MatchResult, hash_map_name: str
-    ) -> Expression:
-        raise NotImplementedError
-
-
-class TagEquality(TagRewriter):
-    def __init__(self) -> None:
-        super().__init__(
-            FunctionCall(
-                function_name=String("equals"),
-                parameters=(
-                    Or(
-                        [
-                            mapping_pattern,
-                            FunctionCall(
-                                function_name=String("ifNull"),
-                                parameters=(mapping_pattern, Literal(String(""))),
-                            ),
-                        ]
-                    ),
-                    Param(
-                        "right_hand_side",
-                        Literal(NonEmptyString("dont let me merge with this param")),
-                    ),
+_tag_not_empty = FunctionCall(
+    function_name=String("notEquals"),
+    parameters=(
+        Or(
+            [
+                mapping_pattern,
+                FunctionCall(
+                    function_name=String("ifNull"),
+                    parameters=(mapping_pattern, Literal(String(""))),
                 ),
-            )
-        )
-
-    def replace_function(
-        self, condition: Expression, match: MatchResult, hash_map_name: str
-    ) -> Expression:
-        rhs = match.expression("right_hand_side")
-        assert isinstance(rhs, LiteralExpr)
-        key = match.string(KEY_MAPPING_PARAM).translate(ESCAPE_TRANSLATION)
-        return FunctionExpr(
-            alias=condition.alias,
-            function_name="has",
-            parameters=(
-                Column(
-                    alias=None,
-                    table_name=match.optional_string(TABLE_MAPPING_PARAM),
-                    column_name=hash_map_name,
-                ),
-                # the problem is that the != case has a different rhs. Hence we need
-                # to do something different for every optimizable expression
-                FunctionExpr(
-                    alias=None,
-                    function_name="cityHash64",
-                    parameters=(LiteralExpr(None, f"{key}={rhs.value}"),),
-                ),
-            ),
-        )
-
-
-class TagNotEqualsEmpty(TagRewriter):
-    def __init__(self) -> None:
-        super().__init__(
-            FunctionCall(
-                function_name=String("notEquals"),
-                parameters=(
-                    Or(
-                        [
-                            mapping_pattern,
-                            FunctionCall(
-                                function_name=String("ifNull"),
-                                parameters=(mapping_pattern, Literal(String(""))),
-                            ),
-                        ]
-                    ),
-                    Param("right_hand_side", Literal(String(""))),
-                ),
-            )
-        )
-
-    def replace_function(
-        self, condition: Expression, match: MatchResult, hash_map_name: str
-    ) -> Expression:
-
-        # LOOK AT ME: this will need to change because we cannot access the tag name in the matching expression
-        # IN will suffer from this as well
-        # assert isinstance(rhs, LiteralExpr)
-        tag_name = match.string(KEY_MAPPING_PARAM).translate(ESCAPE_TRANSLATION)
-        return FunctionExpr(
-            alias=condition.alias,
-            function_name="has",
-            parameters=(
-                Column(
-                    alias=None,
-                    table_name=match.optional_string(TABLE_MAPPING_PARAM),
-                    column_name=hash_map_name,
-                ),
-                # the problem is that the != case has a different rhs. Hence we need
-                # to do something different for every optimizable expression
-                FunctionExpr(
-                    alias=None,
-                    function_name="cityHash64",
-                    parameters=(LiteralExpr(None, f"{key}={tag_name}"),),
-                ),
-            ),
-        )
-        return condition
+            ]
+        ),
+        Param("right_hand_side", Literal(String(""))),
+    ),
+)
 
 
 class MappingOptimizer(QueryProcessor):
@@ -165,13 +58,11 @@ class MappingOptimizer(QueryProcessor):
     `tags.value[indexOf(tags.key, 'my_tag')] = 'my_val'`
     into
     `has(_tags_hash_map, cityHash64('my_tag=my_val'))`
-
     Supported use case:
     - direct equality. Example above
     - tags expression nested into ifNull conditions like:
       `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ...`
     - tags conditions in both where and having
-
     Unsupported use cases:
     - everything that cannot be checked through the tags hash map
       like !=, LIKE, IS NULL
@@ -184,7 +75,6 @@ class MappingOptimizer(QueryProcessor):
        this condition is equivalent to looking whether a tag is
        missing, which cannot be done with the hash map.
     - IN conditions. TODO
-
     """
 
     def __init__(self, column_name: str, hash_map_name: str, killswitch: str) -> None:
@@ -193,43 +83,21 @@ class MappingOptimizer(QueryProcessor):
         self.__killswitch = killswitch
 
         # TODO: Add the support for IN connditions.
-        self.__optimizable_patterns = [TagEquality(), TagNotEqualsEmpty()]
-
-        # self.__optimizable_patterns = [
-        #     FunctionCall(
-        #         function_name=String("equals"),
-        #         parameters=(
-        #             Or(
-        #                 [
-        #                     mapping_pattern,
-        #                     FunctionCall(
-        #                         function_name=String("ifNull"),
-        #                         parameters=(mapping_pattern, Literal(String(""))),
-        #                     ),
-        #                 ]
-        #             ),
-        #             Param(
-        #                 "right_hand_side",
-        #                 Literal(NonEmptyString("dont let me merge with this param")),
-        #             ),
-        #         ),
-        #     ),
-        #     FunctionCall(
-        #         function_name=String("notEquals"),
-        #         parameters=(
-        #             Or(
-        #                 [
-        #                     mapping_pattern,
-        #                     FunctionCall(
-        #                         function_name=String("ifNull"),
-        #                         parameters=(mapping_pattern, Literal(String(""))),
-        #                     ),
-        #                 ]
-        #             ),
-        #             Param("right_hand_side", Literal(String(""))),
-        #         ),
-        #     ),
-        # ]
+        self.__optimizable_pattern = FunctionCall(
+            function_name=String("equals"),
+            parameters=(
+                Or(
+                    [
+                        mapping_pattern,
+                        FunctionCall(
+                            function_name=String("ifNull"),
+                            parameters=(mapping_pattern, Literal(String(""))),
+                        ),
+                    ]
+                ),
+                Param("right_hand_side", Literal(Any(str))),
+            ),
+        )
 
     def __classify_combined_conditions(self, condition: Expression) -> ConditionClass:
         if not isinstance(condition, FunctionExpr):
@@ -251,73 +119,65 @@ class MappingOptimizer(QueryProcessor):
             return self.__classify_condition(condition)
 
     def __classify_condition(self, condition: Expression) -> ConditionClass:
-        # Expects condition arg to be an individual condition
-        non_optimizable_match_found = False
-        for pattern in self.__optimizable_patterns:
-            match = pattern.matching_pattern.match(condition)
-            if (
-                match is not None
-                and match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
-            ):
-                return ConditionClass.OPTIMIZABLE
-            elif match is None:
-                # If this condition is not matching an optimizable condition,
-                # check that it does not reference the optimizable column.
-                # If it does, it means we should not optimize this query.
-                for exp in condition:
-                    if isinstance(exp, Column) and exp.column_name in (
-                        f"{self.__column_name}.key",
-                        f"{self.__column_name}.value",
-                    ):
-                        non_optimizable_match_found = True
-                return ConditionClass.IRRELEVANT
-        if non_optimizable_match_found:
-            # TODO: Word this better
-            # none of the patterns yielded an optimizable match
-            # but did yield non-optimizable matches, hence this condition
-            # is not optimizable
-            return ConditionClass.NOT_OPTIMIZABLE
-        return ConditionClass.IRRELEVANT
+        # Expects this to be an individual condition
+        match = self.__optimizable_pattern.match(condition)
+        if (
+            match is not None
+            and match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
+        ):
+            rhs = match.expression("right_hand_side")
+            assert isinstance(rhs, LiteralExpr)
+            return (
+                ConditionClass.NOT_OPTIMIZABLE
+                # ifNull(tags[asd], '') = '' is not optimizable.
+                if rhs.value == ""
+                else ConditionClass.OPTIMIZABLE
+            )
+        elif match is None:
+            # If this condition is not matching an optimizable condition,
+            # check that it does not reference the optimizable column.
+            # If it does, it means we should not optimize this query.
+            for exp in condition:
+                if isinstance(exp, Column) and exp.column_name in (
+                    f"{self.__column_name}.key",
+                    f"{self.__column_name}.value",
+                ):
+                    return ConditionClass.NOT_OPTIMIZABLE
+            return ConditionClass.IRRELEVANT
+        else:
+            return ConditionClass.IRRELEVANT
 
     def __replace_with_hash(self, condition: Expression) -> Expression:
-        # TODO (Vlad): we shouldn't have to run the matchers twice maybe? it may be possible to
-        # save which patterns are applicable, although more than one can apply, in which case
-        # that might be difficult. Think about it later
-        for pattern in self.__optimizable_patterns:
-            match = pattern.matching_pattern.match(condition)
-            if (
-                match is not None
-                and match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
-            ):
-                pattern.replace_function(condition, match, self.__hash_map_name)
-                # rhs = match.expression("right_hand_side")
-                # assert isinstance(rhs, LiteralExpr)
-                # key = match.string(KEY_MAPPING_PARAM).translate(ESCAPE_TRANSLATION)
-                # return FunctionExpr(
-                #     alias=condition.alias,
-                #     function_name="has",
-                #     parameters=(
-                #         Column(
-                #             alias=None,
-                #             table_name=match.optional_string(TABLE_MAPPING_PARAM),
-                #             column_name=self.__hash_map_name,
-                #         ),
-                #         # the problem is that the != case has a different rhs. Hence we need
-                #         # to do something different for every optimizable expression
-                #         FunctionExpr(
-                #             alias=None,
-                #             function_name="cityHash64",
-                #             parameters=(LiteralExpr(None, f"{key}={rhs.value}"),),
-                #         ),
-                #     ),
-                # )
-        return condition
+        match = self.__optimizable_pattern.match(condition)
+        if (
+            match is None
+            or match.string(KEY_COL_MAPPING_PARAM) != f"{self.__column_name}.key"
+        ):
+            return condition
+        rhs = match.expression("right_hand_side")
+        assert isinstance(rhs, LiteralExpr)
+        key = match.string(KEY_MAPPING_PARAM).translate(ESCAPE_TRANSLATION)
+        return FunctionExpr(
+            alias=condition.alias,
+            function_name="has",
+            parameters=(
+                Column(
+                    alias=None,
+                    table_name=match.optional_string(TABLE_MAPPING_PARAM),
+                    column_name=self.__hash_map_name,
+                ),
+                FunctionExpr(
+                    alias=None,
+                    function_name="cityHash64",
+                    parameters=(LiteralExpr(None, f"{key}={rhs.value}"),),
+                ),
+            ),
+        )
+
+    def _remove_useless_checks(self, query: Query):
+        pass
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        print("<" * 100)
-        print(query)
-        print(">" * 100)
-
         if not get_config(self.__killswitch, 1):
             return
 
@@ -335,9 +195,15 @@ class MappingOptimizer(QueryProcessor):
             if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
 
+        if not (
+            cond_class == ConditionClass.OPTIMIZABLE
+            or having_cond_class == ConditionClass.OPTIMIZABLE
+        ):
+            return
+
         metrics.increment("optimizable_query")
 
-        if condition is not None and cond_class == ConditionClass.OPTIMIZABLE:
+        if condition is not None:
             query.set_ast_condition(condition.transform(self.__replace_with_hash))
-        if having_cond is not None and having_cond_class == ConditionClass.OPTIMIZABLE:
+        if having_cond is not None:
             query.set_ast_having(having_cond.transform(self.__replace_with_hash))
