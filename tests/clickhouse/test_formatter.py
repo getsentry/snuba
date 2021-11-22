@@ -3,7 +3,6 @@ import pytest
 from snuba.clickhouse.formatter.expression import (
     ClickhouseExpressionFormatter,
     ClickHouseExpressionFormatterAnonymized,
-    hash_anonymize,
 )
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -174,7 +173,7 @@ test_expressions = [
             "_snuba_tags[some_pii]", "f0", (Column(None, "table1", "param1"),)
         ),
         "(f0(table1.param1) AS `_snuba_tags[some_pii]`)",
-        f"(f0(table1.param1) AS `_snuba_tags[{hash_anonymize('some_pii')}]`)",
+        "(f0(table1.param1) AS `_snuba_tags[$A]`)",
     ),
     (
         FunctionCall(
@@ -183,7 +182,7 @@ test_expressions = [
             (Column(None, "table1", "param1"),),
         ),
         "(f0(table1.param1) AS `_snuba_tags[some_pii][some_more_pii]`)",
-        f"(f0(table1.param1) AS `_snuba_tags[{hash_anonymize('some_pii')}][{hash_anonymize('some_more_pii')}]`)",
+        "(f0(table1.param1) AS `_snuba_tags[$A][$A]`)",
     ),
     (
         FunctionCall("snubatagssomepii", "f0", (Column(None, "table1", "param1"),)),
@@ -265,17 +264,3 @@ test_escaped = [
 def test_escaping(expression: Expression, expected: str) -> None:
     visitor = ClickhouseExpressionFormatter()
     assert expression.accept(visitor) == expected
-
-
-test_strings = ["short", "long" * 100]
-
-
-@pytest.mark.parametrize("to_anonymize", test_strings)
-def test_anonymize(to_anonymize):
-    anonymized = hash_anonymize(to_anonymize)
-    assert anonymized != to_anonymize
-    assert len(anonymized) == len(to_anonymize)
-    assert anonymized.startswith("$")
-    # test that it's deterministic
-    for _ in range(10):
-        assert hash_anonymize(to_anonymize) == anonymized

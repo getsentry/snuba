@@ -1,4 +1,3 @@
-import math
 import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
@@ -203,22 +202,6 @@ class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
         )
 
 
-def hash_anonymize(some_str: str) -> str:
-    """Deterministically provide an anonimized version of a string that will be comparable to
-    other anonimized versions of that string
-
-    The returned string is guaranteed to be the same length as the source string
-    """
-    if not some_str:
-        return ""
-    hash_str = abs(hash(some_str)).to_bytes(8, "little").hex()
-    # If the source string is longer than the hash string, repeat the hash string
-    # enough times so that it is long enough to be the same length as the source string
-    to_expand_by = math.ceil(len(some_str) / len(hash_str))
-    hash_str = hash_str * to_expand_by
-    return f"${hash_str[:len(some_str)  - 1]}"
-
-
 class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase):
     """
     This Formatter strips string and integer literals and replaces them with a
@@ -246,11 +229,7 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase)
         # This function will anonimize that which is between the brackets.
         # this may erroneously anonimize aliases with square brackets
         # if they are input by the user, but that is better than leaking PII
-        alias_as_list = list(alias)
-        for match in _BETWEEN_SQUARE_BRACKETS_REGEX.finditer(alias):
-            start_i, end_i = match.span()
-            alias_as_list[start_i:end_i] = hash_anonymize(alias[start_i:end_i])
-        return "".join(alias_as_list)
+        return _BETWEEN_SQUARE_BRACKETS_REGEX.sub("$A", alias)
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
