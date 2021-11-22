@@ -1,3 +1,4 @@
+import math
 import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
@@ -21,6 +22,8 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.parsing import ParsingContext
+
+_BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
 
 
 class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
@@ -200,6 +203,22 @@ class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
         )
 
 
+def hash_anonymize(some_str: str) -> str:
+    """Deterministically provide an anonimized version of a string that will be comparable to
+    other anonimized versions of that string
+
+    The returned string is guaranteed to be the same length as the source string
+    """
+    if not some_str:
+        return ""
+    hash_str = abs(hash(some_str)).to_bytes(8, "little").hex()
+    # If the source string is longer than the hash string, repeat the hash string
+    # enough times so that it is long enough to be the same length as the source string
+    to_expand_by = math.ceil(len(some_str) / len(hash_str))
+    hash_str = hash_str * to_expand_by
+    return f"${hash_str[:len(some_str)  - 1]}"
+
+
 class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase):
     """
     This Formatter strips string and integer literals and replaces them with a
@@ -227,18 +246,16 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase)
         # This function will anonimize that which is between the brackets.
         # this may erroneously anonimize aliases with square brackets
         # if they are input by the user, but that is better than leaking PII
-        between_square_brackets_regex = re.compile(r"(?<=\[).*?(?=\])")
         alias_as_list = list(alias)
-        for match in between_square_brackets_regex.finditer(alias):
+        for match in _BETWEEN_SQUARE_BRACKETS_REGEX.finditer(alias):
             start_i, end_i = match.span()
-            alias_as_list[start_i:end_i] = "$" + "A" * (end_i - start_i - 1)
+            alias_as_list[start_i:end_i] = hash_anonymize(alias[start_i:end_i])
         return "".join(alias_as_list)
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
             return formatted_exp
         elif self._parsing_context.is_alias_present(alias):
-            # ret = escape_alias(self._anonimize_alias(alias))
             ret = escape_alias(alias)
             # This is for the type checker. escape_alias can return None if
             # we pass None. But here we do not pass None so a None return value
