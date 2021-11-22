@@ -153,6 +153,9 @@ TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
 # Map the Zookeeper path for the replicated merge tree to something else
 CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 
+# Enable Sentry Metrics (used for the snuba metrics consumer)
+ENABLE_SENTRY_METRICS = os.environ.get("ENABLE_SENTRY_METRICS", False)
+
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 
