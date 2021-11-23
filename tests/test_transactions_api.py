@@ -1,5 +1,6 @@
 import calendar
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Callable, Tuple, Union
 
@@ -13,6 +14,9 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
+
+SNQL_ROUTE = "/transactions/snql"
+LIMIT_BY_COUNT = 5
 
 
 class TestTransactionsApi(BaseApiTest):
@@ -33,7 +37,7 @@ class TestTransactionsApi(BaseApiTest):
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
-        self.environments = ["prød", "test"]  # 2 environments
+        self.environments = ["prød", "staging", "test"]  # 3 environments
         self.platforms = ["a", "b"]  # 2 platforms
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
@@ -626,3 +630,42 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
 
         assert data["data"][0]["span_id"] == "8841662216cc598b"
+
+    def test_limitby_multicolumn(self) -> None:
+        query_str = """MATCH (transactions)
+                    SELECT project_id,
+                           environment,
+                           platform,
+                           event_id
+                    WHERE project_id = 1
+                    AND finish_ts >= toDateTime('{start_time}')
+                    AND finish_ts < toDateTime('{end_time}')
+                    LIMIT {limit_by_count} BY environment, platform
+                    """.format(
+            start_time=(self.base_time - self.skew).isoformat(),
+            end_time=(self.base_time + self.skew).isoformat(),
+            limit_by_count=LIMIT_BY_COUNT,
+        )
+        response = self.app.post(SNQL_ROUTE, data=json.dumps({"query": query_str}))
+        parsed_data = json.loads(response.data)
+
+        assert response.status_code == 200
+        # Note that the following assertions will be wrong if there isn't a sufficient cross-product
+        # of generated test data (meaning each environment needs to have at least
+        # LIMIT_BY_COUNT records present for each platform). The number of environments
+        # had to be made unequal to the number of platforms to get the test data generator
+        # to write suitable input data
+        assert (
+            parsed_data["stats"]["result_rows"]
+            == len(self.platforms) * len(self.environments) * LIMIT_BY_COUNT
+        )
+
+        records_by_limit_columns = defaultdict(list)
+
+        for datum in parsed_data["data"]:
+            records_by_limit_columns[(datum["platform"], datum["environment"])].append(
+                datum
+            )
+
+        for key in records_by_limit_columns.keys():
+            assert len(records_by_limit_columns[key]) == LIMIT_BY_COUNT
