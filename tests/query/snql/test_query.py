@@ -120,6 +120,35 @@ test_cases = [
         id="sample on entity",
     ),
     pytest.param(
+        f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression("e", Column("_snuba_e", None, "e")),
+            ],
+            condition=required_condition,
+            limitby=LimitBy(
+                5,
+                [
+                    Column("_snuba_c", None, "c"),
+                    Column("_snuba_d", None, "d"),
+                    Column("_snuba_e", None, "e"),
+                ],
+            ),
+            limit=1000,
+            offset=0,
+        ),
+        id="limit by multiple columns",
+    ),
+    pytest.param(
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 BY c",
         LogicalQuery(
             QueryEntity(
@@ -133,11 +162,11 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=required_condition,
-            limitby=LimitBy(5, [Column("_snuba_c", None, "c")]),
+            limitby=LimitBy(5, [Column("_snuba_c", None, "c")],),
             limit=1000,
             offset=0,
         ),
-        id="limit by column",
+        id="limit by single column",
     ),
     pytest.param(
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 OFFSET 3",

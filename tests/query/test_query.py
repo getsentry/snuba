@@ -9,7 +9,7 @@ def test_query_parameters() -> None:
     query = Query(
         Table("my_table", ColumnSet([])),
         limitby=LimitBy(
-            100, Column(alias=None, table_name="my_table", column_name="environment")
+            100, [Column(alias=None, table_name="my_table", column_name="environment")]
         ),
         limit=100,
         offset=50,
@@ -17,7 +17,7 @@ def test_query_parameters() -> None:
         granularity=60,
     )
     assert query.get_limitby() == LimitBy(
-        100, Column(alias=None, table_name="my_table", column_name="environment")
+        100, [Column(alias=None, table_name="my_table", column_name="environment")]
     )
     assert query.get_limit() == 100
     assert query.get_offset() == 50
@@ -60,7 +60,7 @@ def test_query_experiments() -> None:
     query = Query(
         Table("my_table", ColumnSet([])),
         limitby=LimitBy(
-            100, Column(alias=None, table_name="my_table", column_name="environment")
+            100, [Column(alias=None, table_name="my_table", column_name="environment")]
         ),
         limit=100,
         offset=50,
