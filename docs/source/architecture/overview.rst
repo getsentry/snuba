@@ -92,9 +92,16 @@ Legend:
 
 Deployments:
 
+Errors and transaction:
+
 .. image:: /_static/architecture/errors_transactions_deployment.png
 
+
+Sessions:
+
 .. image:: /_static/architecture/sessions_deployment.png
+
+Outcomes:
 
 .. image:: /_static/architecture/outcomes_deployment.png
 
