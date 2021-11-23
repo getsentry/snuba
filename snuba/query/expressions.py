@@ -121,6 +121,7 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     def visit_lambda(self, exp: Lambda) -> TVisited:
         raise NotImplementedError
 
+
 class AsCodeVisitor(ExpressionVisitor[str]):
     """Visitor implementation to turn an expression into a string format
     which can be copy and pasted as code and then tested
@@ -128,8 +129,9 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         # Any expression class supported by the visitor will do
         >>> exp: Expression = Expression()
         >>> visitor = AsCodeVisitor()
-        >>> exp_str = exp.accept(visitor)
+        >>> exp_str = exp.accept(visitor) # copy this string into your test or script
     """
+
     def __init__(self, level: int = 0, initial_indent: int = 0) -> None:
         # keeps track of the level of the AST we are currently in,
         # this is necessary for nice indentation
@@ -146,11 +148,14 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         # to make things look pretty
         return "  " * (self.__initial_indent + self.__level)
 
+    def _get_alias_str(self, exp: Expression) -> str:
+        return f'"{exp.alias}"' if exp.alias else "None"
+
     def visit_literal(self, exp: Literal) -> str:
-        return f"{self._get_line_prefix()}Literal({exp.alias}, {repr(exp.value)})"
+        return f"{self._get_line_prefix()}Literal({self._get_alias_str(exp)}, {repr(exp.value)})"
 
     def visit_column(self, exp: Column) -> str:
-        column_str = "Column({exp.alias}, {exp.table_name}, {exp.column_name})"
+        column_str = f"Column({self._get_alias_str(exp)}, {repr(exp.table_name)}, {repr(exp.column_name)})"
         return f"{self._get_line_prefix()}{column_str}"
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
@@ -158,14 +163,14 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         # but for the subscritable reference we don't need it to
         # be indented or newlined. Hence we remove the prefix
         # from the string
-        subscripted_column_str = f"SubscriptableReference({exp.alias}, {exp.column.accept(self)}, {exp.key.accept(self)})"
+        subscripted_column_str = f"SubscriptableReference({self._get_alias_str(exp)}, {exp.column.accept(self)}, {exp.key.accept(self)})"
         return f"{self._get_line_prefix()}{subscripted_column_str}"
 
     def visit_function_call(self, exp: FunctionCall) -> str:
         self.__level += 1
         param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
         self.__level -= 1
-        return f"{self._get_line_prefix()}FunctionCall({exp.alias}, {exp.function_name}, {param_str})"
+        return f"{self._get_line_prefix()}FunctionCall({self._get_alias_str(exp)}, {repr(exp.function_name)}, ({param_str}))"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         self.__level += 1
@@ -174,19 +179,17 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         # The internal function repr will already have the
         # prefix appropriate for the level, we don't need to
         # insert it here
-        return f"{self._get_line_prefix()}CurriedFunctionCall({exp.alias}"
-        return f"{exp.internal_function.accept(self)}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+        return f"{self._get_line_prefix()}CurriedFunctionCall({repr(exp.alias)}, {exp.internal_function.accept(self)}, ({param_str}))"
 
     def visit_argument(self, exp: Argument) -> str:
-        return f"{self._get_line_prefix()}{exp.name}{self._get_alias_str(exp)}"
+        return f'{self._get_line_prefix()}Argument({self._get_alias_str(exp)}, "{exp.name}")'
 
     def visit_lambda(self, exp: Lambda) -> str:
-        params_str = ",".join(exp.parameters)
+        params_str = ",".join([repr(p) for p in exp.parameters])
         self.__level += 1
         transformation_str = exp.transformation.accept(self)
         self.__level -= 1
-        return f"{self._get_line_prefix()}({params_str} ->\n{transformation_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
-
+        return f"{self._get_line_prefix()}Lambda({self._get_alias_str(exp)}, ({params_str}), {transformation_str})"
 
 
 class StringifyVisitor(ExpressionVisitor[str]):
