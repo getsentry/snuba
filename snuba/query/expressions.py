@@ -148,14 +148,11 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         # to make things look pretty
         return "  " * (self.__initial_indent + self.__level)
 
-    def _get_alias_str(self, exp: Expression) -> str:
-        return f'"{exp.alias}"' if exp.alias else "None"
-
     def visit_literal(self, exp: Literal) -> str:
-        return f"{self._get_line_prefix()}Literal({self._get_alias_str(exp)}, {repr(exp.value)})"
+        return f"{self._get_line_prefix()}Literal({repr(exp.alias)}, {repr(exp.value)})"
 
     def visit_column(self, exp: Column) -> str:
-        column_str = f"Column({self._get_alias_str(exp)}, {repr(exp.table_name)}, {repr(exp.column_name)})"
+        column_str = f"Column({repr(exp.alias)}, {repr(exp.table_name)}, {repr(exp.column_name)})"
         return f"{self._get_line_prefix()}{column_str}"
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
@@ -163,14 +160,14 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         # but for the subscritable reference we don't need it to
         # be indented or newlined. Hence we remove the prefix
         # from the string
-        subscripted_column_str = f"SubscriptableReference({self._get_alias_str(exp)}, {exp.column.accept(self)}, {exp.key.accept(self)})"
+        subscripted_column_str = f"SubscriptableReference({repr(exp.alias)}, {exp.column.accept(self)}, {exp.key.accept(self)})"
         return f"{self._get_line_prefix()}{subscripted_column_str}"
 
     def visit_function_call(self, exp: FunctionCall) -> str:
         self.__level += 1
         param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
         self.__level -= 1
-        return f"{self._get_line_prefix()}FunctionCall({self._get_alias_str(exp)}, {repr(exp.function_name)}, ({param_str}))"
+        return f"{self._get_line_prefix()}FunctionCall({repr(exp.alias)}, {repr(exp.function_name)}, ({param_str}))"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         self.__level += 1
@@ -182,14 +179,14 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         return f"{self._get_line_prefix()}CurriedFunctionCall({repr(exp.alias)}, {exp.internal_function.accept(self)}, ({param_str}))"
 
     def visit_argument(self, exp: Argument) -> str:
-        return f'{self._get_line_prefix()}Argument({self._get_alias_str(exp)}, "{exp.name}")'
+        return f'{self._get_line_prefix()}Argument({repr(exp.alias)}, "{exp.name}")'
 
     def visit_lambda(self, exp: Lambda) -> str:
         params_str = ",".join([repr(p) for p in exp.parameters])
         self.__level += 1
         transformation_str = exp.transformation.accept(self)
         self.__level -= 1
-        return f"{self._get_line_prefix()}Lambda({self._get_alias_str(exp)}, ({params_str}), {transformation_str})"
+        return f"{self._get_line_prefix()}Lambda({repr(exp.alias)}, ({params_str}), {transformation_str})"
 
 
 class StringifyVisitor(ExpressionVisitor[str]):
