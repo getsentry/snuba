@@ -619,7 +619,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         visited_children: Tuple[
-            Any, Any, Any, Literal, Any, Any, Any, Column, Sequence[Column]
+            Any, Any, Any, Literal, Any, Any, Any, Column, Optional[Sequence[Column]]
         ],
     ) -> LimitBy:
         _, _, _, limit, _, _, _, column_one, columns_rest = visited_children
