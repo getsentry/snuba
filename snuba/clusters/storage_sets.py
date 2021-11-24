@@ -29,7 +29,7 @@ class StorageSetKey(Enum):
 
 
 # Storage sets enabled only when development features are enabled.
-DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset({StorageSetKey.METRICS})
+DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset({})
 
 # Storage sets in a group share the same query and distributed nodes but
 # do not have the same local node cluster configuration.
