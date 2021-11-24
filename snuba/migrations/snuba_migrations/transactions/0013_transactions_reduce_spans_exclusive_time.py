@@ -17,13 +17,13 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("spans.exclusive_time", Array(Float(32))),
+                column=Column("spans.exclusive_time_32", Array(Float(32))),
                 after="spans.group",
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("spans.exclusive_time", Array(Float(32))),
+                column=Column("spans.exclusive_time_32", Array(Float(32))),
                 ttl_month=("finish_ts", 1),
             ),
         ]
@@ -31,7 +31,9 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_local", "spans.exclusive_time"
+                StorageSetKey.TRANSACTIONS,
+                "transactions_local",
+                "spans.exclusive_time_32",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -55,7 +57,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_dist",
-                column=Column("spans.exclusive_time", Array(Float(32))),
+                column=Column("spans.exclusive_time_32", Array(Float(32))),
                 after="spans.group",
             ),
         ]
@@ -63,7 +65,9 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_dist", "spans.exclusive_time"
+                StorageSetKey.TRANSACTIONS,
+                "transactions_dist",
+                "spans.exclusive_time_32",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

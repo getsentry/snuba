@@ -260,7 +260,11 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         (
             "spans",
             Nested(
-                [("op", String()), ("group", UInt(64)), ("exclusive_time", Float(32))]
+                [
+                    ("op", String()),
+                    ("group", UInt(64)),
+                    ("exclusive_time_32", Float(32)),
+                ]
             ),
         ),
     ]
