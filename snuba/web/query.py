@@ -119,6 +119,7 @@ def parse_and_run_query(
             robust=robust,
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
+        request.query.set_final(result.extra["stats"]["final"])
         if not request.settings.get_dry_run():
             record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
