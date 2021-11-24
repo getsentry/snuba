@@ -154,7 +154,7 @@ TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
 CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 
 # Enable Sentry Metrics (used for the snuba metrics consumer)
-ENABLE_SENTRY_METRICS = os.environ.get("ENABLE_SENTRY_METRICS", False)
+ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
 
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
