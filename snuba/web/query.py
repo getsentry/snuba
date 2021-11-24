@@ -28,7 +28,12 @@ from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.web import QueryException, QueryResult, transform_column_names
+from snuba.web import (
+    QueryException,
+    QueryExtraData,
+    QueryResult,
+    transform_column_names,
+)
 from snuba.web.db_query import raw_query
 
 logger = logging.getLogger("snuba.query")
@@ -119,14 +124,20 @@ def parse_and_run_query(
             robust=robust,
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
-        request.query.set_final(result.extra["stats"]["final"])
+        _set_query_final(request, result.extra)
         if not request.settings.get_dry_run():
             record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
+        _set_query_final(request, error.extra)
         record_query(request, timer, query_metadata, error.extra)
         raise error
 
     return result
+
+
+def _set_query_final(request: Request, extra: QueryExtraData) -> None:
+    if "final" in extra["stats"]:
+        request.query.set_final(extra["stats"]["final"])
 
 
 def _run_query_pipeline(
