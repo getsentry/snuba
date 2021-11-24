@@ -646,7 +646,7 @@ class TestTransactionsApi(BaseApiTest):
             end_time=(self.base_time + self.skew).isoformat(),
             limit_by_count=LIMIT_BY_COUNT,
         )
-        response = self.app.post(SNQL_ROUTE, data=json.dumps({"query": query_str}))
+        response = self.app.post(SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"}))
         parsed_data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -668,4 +668,4 @@ class TestTransactionsApi(BaseApiTest):
             )
 
         for key in records_by_limit_columns.keys():
-            assert len(records_by_limit_columns[key]) == LIMIT_BY_COUNT
+            assert len(records_by_limit_columns[key]) == LIMIT_BY_COUNT, key
