@@ -165,8 +165,5 @@ storage = WritableTableStorage(
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     mandatory_condition_checkers=[ProjectIdEnforcer()],
-    writer_options={
-        "insert_allow_materialized_columns": 1,
-        "input_format_skip_unknown_fields": 1,
-    },
+    writer_options={"insert_allow_materialized_columns": 1},
 )
