@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Set
+from typing import Optional, Sequence, Set
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import Query
@@ -147,7 +147,16 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
     def __init__(self, max_allowed_aggregations: int) -> None:
         self.max_allowed_aggregations = max_allowed_aggregations
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(
+        self,
+        query: Query,
+        alias: Optional[str] = None,
+        disallowed: Optional[Sequence[str]] = None,
+    ) -> None:
+        if disallowed is None:
+            raise InvalidQueryException(
+                "Disallowed clauses list is a required attribute"
+            )
         selected = query.get_selected_columns()
         if len(selected) > self.max_allowed_aggregations:
             aggregation_error_text = (
@@ -159,7 +168,6 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
                 f"A maximum of {aggregation_error_text} allowed in the select"
             )
 
-        disallowed = ["groupby", "having", "orderby"]
         for field in disallowed:
             if getattr(query, f"get_{field}")():
                 raise InvalidQueryException(

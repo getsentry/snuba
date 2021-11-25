@@ -7,10 +7,12 @@ from pytest import raises
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
+from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
@@ -50,6 +52,22 @@ TESTS_CREATE_SESSIONS = [
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
             entity_subscription=create_entity_subscription(dataset_name="sessions"),
+        ),
+        id="Snql subscription",
+    ),
+]
+
+TESTS_CREATE_METRICS = [
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(dataset_name="metrics"),
         ),
         id="Snql subscription",
     ),
@@ -198,6 +216,37 @@ class TestSessionsSubscriptionCreator:
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     redis_client, EntityKey.SESSIONS, identifier.partition,
+                ).all(),
+            )[0][1]
+            == subscription
+        )
+
+
+class TestMetricsCountersSubscriptionCreator:
+    timer = Timer("test")
+
+    @pytest.mark.parametrize("subscription", TESTS_CREATE_METRICS)
+    def test(self, subscription: SubscriptionData) -> None:
+        dataset = get_dataset("metrics")
+        creator = SubscriptionCreator(dataset)
+        # XXX (ahmed): hack to circumvent using the default entity of a dataset as the default
+        # entity for the metrics dataset is METRICS_SETS, and this subscription type is currently
+        # not supported. Will add a fix shortly that relies on passing the entity key rather
+        # than relying on fetching the default entity from a dataset
+        creator.entity_key = EntityKey.METRICS_COUNTERS
+        writable_storage = get_entity(creator.entity_key).get_writable_storage()
+        assert writable_storage is not None
+        creator.__partitioner = TopicSubscriptionDataPartitioner(
+            writable_storage.get_table_writer()
+            .get_stream_loader()
+            .get_default_topic_spec()
+        )
+        identifier = creator.create(subscription, self.timer)
+        assert (
+            cast(
+                List[Tuple[UUID, SubscriptionData]],
+                RedisSubscriptionDataStore(
+                    redis_client, EntityKey.METRICS_COUNTERS, identifier.partition,
                 ).all(),
             )[0][1]
             == subscription

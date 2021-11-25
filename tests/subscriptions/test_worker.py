@@ -31,7 +31,10 @@ from snuba.subscriptions.data import (
     SubscriptionIdentifier,
     SubscriptionTaskResult,
 )
-from snuba.subscriptions.entity_subscription import SessionsSubscription
+from snuba.subscriptions.entity_subscription import (
+    MetricsCountersSubscription,
+    SessionsSubscription,
+)
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
@@ -72,7 +75,7 @@ class Datetime(Pattern[datetime]):
 
 
 @pytest.fixture(
-    ids=["SnQL", "Crash Rate Alert Snql"],
+    ids=["SnQL", "Crash Rate Alert Snql", "Crash Rate Alert Metrics Snql"],
     params=[
         SnQLSubscriptionData(
             project_id=1,
@@ -94,6 +97,16 @@ class Datetime(Pattern[datetime]):
             resolution=timedelta(minutes=1),
             entity_subscription=create_entity_subscription(dataset_name="sessions"),
         ),
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 """
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(dataset_name="metrics"),
+        ),
     ],
 )
 def subscription_data(request: Any) -> SubscriptionData:
@@ -109,9 +122,11 @@ def subscription_rollout() -> Generator[None, None, None]:
 
 
 def test_subscription_worker(subscription_data: SubscriptionData) -> None:
-    uses_sessions_dataset = isinstance(
-        subscription_data.entity_subscription, SessionsSubscription
-    )
+    dataset_name = "events"
+    if isinstance(subscription_data.entity_subscription, SessionsSubscription):
+        dataset_name = "sessions"
+    if isinstance(subscription_data.entity_subscription, MetricsCountersSubscription):
+        dataset_name = "metrics"
 
     broker: Broker[SubscriptionTaskResult] = Broker(
         MemoryMessageStorage(), TestingClock()
@@ -133,9 +148,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
 
     metrics = DummyMetricsBackend(strict=True)
 
-    dataset = (
-        get_dataset("events") if not uses_sessions_dataset else get_dataset("sessions")
-    )
+    dataset = get_dataset(dataset_name)
     worker = SubscriptionWorker(
         dataset,
         ThreadPoolExecutor(),
@@ -157,7 +170,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         timestamps=Interval(now - (frequency * evaluations), now),
     )
 
-    topic = Topic("events") if not uses_sessions_dataset else Topic("sessions")
+    topic = Topic(dataset_name)
     result_futures = worker.process_message(Message(Partition(topic, 0), 0, tick, now))
 
     assert result_futures is not None and len(result_futures) == evaluations
@@ -182,7 +195,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         assert message.payload.task.timestamp == timestamp
         assert message.payload == SubscriptionTaskResult(task, future_result)
 
-        timestamp_field = "timestamp" if not uses_sessions_dataset else "started"
+        timestamp_field = "timestamp" if dataset_name != "sessions" else "started"
         from_pattern = FunctionCall(
             String(ConditionFunctions.GTE),
             (
@@ -203,7 +216,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         assert any([from_pattern.match(e) for e in conditions])
         assert any([to_pattern.match(e) for e in conditions])
 
-        if uses_sessions_dataset:
+        if dataset_name == "sessions":
             expected_result = {
                 "meta": [
                     {
@@ -213,6 +226,15 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
                     {"type": "UInt64", "name": "_total_sessions"},
                 ],
                 "data": [{"_crash_rate_alert_aggregate": None, "_total_sessions": 0}],
+            }
+        elif dataset_name == "metrics":
+            expected_result = {
+                "data": [],
+                "meta": [
+                    {"name": "project_id", "type": "UInt64"},
+                    {"name": "tags[3]", "type": "UInt64"},
+                    {"name": "value", "type": "Float64"},
+                ],
             }
         else:
             expected_result = {
