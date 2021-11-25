@@ -10,6 +10,7 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
+    MetricsCountersSubscription,
     SessionsSubscription,
 )
 
@@ -36,5 +37,7 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
 def create_entity_subscription(dataset_name: str = "events") -> EntitySubscription:
     if dataset_name == "sessions":
         return SessionsSubscription(data_dict={"organization": 1})
+    elif dataset_name == "metrics":
+        return MetricsCountersSubscription(data_dict={"organization": 1})
     else:
         return EventsSubscription(data_dict={})
