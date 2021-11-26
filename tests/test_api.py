@@ -2169,7 +2169,14 @@ class TestApi(SimpleAPITest):
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
 
-    def test(self) -> None:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "events/subscriptions",  # Only dataset in url
+            "events/events/subscriptions",  # dataset and entity in url
+        ],
+    )
+    def test(self, url: str) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
@@ -2245,9 +2252,16 @@ class TestDeleteSubscriptionApi(BaseApiTest):
     dataset_name = "events"
     dataset = get_dataset(dataset_name)
 
-    def test(self) -> None:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "events/subscriptions",  # Only dataset in url
+            "events/events/subscriptions",  # dataset and entity in url
+        ],
+    )
+    def test(self, url: str) -> None:
         resp = self.app.post(
-            "{}/subscriptions".format(self.dataset_name),
+            url,
             data=json.dumps(
                 {
                     "project_id": 1,

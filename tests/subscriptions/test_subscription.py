@@ -104,7 +104,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
     def test(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
@@ -118,7 +118,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID)
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
             creator.create(
                 SnQLSubscriptionData(
@@ -132,7 +132,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_aggregation(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
             creator.create(
                 SnQLSubscriptionData(
@@ -146,7 +146,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_time_window(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
                 SnQLSubscriptionData(
@@ -189,7 +189,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_resolution(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
                 SnQLSubscriptionData(
@@ -209,7 +209,7 @@ class TestSessionsSubscriptionCreator:
     @pytest.mark.parametrize("subscription", TESTS_CREATE_SESSIONS)
     def test(self, subscription: SubscriptionData) -> None:
         dataset = get_dataset("sessions")
-        creator = SubscriptionCreator(dataset)
+        creator = SubscriptionCreator(dataset, EntityKey.SESSIONS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
@@ -255,7 +255,7 @@ class TestMetricsCountersSubscriptionCreator:
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
     def test(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         subscription = SnQLSubscriptionData(
             project_id=1,
             query="MATCH (events) SELECT count() AS count",
@@ -274,7 +274,9 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             == subscription
         )
 
-        SubscriptionDeleter(self.dataset, identifier.partition).delete(identifier.uuid)
+        SubscriptionDeleter(self.entity_key, identifier.partition).delete(
+            identifier.uuid
+        )
         assert (
             RedisSubscriptionDataStore(
                 redis_client, self.entity_key, identifier.partition,
