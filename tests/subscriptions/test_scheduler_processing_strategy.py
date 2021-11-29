@@ -2,6 +2,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime, timedelta
+from typing import Sequence
 from unittest import mock
 
 import pytest
@@ -465,13 +466,22 @@ def test_scheduled_subscription_queue() -> None:
         2,
     )
 
-    future: Future[Message[KafkaPayload]] = Future()
+    futures: Sequence[Future[Message[KafkaPayload]]] = [Future(), Future()]
 
-    queue.append(tick_message, deque([future]))
+    queue.append(tick_message, deque(futures))
 
+    assert len(queue) == 2
+    assert queue.peek() == TickSubscription(
+        tick_message, futures[0], should_commit=False
+    )
+    assert queue.popleft() == TickSubscription(
+        tick_message, futures[0], should_commit=False
+    )
     assert len(queue) == 1
-    assert queue.peek() == TickSubscription(tick_message, future, should_commit=True)
-    assert queue.popleft() == TickSubscription(tick_message, future, should_commit=True)
+
+    assert queue.popleft() == TickSubscription(
+        tick_message, futures[1], should_commit=True
+    )
     assert len(queue) == 0
 
 
