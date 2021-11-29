@@ -122,11 +122,7 @@ def subscriptions_scheduler(
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            scheduled_topic_spec.topic,
-            override_params={
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            },
+            scheduled_topic_spec.topic, override_params={"partitioner": "consistent"},
         )
     )
 
