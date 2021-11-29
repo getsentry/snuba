@@ -378,7 +378,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # Remove completed tasks from the queue and raise if an exception occurred.
         # This method does not attempt to recover from any exception.
         # Also commits any offsets required.
-        while True:
+        while self.__queue:
             tick_subscription = self.__queue.peek()
 
             if tick_subscription is None:
@@ -441,4 +441,16 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                 logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
                 break
 
-            self.__queue.popleft().subscription_future.result(remaining)
+            tick_subscription = self.__queue.popleft()
+
+            tick_subscription.subscription_future.result(remaining)
+
+            if tick_subscription.should_commit:
+                self.__commit(
+                    {
+                        tick_subscription.tick_message.partition: Position(
+                            tick_subscription.tick_message.offset,
+                            tick_subscription.tick_message.timestamp,
+                        )
+                    }
+                )
