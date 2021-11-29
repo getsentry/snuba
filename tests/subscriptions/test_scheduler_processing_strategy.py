@@ -10,6 +10,7 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
 from snuba.datasets.entities import EntityKey
@@ -506,6 +507,9 @@ def test_produce_scheduled_subscription_message() -> None:
     store = RedisSubscriptionDataStore(
         redis_client, entity_key, PartitionId(partition_index)
     )
+
+    # Create 2 subscriptions
+    # Subscription 1
     store.create(
         uuid.uuid4(),
         SnQLSubscriptionData(
@@ -513,6 +517,18 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window=timedelta(minutes=1),
             resolution=timedelta(minutes=1),
             query="MATCH events SELECT count()",
+            entity_subscription=EventsSubscription(data_dict={}),
+        ),
+    )
+
+    # Subscription 2
+    store.create(
+        uuid.uuid4(),
+        SnQLSubscriptionData(
+            project_id=2,
+            time_window=timedelta(minutes=2),
+            resolution=timedelta(minutes=2),
+            query="MATCH events SELECT count(event_id)",
             entity_subscription=EventsSubscription(data_dict={}),
         ),
     )
@@ -553,24 +569,31 @@ def test_produce_scheduled_subscription_message() -> None:
 
     strategy.submit(message)
 
-    # 2 subscriptions should be scheduled (1 for each minute)
-
+    # 3 subscriptions should be scheduled (2 x subscription 1, 1 x subscription 2)
     codec = SubscriptionScheduledTaskEncoder(entity_key)
 
-    # First message at epoch
+    # 2 subscriptions scheduled at epoch
     first_message = broker_storage.consume(partition, 0)
     assert first_message is not None
     assert codec.decode(first_message.payload).timestamp == epoch
 
-    # Second message at epoch + 1 minute
     second_message = broker_storage.consume(partition, 1)
     assert second_message is not None
-    assert codec.decode(second_message.payload).timestamp == epoch + timedelta(
-        minutes=1
-    )
+    assert codec.decode(second_message.payload).timestamp == epoch
 
-    # No 3rd message
-    assert broker_storage.consume(partition, 2) is None
+    # 1 subscription scheduled at epoch + 1
+    third_message = broker_storage.consume(partition, 2)
+    assert third_message is not None
+    assert codec.decode(third_message.payload).timestamp == epoch + timedelta(minutes=1)
+
+    # No 4th message
+    assert broker_storage.consume(partition, 3) is None
+
+    # Offset is committed when poll is called
+    assert commit.call_count == 0
+    strategy.poll()
+    assert commit.call_count == 1
+    assert commit.call_args == mock.call({partition: Position(message.offset, epoch)})
 
     # Close the strategy
     strategy.close()
