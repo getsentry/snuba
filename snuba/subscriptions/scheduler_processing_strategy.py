@@ -378,7 +378,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # Remove completed tasks from the queue and raise if an exception occurred.
         # This method does not attempt to recover from any exception.
         # Also commits any offsets required.
-        while True:
+        while self.__queue:
             tick_subscription = self.__queue.peek()
 
             if tick_subscription is None:
