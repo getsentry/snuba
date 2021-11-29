@@ -13,7 +13,7 @@ This is the query structure.::
     WHERE condition [[AND | OR] condition]*
     HAVING condition [[AND | OR] condition]*
     ORDER BY expressions ASC|DESC [, expressions ASC|DESC]*
-    LIMIT expression BY n
+    LIMIT n BY [expressions]
     LIMIT n
     OFFSET n
     GRANULARITY n
