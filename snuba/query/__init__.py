@@ -34,7 +34,7 @@ from snuba.query.expressions import (
 @dataclass(frozen=True)
 class LimitBy:
     limit: int
-    expression: Expression
+    columns: Sequence[Expression]
 
 
 class OrderByDirection(Enum):
@@ -256,7 +256,7 @@ class Query(DataSource, ABC):
             chain.from_iterable(
                 map(lambda orderby: orderby.expression, self.__order_by)
             ),
-            [self.__limitby.expression] if self.__limitby else [],
+            self.__limitby.columns if self.__limitby else [],
             self._get_expressions_impl(),
         )
 
@@ -323,7 +323,8 @@ class Query(DataSource, ABC):
 
         if self.__limitby is not None:
             self.__limitby = LimitBy(
-                self.__limitby.limit, self.__limitby.expression.transform(func)
+                self.__limitby.limit,
+                [column.transform(func) for column in self.__limitby.columns],
             )
 
         self._transform_expressions_impl(func)
