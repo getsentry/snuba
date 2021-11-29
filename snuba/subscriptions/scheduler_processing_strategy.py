@@ -441,4 +441,16 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                 logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
                 break
 
-            self.__queue.popleft().subscription_future.result(remaining)
+            tick_subscription = self.__queue.popleft()
+
+            tick_subscription.subscription_future.result(remaining)
+
+            if tick_subscription.should_commit:
+                self.__commit(
+                    {
+                        tick_subscription.tick_message.partition: Position(
+                            tick_subscription.tick_message.offset,
+                            tick_subscription.tick_message.timestamp,
+                        )
+                    }
+                )
