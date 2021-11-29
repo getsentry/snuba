@@ -1,16 +1,17 @@
-import pytest
 from typing import Union
+
+import pytest
 
 from snuba.clickhouse.query import Query
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal, StringifyVisitor
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
-from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Table
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -44,9 +45,7 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
 
     dataset = get_dataset(dataset_name)
 
-    schema = RequestSchema.build_with_extensions(
-        entity.get_extensions(), HTTPRequestSettings
-    )
+    schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         query_body,

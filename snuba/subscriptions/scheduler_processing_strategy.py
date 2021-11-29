@@ -1,7 +1,7 @@
 import logging
 from collections import deque
 from datetime import datetime
-from typing import Deque, Mapping, Optional, cast
+from typing import Deque, Mapping, MutableMapping, NamedTuple, Optional, cast
 
 from arroyo import Message
 from arroyo.processing.strategies import ProcessingStrategy
@@ -10,6 +10,112 @@ from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 
 logger = logging.getLogger(__name__)
+
+
+class CommittableTick(NamedTuple):
+    tick: Tick
+    should_commit: bool
+
+
+class ProvideCommitStrategy(ProcessingStrategy[Tick]):
+    """
+    Given a tick message, this step provides the offset commit strategy
+    for that tick before submitting the message to the next step.
+
+    We must commit only offsets based on the slowest partition. This
+    guarantees that all subscriptions are scheduled at least once and we do
+    not miss any even if the scheduler restarts and loses its state.
+
+    A tick can be safely committed only if its lower timestamp has also been
+    reached on every other partition. If that condition is not met, the message
+    is still submitted to the next step with a `should_commit` value of false
+    indicating that it's offset is not to be commited.
+    """
+
+    def __init__(
+        self, partitions: int, next_step: ProcessingStrategy[CommittableTick],
+    ) -> None:
+        self.__partitions = partitions
+        self.__next_step = next_step
+
+        # Store the last message we received for each partition so know when
+        # to commit offsets.
+        self.__latest_messages_by_partition: MutableMapping[
+            int, Optional[Message[Tick]]
+        ] = {index: None for index in range(self.__partitions)}
+        self.__offset_low_watermark: Optional[int] = None
+        self.__offset_high_watermark: Optional[int] = None
+
+        self.__closed = False
+
+    def poll(self) -> None:
+        self.__next_step.poll()
+
+    def submit(self, message: Message[Tick]) -> None:
+        assert not self.__closed
+
+        # Update self.__offset_high_watermark
+        self.__update_offset_high_watermark(message)
+
+        should_commit = self.__should_commit(message)
+
+        self.__next_step.submit(
+            Message(
+                message.partition,
+                message.offset,
+                CommittableTick(message.payload, should_commit),
+                message.timestamp,
+                message.next_offset,
+            )
+        )
+        if should_commit:
+            self.__offset_low_watermark = message.offset
+
+    def __should_commit(self, message: Message[Tick]) -> bool:
+        return (
+            self.__offset_low_watermark is None
+            or message.offset > self.__offset_low_watermark
+        ) and (
+            self.__offset_high_watermark is not None
+            and message.offset <= self.__offset_high_watermark
+        )
+
+    def __update_offset_high_watermark(self, message: Message[Tick]) -> None:
+        assert message.partition.index == 0, "Commit log cannot be partitioned"
+
+        tick_partition = message.payload.partition
+        self.__latest_messages_by_partition[tick_partition] = message
+
+        slowest = message
+        fastest = message
+        for partition_message in self.__latest_messages_by_partition.values():
+            if partition_message is None:
+                return
+
+            partition_timestamp = partition_message.payload.timestamps.lower
+
+            if partition_timestamp < slowest.payload.timestamps.lower:
+                slowest = partition_message
+
+            if partition_timestamp > fastest.payload.timestamps.lower:
+                fastest = partition_message
+
+        if (
+            self.__offset_high_watermark is None
+            or slowest.offset > self.__offset_high_watermark
+        ):
+            self.__offset_high_watermark = slowest.offset
+
+    def close(self) -> None:
+        self.__closed = True
+
+    def terminate(self) -> None:
+        self.__closed = True
+        self.__next_step.terminate()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        self.__next_step.close()
+        self.__next_step.join(timeout)
 
 
 class TickBuffer(ProcessingStrategy[Tick]):
