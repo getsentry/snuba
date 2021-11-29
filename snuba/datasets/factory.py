@@ -9,13 +9,14 @@ from snuba.utils.serializable_exception import SerializableException
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 
-DEV_DATASET_NAMES: Set[str] = {"metrics"}
+DEV_DATASET_NAMES: Set[str] = set()
 
 DATASET_NAMES: Set[str] = {
     "discover",
     "events",
     "groupassignee",
     "groupedmessage",
+    "metrics",
     "outcomes",
     "outcomes_raw",
     "sessions",
