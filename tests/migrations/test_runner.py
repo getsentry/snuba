@@ -207,7 +207,7 @@ def test_no_schema_differences() -> None:
 def test_settings_skipped_group() -> None:
     from snuba.migrations import runner
 
-    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog", "metrics"}):
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
         runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
