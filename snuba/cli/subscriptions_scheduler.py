@@ -79,17 +79,17 @@ def subscriptions_scheduler(
 
     - The first processing step is a tick buffer. It buffers ticks where needed and
     determines when to submit them to the rest of the pipeline. The tick buffer behavior
-    depends on the watermark mode specsified by the entity. In PARTITION mode, ticks are
+    depends on the watermark mode specified by the entity. In PARTITION mode, ticks are
     never buffered and immediately submitted to the next step. In GLOBAL mode we wait
     (filling the buffer) until the timestamp of a tick has been reached on every
     partition before eventually submitting a tick to the next step. This guarantees that
-    a subscription is never be scheduled before data on every partition up to that
+    a subscription is never scheduled before data on every partition up to that
     timestamp is written to storage.
 
     - The second processing step provides the strategy for committing offsets. Ticks are
     only marked as `should_commit` if every partition has already reached the timestamp
-    of the tick. Only the offset of the slowest partition will get committed. This
-    guarantees at least once scheduling of subscriptions.
+    of the tick. Only the commit log offset of the slowest partition (on the main topic)
+    will get committed. This guarantees at least once scheduling of subscriptions.
 
     - The third processing step checks the subscription store to determine which
     subscriptions need to be scheduled for each tick. Each scheduled subscription task
