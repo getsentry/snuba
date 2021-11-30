@@ -2214,7 +2214,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             }
         }
 
-    def test_delegate(self) -> None:
+    def test_with_bad_snql(self) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
@@ -2223,36 +2223,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                 "{}/subscriptions".format(self.dataset_name),
                 data=json.dumps(
                     {
-                        "type": "delegate",
                         "project_id": 1,
-                        "conditions": [["platform", "IN", ["a"]]],
-                        "aggregations": [["count()", "", "count"]],
-                        "time_window": int(timedelta(minutes=10).total_seconds()),
-                        "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') AND project_id = 1",
-                    }
-                ).encode("utf-8"),
-            )
-
-        assert resp.status_code == 202
-        data = json.loads(resp.data)
-        assert data == {
-            "subscription_id": f"0/{expected_uuid.hex}",
-        }
-
-    def test_delegate_with_bad_snql(self) -> None:
-        expected_uuid = uuid.uuid1()
-
-        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
-            uuid4.return_value = expected_uuid
-            resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
-                data=json.dumps(
-                    {
-                        "type": "delegate",
-                        "project_id": 1,
-                        "conditions": [["platform", "IN", ["a"]]],
-                        "aggregations": [["count()", "", "count"]],
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
                         "query": "MATCH (events) SELECT count() AS count BY project_id WHERE platform IN tuple('a')",
