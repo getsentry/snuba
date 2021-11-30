@@ -1,14 +1,36 @@
+import uuid
+from collections import deque
+from concurrent.futures import Future
 from datetime import datetime, timedelta
+from typing import Sequence
 from unittest import mock
 
+import pytest
 from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.types import Position
+from arroyo.utils.clock import TestingClock
 
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.redis import redis_client
+from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.entity_subscription import EventsSubscription
+from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
     CommittableTick,
+    ProduceScheduledSubscriptionMessage,
     ProvideCommitStrategy,
+    ScheduledSubscriptionQueue,
     TickBuffer,
+    TickSubscription,
 )
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
@@ -418,3 +440,161 @@ def test_tick_buffer_with_commit_strategy() -> None:
         mock.call(make_message_for_next_step(message_0_0, True)),
         mock.call(make_message_for_next_step(message_1_1, False)),
     ]
+
+
+def test_scheduled_subscription_queue() -> None:
+    queue = ScheduledSubscriptionQueue()
+    assert len(queue) == 0
+    assert queue.peek() is None
+    with pytest.raises(IndexError):
+        queue.popleft()
+
+    epoch = datetime(1970, 1, 1)
+    partition = Partition(Topic("test"), 0)
+
+    tick_message = Message(
+        partition,
+        1,
+        CommittableTick(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+            ),
+            True,
+        ),
+        epoch,
+        2,
+    )
+
+    futures: Sequence[Future[Message[KafkaPayload]]] = [Future(), Future()]
+
+    queue.append(tick_message, deque(futures))
+
+    assert len(queue) == 2
+    assert queue.peek() == TickSubscription(
+        tick_message, futures[0], should_commit=False
+    )
+    assert queue.popleft() == TickSubscription(
+        tick_message, futures[0], should_commit=False
+    )
+    assert len(queue) == 1
+
+    assert queue.popleft() == TickSubscription(
+        tick_message, futures[1], should_commit=True
+    )
+    assert len(queue) == 0
+
+
+def test_produce_scheduled_subscription_message() -> None:
+    epoch = datetime(1970, 1, 1)
+    metrics_backend = TestingMetricsBackend()
+    partition_index = 0
+    entity_key = EntityKey.EVENTS
+    topic = Topic("scheduled-subscriptions-events")
+    partition = Partition(topic, partition_index)
+
+    clock = TestingClock()
+    broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
+    broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
+
+    broker.create_topic(topic, partitions=1)
+
+    producer = broker.get_producer()
+    consumer = broker.get_consumer("group")
+    consumer.subscribe([topic])
+
+    store = RedisSubscriptionDataStore(
+        redis_client, entity_key, PartitionId(partition_index)
+    )
+
+    # Create 2 subscriptions
+    # Subscription 1
+    store.create(
+        uuid.uuid4(),
+        SnQLSubscriptionData(
+            project_id=1,
+            time_window=timedelta(minutes=1),
+            resolution=timedelta(minutes=1),
+            query="MATCH events SELECT count()",
+            entity_subscription=EventsSubscription(data_dict={}),
+        ),
+    )
+
+    # Subscription 2
+    store.create(
+        uuid.uuid4(),
+        SnQLSubscriptionData(
+            project_id=2,
+            time_window=timedelta(minutes=2),
+            resolution=timedelta(minutes=2),
+            query="MATCH events SELECT count(event_id)",
+            entity_subscription=EventsSubscription(data_dict={}),
+        ),
+    )
+
+    schedulers = {
+        partition_index: SubscriptionScheduler(
+            store,
+            PartitionId(partition_index),
+            cache_ttl=timedelta(seconds=300),
+            metrics=metrics_backend,
+        )
+    }
+
+    commit = mock.Mock()
+
+    strategy = ProduceScheduledSubscriptionMessage(
+        entity_key,
+        schedulers,
+        producer,
+        KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
+        commit,
+    )
+
+    message = Message(
+        partition,
+        1,
+        CommittableTick(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
+            ),
+            True,
+        ),
+        epoch,
+        2,
+    )
+
+    strategy.submit(message)
+
+    # 3 subscriptions should be scheduled (2 x subscription 1, 1 x subscription 2)
+    codec = SubscriptionScheduledTaskEncoder(entity_key)
+
+    # 2 subscriptions scheduled at epoch
+    first_message = broker_storage.consume(partition, 0)
+    assert first_message is not None
+    assert codec.decode(first_message.payload).timestamp == epoch
+
+    second_message = broker_storage.consume(partition, 1)
+    assert second_message is not None
+    assert codec.decode(second_message.payload).timestamp == epoch
+
+    # 1 subscription scheduled at epoch + 1
+    third_message = broker_storage.consume(partition, 2)
+    assert third_message is not None
+    assert codec.decode(third_message.payload).timestamp == epoch + timedelta(minutes=1)
+
+    # No 4th message
+    assert broker_storage.consume(partition, 3) is None
+
+    # Offset is committed when poll is called
+    assert commit.call_count == 0
+    strategy.poll()
+    assert commit.call_count == 1
+    assert commit.call_args == mock.call({partition: Position(message.offset, epoch)})
+
+    # Close the strategy
+    strategy.close()
+    strategy.join()
