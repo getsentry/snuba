@@ -181,10 +181,9 @@ def _format_limitby(
     ast_limitby = query.get_limitby()
 
     if ast_limitby is not None:
+        columns_accepted = [column.accept(formatter) for column in ast_limitby.columns]
         return StringNode(
-            "LIMIT {} BY {}".format(
-                ast_limitby.limit, ast_limitby.expression.accept(formatter)
-            )
+            "LIMIT {} BY {}".format(ast_limitby.limit, ",".join(columns_accepted))
         )
 
     return None
