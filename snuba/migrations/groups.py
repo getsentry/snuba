@@ -118,6 +118,7 @@ class TransactionsLoader(DirectoryLoader):
             "0011_transactions_add_span_op_breakdowns",
             "0012_transactions_add_spans",
             "0013_transactions_reduce_spans_exclusive_time",
+            "0014_transactions_drop_spans_exclusive_time",
         ]
 
 

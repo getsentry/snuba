@@ -263,7 +263,6 @@ TRANSACTIONS_COLUMNS = ColumnSet(
                 [
                     ("op", String()),
                     ("group", UInt(64)),
-                    ("exclusive_time", Float(64)),
                     ("exclusive_time_32", Float(32)),
                 ]
             ),
