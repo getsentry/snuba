@@ -253,11 +253,7 @@ TEST_JOIN = [
 def test_query_formatter(
     query: Union[ProcessableQuery, CompositeQuery[Entity]], formatted: TExpression,
 ) -> None:
-    from snuba.query.expressions import AsCodeVisitor
-    formatted_query = format_query(query, AsCodeVisitor())  # type: ignore
-    print("<" * 100)
-    print(formatted_query)
-    print(">" * 100)
-    # assert formatted_query == formatted
+    formatted_query = format_query(query)  # type: ignore
+    assert formatted_query == formatted
     # # make sure there are no empty lines
-    # assert [line for line in formatted_query if not line] == []
+    assert [line for line in formatted_query if not line] == []
