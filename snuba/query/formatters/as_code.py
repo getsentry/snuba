@@ -57,7 +57,7 @@ def format_query(
     limitby_str = (
         f"""LimitBy(
     limit={limitby.limit},
-    expression={limitby.expression.accept(eformatter)}
+    columns={[c.accept(eformatter) for c in limitby.columns]}
 )
     """
         if limitby
