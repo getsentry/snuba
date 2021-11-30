@@ -255,5 +255,5 @@ def test_query_formatter(
 ) -> None:
     formatted_query = format_query(query)  # type: ignore
     assert formatted_query == formatted
-    # # make sure there are no empty lines
+    # make sure there are no empty lines
     assert [line for line in formatted_query if not line] == []
