@@ -58,7 +58,6 @@ transaction_translator = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "message", None, "transaction_name"),
         ColumnToColumn(None, "title", None, "transaction_name"),
-        ColumnToColumn(None, "spans.exclusive_time", None, "spans.exclusive_time_32"),
         ColumnToMapping(
             None,
             "geo_country_code",
