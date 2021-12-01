@@ -303,9 +303,6 @@ class Query(DataSource, ABC):
             )
         )
         if not skip_array_join:
-            # self.__array_join = (
-            #     self.__array_join.transform(func) if self.__array_join else None
-            # )
             if self.__array_join:
                 self.__array_join = [
                     join_element.transform(func) for join_element in self.__array_join

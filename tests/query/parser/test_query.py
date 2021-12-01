@@ -64,13 +64,99 @@ def with_required(condition: Optional[Expression] = None) -> Expression:
     return required
 
 
-test_cases = [
+test_cases_legacy = [
     pytest.param(
         {
-            "selected_columns": ["column1"],
-            "groupby": ["column2", "column3"],
-            "aggregations": [["test_func", "column4", "test_func_alias"]],
+            "selected_columns": ["exception_stacks.type"],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [
+                [
+                    [
+                        "or",
+                        [
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'ArithmeticException'"],
+                            ],
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'RuntimeException'"],
+                            ],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
+            ],
+            "having": [],
+            "groupby": [],
+            "arrayjoin": ["exception_stacks"],
         },
+        Query(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
+                SelectedExpression(
+                    "exception_stacks.type",
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
+                ),
+            ],
+            condition=with_required(
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    FunctionCall(
+                        None,
+                        "or",
+                        (
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
+                                    Literal(None, "ArithmeticException"),
+                                ),
+                            ),
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
+                                    Literal(None, "RuntimeException"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    Literal(None, 1),
+                )
+            ),
+            limit=1000,
+            array_join=[Column("exception_stacks", None, "exception_stacks")],
+        ),
+        id="Format a query with array join field in a boolean condition",
+    ),
+]
+
+test_cases_snql = [
+    pytest.param(
+        """MATCH (events)
+       SELECT test_func(column4) AS test_func_alias,
+              column1 BY column2, column3
+       WHERE timestamp >= toDateTime('2021-01-01T00:00:00')
+       AND timestamp < toDateTime('2021-01-02T00:00:00')
+       AND project_id = 1
+       """,
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -104,20 +190,19 @@ test_cases = [
         id="Select composed by select, groupby and aggregations",
     ),
     pytest.param(
-        {
-            "selected_columns": [
-                ["f1", ["column1", "column2"], "f1_alias"],
-                ["f2", [], "f2_alias"],
-            ],
-            "aggregations": [
-                ["count", "platform", "platforms"],
-                ["uniq", "platform", "uniq_platforms"],
-                ["testF", ["platform", "field2"], "top_platforms"],
-            ],
-            "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
-            "having": [["times_seen", ">", 1]],
-            "groupby": [["format_eventid", ["event_id"]]],
-        },
+        """
+        MATCH (events)
+        SELECT count(platform) AS platforms,
+               uniq(platform) AS uniq_platforms,
+               testF(platform, field2) AS top_platforms,
+               f1(column1, column2) AS f1_alias, f2() AS f2_alias
+        BY format_eventid(event_id)
+        WHERE tags[sentry:dist] IN tuple('dist1', 'dist2')
+          AND timestamp >= toDateTime('2021-01-01T00:00:00')
+          AND timestamp < toDateTime('2021-01-02T00:00:00')
+          AND project_id = 1
+          HAVING times_seen > 1
+        """,
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -205,10 +290,16 @@ test_cases = [
         id="Format a query with functions in all fields",
     ),
     pytest.param(
-        {
-            "selected_columns": ["column1", "column2"],
-            "orderby": ["column1", "-column2", ["-func", ["column3"]]],
-        },
+        """
+        MATCH (events)
+        SELECT column1, column2
+        WHERE timestamp >= toDateTime('2021-01-01T00:00:00')
+          AND timestamp < toDateTime('2021-01-02T00:00:00')
+          AND project_id = 1
+        ORDER BY column1 ASC,
+                 column2 DESC,
+                 func(column3) DESC
+        """,
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -243,7 +334,14 @@ test_cases = [
         id="Order by with functions",
     ),
     pytest.param(
-        {"selected_columns": ["column1"], "groupby": "column1", "orderby": "-column1"},
+        """
+        MATCH (events)
+        SELECT column1 BY column1
+        WHERE timestamp >= toDateTime('2021-01-01T00:00:00')
+          AND timestamp < toDateTime('2021-01-02T00:00:00')
+          AND project_id = 1
+        ORDER BY column1 DESC
+        """,
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -269,10 +367,13 @@ test_cases = [
         id="Order and group by provided as string",
     ),
     pytest.param(
-        {
-            "selected_columns": ["column1", "tags[test]"],
-            "groupby": [["foo", ["tags[test2]"]]],
-        },
+        """
+        MATCH (events)
+        SELECT column1, tags[test] BY foo(tags[test2])
+        WHERE timestamp >= toDateTime('2021-01-01T00:00:00')
+              AND timestamp < toDateTime('2021-01-02T00:00:00')
+              AND project_id = 1
+        """,
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -323,15 +424,16 @@ test_cases = [
         id="Unpacks subscriptable references",
     ),
     pytest.param(
-        {
-            "selected_columns": [
-                "group_id",
-                ["goo", ["something"], "issue_id"],
-                ["foo", [["zoo", ["a"]]], "a"],
-            ],
-            "conditions": [[["foo", ["issue_id"], "group_id"], "=", 1]],
-            "orderby": ["group_id"],
-        },
+        """
+        MATCH (events)
+        SELECT group_id, goo(something) AS issue_id,
+               foo(zoo(a)) AS a
+        WHERE foo(issue_id) AS group_id = 1
+              AND timestamp >= toDateTime('2021-01-01T00:00:00')
+              AND timestamp < toDateTime('2021-01-02T00:00:00')
+              AND project_id = 1
+        ORDER BY group_id ASC
+        """,
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -406,12 +508,7 @@ test_cases = [
         id="Alias references are expanded",
     ),
     pytest.param(
-        {
-            "selected_columns": [
-                ["foo", ["column3"], "exp"],
-                ["foo", ["column3"], "exp"],
-            ]
-        },
+        "MATCH (events) SELECT foo(column3) AS exp, foo(column3) AS exp WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -440,7 +537,7 @@ test_cases = [
         id="Allowed duplicate alias (same expression)",
     ),
     pytest.param(
-        {"selected_columns": [["foo", ["column"], "exp"], "exp"]},
+        "MATCH (events) SELECT foo(column) AS exp, exp WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -465,14 +562,7 @@ test_cases = [
         id="De-escape aliases defined by the user",
     ),
     pytest.param(
-        {
-            "selected_columns": ["exception_stacks.type"],
-            "aggregations": [["count", None, "count"]],
-            "conditions": [],
-            "having": [],
-            "groupby": [],
-            "arrayjoin": "exception_stacks.type",
-        },
+        "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks.type WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -493,13 +583,7 @@ test_cases = [
         id="Format a query with array join",
     ),
     pytest.param(
-        {
-            "selected_columns": ["exception_stacks.type"],
-            "aggregations": [["count", None, "count"]],
-            "conditions": [["exception_stacks.type", "LIKE", "Arithmetic%"]],
-            "having": [],
-            "groupby": [],
-        },
+        "MATCH (events) SELECT count() AS count, exception_stacks.type WHERE exception_stacks.type LIKE 'Arithmetic%' AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -549,14 +633,7 @@ test_cases = [
         id="Format a query with array field in a condition",
     ),
     pytest.param(
-        {
-            "selected_columns": ["exception_stacks.type"],
-            "aggregations": [["count", None, "count"]],
-            "conditions": [["exception_stacks.type", "LIKE", "Arithmetic%"]],
-            "having": [],
-            "groupby": [],
-            "arrayjoin": "exception_stacks.type",
-        },
+        "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks.type WHERE exception_stacks.type LIKE 'Arithmetic%' AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -590,13 +667,7 @@ test_cases = [
         id="Format a query with array join field in a condition",
     ),
     pytest.param(
-        {
-            "selected_columns": [["arrayJoin", ["exception_stacks"]]],
-            "aggregations": [["count", None, "count"]],
-            "conditions": [["exception_stacks.type", "LIKE", "Arithmetic%"]],
-            "having": [],
-            "groupby": [],
-        },
+        "MATCH (events) SELECT count() AS count, arrayJoin(exception_stacks) WHERE exception_stacks.type LIKE 'Arithmetic%' AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -648,31 +719,7 @@ test_cases = [
         id="Format a query with array join field in a condition and array join in a function",
     ),
     pytest.param(
-        {
-            "selected_columns": ["exception_stacks.type"],
-            "aggregations": [["count", None, "count"]],
-            "conditions": [
-                [
-                    [
-                        "or",
-                        [
-                            [
-                                "equals",
-                                ["exception_stacks.type", "'ArithmeticException'"],
-                            ],
-                            [
-                                "equals",
-                                ["exception_stacks.type", "'RuntimeException'"],
-                            ],
-                        ],
-                    ],
-                    "=",
-                    1,
-                ],
-            ],
-            "having": [],
-            "groupby": [],
-        },
+        "MATCH (events) SELECT count() AS count, exception_stacks.type WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -765,112 +812,7 @@ test_cases = [
         id="Format a query with array field in a boolean condition",
     ),
     pytest.param(
-        {
-            "selected_columns": ["exception_stacks.type"],
-            "aggregations": [["count", None, "count"]],
-            "conditions": [
-                [
-                    [
-                        "or",
-                        [
-                            [
-                                "equals",
-                                ["exception_stacks.type", "'ArithmeticException'"],
-                            ],
-                            [
-                                "equals",
-                                ["exception_stacks.type", "'RuntimeException'"],
-                            ],
-                        ],
-                    ],
-                    "=",
-                    1,
-                ],
-            ],
-            "having": [],
-            "groupby": [],
-            "arrayjoin": ["exception_stacks"],
-        },
-        Query(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
-            selected_columns=[
-                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
-                SelectedExpression(
-                    "exception_stacks.type",
-                    Column(
-                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
-                    ),
-                ),
-            ],
-            condition=with_required(
-                binary_condition(
-                    ConditionFunctions.EQ,
-                    FunctionCall(
-                        None,
-                        "or",
-                        (
-                            FunctionCall(
-                                None,
-                                "equals",
-                                (
-                                    Column(
-                                        "_snuba_exception_stacks.type",
-                                        None,
-                                        "exception_stacks.type",
-                                    ),
-                                    Literal(None, "ArithmeticException"),
-                                ),
-                            ),
-                            FunctionCall(
-                                None,
-                                "equals",
-                                (
-                                    Column(
-                                        "_snuba_exception_stacks.type",
-                                        None,
-                                        "exception_stacks.type",
-                                    ),
-                                    Literal(None, "RuntimeException"),
-                                ),
-                            ),
-                        ),
-                    ),
-                    Literal(None, 1),
-                )
-            ),
-            limit=1000,
-            array_join=[Column("exception_stacks", None, "exception_stacks")],
-        ),
-        id="Format a query with array join field in a boolean condition",
-    ),
-    pytest.param(
-        {
-            "selected_columns": [["arrayJoin", ["exception_stacks.type"]]],
-            "aggregations": [["count", None, "count"]],
-            "conditions": [
-                [
-                    [
-                        "or",
-                        [
-                            [
-                                "equals",
-                                ["exception_stacks.type", "'ArithmeticException'"],
-                            ],
-                            [
-                                "equals",
-                                ["exception_stacks.type", "'RuntimeException'"],
-                            ],
-                        ],
-                    ],
-                    "=",
-                    1,
-                ],
-            ],
-            "having": [],
-            "groupby": [],
-        },
+        "MATCH (events) SELECT count() AS count, arrayJoin(exception_stacks.type) WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -971,24 +913,7 @@ test_cases = [
         id="Format a query with array join field in a boolean condition and array join in a function",
     ),
     pytest.param(
-        {
-            "aggregations": [["count", None, "count"]],
-            "conditions": [
-                [
-                    [
-                        "or",
-                        [
-                            ["equals", [["ifNull", ["tags[foo]", "''"]], "'baz'"]],
-                            ["equals", [["ifNull", ["tags[foo.bar]", "''"]], "'qux'"]],
-                        ],
-                    ],
-                    "=",
-                    1,
-                ],
-            ],
-            "having": [],
-            "groupby": ["tags_key"],
-        },
+        "MATCH (events) SELECT count() AS count BY tags_key WHERE or(equals(ifNull(tags[foo], ''), 'baz'), equals(ifNull(tags[foo.bar], ''), 'qux')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -1058,7 +983,7 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize("query_body, expected_query", test_cases)
+@pytest.mark.parametrize("query_body, expected_query", test_cases_legacy)
 def test_format_expressions(
     query_body: MutableMapping[str, Any], expected_query: Query
 ) -> None:
@@ -1073,7 +998,21 @@ def test_format_expressions(
         ["project_id", "=", 1],
     ]
     snql_query = json_to_snql(query_body, "events")
+    print(snql_query)
     query = parse_snql_query(str(snql_query), events)
+
+    eq, reason = query.equals(expected_query)
+    assert eq, reason
+
+
+#
+# DELETEME pytest --no-header -q --capture=tee-sys tests/query/parser/test_query.py to get old queries
+#
+@pytest.mark.parametrize("query_body, expected_query", test_cases_snql)
+def test_format_expressions_new(query_body: str, expected_query: Query) -> None:
+    state.set_config("query_parsing_expand_aliases", 1)
+    events = get_dataset("events")
+    query = parse_snql_query(str(query_body), events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason
