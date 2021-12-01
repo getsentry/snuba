@@ -4,10 +4,10 @@ FunctionCall(
     (
         FunctionCall(
             None,
-            "greaterOrEquals",
+            "less",
             (
                 Column("_snuba_timestamp", None, "timestamp"),
-                Literal(None, datetime.datetime(2021, 7, 12, 19, 45, 1)),
+                Literal(None, datetime.datetime(2021, 8, 11, 19, 45, 1)),
             ),
         ),
         FunctionCall(
@@ -16,10 +16,14 @@ FunctionCall(
             (
                 FunctionCall(
                     None,
-                    "less",
+                    "in",
                     (
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 8, 11, 19, 45, 1)),
+                        Column("_snuba_project_id", None, "project_id"),
+                        FunctionCall(
+                            None,
+                            "tuple",
+                            ({exp.parameters[0].accept(self)},),
+                        ),
                     ),
                 ),
                 FunctionCall(
@@ -28,94 +32,74 @@ FunctionCall(
                     (
                         FunctionCall(
                             None,
-                            "in",
-                            (
-                                Column("_snuba_project_id", None, "project_id"),
-                                FunctionCall(
-                                    None, "tuple", ({exp.parameters[0].accept(self)},),
-                                ),
-                            ),
-                        ),
-                        FunctionCall(
-                            None,
-                            "and",
+                            "notEquals",
                             (
                                 FunctionCall(
                                     None,
-                                    "notEquals",
+                                    "ifNull",
                                     (
                                         FunctionCall(
-                                            None,
-                                            "ifNull",
+                                            "_snuba_tags[duration_group]",
+                                            "arrayElement",
                                             (
+                                                Column(None, None, "tags.value"),
                                                 FunctionCall(
-                                                    "_snuba_tags[duration_group]",
-                                                    "arrayElement",
+                                                    None,
+                                                    "indexOf",
                                                     (
                                                         Column(
-                                                            None, None, "tags.value"
-                                                        ),
-                                                        FunctionCall(
                                                             None,
-                                                            "indexOf",
-                                                            (
-                                                                Column(
-                                                                    None,
-                                                                    None,
-                                                                    "tags.key",
-                                                                ),
-                                                                Literal(
-                                                                    None,
-                                                                    "duration_group",
-                                                                ),
-                                                            ),
+                                                            None,
+                                                            "tags.key",
+                                                        ),
+                                                        Literal(
+                                                            None,
+                                                            "duration_group",
                                                         ),
                                                     ),
                                                 ),
-                                                Literal(None, ""),
                                             ),
                                         ),
                                         Literal(None, ""),
                                     ),
                                 ),
+                                Literal(None, ""),
+                            ),
+                        ),
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
                                 FunctionCall(
                                     None,
-                                    "equals",
+                                    "ifNull",
                                     (
                                         FunctionCall(
-                                            None,
-                                            "ifNull",
+                                            "_snuba_tags[duration_group]",
+                                            "arrayElement",
                                             (
+                                                Column(None, None, "tags.value"),
                                                 FunctionCall(
-                                                    "_snuba_tags[duration_group]",
-                                                    "arrayElement",
+                                                    None,
+                                                    "indexOf",
                                                     (
                                                         Column(
-                                                            None, None, "tags.value"
-                                                        ),
-                                                        FunctionCall(
                                                             None,
-                                                            "indexOf",
-                                                            (
-                                                                Column(
-                                                                    None,
-                                                                    None,
-                                                                    "tags.key",
-                                                                ),
-                                                                Literal(
-                                                                    None,
-                                                                    "duration_group",
-                                                                ),
-                                                            ),
+                                                            None,
+                                                            "tags.key",
+                                                        ),
+                                                        Literal(
+                                                            None,
+                                                            "duration_group",
                                                         ),
                                                     ),
                                                 ),
-                                                Literal(None, ""),
                                             ),
                                         ),
-                                        Literal(None, "<10s"),
+                                        Literal(None, ""),
                                     ),
                                 ),
+                                Literal(None, "<10s"),
                             ),
                         ),
                     ),
