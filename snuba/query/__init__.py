@@ -91,7 +91,7 @@ class Query(DataSource, ABC):
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Expression] = None,
+        array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
@@ -173,10 +173,10 @@ class Query(DataSource, ABC):
                 BooleanFunctions.AND, condition, self.__condition
             )
 
-    def get_arrayjoin(self) -> Optional[Expression]:
+    def get_arrayjoin(self) -> Optional[Sequence[Expression]]:
         return self.__array_join
 
-    def set_arrayjoin(self, arrayjoin: Optional[Expression]) -> None:
+    def set_arrayjoin(self, arrayjoin: Optional[Sequence[Expression]]) -> None:
         self.__array_join = arrayjoin
 
     def get_having(self) -> Optional[Expression]:
@@ -303,9 +303,14 @@ class Query(DataSource, ABC):
             )
         )
         if not skip_array_join:
-            self.__array_join = (
-                self.__array_join.transform(func) if self.__array_join else None
-            )
+            # self.__array_join = (
+            #     self.__array_join.transform(func) if self.__array_join else None
+            # )
+            if self.__array_join:
+                self.__array_join = [
+                    join_element.transform(func) for join_element in self.__array_join
+                ]
+
         if not skip_transform_condition:
             self.__condition = (
                 self.__condition.transform(func) if self.__condition else None
@@ -357,7 +362,9 @@ class Query(DataSource, ABC):
             )
         )
         if self.__array_join is not None:
-            self.__array_join = self.__array_join.accept(visitor)
+            self.__array_join = [
+                join_element.accept(visitor) for join_element in self.__array_join
+            ]
         if self.__condition is not None:
             self.__condition = self.__condition.accept(visitor)
         self.__groupby = [e.accept(visitor) for e in (self.__groupby or [])]
@@ -485,7 +492,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Expression] = None,
+        array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,

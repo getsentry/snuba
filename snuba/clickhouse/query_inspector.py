@@ -106,10 +106,10 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         self.visit_join_clause(data_source)
 
     def _list_array_join(self, query: ProcessableQuery[Table]) -> Set[Expression]:
-        ret = set()
+        ret: Set[Expression] = set()
         query_arrayjoin = query.get_arrayjoin()
         if query_arrayjoin is not None:
-            ret.add(query_arrayjoin)
+            ret.update(query_arrayjoin)
 
         for e in query.get_all_expressions():
             if isinstance(e, FunctionCallExpr) and e.function_name == "arrayJoin":

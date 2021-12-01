@@ -486,7 +486,7 @@ test_cases = [
                     ),
                 ),
             ],
-            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+            array_join=[Column("exception_stacks.type", None, "exception_stacks.type")],
             condition=with_required(),
             limit=1000,
         ),
@@ -570,7 +570,7 @@ test_cases = [
                     ),
                 ),
             ],
-            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+            array_join=[Column("exception_stacks.type", None, "exception_stacks.type")],
             condition=with_required(
                 FunctionCall(
                     None,
@@ -789,7 +789,7 @@ test_cases = [
             ],
             "having": [],
             "groupby": [],
-            "arrayjoin": "exception_stacks",
+            "arrayjoin": ["exception_stacks"],
         },
         Query(
             QueryEntity(
@@ -841,7 +841,7 @@ test_cases = [
                 )
             ),
             limit=1000,
-            array_join=Column("exception_stacks", None, "exception_stacks"),
+            array_join=[Column("exception_stacks", None, "exception_stacks")],
         ),
         id="Format a query with array join field in a boolean condition",
     ),
