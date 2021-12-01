@@ -23,7 +23,7 @@ def format_query(
     eformatter = AsCodeVisitor(level=0, initial_indent=1)
 
     selects = ",\n".join(
-        f"SelectedExpression({repr({e.name})}, {e.expression.accept(eformatter)})"
+        f"SelectedExpression({repr(e.name)}, {e.expression.accept(eformatter)})"
         for e in query.get_selected_columns()
     )
     select_str = f"[{selects}]"

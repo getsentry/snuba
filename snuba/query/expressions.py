@@ -165,9 +165,17 @@ class AsCodeVisitor(ExpressionVisitor[str]):
 
     def visit_function_call(self, exp: FunctionCall) -> str:
         self.__level += 1
-        param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
+        if not exp.parameters:
+            param_str = "()"
+        elif len(exp.parameters) == 1:
+            param_str = "({exp.parameters[0].accept(self)},)"
+        else:
+            param_str = ",".join(
+                [f"\n{param.accept(self)}" for param in exp.parameters]
+            )
+            param_str = f"({param_str})"
         self.__level -= 1
-        return f"{self._get_line_prefix()}FunctionCall({repr(exp.alias)}, {repr(exp.function_name)}, ({param_str}))"
+        return f"{self._get_line_prefix()}FunctionCall({repr(exp.alias)}, {repr(exp.function_name)}, {param_str})"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         self.__level += 1

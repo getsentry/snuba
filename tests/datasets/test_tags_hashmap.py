@@ -59,14 +59,12 @@ def test_tags_hashmap() -> None:
     WHERE
         timestamp >= toDateTime('2021-07-12T19:45:01') AND
         timestamp < toDateTime('2021-08-11T19:45:01') AND
-        project_id IN tuple(300688) AND
-        type = 'transaction' AND ifNull(tags[duration_group], '') != '' AND
-        transaction_status = 0 AND
-        duration > 500.0 AND
-        ifNull(tags[duration_group], '') = '<10s' AND
         project_id IN tuple(300688)
+        AND ifNull(tags[duration_group], '') != '' AND
+        ifNull(tags[duration_group], '') = '<10s'
     LIMIT 50
     """
+
     # ----- create the request object as if it came in through our API -----
     query_body = {
         "query": query_str,
