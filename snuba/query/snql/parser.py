@@ -738,14 +738,24 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_arrayjoin_clause(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, Any, Any, Expression, Optional[Sequence[Expression]]
-        ],
+        visited_children: Tuple[Any, Any, Any, Expression, Optional[List[Expression]]],
     ) -> Sequence[Expression]:
         _, _, _, join_first, join_rest = visited_children
         exprs = [join_first]
+
         if join_rest is not None:
             exprs.extend(join_rest)
+
+        return exprs
+
+    def visit_arrayjoin_optional(
+        self, node: Node, visited_children: List[Tuple[Any, Any, Any, Expression]],
+    ) -> List[Expression]:
+        exprs: List[Expression] = list()
+        if visited_children is not None:
+            for child in visited_children:
+                _, _, _, exp = child
+                exprs.append(exp)
         return exprs
 
     def visit_parameter(

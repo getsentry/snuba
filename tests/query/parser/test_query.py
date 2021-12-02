@@ -538,11 +538,12 @@ test_cases = [
         MATCH (events)
         SELECT count() AS count,
             exception_stacks.type
-        WHERE exception_stacks.type LIKE 'Arithmetic%'
-          AND timestamp >= toDateTime('2021-01-01T00:00:00')
-          AND timestamp < toDateTime('2021-01-02T00:00:00')
-          AND project_id = 1
-        """,
+        WHERE {conditions}
+        """.format(
+            conditions=prepend_condition_str_to_default(
+                "exception_stacks.type LIKE 'Arithmetic%'"
+            )
+        ),
         Query(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -1048,6 +1049,74 @@ test_cases = [
             array_join=[Column("exception_stacks", None, "exception_stacks")],
         ),
         id="Format a query with array join field in a boolean condition",
+    ),
+    pytest.param(
+        """
+        MATCH (events)
+        SELECT count() AS count, exception_stacks.type
+        ARRAY JOIN exception_stacks, hierarchical_hashes
+        WHERE {conditions}
+        """.format(
+            conditions=prepend_condition_str_to_default(
+                "or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1"
+            )
+        ),
+        Query(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
+                SelectedExpression(
+                    "exception_stacks.type",
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
+                ),
+            ],
+            condition=with_required(
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    FunctionCall(
+                        None,
+                        "or",
+                        (
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
+                                    Literal(None, "ArithmeticException"),
+                                ),
+                            ),
+                            FunctionCall(
+                                None,
+                                "equals",
+                                (
+                                    Column(
+                                        "_snuba_exception_stacks.type",
+                                        None,
+                                        "exception_stacks.type",
+                                    ),
+                                    Literal(None, "RuntimeException"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    Literal(None, 1),
+                )
+            ),
+            limit=1000,
+            array_join=[
+                Column("exception_stacks", None, "exception_stacks"),
+                Column("hierarchical_hashes", None, "hierarchical_hashes"),
+            ],
+        ),
+        id="Format a query with 2 array join fields in a boolean condition",
     ),
 ]
 
