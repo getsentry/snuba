@@ -412,13 +412,13 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # Otherwise, add the tick message and all of it's subscriptions to
         # the queue
         tick = message.payload.tick
-        tasks = self.__schedulers[tick.partition].find(tick.timestamps)
+        tasks = self.__schedulers[tick.partition].find_with_tick(tick)
         self.__queue.append(
             message,
             deque(
                 [
                     self.__producer.produce(
-                        self.__scheduled_topic, self.__encoder.encode(task)
+                        self.__scheduled_topic, self.__encoder.encode(task),
                     )
                     for task in tasks
                 ]

@@ -28,9 +28,11 @@ from snuba.subscriptions.entity_subscription import (
     SessionsSubscription,
     SubscriptionType,
 )
+from snuba.subscriptions.utils import Tick
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.scheduler import ScheduledTask
+from snuba.utils.types import Interval
 
 
 def build_snql_subscription_data(
@@ -233,12 +235,16 @@ def test_subscription_task_encoder() -> None:
 
     epoch = datetime(1970, 1, 1)
 
-    task = ScheduledTask(
-        timestamp=epoch,
-        task=Subscription(
+    tick = Tick(0, Interval(1, 5), Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)))
+
+    subscription_with_tick = (
+        Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
+        tick,
     )
+
+    task = ScheduledTask(timestamp=epoch, task=subscription_with_tick)
 
     encoded = encoder.encode(task)
 
@@ -248,7 +254,8 @@ def test_subscription_task_encoder() -> None:
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"task":{'
-        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}}'
+        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
+        b'"tick":{"partition":0,"offsets":[1,5],"timestamps":["1970-01-01T00:00:00","1970-01-02T00:00:00"]}'
         b"}"
     )
 

@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Generic, Iterator, TypeVar
+from typing import Generic, Iterator, Tuple, TypeVar
 
+from snuba.subscriptions.utils import Tick
 from snuba.utils.types import Interval
-
 
 TTask = TypeVar("TTask")
 
@@ -37,5 +37,15 @@ class Scheduler(ABC, Generic[TTask]):
         lower bound (exclusive) and upper bound (inclusive) of the provided
         interval. The tasks returned should be ordered by timestamp in
         ascending order.
+
+        Will be deprecated once moving to the new subscriptions pipeline.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def find_with_tick(self, tick: Tick) -> Iterator[ScheduledTask[Tuple[TTask, Tick]]]:
+        """
+        Like `find()` but includes the tick. Required for the
+        new subscriptions pipeline.
         """
         raise NotImplementedError

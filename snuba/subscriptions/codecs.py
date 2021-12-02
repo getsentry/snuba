@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import cast
+from typing import Tuple, cast
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -13,6 +13,7 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
 )
+from snuba.subscriptions.utils import Tick
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
 from snuba.utils.scheduler import ScheduledTask
@@ -55,8 +56,11 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         )
 
 
+SubscriptionWithTick = Tuple[Subscription, Tick]
+
+
 class SubscriptionScheduledTaskEncoder(
-    Codec[KafkaPayload, ScheduledTask[Subscription]]
+    Codec[KafkaPayload, ScheduledTask[SubscriptionWithTick]]
 ):
     """
     Encodes/decodes a scheduled subscription to Kafka payload.
@@ -66,24 +70,27 @@ class SubscriptionScheduledTaskEncoder(
     def __init__(self, entity_key: EntityKey) -> None:
         self.__entity_key = entity_key
 
-    def encode(self, value: ScheduledTask[Subscription]) -> KafkaPayload:
-        assert isinstance(value.task.data, SnQLSubscriptionData)
+    def encode(self, value: ScheduledTask[SubscriptionWithTick]) -> KafkaPayload:
+        subscription, tick = value.task
+
+        assert isinstance(subscription.data, SnQLSubscriptionData)
 
         return KafkaPayload(
-            str(value.task.identifier).encode("utf-8"),
+            str(subscription.identifier).encode("utf-8"),
             cast(
                 str,
                 rapidjson.dumps(
                     {
                         "timestamp": value.timestamp.isoformat(),
-                        "task": {"data": value.task.data.to_dict()},
+                        "task": {"data": subscription.data.to_dict()},
+                        "tick": tick.to_dict(),
                     }
                 ),
             ).encode("utf-8"),
             [],
         )
 
-    def decode(self, value: KafkaPayload) -> ScheduledTask[Subscription]:
+    def decode(self, value: KafkaPayload) -> ScheduledTask[SubscriptionWithTick]:
         payload_value = value.value
 
         assert value.key is not None
@@ -93,10 +100,13 @@ class SubscriptionScheduledTaskEncoder(
         assert scheduled_subscription_dict["task"]["data"]["type"] == "snql"
         return ScheduledTask(
             datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
-            Subscription(
-                SubscriptionIdentifier.from_string(subscription_identifier),
-                SnQLSubscriptionData.from_dict(
-                    scheduled_subscription_dict["task"]["data"], self.__entity_key
+            (
+                Subscription(
+                    SubscriptionIdentifier.from_string(subscription_identifier),
+                    SnQLSubscriptionData.from_dict(
+                        scheduled_subscription_dict["task"]["data"], self.__entity_key
+                    ),
                 ),
+                Tick.from_dict(scheduled_subscription_dict["tick"]),
             ),
         )
