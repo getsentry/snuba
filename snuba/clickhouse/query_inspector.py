@@ -1,42 +1,23 @@
-from datetime import datetime
 from typing import Mapping, MutableMapping, Optional, Set
 
-from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import BooleanFunctions, ConditionFunctions
+from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
 
 
 def _get_date_range(query: ProcessableQuery[Table]) -> Optional[int]:
-    """
-    Best guess to find the time range for the query.
-    We pick the first column that is compared with a datetime Literal.
-    """
-    pattern = FunctionCall(
-        Or([String(ConditionFunctions.GT), String(ConditionFunctions.GTE)]),
-        (Column(None, Param("col_name", Any(str))), Literal(Any(datetime))),
-    )
-
-    condition = query.get_condition()
-    if condition is None:
+    from_date, to_date = get_time_range_estimate(query)
+    if from_date is None or to_date is None:
         return None
-    for exp in condition:
-        result = pattern.match(exp)
-        if result is not None:
-            from_date, to_date = get_time_range(query, result.string("col_name"))
-            if from_date is None or to_date is None:
-                return None
-            else:
-                return (to_date - from_date).days
-
-    return None
+    else:
+        return (to_date - from_date).days
 
 
 class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
