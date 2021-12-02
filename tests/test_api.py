@@ -2169,13 +2169,20 @@ class TestApi(SimpleAPITest):
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
 
-    def test(self) -> None:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "events/subscriptions",  # Only dataset in url
+            "events/events/subscriptions",  # dataset and entity in url
+        ],
+    )
+    def test(self, url: str) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
+                url,
                 data=json.dumps(
                     {
                         "project_id": 1,
@@ -2191,6 +2198,47 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data == {
             "subscription_id": f"0/{expected_uuid.hex}",
         }
+
+    def test_selected_entity_is_used(self) -> None:
+        """
+        Test that ensures that the passed entity is the selected one, not the dataset's default
+        entity
+        """
+
+        expected_uuid = uuid.uuid1()
+        entity_key = EntityKey.METRICS_COUNTERS
+
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                f"metrics/{entity_key.value}/subscriptions",
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "organization": 1,
+                        "query": "MATCH (metrics_counters) SELECT sum(value) AS value BY "
+                        "project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) "
+                        "AND metric_id = 7",
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                    }
+                ).encode("utf-8"),
+            )
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {
+            "subscription_id": f"0/{expected_uuid.hex}",
+        }
+        subscription_id = data["subscription_id"]
+        partition = subscription_id.split("/", 1)[0]
+        assert (
+            len(
+                RedisSubscriptionDataStore(redis_client, entity_key, partition,).all()
+                # type: ignore
+            )
+            == 1
+        )
 
     def test_time_error(self) -> None:
         resp = self.app.post(
@@ -2245,9 +2293,16 @@ class TestDeleteSubscriptionApi(BaseApiTest):
     dataset_name = "events"
     dataset = get_dataset(dataset_name)
 
-    def test(self) -> None:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "events/subscriptions",  # Only dataset in url
+            "events/events/subscriptions",  # dataset and entity in url
+        ],
+    )
+    def test(self, url: str) -> None:
         resp = self.app.post(
-            "{}/subscriptions".format(self.dataset_name),
+            url,
             data=json.dumps(
                 {
                     "project_id": 1,

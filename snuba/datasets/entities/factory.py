@@ -3,6 +3,7 @@ from typing import Callable, MutableMapping
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.table_storage import TableWriter
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -65,3 +66,12 @@ def get_entity(name: EntityKey) -> Entity:
         raise InvalidEntityError(f"entity {name!r} does not exist") from error
 
     return entity
+
+
+def enforce_table_writer(entity: Entity) -> TableWriter:
+    writable_storage = entity.get_writable_storage()
+
+    assert (
+        writable_storage is not None
+    ), f"Entity {ENTITY_NAME_LOOKUP[entity]} does not have a writable storage."
+    return writable_storage.get_table_writer()
