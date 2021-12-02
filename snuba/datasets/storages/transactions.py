@@ -83,7 +83,12 @@ columns = ColumnSet(
         (
             "spans",
             Nested(
-                [("op", String()), ("group", UInt(64)), ("exclusive_time", Float(64))]
+                [
+                    ("op", String()),
+                    ("group", UInt(64)),
+                    ("exclusive_time", Float(64)),
+                    ("exclusive_time_32", Float(32)),
+                ]
             ),
         ),
         ("partition", UInt(16)),
