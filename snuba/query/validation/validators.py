@@ -144,19 +144,13 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
     clauses are being used in the query, and that those clauses are in the correct structure.
     """
 
-    def __init__(self, max_allowed_aggregations: int) -> None:
-        self.max_allowed_aggregations = max_allowed_aggregations
-
-    def validate(
-        self,
-        query: Query,
-        alias: Optional[str] = None,
-        disallowed: Optional[Sequence[str]] = None,
+    def __init__(
+        self, max_allowed_aggregations: int, disallowed_aggregations: Sequence[str]
     ) -> None:
-        if disallowed is None:
-            raise InvalidQueryException(
-                "Disallowed clauses list is a required attribute"
-            )
+        self.max_allowed_aggregations = max_allowed_aggregations
+        self.disallowed_aggregations = disallowed_aggregations
+
+    def validate(self, query: Query, alias: Optional[str] = None,) -> None:
         selected = query.get_selected_columns()
         if len(selected) > self.max_allowed_aggregations:
             aggregation_error_text = (
@@ -168,7 +162,7 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
                 f"A maximum of {aggregation_error_text} allowed in the select"
             )
 
-        for field in disallowed:
+        for field in self.disallowed_aggregations:
             if getattr(query, f"get_{field}")():
                 raise InvalidQueryException(
                     f"invalid clause {field} in subscription query"

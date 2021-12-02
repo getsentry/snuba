@@ -21,6 +21,11 @@ from snuba.subscriptions.entity_subscription import (
     EntitySubscriptionValidation,
 )
 
+
+class EntityKeySubscription(EntitySubscriptionValidation, EntitySubscription):
+    ...
+
+
 tests = [
     pytest.param(
         LogicalQuery(
@@ -80,16 +85,16 @@ tests = [
 
 @pytest.mark.parametrize("query", tests)  # type: ignore
 def test_subscription_clauses_validation(query: LogicalQuery) -> None:
-    class EntityKeySubscription(EntitySubscriptionValidation, EntitySubscription):
-        ...
-
     entity_subscription_cls = cast(
         EntityKeySubscription,
         ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[query.get_from_clause().key],
     )
 
-    validator = SubscriptionAllowedClausesValidator(max_allowed_aggregations=1)
-    validator.validate(query, disallowed=entity_subscription_cls.disallowed)
+    validator = SubscriptionAllowedClausesValidator(
+        max_allowed_aggregations=1,
+        disallowed_aggregations=entity_subscription_cls.disallowed_aggregations,
+    )
+    validator.validate(query)
 
 
 invalid_tests = [
@@ -155,6 +160,13 @@ invalid_tests = [
 
 @pytest.mark.parametrize("query", invalid_tests)  # type: ignore
 def test_subscription_clauses_validation_failure(query: LogicalQuery) -> None:
-    validator = SubscriptionAllowedClausesValidator(max_allowed_aggregations=1)
+    entity_subscription_cls = cast(
+        EntityKeySubscription,
+        ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[query.get_from_clause().key],
+    )
+    validator = SubscriptionAllowedClausesValidator(
+        max_allowed_aggregations=1,
+        disallowed_aggregations=entity_subscription_cls.disallowed_aggregations,
+    )
     with pytest.raises(InvalidQueryException):
         validator.validate(query)
