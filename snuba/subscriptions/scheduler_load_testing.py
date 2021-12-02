@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
-from typing import Iterator
+from typing import Iterator, Tuple
 
 from snuba.datasets.entities import EntityKey
 from snuba.redis import redis_client
 from snuba.subscriptions.data import PartitionId, Subscription
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.utils.types import Interval
@@ -46,4 +47,11 @@ class LoadTestingSubscriptionScheduler(Scheduler[Subscription]):
     ) -> Iterator[ScheduledTask[Subscription]]:
         for scheduler in self.__scheduler_copies:
             for s in scheduler.find(interval):
+                yield s
+
+    def find_with_tick(
+        self, tick: Tick
+    ) -> Iterator[ScheduledTask[Tuple[Subscription, Tick]]]:
+        for scheduler in self.__scheduler_copies:
+            for s in scheduler.find_with_tick(tick):
                 yield s
