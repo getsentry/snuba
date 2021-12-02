@@ -10,15 +10,20 @@ from snuba import environment
 from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
+from snuba.clickhouse.query_dsl.accessors import (
+    get_object_ids_in_query_ast,
+    get_time_range,
+)
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.logical import Query as LogicalQuery
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
@@ -28,7 +33,12 @@ from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.web import QueryException, QueryResult, transform_column_names
+from snuba.web import (
+    QueryException,
+    QueryExtraData,
+    QueryResult,
+    transform_column_names,
+)
 from snuba.web.db_query import raw_query
 
 logger = logging.getLogger("snuba.query")
@@ -102,8 +112,17 @@ def parse_and_run_query(
     """
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
+    # from_clause = request.query.get_from_clause()
+    start, end = None, None
+    if isinstance(request.query, LogicalQuery):
+        entity = get_entity(request.query.get_from_clause().key)
+        if entity.required_time_column is not None:
+            start, end = get_time_range(request.query, entity.required_time_column)
+
     query_metadata = SnubaQueryMetadata(
         request=request,
+        start_timestamp=start,
+        end_timestamp=end,
         dataset=get_dataset_name(dataset),
         timer=timer,
         query_list=[],
@@ -119,13 +138,20 @@ def parse_and_run_query(
             robust=robust,
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
+        _set_query_final(request, result.extra)
         if not request.settings.get_dry_run():
             record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
+        _set_query_final(request, error.extra)
         record_query(request, timer, query_metadata, error.extra)
         raise error
 
     return result
+
+
+def _set_query_final(request: Request, extra: QueryExtraData) -> None:
+    if "final" in extra["stats"]:
+        request.query.set_final(extra["stats"]["final"])
 
 
 def _run_query_pipeline(

@@ -64,10 +64,10 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
-    _apply_column_aliases,
-    _expand_aliases,
-    _parse_subscriptables,
-    _validate_aliases,
+    apply_column_aliases,
+    expand_aliases,
+    parse_subscriptables,
+    validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
@@ -110,7 +110,7 @@ snql_grammar = Grammar(
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
-    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name
+    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name limit_by_columns
     limit_clause          = space+ "LIMIT" space+ integer_literal
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
@@ -144,6 +144,7 @@ snql_grammar = Grammar(
     group_columns         = selected_expression space* comma
     order_list            = order_columns* low_pri_arithmetic space+ ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic space+ ("ASC"/"DESC") space* comma space*
+    limit_by_columns      = (space* comma space* column_name)*
 
     low_pri_arithmetic    = space* high_pri_arithmetic (space* low_pri_tuple)*
     high_pri_arithmetic   = space* arithmetic_term (space* high_pri_tuple)*
@@ -617,11 +618,25 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_limit_by_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Any, Literal, Any, Any, Any, Column],
+        visited_children: Tuple[
+            Any, Any, Any, Literal, Any, Any, Any, Column, Optional[Sequence[Column]]
+        ],
     ) -> LimitBy:
-        _, _, _, limit, _, _, _, column = visited_children
+        _, _, _, limit, _, _, _, column_one, columns_rest = visited_children
         assert isinstance(limit.value, int)  # mypy
-        return LimitBy(limit.value, column)
+        columns = [column_one]
+        if columns_rest is not None:
+            columns.extend(columns_rest)
+        return LimitBy(limit.value, columns)
+
+    def visit_limit_by_columns(
+        self, node: Node, visited_children: Sequence[Tuple[Any, Any, Any, Column]]
+    ) -> Sequence[Column]:
+        columns: List[Column] = []
+        for column_visit in visited_children:
+            _, _, _, column_inst = column_visit
+            columns.append(column_inst)
+        return columns
 
     def visit_limit_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
@@ -1286,10 +1301,10 @@ def _post_process(
 
 POST_PROCESSORS = [
     _parse_datetime_literals,
-    _validate_aliases,
-    _parse_subscriptables,  # -> This should be part of the grammar
-    _apply_column_aliases,
-    _expand_aliases,
+    validate_aliases,
+    parse_subscriptables,  # -> This should be part of the grammar
+    apply_column_aliases,
+    expand_aliases,
     _mangle_query_aliases,
     _array_join_transformation,
     _qualify_columns,

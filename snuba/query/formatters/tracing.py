@@ -66,9 +66,9 @@ def format_query(
         str_list.append(f"HAVING\n{having.accept(eformatter)}")
     limitby = query.get_limitby()
     if limitby:
-        str_list.append(
-            f"LIMIT {limitby.limit} BY {limitby.expression.accept(eformatter)}"
-        )
+        columns_accepted = [column.accept(eformatter) for column in limitby.columns]
+        column_string = ",".join(columns_accepted)
+        str_list.append(f"LIMIT {limitby.limit} BY {column_string}")
     limit = query.get_limit()
     if limit:
         str_list.append(f"  LIMIT {limit}")

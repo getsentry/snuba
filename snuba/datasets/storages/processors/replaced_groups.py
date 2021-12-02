@@ -1,9 +1,7 @@
 import logging
 from dataclasses import replace
 from datetime import datetime
-from typing import Optional
-
-import sentry_sdk
+from typing import MutableMapping, Optional, Set
 
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
@@ -21,6 +19,8 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
+FINAL_METRIC = "final"
+AVOID_FINAL_METRIC = "avoid_final"
 
 
 class PostReplacementConsistencyEnforcer(QueryProcessor):
@@ -37,6 +37,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         self, project_column: str, replacer_state_name: Optional[ReplacerState]
     ) -> None:
         self.__project_column = project_column
+        self.__groups_column = "group_id"
         # This is used to allow us to keep the replacement state in redis for multiple
         # replacers on multiple tables. replacer_state_name is part of the redis key.
         self.__replacer_state_name = replacer_state_name
@@ -45,73 +46,84 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         if request_settings.get_turbo():
             return
 
-        with sentry_sdk.start_span(
-            op="function", description="get_project_ids_in_query"
-        ):
-            project_ids = get_object_ids_in_query_ast(query, self.__project_column)
+        project_ids = get_object_ids_in_query_ast(query, self.__project_column)
 
         if project_ids is None:
             self._set_query_final(query, False)
             return
 
-        with sentry_sdk.start_span(
-            op="function", description="get_project_query_flags"
-        ):
-            flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
-                list(project_ids), self.__replacer_state_name
-            )
+        flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
+            list(project_ids), self.__replacer_state_name
+        )
 
+        tags = self._initialize_tags(request_settings, flags)
+
+        query_overlaps_replacement = self._query_overlaps_replacements(
+            query, flags.latest_replacement_time
+        )
+
+        metric_name = FINAL_METRIC if query_overlaps_replacement else AVOID_FINAL_METRIC
+
+        set_final = False
+
+        if flags.needs_final:
+            tags["cause"] = "final_flag"
+            metrics.increment(
+                name=metric_name, tags=tags,
+            )
+            set_final = True
+        elif flags.group_ids_to_exclude:
+            # If the number of groups to exclude exceeds our limit, the query
+            # should just use final instead of the exclusion set.
+            max_group_ids_exclude = get_config(
+                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+            )
+            assert isinstance(max_group_ids_exclude, int)
+            groups_to_exclude = self._groups_to_exclude(
+                query, flags.group_ids_to_exclude
+            )
+            if len(groups_to_exclude) > max_group_ids_exclude:
+                tags["cause"] = "max_groups"
+                metrics.increment(
+                    name=metric_name, tags=tags,
+                )
+                set_final = True
+            elif query_overlaps_replacement and groups_to_exclude:
+                query.add_condition_to_ast(
+                    not_in_condition(
+                        FunctionCall(
+                            None,
+                            "assumeNotNull",
+                            (Column(None, None, self.__groups_column),),
+                        ),
+                        [Literal(None, p) for p in groups_to_exclude],
+                    )
+                )
+
+            if (
+                len(flags.group_ids_to_exclude) > max_group_ids_exclude
+                and not set_final
+            ):
+                # Avoided what would have caused the query to be final
+                tags["cause"] = "avoided_max_groups"
+                metrics.increment(
+                    name=AVOID_FINAL_METRIC, tags=tags,
+                )
+
+        self._set_query_final(query, set_final and query_overlaps_replacement)
+
+    def _initialize_tags(
+        self, request_settings: RequestSettings, flags: ProjectsQueryFlags
+    ) -> MutableMapping[str, str]:
+        """
+        Initialize tags dictionary for DataDog metrics.
+        """
         tags = {
             replacement_type: "True" for replacement_type in flags.replacement_types
         }
         tags["referrer"] = request_settings.referrer
         tags["parent_api"] = request_settings.get_parent_api()
-
-        with sentry_sdk.start_span(
-            op="function", description="_query_overlaps_replacements"
-        ):
-            query_overlaps_replacement = self._query_overlaps_replacements(
-                query, flags.latest_replacement_time
-            )
-
-        metric_name = "final" if query_overlaps_replacement else "avoid_final"
-
-        set_final = False
-
-        with sentry_sdk.start_span(op="processor", description="process_final"):
-
-            if flags.needs_final:
-                tags["cause"] = "final_flag"
-                metrics.increment(
-                    name=metric_name, tags=tags,
-                )
-                set_final = True
-            elif flags.group_ids_to_exclude:
-                # If the number of groups to exclude exceeds our limit, the query
-                # should just use final instead of the exclusion set.
-                max_group_ids_exclude = get_config(
-                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
-                )
-                assert isinstance(max_group_ids_exclude, int)
-                if len(flags.group_ids_to_exclude) > max_group_ids_exclude:
-                    tags["cause"] = "max_groups"
-                    metrics.increment(
-                        name=metric_name, tags=tags,
-                    )
-                    set_final = True
-                elif query_overlaps_replacement:
-                    query.add_condition_to_ast(
-                        not_in_condition(
-                            FunctionCall(
-                                None,
-                                "assumeNotNull",
-                                (Column(None, None, "group_id"),),
-                            ),
-                            [Literal(None, p) for p in flags.group_ids_to_exclude],
-                        )
-                    )
-
-            self._set_query_final(query, set_final and query_overlaps_replacement)
+        return tags
 
     def _set_query_final(self, query: Query, final: bool) -> None:
         """
@@ -136,3 +148,25 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if latest_replacement_time and query_from
             else True
         )
+
+    def _groups_to_exclude(
+        self, query: Query, group_ids_to_exclude: Set[int]
+    ) -> Set[int]:
+        """
+        Given a Query and the group ids to exclude for any project
+        this query touches, returns the intersection of the group ids
+        from the replacements and the group ids this Query explicitly
+        queries for, if any.
+
+        Eg.
+        - The query specifically looks for group ids: {1, 2}
+        - The replacements on the projects require exclusion of groups: {1, 3, 4}
+        - The query only needs to exclude group id 1
+        """
+
+        groups_in_query = get_object_ids_in_query_ast(query, self.__groups_column)
+
+        if groups_in_query:
+            group_ids_to_exclude = group_ids_to_exclude.intersection(groups_in_query)
+
+        return group_ids_to_exclude

@@ -162,7 +162,7 @@ distributions_storage = ReadableTableStorage(
                 Column(
                     "percentiles",
                     AggregateFunction(
-                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99, 1)", [Float(64)]
+                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]
                     ),
                 ),
                 Column("min", AggregateFunction("min", [Float(64)])),

@@ -221,7 +221,7 @@ class ProjectsQueryFlags:
     FINAL overall.
 
     - needs_final: Whether or not any project was set as final.
-    - group_ids_to_exclude: A list of group id's that have been replaced, and
+    - group_ids_to_exclude: A set of group id's that have been replaced, and
     the replacement has not yet been merged in the database. These groups should be
     excluded from the data a Query looks through.
     - replacement_types: A set of all replacement types across replacements for the
@@ -230,7 +230,7 @@ class ProjectsQueryFlags:
     """
 
     needs_final: bool
-    group_ids_to_exclude: Sequence[int]
+    group_ids_to_exclude: Set[int]
     replacement_types: Set[str]
     latest_replacement_time: Optional[datetime]
 
@@ -282,8 +282,8 @@ class ProjectsQueryFlags:
             needs_final: Sequence[timestamp]...,
             _: Sequence[num_removed_elements]...,
             exclude_groups: Sequence[List[group_id]]...,
-            needs_final_replacement_types: Sequece[Optional[str]]...,
-            _: Sequemce[num_removed_elements]...,
+            needs_final_replacement_types: Sequence[Optional[str]]...,
+            _: Sequence[num_removed_elements]...,
             groups_replacement_types: Sequence[List[str]]...,
             latest_exclude_groups_replacements: Sequence[Optional[Tuple[group_id, datetime]]]...
         ]
@@ -299,13 +299,11 @@ class ProjectsQueryFlags:
 
         needs_final = any(needs_final_result)
 
-        exclude_groups = sorted(
-            {
-                int(group_id)
-                for exclude_groups_result in exclude_groups_results
-                for group_id in exclude_groups_result
-            }
-        )
+        exclude_groups = {
+            int(group_id)
+            for exclude_groups_result in exclude_groups_results
+            for group_id in exclude_groups_result
+        }
 
         needs_final_replacement_types = {
             replacement_type.decode("utf-8")
