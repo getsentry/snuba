@@ -77,7 +77,7 @@ def prepend_condition_str_to_default(condition: str) -> str:
     return " AND ".join([condition] + DEFAULT_TEST_QUERY_CONDITIONS)
 
 
-test_cases_snql = [
+test_cases = [
     pytest.param(
         """
            MATCH (events)
@@ -1051,11 +1051,9 @@ test_cases_snql = [
     ),
 ]
 
-#
-# DELETEME pytest --no-header -q --capture=tee-sys tests/query/parser/test_query.py to get old queries
-#
-@pytest.mark.parametrize("query_body, expected_query", test_cases_snql)
-def test_format_expressions_new(query_body: str, expected_query: Query) -> None:
+
+@pytest.mark.parametrize("query_body, expected_query", test_cases)
+def test_format_expressions(query_body: str, expected_query: Query) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
     query = parse_snql_query(str(query_body), events)
