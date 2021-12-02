@@ -74,7 +74,7 @@ class Datetime(Pattern[datetime]):
 
 
 @pytest.fixture(
-    ids=["SnQL", "Crash Rate Alert Delegate"],
+    ids=["SnQL", "Crash Rate Alert Snql"],
     params=[
         SnQLSubscriptionData(
             project_id=1,
