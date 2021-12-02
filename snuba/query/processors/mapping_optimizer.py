@@ -11,6 +11,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.query.conditions import (
     BooleanFunctions,
+    combine_and_conditions,
+    combine_or_conditions,
     get_first_level_and_conditions,
     get_first_level_or_conditions,
 )
@@ -108,6 +110,8 @@ class MappingOptimizer(QueryProcessor):
                 if condition.function_name == BooleanFunctions.AND
                 else get_first_level_or_conditions(condition)
             )
+            # LOOK AT ME: maybe strip out unnecessary ones here?
+            # It's unclear where the joins come in to the picture here. Maybe tags queries don't use joins?
             classified = {self.__classify_combined_conditions(c) for c in conditions}
             if ConditionClass.NOT_OPTIMIZABLE in classified:
                 return ConditionClass.NOT_OPTIMIZABLE
@@ -174,8 +178,51 @@ class MappingOptimizer(QueryProcessor):
             ),
         )
 
-    def _remove_useless_checks(self, query: Query):
-        pass
+    def _get_condition_without_useless_checks(
+        self, condition: Expression
+    ) -> Expression:
+        if not isinstance(condition, FunctionExpr):
+            return condition
+        elif condition.function_name == BooleanFunctions.OR:
+            sub_conditions = get_first_level_or_conditions(condition)
+            pruned_conditions = [
+                self._get_condition_without_useless_checks(c) for c in sub_conditions
+            ]
+            print(pruned_conditions)
+            return combine_or_conditions(pruned_conditions)
+        elif condition.function_name == BooleanFunctions.AND:
+            sub_conditions = get_first_level_and_conditions(condition)
+            tag_match_strings = set()
+            eq_match_strings = set()
+            for cond in sub_conditions:
+                tag_match = _tag_not_empty.match(cond)
+                if tag_match:
+                    tag_match_strings.add(tag_match.string("key"))
+                eq_match = self.__optimizable_pattern.match(cond)
+                if eq_match:
+                    eq_match_strings.add(eq_match.string("key"))
+            # TODO: This will have redundant matches, optimize it later
+            useful_conditions = []
+            for cond in sub_conditions:
+                tag_match = _tag_not_empty.match(cond)
+                if tag_match:
+                    requested_tag = tag_match.string("key")
+                    if requested_tag in eq_match_strings:
+                        continue
+                useful_conditions.append(
+                    self._get_condition_without_useless_checks(cond)
+                )
+            return combine_and_conditions(useful_conditions)
+        else:
+            return condition
+
+            # LOOK AT ME: maybe strip out unnecessary ones here?
+            # It's unclear where the joins come in to the picture here. Maybe tags queries don't use joins?
+            # this is pseudocode
+            # if useless_checks_exist(conditions):
+            #     new_conditions = combine_and_conditions([c for c in conditions if c != useless_condition])
+
+            #     query.set_ast_condition(new_conditions)
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         if not get_config(self.__killswitch, 1):
@@ -184,6 +231,9 @@ class MappingOptimizer(QueryProcessor):
         cond_class = ConditionClass.IRRELEVANT
         condition = query.get_condition()
         if condition is not None:
+            condition = self._get_condition_without_useless_checks(condition)
+
+            query.set_ast_condition(condition)
             cond_class = self.__classify_combined_conditions(condition)
             if cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
