@@ -194,8 +194,8 @@ def _format_arrayjoin(
 ) -> Optional[StringNode]:
     array_join = query.get_arrayjoin()
     if array_join is not None:
-        # TODO fix hardcode array_join[0]
-        return _build_optional_string_node("ARRAY JOIN", array_join[0], formatter)
+        column_likes_joined = [el.accept(formatter) for el in array_join]
+        return StringNode("ARRAY JOIN {}".format(",".join(column_likes_joined)))
 
     return None
 
