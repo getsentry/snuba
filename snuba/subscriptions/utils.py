@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Mapping, NamedTuple
+from typing import Any, Mapping, NamedTuple, Optional
 
 from snuba.utils.types import Interval
 
@@ -13,7 +13,9 @@ class SchedulingWatermarkMode(Enum):
 
 
 class Tick(NamedTuple):
-    partition: int
+    # TODO: Partition is only optional in the old subscription worker, once
+    # that is deprecated, partition should no longer be optional
+    partition: Optional[int]
     offsets: Interval[int]
     timestamps: Interval[datetime]
 

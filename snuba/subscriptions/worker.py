@@ -19,8 +19,8 @@ from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
-from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -34,13 +34,16 @@ from snuba.web.query import parse_and_run_query
 logger = logging.getLogger("snuba.subscriptions")
 
 
+SubscriptionWithTick = Tuple[Subscription, Tick]
+
+
 class SubscriptionTaskResultFuture(NamedTuple):
-    task: ScheduledTask[Subscription]
+    task: ScheduledTask[Tuple[Subscription, Tick]]
     future: Future[Tuple[Request, Result]]
 
 
 class SubscriptionTaskResult(NamedTuple):
-    task: ScheduledTask[Subscription]
+    task: ScheduledTask[Tuple[Subscription, Tick]]
     result: Tuple[Request, Result]
 
 
@@ -73,7 +76,7 @@ class SubscriptionWorker(
         )
 
     def __execute(
-        self, task: ScheduledTask[Subscription], tick: Tick
+        self, task: ScheduledTask[SubscriptionWithTick], tick: Tick
     ) -> Tuple[Request, Result]:
         # Measure the amount of time that took between this task being
         # scheduled and it beginning to execute.
@@ -86,13 +89,13 @@ class SubscriptionWorker(
         # execution environment.
         timer = Timer("query")
 
-        request = task.task.data.build_request(
+        request = task.task[0].data.build_request(
             self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
         )
         return self.__execute_query(request, timer, task)
 
     def __execute_query(
-        self, request: Request, timer: Timer, task: ScheduledTask[Subscription]
+        self, request: Request, timer: Timer, task: ScheduledTask[SubscriptionWithTick]
     ) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
             is_consistent_query = request.settings.get_consistent()
@@ -175,8 +178,8 @@ class SubscriptionWorker(
                                 "other": result.result,
                                 "query_columns": request.query.get_selected_columns(),
                                 "query_condition": request.query.get_condition(),
-                                "subscription_id": task.task.identifier,
-                                "project": task.task.data.project_id,
+                                "subscription_id": task.task[0].identifier,
+                                "project": task.task[0].data.project_id,
                             },
                         )
 
@@ -223,7 +226,7 @@ class SubscriptionWorker(
             SubscriptionTaskResultFuture(
                 task, self.__executor.submit(self.__execute, task, tick)
             )
-            for task in self.__schedulers[message.partition.index].find(tick.timestamps)
+            for task in self.__schedulers[message.partition.index].find(tick)
         ]
 
     def flush_batch(

@@ -103,8 +103,8 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
     def __update_offset_high_watermark(self, message: Message[Tick]) -> None:
         assert message.partition.index == 0, "Commit log cannot be partitioned"
-
         tick_partition = message.payload.partition
+        assert tick_partition is not None
         self.__latest_messages_by_partition[tick_partition] = message
 
         slowest = message
@@ -216,6 +216,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
             self.__latest_ts = message.payload.timestamps.upper
 
         tick_partition = message.payload.partition
+        assert tick_partition is not None
         self.__buffers[tick_partition].append(message)
 
         # If the buffer length exceeds `max_ticks_buffered_per_partition`
@@ -238,6 +239,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
         while all(len(buffer) > 0 for buffer in self.__buffers.values()):
             earliest_ts = message.payload.timestamps.upper
+            assert message.payload.partition is not None
             earliest_ts_partitions = {message.payload.partition}
 
             for partition_index in self.__buffers:
@@ -254,9 +256,11 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
                 if partition_ts < earliest_ts:
                     earliest_ts = tick.timestamps.upper
+                    assert tick.partition is not None
                     earliest_ts_partitions = {tick.partition}
 
                 elif partition_ts == earliest_ts:
+                    assert tick.partition is not None
                     earliest_ts_partitions.add(tick.partition)
 
             for partition_index in earliest_ts_partitions:
@@ -412,7 +416,8 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # Otherwise, add the tick message and all of it's subscriptions to
         # the queue
         tick = message.payload.tick
-        tasks = self.__schedulers[tick.partition].find_with_tick(tick)
+        assert tick.partition is not None
+        tasks = self.__schedulers[tick.partition].find(tick)
         self.__queue.append(
             message,
             deque(

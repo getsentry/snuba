@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Generic, Iterator, Tuple, TypeVar
 
 from snuba.subscriptions.utils import Tick
-from snuba.utils.types import Interval
 
 TTask = TypeVar("TTask")
 
@@ -31,7 +30,7 @@ class Scheduler(ABC, Generic[TTask]):
     """
 
     @abstractmethod
-    def find(self, interval: Interval[datetime]) -> Iterator[ScheduledTask[TTask]]:
+    def find(self, tick: Tick) -> Iterator[ScheduledTask[Tuple[TTask, Tick]]]:
         """
         Find all of the tasks that were scheduled to be executed between the
         lower bound (exclusive) and upper bound (inclusive) of the provided
@@ -39,13 +38,5 @@ class Scheduler(ABC, Generic[TTask]):
         ascending order.
 
         Will be deprecated once moving to the new subscriptions pipeline.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def find_with_tick(self, tick: Tick) -> Iterator[ScheduledTask[Tuple[TTask, Tick]]]:
-        """
-        Like `find()` but includes the tick. Required for the
-        new subscriptions pipeline.
         """
         raise NotImplementedError

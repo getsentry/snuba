@@ -20,7 +20,6 @@ from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.scheduler import ScheduledTask, Scheduler
-from snuba.utils.types import Interval
 
 TSubscription = TypeVar("TSubscription")
 
@@ -32,20 +31,11 @@ class TaskBuilder(ABC, Generic[TSubscription]):
     Takes a Subscription and a timestamp, decides whether we should
     schedule that task at the current timestamp and provides the
     task instance.
-
-    `get_task` is used by the old subscription pipeline and will eventually
-    be deprecated, `get_task_v2` is for the new scheduler + executor pipeline
     """
 
     @abstractmethod
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[TSubscription]]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_task_v2(
-        self, subscription: Tuple[Subscription, Tick], timestamp: int
+        self, subscription_with_tick: Tuple[Subscription, Tick], timestamp: int
     ) -> Optional[ScheduledTask[Tuple[Subscription, Tick]]]:
         raise NotImplementedError
 
@@ -63,16 +53,6 @@ class ImmediateTaskBuilder(TaskBuilder[Subscription]):
         self.__count = 0
 
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[Subscription]]:
-        resolution = int(subscription.data.resolution.total_seconds())
-        if timestamp % resolution == 0:
-            self.__count += 1
-            return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
-        else:
-            return None
-
-    def get_task_v2(
         self, subscription_with_tick: Tuple[Subscription, Tick], timestamp: int
     ) -> Optional[ScheduledTask[Tuple[Subscription, Tick]]]:
         subscription, _ = subscription_with_tick
@@ -120,28 +100,6 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
         self.__count_max_resolution = 0
 
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[Subscription]]:
-        resolution = int(subscription.data.resolution.total_seconds())
-
-        if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
-            if timestamp % resolution == 0:
-                self.__count += 1
-                self.__count_max_resolution += 1
-                return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
-            else:
-                return None
-
-        jitter = subscription.identifier.uuid.int % resolution
-        if timestamp % resolution == jitter:
-            self.__count += 1
-            return ScheduledTask(
-                datetime.fromtimestamp(timestamp - jitter), subscription
-            )
-        else:
-            return None
-
-    def get_task_v2(
         self, subscription_with_tick: Tuple[Subscription, Tick], timestamp: int
     ) -> Optional[ScheduledTask[Tuple[Subscription, Tick]]]:
         subscription, _ = subscription_with_tick
@@ -273,25 +231,14 @@ class DelegateTaskBuilder(TaskBuilder[Subscription]):
         self.__rollout_state = TaskBuilderModeState()
 
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[Subscription]]:
-        immediate_task = self.__immediate_builder.get_task(subscription, timestamp)
-        jittered_task = self.__jittered_builder.get_task(subscription, timestamp)
-        primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
-        if primary_builder == TaskBuilderMode.JITTERED:
-            return jittered_task
-        else:
-            return immediate_task
-
-    def get_task_v2(
         self, subscription_with_tick: Tuple[Subscription, Tick], timestamp: int
     ) -> Optional[ScheduledTask[Tuple[Subscription, Tick]]]:
         subscription, _ = subscription_with_tick
 
-        immediate_task = self.__immediate_builder.get_task_v2(
+        immediate_task = self.__immediate_builder.get_task(
             subscription_with_tick, timestamp
         )
-        jittered_task = self.__jittered_builder.get_task_v2(
+        jittered_task = self.__jittered_builder.get_task(
             subscription_with_tick, timestamp
         )
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
@@ -367,28 +314,7 @@ class SubscriptionScheduler(Scheduler[Subscription]):
 
         return self.__subscriptions
 
-    def find(
-        self, interval: Interval[datetime]
-    ) -> Iterator[ScheduledTask[Subscription]]:
-        subscriptions = self.__get_subscriptions()
-
-        for timestamp in range(
-            math.ceil(interval.lower.timestamp()),
-            math.ceil(interval.upper.timestamp()),
-        ):
-            for subscription in subscriptions:
-                task = self.__builder.get_task(subscription, timestamp)
-                if task is not None:
-                    yield task
-
-        metrics = self.__builder.reset_metrics()
-        if any(metric for metric in metrics if metric[1] > 0):
-            for metric in metrics:
-                self.__metrics.increment(metric[0], metric[1], tags=metric[2])
-
-    def find_with_tick(
-        self, tick: Tick
-    ) -> Iterator[ScheduledTask[Tuple[Subscription, Tick]]]:
+    def find(self, tick: Tick) -> Iterator[ScheduledTask[Tuple[Subscription, Tick]]]:
         interval = tick.timestamps
 
         subscriptions = self.__get_subscriptions()
@@ -398,7 +324,7 @@ class SubscriptionScheduler(Scheduler[Subscription]):
             math.ceil(interval.upper.timestamp()),
         ):
             for subscription in subscriptions:
-                task = self.__builder.get_task_v2((subscription, tick), timestamp)
+                task = self.__builder.get_task((subscription, tick), timestamp)
                 if task is not None:
                     yield task
 

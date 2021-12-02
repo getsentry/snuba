@@ -13,6 +13,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.types import Interval
@@ -37,22 +38,28 @@ class TestSubscriptionScheduler:
             ),
         )
 
-    def build_interval(self, lower: timedelta, upper: timedelta) -> Interval[datetime]:
-        return Interval(self.now + lower, self.now + upper)
+    def build_tick(self, lower: timedelta, upper: timedelta) -> Tick:
+        return Tick(None, Interval(1, 5), Interval(self.now + lower, self.now + upper))
 
-    def sort_key(self, task: ScheduledTask[Subscription]) -> Tuple[datetime, uuid.UUID]:
-        return task.timestamp, task.task.identifier.uuid
+    def sort_key(
+        self, task: ScheduledTask[Tuple[Subscription, Tick]]
+    ) -> Tuple[datetime, uuid.UUID]:
+        return task.timestamp, task.task[0].identifier.uuid
 
     def run_test(
         self,
         subscriptions: Collection[Subscription],
         start: timedelta,
         end: timedelta,
-        expected: Collection[ScheduledTask[Subscription]],
+        expected: Collection[ScheduledTask[Tuple[Subscription, Tick]]],
         sort_key: Optional[
-            Callable[[ScheduledTask[Subscription]], Tuple[datetime, uuid.UUID]]
+            Callable[
+                [ScheduledTask[Tuple[Subscription, Tick]]], Tuple[datetime, uuid.UUID]
+            ]
         ] = None,
     ) -> None:
+        tick = self.build_tick(start, end)
+
         store = RedisSubscriptionDataStore(
             redis_client, self.entity_key, self.partition_id,
         )
@@ -66,7 +73,7 @@ class TestSubscriptionScheduler:
             DummyMetricsBackend(strict=True),
         )
 
-        result = list(scheduler.find(self.build_interval(start, end)))
+        result = list(scheduler.find(tick))
         if sort_key:
             result.sort(key=sort_key)
 
@@ -75,24 +82,35 @@ class TestSubscriptionScheduler:
     def test_simple(self) -> None:
         state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
+        start = timedelta(minutes=-10)
+        end = timedelta(minutes=0)
         self.run_test(
             [subscription],
-            start=timedelta(minutes=-10),
-            end=timedelta(minutes=0),
+            start=start,
+            end=end,
             expected=[
-                ScheduledTask(self.now + timedelta(minutes=-10 + i), subscription)
+                ScheduledTask(
+                    self.now + timedelta(minutes=-10 + i),
+                    (subscription, self.build_tick(start, end)),
+                )
                 for i in range(10)
             ],
         )
 
     def test_simple_jittered(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=1))
+        start = timedelta(minutes=-10)
+        end = timedelta(minutes=0)
+
         self.run_test(
             [subscription],
-            start=timedelta(minutes=-10),
-            end=timedelta(minutes=0),
+            start=start,
+            end=end,
             expected=[
-                ScheduledTask(self.now + timedelta(minutes=-10 + i), subscription)
+                ScheduledTask(
+                    self.now + timedelta(minutes=-10 + i),
+                    (subscription, self.build_tick(start, end)),
+                )
                 for i in range(10)
             ],
         )
@@ -107,38 +125,55 @@ class TestSubscriptionScheduler:
 
     def test_subscription_resolution_larger_than_interval(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=3))
+        start = timedelta(minutes=-1)
+        end = timedelta(minutes=1)
         self.run_test(
             [subscription],
-            start=timedelta(minutes=-1),
-            end=timedelta(minutes=1),
-            expected=[ScheduledTask(self.now, subscription)],
+            start=start,
+            end=end,
+            expected=[
+                ScheduledTask(self.now, (subscription, self.build_tick(start, end)))
+            ],
         )
 
     def test_subscription_resolution_larger_than_tiny_interval(self) -> None:
         state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
+        start = timedelta(seconds=-1)
+        end = timedelta(seconds=1)
         self.run_test(
             [subscription],
-            start=timedelta(seconds=-1),
-            end=timedelta(seconds=1),
-            expected=[ScheduledTask(self.now, subscription)],
+            start=start,
+            end=end,
+            expected=[
+                ScheduledTask(self.now, (subscription, self.build_tick(start, end)))
+            ],
         )
 
     def test_multiple_subscriptions(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=1))
         other_subscription = self.build_subscription(timedelta(minutes=2))
+        start = timedelta(minutes=-10)
+        end = timedelta(minutes=0)
         expected = [
-            ScheduledTask(self.now + timedelta(minutes=-10 + i), subscription)
+            ScheduledTask(
+                self.now + timedelta(minutes=-10 + i),
+                (subscription, self.build_tick(start, end)),
+            )
             for i in range(10)
         ] + [
-            ScheduledTask(self.now + timedelta(minutes=-10 + i), other_subscription)
+            ScheduledTask(
+                self.now + timedelta(minutes=-10 + i),
+                (other_subscription, self.build_tick(start, end)),
+            )
             for i in range(0, 10, 2)
         ]
+
         expected.sort(key=self.sort_key)
         self.run_test(
             [subscription, other_subscription],
-            start=timedelta(minutes=-10),
-            end=timedelta(minutes=0),
+            start=start,
+            end=end,
             expected=expected,
             sort_key=self.sort_key,
         )
