@@ -36,7 +36,5 @@ class Scheduler(ABC, Generic[TTask]):
         lower bound (exclusive) and upper bound (inclusive) of the provided
         interval. The tasks returned should be ordered by timestamp in
         ascending order.
-
-        Will be deprecated once moving to the new subscriptions pipeline.
         """
         raise NotImplementedError
