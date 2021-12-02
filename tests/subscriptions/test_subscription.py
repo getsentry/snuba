@@ -228,7 +228,7 @@ class TestMetricsCountersSubscriptionCreator:
     @pytest.mark.parametrize("subscription", TESTS_CREATE_METRICS)
     def test(self, subscription: SubscriptionData) -> None:
         dataset = get_dataset("metrics")
-        creator = SubscriptionCreator(dataset)
+        creator = SubscriptionCreator(dataset, entity_key=EntityKey.METRICS_COUNTERS)
         # XXX (ahmed): hack to circumvent using the default entity of a dataset as the default
         # entity for the metrics dataset is METRICS_SETS, and this subscription type is currently
         # not supported. Will add a fix shortly that relies on passing the entity key rather
