@@ -112,7 +112,7 @@ def _format_query_content(
                     query.get_from_clause()
                 ),
             ),
-            _build_optional_string_node("ARRAY JOIN", query.get_arrayjoin(), formatter),
+            _format_arrayjoin(query, formatter),
             _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
             if isinstance(query, Query)
             else None,
@@ -185,6 +185,17 @@ def _format_limitby(
         return StringNode(
             "LIMIT {} BY {}".format(ast_limitby.limit, ",".join(columns_accepted))
         )
+
+    return None
+
+
+def _format_arrayjoin(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatterBase
+) -> Optional[StringNode]:
+    array_join = query.get_arrayjoin()
+    if array_join is not None:
+        column_likes_joined = [el.accept(formatter) for el in array_join]
+        return StringNode("ARRAY JOIN {}".format(",".join(column_likes_joined)))
 
     return None
 

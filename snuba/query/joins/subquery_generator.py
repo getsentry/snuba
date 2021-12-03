@@ -245,7 +245,9 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
 
     array_join = query.get_arrayjoin()
     if array_join is not None:
-        query.set_arrayjoin(_process_root(array_join, subqueries, alias_generator))
+        query.set_arrayjoin(
+            [_process_root(el, subqueries, alias_generator) for el in array_join]
+        )
 
     ast_condition = query.get_condition()
     if ast_condition is not None:
