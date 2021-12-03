@@ -257,7 +257,7 @@ class ScheduledSubscriptionTask:
 class SubscriptionScheduler(ABC):
     """
     The scheduler maintains the scheduling state for subscription tasks and
-    provides the ability to query the schedule to find tasks that were
+    provides the ability to query the schedule to find tasks that should be
     scheduled between the time interval of a tick.
     """
 
