@@ -4,7 +4,11 @@ from typing import Sequence, Tuple
 import pytest
 
 from snuba import state
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import (
+    ScheduledSubscriptionTask,
+    Subscription,
+    SubscriptionWithTick,
+)
 from snuba.subscriptions.scheduler import (
     DelegateTaskBuilder,
     ImmediateTaskBuilder,
@@ -13,7 +17,6 @@ from snuba.subscriptions.scheduler import (
     TaskBuilder,
 )
 from snuba.subscriptions.utils import Tick
-from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.types import Interval
 from tests.subscriptions.subscriptions_utils import UUIDS, build_subscription
 
@@ -36,9 +39,9 @@ TEST_CASES = [
         [
             (
                 ALIGNED_TIMESTAMP,
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    (
+                    SubscriptionWithTick(
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(ALIGNED_TIMESTAMP, ALIGNED_TIMESTAMP + 60),
                     ),
@@ -73,12 +76,12 @@ TEST_CASES = [
         [
             (
                 ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     # Notice the timestamp of the task is the one without
                     # jitter so that the query time range is still aligned
                     # to the minute without jitter.
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    (
+                    SubscriptionWithTick(
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
                             ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
@@ -117,9 +120,9 @@ TEST_CASES = [
         [
             (
                 ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    (
+                    SubscriptionWithTick(
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
                             ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
@@ -139,9 +142,9 @@ TEST_CASES = [
         [
             (
                 ALIGNED_TIMESTAMP,
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    (
+                    SubscriptionWithTick(
                         build_subscription(timedelta(minutes=2), 0),
                         build_tick(ALIGNED_TIMESTAMP, ALIGNED_TIMESTAMP + 60),
                     ),
@@ -164,9 +167,9 @@ TEST_CASES = [
         [
             (
                 ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    (
+                    SubscriptionWithTick(
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
                             ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
@@ -202,9 +205,9 @@ TEST_CASES = [
         [
             (
                 ALIGNED_TIMESTAMP + UUIDS[0].int % 60 + 60,
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP + 60),
-                    (
+                    SubscriptionWithTick(
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
                             ALIGNED_TIMESTAMP + UUIDS[0].int % 60 + 60,
@@ -228,10 +231,10 @@ TEST_CASES = [
     "builder, primary_builder_config, sequence_in, task_sequence, metrics", TEST_CASES
 )
 def test_sequences(
-    builder: TaskBuilder[Subscription],
+    builder: TaskBuilder,
     primary_builder_config: str,
     sequence_in: Sequence[Tuple[int, Subscription]],
-    task_sequence: Sequence[Tuple[int, ScheduledTask[Tuple[Subscription, Tick]]]],
+    task_sequence: Sequence[Tuple[int, ScheduledSubscriptionTask]],
     metrics: Sequence[Tuple[str, int, Tags]],
 ) -> None:
     """
@@ -250,7 +253,7 @@ def test_sequences(
                 datetime.fromtimestamp(timestamp) + timedelta(minutes=1),
             ),
         )
-        ret = builder.get_task((subscription, tick), timestamp)
+        ret = builder.get_task(SubscriptionWithTick(subscription, tick), timestamp)
         if ret:
             output.append((timestamp, ret))
 

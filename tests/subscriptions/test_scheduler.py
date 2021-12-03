@@ -7,15 +7,16 @@ from snuba.datasets.entities import EntityKey
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     PartitionId,
+    ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
     SubscriptionIdentifier,
+    SubscriptionWithTick,
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.types import Interval
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
@@ -41,9 +42,7 @@ class TestSubscriptionScheduler:
     def build_tick(self, lower: timedelta, upper: timedelta) -> Tick:
         return Tick(None, Interval(1, 5), Interval(self.now + lower, self.now + upper))
 
-    def sort_key(
-        self, task: ScheduledTask[Tuple[Subscription, Tick]]
-    ) -> Tuple[datetime, uuid.UUID]:
+    def sort_key(self, task: ScheduledSubscriptionTask) -> Tuple[datetime, uuid.UUID]:
         return task.timestamp, task.task[0].identifier.uuid
 
     def run_test(
@@ -51,11 +50,9 @@ class TestSubscriptionScheduler:
         subscriptions: Collection[Subscription],
         start: timedelta,
         end: timedelta,
-        expected: Collection[ScheduledTask[Tuple[Subscription, Tick]]],
+        expected: Collection[ScheduledSubscriptionTask],
         sort_key: Optional[
-            Callable[
-                [ScheduledTask[Tuple[Subscription, Tick]]], Tuple[datetime, uuid.UUID]
-            ]
+            Callable[[ScheduledSubscriptionTask], Tuple[datetime, uuid.UUID]]
         ] = None,
     ) -> None:
         tick = self.build_tick(start, end)
@@ -89,9 +86,9 @@ class TestSubscriptionScheduler:
             start=start,
             end=end,
             expected=[
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
-                    (subscription, self.build_tick(start, end)),
+                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
                 )
                 for i in range(10)
             ],
@@ -107,9 +104,9 @@ class TestSubscriptionScheduler:
             start=start,
             end=end,
             expected=[
-                ScheduledTask(
+                ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
-                    (subscription, self.build_tick(start, end)),
+                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
                 )
                 for i in range(10)
             ],
@@ -132,7 +129,10 @@ class TestSubscriptionScheduler:
             start=start,
             end=end,
             expected=[
-                ScheduledTask(self.now, (subscription, self.build_tick(start, end)))
+                ScheduledSubscriptionTask(
+                    self.now,
+                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
+                )
             ],
         )
 
@@ -146,7 +146,10 @@ class TestSubscriptionScheduler:
             start=start,
             end=end,
             expected=[
-                ScheduledTask(self.now, (subscription, self.build_tick(start, end)))
+                ScheduledSubscriptionTask(
+                    self.now,
+                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
+                )
             ],
         )
 
@@ -156,15 +159,15 @@ class TestSubscriptionScheduler:
         start = timedelta(minutes=-10)
         end = timedelta(minutes=0)
         expected = [
-            ScheduledTask(
+            ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
-                (subscription, self.build_tick(start, end)),
+                SubscriptionWithTick(subscription, self.build_tick(start, end)),
             )
             for i in range(10)
         ] + [
-            ScheduledTask(
+            ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
-                (other_subscription, self.build_tick(start, end)),
+                SubscriptionWithTick(other_subscription, self.build_tick(start, end)),
             )
             for i in range(0, 10, 2)
         ]

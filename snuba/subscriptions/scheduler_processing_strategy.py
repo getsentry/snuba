@@ -25,10 +25,9 @@ from arroyo.types import Position
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import SubscriptionScheduler
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.scheduler import Scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -360,7 +359,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
     def __init__(
         self,
         entity_key: EntityKey,
-        schedulers: Mapping[int, Scheduler[Subscription]],
+        schedulers: Mapping[int, SubscriptionScheduler],
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         commit: Callable[[Mapping[Partition, Position]], None],

@@ -17,10 +17,12 @@ from snuba.subscriptions.codecs import (
 )
 from snuba.subscriptions.data import (
     PartitionId,
+    ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionWithTick,
 )
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
@@ -31,7 +33,6 @@ from snuba.subscriptions.entity_subscription import (
 from snuba.subscriptions.utils import Tick
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.types import Interval
 
 
@@ -145,9 +146,9 @@ def test_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            (
+            SubscriptionWithTick(
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
@@ -167,7 +168,9 @@ def test_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task[0].identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
@@ -208,9 +211,9 @@ def test_sessions_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            (
+            SubscriptionWithTick(
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
@@ -253,14 +256,14 @@ def test_subscription_task_encoder() -> None:
 
     tick = Tick(0, Interval(1, 5), Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)))
 
-    subscription_with_tick = (
+    subscription_with_tick = SubscriptionWithTick(
         Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
         tick,
     )
 
-    task = ScheduledTask(timestamp=epoch, task=subscription_with_tick)
+    task = ScheduledSubscriptionTask(timestamp=epoch, task=subscription_with_tick)
 
     encoded = encoder.encode(task)
 
