@@ -106,7 +106,7 @@ snql_grammar = Grammar(
     match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
-    arrayjoin_clause      = space+ "ARRAY JOIN" space+ (tag_column / subscriptable / simple_term)
+    arrayjoin_clause      = space+ "ARRAY JOIN" space+ arrayjoin_entity arrayjoin_optional
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
@@ -139,6 +139,9 @@ snql_grammar = Grammar(
     select_list          = select_columns* (selected_expression)
     select_columns       = selected_expression space* comma
     selected_expression  = space* (aliased_tag_column / aliased_subscriptable / aliased_column_name / low_pri_arithmetic)
+
+    arrayjoin_entity     = tag_column / subscriptable / simple_term
+    arrayjoin_optional   = (space* comma space* arrayjoin_entity)*
 
     group_list            = group_columns* (selected_expression)
     group_columns         = selected_expression space* comma
@@ -733,10 +736,27 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return ret
 
     def visit_arrayjoin_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
-    ) -> Expression:
-        _, _, _, expression = visited_children
-        return expression
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Any, Expression, Optional[List[Expression]]],
+    ) -> Sequence[Expression]:
+        _, _, _, join_first, join_rest = visited_children
+        exprs = [join_first]
+
+        if join_rest is not None:
+            exprs.extend(join_rest)
+
+        return exprs
+
+    def visit_arrayjoin_optional(
+        self, node: Node, visited_children: List[Tuple[Any, Any, Any, Expression]],
+    ) -> List[Expression]:
+        exprs: List[Expression] = list()
+        if visited_children is not None:
+            for child in visited_children:
+                _, _, _, exp = child
+                exprs.append(exp)
+        return exprs
 
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
@@ -1011,18 +1031,24 @@ def _unpack_array_conditions(
     entity_alias: Optional[str] = None,
 ) -> None:
     array_columns: Set[str] = set()
-    array_join_col = query.get_arrayjoin()
-    array_join = ""
-    if array_join_col is not None:
-        assert isinstance(array_join_col, Column)
-        array_join = f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+    array_join_arguments = query.get_arrayjoin()
+    array_join_columns = set()
+    if array_join_arguments is not None:
+        for array_join_col in array_join_arguments:
+            assert isinstance(array_join_col, Column)
+            array_join_columns.add(
+                f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+            )
 
     entity_alias = f"{entity_alias}." if entity_alias is not None else ""
     for column in schema:
         if isinstance(column.type, Array):
             aliased_base_name = f"{entity_alias}{column.base_name}"
             aliased_flattened = f"{entity_alias}{column.flattened}"
-            if aliased_base_name == array_join or aliased_flattened == array_join:
+            if (
+                aliased_base_name in array_join_columns
+                or aliased_flattened in array_join_columns
+            ):
                 continue
 
             array_columns.add(aliased_base_name)

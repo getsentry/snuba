@@ -646,7 +646,9 @@ class TestTransactionsApi(BaseApiTest):
             end_time=(self.base_time + self.skew).isoformat(),
             limit_by_count=LIMIT_BY_COUNT,
         )
-        response = self.app.post(SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"}))
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"})
+        )
         parsed_data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -669,3 +671,37 @@ class TestTransactionsApi(BaseApiTest):
 
         for key in records_by_limit_columns.keys():
             assert len(records_by_limit_columns[key]) == LIMIT_BY_COUNT, key
+
+    def test_arrayjoin_multicolumn(self) -> None:
+        query_str = """MATCH (transactions)
+                    SELECT event_id,
+                           measurements.key,
+                           measurements.value
+                    ARRAY JOIN measurements.key, measurements.value
+                    WHERE project_id = 1
+                    AND finish_ts >= toDateTime('{start_time}')
+                    AND finish_ts < toDateTime('{end_time}')
+                    ORDER BY event_id ASC, measurements.key ASC
+                    LIMIT 4
+                    """.format(
+            start_time=(self.base_time - self.skew).isoformat(),
+            end_time=(self.base_time + self.skew).isoformat(),
+        )
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"})
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 4, data
+        key_column = "measurements.key"
+        value_column = "measurements.value"
+
+        assert data["data"][0][key_column] == "lcp"
+        assert data["data"][0][value_column] == 32.129
+        assert data["data"][1][key_column] == "lcp.elementSize"
+        assert data["data"][1][value_column] == 4242
+        assert data["data"][2][key_column] == "lcp"
+        assert data["data"][2][value_column] == 32.129
+        assert data["data"][3][key_column] == "lcp.elementSize"
+        assert data["data"][3][value_column] == 4242
