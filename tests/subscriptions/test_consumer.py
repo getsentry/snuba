@@ -9,17 +9,10 @@ from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.errors import ConsumerError
 from arroyo.utils.clock import TestingClock
 
-from snuba.subscriptions.consumer import Tick, TickConsumer
+from snuba.subscriptions.consumer import TickConsumer
+from snuba.subscriptions.utils import Tick
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes, assert_does_not_change
-
-
-def test_tick_time_shift() -> None:
-    offsets = Interval(0, 1)
-    tick = Tick(offsets, Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)))
-    assert tick.time_shift(timedelta(hours=24)) == Tick(
-        offsets, Interval(datetime(1970, 1, 2), datetime(1970, 1, 3))
-    )
 
 
 @pytest.mark.parametrize(
@@ -84,9 +77,9 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     assert consumer.poll() == Message(
         Partition(topic, 0),
         0,
-        Tick(offsets=Interval(0, 1), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            None, offsets=Interval(0, 1), timestamps=Interval(epoch, epoch)
+        ).time_shift(time_shift),
         epoch,
     )
 
@@ -104,9 +97,9 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     assert consumer.poll() == Message(
         Partition(topic, 0),
         1,
-        Tick(offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            None, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)
+        ).time_shift(time_shift),
         epoch,
     )
 
@@ -175,9 +168,9 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     assert consumer.poll() == Message(
         Partition(topic, 0),
         1,
-        Tick(offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
-            time_shift
-        ),
+        Tick(
+            None, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)
+        ).time_shift(time_shift),
         epoch,
     )
 
@@ -239,6 +232,7 @@ def test_tick_consumer_non_monotonic() -> None:
             partition,
             0,
             Tick(
+                None,
                 offsets=Interval(0, 1),
                 timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
             ),
@@ -265,6 +259,7 @@ def test_tick_consumer_non_monotonic() -> None:
             partition,
             1,
             Tick(
+                None,
                 offsets=Interval(1, 3),
                 timestamps=Interval(
                     epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)

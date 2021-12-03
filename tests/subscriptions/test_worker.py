@@ -22,7 +22,6 @@ from snuba.query.matchers import (
     Pattern,
     String,
 )
-from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     PartitionId,
     SnQLSubscriptionData,
@@ -33,6 +32,7 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.entity_subscription import SessionsSubscription
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
+from snuba.subscriptions.utils import Tick
 from snuba.subscriptions.worker import (
     SubscriptionTaskResult,
     SubscriptionWorker,
@@ -150,6 +150,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
     now = datetime(2000, 1, 1)
 
     tick = Tick(
+        None,
         offsets=Interval(0, 1),
         timestamps=Interval(now - (frequency * evaluations), now),
     )
@@ -259,6 +260,7 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
     now = datetime(2000, 1, 1)
 
     tick = Tick(
+        None,
         offsets=Interval(0, 1),
         timestamps=Interval(now - (frequency * evaluations), now),
     )

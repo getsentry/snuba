@@ -1,17 +1,17 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Iterator
 
 from snuba.datasets.entities import EntityKey
 from snuba.redis import redis_client
-from snuba.subscriptions.data import PartitionId, Subscription
+from snuba.subscriptions.data import PartitionId, ScheduledSubscriptionTask
+from snuba.subscriptions.data import SubscriptionScheduler as SubscriptionSchedulerBase
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.scheduler import ScheduledTask, Scheduler
-from snuba.utils.types import Interval
 
 
-class LoadTestingSubscriptionScheduler(Scheduler[Subscription]):
+class LoadTestingSubscriptionScheduler(SubscriptionSchedulerBase):
     """
     Like SubscriptionScheduler but multiplies the number of subscriptions
     by the load_factor passed. Unlike subscription scheduler this version
@@ -41,9 +41,7 @@ class LoadTestingSubscriptionScheduler(Scheduler[Subscription]):
             for _ in range(load_factor)
         ]
 
-    def find(
-        self, interval: Interval[datetime]
-    ) -> Iterator[ScheduledTask[Subscription]]:
+    def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         for scheduler in self.__scheduler_copies:
-            for s in scheduler.find(interval):
+            for s in scheduler.find(tick):
                 yield s
