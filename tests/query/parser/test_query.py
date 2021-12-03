@@ -69,12 +69,9 @@ DEFAULT_TEST_QUERY_CONDITIONS = [
     "project_id = 1",
 ]
 
-# If these are the only WHERE conditions we can do the simplest thing
-PRECOMPUTED_TEST_QUERY_CONDITIONS_STR = " AND ".join(DEFAULT_TEST_QUERY_CONDITIONS)
 
-
-def prepend_condition_str_to_default(condition: str) -> str:
-    return " AND ".join([condition] + DEFAULT_TEST_QUERY_CONDITIONS)
+def snql_conditions_with_default(*conditions: str) -> str:
+    return " AND ".join(list(conditions) + DEFAULT_TEST_QUERY_CONDITIONS)
 
 
 test_cases = [
@@ -85,7 +82,7 @@ test_cases = [
               column1 BY column2, column3
            WHERE {conditions}
         """.format(
-            conditions=PRECOMPUTED_TEST_QUERY_CONDITIONS_STR
+            conditions=snql_conditions_with_default()
         ),
         Query(
             QueryEntity(
@@ -130,7 +127,7 @@ test_cases = [
         WHERE {conditions}
         HAVING times_seen > 1
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "tags[sentry:dist] IN tuple('dist1', 'dist2')"
             )
         ),
@@ -229,7 +226,7 @@ test_cases = [
                  column2 DESC,
                  func(column3) DESC
         """.format(
-            conditions=PRECOMPUTED_TEST_QUERY_CONDITIONS_STR
+            conditions=snql_conditions_with_default()
         ),
         Query(
             QueryEntity(
@@ -271,7 +268,7 @@ test_cases = [
         WHERE {conditions}
         ORDER BY column1 DESC
         """.format(
-            conditions=PRECOMPUTED_TEST_QUERY_CONDITIONS_STR
+            conditions=snql_conditions_with_default()
         ),
         Query(
             QueryEntity(
@@ -303,7 +300,7 @@ test_cases = [
         SELECT column1, tags[test] BY foo(tags[test2])
         WHERE {conditions}
         """.format(
-            conditions=PRECOMPUTED_TEST_QUERY_CONDITIONS_STR
+            conditions=snql_conditions_with_default()
         ),
         Query(
             QueryEntity(
@@ -362,7 +359,7 @@ test_cases = [
         WHERE {conditions}
         ORDER BY group_id ASC
         """.format(
-            conditions=prepend_condition_str_to_default("foo(issue_id) AS group_id = 1")
+            conditions=snql_conditions_with_default("foo(issue_id) AS group_id = 1")
         ),
         Query(
             QueryEntity(
@@ -444,7 +441,7 @@ test_cases = [
                foo(column3) AS exp
         WHERE {conditions}
         """.format(
-            conditions=PRECOMPUTED_TEST_QUERY_CONDITIONS_STR
+            conditions=snql_conditions_with_default()
         ),
         Query(
             QueryEntity(
@@ -479,7 +476,7 @@ test_cases = [
         SELECT foo(column) AS exp, exp
         WHERE {conditions}
         """.format(
-            conditions=PRECOMPUTED_TEST_QUERY_CONDITIONS_STR
+            conditions=snql_conditions_with_default()
         ),
         Query(
             QueryEntity(
@@ -512,7 +509,7 @@ test_cases = [
         ARRAY JOIN exception_stacks.type
         WHERE {conditions}
         """.format(
-            conditions=PRECOMPUTED_TEST_QUERY_CONDITIONS_STR
+            conditions=snql_conditions_with_default()
         ),
         Query(
             QueryEntity(
@@ -540,7 +537,7 @@ test_cases = [
             exception_stacks.type
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "exception_stacks.type LIKE 'Arithmetic%'"
             )
         ),
@@ -600,7 +597,7 @@ test_cases = [
         ARRAY JOIN exception_stacks.type
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "exception_stacks.type LIKE 'Arithmetic%'"
             )
         ),
@@ -643,7 +640,7 @@ test_cases = [
              arrayJoin(exception_stacks)
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "exception_stacks.type LIKE 'Arithmetic%'"
             )
         ),
@@ -704,7 +701,7 @@ test_cases = [
           exception_stacks.type
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1"
             )
         ),
@@ -806,7 +803,7 @@ test_cases = [
           arrayJoin(exception_stacks.type)
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1"
             )
         ),
@@ -915,7 +912,7 @@ test_cases = [
         SELECT count() AS count BY tags_key
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "or(equals(ifNull(tags[foo], ''), 'baz'), equals(ifNull(tags[foo.bar], ''), 'qux')) = 1"
             )
         ),
@@ -992,7 +989,7 @@ test_cases = [
         ARRAY JOIN exception_stacks
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1"
             )
         ),
@@ -1057,7 +1054,7 @@ test_cases = [
         ARRAY JOIN exception_stacks, hierarchical_hashes
         WHERE {conditions}
         """.format(
-            conditions=prepend_condition_str_to_default(
+            conditions=snql_conditions_with_default(
                 "or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1"
             )
         ),
