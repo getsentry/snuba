@@ -18,7 +18,7 @@ class Query(AbstractQuery[Table]):
         from_clause: Optional[Table],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Expression] = None,
+        array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         prewhere: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,

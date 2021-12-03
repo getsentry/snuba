@@ -57,7 +57,8 @@ def format_query(
 
     array_join = query.get_arrayjoin()
     if array_join:
-        str_list.append(f"ARRAYJOIN\n{array_join.accept(eformatter)}")
+        arrayjoins = ",\n".join([e.accept(eformatter) for e in array_join])
+        str_list.append(f"ARRAYJOIN\n{arrayjoins}")
     condition = query.get_condition()
     if condition:
         str_list.append(f"WHERE\n{condition.accept(eformatter)}")

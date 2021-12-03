@@ -37,7 +37,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Expression] = None,
+        array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
