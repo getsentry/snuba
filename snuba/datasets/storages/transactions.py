@@ -140,8 +140,8 @@ storage = WritableTableStorage(
         # the bloom filter optimizer should occur before the array join optimizer
         # on the span columns because the array join optimizer will rewrite the
         # same conditions the bloom filter optimizer is looking for
-        BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time"]),
-        ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time"]),
+        BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
+        ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
         HexIntArrayColumnProcessor({"spans.group"}),
         PrewhereProcessor(
             [
