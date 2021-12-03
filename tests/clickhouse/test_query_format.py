@@ -575,9 +575,9 @@ def test_format_clickhouse_specific_query() -> None:
             "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
         ),
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
-        array_join=Column(None, None, "column1"),
+        array_join=[Column(None, None, "column1")],
         totals=True,
-        limitby=LimitBy(10, Column(None, None, "environment")),
+        limitby=LimitBy(10, [Column(None, None, "environment")]),
     )
 
     query.set_offset(50)

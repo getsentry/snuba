@@ -51,7 +51,7 @@ TESTS_CREATE_SESSIONS = [
             resolution=timedelta(minutes=1),
             entity_subscription=create_entity_subscription(dataset_name="sessions"),
         ),
-        id="Delegate subscription",
+        id="Snql subscription",
     ),
 ]
 
