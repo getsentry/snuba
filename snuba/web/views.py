@@ -469,7 +469,12 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 def create_subscription(
     *, dataset: Dataset, timer: Timer, entity: Optional[Entity] = None
 ) -> RespTuple:
-    if not entity:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
         entity = dataset.get_default_entity()
     entity_key = ENTITY_NAME_LOOKUP[entity]
 
@@ -492,7 +497,12 @@ def create_subscription(
 def delete_subscription(
     *, dataset: Dataset, partition: int, key: str, entity: Optional[Entity] = None
 ) -> RespTuple:
-    if not entity:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
         entity = dataset.get_default_entity()
     entity_key = ENTITY_NAME_LOOKUP[entity]
     SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
