@@ -221,7 +221,6 @@ class MappingOptimizer(QueryProcessor):
             pruned_conditions = [
                 self._get_condition_without_redundant_checks(c) for c in sub_conditions
             ]
-            print(pruned_conditions)
             return combine_or_conditions(pruned_conditions)
         elif condition.function_name == BooleanFunctions.AND:
             sub_conditions = get_first_level_and_conditions(condition)
