@@ -608,6 +608,7 @@ class TestReplacer:
     def test_query_time_flags_project(self) -> None:
         """
         Tests errors_replacer.set_project_needs_final()
+
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
         """
@@ -650,6 +651,7 @@ class TestReplacer:
     def test_query_time_flags_groups(self) -> None:
         """
         Tests errors_replacer.set_project_exclude_groups()
+
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
         """
@@ -721,6 +723,7 @@ class TestReplacer:
         """
         Tests errors_replacer.set_project_needs_final() and
         errors_replacer.set_project_exclude_groups() work together as expected.
+
         ReplacementType's are arbitrary, just need to show up in
         getter appropriately once set.
         """
