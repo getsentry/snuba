@@ -228,19 +228,17 @@ class MappingOptimizer(QueryProcessor):
         elif condition.function_name == BooleanFunctions.AND:
             sub_conditions = get_first_level_and_conditions(condition)
             tag_eq_match_strings = set()
-            matched_tag_not_empty_conditions = {}
+            matched_tag_exists_conditions = {}
             for condition_id, cond in enumerate(sub_conditions):
                 tag_exist_match = _tag_not_empty.match(cond)
                 if tag_exist_match:
-                    matched_tag_not_empty_conditions[condition_id] = tag_exist_match
+                    matched_tag_exists_conditions[condition_id] = tag_exist_match
                 eq_match = self.__optimizable_pattern.match(cond)
                 if eq_match:
                     tag_eq_match_strings.add(eq_match.string("key"))
             useful_conditions = []
             for condition_id, cond in enumerate(sub_conditions):
-                tag_exist_match = matched_tag_not_empty_conditions.get(
-                    condition_id, None
-                )
+                tag_exist_match = matched_tag_exists_conditions.get(condition_id, None)
                 if tag_exist_match:
                     requested_tag = tag_exist_match.string("key")
                     if requested_tag in tag_eq_match_strings:

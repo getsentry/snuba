@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -178,9 +180,9 @@ TEST_CASES = [
                 ),
             ),
         ),
-        # these expression are functionally equivalent (A AND B AND C = A AND (B AND C))
+        # these expressions are functionally equivalent (A AND B AND C = A AND (B AND C))
         # but the optimizer works by flatttening and recombining the and expressions. Therefore
-        # the query tree structure will change but the functionality will remain the same
+        # the query tree structure will change but the computation will remain the same
         id="no optimize but query will change",
     ),
     pytest.param(
@@ -223,10 +225,42 @@ TEST_CASES = [
         ),
         id="optimize more than one tag",
     ),
+]
+
+
+@pytest.mark.parametrize("input_query, expected_query", TEST_CASES)
+def test_recursive_useless_condition(
+    input_query: ClickhouseQuery, expected_query: ClickhouseQuery
+) -> None:
+    # copy the condition to the having condition so that we test both being
+    # applied in one test
+    input_query.set_ast_having(deepcopy(input_query.get_condition()))
+    expected_query.set_ast_having(deepcopy(expected_query.get_condition()))
+    MappingOptimizer(
+        column_name="tags",
+        hash_map_name="_tags_hash_map",
+        killswitch="tags_hash_map_enabled",
+    ).process_query(input_query, HTTPRequestSettings())
+    assert input_query == expected_query
+
+
+# The optimizer returns early if the condition clause is NOT_OPTIMIZABLE, thus not touching
+# the having clause of the query. This test is here to document that behaviour but there is
+# no reason that it *has* to behave this way. Feel free to change it according to your needs
+HAVING_SPECIAL_TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[Column("count", None, "count")],
+            # this condition will be transformed
             condition=or_exp(
+                and_exp(
+                    tag_existence_expression(tag_name="foo"),
+                    tag_equality_expression(tag_name="foo"),
+                ),
+                tag_existence_expression(tag_name="blah"),
+            ),
+            # this clause will not be transformed (because the optimizer returns early)
+            having=or_exp(
                 and_exp(
                     tag_existence_expression(tag_name="foo"),
                     tag_equality_expression(tag_name="foo"),
@@ -240,6 +274,13 @@ TEST_CASES = [
                 tag_equality_expression(tag_name="foo"),
                 tag_existence_expression(tag_name="blah"),
             ),
+            having=or_exp(
+                and_exp(
+                    tag_existence_expression(tag_name="foo"),
+                    tag_equality_expression(tag_name="foo"),
+                ),
+                tag_existence_expression(tag_name="blah"),
+            ),
         ),
         id="remove useless condition but don't optimize",
     ),
@@ -247,20 +288,14 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("input_query, expected_query", TEST_CASES)
-def test_recursive_useless_condition(
+def test_having_special_case(
     input_query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
+    # copy the condition to the having condition so that we test both being
+    # applied in one test
     MappingOptimizer(
         column_name="tags",
         hash_map_name="_tags_hash_map",
         killswitch="tags_hash_map_enabled",
     ).process_query(input_query, HTTPRequestSettings())
-    if input_query != expected_query:
-        print(input_query)
-        print(expected_query)
-
-        import pdb
-
-        pdb.set_trace()
-        print(input_query)
     assert input_query == expected_query
