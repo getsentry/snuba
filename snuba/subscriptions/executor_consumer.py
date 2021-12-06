@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import Future
-from typing import Callable, Mapping, NamedTuple, Optional, Tuple
+from typing import Callable, Mapping, Optional
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer
@@ -15,17 +14,10 @@ from arroyo.types import Position
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.reader import Result
-from snuba.request import Request
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 
 logger = logging.getLogger(__name__)
-
-
-class SubscriptionResultFuture(NamedTuple):
-    message: Message[KafkaPayload]
-    future: Future[Tuple[Request, Result]]
 
 
 class ExecutorBuilder:
