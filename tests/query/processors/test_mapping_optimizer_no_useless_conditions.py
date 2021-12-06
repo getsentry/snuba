@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Optional
 
 import pytest
 
@@ -114,6 +115,7 @@ TEST_CASES = [
             selected_columns=[Column("count", None, "count")],
             condition=optimized_tag_expression(),
         ),
+        1,
         id="simplest happy path",
     ),
     pytest.param(
@@ -125,6 +127,7 @@ TEST_CASES = [
             selected_columns=[Column("count", None, "count")],
             condition=or_exp(tag_existence_expression(), tag_equality_expression()),
         ),
+        None,
         id="don't reduce OR",
     ),
     pytest.param(
@@ -142,6 +145,7 @@ TEST_CASES = [
             selected_columns=[Column("count", None, "count")],
             condition=and_exp(noop, or_exp(optimized_tag_expression(), noop),),
         ),
+        1,
         id="useless condition nested in OR",
     ),
     pytest.param(
@@ -164,6 +168,7 @@ TEST_CASES = [
                 noop_or, and_exp(noop_or, and_exp(noop_or, optimized_tag_expression())),
             ),
         ),
+        1,
         id="useless condition nested in AND",
     ),
     pytest.param(
@@ -184,6 +189,7 @@ TEST_CASES = [
         # these expressions are functionally equivalent (A AND B AND C = A AND (B AND C))
         # but the optimizer works by flatttening and recombining the and expressions. Therefore
         # the query tree structure will change but the computation will remain the same
+        None,
         id="no optimize but query will change",
     ),
     pytest.param(
@@ -201,6 +207,7 @@ TEST_CASES = [
                 tag_equality_expression(tag_name="notblah"),
             ),
         ),
+        None,
         id="don't optimize when tags are different",
     ),
     pytest.param(
@@ -224,14 +231,17 @@ TEST_CASES = [
                 optimized_tag_expression(tag_name="blah"),
             ),
         ),
+        1,
         id="optimize more than one tag",
     ),
 ]
 
 
-@pytest.mark.parametrize("input_query, expected_query", TEST_CASES)
+@pytest.mark.parametrize("input_query, expected_query, optimizer_applied", TEST_CASES)
 def test_recursive_useless_condition(
-    input_query: ClickhouseQuery, expected_query: ClickhouseQuery
+    input_query: ClickhouseQuery,
+    expected_query: ClickhouseQuery,
+    optimizer_applied: Optional[int],
 ) -> None:
     state.set_config("tags_redundant_optimizer_skip_rate", 0)
     # copy the condition to the having condition so that we test both being
@@ -244,6 +254,10 @@ def test_recursive_useless_condition(
         killswitch="tags_hash_map_enabled",
     ).process_query(input_query, HTTPRequestSettings())
     assert input_query == expected_query
+    assert (
+        input_query.get_experiment_value("tags_redundant_optimizer_enabled")
+        == optimizer_applied
+    )
 
 
 # The optimizer returns early if the condition clause is NOT_OPTIMIZABLE, thus not touching
@@ -314,6 +328,7 @@ def test_experiment() -> None:
         hash_map_name="_tags_hash_map",
         killswitch="tags_hash_map_enabled",
     ).process_query(query, HTTPRequestSettings())
+    assert query.get_experiment_value("tags_redundant_optimizer_enabled") == 0
     assert query == build_query(
         selected_columns=[Column("count", None, "count")],
         condition=and_exp(tag_existence_expression(), tag_equality_expression()),

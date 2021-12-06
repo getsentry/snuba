@@ -247,12 +247,14 @@ class MappingOptimizer(QueryProcessor):
                         skip_rate = state.get_config(
                             "tags_redundant_optimizer_skip_rate", 0
                         )
-                        assert isinstance(skip_rate, float)
+                        assert isinstance(skip_rate, float) or isinstance(
+                            skip_rate, int
+                        )
                         if random.random() >= skip_rate:
-                            query.add_experiment("tags_redundant_optimizer", 1)
+                            query.add_experiment("tags_redundant_optimizer_enabled", 1)
                             continue
                         else:
-                            query.add_experiment("tags_redundant_optimizer", 0)
+                            query.add_experiment("tags_redundant_optimizer_enabled", 0)
                 useful_conditions.append(
                     self._get_condition_without_redundant_checks(cond, query)
                 )
