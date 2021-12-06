@@ -1,56 +1,16 @@
-from functools import partial
-
-import pytest
-
 from snuba.clickhouse.query import Query
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.expressions import Column, FunctionCall, Literal, StringifyVisitor
+from snuba.query.expressions import Column, FunctionCall, StringifyVisitor
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
 
-#   OTHER QUERY:[
-#       "ChainMap({'query': \"MATCH (discover SAMPLE 1.0) SELECT count() AS count BY tags_key WHERE timestamp",
-#       ">= toDateTime('2021-07-15T19:42:37.365384') AND timestamp < toDateTime('2021-10-13T19:41:50') AND",
-#       "project_id IN tuple(1) AND project_id IN tuple(1) ORDER BY count DESC LIMIT 1000\", 'dataset':",
-#       "'discover', 'parent_api': '/api/0/organizations/{organization_slug}/tags/'})"
-#   ]
 
-
-# [
-#     "SELECT (toDateTime(multiply(intDiv(toUInt32(timestamp), 14400), 14400), 'Universal') AS _snuba_time), (count() AS _snuba_count)",
-#     [
-#         "FROM",
-#         "discover_dist"
-#     ],
-#     "PREWHERE in((project_id AS _snuba_project_id), tuple(1))",
-#     "WHERE equals(deleted, 0) AND greaterOrEquals((timestamp AS _snuba_timestamp), toDateTime('2021-07-10T17:41:55', 'Universal')) AND less(_snuba_timestamp, toDateTime('2021-10-08T17:30:01', 'Universal')) AND has(tags.key, 'organization.slug') AND in(ifNull((arrayElement(tags.value, indexOf(tags.key, 'subscription.plan')) AS `_snuba_tags[subscription.plan]`), ''), tuple('am1_business', 'am1_business_auf', 'am1_business_ent', 'am1_business_ent_auf'))",
-#     "GROUP BY _snuba_time",
-#     "ORDER BY _snuba_time ASC",
-#     "LIMIT 10000 OFFSET 0"
-# ]
-
-
-# [
-#     "ChainMap({'query': \"MATCH (discover) SELECT uniq(user) AS count_unique_user WHERE timestamp >=",
-#     "toDateTime('2021-09-08T17:30:01') AND timestamp < toDateTime('2021-10-08T17:30:01') AND project_id",
-#     "IN tuple(1) AND ifNull(tags[organization.slug], '') != '' AND ifNull(tags[subscription.plan], '') IN",
-#     "tuple('am1_business', 'am1_business_auf', 'am1_business_ent', 'am1_business_ent_auf') AND type =",
-#     "'transaction' AND match(transaction, '(?i)^/api/0/.*$') = 1 AND project_id IN tuple(1) LIMIT 51",
-#     "OFFSET 0\", 'dataset': 'discover', 'parent_api':",
-#     "'/api/0/organizations/{organization_slug}/eventsv2/'})"
-# ]
-
-
-# LOOK AT ME!!!!: WE don't support IN, and that makes the queries not great
-
-
-def test_tags_hashmap() -> None:
+def test_tags_hashmap_optimization() -> None:
     entity = get_entity(EntityKey.DISCOVER)
     dataset_name = "discover"
     query_str = """
@@ -92,7 +52,24 @@ def test_tags_hashmap() -> None:
     def query_verifier(query: Query, settings: RequestSettings, reader: Reader) -> None:
         # The only reason this extends StringifyVisitor is because it has all the other
         # visit methods implemented.
-        print(query)
+        class ConditionVisitor(StringifyVisitor):
+            def __init__(self, level: int = 0, initial_indent: int = 0) -> None:
+                self.found_hashmap_condition = False
+                super().__init__(level=level, initial_indent=initial_indent)
+
+            def visit_function_call(self, exp: FunctionCall) -> str:
+                assert exp.function_name != "arrayElement"
+                if (
+                    exp.function_name == "has"
+                    and isinstance(exp.parameters[0], Column)
+                    and exp.parameters[0].column_name == "_tags_hash_map"
+                ):
+                    self.found_hashmap_condition = True
+                return super().visit_function_call(exp)
+
+        visitor = ConditionVisitor()
+        query.get_condition().accept(visitor)
+        assert visitor.found_hashmap_condition
 
     entity.get_query_pipeline_builder().build_execution_pipeline(
         request, query_verifier
