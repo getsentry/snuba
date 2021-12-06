@@ -76,6 +76,12 @@ class MappingOptimizer(QueryProcessor):
     - `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ''`
        this condition is equivalent to looking whether a tag is
        missing, which cannot be done with the hash map.
+        - There is a special case of this where the query will have
+            (
+                ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') != '' AND
+                ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = 'my_tag_value
+            )
+            in this case, the first condition is redundant and will be removed from the query
     - IN conditions. TODO
     """
 
@@ -84,7 +90,7 @@ class MappingOptimizer(QueryProcessor):
         self.__hash_map_name = hash_map_name
         self.__killswitch = killswitch
 
-        # TODO: Add the support for IN connditions.
+        # TODO: Add the support for IN conditions.
         self.__optimizable_pattern = FunctionCall(
             function_name=String("equals"),
             parameters=(
@@ -178,61 +184,83 @@ class MappingOptimizer(QueryProcessor):
             ),
         )
 
-    def _get_condition_without_useless_checks(
+    def _get_condition_without_redundant_checks(
         self, condition: Expression
     ) -> Expression:
+        """Optimizes the case where the query condition contains the following:
+
+        valueOf('my_tag') != '' AND valueOf('my_tag') == "something"
+                          ^                            ^
+                          |                            |
+                      existence check               value check
+
+        the existence check in this clause is redundant and prevents the hashmap
+        optimization from being applied.
+
+        This function will remove all tag existence checks
+        from the condition IFF they are ANDed with a value check for the *same tag name*
+
+        Side effects:
+            This function works by flattening first level AND conditions to find clauses where
+            existence checks and value checks are ANDed together. When the AND conditions are recombined,
+            they are not guaranteed to be in the same structure (but are guaranteed to be functionally equivalent)
+
+            Example:
+                ┌───┐         ┌───┐
+                │AND│         │AND│
+                ├──┬┘         └┬──┤
+                │  │           │  │
+             ┌──┴┐ c           a ┌┴──┐
+             │AND│    becomes    │AND│
+             └┬─┬┘               ├──┬┘
+              │ │                │  │
+              a b                b  c
+        """
         if not isinstance(condition, FunctionExpr):
             return condition
         elif condition.function_name == BooleanFunctions.OR:
             sub_conditions = get_first_level_or_conditions(condition)
             pruned_conditions = [
-                self._get_condition_without_useless_checks(c) for c in sub_conditions
+                self._get_condition_without_redundant_checks(c) for c in sub_conditions
             ]
             print(pruned_conditions)
             return combine_or_conditions(pruned_conditions)
         elif condition.function_name == BooleanFunctions.AND:
             sub_conditions = get_first_level_and_conditions(condition)
-            tag_match_strings = set()
-            eq_match_strings = set()
-            for cond in sub_conditions:
-                tag_match = _tag_not_empty.match(cond)
-                if tag_match:
-                    tag_match_strings.add(tag_match.string("key"))
+            tag_eq_match_strings = set()
+            matched_tag_not_empty_conditions = {}
+            for condition_id, cond in enumerate(sub_conditions):
+                tag_exist_match = _tag_not_empty.match(cond)
+                if tag_exist_match:
+                    matched_tag_not_empty_conditions[condition_id] = tag_exist_match
                 eq_match = self.__optimizable_pattern.match(cond)
                 if eq_match:
-                    eq_match_strings.add(eq_match.string("key"))
-            # TODO: This will have redundant matches, optimize it later
+                    tag_eq_match_strings.add(eq_match.string("key"))
             useful_conditions = []
-            for cond in sub_conditions:
-                tag_match = _tag_not_empty.match(cond)
-                if tag_match:
-                    requested_tag = tag_match.string("key")
-                    if requested_tag in eq_match_strings:
+            for condition_id, cond in enumerate(sub_conditions):
+                tag_exist_match = matched_tag_not_empty_conditions.get(
+                    condition_id, None
+                )
+                if tag_exist_match:
+                    requested_tag = tag_exist_match.string("key")
+                    if requested_tag in tag_eq_match_strings:
                         continue
                 useful_conditions.append(
-                    self._get_condition_without_useless_checks(cond)
+                    self._get_condition_without_redundant_checks(cond)
                 )
             return combine_and_conditions(useful_conditions)
         else:
             return condition
 
-            # LOOK AT ME: maybe strip out unnecessary ones here?
-            # It's unclear where the joins come in to the picture here. Maybe tags queries don't use joins?
-            # this is pseudocode
-            # if useless_checks_exist(conditions):
-            #     new_conditions = combine_and_conditions([c for c in conditions if c != useless_condition])
-
-            #     query.set_ast_condition(new_conditions)
-
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         if not get_config(self.__killswitch, 1):
             return
-
+        # NOTE (Vlad): There may be too much duplication for the having and condition clauses
+        # think about deduplicating them
         cond_class = ConditionClass.IRRELEVANT
         condition = query.get_condition()
         if condition is not None:
-            condition = self._get_condition_without_useless_checks(condition)
-
+            condition = self._get_condition_without_redundant_checks(condition)
             query.set_ast_condition(condition)
             cond_class = self.__classify_combined_conditions(condition)
             if cond_class == ConditionClass.NOT_OPTIMIZABLE:
@@ -241,6 +269,8 @@ class MappingOptimizer(QueryProcessor):
         having_cond_class = ConditionClass.IRRELEVANT
         having_cond = query.get_having()
         if having_cond is not None:
+            having_cond = self._get_condition_without_redundant_checks(having_cond)
+            query.set_ast_having(having_cond)
             having_cond_class = self.__classify_combined_conditions(having_cond)
             if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
