@@ -1,11 +1,10 @@
-import datetime
+from datetime import datetime
 from typing import Set
 
 import pytest
 
 from snuba.query.expressions import (
     Argument,
-    AsCodeVisitor,
     Column,
     CurriedFunctionCall,
     Expression,
@@ -209,13 +208,10 @@ def test_hash() -> None:
         (Literal(None, 123), "123"),
         (Literal(None, False), "False"),
         (
-            Literal(None, datetime.datetime(2020, 4, 20, 16, 20)),
+            Literal(None, datetime(2020, 4, 20, 16, 20)),
             "datetime(2020-04-20T16:20:00)",
         ),
-        (
-            Literal(None, datetime.datetime(2020, 4, 20, 16, 20).date()),
-            "date(2020-04-20)",
-        ),
+        (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "date(2020-04-20)"),
         (Literal(None, None), "None"),
         (
             SubscriptableReference(
@@ -297,7 +293,3 @@ def test_hash() -> None:
 )
 def test_format(test_expr, expected_str) -> None:
     assert repr(test_expr) == expected_str
-    v = AsCodeVisitor()
-    expr_as_code = test_expr.accept(v)
-    evaled_expr = eval(expr_as_code)
-    assert repr(evaled_expr) == repr(test_expr)
