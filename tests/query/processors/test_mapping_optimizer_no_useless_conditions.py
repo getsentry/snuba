@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import pytest
 
+from snuba import state
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
@@ -232,6 +233,7 @@ TEST_CASES = [
 def test_recursive_useless_condition(
     input_query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
+    state.set_config("tags_redundant_optimizer_skip_rate", 0)
     # copy the condition to the having condition so that we test both being
     # applied in one test
     input_query.set_ast_having(deepcopy(input_query.get_condition()))
@@ -287,7 +289,7 @@ HAVING_SPECIAL_TEST_CASES = [
 ]
 
 
-@pytest.mark.parametrize("input_query, expected_query", TEST_CASES)
+@pytest.mark.parametrize("input_query, expected_query", HAVING_SPECIAL_TEST_CASES)
 def test_having_special_case(
     input_query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
@@ -299,3 +301,20 @@ def test_having_special_case(
         killswitch="tags_hash_map_enabled",
     ).process_query(input_query, HTTPRequestSettings())
     assert input_query == expected_query
+
+
+def test_experiment() -> None:
+    state.set_config("tags_redundant_optimizer_skip_rate", 1)
+    query = build_query(
+        selected_columns=[Column("count", None, "count")],
+        condition=and_exp(tag_existence_expression(), tag_equality_expression()),
+    )
+    MappingOptimizer(
+        column_name="tags",
+        hash_map_name="_tags_hash_map",
+        killswitch="tags_hash_map_enabled",
+    ).process_query(query, HTTPRequestSettings())
+    assert query == build_query(
+        selected_columns=[Column("count", None, "count")],
+        condition=and_exp(tag_existence_expression(), tag_equality_expression()),
+    )

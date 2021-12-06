@@ -1,6 +1,7 @@
+import random
 from enum import Enum
 
-from snuba import environment
+from snuba import environment, state
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -35,7 +36,7 @@ class ConditionClass(Enum):
     NOT_OPTIMIZABLE = 3
 
 
-_tag_not_empty = FunctionCall(
+_tag_exists_pattern = FunctionCall(
     function_name=String("notEquals"),
     parameters=(
         Or(
@@ -185,7 +186,7 @@ class MappingOptimizer(QueryProcessor):
         )
 
     def _get_condition_without_redundant_checks(
-        self, condition: Expression
+        self, condition: Expression, query: Query
     ) -> Expression:
         """Optimizes the case where the query condition contains the following:
 
@@ -221,7 +222,8 @@ class MappingOptimizer(QueryProcessor):
         elif condition.function_name == BooleanFunctions.OR:
             sub_conditions = get_first_level_or_conditions(condition)
             pruned_conditions = [
-                self._get_condition_without_redundant_checks(c) for c in sub_conditions
+                self._get_condition_without_redundant_checks(c, query)
+                for c in sub_conditions
             ]
             return combine_or_conditions(pruned_conditions)
         elif condition.function_name == BooleanFunctions.AND:
@@ -229,7 +231,7 @@ class MappingOptimizer(QueryProcessor):
             tag_eq_match_strings = set()
             matched_tag_exists_conditions = {}
             for condition_id, cond in enumerate(sub_conditions):
-                tag_exist_match = _tag_not_empty.match(cond)
+                tag_exist_match = _tag_exists_pattern.match(cond)
                 if tag_exist_match:
                     matched_tag_exists_conditions[condition_id] = tag_exist_match
                 eq_match = self.__optimizable_pattern.match(cond)
@@ -241,9 +243,18 @@ class MappingOptimizer(QueryProcessor):
                 if tag_exist_match:
                     requested_tag = tag_exist_match.string("key")
                     if requested_tag in tag_eq_match_strings:
-                        continue
+                        # how often we should skip this optimization
+                        skip_rate = state.get_config(
+                            "tags_redundant_optimizer_skip_rate", 0
+                        )
+                        assert isinstance(skip_rate, float)
+                        if random.random() >= skip_rate:
+                            query.add_experiment("tags_redundant_optimizer", 1)
+                            continue
+                        else:
+                            query.add_experiment("tags_redundant_optimizer", 0)
                 useful_conditions.append(
-                    self._get_condition_without_redundant_checks(cond)
+                    self._get_condition_without_redundant_checks(cond, query)
                 )
             return combine_and_conditions(useful_conditions)
         else:
@@ -257,7 +268,7 @@ class MappingOptimizer(QueryProcessor):
         cond_class = ConditionClass.IRRELEVANT
         condition = query.get_condition()
         if condition is not None:
-            condition = self._get_condition_without_redundant_checks(condition)
+            condition = self._get_condition_without_redundant_checks(condition, query)
             query.set_ast_condition(condition)
             cond_class = self.__classify_combined_conditions(condition)
             if cond_class == ConditionClass.NOT_OPTIMIZABLE:
@@ -266,7 +277,9 @@ class MappingOptimizer(QueryProcessor):
         having_cond_class = ConditionClass.IRRELEVANT
         having_cond = query.get_having()
         if having_cond is not None:
-            having_cond = self._get_condition_without_redundant_checks(having_cond)
+            having_cond = self._get_condition_without_redundant_checks(
+                having_cond, query
+            )
             query.set_ast_having(having_cond)
             having_cond_class = self.__classify_combined_conditions(having_cond)
             if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
