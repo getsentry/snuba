@@ -116,8 +116,6 @@ class MappingOptimizer(QueryProcessor):
                 if condition.function_name == BooleanFunctions.AND
                 else get_first_level_or_conditions(condition)
             )
-            # LOOK AT ME: maybe strip out unnecessary ones here?
-            # It's unclear where the joins come in to the picture here. Maybe tags queries don't use joins?
             classified = {self.__classify_combined_conditions(c) for c in conditions}
             if ConditionClass.NOT_OPTIMIZABLE in classified:
                 return ConditionClass.NOT_OPTIMIZABLE
