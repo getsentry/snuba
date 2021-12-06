@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime, timedelta
 
+import pytest
 from arroyo import Topic
 from arroyo.backends.kafka import KafkaProducer
+from confluent_kafka.admin import AdminClient
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -18,12 +20,21 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.entity_subscription import EventsSubscription
 from snuba.subscriptions.executor_consumer import ExecutorBuilder
 from snuba.subscriptions.utils import Tick
-from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import (
+    build_kafka_producer_configuration,
+    get_default_kafka_configuration,
+)
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
 
 
+@pytest.mark.ci_only
 def test_executor_consumer() -> None:
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
+
     dataset_name = "events"
     entity_name = "events"
     entity_key = EntityKey(entity_name)
