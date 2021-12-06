@@ -60,11 +60,13 @@ class MappingOptimizer(QueryProcessor):
     `tags.value[indexOf(tags.key, 'my_tag')] = 'my_val'`
     into
     `has(_tags_hash_map, cityHash64('my_tag=my_val'))`
+
     Supported use case:
     - direct equality. Example above
     - tags expression nested into ifNull conditions like:
       `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ...`
     - tags conditions in both where and having
+
     Unsupported use cases:
     - everything that cannot be checked through the tags hash map
       like !=, LIKE, IS NULL
