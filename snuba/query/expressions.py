@@ -168,7 +168,7 @@ class AsCodeVisitor(ExpressionVisitor[str]):
         if not exp.parameters:
             param_str = "()"
         elif len(exp.parameters) == 1:
-            param_str = "({exp.parameters[0].accept(self)},)"
+            param_str = f"({exp.parameters[0].accept(self)},)"
         else:
             param_str = ",".join(
                 [f"\n{param.accept(self)}" for param in exp.parameters]

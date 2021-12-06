@@ -1,3 +1,6 @@
+import pytest
+
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
@@ -64,6 +67,14 @@ tag_equality_expression = FunctionCall(
     ),
 )
 
+optimized_tag_expression = FunctionCall(
+    None,
+    "has",
+    (
+        Column(None, None, "_tags_hash_map"),
+        FunctionCall(None, "cityHash64", (Literal(None, "duration_group=<10s"),),),
+    ),
+)
 
 query = build_query(
     selected_columns=[Column("count", None, "count")],
@@ -84,21 +95,41 @@ def and_exp(op1: Expression, op2: Expression) -> FunctionCall:
 noop_and = and_exp(Literal(None, True), Literal(None, True))
 
 
-def test_recursive_useless_condition():
-    query = build_query(
-        selected_columns=[Column("count", None, "count")],
-        condition=and_exp(
-            noop_and,
-            or_exp(
-                and_exp(tag_existence_expression, tag_equality_expression), noop_and
+TEST_CASES = [
+    pytest.param(
+        build_query(
+            selected_columns=[Column("count", None, "count")],
+            condition=and_exp(
+                noop_and,
+                or_exp(
+                    and_exp(tag_existence_expression, tag_equality_expression), noop_and
+                ),
             ),
         ),
+        build_query(
+            selected_columns=[Column("count", None, "count")],
+            condition=and_exp(
+                Literal(None, True),
+                and_exp(
+                    Literal(None, True), or_exp(optimized_tag_expression, noop_and),
+                ),
+            ),
+        ),
+        id="useless condition nested in OR",
     )
+]
+
+
+@pytest.mark.parametrize("input_query, expected_query", TEST_CASES)
+def test_recursive_useless_condition(
+    input_query: ClickhouseQuery, expected_query: ClickhouseQuery
+) -> None:
     MappingOptimizer(
         column_name="tags",
         hash_map_name="_tags_hash_map",
         killswitch="tags_hash_map_enabled",
-    ).process_query(query, HTTPRequestSettings())
+    ).process_query(input_query, HTTPRequestSettings())
+    assert input_query == expected_query
 
 
 def test_bs():
