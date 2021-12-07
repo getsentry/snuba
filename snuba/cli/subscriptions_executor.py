@@ -6,7 +6,7 @@ from arroyo import configure_metrics
 
 from snuba import environment
 from snuba.environment import setup_logging, setup_sentry
-from snuba.subscriptions.executor_consumer import ExecutorBuilder
+from snuba.subscriptions.executor_consumer import build_executor_consumer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
@@ -69,7 +69,7 @@ def subscriptions_executor(
 
     configure_metrics(StreamMetricsAdapter(metrics))
 
-    builder = ExecutorBuilder(
+    processor = build_executor_consumer(
         dataset_name,
         entity_name,
         consumer_group,
@@ -77,8 +77,6 @@ def subscriptions_executor(
         auto_offset_reset,
         metrics,
     )
-
-    processor = builder.build_consumer()
 
     def handler(signum: int, frame: Any) -> None:
         processor.signal_shutdown()
