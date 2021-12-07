@@ -52,6 +52,7 @@ class MappingOptimizer(QueryProcessor):
     `has(_tags_hash_map, cityHash64('my_tag=my_val'))`
 
     Supported use case:
+
     - direct equality. Example above
     - tags expression nested into ifNull conditions like:
       `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ...`
@@ -74,6 +75,7 @@ class MappingOptimizer(QueryProcessor):
                 ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = 'my_tag_value
             )
             in this case, the first condition is redundant and will be removed from the query
+            NOTE: The ifNull wrapping is optional, direct comparison will be optimized away as well
     - IN conditions. TODO
     """
 
