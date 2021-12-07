@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
     "--entity",
     "entity_name",
     required=True,
-    type=click.Choice(["events", "transactions"]),
+    type=click.Choice(["events", "transactions", "sessions"]),
     help="The entity to target",
 )
 @click.option(

@@ -16,19 +16,19 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions"]),
+    type=click.Choice(["events", "transactions", "sessions"]),
     help="The dataset to target.",
 )
 @click.option(
     "--entity",
     "entity_name",
     required=True,
-    type=click.Choice(["events", "transactions"]),
+    type=click.Choice(["events", "transactions", "sessions"]),
     help="The entity to target.",
 )
 @click.option(
     "--consumer-group",
-    default="snuba-subscription-scheduler",
+    default="snuba-subscription-executor",
     help="Consumer group used for consuming the scheduled subscription topic/s.",
 )
 @click.option(
