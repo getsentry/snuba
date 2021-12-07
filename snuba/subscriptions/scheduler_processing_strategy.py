@@ -365,7 +365,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         self.__schedulers = schedulers
-        self.__encoder = SubscriptionScheduledTaskEncoder(entity_key)
+        self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__producer = producer
         self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
         self.__commit = commit

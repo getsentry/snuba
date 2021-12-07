@@ -43,7 +43,7 @@ class TestSubscriptionScheduler:
         return Tick(None, Interval(1, 5), Interval(self.now + lower, self.now + upper))
 
     def sort_key(self, task: ScheduledSubscriptionTask) -> Tuple[datetime, uuid.UUID]:
-        return task.timestamp, task.task[0].identifier.uuid
+        return task.timestamp, task.task.subscription.identifier.uuid
 
     def run_test(
         self,
@@ -64,6 +64,7 @@ class TestSubscriptionScheduler:
             store.create(subscription.identifier.uuid, subscription.data)
 
         scheduler = SubscriptionScheduler(
+            EntityKey.EVENTS,
             store,
             self.partition_id,
             timedelta(minutes=1),
@@ -88,7 +89,9 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
-                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
+                    SubscriptionWithTick(
+                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    ),
                 )
                 for i in range(10)
             ],
@@ -106,7 +109,9 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
-                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
+                    SubscriptionWithTick(
+                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    ),
                 )
                 for i in range(10)
             ],
@@ -131,7 +136,9 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now,
-                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
+                    SubscriptionWithTick(
+                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    ),
                 )
             ],
         )
@@ -148,7 +155,9 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now,
-                    SubscriptionWithTick(subscription, self.build_tick(start, end)),
+                    SubscriptionWithTick(
+                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    ),
                 )
             ],
         )
@@ -161,13 +170,17 @@ class TestSubscriptionScheduler:
         expected = [
             ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
-                SubscriptionWithTick(subscription, self.build_tick(start, end)),
+                SubscriptionWithTick(
+                    EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                ),
             )
             for i in range(10)
         ] + [
             ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
-                SubscriptionWithTick(other_subscription, self.build_tick(start, end)),
+                SubscriptionWithTick(
+                    EntityKey.EVENTS, other_subscription, self.build_tick(start, end)
+                ),
             )
             for i in range(0, 10, 2)
         ]
