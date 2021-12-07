@@ -17,10 +17,12 @@ from snuba.subscriptions.codecs import (
 )
 from snuba.subscriptions.data import (
     PartitionId,
+    ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionWithTick,
 )
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
@@ -28,9 +30,10 @@ from snuba.subscriptions.entity_subscription import (
     SessionsSubscription,
     SubscriptionType,
 )
+from snuba.subscriptions.utils import Tick
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.scheduler import ScheduledTask
+from snuba.utils.types import Interval
 
 
 def build_snql_subscription_data(
@@ -143,10 +146,19 @@ def test_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            Subscription(
-                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
+            SubscriptionWithTick(
+                EntityKey.EVENTS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                Tick(
+                    0,
+                    Interval(1, 5),
+                    Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)),
+                ),
             ),
         ),
         (request, result),
@@ -157,7 +169,9 @@ def test_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
@@ -198,10 +212,19 @@ def test_sessions_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            Subscription(
-                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
+            SubscriptionWithTick(
+                EntityKey.EVENTS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                Tick(
+                    0,
+                    Interval(1, 5),
+                    Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)),
+                ),
             ),
         ),
         (request, result),
@@ -212,14 +235,16 @@ def test_sessions_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
 
 
 def test_subscription_task_encoder() -> None:
-    encoder = SubscriptionScheduledTaskEncoder(EntityKey.EVENTS)
+    encoder = SubscriptionScheduledTaskEncoder()
 
     subscription_data = SnQLSubscriptionData(
         project_id=1,
@@ -233,12 +258,17 @@ def test_subscription_task_encoder() -> None:
 
     epoch = datetime(1970, 1, 1)
 
-    task = ScheduledTask(
-        timestamp=epoch,
-        task=Subscription(
+    tick = Tick(0, Interval(1, 5), Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)))
+
+    subscription_with_tick = SubscriptionWithTick(
+        EntityKey.EVENTS,
+        Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
+        tick,
     )
+
+    task = ScheduledSubscriptionTask(timestamp=epoch, task=subscription_with_tick)
 
     encoded = encoder.encode(task)
 
@@ -247,8 +277,10 @@ def test_subscription_task_encoder() -> None:
     assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
+        b'"entity":"events",'
         b'"task":{'
-        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}}'
+        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
+        b'"tick":{"partition":0,"offsets":[1,5],"timestamps":["1970-01-01T00:00:00","1970-01-02T00:00:00"]}'
         b"}"
     )
 

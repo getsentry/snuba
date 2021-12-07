@@ -12,6 +12,7 @@ from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.utils.clock import TestingClock
 
 from snuba import state
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import ConditionFunctions, get_first_level_and_conditions
 from snuba.query.matchers import (
@@ -22,7 +23,6 @@ from snuba.query.matchers import (
     Pattern,
     String,
 )
-from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     PartitionId,
     SnQLSubscriptionData,
@@ -33,6 +33,7 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.entity_subscription import SessionsSubscription
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
+from snuba.subscriptions.utils import Tick
 from snuba.subscriptions.worker import (
     SubscriptionTaskResult,
     SubscriptionWorker,
@@ -74,7 +75,7 @@ class Datetime(Pattern[datetime]):
 
 
 @pytest.fixture(
-    ids=["SnQL", "Crash Rate Alert Delegate"],
+    ids=["SnQL", "Crash Rate Alert Snql"],
     params=[
         SnQLSubscriptionData(
             project_id=1,
@@ -141,7 +142,11 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
     worker = SubscriptionWorker(
         dataset,
         ThreadPoolExecutor(),
-        {0: SubscriptionScheduler(store, PartitionId(0), timedelta(), metrics)},
+        {
+            0: SubscriptionScheduler(
+                EntityKey.SESSIONS, store, PartitionId(0), timedelta(), metrics
+            )
+        },
         broker.get_producer(),
         result_topic,
         metrics,
@@ -150,6 +155,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
     now = datetime(2000, 1, 1)
 
     tick = Tick(
+        None,
         offsets=Interval(0, 1),
         timestamps=Interval(now - (frequency * evaluations), now),
     )
@@ -248,7 +254,11 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
         ThreadPoolExecutor(),
         {
             0: SubscriptionScheduler(
-                store, PartitionId(0), timedelta(), DummyMetricsBackend(strict=True)
+                EntityKey.EVENTS,
+                store,
+                PartitionId(0),
+                timedelta(),
+                DummyMetricsBackend(strict=True),
             )
         },
         broker.get_producer(),
@@ -259,6 +269,7 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
     now = datetime(2000, 1, 1)
 
     tick = Tick(
+        None,
         offsets=Interval(0, 1),
         timestamps=Interval(now - (frequency * evaluations), now),
     )

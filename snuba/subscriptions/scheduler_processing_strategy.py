@@ -25,10 +25,9 @@ from arroyo.types import Position
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import SubscriptionScheduler
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.scheduler import Scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +102,8 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
     def __update_offset_high_watermark(self, message: Message[Tick]) -> None:
         assert message.partition.index == 0, "Commit log cannot be partitioned"
-
         tick_partition = message.payload.partition
+        assert tick_partition is not None
         self.__latest_messages_by_partition[tick_partition] = message
 
         slowest = message
@@ -147,15 +146,15 @@ class TickBuffer(ProcessingStrategy[Tick]):
     The behavior of the TickBuffer depends on which of the two scheduler
     modes applies.
 
-    If the scheduler mode is IMMEDIATE then there is no buffering and a
+    If the scheduler mode is PARTITION then there is no buffering and a
     message is always immediately submitted to the next processing step.
 
-    If the scheduler mode is WAIT_FOR_SLOWEST_PARTITION then messages are
+    If the scheduler mode is GLOBAL then messages are
     buffered until all partitions are at least up to the timestamp of the
     tick.
 
     `max_ticks_buffered_per_partition` applies if the scheduler mode is
-    WAIT_FOR_SLOWEST_PARTITION. Once the maximum ticks is received for that
+    PARTITION. Once the maximum ticks is received for that
     partition, we start to submit ticks for processing even if that timestamp
     is not received for all partitions yet.
 
@@ -216,6 +215,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
             self.__latest_ts = message.payload.timestamps.upper
 
         tick_partition = message.payload.partition
+        assert tick_partition is not None
         self.__buffers[tick_partition].append(message)
 
         # If the buffer length exceeds `max_ticks_buffered_per_partition`
@@ -238,6 +238,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
         while all(len(buffer) > 0 for buffer in self.__buffers.values()):
             earliest_ts = message.payload.timestamps.upper
+            assert message.payload.partition is not None
             earliest_ts_partitions = {message.payload.partition}
 
             for partition_index in self.__buffers:
@@ -254,9 +255,11 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
                 if partition_ts < earliest_ts:
                     earliest_ts = tick.timestamps.upper
+                    assert tick.partition is not None
                     earliest_ts_partitions = {tick.partition}
 
                 elif partition_ts == earliest_ts:
+                    assert tick.partition is not None
                     earliest_ts_partitions.add(tick.partition)
 
             for partition_index in earliest_ts_partitions:
@@ -356,13 +359,13 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
     def __init__(
         self,
         entity_key: EntityKey,
-        schedulers: Mapping[int, Scheduler[Subscription]],
+        schedulers: Mapping[int, SubscriptionScheduler],
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         self.__schedulers = schedulers
-        self.__encoder = SubscriptionScheduledTaskEncoder(entity_key)
+        self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__producer = producer
         self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
         self.__commit = commit
@@ -412,13 +415,14 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # Otherwise, add the tick message and all of it's subscriptions to
         # the queue
         tick = message.payload.tick
-        tasks = self.__schedulers[tick.partition].find(tick.timestamps)
+        assert tick.partition is not None
+        tasks = self.__schedulers[tick.partition].find(tick)
         self.__queue.append(
             message,
             deque(
                 [
                     self.__producer.produce(
-                        self.__scheduled_topic, self.__encoder.encode(task)
+                        self.__scheduled_topic, self.__encoder.encode(task),
                     )
                     for task in tasks
                 ]
