@@ -259,7 +259,7 @@ class MappingOptimizer(QueryProcessor):
                                 )
                         else:
                             # when in doubt, apply the optimization
-                            query.add_experiment("tags_redundant_optimizer_enabled", 0)
+                            query.add_experiment("tags_redundant_optimizer_enabled", 1)
                             continue
                 useful_conditions.append(
                     self._get_condition_without_redundant_checks(cond, query)
