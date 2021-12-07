@@ -120,7 +120,7 @@ class MappingOptimizer(QueryProcessor):
                         Param(TABLE_MAPPING_PARAM, AnyOptionalString()),
                         Param(VALUE_COL_MAPPING_PARAM, String(f"{column_name}.key")),
                     ),
-                    Literal(Param("key", Any(str))),
+                    Literal(Param(KEY_MAPPING_PARAM, Any(str))),
                 ),
             ),
         ]
