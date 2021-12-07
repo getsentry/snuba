@@ -79,6 +79,7 @@ def test_executor_consumer() -> None:
     task = ScheduledSubscriptionTask(
         timestamp=epoch,
         task=SubscriptionWithTick(
+            entity_key,
             Subscription(
                 SubscriptionIdentifier(PartitionId(1), subscription_id),
                 subscription_data,
@@ -89,7 +90,7 @@ def test_executor_consumer() -> None:
         ),
     )
 
-    encoder = SubscriptionScheduledTaskEncoder(entity_key)
+    encoder = SubscriptionScheduledTaskEncoder()
 
     encoded_task = encoder.encode(task)
 
