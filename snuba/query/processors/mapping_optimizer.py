@@ -2,7 +2,7 @@ import logging
 import random
 from enum import Enum
 
-from snuba import environment, state
+from snuba import environment
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -232,21 +232,6 @@ class MappingOptimizer(QueryProcessor):
               │ │                │  │
               a b                b  c
         """
-        # how often we should skip this optimization
-        skip_rate = state.get_config("tags_redundant_optimizer_skip_rate", 0)
-        if isinstance(skip_rate, float) or isinstance(skip_rate, int):
-            if random.random() >= skip_rate:
-                query.add_experiment("tags_redundant_optimizer_enabled", 1)
-            else:
-                query.add_experiment("tags_redundant_optimizer_enabled", 0)
-                return condition
-        else:
-            # when in doubt, apply the optimization but yell about it
-            query.add_experiment("tags_redundant_optimizer_enabled", 1)
-            logger.error(
-                "Invalid experiment config for 'tags_redundant_optimizer_skip_rate': %s",
-                skip_rate,
-            )
         if not isinstance(condition, FunctionExpr):
             return condition
         elif condition.function_name == BooleanFunctions.OR:
@@ -284,15 +269,44 @@ class MappingOptimizer(QueryProcessor):
         else:
             return condition
 
+    def _should_apply_redundant_clause_optimization(self, query: Query) -> bool:
+        """This function is used to measure impact of the redundant clause optimization
+        once that measurement is complete, this code should be removed"""
+        optimizer_skip_rate = get_config("tags_redundant_optimizer_skip_rate", 0)
+        if isinstance(optimizer_skip_rate, float) or isinstance(
+            optimizer_skip_rate, int
+        ):
+            if random.random() >= optimizer_skip_rate:
+                query.add_experiment("tags_redundant_optimizer_enabled", 1)
+                return True
+            else:
+                query.add_experiment("tags_redundant_optimizer_enabled", 0)
+                return False
+        else:
+            # when in doubt, apply the optimization but yell about it
+            query.add_experiment("tags_redundant_optimizer_enabled", 1)
+            logger.error(
+                "Invalid experiment config for 'tags_redundant_optimizer_skip_rate': %s",
+                optimizer_skip_rate,
+            )
+            return True
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         if not get_config(self.__killswitch, 1):
             return
+        should_apply_redundant_clause_optimization = self._should_apply_redundant_clause_optimization(
+            query
+        )
         # NOTE (Vlad): There may be too much duplication for the having and condition clauses
         # think about deduplicating them
         cond_class = ConditionClass.IRRELEVANT
         condition = query.get_condition()
         if condition is not None:
-            condition = self._get_condition_without_redundant_checks(condition, query)
+            condition = (
+                self._get_condition_without_redundant_checks(condition, query)
+                if should_apply_redundant_clause_optimization
+                else condition
+            )
             query.set_ast_condition(condition)
             cond_class = self.__classify_combined_conditions(condition)
             if cond_class == ConditionClass.NOT_OPTIMIZABLE:
@@ -301,8 +315,10 @@ class MappingOptimizer(QueryProcessor):
         having_cond_class = ConditionClass.IRRELEVANT
         having_cond = query.get_having()
         if having_cond is not None:
-            having_cond = self._get_condition_without_redundant_checks(
-                having_cond, query
+            having_cond = (
+                self._get_condition_without_redundant_checks(having_cond, query)
+                if should_apply_redundant_clause_optimization
+                else having_cond
             )
             query.set_ast_having(having_cond)
             having_cond_class = self.__classify_combined_conditions(having_cond)
