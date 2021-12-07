@@ -263,6 +263,7 @@ class MappingOptimizer(QueryProcessor):
                 if tag_exist_match:
                     requested_tag = tag_exist_match.string("key")
                     if requested_tag in tag_eq_match_strings:
+                        metrics.increment("redundant_clause_removed")
                         continue
                 useful_conditions.append(
                     self._get_condition_without_redundant_checks(cond)
