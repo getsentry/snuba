@@ -9,6 +9,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
     KEY_MAPPING_PARAM,
     TABLE_MAPPING_PARAM,
+    VALUE_COL_MAPPING_PARAM,
     mapping_pattern,
 )
 from snuba.query.conditions import (
@@ -21,7 +22,9 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Expression
 from snuba.query.expressions import FunctionCall as FunctionExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.matchers import Any, FunctionCall, Literal, Or, Param, String
+from snuba.query.matchers import Any, AnyOptionalString
+from snuba.query.matchers import Column as ColumnMatcher
+from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -36,23 +39,6 @@ class ConditionClass(Enum):
     IRRELEVANT = 1
     OPTIMIZABLE = 2
     NOT_OPTIMIZABLE = 3
-
-
-_tag_exists_pattern = FunctionCall(
-    function_name=String("notEquals"),
-    parameters=(
-        Or(
-            [
-                mapping_pattern,
-                FunctionCall(
-                    function_name=String("ifNull"),
-                    parameters=(mapping_pattern, Literal(String(""))),
-                ),
-            ]
-        ),
-        Param("right_hand_side", Literal(String(""))),
-    ),
-)
 
 
 class MappingOptimizer(QueryProcessor):
@@ -111,6 +97,33 @@ class MappingOptimizer(QueryProcessor):
                 Param("right_hand_side", Literal(Any(str))),
             ),
         )
+        self.__tag_exists_patterns = [
+            FunctionCall(
+                function_name=String("notEquals"),
+                parameters=(
+                    Or(
+                        [
+                            mapping_pattern,
+                            FunctionCall(
+                                function_name=String("ifNull"),
+                                parameters=(mapping_pattern, Literal(String(""))),
+                            ),
+                        ]
+                    ),
+                    Param("right_hand_side", Literal(String(""))),
+                ),
+            ),
+            FunctionCall(
+                function_name=String("has"),
+                parameters=(
+                    ColumnMatcher(
+                        Param(TABLE_MAPPING_PARAM, AnyOptionalString()),
+                        Param(VALUE_COL_MAPPING_PARAM, String(column_name)),
+                    ),
+                    Param("tag_name", Literal(Any(str))),
+                ),
+            ),
+        ]
 
     def __classify_combined_conditions(self, condition: Expression) -> ConditionClass:
         if not isinstance(condition, FunctionExpr):
@@ -248,10 +261,12 @@ class MappingOptimizer(QueryProcessor):
             tag_eq_match_strings = set()
             matched_tag_exists_conditions = {}
             for condition_id, cond in enumerate(sub_conditions):
-                tag_exist_match = _tag_exists_pattern.match(cond)
-                if tag_exist_match:
-                    matched_tag_exists_conditions[condition_id] = tag_exist_match
-                else:
+                tag_exist_match = None
+                for tag_exists_pattern in self.__tag_exists_patterns:
+                    tag_exist_match = tag_exists_pattern.match(cond)
+                    if tag_exist_match:
+                        matched_tag_exists_conditions[condition_id] = tag_exist_match
+                if not tag_exist_match:
                     eq_match = self.__optimizable_pattern.match(cond)
                     if eq_match:
                         tag_eq_match_strings.add(eq_match.string("key"))
