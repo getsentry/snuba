@@ -18,7 +18,7 @@ from snuba.subscriptions.data import (
     SubscriptionWithTick,
 )
 from snuba.subscriptions.entity_subscription import EventsSubscription
-from snuba.subscriptions.executor_consumer import ExecutorBuilder
+from snuba.subscriptions.executor_consumer import build_executor_consumer
 from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
@@ -50,7 +50,7 @@ def test_executor_consumer() -> None:
 
     consumer_group = str(uuid.uuid1().hex)
     auto_offset_reset = "latest"
-    builder = ExecutorBuilder(
+    executor = build_executor_consumer(
         dataset_name,
         entity_name,
         consumer_group,
@@ -58,8 +58,6 @@ def test_executor_consumer() -> None:
         auto_offset_reset,
         TestingMetricsBackend(),
     )
-
-    executor = builder.build_consumer()
 
     # Produce a scheduled task to the scheduled subscriptions topic
     producer = KafkaProducer(
