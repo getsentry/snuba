@@ -340,7 +340,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             for op, group, exclusive_time in sorted(processed_spans):
                 processed["spans.op"].append(op)
                 processed["spans.group"].append(group)
-                processed["spans.exclusive_time"].append(exclusive_time)
+                processed["spans.exclusive_time"].append(0)
                 processed["spans.exclusive_time_32"].append(exclusive_time)
 
             # The hash and exclusive_time is being stored in the spans columns
