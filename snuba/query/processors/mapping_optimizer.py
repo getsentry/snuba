@@ -1,6 +1,7 @@
 import logging
 import random
 from enum import Enum
+from typing import Optional, Tuple
 
 from snuba import environment
 from snuba.clickhouse.processors import QueryProcessor
@@ -201,7 +202,7 @@ class MappingOptimizer(QueryProcessor):
         )
 
     def _get_condition_without_redundant_checks(
-        self, condition: Expression, query: Query
+        self, condition: Expression
     ) -> Expression:
         """Optimizes the case where the query condition contains the following:
 
@@ -237,8 +238,7 @@ class MappingOptimizer(QueryProcessor):
         elif condition.function_name == BooleanFunctions.OR:
             sub_conditions = get_first_level_or_conditions(condition)
             pruned_conditions = [
-                self._get_condition_without_redundant_checks(c, query)
-                for c in sub_conditions
+                self._get_condition_without_redundant_checks(c) for c in sub_conditions
             ]
             return combine_or_conditions(pruned_conditions)
         elif condition.function_name == BooleanFunctions.AND:
@@ -263,7 +263,7 @@ class MappingOptimizer(QueryProcessor):
                     if requested_tag in tag_eq_match_strings:
                         continue
                 useful_conditions.append(
-                    self._get_condition_without_redundant_checks(cond, query)
+                    self._get_condition_without_redundant_checks(cond)
                 )
             return combine_and_conditions(useful_conditions)
         else:
@@ -291,39 +291,42 @@ class MappingOptimizer(QueryProcessor):
             )
             return True
 
+    def __get_reduced_and_classified_query_clause(
+        self,
+        clause: Optional[Expression],
+        should_apply_redundant_clause_optimization: bool,
+    ) -> Tuple[Optional[Expression], ConditionClass]:
+        cond_class = ConditionClass.IRRELEVANT
+        if clause is not None:
+            new_clause = (
+                self._get_condition_without_redundant_checks(clause)
+                if should_apply_redundant_clause_optimization
+                else clause
+            )
+            cond_class = self.__classify_combined_conditions(new_clause)
+            return new_clause, cond_class
+        else:
+            return clause, cond_class
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         if not get_config(self.__killswitch, 1):
             return
         should_apply_redundant_clause_optimization = self._should_apply_redundant_clause_optimization(
             query
         )
-        # NOTE (Vlad): There may be too much duplication for the having and condition clauses
-        # think about deduplicating them
-        cond_class = ConditionClass.IRRELEVANT
-        condition = query.get_condition()
-        if condition is not None:
-            condition = (
-                self._get_condition_without_redundant_checks(condition, query)
-                if should_apply_redundant_clause_optimization
-                else condition
-            )
-            query.set_ast_condition(condition)
-            cond_class = self.__classify_combined_conditions(condition)
-            if cond_class == ConditionClass.NOT_OPTIMIZABLE:
-                return
+        condition, cond_class = self.__get_reduced_and_classified_query_clause(
+            query.get_condition(), should_apply_redundant_clause_optimization
+        )
+        query.set_ast_condition(condition)
+        if cond_class == ConditionClass.NOT_OPTIMIZABLE:
+            return
 
-        having_cond_class = ConditionClass.IRRELEVANT
-        having_cond = query.get_having()
-        if having_cond is not None:
-            having_cond = (
-                self._get_condition_without_redundant_checks(having_cond, query)
-                if should_apply_redundant_clause_optimization
-                else having_cond
-            )
-            query.set_ast_having(having_cond)
-            having_cond_class = self.__classify_combined_conditions(having_cond)
-            if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
-                return
+        having_cond, having_cond_class = self.__get_reduced_and_classified_query_clause(
+            query.get_having(), should_apply_redundant_clause_optimization
+        )
+        query.set_ast_having(having_cond)
+        if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
+            return
 
         if not (
             cond_class == ConditionClass.OPTIMIZABLE

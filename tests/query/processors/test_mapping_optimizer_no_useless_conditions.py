@@ -247,7 +247,7 @@ def test_recursive_useless_condition(
     assert input_query.get_experiment_value("tags_redundant_optimizer_enabled") == 1
 
 
-@pytest.mark.parametrize("input_query, expected_query", deepcopy([TEST_CASES[0]]))
+@pytest.mark.parametrize("input_query, expected_query", deepcopy(TEST_CASES))
 def test_useless_has_condition(
     input_query: ClickhouseQuery, expected_query: ClickhouseQuery,
 ) -> None:
