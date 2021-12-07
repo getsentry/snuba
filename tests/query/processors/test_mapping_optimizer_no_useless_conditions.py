@@ -337,7 +337,20 @@ def test_experiment() -> None:
         killswitch="tags_hash_map_enabled",
     ).process_query(query, HTTPRequestSettings())
     assert query.get_experiment_value("tags_redundant_optimizer_enabled") == 0
+    assert query.get_experiment_value("redundant_clause_removed") is None
     assert query == build_query(
         selected_columns=[Column("count", None, "count")],
         condition=and_exp(tag_existence_expression(), tag_equality_expression()),
     )
+
+    state.set_config("tags_redundant_optimizer_skip_rate", 0)
+    query = build_query(
+        selected_columns=[Column("count", None, "count")],
+        condition=and_exp(tag_existence_expression(), tag_equality_expression()),
+    )
+    MappingOptimizer(
+        column_name="tags",
+        hash_map_name="_tags_hash_map",
+        killswitch="tags_hash_map_enabled",
+    ).process_query(query, HTTPRequestSettings())
+    assert query.get_experiment_value("redundant_clause_removed") == 1
