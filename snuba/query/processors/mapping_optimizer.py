@@ -1,3 +1,4 @@
+import logging
 import random
 from enum import Enum
 
@@ -26,6 +27,7 @@ from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
+logger = logging.getLogger("snuba.mapping_optimizer")
 
 ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "=": "\="})
 
@@ -217,6 +219,21 @@ class MappingOptimizer(QueryProcessor):
               │ │                │  │
               a b                b  c
         """
+        # how often we should skip this optimization
+        skip_rate = state.get_config("tags_redundant_optimizer_skip_rate", 0)
+        if isinstance(skip_rate, float) or isinstance(skip_rate, int):
+            if random.random() >= skip_rate:
+                query.add_experiment("tags_redundant_optimizer_enabled", 1)
+            else:
+                query.add_experiment("tags_redundant_optimizer_enabled", 0)
+                return condition
+        else:
+            # when in doubt, apply the optimization but yell about it
+            query.add_experiment("tags_redundant_optimizer_enabled", 1)
+            logger.error(
+                "Invalid experiment config for 'tags_redundant_optimizer_skip_rate': %s",
+                skip_rate,
+            )
         if not isinstance(condition, FunctionExpr):
             return condition
         elif condition.function_name == BooleanFunctions.OR:
@@ -234,33 +251,17 @@ class MappingOptimizer(QueryProcessor):
                 tag_exist_match = _tag_exists_pattern.match(cond)
                 if tag_exist_match:
                     matched_tag_exists_conditions[condition_id] = tag_exist_match
-                eq_match = self.__optimizable_pattern.match(cond)
-                if eq_match:
-                    tag_eq_match_strings.add(eq_match.string("key"))
+                else:
+                    eq_match = self.__optimizable_pattern.match(cond)
+                    if eq_match:
+                        tag_eq_match_strings.add(eq_match.string("key"))
             useful_conditions = []
             for condition_id, cond in enumerate(sub_conditions):
                 tag_exist_match = matched_tag_exists_conditions.get(condition_id, None)
                 if tag_exist_match:
                     requested_tag = tag_exist_match.string("key")
                     if requested_tag in tag_eq_match_strings:
-                        # how often we should skip this optimization
-                        skip_rate = state.get_config(
-                            "tags_redundant_optimizer_skip_rate", 0
-                        )
-                        if isinstance(skip_rate, float) or isinstance(skip_rate, int):
-                            if random.random() >= skip_rate:
-                                query.add_experiment(
-                                    "tags_redundant_optimizer_enabled", 1
-                                )
-                                continue
-                            else:
-                                query.add_experiment(
-                                    "tags_redundant_optimizer_enabled", 0
-                                )
-                        else:
-                            # when in doubt, apply the optimization
-                            query.add_experiment("tags_redundant_optimizer_enabled", 1)
-                            continue
+                        continue
                 useful_conditions.append(
                     self._get_condition_without_redundant_checks(cond, query)
                 )
