@@ -63,11 +63,8 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
     Does not support non SnQL subscriptions.
     """
 
-    def __init__(self, entity_key: EntityKey) -> None:
-        self.__entity_key = entity_key
-
     def encode(self, value: ScheduledSubscriptionTask) -> KafkaPayload:
-        subscription, tick = value.task
+        entity, subscription, tick = value.task
 
         assert isinstance(subscription.data, SnQLSubscriptionData)
 
@@ -78,6 +75,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
                 rapidjson.dumps(
                     {
                         "timestamp": value.timestamp.isoformat(),
+                        "entity": entity.value,
                         "task": {"data": value.task.subscription.data.to_dict()},
                         "tick": tick.to_dict(),
                     }
@@ -94,13 +92,17 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
 
         scheduled_subscription_dict = rapidjson.loads(payload_value.decode("utf-8"))
         assert scheduled_subscription_dict["task"]["data"]["type"] == "snql"
+
+        entity_key = EntityKey(scheduled_subscription_dict["entity"])
+
         return ScheduledSubscriptionTask(
             datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
             SubscriptionWithTick(
+                entity_key,
                 Subscription(
                     SubscriptionIdentifier.from_string(subscription_identifier),
                     SnQLSubscriptionData.from_dict(
-                        scheduled_subscription_dict["task"]["data"], self.__entity_key
+                        scheduled_subscription_dict["task"]["data"], entity_key
                     ),
                 ),
                 Tick.from_dict(scheduled_subscription_dict["tick"]),

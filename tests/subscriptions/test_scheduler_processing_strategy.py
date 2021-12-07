@@ -535,6 +535,7 @@ def test_produce_scheduled_subscription_message() -> None:
 
     schedulers = {
         partition_index: SubscriptionScheduler(
+            entity_key,
             store,
             PartitionId(partition_index),
             cache_ttl=timedelta(seconds=300),
@@ -570,7 +571,7 @@ def test_produce_scheduled_subscription_message() -> None:
     strategy.submit(message)
 
     # 3 subscriptions should be scheduled (2 x subscription 1, 1 x subscription 2)
-    codec = SubscriptionScheduledTaskEncoder(entity_key)
+    codec = SubscriptionScheduledTaskEncoder()
 
     # 2 subscriptions scheduled at epoch
     first_message = broker_storage.consume(partition, 0)

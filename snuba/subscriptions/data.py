@@ -236,6 +236,7 @@ class Subscription(NamedTuple):
 
 
 class SubscriptionWithTick(NamedTuple):
+    entity: EntityKey
     subscription: Subscription
     tick: Tick
 
