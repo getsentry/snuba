@@ -149,6 +149,7 @@ def test_subscription_task_result_encoder() -> None:
         ScheduledSubscriptionTask(
             timestamp,
             SubscriptionWithTick(
+                EntityKey.EVENTS,
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
@@ -214,6 +215,7 @@ def test_sessions_subscription_task_result_encoder() -> None:
         ScheduledSubscriptionTask(
             timestamp,
             SubscriptionWithTick(
+                EntityKey.EVENTS,
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
@@ -233,14 +235,16 @@ def test_sessions_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task[0].identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
 
 
 def test_subscription_task_encoder() -> None:
-    encoder = SubscriptionScheduledTaskEncoder(EntityKey.EVENTS)
+    encoder = SubscriptionScheduledTaskEncoder()
 
     subscription_data = SnQLSubscriptionData(
         project_id=1,
@@ -257,6 +261,7 @@ def test_subscription_task_encoder() -> None:
     tick = Tick(0, Interval(1, 5), Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)))
 
     subscription_with_tick = SubscriptionWithTick(
+        EntityKey.EVENTS,
         Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
@@ -272,6 +277,7 @@ def test_subscription_task_encoder() -> None:
     assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
+        b'"entity":"events",'
         b'"task":{'
         b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
         b'"tick":{"partition":0,"offsets":[1,5],"timestamps":["1970-01-01T00:00:00","1970-01-02T00:00:00"]}'
