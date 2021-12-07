@@ -269,7 +269,7 @@ class MappingOptimizer(QueryProcessor):
                 if not tag_exist_match:
                     eq_match = self.__optimizable_pattern.match(cond)
                     if eq_match:
-                        tag_eq_match_strings.add(eq_match.string("key"))
+                        tag_eq_match_strings.add(eq_match.string(KEY_MAPPING_PARAM))
             useful_conditions = []
             for condition_id, cond in enumerate(sub_conditions):
                 tag_exist_match = matched_tag_exists_conditions.get(condition_id, None)
