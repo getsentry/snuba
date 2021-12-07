@@ -222,6 +222,7 @@ def subscriptions(
                     executor,
                     {
                         index: SubscriptionScheduler(
+                            entity_key,
                             RedisSubscriptionDataStore(
                                 redis_client, entity_key, PartitionId(index)
                             ),

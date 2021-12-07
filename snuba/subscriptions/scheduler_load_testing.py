@@ -33,6 +33,7 @@ class LoadTestingSubscriptionScheduler(SubscriptionSchedulerBase):
         # Make `load_factor` copies of the scheduler and the store
         self.__scheduler_copies = [
             SubscriptionScheduler(
+                entity_key,
                 RedisSubscriptionDataStore(redis_client, entity_key, partition_id),
                 partition_id,
                 cache_ttl,

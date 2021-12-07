@@ -44,6 +44,8 @@ steps:
     name: querylog-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: snuba-admin
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: metrics-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba
