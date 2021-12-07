@@ -110,7 +110,7 @@ class MappingOptimizer(QueryProcessor):
                             ),
                         ]
                     ),
-                    Param("right_hand_side", Literal(String(""))),
+                    Param("right_hand_side", Literal(Any(str))),
                 ),
             ),
             FunctionCall(
@@ -118,9 +118,9 @@ class MappingOptimizer(QueryProcessor):
                 parameters=(
                     ColumnMatcher(
                         Param(TABLE_MAPPING_PARAM, AnyOptionalString()),
-                        Param(VALUE_COL_MAPPING_PARAM, String(column_name)),
+                        Param(VALUE_COL_MAPPING_PARAM, String(f"{column_name}.key")),
                     ),
-                    Param("tag_name", Literal(Any(str))),
+                    Literal(Param("key", Any(str))),
                 ),
             ),
         ]

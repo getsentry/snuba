@@ -229,7 +229,7 @@ TEST_CASES = [
 ]
 
 
-@pytest.mark.parametrize("input_query, expected_query", TEST_CASES)
+@pytest.mark.parametrize("input_query, expected_query", deepcopy(TEST_CASES))
 def test_recursive_useless_condition(
     input_query: ClickhouseQuery, expected_query: ClickhouseQuery,
 ) -> None:
@@ -238,6 +238,29 @@ def test_recursive_useless_condition(
     # applied in one test
     input_query.set_ast_having(deepcopy(input_query.get_condition()))
     expected_query.set_ast_having(deepcopy(expected_query.get_condition()))
+    MappingOptimizer(
+        column_name="tags",
+        hash_map_name="_tags_hash_map",
+        killswitch="tags_hash_map_enabled",
+    ).process_query(input_query, HTTPRequestSettings())
+    assert input_query == expected_query
+    assert input_query.get_experiment_value("tags_redundant_optimizer_enabled") == 1
+
+
+@pytest.mark.parametrize("input_query, expected_query", deepcopy([TEST_CASES[0]]))
+def test_useless_has_condition(
+    input_query: ClickhouseQuery, expected_query: ClickhouseQuery,
+) -> None:
+    from snuba.query.processors.empty_tag_condition_processor import (
+        EmptyTagConditionProcessor,
+    )
+
+    state.set_config("tags_redundant_optimizer_skip_rate", 0)
+    # change the existence expression to be a has(tags, 'my_tag') expression for boh queries
+    # this allows reuse of the previous test cases
+    EmptyTagConditionProcessor().process_query(input_query, HTTPRequestSettings())
+    EmptyTagConditionProcessor().process_query(expected_query, HTTPRequestSettings())
+
     MappingOptimizer(
         column_name="tags",
         hash_map_name="_tags_hash_map",
@@ -294,8 +317,6 @@ HAVING_SPECIAL_TEST_CASES = [
 def test_having_special_case(
     input_query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
-    # copy the condition to the having condition so that we test both being
-    # applied in one test
     MappingOptimizer(
         column_name="tags",
         hash_map_name="_tags_hash_map",
