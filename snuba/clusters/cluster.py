@@ -33,8 +33,7 @@ class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
     MIGRATE = ClickhouseClientSettingsType(
-        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2},
-        10000
+        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
@@ -273,6 +272,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__distributed_cluster_name is not None
         ), "distributed_cluster_name must be set"
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
+
+    def connection_tuple(self) -> Tuple[str, int]:
+        return (self.__query_node.host_name, self.__http_port)
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
         return [

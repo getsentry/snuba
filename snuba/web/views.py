@@ -106,7 +106,11 @@ def check_clickhouse() -> bool:
             for storage in storages
             if isinstance(storage.get_schema(), TableSchema)
         ]
-        unique_clusters = set([storage.get_cluster() for storage in storages])
+        # De-dupe clusters by host:port pairs
+        unique_clusters = {
+            storage.get_cluster().connection_tuple(): storage.get_cluster()
+            for storage in storages
+        }.values()
 
         logger.debug(f"checking for {known_table_names} on {unique_clusters}")
         for cluster in unique_clusters:
