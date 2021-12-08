@@ -142,7 +142,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         executor: ThreadPoolExecutor,
         max_concurrent_queries: int,
         metrics: MetricsBackend,
-        next_step: ProcessingStrategy[KafkaPayload],
+        next_step: ProcessingStrategy[Future[Tuple[Request, Result]]],
     ) -> None:
         self.__dataset = dataset
         self.__executor = executor
@@ -196,9 +196,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             result_future = self.__queue.popleft()
 
-            message = result_future.message
+            message, future = result_future
 
-            self.__next_step.submit(message)
+            self.__next_step.submit(
+                Message(
+                    message.partition,
+                    message.offset,
+                    future,
+                    message.timestamp,
+                    message.next_offset,
+                )
+            )
 
         self.__next_step.poll()
 
@@ -242,9 +250,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             result_future.future.result(remaining)
 
-            message = result_future.message
+            message, future = result_future
 
-            self.__next_step.submit(message)
+            self.__next_step.submit(
+                Message(
+                    message.partition,
+                    message.offset,
+                    future,
+                    message.timestamp,
+                    message.next_offset,
+                )
+            )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
         self.__next_step.close()
