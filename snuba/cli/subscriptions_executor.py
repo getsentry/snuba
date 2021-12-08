@@ -66,7 +66,7 @@ def subscriptions_executor(
 
     metrics = MetricsWrapper(
         environment.metrics,
-        "subscriptions.scheduler",
+        "subscriptions.executor",
         tags={"entity": ",".join(entity_names)},
     )
 
