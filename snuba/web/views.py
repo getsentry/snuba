@@ -1,4 +1,5 @@
 import functools
+import itertools
 import logging
 import os
 import time
@@ -14,6 +15,7 @@ from typing import (
     Text,
     Tuple,
     Union,
+    cast,
 )
 from uuid import UUID
 
@@ -92,23 +94,33 @@ def check_clickhouse() -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        for name in get_enabled_dataset_names():
-            dataset = get_dataset(name)
-            for entity in dataset.get_all_entities():
-                for storage in entity.get_all_storages():
-                    clickhouse = storage.get_cluster().get_query_connection(
-                        ClickhouseClientSettings.QUERY
-                    )
-                    clickhouse_tables = clickhouse.execute("show tables")
-                    source = storage.get_schema()
-                    if isinstance(source, TableSchema):
-                        table_name = source.get_table_name()
-                        if (table_name,) not in clickhouse_tables:
-                            return False
+        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+        entities = itertools.chain(
+            *[dataset.get_all_entities() for dataset in datasets]
+        )
+        storages = list(
+            itertools.chain(*[entity.get_all_storages() for entity in entities])
+        )
+        known_table_names = [
+            cast(TableSchema, storage.get_schema()).get_table_name()
+            for storage in storages
+            if isinstance(storage.get_schema(), TableSchema)
+        ]
+        unique_clusters = set([storage.get_cluster() for storage in storages])
+
+        logger.debug(f"checking for {known_table_names} on {unique_clusters}")
+        for cluster in unique_clusters:
+            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            clickhouse_tables = clickhouse.execute("show tables")
+            for table in known_table_names:
+                if (table,) not in clickhouse_tables:
+                    logger.error(f"{table} not present in cluster {cluster}")
+                    return False
 
         return True
 
-    except Exception:
+    except Exception as err:
+        logger.error(err)
         return False
 
 
