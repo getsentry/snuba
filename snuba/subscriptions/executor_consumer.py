@@ -176,6 +176,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 tick.offsets.upper,
                 timer,
                 self.__metrics,
+                "subscriptions_executor",
             )
 
             result = parse_and_run_query(
