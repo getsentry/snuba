@@ -16,7 +16,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions", "sessions", "discover"]),
+    type=click.Choice(["events", "transactions", "sessions"]),
     help="The dataset to target.",
 )
 @click.option(
