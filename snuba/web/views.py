@@ -3,11 +3,13 @@ import itertools
 import logging
 import os
 import time
+from collections import defaultdict
 from datetime import datetime
 from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -33,7 +35,7 @@ from werkzeug.exceptions import InternalServerError
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ConnectionId
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
@@ -101,21 +103,26 @@ def check_clickhouse() -> bool:
         storages = list(
             itertools.chain(*[entity.get_all_storages() for entity in entities])
         )
-        known_table_names = [
-            cast(TableSchema, storage.get_schema()).get_table_name()
-            for storage in storages
-            if isinstance(storage.get_schema(), TableSchema)
-        ]
+
+        cluster_grouped_table_names: Dict[ConnectionId, List[str]] = defaultdict(list)
+        for storage in storages:
+            if isinstance(storage.get_schema(), TableSchema):
+                cluster = storage.get_cluster()
+                cluster_grouped_table_names[cluster.get_connection_id()].append(
+                    cast(TableSchema, storage.get_schema()).get_table_name()
+                )
+
         # De-dupe clusters by host:port pairs
         unique_clusters = {
-            storage.get_cluster().connection_tuple(): storage.get_cluster()
+            storage.get_cluster().get_connection_id(): storage.get_cluster()
             for storage in storages
-        }.values()
+        }
 
-        logger.debug(f"checking for {known_table_names} on {unique_clusters}")
-        for cluster in unique_clusters:
+        for (cluster_key, cluster) in unique_clusters.items():
             clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             clickhouse_tables = clickhouse.execute("show tables")
+            known_table_names = cluster_grouped_table_names[cluster_key]
+            logger.debug(f"checking for {known_table_names} on {cluster_key}")
             for table in known_table_names:
                 if (table,) not in clickhouse_tables:
                     logger.error(f"{table} not present in cluster {cluster}")

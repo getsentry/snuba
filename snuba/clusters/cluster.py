@@ -29,6 +29,12 @@ class ClickhouseClientSettingsType(NamedTuple):
     timeout: Optional[int]
 
 
+class ConnectionId(NamedTuple):
+    hostname: str
+    tcp_port: int
+    http_port: int
+
+
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
@@ -273,8 +279,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         ), "distributed_cluster_name must be set"
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
 
-    def connection_tuple(self) -> Tuple[str, int]:
-        return (self.__query_node.host_name, self.__http_port)
+    def get_connection_id(self) -> ConnectionId:
+        return ConnectionId(
+            hostname=self.__query_node.host_name,
+            tcp_port=self.__query_node.port,
+            http_port=self.__http_port,
+        )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
         return [
