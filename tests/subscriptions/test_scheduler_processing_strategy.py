@@ -542,7 +542,6 @@ def test_produce_scheduled_subscription_message() -> None:
     commit = mock.Mock()
 
     strategy = ProduceScheduledSubscriptionMessage(
-        entity_key,
         schedulers,
         producer,
         KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
