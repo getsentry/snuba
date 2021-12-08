@@ -96,7 +96,9 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         if should_commit:
             self.__offset_low_watermark = message.offset
 
-        self.__metrics.timing("ProvideCommitStrategy.submit", time.time() - start)
+        self.__metrics.timing(
+            "ProvideCommitStrategy.submit", (time.time() - start) * 1000
+        )
 
     def __should_commit(self, message: Message[Tick]) -> bool:
         return (
@@ -280,7 +282,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 (self.__latest_ts - earliest_ts).total_seconds() * 1000,
             )
 
-            self.__metrics.timing("TickBuffer.submit", time.time() - start)
+            self.__metrics.timing("TickBuffer.submit", (time.time() - start) * 1000)
 
     def close(self) -> None:
         self.__closed = True
@@ -418,7 +420,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                 )
 
         self.__metrics.timing(
-            "ProduceScheduledSubscriptionMessage.poll", time.time() - start
+            "ProduceScheduledSubscriptionMessage.poll", (time.time() - start) * 1000
         )
 
     def submit(self, message: Message[CommittableTick]) -> None:
@@ -448,7 +450,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         )
 
         self.__metrics.timing(
-            "ProduceScheduledSubscriptionMessage.submit", time.time() - start
+            "ProduceScheduledSubscriptionMessage.submit", (time.time() - start) * 1000
         )
 
     def close(self) -> None:
