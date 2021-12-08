@@ -67,7 +67,7 @@ def build_executor_consumer(
         assert get_topics_for_entity(entity_name) == (
             scheduled_topic_spec,
             result_topic_spec,
-        )
+        ), "All entities must have same scheduled and result topics"
 
     return StreamProcessor(
         KafkaConsumer(
