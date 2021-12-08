@@ -4,7 +4,7 @@ import logging
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Callable, Deque, Mapping, NamedTuple, Optional, Tuple
+from typing import Callable, Deque, Mapping, NamedTuple, Optional, Sequence, Tuple
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
@@ -17,6 +17,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 def build_executor_consumer(
     dataset_name: str,
-    entity_name: str,
+    entity_names: Sequence[str],
     consumer_group: str,
     max_concurrent_queries: int,
     auto_offset_reset: str,
@@ -44,21 +45,41 @@ def build_executor_consumer(
     dataset_entity_names = [
         ENTITY_NAME_LOOKUP[e].value for e in dataset.get_all_entities()
     ]
-    assert (
-        entity_name in dataset_entity_names
-    ), f"Entity {entity_name} does not exist in dataset {dataset_name}"
 
-    entity_key = EntityKey(entity_name)
-    entity = get_entity(entity_key)
-    storage = entity.get_writable_storage()
+    # Only entities in the same dataset with the same scheduled and result topics
+    # may be run together
 
-    assert (
-        storage is not None
-    ), f"Entity {entity_name} does not have a writable storage by default."
+    def get_topics_for_entity(
+        entity_name: str,
+    ) -> Tuple[KafkaTopicSpec, KafkaTopicSpec]:
+        assert (
+            entity_name in dataset_entity_names
+        ), f"Entity {entity_name} does not exist in dataset {dataset_name}"
 
-    stream_loader = storage.get_table_writer().get_stream_loader()
-    scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
-    assert scheduled_topic_spec is not None
+        entity = get_entity(EntityKey(entity_name))
+        storage = entity.get_writable_storage()
+
+        assert (
+            storage is not None
+        ), f"Entity {entity_name} does not have a writable storage by default."
+
+        stream_loader = storage.get_table_writer().get_stream_loader()
+
+        scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
+        assert scheduled_topic_spec is not None
+
+        result_topic_spec = stream_loader.get_subscription_result_topic_spec()
+        assert result_topic_spec is not None
+
+        return scheduled_topic_spec, result_topic_spec
+
+    scheduled_topic_spec, result_topic_spec = get_topics_for_entity(entity_names[0])
+
+    for entity_name in entity_names[1:]:
+        assert get_topics_for_entity(entity_name) == (
+            scheduled_topic_spec,
+            result_topic_spec,
+        ), "All entities must have same scheduled and result topics"
 
     return StreamProcessor(
         KafkaConsumer(

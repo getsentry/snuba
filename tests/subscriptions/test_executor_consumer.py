@@ -58,7 +58,7 @@ def test_executor_consumer() -> None:
     auto_offset_reset = "latest"
     executor = build_executor_consumer(
         dataset_name,
-        entity_name,
+        [entity_name],
         consumer_group,
         2,
         auto_offset_reset,
