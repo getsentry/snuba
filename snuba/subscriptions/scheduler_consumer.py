@@ -280,7 +280,6 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         metrics: MetricsBackend,
         load_factor: int,
     ) -> None:
-        self.__entity_key = entity_key
         self.__mode = mode
         self.__partitions = partitions
         self.__producer = producer
@@ -306,17 +305,17 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[Tick]:
         schedule_step = ProduceScheduledSubscriptionMessage(
-            self.__entity_key,
             self.__schedulers,
             self.__producer,
             self.__scheduled_topic_spec,
             commit,
+            self.__metrics,
         )
 
         return TickBuffer(
             self.__mode,
             self.__partitions,
             self.__buffer_size,
-            ProvideCommitStrategy(self.__partitions, schedule_step),
+            ProvideCommitStrategy(self.__partitions, schedule_step, self.__metrics),
             self.__metrics,
         )
