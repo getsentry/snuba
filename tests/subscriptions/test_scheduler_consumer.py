@@ -29,7 +29,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes
-from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.backends.metrics import TestingMetricsBackend
 
 
 def test_scheduler_consumer() -> None:
@@ -123,7 +123,6 @@ def test_scheduler_consumer() -> None:
 
     scheduler._shutdown()
 
-    assert Timing("partition_lag_ms", 1000 * 60, None) in metrics_backend.calls
     assert mock_scheduler_producer.produce.call_count == 2
 
     settings.TOPIC_PARTITION_COUNTS = {}
