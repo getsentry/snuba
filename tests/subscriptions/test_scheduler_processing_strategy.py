@@ -243,7 +243,7 @@ def make_message_for_next_step(
 def test_provide_commit_strategy() -> None:
     epoch = datetime(1970, 1, 1)
     next_step = mock.Mock()
-    strategy = ProvideCommitStrategy(2, next_step)
+    strategy = ProvideCommitStrategy(2, next_step, TestingMetricsBackend())
 
     topic = Topic("messages")
     partition = Partition(topic, 0)
@@ -350,7 +350,7 @@ def test_tick_buffer_with_commit_strategy() -> None:
         SchedulingWatermarkMode.GLOBAL,
         2,
         10,
-        ProvideCommitStrategy(2, next_step),
+        ProvideCommitStrategy(2, next_step, metrics_backend),
         metrics_backend,
     )
 
@@ -546,6 +546,7 @@ def test_produce_scheduled_subscription_message() -> None:
         producer,
         KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
         commit,
+        metrics_backend,
     )
 
     message = Message(
