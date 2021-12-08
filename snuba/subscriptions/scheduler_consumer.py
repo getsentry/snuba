@@ -305,9 +305,6 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[Tick]:
-        # TODO: Temporarily hardcoding global mode for testing
-        mode = SchedulingWatermarkMode.GLOBAL
-
         schedule_step = ProduceScheduledSubscriptionMessage(
             self.__entity_key,
             self.__schedulers,
@@ -317,7 +314,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         )
 
         return TickBuffer(
-            mode,
+            self.__mode,
             self.__partitions,
             self.__buffer_size,
             ProvideCommitStrategy(self.__partitions, schedule_step),
