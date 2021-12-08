@@ -64,7 +64,7 @@ def subscriptions_executor(
     setup_sentry()
 
     metrics = MetricsWrapper(
-        environment.metrics, "subscriptions.scheduler", tags={"entity": entity_name}
+        environment.metrics, "subscriptions.executor", tags={"entity": entity_name}
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
