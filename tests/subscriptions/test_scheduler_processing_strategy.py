@@ -136,9 +136,7 @@ def test_tick_buffer_wait_slowest() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(message_1_0)]
-    assert metrics_backend.calls == [
-        Timing("partition_lag_ms", 6000.0, None),
-    ]
+    assert Timing("partition_lag_ms", 6000.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
     metrics_backend.calls = []
@@ -164,9 +162,7 @@ def test_tick_buffer_wait_slowest() -> None:
         mock.call(message_0_0),
         mock.call(message_1_1),
     ]
-    assert metrics_backend.calls == [
-        Timing("partition_lag_ms", 5000.0, None),
-    ]
+    assert Timing("partition_lag_ms", 5000.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
     metrics_backend.calls = []
@@ -194,9 +190,7 @@ def test_tick_buffer_wait_slowest() -> None:
         mock.call(message_0_1),
         mock.call(message_1_2),
     ]
-    assert metrics_backend.calls == [
-        Timing("partition_lag_ms", 0.0, None),
-    ]
+    assert Timing("partition_lag_ms", 0.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
     metrics_backend.calls = []
