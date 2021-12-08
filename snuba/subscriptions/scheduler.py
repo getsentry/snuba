@@ -14,6 +14,7 @@ from typing import (
 )
 
 from snuba import settings, state
+from snuba.datasets.entities import EntityKey
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
@@ -60,7 +61,7 @@ class ImmediateTaskBuilder(TaskBuilder):
     def get_task(
         self, subscription_with_tick: SubscriptionWithTick, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
-        subscription, _ = subscription_with_tick
+        subscription = subscription_with_tick.subscription
 
         resolution = int(subscription.data.resolution.total_seconds())
         if timestamp % resolution == 0:
@@ -107,7 +108,7 @@ class JitteredTaskBuilder(TaskBuilder):
     def get_task(
         self, subscription_with_tick: SubscriptionWithTick, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
-        subscription, _ = subscription_with_tick
+        subscription = subscription_with_tick.subscription
 
         resolution = int(subscription.data.resolution.total_seconds())
 
@@ -279,11 +280,13 @@ class DelegateTaskBuilder(TaskBuilder):
 class SubscriptionScheduler(SubscriptionSchedulerBase):
     def __init__(
         self,
+        entity_key: EntityKey,
         store: SubscriptionDataStore,
         partition_id: PartitionId,
         cache_ttl: timedelta,
         metrics: MetricsBackend,
     ) -> None:
+        self.__entity_key = entity_key
         self.__store = store
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id
@@ -330,7 +333,8 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         ):
             for subscription in subscriptions:
                 task = self.__builder.get_task(
-                    SubscriptionWithTick(subscription, tick), timestamp
+                    SubscriptionWithTick(self.__entity_key, subscription, tick),
+                    timestamp,
                 )
                 if task is not None:
                     yield task
