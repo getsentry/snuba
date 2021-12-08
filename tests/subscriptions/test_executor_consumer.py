@@ -1,5 +1,6 @@
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Iterator
 from unittest import mock
@@ -149,10 +150,13 @@ def generate_message() -> Iterator[Message[KafkaPayload]]:
 def test_execute_query_strategy() -> None:
     dataset = get_dataset("events")
     max_concurrent_queries = 2
+    executor = ThreadPoolExecutor(max_concurrent_queries)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, max_concurrent_queries, metrics, next_step)
+    strategy = ExecuteQuery(
+        dataset, executor, max_concurrent_queries, metrics, next_step
+    )
 
     make_message = generate_message()
     message = next(make_message)
@@ -172,16 +176,19 @@ def test_execute_query_strategy() -> None:
 
 def test_too_many_concurrent_queries() -> None:
     dataset = get_dataset("events")
-    max_concurrent_queries = 2
+    executor = ThreadPoolExecutor(2)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, max_concurrent_queries, metrics, next_step)
+    strategy = ExecuteQuery(dataset, executor, 4, metrics, next_step)
 
     make_message = generate_message()
 
-    for _ in range(2):
+    for _ in range(4):
         strategy.submit(next(make_message))
 
     with pytest.raises(MessageRejected):
         strategy.submit(next(make_message))
+
+    strategy.close()
+    strategy.join()

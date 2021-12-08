@@ -118,18 +118,19 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def __init__(
         self,
         dataset: Dataset,
+        executor: ThreadPoolExecutor,
         max_concurrent_queries: int,
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[KafkaPayload],
     ) -> None:
         self.__dataset = dataset
+        self.__executor = executor
         self.__max_concurrent_queries = max_concurrent_queries
         self.__metrics = metrics
         self.__next_step = next_step
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
 
-        self.__executor = ThreadPoolExecutor()
         self.__queue: Deque[SubscriptionResultFuture] = deque()
 
         self.__closed = False
