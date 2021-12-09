@@ -1166,7 +1166,10 @@ def _align_max_days_date_align(
 
     # If there is an = or IN condition on time, we don't need to do any of this
     match = build_match(
-        entity.required_time_column, [ConditionFunctions.EQ], datetime, alias
+        col=entity.required_time_column,
+        ops=[ConditionFunctions.EQ],
+        param_type=datetime,
+        alias=alias,
     )
     if any(match.match(cond) for cond in old_top_level):
         return old_top_level

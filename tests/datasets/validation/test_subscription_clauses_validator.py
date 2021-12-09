@@ -62,14 +62,22 @@ tests = [
                 binary_condition(
                     BooleanFunctions.AND,
                     binary_condition(
-                        "equals",
-                        Column("_snuba_project_id", None, "project_id"),
-                        Literal(None, 1),
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            "equals",
+                            Column("_snuba_project_id", None, "project_id"),
+                            Literal(None, 1),
+                        ),
+                        binary_condition(
+                            "equals",
+                            Column("_snuba_org_id", None, "org_id"),
+                            Literal(None, 1),
+                        ),
                     ),
                     binary_condition(
                         "equals",
-                        Column("_snuba_org_id", None, "org_id"),
-                        Literal(None, 1),
+                        Column("_snuba_tags[3]", None, "tags[3]"),
+                        Literal(None, 2),
                     ),
                 ),
             ),
@@ -154,6 +162,41 @@ invalid_tests = [
             ],
         ),
         id="no orderby clauses",
+    ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
+            ),
+            selected_columns=[SelectedExpression("value", Column(None, None, "value"))],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "metric_id"),
+                    Literal(None, 123),
+                ),
+                binary_condition(
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_project_id", None, "project_id"),
+                        Literal(None, 1),
+                    ),
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_org_id", None, "org_id"),
+                        Literal(None, 1),
+                    ),
+                ),
+            ),
+            groupby=[
+                Column("_snuba_project_id", None, "project_id"),
+                Column("_snuba_tags[3]", None, "tags[3]"),
+            ],
+        ),
+        id="tags[3] is in the group by clause but has no matching condition",
     ),
 ]
 

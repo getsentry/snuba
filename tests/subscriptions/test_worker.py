@@ -101,7 +101,8 @@ class Datetime(Pattern[datetime]):
             project_id=123,
             query=(
                 """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 """
+                WHERE org_id = 1 AND project_id IN array(1) AND tags[3] IN array(3,4,
+                5) AND metric_id=7"""
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),

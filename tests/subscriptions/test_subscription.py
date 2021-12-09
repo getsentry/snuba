@@ -9,6 +9,7 @@ from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
+from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
 from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
@@ -57,21 +58,6 @@ TESTS_CREATE_SESSIONS = [
     ),
 ]
 
-TESTS_CREATE_METRICS = [
-    pytest.param(
-        SnQLSubscriptionData(
-            project_id=123,
-            query=(
-                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
-            ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(dataset_name="metrics"),
-        ),
-        id="Snql subscription",
-    ),
-]
 
 TESTS_INVALID = [
     pytest.param(
@@ -121,14 +107,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                SnQLSubscriptionData(
-                    project_id=123,
-                    resolution=timedelta(minutes=1),
-                    time_window=timedelta(minutes=10),
-                    query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
-                    entity_subscription=create_entity_subscription(),
-                ),
-                self.timer,
+                subscription, self.timer,
             )
 
     def test_invalid_aggregation(self) -> None:
@@ -222,13 +201,63 @@ class TestSessionsSubscriptionCreator:
         )
 
 
+TESTS_CREATE_METRICS = [
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
+                array(6,7)"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(dataset_name="metrics"),
+        ),
+        id="Snql subscription",
+    ),
+]
+
+
+TESTS_INVALID_METRICS = [
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(dataset_name="metrics"),
+        ),
+        id="Snql subscription",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(dataset_name="metrics"),
+        ),
+        id="Snql subscription",
+    ),
+]
+
+
 class TestMetricsCountersSubscriptionCreator:
     timer = Timer("test")
 
+    def setup_method(self) -> None:
+        self.dataset = get_dataset("metrics")
+
     @pytest.mark.parametrize("subscription", TESTS_CREATE_METRICS)
     def test(self, subscription: SubscriptionData) -> None:
-        dataset = get_dataset("metrics")
-        creator = SubscriptionCreator(dataset)
+        creator = SubscriptionCreator(self.dataset)
         # XXX (ahmed): hack to circumvent using the default entity of a dataset as the default
         # entity for the metrics dataset is METRICS_SETS, and this subscription type is currently
         # not supported. Will add a fix shortly that relies on passing the entity key rather
@@ -251,6 +280,16 @@ class TestMetricsCountersSubscriptionCreator:
             )[0][1]
             == subscription
         )
+
+    @pytest.mark.parametrize("subscription", TESTS_INVALID_METRICS)
+    def test_missing_conditions_for_groupby_clause(
+        self, subscription: SubscriptionData
+    ) -> None:
+        creator = SubscriptionCreator(self.dataset)
+        with raises(InvalidQueryException):
+            creator.create(
+                subscription, self.timer,
+            )
 
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):

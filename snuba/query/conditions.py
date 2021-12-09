@@ -1,7 +1,12 @@
-from typing import Any, Mapping, Optional, Sequence, Set
+from typing import Any, Mapping, Optional, Sequence, Set, Union
 
 from snuba.query.dsl import literals_tuple
-from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.query.expressions import (
+    Expression,
+    FunctionCall,
+    Literal,
+    OptionalScalarType,
+)
 from snuba.query.matchers import Any as AnyPattern
 from snuba.query.matchers import AnyExpression, AnyOptionalString
 from snuba.query.matchers import Column as ColumnPattern
@@ -9,6 +14,7 @@ from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Integer
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import Or, Param, Pattern, String
+from snuba.query.matchers import SubscriptableReference as SubscriptableReferencePattern
 
 
 class ConditionFunctions:
@@ -294,12 +300,25 @@ def is_condition(exp: Expression) -> bool:
 
 
 def build_match(
-    col: str, ops: Sequence[str], param_type: Any, alias: Optional[str] = None
+    col: str,
+    ops: Sequence[str],
+    param_type: Any,
+    alias: Optional[str] = None,
+    key: OptionalScalarType = None,
 ) -> Or[Expression]:
     # The IN condition has to be checked separately since each parameter
     # has to be checked individually.
     alias_match = AnyOptionalString() if alias is None else String(alias)
-    column_match = Param("column", ColumnPattern(alias_match, String(col)))
+    pattern: Union[ColumnPattern, SubscriptableReferencePattern]
+    if key is not None:
+        pattern = SubscriptableReferencePattern(
+            table_name=alias_match, column_name=String(col), key=AnyPattern(str)
+        )
+    else:
+        pattern = ColumnPattern(table_name=alias_match, column_name=String(col))
+
+    column_match = Param("column", pattern)
+
     return Or(
         [
             FunctionCallPattern(

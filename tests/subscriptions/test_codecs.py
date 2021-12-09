@@ -233,7 +233,7 @@ def test_sessions_subscription_task_result_encoder() -> None:
         ScheduledSubscriptionTask(
             timestamp,
             SubscriptionWithMetadata(
-                EntityKey.EVENTS,
+                EntityKey.SESSIONS,
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
@@ -268,7 +268,7 @@ def test_metrics_subscription_task_result_encoder() -> None:
         query=(
             """
             MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-            WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7
+            WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(1,2)
             """
         ),
         time_window=timedelta(minutes=1),
@@ -291,23 +291,28 @@ def test_metrics_subscription_task_result_encoder() -> None:
             {"name": "value", "type": "Float64"},
         ],
     }
-
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            Subscription(
-                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
+            SubscriptionWithMetadata(
+                EntityKey.METRICS_COUNTERS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                5,
             ),
         ),
         (request, result),
     )
-
     message = codec.encode(task_result)
     data = json.loads(message.value.decode("utf-8"))
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
