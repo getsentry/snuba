@@ -2217,8 +2217,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
                         "project_id": 1,
                         "organization": 1,
                         "query": "MATCH (metrics_counters) SELECT sum(value) AS value BY "
-                        "project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) "
-                        "AND metric_id = 7",
+                        "project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND "
+                        "tags[3] IN array(1,34) AND metric_id = 7",
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
                     }
