@@ -464,6 +464,7 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 
 
 @application.route("/<dataset:dataset>/<entity:entity>/subscriptions", methods=["POST"])
+# ToDo(ahmed): Deprecate this endpoint
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(
@@ -491,6 +492,7 @@ def create_subscription(
     "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
     methods=["DELETE"],
 )
+# ToDo(ahmed): Deprecate this endpoint
 @application.route(
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
