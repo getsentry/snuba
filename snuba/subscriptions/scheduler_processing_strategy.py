@@ -405,8 +405,6 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             if not tick_subscription.subscription_future.done():
                 break
 
-            tick_subscription.subscription_future.result()
-
             self.__queue.popleft()
 
             if tick_subscription.should_commit:

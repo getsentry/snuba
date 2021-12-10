@@ -22,7 +22,6 @@ from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import ScheduledSubscriptionTask
-from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -165,7 +164,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         )
 
     def __execute_query(
-        self, task: ScheduledSubscriptionTask, tick: Tick
+        self, task: ScheduledSubscriptionTask, tick_upper_offset: int
     ) -> Tuple[Request, Result]:
         timer = Timer("query")
 
@@ -173,7 +172,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             request = task.task.subscription.data.build_request(
                 self.__dataset,
                 task.timestamp,
-                tick.offsets.upper,
+                tick_upper_offset,
                 timer,
                 self.__metrics,
                 "subscriptions_executor",
@@ -220,11 +219,12 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         task = self.__encoder.decode(message.payload)
 
-        tick = task.task.tick
+        tick_upper_offset = task.task.tick_upper_offset
 
         self.__queue.append(
             SubscriptionResultFuture(
-                message, self.__executor.submit(self.__execute_query, task, tick),
+                message,
+                self.__executor.submit(self.__execute_query, task, tick_upper_offset),
             )
         )
 

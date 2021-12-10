@@ -8,7 +8,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     Subscription,
-    SubscriptionWithTick,
+    SubscriptionWithMetadata,
 )
 from snuba.subscriptions.scheduler import (
     DelegateTaskBuilder,
@@ -42,7 +42,7 @@ TEST_CASES = [
                 ALIGNED_TIMESTAMP,
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    SubscriptionWithTick(
+                    SubscriptionWithMetadata(
                         EntityKey.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(ALIGNED_TIMESTAMP, ALIGNED_TIMESTAMP + 60),
@@ -83,7 +83,7 @@ TEST_CASES = [
                     # jitter so that the query time range is still aligned
                     # to the minute without jitter.
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    SubscriptionWithTick(
+                    SubscriptionWithMetadata(
                         EntityKey.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
@@ -125,7 +125,7 @@ TEST_CASES = [
                 ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    SubscriptionWithTick(
+                    SubscriptionWithMetadata(
                         EntityKey.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
@@ -148,7 +148,7 @@ TEST_CASES = [
                 ALIGNED_TIMESTAMP,
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    SubscriptionWithTick(
+                    SubscriptionWithMetadata(
                         EntityKey.EVENTS,
                         build_subscription(timedelta(minutes=2), 0),
                         build_tick(ALIGNED_TIMESTAMP, ALIGNED_TIMESTAMP + 60),
@@ -174,7 +174,7 @@ TEST_CASES = [
                 ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
-                    SubscriptionWithTick(
+                    SubscriptionWithMetadata(
                         EntityKey.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
@@ -213,7 +213,7 @@ TEST_CASES = [
                 ALIGNED_TIMESTAMP + UUIDS[0].int % 60 + 60,
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP + 60),
-                    SubscriptionWithTick(
+                    SubscriptionWithMetadata(
                         EntityKey.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         build_tick(
@@ -261,7 +261,7 @@ def test_sequences(
             ),
         )
         ret = builder.get_task(
-            SubscriptionWithTick(EntityKey.EVENTS, subscription, tick), timestamp
+            SubscriptionWithMetadata(EntityKey.EVENTS, subscription, tick), timestamp
         )
         if ret:
             output.append((timestamp, ret))
