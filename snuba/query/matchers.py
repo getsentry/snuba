@@ -64,7 +64,7 @@ class MatchResult:
         is there or throws.
         """
         ret = self.results[name]
-        assert isinstance(ret, str)
+        assert isinstance(ret, str), type(ret)
         return ret
 
     def optional_string(self, name: str) -> Optional[str]:
