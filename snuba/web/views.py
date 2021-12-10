@@ -104,17 +104,17 @@ def check_clickhouse() -> bool:
             itertools.chain(*[entity.get_all_storages() for entity in entities])
         )
 
-        cluster_grouped_table_names: MutableMapping[
+        connection_grouped_table_names: MutableMapping[
             ConnectionId, Set[str]
         ] = defaultdict(set)
         for storage in storages:
             if isinstance(storage.get_schema(), TableSchema):
                 cluster = storage.get_cluster()
-                cluster_grouped_table_names[cluster.get_connection_id()].add(
+                connection_grouped_table_names[cluster.get_connection_id()].add(
                     cast(TableSchema, storage.get_schema()).get_table_name()
                 )
 
-        # De-dupe clusters by host:port pairs
+        # De-dupe clusters by host:TCP port:HTTP port:database
         unique_clusters = {
             storage.get_cluster().get_connection_id(): storage.get_cluster()
             for storage in storages
@@ -123,7 +123,7 @@ def check_clickhouse() -> bool:
         for (cluster_key, cluster) in unique_clusters.items():
             clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             clickhouse_tables = clickhouse.execute("show tables")
-            known_table_names = cluster_grouped_table_names[cluster_key]
+            known_table_names = connection_grouped_table_names[cluster_key]
             logger.debug(f"checking for {known_table_names} on {cluster_key}")
             for table in known_table_names:
                 if (table,) not in clickhouse_tables:
