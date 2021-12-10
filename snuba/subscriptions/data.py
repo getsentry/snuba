@@ -108,6 +108,7 @@ class SubscriptionData(ABC, _SubscriptionData):
         offset: Optional[int],
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
         raise NotImplementedError
 
@@ -185,6 +186,7 @@ class SnQLSubscriptionData(SubscriptionData):
         offset: Optional[int],
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
         schema = RequestSchema.build(SubscriptionRequestSettings)
 
@@ -195,7 +197,7 @@ class SnQLSubscriptionData(SubscriptionData):
             schema,
             dataset,
             timer,
-            SUBSCRIPTION_REFERRER,
+            referrer,
             [
                 self.validate_subscription,
                 partial(self.add_conditions, timestamp, offset),
