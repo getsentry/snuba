@@ -437,14 +437,19 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         tick = message.payload.tick
         assert tick.partition is not None
         tasks = self.__schedulers[tick.partition].find(tick)
+
+        start_encoding = time.time()
+        encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+        self.__metrics.timing(
+            "ScheduledSubscriptionTask.encode", (time.time() - start_encoding) * 1000
+        )
+
         self.__queue.append(
             message,
             deque(
                 [
-                    self.__producer.produce(
-                        self.__scheduled_topic, self.__encoder.encode(task),
-                    )
-                    for task in tasks
+                    self.__producer.produce(self.__scheduled_topic, task)
+                    for task in encoded_tasks
                 ]
             ),
         )
