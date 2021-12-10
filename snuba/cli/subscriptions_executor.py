@@ -1,5 +1,5 @@
 import signal
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import click
 from arroyo import configure_metrics
@@ -21,8 +21,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option(
     "--entity",
-    "entity_name",
+    "entity_names",
     required=True,
+    multiple=True,
     type=click.Choice(["events", "transactions", "sessions"]),
     help="The entity to target.",
 )
@@ -47,7 +48,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 def subscriptions_executor(
     *,
     dataset_name: str,
-    entity_name: str,
+    entity_names: Sequence[str],
     consumer_group: str,
     max_concurrent_queries: int,
     auto_offset_reset: str,
@@ -64,14 +65,16 @@ def subscriptions_executor(
     setup_sentry()
 
     metrics = MetricsWrapper(
-        environment.metrics, "subscriptions.scheduler", tags={"entity": entity_name}
+        environment.metrics,
+        "subscriptions.executor",
+        tags={"entity": ",".join(entity_names)},
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
 
     processor = build_executor_consumer(
         dataset_name,
-        entity_name,
+        entity_names,
         consumer_group,
         max_concurrent_queries,
         auto_offset_reset,
