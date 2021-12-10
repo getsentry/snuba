@@ -86,7 +86,7 @@ class SubscriptionWorker(
         timer = Timer("query")
 
         request = task.task.subscription.data.build_request(
-            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
+            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics,
         )
         return self.__execute_query(request, timer, task)
 

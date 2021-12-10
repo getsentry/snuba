@@ -1,13 +1,19 @@
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from typing import Iterator
+from unittest import mock
 
 import pytest
-from arroyo import Topic
-from arroyo.backends.kafka import KafkaProducer
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload, KafkaProducer
+from arroyo.processing.strategies import MessageRejected
 from confluent_kafka.admin import AdminClient
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import (
     PartitionId,
@@ -18,7 +24,7 @@ from snuba.subscriptions.data import (
     SubscriptionWithTick,
 )
 from snuba.subscriptions.entity_subscription import EventsSubscription
-from snuba.subscriptions.executor_consumer import build_executor_consumer
+from snuba.subscriptions.executor_consumer import ExecuteQuery, build_executor_consumer
 from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
@@ -102,3 +108,92 @@ def test_executor_consumer() -> None:
     executor._run_once()
 
     executor._shutdown()
+
+
+def generate_message() -> Iterator[Message[KafkaPayload]]:
+    codec = SubscriptionScheduledTaskEncoder()
+    epoch = datetime(1970, 1, 1)
+    i = 0
+
+    while True:
+        payload = codec.encode(
+            ScheduledSubscriptionTask(
+                epoch + timedelta(minutes=i),
+                SubscriptionWithTick(
+                    EntityKey.EVENTS,
+                    Subscription(
+                        SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                        SnQLSubscriptionData(
+                            project_id=1,
+                            time_window=timedelta(minutes=1),
+                            resolution=timedelta(minutes=1),
+                            query="MATCH (events) SELECT count()",
+                            entity_subscription=EventsSubscription(data_dict={}),
+                        ),
+                    ),
+                    Tick(
+                        0,
+                        Interval(i, i + 1),
+                        Interval(
+                            epoch + timedelta(minutes=i),
+                            epoch + timedelta(minutes=i + 1),
+                        ),
+                    ),
+                ),
+            )
+        )
+
+        yield Message(Partition(Topic("test"), 0), i, payload, epoch, i + 1)
+        i += 1
+
+
+def test_execute_query_strategy() -> None:
+    dataset = get_dataset("events")
+    max_concurrent_queries = 2
+    executor = ThreadPoolExecutor(max_concurrent_queries)
+    metrics = TestingMetricsBackend()
+    next_step = mock.Mock()
+
+    strategy = ExecuteQuery(
+        dataset, executor, max_concurrent_queries, metrics, next_step
+    )
+
+    make_message = generate_message()
+    message = next(make_message)
+
+    strategy.submit(message)
+
+    # next_step.submit should be called eventually
+    while next_step.submit.call_count == 0:
+        time.sleep(0.1)
+        strategy.poll()
+
+    assert next_step.submit.call_args[0][0].timestamp == message.timestamp
+    assert next_step.submit.call_args[0][0].offset == message.offset
+    assert next_step.submit.call_args[0][0].payload.result()[1] == {
+        "data": [{"count()": 0}],
+        "meta": [{"name": "count()", "type": "UInt64"}],
+    }
+
+    strategy.close()
+    strategy.join()
+
+
+def test_too_many_concurrent_queries() -> None:
+    dataset = get_dataset("events")
+    executor = ThreadPoolExecutor(2)
+    metrics = TestingMetricsBackend()
+    next_step = mock.Mock()
+
+    strategy = ExecuteQuery(dataset, executor, 4, metrics, next_step)
+
+    make_message = generate_message()
+
+    for _ in range(4):
+        strategy.submit(next(make_message))
+
+    with pytest.raises(MessageRejected):
+        strategy.submit(next(make_message))
+
+    strategy.close()
+    strategy.join()
