@@ -33,6 +33,7 @@ class ConnectionId(NamedTuple):
     hostname: str
     tcp_port: int
     http_port: int
+    database_name: str
 
 
 class ClickhouseClientSettings(Enum):
@@ -284,6 +285,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             hostname=self.__query_node.host_name,
             tcp_port=self.__query_node.port,
             http_port=self.__http_port,
+            database_name=self.__database,
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:

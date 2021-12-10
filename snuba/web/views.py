@@ -9,11 +9,11 @@ from typing import (
     Any,
     Callable,
     Dict,
-    List,
     Mapping,
     MutableMapping,
     MutableSequence,
     Sequence,
+    Set,
     Text,
     Tuple,
     Union,
@@ -104,11 +104,13 @@ def check_clickhouse() -> bool:
             itertools.chain(*[entity.get_all_storages() for entity in entities])
         )
 
-        cluster_grouped_table_names: Dict[ConnectionId, List[str]] = defaultdict(list)
+        cluster_grouped_table_names: MutableMapping[
+            ConnectionId, Set[str]
+        ] = defaultdict(set)
         for storage in storages:
             if isinstance(storage.get_schema(), TableSchema):
                 cluster = storage.get_cluster()
-                cluster_grouped_table_names[cluster.get_connection_id()].append(
+                cluster_grouped_table_names[cluster.get_connection_id()].add(
                     cast(TableSchema, storage.get_schema()).get_table_name()
                 )
 
