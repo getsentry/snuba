@@ -22,7 +22,6 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import Position
 
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import SubscriptionScheduler
@@ -53,10 +52,14 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
     """
 
     def __init__(
-        self, partitions: int, next_step: ProcessingStrategy[CommittableTick],
+        self,
+        partitions: int,
+        next_step: ProcessingStrategy[CommittableTick],
+        metrics: MetricsBackend,
     ) -> None:
         self.__partitions = partitions
         self.__next_step = next_step
+        self.__metrics = metrics
 
         # Store the last message we received for each partition so know when
         # to commit offsets.
@@ -72,6 +75,8 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
+        start = time.time()
+
         assert not self.__closed
 
         # Update self.__offset_high_watermark
@@ -90,6 +95,10 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         )
         if should_commit:
             self.__offset_low_watermark = message.offset
+
+        self.__metrics.timing(
+            "ProvideCommitStrategy.submit", (time.time() - start) * 1000
+        )
 
     def __should_commit(self, message: Message[Tick]) -> bool:
         return (
@@ -193,6 +202,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
+        start = time.time()
+
         assert not self.__closed
 
         # If the scheduler mode is immediate or there is only one partition
@@ -270,6 +281,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 "partition_lag_ms",
                 (self.__latest_ts - earliest_ts).total_seconds() * 1000,
             )
+
+            self.__metrics.timing("TickBuffer.submit", (time.time() - start) * 1000)
 
     def close(self) -> None:
         self.__closed = True
@@ -358,17 +371,18 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
     def __init__(
         self,
-        entity_key: EntityKey,
         schedulers: Mapping[int, SubscriptionScheduler],
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         commit: Callable[[Mapping[Partition, Position]], None],
+        metrics: MetricsBackend,
     ) -> None:
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__producer = producer
         self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
         self.__commit = commit
+        self.__metrics = metrics
         self.__closed = False
 
         # Stores each tick with it's futures
@@ -378,6 +392,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__max_buffer_size = 10000
 
     def poll(self) -> None:
+        start = time.time()
         # Remove completed tasks from the queue and raise if an exception occurred.
         # This method does not attempt to recover from any exception.
         # Also commits any offsets required.
@@ -404,7 +419,12 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     }
                 )
 
+        self.__metrics.timing(
+            "ProduceScheduledSubscriptionMessage.poll", (time.time() - start) * 1000
+        )
+
     def submit(self, message: Message[CommittableTick]) -> None:
+        start = time.time()
         assert not self.__closed
 
         # If queue is full, raise MessageRejected to tell the stream
@@ -427,6 +447,10 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     for task in tasks
                 ]
             ),
+        )
+
+        self.__metrics.timing(
+            "ProduceScheduledSubscriptionMessage.submit", (time.time() - start) * 1000
         )
 
     def close(self) -> None:
