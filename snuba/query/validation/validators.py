@@ -167,12 +167,11 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
         """
         condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
-
         for exp in query.get_groupby():
-            key = None
+            key: Optional[str] = None
             if isinstance(exp, SubscriptableReferenceExpr):
                 column_name = str(exp.column.column_name)
-                key = exp.key.value
+                key = str(exp.key.value)
             elif isinstance(exp, Column):
                 column_name = exp.column_name
             else:

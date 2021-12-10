@@ -12,7 +12,12 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.validation.validators import SubscriptionAllowedClausesValidator
 from snuba.subscriptions.entity_subscription import (
@@ -76,14 +81,22 @@ tests = [
                     ),
                     binary_condition(
                         "equals",
-                        Column("_snuba_tags[3]", None, "tags[3]"),
+                        SubscriptableReference(
+                            "_snuba_tags[asd]",
+                            Column("_snuba_tags", None, "tags"),
+                            Literal(None, "asd"),
+                        ),
                         Literal(None, 2),
                     ),
                 ),
             ),
             groupby=[
                 Column("_snuba_project_id", None, "project_id"),
-                Column("_snuba_tags[3]", None, "tags[3]"),
+                SubscriptableReference(
+                    "_snuba_tags[asd]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "asd"),
+                ),
             ],
         ),
         id="groupby is allowed in metrics counters subscriptions",
@@ -193,10 +206,65 @@ invalid_tests = [
             ),
             groupby=[
                 Column("_snuba_project_id", None, "project_id"),
-                Column("_snuba_tags[3]", None, "tags[3]"),
+                SubscriptableReference(
+                    "_snuba_tags[3]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "3"),
+                ),
             ],
         ),
         id="tags[3] is in the group by clause but has no matching condition",
+    ),
+    pytest.param(
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
+            ),
+            selected_columns=[SelectedExpression("value", Column(None, None, "value"))],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "metric_id"),
+                    Literal(None, 123),
+                ),
+                binary_condition(
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            "equals",
+                            Column("_snuba_project_id", None, "project_id"),
+                            Literal(None, 1),
+                        ),
+                        binary_condition(
+                            "equals",
+                            Column("_snuba_org_id", None, "org_id"),
+                            Literal(None, 1),
+                        ),
+                    ),
+                    binary_condition(
+                        "equals",
+                        SubscriptableReference(
+                            "_snuba_tags[asd]",
+                            Column("_snuba_tags", None, "tags"),
+                            Literal(None, "asd"),
+                        ),
+                        Literal(None, 2),
+                    ),
+                ),
+            ),
+            groupby=[
+                Column("_snuba_project_id", None, "project_id"),
+                SubscriptableReference(
+                    "_snuba_tags[3]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "3"),
+                ),
+            ],
+        ),
+        id="groupby field in where clause but with a different key",
     ),
 ]
 
