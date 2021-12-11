@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Callable, Deque, Mapping, NamedTuple, Optional, Sequence, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
@@ -21,7 +21,11 @@ from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
-from snuba.subscriptions.data import ScheduledSubscriptionTask
+from snuba.subscriptions.data import (
+    ScheduledSubscriptionTask,
+    SubscriptionTaskResult,
+    SubscriptionTaskResultFuture,
+)
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
@@ -125,11 +129,6 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         return Noop(commit)
 
 
-class SubscriptionResultFuture(NamedTuple):
-    message: Message[KafkaPayload]
-    future: Future[Tuple[Request, Result]]
-
-
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     """
     Decodes a scheduled subscription task from the Kafka payload, builds
@@ -142,7 +141,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         executor: ThreadPoolExecutor,
         max_concurrent_queries: int,
         metrics: MetricsBackend,
-        next_step: ProcessingStrategy[Future[Tuple[Request, Result]]],
+        next_step: ProcessingStrategy[SubscriptionTaskResult],
     ) -> None:
         self.__dataset = dataset
         self.__executor = executor
@@ -152,7 +151,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
 
-        self.__queue: Deque[SubscriptionResultFuture] = deque()
+        self.__queue: Deque[
+            Tuple[Message[KafkaPayload], SubscriptionTaskResultFuture]
+        ] = deque()
 
         self.__closed = False
 
@@ -191,18 +192,18 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def poll(self) -> None:
         while self.__queue:
-            if not self.__queue[0].future.done():
+            if not self.__queue[0][1].future.done():
                 break
 
-            result_future = self.__queue.popleft()
-
-            message, future = result_future
+            message, result_future = self.__queue.popleft()
 
             self.__next_step.submit(
                 Message(
                     message.partition,
                     message.offset,
-                    future,
+                    SubscriptionTaskResult(
+                        result_future.task, result_future.future.result()
+                    ),
                     message.timestamp,
                     message.next_offset,
                 )
@@ -223,8 +224,11 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         tick = task.task.tick
 
         self.__queue.append(
-            SubscriptionResultFuture(
-                message, self.__executor.submit(self.__execute_query, task, tick),
+            (
+                message,
+                SubscriptionTaskResultFuture(
+                    task, self.__executor.submit(self.__execute_query, task, tick),
+                ),
             )
         )
 
@@ -246,17 +250,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
                 break
 
-            result_future = self.__queue.popleft()
+            message, result_future = self.__queue.popleft()
 
-            result_future.future.result(remaining)
-
-            message, future = result_future
+            subscription_task_result = SubscriptionTaskResult(
+                result_future.task, result_future.future.result(remaining)
+            )
 
             self.__next_step.submit(
                 Message(
                     message.partition,
                     message.offset,
-                    future,
+                    subscription_task_result,
                     message.timestamp,
                     message.next_offset,
                 )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractclassmethod, abstractmethod
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
@@ -13,6 +14,7 @@ from typing import (
     NewType,
     Optional,
     Sequence,
+    Tuple,
     Union,
 )
 from uuid import UUID
@@ -30,6 +32,7 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
+from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
@@ -273,3 +276,13 @@ class SubscriptionScheduler(ABC):
         ascending order.
         """
         raise NotImplementedError
+
+
+class SubscriptionTaskResultFuture(NamedTuple):
+    task: ScheduledSubscriptionTask
+    future: Future[Tuple[Request, Result]]
+
+
+class SubscriptionTaskResult(NamedTuple):
+    task: ScheduledSubscriptionTask
+    result: Tuple[Request, Result]

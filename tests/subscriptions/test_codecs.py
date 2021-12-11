@@ -22,6 +22,7 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionTaskResult,
     SubscriptionWithTick,
 )
 from snuba.subscriptions.entity_subscription import (
@@ -31,7 +32,6 @@ from snuba.subscriptions.entity_subscription import (
     SubscriptionType,
 )
 from snuba.subscriptions.utils import Tick
-from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.types import Interval
 

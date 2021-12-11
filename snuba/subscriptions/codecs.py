@@ -13,10 +13,10 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionTaskResult,
     SubscriptionWithTick,
 )
 from snuba.subscriptions.utils import Tick
-from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
 
 

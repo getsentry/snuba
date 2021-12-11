@@ -6,8 +6,8 @@ import logging
 import math
 import random
 import time
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from typing import List, Mapping, NamedTuple, Optional, Sequence, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Mapping, Optional, Sequence, Tuple
 
 from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
@@ -19,7 +19,12 @@ from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
-from snuba.subscriptions.data import ScheduledSubscriptionTask, SubscriptionScheduler
+from snuba.subscriptions.data import (
+    ScheduledSubscriptionTask,
+    SubscriptionScheduler,
+    SubscriptionTaskResult,
+    SubscriptionTaskResultFuture,
+)
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
@@ -31,16 +36,6 @@ from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 from snuba.web.query import parse_and_run_query
 
 logger = logging.getLogger("snuba.subscriptions")
-
-
-class SubscriptionTaskResultFuture(NamedTuple):
-    task: ScheduledSubscriptionTask
-    future: Future[Tuple[Request, Result]]
-
-
-class SubscriptionTaskResult(NamedTuple):
-    task: ScheduledSubscriptionTask
-    result: Tuple[Request, Result]
 
 
 class SubscriptionWorker(
