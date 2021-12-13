@@ -237,10 +237,10 @@ class Subscription(NamedTuple):
     data: SubscriptionData
 
 
-class SubscriptionWithTick(NamedTuple):
+class SubscriptionWithMetadata(NamedTuple):
     entity: EntityKey
     subscription: Subscription
-    tick: Tick
+    tick_upper_offset: int
 
 
 @dataclass(frozen=True)
@@ -254,7 +254,7 @@ class ScheduledSubscriptionTask:
     timestamp: datetime
 
     # The task that should be executed.
-    task: SubscriptionWithTick
+    task: SubscriptionWithMetadata
 
 
 class SubscriptionScheduler(ABC):

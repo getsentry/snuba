@@ -13,9 +13,8 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
-    SubscriptionWithTick,
+    SubscriptionWithMetadata,
 )
-from snuba.subscriptions.utils import Tick
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
 
@@ -64,7 +63,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
     """
 
     def encode(self, value: ScheduledSubscriptionTask) -> KafkaPayload:
-        entity, subscription, tick = value.task
+        entity, subscription, tick_upper_offset = value.task
 
         assert isinstance(subscription.data, SnQLSubscriptionData)
 
@@ -77,7 +76,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
                         "timestamp": value.timestamp.isoformat(),
                         "entity": entity.value,
                         "task": {"data": value.task.subscription.data.to_dict()},
-                        "tick": tick.to_dict(),
+                        "tick_upper_offset": tick_upper_offset,
                     }
                 ),
             ).encode("utf-8"),
@@ -97,7 +96,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
 
         return ScheduledSubscriptionTask(
             datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
-            SubscriptionWithTick(
+            SubscriptionWithMetadata(
                 entity_key,
                 Subscription(
                     SubscriptionIdentifier.from_string(subscription_identifier),
@@ -105,6 +104,6 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
                         scheduled_subscription_dict["task"]["data"], entity_key
                     ),
                 ),
-                Tick.from_dict(scheduled_subscription_dict["tick"]),
+                scheduled_subscription_dict["tick_upper_offset"],
             ),
         )
