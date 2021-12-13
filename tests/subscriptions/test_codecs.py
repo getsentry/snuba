@@ -266,7 +266,7 @@ def test_subscription_task_encoder() -> None:
 
     assert encoded.value == (
         b"{"
-        b'"timestamp":"1970-01-01T00:00:00",'
+        b'"timestamp":28800.0,'
         b'"entity":"events",'
         b'"task":{'
         b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'

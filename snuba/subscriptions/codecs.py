@@ -73,7 +73,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
                 str,
                 rapidjson.dumps(
                     {
-                        "timestamp": value.timestamp.isoformat(),
+                        "timestamp": value.timestamp.timestamp(),
                         "entity": entity.value,
                         "task": {"data": value.task.subscription.data.to_dict()},
                         "tick_upper_offset": tick_upper_offset,
@@ -95,7 +95,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
         entity_key = EntityKey(scheduled_subscription_dict["entity"])
 
         return ScheduledSubscriptionTask(
-            datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
+            datetime.fromtimestamp(scheduled_subscription_dict["timestamp"]),
             SubscriptionWithMetadata(
                 entity_key,
                 Subscription(
