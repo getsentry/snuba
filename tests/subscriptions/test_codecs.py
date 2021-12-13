@@ -23,7 +23,7 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
-    SubscriptionWithTick,
+    SubscriptionWithMetadata,
 )
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
@@ -31,9 +31,7 @@ from snuba.subscriptions.entity_subscription import (
     SessionsSubscription,
     SubscriptionType,
 )
-from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.types import Interval
 
 
 def build_snql_subscription_data(
@@ -148,17 +146,13 @@ def test_subscription_task_result_encoder() -> None:
     task_result = SubscriptionTaskResult(
         ScheduledSubscriptionTask(
             timestamp,
-            SubscriptionWithTick(
+            SubscriptionWithMetadata(
                 EntityKey.EVENTS,
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
                 ),
-                Tick(
-                    0,
-                    Interval(1, 5),
-                    Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)),
-                ),
+                5,
             ),
         ),
         (request, result),
@@ -214,17 +208,13 @@ def test_sessions_subscription_task_result_encoder() -> None:
     task_result = SubscriptionTaskResult(
         ScheduledSubscriptionTask(
             timestamp,
-            SubscriptionWithTick(
+            SubscriptionWithMetadata(
                 EntityKey.EVENTS,
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
                 ),
-                Tick(
-                    0,
-                    Interval(1, 5),
-                    Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)),
-                ),
+                5,
             ),
         ),
         (request, result),
@@ -258,17 +248,17 @@ def test_subscription_task_encoder() -> None:
 
     epoch = datetime(1970, 1, 1)
 
-    tick = Tick(0, Interval(1, 5), Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)))
+    tick_upper_offset = 5
 
-    subscription_with_tick = SubscriptionWithTick(
+    subscription_with_metadata = SubscriptionWithMetadata(
         EntityKey.EVENTS,
         Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
-        tick,
+        tick_upper_offset,
     )
 
-    task = ScheduledSubscriptionTask(timestamp=epoch, task=subscription_with_tick)
+    task = ScheduledSubscriptionTask(timestamp=epoch, task=subscription_with_metadata)
 
     encoded = encoder.encode(task)
 
@@ -280,7 +270,7 @@ def test_subscription_task_encoder() -> None:
         b'"entity":"events",'
         b'"task":{'
         b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
-        b'"tick":{"partition":0,"offsets":[1,5],"timestamps":["1970-01-01T00:00:00","1970-01-02T00:00:00"]}'
+        b'"tick_upper_offset":5'
         b"}"
     )
 

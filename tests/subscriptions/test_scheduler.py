@@ -11,7 +11,7 @@ from snuba.subscriptions.data import (
     SnQLSubscriptionData,
     Subscription,
     SubscriptionIdentifier,
-    SubscriptionWithTick,
+    SubscriptionWithMetadata,
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
@@ -89,8 +89,10 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
-                    SubscriptionWithTick(
-                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    SubscriptionWithMetadata(
+                        EntityKey.EVENTS,
+                        subscription,
+                        self.build_tick(start, end).offsets.upper,
                     ),
                 )
                 for i in range(10)
@@ -109,8 +111,10 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
-                    SubscriptionWithTick(
-                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    SubscriptionWithMetadata(
+                        EntityKey.EVENTS,
+                        subscription,
+                        self.build_tick(start, end).offsets.upper,
                     ),
                 )
                 for i in range(10)
@@ -136,8 +140,10 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now,
-                    SubscriptionWithTick(
-                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    SubscriptionWithMetadata(
+                        EntityKey.EVENTS,
+                        subscription,
+                        self.build_tick(start, end).offsets.upper,
                     ),
                 )
             ],
@@ -155,8 +161,10 @@ class TestSubscriptionScheduler:
             expected=[
                 ScheduledSubscriptionTask(
                     self.now,
-                    SubscriptionWithTick(
-                        EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                    SubscriptionWithMetadata(
+                        EntityKey.EVENTS,
+                        subscription,
+                        self.build_tick(start, end).offsets.upper,
                     ),
                 )
             ],
@@ -170,16 +178,20 @@ class TestSubscriptionScheduler:
         expected = [
             ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
-                SubscriptionWithTick(
-                    EntityKey.EVENTS, subscription, self.build_tick(start, end)
+                SubscriptionWithMetadata(
+                    EntityKey.EVENTS,
+                    subscription,
+                    self.build_tick(start, end).offsets.upper,
                 ),
             )
             for i in range(10)
         ] + [
             ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
-                SubscriptionWithTick(
-                    EntityKey.EVENTS, other_subscription, self.build_tick(start, end)
+                SubscriptionWithMetadata(
+                    EntityKey.EVENTS,
+                    other_subscription,
+                    self.build_tick(start, end).offsets.upper,
                 ),
             )
             for i in range(0, 10, 2)

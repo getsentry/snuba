@@ -21,18 +21,16 @@ from snuba.subscriptions.data import (
     SnQLSubscriptionData,
     Subscription,
     SubscriptionIdentifier,
-    SubscriptionWithTick,
+    SubscriptionWithMetadata,
 )
 from snuba.subscriptions.entity_subscription import EventsSubscription
 from snuba.subscriptions.executor_consumer import ExecuteQuery, build_executor_consumer
-from snuba.subscriptions.utils import Tick
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
 
 
@@ -84,15 +82,13 @@ def test_executor_consumer() -> None:
 
     task = ScheduledSubscriptionTask(
         timestamp=epoch,
-        task=SubscriptionWithTick(
+        task=SubscriptionWithMetadata(
             entity_key,
             Subscription(
                 SubscriptionIdentifier(PartitionId(1), subscription_id),
                 subscription_data,
             ),
-            Tick(
-                0, Interval(0, 1), Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)),
-            ),
+            1,
         ),
     )
 
@@ -119,7 +115,7 @@ def generate_message() -> Iterator[Message[KafkaPayload]]:
         payload = codec.encode(
             ScheduledSubscriptionTask(
                 epoch + timedelta(minutes=i),
-                SubscriptionWithTick(
+                SubscriptionWithMetadata(
                     EntityKey.EVENTS,
                     Subscription(
                         SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
@@ -131,14 +127,7 @@ def generate_message() -> Iterator[Message[KafkaPayload]]:
                             entity_subscription=EventsSubscription(data_dict={}),
                         ),
                     ),
-                    Tick(
-                        0,
-                        Interval(i, i + 1),
-                        Interval(
-                            epoch + timedelta(minutes=i),
-                            epoch + timedelta(minutes=i + 1),
-                        ),
-                    ),
+                    i + 1,
                 ),
             )
         )
