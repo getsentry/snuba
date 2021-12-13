@@ -16,15 +16,17 @@ from typing import (
     Union,
 )
 
+import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
-from snuba.clickhouse.columns import Array, ColumnSet
+from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -62,10 +64,10 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
-    _apply_column_aliases,
-    _expand_aliases,
-    _parse_subscriptables,
-    _validate_aliases,
+    apply_column_aliases,
+    expand_aliases,
+    parse_subscriptables,
+    validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
@@ -104,11 +106,11 @@ snql_grammar = Grammar(
     match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
-    arrayjoin_clause      = space+ "ARRAY JOIN" space+ (tag_column / subscriptable / simple_term)
+    arrayjoin_clause      = space+ "ARRAY JOIN" space+ arrayjoin_entity arrayjoin_optional
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
-    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name
+    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name limit_by_columns
     limit_clause          = space+ "LIMIT" space+ integer_literal
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
@@ -138,10 +140,14 @@ snql_grammar = Grammar(
     select_columns       = selected_expression space* comma
     selected_expression  = space* (aliased_tag_column / aliased_subscriptable / aliased_column_name / low_pri_arithmetic)
 
+    arrayjoin_entity     = tag_column / subscriptable / simple_term
+    arrayjoin_optional   = (space* comma space* arrayjoin_entity)*
+
     group_list            = group_columns* (selected_expression)
     group_columns         = selected_expression space* comma
     order_list            = order_columns* low_pri_arithmetic space+ ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic space+ ("ASC"/"DESC") space* comma space*
+    limit_by_columns      = (space* comma space* column_name)*
 
     low_pri_arithmetic    = space* high_pri_arithmetic (space* low_pri_tuple)*
     high_pri_arithmetic   = space* arithmetic_term (space* high_pri_tuple)*
@@ -615,11 +621,25 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_limit_by_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Any, Literal, Any, Any, Any, Column],
+        visited_children: Tuple[
+            Any, Any, Any, Literal, Any, Any, Any, Column, Optional[Sequence[Column]]
+        ],
     ) -> LimitBy:
-        _, _, _, limit, _, _, _, column = visited_children
+        _, _, _, limit, _, _, _, column_one, columns_rest = visited_children
         assert isinstance(limit.value, int)  # mypy
-        return LimitBy(limit.value, column)
+        columns = [column_one]
+        if columns_rest is not None:
+            columns.extend(columns_rest)
+        return LimitBy(limit.value, columns)
+
+    def visit_limit_by_columns(
+        self, node: Node, visited_children: Sequence[Tuple[Any, Any, Any, Column]]
+    ) -> Sequence[Column]:
+        columns: List[Column] = []
+        for column_visit in visited_children:
+            _, _, _, column_inst = column_visit
+            columns.append(column_inst)
+        return columns
 
     def visit_limit_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
@@ -716,10 +736,27 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return ret
 
     def visit_arrayjoin_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
-    ) -> Expression:
-        _, _, _, expression = visited_children
-        return expression
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Any, Expression, Optional[List[Expression]]],
+    ) -> Sequence[Expression]:
+        _, _, _, join_first, join_rest = visited_children
+        exprs = [join_first]
+
+        if join_rest is not None:
+            exprs.extend(join_rest)
+
+        return exprs
+
+    def visit_arrayjoin_optional(
+        self, node: Node, visited_children: List[Tuple[Any, Any, Any, Expression]],
+    ) -> List[Expression]:
+        exprs: List[Expression] = list()
+        if visited_children is not None:
+            for child in visited_children:
+                _, _, _, exp = child
+                exprs.append(exp)
+        return exprs
 
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
@@ -990,22 +1027,28 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 def _unpack_array_conditions(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    schema: ColumnSet,
+    schema: EntityColumnSet,
     entity_alias: Optional[str] = None,
 ) -> None:
-    array_columns = set()
-    array_join_col = query.get_arrayjoin()
-    array_join = ""
-    if array_join_col is not None:
-        assert isinstance(array_join_col, Column)
-        array_join = f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+    array_columns: Set[str] = set()
+    array_join_arguments = query.get_arrayjoin()
+    array_join_columns = set()
+    if array_join_arguments is not None:
+        for array_join_col in array_join_arguments:
+            assert isinstance(array_join_col, Column)
+            array_join_columns.add(
+                f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+            )
 
     entity_alias = f"{entity_alias}." if entity_alias is not None else ""
     for column in schema:
         if isinstance(column.type, Array):
             aliased_base_name = f"{entity_alias}{column.base_name}"
             aliased_flattened = f"{entity_alias}{column.flattened}"
-            if aliased_base_name == array_join or aliased_flattened == array_join:
+            if (
+                aliased_base_name in array_join_columns
+                or aliased_flattened in array_join_columns
+            ):
                 continue
 
             array_columns.add(aliased_base_name)
@@ -1197,7 +1240,7 @@ def validate_entities_with_query(
                 entity = get_entity(node.data_source.key)
                 try:
                     for v in entity.get_validators():
-                        v.validate(query)
+                        v.validate(query, alias)
                 except InvalidQueryException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
@@ -1268,7 +1311,12 @@ def _post_process(
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
 ) -> None:
     for func in funcs:
-        func(query)
+        # custom processors can be partials instead of functions but partials don't
+        # have the __name__ attribute set automatically (and we don't set it manually)
+        description = getattr(func, "__name__", "custom")
+
+        with sentry_sdk.start_span(op="processor", description=description):
+            func(query)
 
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
@@ -1279,10 +1327,10 @@ def _post_process(
 
 POST_PROCESSORS = [
     _parse_datetime_literals,
-    _validate_aliases,
-    _parse_subscriptables,  # -> This should be part of the grammar
-    _apply_column_aliases,
-    _expand_aliases,
+    validate_aliases,
+    parse_subscriptables,  # -> This should be part of the grammar
+    apply_column_aliases,
+    expand_aliases,
     _mangle_query_aliases,
     _array_join_transformation,
     _qualify_columns,
@@ -1300,23 +1348,28 @@ CustomProcessors = Sequence[
 def parse_snql_query(
     body: str, dataset: Dataset, custom_processing: Optional[CustomProcessors] = None,
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
-    query = parse_snql_query_initial(body)
+    with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
+        query = parse_snql_query_initial(body)
 
-    _post_process(
-        query, POST_PROCESSORS,
-    )
+    with sentry_sdk.start_span(op="processor", description="post_processors"):
+        _post_process(
+            query, POST_PROCESSORS,
+        )
 
     # Custom processing to tweak the AST before validation
-    if custom_processing is not None:
-        _post_process(query, custom_processing)
+    with sentry_sdk.start_span(op="processor", description="custom_processing"):
+        if custom_processing is not None:
+            _post_process(query, custom_processing)
 
     # Time based processing
-    _post_process(query, [_replace_time_condition])
+    with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+        _post_process(query, [_replace_time_condition])
 
     # XXX: Select the entity to be used for the query. This step is temporary. Eventually
     # entity selection will be moved to Sentry and specified for all SnQL queries.
     _post_process(query, [_select_entity_for_dataset(dataset)])
 
     # Validating
-    _post_process(query, VALIDATORS)
+    with sentry_sdk.start_span(op="validate", description="expression_validators"):
+        _post_process(query, VALIDATORS)
     return query

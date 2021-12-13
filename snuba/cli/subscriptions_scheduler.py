@@ -4,11 +4,15 @@ from typing import Any, Optional
 
 import click
 from arroyo import configure_metrics
+from arroyo.backends.kafka import KafkaProducer
 
-from snuba import environment
+from snuba import environment, settings
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 logger = logging.getLogger(__name__)
@@ -19,7 +23,7 @@ logger = logging.getLogger(__name__)
     "--entity",
     "entity_name",
     required=True,
-    type=click.Choice(["events", "transactions"]),
+    type=click.Choice(["events", "transactions", "sessions"]),
     help="The entity to target",
 )
 @click.option(
@@ -44,7 +48,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--load-factor",
     type=int,
-    default=1,
+    default=settings.SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR,
     help="Temporary option to simulate additional load. To be removed after testing.",
 )
 def subscriptions_scheduler(
@@ -56,11 +60,42 @@ def subscriptions_scheduler(
     schedule_ttl: int,
     log_level: Optional[str],
     delay_seconds: Optional[int],
-    load_factor: int = 1
+    load_factor: int,
 ) -> None:
     """
-    Currently the subscriptions scheduler just consumes the commit log and records
-    the lag between the slowest and fastest partitions.
+    The subscriptions scheduler's job is to schedule subscriptions for a single entity.
+    It consumes the commit log for that entity which is used as a clock and determines
+    which subscriptions to run at each interval. It produces a message for each
+    scheduled subscription task to the scheduled subscription topic for that entity, so
+    it can be picked up and run by subscription executors.
+
+    The subscriptions scheduler consists of a tick consumer and three processing steps.
+
+    - The tick consumer consumes the commit log and reads the "orig_message_ts" header.
+    It constructs a new `Tick` message representing the intervals between each of the
+    original messages, which gets passed to the processing strategy. Note: A tick always
+    corresponds to a single partition on the original topic (not the commit log topic
+    as that is never partitioned).
+
+    - The first processing step is a tick buffer. It buffers ticks where needed and
+    determines when to submit them to the rest of the pipeline. The tick buffer behavior
+    depends on the watermark mode specified by the entity. In PARTITION mode, ticks are
+    never buffered and immediately submitted to the next step. In GLOBAL mode we wait
+    (filling the buffer) until the timestamp of a tick has been reached on every
+    partition before eventually submitting a tick to the next step. This guarantees that
+    a subscription is never scheduled before data on every partition up to that
+    timestamp is written to storage.
+
+    - The second processing step provides the strategy for committing offsets. Ticks are
+    only marked as `should_commit` if every partition has already reached the timestamp
+    of the tick. Only the commit log offset of the slowest partition (on the main topic)
+    will get committed. This guarantees at least once scheduling of subscriptions.
+
+    - The third processing step checks the subscription store to determine which
+    subscriptions need to be scheduled for each tick. Each scheduled subscription task
+    is encoded and produced to the scheduled topic. Offsets are commited if the
+    `should_commit` value provided by the previous strategy is true, and only once all
+    prior scheduled subscriptions were succesfully produced (and replicated).
     """
 
     setup_logging(log_level)
@@ -72,11 +107,32 @@ def subscriptions_scheduler(
 
     configure_metrics(StreamMetricsAdapter(metrics))
 
+    entity_key = EntityKey(entity_name)
+
+    storage = get_entity(entity_key).get_writable_storage()
+
+    assert (
+        storage is not None
+    ), f"Entity {entity_name} does not have a writable storage by default."
+
+    stream_loader = storage.get_table_writer().get_stream_loader()
+
+    scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
+    assert scheduled_topic_spec is not None
+
+    producer = KafkaProducer(
+        build_kafka_producer_configuration(
+            scheduled_topic_spec.topic, override_params={"partitioner": "consistent"},
+        )
+    )
+
     builder = SchedulerBuilder(
         entity_name,
         consumer_group,
         followed_consumer_group,
+        producer,
         auto_offset_reset,
+        schedule_ttl,
         delay_seconds,
         metrics,
         # TODO: Just for testing, should be removed before the scheduler is actually used

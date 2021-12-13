@@ -1,6 +1,7 @@
-import click
 import json
 from typing import Any, Mapping
+
+import click
 
 from snuba import state
 
@@ -80,7 +81,7 @@ def delete(*, key: str) -> None:
         raise click.ClickException(f"Key {key!r} not found.")
 
     click.echo(human_fmt({key: rv}))
-    click.confirm(f"\nAre you sure you want to delete this?", abort=True)
+    click.confirm("\nAre you sure you want to delete this?", abort=True)
 
     state.delete_config(key, user=get_user())
 
@@ -90,7 +91,7 @@ def log() -> None:
     "Dump the config change log."
     from datetime import datetime
 
-    for key, (ts, user, before, after) in state.get_config_changes():
+    for key, (ts, user, before, after) in state.get_config_changes_legacy():
         click.echo(
             f"{datetime.fromtimestamp(int(ts)).isoformat()}: "
             f"key={key!r} user={user!r} "

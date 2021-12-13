@@ -168,6 +168,27 @@ test_expressions = [
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
         "(equals(c1, $N) AND equals(c2, $N) OR equals(c3, $N) OR equals(c4, $N)) AND equals(c5, $N)",
     ),  # Formatting infix expressions
+    (
+        FunctionCall(
+            "_snuba_tags[some_pii]", "f0", (Column(None, "table1", "param1"),)
+        ),
+        "(f0(table1.param1) AS `_snuba_tags[some_pii]`)",
+        "(f0(table1.param1) AS `_snuba_tags[$A]`)",
+    ),
+    (
+        FunctionCall(
+            "_snuba_tags[some_pii][some_more_pii]",
+            "f0",
+            (Column(None, "table1", "param1"),),
+        ),
+        "(f0(table1.param1) AS `_snuba_tags[some_pii][some_more_pii]`)",
+        "(f0(table1.param1) AS `_snuba_tags[$A][$A]`)",
+    ),
+    (
+        FunctionCall("snubatagssomepii", "f0", (Column(None, "table1", "param1"),)),
+        "(f0(table1.param1) AS snubatagssomepii)",
+        "(f0(table1.param1) AS snubatagssomepii)",
+    ),
 ]
 
 

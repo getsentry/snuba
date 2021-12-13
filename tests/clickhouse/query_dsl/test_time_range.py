@@ -3,8 +3,8 @@ from datetime import datetime
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
-from snuba.query.parser import parse_query
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.snql.parser import parse_snql_query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -12,22 +12,18 @@ def test_get_time_range() -> None:
     """
     Test finding the time range of a query.
     """
-    body = {
-        "selected_columns": ["event_id"],
-        "conditions": [
-            # Cannot test complex conditions based on explicit calls
-            # the `and` and `or` functions, because they would not be
-            # parsed as datetime by the old parser.
-            ("timestamp", ">=", "2019-09-18T10:00:00"),
-            ("timestamp", ">=", "2000-09-18T10:00:00"),
-            ("timestamp", "<", "2019-09-19T12:00:00"),
-            [("timestamp", "<", "2019-09-18T12:00:00"), ("project_id", "IN", [1])],
-            ("project_id", "IN", [1]),
-        ],
-    }
+    body = """
+        MATCH (events)
+        SELECT event_id
+        WHERE timestamp >= toDateTime('2019-09-18T10:00:00')
+            AND timestamp >= toDateTime('2000-09-18T10:00:00')
+            AND timestamp < toDateTime('2019-09-19T12:00:00')
+            AND (timestamp < toDateTime('2019-09-18T12:00:00') OR project_id IN tuple(1))
+            AND project_id IN tuple(1)
+        """
 
     events = get_dataset("events")
-    query = parse_query(body, events)
+    query = parse_snql_query(body, events)
     processors = events.get_default_entity().get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
