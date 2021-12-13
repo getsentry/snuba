@@ -22,7 +22,7 @@ from snuba.subscriptions.data import (
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.data import SubscriptionScheduler as SubscriptionSchedulerBase
-from snuba.subscriptions.data import SubscriptionWithTick
+from snuba.subscriptions.data import SubscriptionWithMetadata
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
@@ -41,7 +41,7 @@ class TaskBuilder(ABC):
 
     @abstractmethod
     def get_task(
-        self, subscription_with_tick: SubscriptionWithTick, timestamp: int
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
         raise NotImplementedError
 
@@ -59,15 +59,15 @@ class ImmediateTaskBuilder(TaskBuilder):
         self.__count = 0
 
     def get_task(
-        self, subscription_with_tick: SubscriptionWithTick, timestamp: int
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
-        subscription = subscription_with_tick.subscription
+        subscription = subscription_with_metadata.subscription
 
         resolution = int(subscription.data.resolution.total_seconds())
         if timestamp % resolution == 0:
             self.__count += 1
             return ScheduledSubscriptionTask(
-                datetime.fromtimestamp(timestamp), subscription_with_tick
+                datetime.fromtimestamp(timestamp), subscription_with_metadata
             )
         else:
             return None
@@ -106,9 +106,9 @@ class JitteredTaskBuilder(TaskBuilder):
         self.__count_max_resolution = 0
 
     def get_task(
-        self, subscription_with_tick: SubscriptionWithTick, timestamp: int
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
-        subscription = subscription_with_tick.subscription
+        subscription = subscription_with_metadata.subscription
 
         resolution = int(subscription.data.resolution.total_seconds())
 
@@ -117,7 +117,7 @@ class JitteredTaskBuilder(TaskBuilder):
                 self.__count += 1
                 self.__count_max_resolution += 1
                 return ScheduledSubscriptionTask(
-                    datetime.fromtimestamp(timestamp), subscription_with_tick
+                    datetime.fromtimestamp(timestamp), subscription_with_metadata
                 )
             else:
                 return None
@@ -126,7 +126,7 @@ class JitteredTaskBuilder(TaskBuilder):
         if timestamp % resolution == jitter:
             self.__count += 1
             return ScheduledSubscriptionTask(
-                datetime.fromtimestamp(timestamp - jitter), subscription_with_tick
+                datetime.fromtimestamp(timestamp - jitter), subscription_with_metadata
             )
         else:
             return None
@@ -237,15 +237,15 @@ class DelegateTaskBuilder(TaskBuilder):
         self.__rollout_state = TaskBuilderModeState()
 
     def get_task(
-        self, subscription_with_tick: SubscriptionWithTick, timestamp: int
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
-        subscription = subscription_with_tick.subscription
+        subscription = subscription_with_metadata.subscription
 
         immediate_task = self.__immediate_builder.get_task(
-            subscription_with_tick, timestamp
+            subscription_with_metadata, timestamp
         )
         jittered_task = self.__jittered_builder.get_task(
-            subscription_with_tick, timestamp
+            subscription_with_metadata, timestamp
         )
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
         if primary_builder == TaskBuilderMode.JITTERED:
@@ -333,7 +333,9 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         ):
             for subscription in subscriptions:
                 task = self.__builder.get_task(
-                    SubscriptionWithTick(self.__entity_key, subscription, tick),
+                    SubscriptionWithMetadata(
+                        self.__entity_key, subscription, tick.offsets.upper
+                    ),
                     timestamp,
                 )
                 if task is not None:
