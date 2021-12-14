@@ -24,7 +24,7 @@ def admin(
 
         from werkzeug.serving import WSGIRequestHandler
 
-        from snuba.web.views import application
+        from snuba.admin.views import application
 
         setup_logging(log_level)
 
