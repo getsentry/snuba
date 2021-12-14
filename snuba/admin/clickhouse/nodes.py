@@ -19,11 +19,15 @@ def _get_local_table_name(storage_key: StorageKey) -> str:
 
 
 def _get_local_nodes(storage_key: StorageKey) -> Sequence[str]:
-    storage = get_storage(storage_key)
-    return [
-        f"{node.host_name}:{node.port}"
-        for node in storage.get_cluster().get_local_nodes()
-    ]
+    try:
+        storage = get_storage(storage_key)
+        return [
+            f"{node.host_name}:{node.port}"
+            for node in storage.get_cluster().get_local_nodes()
+        ]
+    except AssertionError:
+        # If cluster_name is not defined just return an empty list
+        return []
 
 
 def get_storage_info() -> Sequence[Storage]:
