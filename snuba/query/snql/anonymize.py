@@ -169,7 +169,7 @@ def _format_limit(
     query: AbstractQuery, formatter: ExpressionVisitor[str]
 ) -> Optional[StringNode]:
     ast_limit = query.get_limit()
-    return StringNode(f"LIMIT {ast_limit}") if ast_limit is not None else None
+    return StringNode(f"LIMIT {ast_limit}") if ast_limit != 1000 else None
 
 
 def _format_offset(
