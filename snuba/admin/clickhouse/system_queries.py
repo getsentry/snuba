@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Type, cast
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.utils.serializable_exception import SerializableException
@@ -89,8 +89,9 @@ class ActivePartitions(SystemQuery):
     """
 
 
-def _is_valid_node(host: str, port: int) -> bool:
-    return (host == "localhost" or host == "127.0.0.1") and port == 9000
+def _is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
+    connection_id = cluster.get_connection_id()
+    return host == connection_id.hostname and port == connection_id.tcp_port
 
 
 def run_system_query_on_host_by_name(
@@ -104,11 +105,6 @@ def run_system_query_on_host_by_name(
     if not query:
         raise NonExistentSystemQuery(extra_data={"query_name": system_query_name})
 
-    if not _is_valid_node(clickhouse_host, clickhouse_port):
-        raise InvalidNodeError(
-            extra_data={"host": clickhouse_host, "port": clickhouse_port}
-        )
-
     storage_key = None
     try:
         storage_key = StorageKey(storage_name)
@@ -116,7 +112,14 @@ def run_system_query_on_host_by_name(
         raise InvalidStorageError(extra_data={"storage_name": storage_name})
 
     storage = get_storage(storage_key)
-    database = storage.get_cluster().get_database()
+    cluster = storage.get_cluster()
+
+    if not _is_valid_node(clickhouse_host, clickhouse_port, cluster):
+        raise InvalidNodeError(
+            extra_data={"host": clickhouse_host, "port": clickhouse_port}
+        )
+
+    database = cluster.get_database()
 
     connection = ClickhousePool(
         clickhouse_host,
