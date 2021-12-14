@@ -1,9 +1,10 @@
-from typing import Optional
+from typing import Any, List, MutableMapping, Optional
 
 import simplejson as json
 from flask import Flask, Response, jsonify, make_response, request
 
 from snuba import state
+from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.system_queries import (
     InvalidNodeError,
     InvalidStorageError,
@@ -49,9 +50,10 @@ def clickhouse_system_query() -> Response:
         results, columns = run_system_query_on_host_by_name(
             req.get("host"), req.get("port"), req.get("storage"), req.get("query_name"),
         )
-        res = {}
+        res: MutableMapping[str, Any] = {}
+        rows: List[List[str]] = []
         res["column_names"] = [name for name, _ in columns]
-        res["rows"] = []
+        res["rows"] = rows
         for row in results:
             res["rows"].append([str(col) for col in row])
 
@@ -141,3 +143,10 @@ def config_changes() -> Response:
     ]
 
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+
+
+@application.route("/clickhouse_nodes")
+def clickhouse_nodes() -> Response:
+    return Response(
+        json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"}
+    )
