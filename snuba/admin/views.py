@@ -4,7 +4,12 @@ import simplejson as json
 from flask import Flask, Response, jsonify, make_response, request
 
 from snuba import state
-from snuba.admin.clickhouse.system_queries import SystemQuery, run_system_query
+from snuba.admin.clickhouse.system_queries import (
+    InvalidNodeError,
+    NonExistentSystemQuery,
+    SystemQuery,
+    run_system_query,
+)
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -41,18 +46,23 @@ def clickhouse_system_query() -> Response:
     # TODO: You can do something like this to get all the hosts:
     # SELECT * FROM system.clusters
     req = request.get_json()
-    results, columns = run_system_query(
-        req.get("host", "localhost"),
-        req.get("storage", "transactions"),
-        req.get("query_name"),
-    )
-    res = {}
-    res["column_names"] = [name for name, _ in columns]
-    res["rows"] = []
-    for row in results:
-        res["rows"].append([str(col) for col in row])
+    try:
+        results, columns = run_system_query(
+            req.get("host", "localhost"),
+            req.get("storage", "transactions"),
+            req.get("query_name"),
+        )
+        res = {}
+        res["column_names"] = [name for name, _ in columns]
+        res["rows"] = []
+        for row in results:
+            res["rows"].append([str(col) for col in row])
 
-    return make_response(jsonify(res), 200)
+        return make_response(jsonify(res), 200)
+    except (InvalidNodeError, NonExistentSystemQuery) as err:
+        return make_response(
+            jsonify({"error": err.__class__.__name__, "data": err.extra_data}), 400
+        )
 
 
 @application.route("/configs", methods=["GET"])

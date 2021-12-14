@@ -16,6 +16,10 @@ class NonExistentSystemQuery(SerializableException):
     pass
 
 
+class InvalidNodeError(SerializableException):
+    pass
+
+
 class _QueryRegistry:
     """Keep a mapping of SystemQueries to their names"""
 
@@ -84,6 +88,10 @@ class ActivePartitions(SystemQuery):
     """
 
 
+def _is_valid_node(host: str, port: int) -> bool:
+    return (host == "localhost" or host == "127.0.0.1") and port == 9000
+
+
 def run_system_query(
     clickhouse_host: str, storage_name: str, system_query: Union[str, SystemQuery]
 ) -> Tuple[Sequence[Any], Sequence[Tuple[str, str]]]:
@@ -93,9 +101,15 @@ def run_system_query(
         else system_query
     )
     if not query:
-        raise NonExistentSystemQuery
+        raise NonExistentSystemQuery(extra_data={"query": system_query})
+
     clickhouse_port = 9000
-    # TODO: don't create a new pool every time, that's no good
+
+    if not _is_valid_node(clickhouse_host, clickhouse_port):
+        raise InvalidNodeError(
+            extra_data={"host": clickhouse_host, "port": clickhouse_port}
+        )
+
     storage_key = StorageKey(storage_name)
     storage = get_storage(storage_key)
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
@@ -103,7 +117,6 @@ def run_system_query(
     connection = ClickhousePool(
         clickhouse_host, clickhouse_port, clickhouse_user, clickhouse_password, database
     )
-    return cast(
-        Tuple[Sequence[Any], Sequence[Tuple[str, str]]],
-        connection.execute(query=query.sql, with_column_types=True),
-    )
+    query_result = connection.execute(query=query.sql, with_column_types=True)
+    connection.close()
+    return cast(Tuple[Sequence[Any], Sequence[Tuple[str, str]]], query_result,)
