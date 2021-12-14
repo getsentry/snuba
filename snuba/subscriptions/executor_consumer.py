@@ -44,6 +44,8 @@ def build_executor_consumer(
     max_concurrent_queries: int,
     auto_offset_reset: str,
     metrics: MetricsBackend,
+    # TODO: Should be removed once testing is done
+    override_result_topic: Optional[str],
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
