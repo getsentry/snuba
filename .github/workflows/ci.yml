@@ -41,7 +41,7 @@ jobs:
           make install-python-dependencies
       - name: Run mypy
         run: |
-          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba tests/subscriptions
+          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba tests/subscriptions tests/admin
 
   snuba-image:
     name: Build snuba CI image
