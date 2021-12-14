@@ -47,10 +47,7 @@ def clickhouse_system_query() -> Response:
     req = request.get_json()
     try:
         results, columns = run_system_query_on_host_by_name(
-            req.get("host", "localhost"),
-            req.get("port", 9000),
-            req.get("storage", "transactions"),
-            req.get("query_name"),
+            req.get("host"), req.get("port"), req.get("storage"), req.get("query_name"),
         )
         res = {}
         res["column_names"] = [name for name, _ in columns]
