@@ -45,7 +45,7 @@ def build_executor_consumer(
     auto_offset_reset: str,
     metrics: MetricsBackend,
     # TODO: Should be removed once testing is done
-    override_result_topic: Optional[str],
+    override_result_topic: Optional[str] = None,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
