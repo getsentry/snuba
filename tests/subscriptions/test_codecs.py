@@ -22,6 +22,7 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionTaskResult,
     SubscriptionWithMetadata,
 )
 from snuba.subscriptions.entity_subscription import (
@@ -30,7 +31,6 @@ from snuba.subscriptions.entity_subscription import (
     SessionsSubscription,
     SubscriptionType,
 )
-from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
 
 
