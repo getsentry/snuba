@@ -11,6 +11,7 @@ from arroyo.backends.kafka import KafkaPayload, KafkaProducer
 from arroyo.processing.strategies import MessageRejected
 from confluent_kafka.admin import AdminClient
 
+from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -137,6 +138,7 @@ def generate_message() -> Iterator[Message[KafkaPayload]]:
 
 
 def test_execute_query_strategy() -> None:
+    state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
     max_concurrent_queries = 2
     executor = ThreadPoolExecutor(max_concurrent_queries)
@@ -169,6 +171,7 @@ def test_execute_query_strategy() -> None:
 
 
 def test_too_many_concurrent_queries() -> None:
+    state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
     executor = ThreadPoolExecutor(2)
     metrics = TestingMetricsBackend()
