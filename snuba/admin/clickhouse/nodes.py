@@ -39,5 +39,5 @@ def get_storage_info() -> Sequence[Storage]:
             "local_table_name": _get_local_table_name(storage_key),
             "local_nodes": _get_local_nodes(storage_key),
         }
-        for storage_key in STORAGES
+        for storage_key in sorted(STORAGES, key=lambda storage_key: storage_key.value)
     ]
