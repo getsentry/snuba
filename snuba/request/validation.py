@@ -1,7 +1,7 @@
 import random
 import textwrap
 import uuid
-from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Tuple, Type, Union
+from typing import Any, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
 
@@ -12,7 +12,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
-from snuba.query.parser import parse_query
+from snuba.query.snql.parser import CustomProcessors
 from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.request import Request
@@ -22,30 +22,28 @@ from snuba.request.request_settings import (
     RequestSettings,
     SubscriptionRequestSettings,
 )
-from snuba.request.schema import RequestParts, RequestSchema, apply_query_extensions
+from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
 
-Parser = Callable[
-    [RequestParts, RequestSettings, Dataset],
-    Tuple[Union[Query, CompositeQuery[Entity]], str],
-]
+
+class Parser(Protocol):
+    def __call__(
+        self,
+        request_parts: RequestParts,
+        settings: RequestSettings,
+        dataset: Dataset,
+        custom_processing: Optional[CustomProcessors] = ...,
+    ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+        ...
 
 
 def parse_snql_query(
-    custom_processing: Sequence[Callable[[Union[CompositeQuery[Entity], Query]], None]],
     request_parts: RequestParts,
     settings: RequestSettings,
     dataset: Dataset,
+    custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
-    return _parse_snql_query(request_parts.query["query"], custom_processing, dataset)
-
-
-def parse_legacy_query(
-    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset,
-) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
-    query = parse_query(request_parts.query, dataset)
-    apply_query_extensions(query, request_parts.extensions, settings)
-    return query, ""
+    return _parse_snql_query(request_parts.query["query"], dataset, custom_processing)
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
@@ -69,6 +67,7 @@ def build_request(
     dataset: Dataset,
     timer: Timer,
     referrer: str,
+    custom_processing: Optional[CustomProcessors] = None,
 ) -> Request:
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
@@ -85,14 +84,16 @@ def build_request(
                 ] = settings_class(
                     referrer=referrer,
                     parent_api=request_parts.query["parent_api"],
-                    **settings
+                    **settings,
                 )
             elif settings_class == SubscriptionRequestSettings:
                 settings_obj = settings_class(
                     referrer=referrer, consistent=_consistent_override(True, referrer),
                 )
 
-            query, snql_anonymized = parser(request_parts, settings_obj, dataset)
+            query, snql_anonymized = parser(
+                request_parts, settings_obj, dataset, custom_processing
+            )
 
             project_ids = get_object_ids_in_query_ast(query, "project_id")
             if project_ids is not None and len(project_ids) == 1:
@@ -108,7 +109,7 @@ def build_request(
                 # TODO: Replace this with the actual query raw body.
                 # this can have an impact on subscriptions so we need
                 # to be careful with the change.
-                ChainMap(request_parts.query, *request_parts.extensions.values()),
+                request_parts.query,
                 query,
                 snql_anonymized,
                 settings_obj,

@@ -17,10 +17,12 @@ from snuba.subscriptions.codecs import (
 )
 from snuba.subscriptions.data import (
     PartitionId,
+    ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionWithMetadata,
 )
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
@@ -30,7 +32,6 @@ from snuba.subscriptions.entity_subscription import (
 )
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.scheduler import ScheduledTask
 
 
 def build_snql_subscription_data(
@@ -143,10 +144,15 @@ def test_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            Subscription(
-                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
+            SubscriptionWithMetadata(
+                EntityKey.EVENTS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                5,
             ),
         ),
         (request, result),
@@ -157,7 +163,9 @@ def test_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
@@ -198,10 +206,15 @@ def test_sessions_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            Subscription(
-                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
+            SubscriptionWithMetadata(
+                EntityKey.EVENTS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                5,
             ),
         ),
         (request, result),
@@ -212,14 +225,16 @@ def test_sessions_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
 
 
 def test_subscription_task_encoder() -> None:
-    encoder = SubscriptionScheduledTaskEncoder(EntityKey.EVENTS)
+    encoder = SubscriptionScheduledTaskEncoder()
 
     subscription_data = SnQLSubscriptionData(
         project_id=1,
@@ -233,12 +248,17 @@ def test_subscription_task_encoder() -> None:
 
     epoch = datetime(1970, 1, 1)
 
-    task = ScheduledTask(
-        timestamp=epoch,
-        task=Subscription(
+    tick_upper_offset = 5
+
+    subscription_with_metadata = SubscriptionWithMetadata(
+        EntityKey.EVENTS,
+        Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
+        tick_upper_offset,
     )
+
+    task = ScheduledSubscriptionTask(timestamp=epoch, task=subscription_with_metadata)
 
     encoded = encoder.encode(task)
 
@@ -247,8 +267,10 @@ def test_subscription_task_encoder() -> None:
     assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
+        b'"entity":"events",'
         b'"task":{'
-        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}}'
+        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
+        b'"tick_upper_offset":5'
         b"}"
     )
 

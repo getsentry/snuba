@@ -94,7 +94,9 @@ def _format_query_content(
             ),
             _format_select(query, formatter),
             _format_groupby(query, formatter),
-            _build_optional_string_node("ARRAY JOIN", query.get_arrayjoin(), formatter),
+            _build_optional_string_nodes(
+                "ARRAY JOIN", query.get_arrayjoin(), formatter
+            ),
             _build_optional_string_node("WHERE", query.get_condition(), formatter),
             _build_optional_string_node("HAVING", query.get_having(), formatter),
             _format_orderby(query, formatter),
@@ -150,6 +152,20 @@ def _build_optional_string_node(
     )
 
 
+def _build_optional_string_nodes(
+    name: str,
+    expressions: Optional[Sequence[Expression]],
+    formatter: ExpressionVisitor[str],
+) -> Optional[StringNode]:
+    return (
+        StringNode(
+            f"{name} {', '.join(expression.accept(formatter) for expression in expressions)}"
+        )
+        if expressions is not None
+        else None
+    )
+
+
 def _format_limitby(
     query: AbstractQuery, formatter: ExpressionVisitor[str]
 ) -> Optional[StringNode]:
@@ -157,9 +173,7 @@ def _format_limitby(
 
     if ast_limitby is not None:
         return StringNode(
-            "LIMIT {} BY {}".format(
-                ast_limitby.limit, ast_limitby.expression.accept(formatter)
-            )
+            f"LIMIT {ast_limitby.limit} BY {', '.join(expression.accept(formatter) for expression in ast_limitby.columns)}"
         )
 
     return None
@@ -169,7 +183,11 @@ def _format_limit(
     query: AbstractQuery, formatter: ExpressionVisitor[str]
 ) -> Optional[StringNode]:
     ast_limit = query.get_limit()
-    return StringNode(f"LIMIT {ast_limit}") if ast_limit != 1000 else None
+    return (
+        StringNode(f"LIMIT {ast_limit}")
+        if ast_limit is not None and ast_limit != 1000
+        else None
+    )
 
 
 def _format_offset(

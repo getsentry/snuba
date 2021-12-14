@@ -8,7 +8,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.parser import parse_query
+from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.threaded_function_delegator import Result
@@ -29,15 +29,18 @@ def test() -> None:
     mock_callback = Mock(side_effect=callback_func)
 
     query_body = {
-        "selected_columns": ["type", "project_id"],
-        "conditions": [
-            ["project_id", "=", 1],
-            ["timestamp", ">", "2020-01-01 12:00:00"],
-        ],
+        "query": """
+        MATCH (events)
+        SELECT type, project_id
+        WHERE project_id = 1
+        AND timestamp >= toDateTime('2020-01-01 12:00:00')
+        AND timestamp < toDateTime('2020-01-02 12:00:00')
+        """,
+        "dataset": "events",
     }
 
     events = get_dataset("events")
-    query = parse_query(query_body, events)
+    query = parse_snql_query(query_body["query"], events)
 
     errors_pipeline = SimplePipelineBuilder(
         query_plan_builder=SingleStorageQueryPlanBuilder(

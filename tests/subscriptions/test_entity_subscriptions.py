@@ -89,39 +89,6 @@ TESTS_CONDITIONS_SNQL_METHOD = [
     ),
 ]
 
-TESTS_CONDITIONS_LEGACY_METHOD = [
-    pytest.param(
-        EventsSubscription(data_dict={}),
-        [[["ifNull", ["offset", 0]], "<=", 5]],
-        True,
-        id="Events subscription with offset of type LEGACY",
-    ),
-    pytest.param(
-        EventsSubscription(data_dict={}),
-        [],
-        False,
-        id="Events subscription with no offset of type LEGACY",
-    ),
-    pytest.param(
-        TransactionsSubscription(data_dict={}),
-        [[["ifNull", ["offset", 0]], "<=", 5]],
-        True,
-        id="Transactions subscription with offset of type LEGACY",
-    ),
-    pytest.param(
-        TransactionsSubscription(data_dict={}),
-        [],
-        False,
-        id="Transactions subscription with no offset of type LEGACY",
-    ),
-    pytest.param(
-        SessionsSubscription(data_dict={"organization": 1}),
-        [],
-        True,
-        id="Sessions subscription of type LEGACY",
-    ),
-]
-
 
 @pytest.mark.parametrize("entity_subscription, creation_dict, exception", TESTS)
 def test_basic(
@@ -148,21 +115,5 @@ def test_entity_subscription_methods_for_snql(
     offset = 5 if has_offset else None
     assert (
         entity_subscription.get_entity_subscription_conditions_for_snql(offset)
-        == expected_conditions
-    )
-
-
-@pytest.mark.parametrize(
-    "entity_subscription, expected_conditions, has_offset",
-    TESTS_CONDITIONS_LEGACY_METHOD,
-)
-def test_entity_subscription_functions_for_legacy(
-    entity_subscription: EntitySubscription,
-    expected_conditions: List[Any],
-    has_offset: bool,
-) -> None:
-    offset = 5 if has_offset else None
-    assert (
-        entity_subscription.get_entity_subscription_conditions_for_legacy(offset)
         == expected_conditions
     )
