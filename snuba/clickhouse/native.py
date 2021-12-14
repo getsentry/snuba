@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 import logging
 import queue
 import re
@@ -21,6 +24,13 @@ logger = logging.getLogger("snuba.clickhouse")
 Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
+
+
+@dataclass(frozen=True)
+class ClickhouseResult:
+    results: Sequence[Any] = field(default_factory=list)
+    meta: Sequence[Any] | None = None
+    profile: Mapping[str, Any] | None = None
 
 
 class ClickhousePool(object):
@@ -63,7 +73,7 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-    ) -> Sequence[Any]:
+    ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a single quick retry in case of
         connection failure.
@@ -84,7 +94,7 @@ class ClickhousePool(object):
                     conn = self._create_conn()
 
                 try:
-                    result: Sequence[Any] = conn.execute(
+                    result_data: Sequence[Any] = conn.execute(
                         query,
                         params=params,
                         with_column_types=with_column_types,
@@ -93,6 +103,17 @@ class ClickhousePool(object):
                         types_check=types_check,
                         columnar=columnar,
                     )
+                    profile_data = {
+                        "bytes": conn.last_query.profile_info.bytes,
+                        "blocks": conn.last_query.profile_info.blocks,
+                        "rows": conn.last_query.profile_info.rows,
+                        "elapsed": conn.last_query.elapsed,
+                    }
+                    if with_column_types:
+                        result = ClickhouseResult(results=result_data[0], meta=result_data[1], profile=profile_data)
+                    else:
+                        result = ClickhouseResult(results=result_data, profile=profile_data)
+
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     metrics.increment("connection_error")
@@ -113,7 +134,7 @@ class ClickhousePool(object):
         finally:
             self.pool.put(conn, block=False)
 
-        return []
+        return ClickhouseResult()
 
     def execute_robust(
         self,
@@ -124,7 +145,7 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-    ) -> Sequence[Any]:
+    ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
         attempts, (infinite in the case of too many simultaneous queries
@@ -244,13 +265,14 @@ class NativeDriverReader(Reader):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
-    def __transform_result(self, result: Sequence[Any], with_totals: bool) -> Result:
+    def __transform_result(self, result: ClickhouseResult, with_totals: bool) -> Result:
         """
         Transform a native driver response into a response that is
         structurally similar to a ClickHouse-flavored JSON response.
         """
-        data, meta = result
-
+        meta = result.meta if result.meta is not None else []
+        data = result.results
+        profile = result.profile if result.profile else {}
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent
@@ -269,9 +291,9 @@ class NativeDriverReader(Reader):
         if with_totals:
             assert len(data) > 0
             totals = data.pop(-1)
-            new_result = {"data": data, "meta": meta, "totals": totals}
+            new_result = {"data": data, "meta": meta, "totals": totals, "profile": profile}
         else:
-            new_result = {"data": data, "meta": meta}
+            new_result = {"data": data, "meta": meta, "profile": profile}
 
         transform_column_types(new_result)
 
