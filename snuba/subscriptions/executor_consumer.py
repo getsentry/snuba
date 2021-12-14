@@ -4,7 +4,8 @@ import logging
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple, cast
+from zlib import crc32
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
@@ -13,6 +14,7 @@ from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
+from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
@@ -222,17 +224,28 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         tick_upper_offset = task.task.tick_upper_offset
 
-        self.__queue.append(
-            (
-                message,
-                SubscriptionTaskResultFuture(
-                    task,
-                    self.__executor.submit(
-                        self.__execute_query, task, tick_upper_offset
-                    ),
-                ),
-            )
+        # We need to sample queries to ClickHouse while this is being rolled out
+        # as we don't want to duplicate every subscription query
+        executor_sample_rate = cast(
+            float, state.get_config("executor_sample_rate", 0.0)
         )
+        subscription_id = str(task.task.subscription.identifier)
+        should_execute = (
+            (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
+        ) < executor_sample_rate
+
+        if should_execute:
+            self.__queue.append(
+                (
+                    message,
+                    SubscriptionTaskResultFuture(
+                        task,
+                        self.__executor.submit(
+                            self.__execute_query, task, tick_upper_offset
+                        ),
+                    ),
+                )
+            )
 
     def close(self) -> None:
         self.__closed = True
