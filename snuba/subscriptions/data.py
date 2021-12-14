@@ -108,6 +108,7 @@ class SubscriptionData(ABC, _SubscriptionData):
         offset: Optional[int],
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
         raise NotImplementedError
 
@@ -185,6 +186,7 @@ class SnQLSubscriptionData(SubscriptionData):
         offset: Optional[int],
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
         schema = RequestSchema.build(SubscriptionRequestSettings)
 
@@ -195,7 +197,7 @@ class SnQLSubscriptionData(SubscriptionData):
             schema,
             dataset,
             timer,
-            SUBSCRIPTION_REFERRER,
+            referrer,
             [
                 self.validate_subscription,
                 partial(self.add_conditions, timestamp, offset),
@@ -235,10 +237,10 @@ class Subscription(NamedTuple):
     data: SubscriptionData
 
 
-class SubscriptionWithTick(NamedTuple):
+class SubscriptionWithMetadata(NamedTuple):
     entity: EntityKey
     subscription: Subscription
-    tick: Tick
+    tick_upper_offset: int
 
 
 @dataclass(frozen=True)
@@ -252,7 +254,7 @@ class ScheduledSubscriptionTask:
     timestamp: datetime
 
     # The task that should be executed.
-    task: SubscriptionWithTick
+    task: SubscriptionWithMetadata
 
 
 class SubscriptionScheduler(ABC):
