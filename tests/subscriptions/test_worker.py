@@ -184,6 +184,7 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         future_result = request, result = future.result()
         assert message.payload.task.timestamp == timestamp
         assert message.payload == SubscriptionTaskResult(task, future_result)
+        del result["profile"]
 
         timestamp_field = "timestamp" if not uses_sessions_dataset else "started"
         from_pattern = FunctionCall(

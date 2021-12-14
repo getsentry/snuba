@@ -58,7 +58,7 @@ def forwards(logger: logging.Logger) -> None:
 
     new_create_table_statement = curr_create_table_statement.replace(
         TABLE_NAME, TABLE_NAME_NEW
-    ).results
+    )
 
     # Insert sample clause before TTL
     if sampling_key_needs_update:
@@ -116,9 +116,10 @@ def forwards(logger: logging.Logger) -> None:
     clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
 
     # Ensure each table has the same number of rows before deleting the old one
-    assert clickhouse.execute(
-        f"SELECT COUNT() FROM {TABLE_NAME} FINAL;"
-    ).results == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;").results
+    assert (
+        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results
+        == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;").results
+    )
 
     clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 

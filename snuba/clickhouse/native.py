@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
 import queue
 import re
 import time
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Mapping, Optional, Sequence, Union
 from uuid import UUID
@@ -110,9 +110,17 @@ class ClickhousePool(object):
                         "elapsed": conn.last_query.elapsed,
                     }
                     if with_column_types:
-                        result = ClickhouseResult(results=result_data[0], meta=result_data[1], profile=profile_data)
+                        result = ClickhouseResult(
+                            results=result_data[0],
+                            meta=result_data[1],
+                            profile=profile_data,
+                        )
                     else:
-                        result = ClickhouseResult(results=result_data, profile=profile_data)
+                        if not isinstance(result_data, (list, tuple)):
+                            result_data = [result_data]
+                        result = ClickhouseResult(
+                            results=result_data, profile=profile_data
+                        )
 
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
@@ -291,7 +299,12 @@ class NativeDriverReader(Reader):
         if with_totals:
             assert len(data) > 0
             totals = data.pop(-1)
-            new_result = {"data": data, "meta": meta, "totals": totals, "profile": profile}
+            new_result = {
+                "data": data,
+                "meta": meta,
+                "totals": totals,
+                "profile": profile,
+            }
         else:
             new_result = {"data": data, "meta": meta, "profile": profile}
 
