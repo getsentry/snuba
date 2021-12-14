@@ -40,7 +40,7 @@ def test() -> None:
     }
 
     events = get_dataset("events")
-    query = parse_snql_query(query_body["query"], events)
+    query, _ = parse_snql_query(query_body["query"], events)
 
     errors_pipeline = SimplePipelineBuilder(
         query_plan_builder=SingleStorageQueryPlanBuilder(
