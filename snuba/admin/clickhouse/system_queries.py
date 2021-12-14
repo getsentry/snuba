@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence, Tuple, Type, cast
 
+from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
@@ -115,13 +116,13 @@ def run_system_query_on_host_by_name(
         raise InvalidStorageError(extra_data={"storage_name": storage_name})
 
     storage = get_storage(storage_key)
-    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
     database = storage.get_cluster().get_database()
+
     connection = ClickhousePool(
         clickhouse_host,
         clickhouse_port,
-        clickhouse_user,
-        clickhouse_password,
+        settings.CLICKHOUSE_READONLY_USER,
+        settings.CLICKHOUSE_READONLY_PASSWORD,
         database,
         # force read-only
         client_settings=ClickhouseClientSettings.QUERY.value.settings,
