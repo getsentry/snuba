@@ -4,7 +4,7 @@ import simplejson as json
 from flask import Flask, Response
 
 from snuba import state
-from snuba.admin.clickhouse.clusters import get_storage_info
+from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
