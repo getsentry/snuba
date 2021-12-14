@@ -13,9 +13,9 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionTaskResult,
     SubscriptionWithMetadata,
 )
-from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
 
 
