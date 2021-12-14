@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Tuple, Type, Union, cast
+from typing import Any, Dict, Optional, Sequence, Tuple, Type, cast
 
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.storages import StorageKey
@@ -17,6 +17,10 @@ class NonExistentSystemQuery(SerializableException):
 
 
 class InvalidNodeError(SerializableException):
+    pass
+
+
+class InvalidStorageError(SerializableException):
     pass
 
 
@@ -92,28 +96,28 @@ def _is_valid_node(host: str, port: int) -> bool:
     return (host == "localhost" or host == "127.0.0.1") and port == 9000
 
 
-def run_system_query(
+def run_system_query_on_host_by_name(
     clickhouse_host: str,
     clickhouse_port: int,
     storage_name: str,
-    system_query: Union[str, SystemQuery],
+    system_query_name: str,
 ) -> Tuple[Sequence[Any], Sequence[Tuple[str, str]]]:
-    query = (
-        SystemQuery.from_name(system_query)
-        if isinstance(system_query, str)
-        else system_query
-    )
-    if not query:
-        raise NonExistentSystemQuery(extra_data={"query": system_query})
+    query = SystemQuery.from_name(system_query_name)
 
-    clickhouse_port = 9000 if clickhouse_port is None else clickhouse_port
+    if not query:
+        raise NonExistentSystemQuery(extra_data={"query_name": system_query_name})
 
     if not _is_valid_node(clickhouse_host, clickhouse_port):
         raise InvalidNodeError(
             extra_data={"host": clickhouse_host, "port": clickhouse_port}
         )
 
-    storage_key = StorageKey(storage_name)
+    storage_key = None
+    try:
+        storage_key = StorageKey(storage_name)
+    except ValueError:
+        raise InvalidStorageError(extra_data={"storage_name": storage_name})
+
     storage = get_storage(storage_key)
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
     database = storage.get_cluster().get_database()

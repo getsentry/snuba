@@ -6,9 +6,10 @@ from flask import Flask, Response, jsonify, make_response, request
 from snuba import state
 from snuba.admin.clickhouse.system_queries import (
     InvalidNodeError,
+    InvalidStorageError,
     NonExistentSystemQuery,
     SystemQuery,
-    run_system_query,
+    run_system_query_on_host_by_name,
 )
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -45,7 +46,7 @@ def clickhouse_queries() -> Response:
 def clickhouse_system_query() -> Response:
     req = request.get_json()
     try:
-        results, columns = run_system_query(
+        results, columns = run_system_query_on_host_by_name(
             req.get("host", "localhost"),
             req.get("port", 9000),
             req.get("storage", "transactions"),
@@ -58,7 +59,7 @@ def clickhouse_system_query() -> Response:
             res["rows"].append([str(col) for col in row])
 
         return make_response(jsonify(res), 200)
-    except (InvalidNodeError, NonExistentSystemQuery) as err:
+    except (InvalidNodeError, NonExistentSystemQuery, InvalidStorageError) as err:
         return make_response(
             jsonify({"error": err.__class__.__name__, "data": err.extra_data}), 400
         )
