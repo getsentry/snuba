@@ -4,6 +4,7 @@ import simplejson as json
 from flask import Flask, Response, request
 
 from snuba import state
+from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -102,3 +103,10 @@ def config_changes() -> Response:
     ]
 
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
+
+
+@application.route("/clickhouse_nodes")
+def clickhouse_nodes() -> Response:
+    return Response(
+        json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"}
+    )
