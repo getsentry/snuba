@@ -43,12 +43,11 @@ def clickhouse_queries() -> Response:
 #  http://localhost:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
-    # TODO: You can do something like this to get all the hosts:
-    # SELECT * FROM system.clusters
     req = request.get_json()
     try:
         results, columns = run_system_query(
             req.get("host", "localhost"),
+            req.get("port", 9000),
             req.get("storage", "transactions"),
             req.get("query_name"),
         )

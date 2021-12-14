@@ -93,7 +93,10 @@ def _is_valid_node(host: str, port: int) -> bool:
 
 
 def run_system_query(
-    clickhouse_host: str, storage_name: str, system_query: Union[str, SystemQuery]
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    system_query: Union[str, SystemQuery],
 ) -> Tuple[Sequence[Any], Sequence[Tuple[str, str]]]:
     query = (
         SystemQuery.from_name(system_query)
@@ -103,7 +106,7 @@ def run_system_query(
     if not query:
         raise NonExistentSystemQuery(extra_data={"query": system_query})
 
-    clickhouse_port = 9000
+    clickhouse_port = 9000 if clickhouse_port is None else clickhouse_port
 
     if not _is_valid_node(clickhouse_host, clickhouse_port):
         raise InvalidNodeError(
