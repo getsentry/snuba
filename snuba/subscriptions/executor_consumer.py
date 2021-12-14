@@ -95,11 +95,11 @@ def build_executor_consumer(
             ),
         ),
         Topic(scheduled_topic_spec.topic_name),
-        SubscriptionExecutorProcessingFactory(),
+        SubscriptionExecutorProcessingFactory(dataset, max_concurrent_queries, metrics),
     )
 
 
-class Noop(ProcessingStrategy[KafkaPayload]):
+class Noop(ProcessingStrategy[SubscriptionTaskResult]):
     """
     Placeholder.
     """
@@ -110,7 +110,7 @@ class Noop(ProcessingStrategy[KafkaPayload]):
     def poll(self) -> None:
         pass
 
-    def submit(self, message: Message[KafkaPayload]) -> None:
+    def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         self.__commit({message.partition: Position(message.offset, message.timestamp)})
 
     def close(self) -> None:
@@ -124,10 +124,27 @@ class Noop(ProcessingStrategy[KafkaPayload]):
 
 
 class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
+    def __init__(
+        self, dataset: Dataset, max_concurrent_queries: int, metrics: MetricsBackend
+    ) -> None:
+        self.__dataset = dataset
+        self.__max_concurrent_queries = max_concurrent_queries
+        self.__metrics = metrics
+
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
-        return Noop(commit)
+        executor = ThreadPoolExecutor(self.__max_concurrent_queries)
+        return ExecuteQuery(
+            self.__dataset,
+            executor,
+            # If there are max_concurrent_queries + 10 pending futures in the queue,
+            # we will start raising MessageRejected to slow down the consumer as
+            # it means our executor cannot keep up
+            self.__max_concurrent_queries + 10,
+            self.__metrics,
+            Noop(commit),
+        )
 
 
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
