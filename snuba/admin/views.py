@@ -30,6 +30,12 @@ def clickhouse_queries() -> Response:
     return make_response(jsonify(res), 200)
 
 
+# Sample cURL command:
+#
+# curl -X POST \
+#  -d '{"query_name": "ActivePartitions"}' \
+#  -H 'Content-Type: application/json' \
+#  http://localhost:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
     # TODO: You can do something like this to get all the hosts:
