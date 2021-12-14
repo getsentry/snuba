@@ -5,6 +5,7 @@ import pytest
 
 from snuba import state
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
@@ -81,7 +82,7 @@ TESTS_OVER_SESSIONS = [
             ),
             time_window=timedelta(minutes=120),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription("sessions"),
+            entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
         ),
         InvalidQueryException,
         id="Snql subscription",
@@ -90,8 +91,7 @@ TESTS_OVER_SESSIONS = [
 
 
 class TestBuildRequestBase:
-    def __init__(self) -> None:
-        self.dataset: Dataset
+    dataset: Dataset
 
     @pytest.fixture(autouse=True)
     def subscription_rollout(self) -> Generator[None, None, None]:
