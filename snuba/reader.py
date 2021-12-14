@@ -24,7 +24,13 @@ Column = TypedDict("Column", {"name": str, "type": str})
 Row = MutableMapping[str, Any]
 Result = TypedDict(
     "Result",
-    {"meta": Sequence[Column], "data": MutableSequence[Row], "totals": Row},
+    {
+        "meta": Sequence[Column],
+        "data": MutableSequence[Row],
+        "totals": Row,
+        "profile": Optional[Mapping[str, Any]],
+        "trace_output": str,
+    },
     total=False,
 )
 
