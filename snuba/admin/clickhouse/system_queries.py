@@ -2,14 +2,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence, Tuple, Type, cast
 
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.utils.serializable_exception import SerializableException
-
-# from snuba.admin.views import application
-
-# TODO (Vlad): we have to decouple getting a cluster from getting a connection
-# for now though, I'm just going to make it so you can query the query node
 
 
 class NonExistentSystemQuery(SerializableException):
@@ -122,7 +118,13 @@ def run_system_query_on_host_by_name(
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
     database = storage.get_cluster().get_database()
     connection = ClickhousePool(
-        clickhouse_host, clickhouse_port, clickhouse_user, clickhouse_password, database
+        clickhouse_host,
+        clickhouse_port,
+        clickhouse_user,
+        clickhouse_password,
+        database,
+        # force read-only
+        client_settings=ClickhouseClientSettings.QUERY.value.settings,
     )
     query_result = connection.execute(query=query.sql, with_column_types=True)
     connection.close()
