@@ -29,16 +29,13 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionTaskResult,
 )
 from snuba.subscriptions.entity_subscription import SessionsSubscription
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
-from snuba.subscriptions.worker import (
-    SubscriptionTaskResult,
-    SubscriptionWorker,
-    handle_nan,
-)
+from snuba.subscriptions.worker import SubscriptionWorker, handle_nan
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.backends.metrics import Increment, TestingMetricsBackend
