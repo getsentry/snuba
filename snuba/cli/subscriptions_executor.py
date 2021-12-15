@@ -45,6 +45,12 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Kafka consumer auto offset reset.",
 )
 @click.option("--log-level", help="Logging level to use.")
+# This option allows us to reroute the produced subscription results to a different
+# topic temporarily while we are testing and running the old and new subscription
+# pipeline concurrently. Should be removed once we are done testing.
+@click.option(
+    "--override-result-topic", type=str, help="Override the result topic for testing"
+)
 def subscriptions_executor(
     *,
     dataset_name: str,
@@ -52,7 +58,8 @@ def subscriptions_executor(
     consumer_group: str,
     max_concurrent_queries: int,
     auto_offset_reset: str,
-    log_level: Optional[str]
+    log_level: Optional[str],
+    override_result_topic: Optional[str],
 ) -> None:
     """
     The subscription's executor consumes scheduled subscriptions from the scheduled
@@ -79,6 +86,7 @@ def subscriptions_executor(
         max_concurrent_queries,
         auto_offset_reset,
         metrics,
+        override_result_topic,
     )
 
     def handler(signum: int, frame: Any) -> None:
