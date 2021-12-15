@@ -1,11 +1,26 @@
 import logging
 from abc import ABC
 from datetime import datetime
-from typing import Any, Dict, MutableMapping, Optional, Union
+from enum import Enum
+from typing import Any, MutableMapping, Optional, TypedDict, Union
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
 from snuba.admin.notifications.slack.utils import build_blocks
+
+
+class RuntimeConfigAction(Enum):
+    ADDED = "added"
+    REMOVED = "removed"
+    UPDATED = "updated"
+
+
+ConfigType = Union[str, int, float]
+
+NotificationData = TypedDict(
+    "NotificationData",
+    {"option": str, "old": Optional[ConfigType], "new": Optional[ConfigType]},
+)
 
 
 class NotificationBase(ABC):
@@ -16,9 +31,9 @@ class NotificationBase(ABC):
 
     def notify(
         self,
-        action: str,
-        data: Dict[str, Union[str, float, int]],
-        user: str,
+        action: RuntimeConfigAction,
+        data: NotificationData,
+        user: Optional[str],
         timestamp: Optional[str],
     ) -> None:
         """
@@ -36,22 +51,25 @@ class RuntimeConfigLogClient(NotificationBase):
         self.logger = logging.getLogger("runtime-config.notify")
 
     def _get_value_text(
-        self, action: str, old: Union[str, int, float], new: Union[str, int, float]
+        self,
+        action: RuntimeConfigAction,
+        old: Optional[ConfigType],
+        new: Optional[ConfigType],
     ) -> str:
-        if action == "removed":
+        if action == RuntimeConfigAction.REMOVED:
             return f"(value:{old})"
-        elif action == "added":
+        elif action == RuntimeConfigAction.ADDED:
             return f"(value:{new})"
-        elif action == "updated":
+        elif action == RuntimeConfigAction.UPDATED:
             return f"(from value:{old} to value:{new})"
         else:
             return ""
 
     def notify(
         self,
-        action: str,
-        data: Dict[str, Union[str, float, int]],
-        user: str,
+        action: RuntimeConfigAction,
+        data: NotificationData,
+        user: Optional[str],
         timestamp: Optional[str] = None,
     ) -> None:
         """
@@ -88,9 +106,9 @@ class RuntimeConfigSlackClient(NotificationBase):
 
     def notify(
         self,
-        action: str,
-        data: Dict[str, Union[str, float, int]],
-        user: str,
+        action: RuntimeConfigAction,
+        data: NotificationData,
+        user: Optional[str],
         timestamp: Optional[str] = None,
     ) -> None:
         """
@@ -109,7 +127,7 @@ class RuntimeConfigSlackClient(NotificationBase):
         if not timestamp:
             timestamp = self.timestamp
 
-        blocks = build_blocks(data, action, timestamp, user)
+        blocks = build_blocks(data, action.value, timestamp, user or "")
         payload: MutableMapping[str, Any] = {"blocks": blocks}
 
         self.client.post_message(message=payload, channel=self.channel_id)
