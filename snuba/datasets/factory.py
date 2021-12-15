@@ -2,20 +2,20 @@ from typing import Callable, MutableMapping, Sequence, Set
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.table_storage import TableWriter
 from snuba.util import with_span
 from snuba.utils.serializable_exception import SerializableException
 
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 
-DEV_DATASET_NAMES: Set[str] = {"metrics"}
+DEV_DATASET_NAMES: Set[str] = set()
 
 DATASET_NAMES: Set[str] = {
     "discover",
     "events",
     "groupassignee",
     "groupedmessage",
+    "metrics",
     "outcomes",
     "outcomes_raw",
     "sessions",
@@ -79,14 +79,3 @@ def get_dataset_name(dataset: Dataset) -> str:
 
 def get_enabled_dataset_names() -> Sequence[str]:
     return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]
-
-
-# TODO: This should be removed and moved to the Entity since Datasets no longer control
-# storages.
-def enforce_table_writer(dataset: Dataset) -> TableWriter:
-    writable_storage = dataset.get_default_entity().get_writable_storage()
-
-    assert (
-        writable_storage is not None
-    ), f"Dataset{dataset} does not have a writable storage."
-    return writable_storage.get_table_writer()

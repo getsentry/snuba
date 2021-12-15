@@ -218,9 +218,8 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
     ) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "sessions",
                     "organization": 1,
@@ -260,9 +259,8 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
     def test_minute_granularity_range(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "sessions",
                     "organization": 1,
@@ -288,26 +286,23 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "sessions"
 
-    def test_delegate_with_sessions_entity_subscription(self) -> None:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "sessions/subscriptions",  # Only dataset in url
+            "sessions/sessions/subscriptions",  # dataset and entity in url
+        ],
+    )
+    def test_snql_with_sessions_entity_subscription(self, url: str) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
+                url,
                 data=json.dumps(
                     {
-                        "type": "delegate",
                         "project_id": 1,
-                        "conditions": [],
-                        "aggregations": [
-                            [
-                                "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
-                                None,
-                                "_crash_rate_alert_aggregate",
-                            ],
-                            ["identity(sessions)", None, "_total_sessions"],
-                        ],
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
                         "query": (
@@ -330,7 +325,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             "subscription_id": f"0/{expected_uuid.hex}",
         }
 
-    def test_bad_delegate_with_sessions_entity_subscription(self) -> None:
+    def test_bad_snql_with_sessions_entity_subscription(self) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
@@ -339,18 +334,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                 "{}/subscriptions".format(self.dataset_name),
                 data=json.dumps(
                     {
-                        "type": "delegate",
                         "project_id": 1,
-                        "conditions": [],
-                        "aggregations": [
-                            [
-                                "if(greater(sessions,0),divide(sessions_crashed,sessions),null)",
-                                None,
-                                "_crash_rate_alert_aggregate",
-                            ],
-                            ["identity(sessions)", None, "_total_sessions"],
-                            ["identity(sessions_crashed)", None, None],
-                        ],
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
                         "query": (

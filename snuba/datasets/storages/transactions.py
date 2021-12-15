@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -82,7 +83,12 @@ columns = ColumnSet(
         (
             "spans",
             Nested(
-                [("op", String()), ("group", UInt(64)), ("exclusive_time", Float(64))]
+                [
+                    ("op", String()),
+                    ("group", UInt(64)),
+                    ("exclusive_time", Float(64)),
+                    ("exclusive_time_32", Float(32)),
+                ]
             ),
         ),
         ("partition", UInt(16)),
@@ -134,8 +140,8 @@ storage = WritableTableStorage(
         # the bloom filter optimizer should occur before the array join optimizer
         # on the span columns because the array join optimizer will rewrite the
         # same conditions the bloom filter optimizer is looking for
-        BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time"]),
-        ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time"]),
+        BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
+        ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
         HexIntArrayColumnProcessor({"spans.group"}),
         PrewhereProcessor(
             [
@@ -151,6 +157,7 @@ storage = WritableTableStorage(
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=TransactionsMessageProcessor(),
+        pre_filter=KafkaHeaderFilter("transaction_forwarder", "0"),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
@@ -159,5 +166,8 @@ storage = WritableTableStorage(
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     mandatory_condition_checkers=[ProjectIdEnforcer()],
-    writer_options={"insert_allow_materialized_columns": 1},
+    writer_options={
+        "insert_allow_materialized_columns": 1,
+        "input_format_skip_unknown_fields": 1,
+    },
 )

@@ -1,9 +1,10 @@
 import functools
+import itertools
 import logging
 import os
 import time
+from collections import defaultdict
 from datetime import datetime
-from functools import partial
 from typing import (
     Any,
     Callable,
@@ -11,10 +12,13 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
+    Optional,
     Sequence,
+    Set,
     Text,
     Tuple,
     Union,
+    cast,
 )
 from uuid import UUID
 
@@ -32,10 +36,11 @@ from werkzeug.exceptions import InternalServerError
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ConnectionId
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
+from snuba.datasets.entity import Entity
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -43,16 +48,12 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.logical import Query
 from snuba.redis import redis_client
-from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
-from snuba.request.schema import RequestParts, RequestSchema
-from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
+from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.schema import RequestSchema
+from snuba.request.validation import build_request, parse_snql_query
 from snuba.state import MismatchedTypeException
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -63,7 +64,7 @@ from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException
-from snuba.web.converters import DatasetConverter
+from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -98,23 +99,44 @@ def check_clickhouse() -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        for name in get_enabled_dataset_names():
-            dataset = get_dataset(name)
-            for entity in dataset.get_all_entities():
-                for storage in entity.get_all_storages():
-                    clickhouse = storage.get_cluster().get_query_connection(
-                        ClickhouseClientSettings.QUERY
-                    )
-                    clickhouse_tables = clickhouse.execute("show tables")
-                    source = storage.get_schema()
-                    if isinstance(source, TableSchema):
-                        table_name = source.get_table_name()
-                        if (table_name,) not in clickhouse_tables:
-                            return False
+        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+        entities = itertools.chain(
+            *[dataset.get_all_entities() for dataset in datasets]
+        )
+        storages = list(
+            itertools.chain(*[entity.get_all_storages() for entity in entities])
+        )
+
+        connection_grouped_table_names: MutableMapping[
+            ConnectionId, Set[str]
+        ] = defaultdict(set)
+        for storage in storages:
+            if isinstance(storage.get_schema(), TableSchema):
+                cluster = storage.get_cluster()
+                connection_grouped_table_names[cluster.get_connection_id()].add(
+                    cast(TableSchema, storage.get_schema()).get_table_name()
+                )
+
+        # De-dupe clusters by host:TCP port:HTTP port:database
+        unique_clusters = {
+            storage.get_cluster().get_connection_id(): storage.get_cluster()
+            for storage in storages
+        }
+
+        for (cluster_key, cluster) in unique_clusters.items():
+            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            clickhouse_tables = clickhouse.execute("show tables")
+            known_table_names = connection_grouped_table_names[cluster_key]
+            logger.debug(f"checking for {known_table_names} on {cluster_key}")
+            for table in known_table_names:
+                if (table,) not in clickhouse_tables:
+                    logger.error(f"{table} not present in cluster {cluster}")
+                    return False
 
         return True
 
-    except Exception:
+    except Exception as err:
+        logger.error(err)
         return False
 
 
@@ -144,6 +166,7 @@ application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
+application.url_map.converters["entity"] = EntityConverter
 
 
 @application.errorhandler(InvalidJsonRequestException)
@@ -310,7 +333,7 @@ def config(fmt: str = "html") -> Union[Response, RespTuple]:
 @application.route("/config/changes.json")
 def config_changes() -> RespTuple:
     return (
-        json.dumps(state.get_config_changes()),
+        json.dumps(state.get_config_changes_legacy()),
         200,
         {"Content-Type": "application/json"},
     )
@@ -368,28 +391,7 @@ def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
         _trace_transaction(dataset)
         # Not sure what language to pass into dataset_query here
-        return dataset_query(dataset, body, timer, Language.LEGACY)
-    else:
-        assert False, "unexpected fallthrough"
-
-
-@application.route("/<dataset:dataset>/query", methods=["GET", "POST"])
-@util.time_request("query")
-def dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
-    if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(),
-            HTTPRequestSettings,
-            Language.LEGACY,
-        )
-        return render_template(
-            "query.html",
-            query_template=json.dumps(schema.generate_template(), indent=4,),
-        )
-    elif http_request.method == "POST":
-        body = parse_request_body(http_request)
-        _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer, Language.LEGACY)
+        return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
 
@@ -398,46 +400,31 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions(
-            {}, HTTPRequestSettings, Language.SNQL,
-        )
+        schema = RequestSchema.build(HTTPRequestSettings)
         return render_template(
             "query.html",
-            query_template=json.dumps(schema.generate_template(), indent=4,),
+            query_template=json.dumps(schema.generate_template(), indent=4),
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer, Language.SNQL)
+        return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
 
 
 @with_span()
 def dataset_query(
-    dataset: Dataset, body: MutableMapping[str, Any], timer: Timer, language: Language
+    dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
 ) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
-    metrics.increment(
-        "snql.query.incoming", tags={"referrer": referrer, "language": str(language)}
-    )
-    if language == Language.SNQL:
-        parser: Callable[
-            [RequestParts, RequestSettings, Dataset],
-            Union[Query, CompositeQuery[Entity]],
-        ] = partial(parse_snql_query, [])
-    else:
-        parser = parse_legacy_query
-
     with sentry_sdk.start_span(description="build_schema", op="validate"):
-        schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
-        )
+        schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
-        body, parser, HTTPRequestSettings, schema, dataset, timer, referrer
+        body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer
     )
 
     try:
@@ -494,13 +481,24 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
     )
 
 
+@application.route("/<dataset:dataset>/<entity:entity>/subscriptions", methods=["POST"])
+# ToDo(ahmed): Deprecate this endpoint
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
-def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
-    entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+def create_subscription(
+    *, dataset: Dataset, timer: Timer, entity: Optional[Entity] = None
+) -> RespTuple:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
+        entity = dataset.get_default_entity()
+    entity_key = ENTITY_NAME_LOOKUP[entity]
 
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
-    identifier = SubscriptionCreator(dataset).create(subscription, timer)
+    identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),
         202,
@@ -509,10 +507,25 @@ def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
 
 
 @application.route(
+    "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
+    methods=["DELETE"],
+)
+# ToDo(ahmed): Deprecate this endpoint
+@application.route(
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
-def delete_subscription(*, dataset: Dataset, partition: int, key: str) -> RespTuple:
-    SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
+def delete_subscription(
+    *, dataset: Dataset, partition: int, key: str, entity: Optional[Entity] = None
+) -> RespTuple:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
+        entity = dataset.get_default_entity()
+    entity_key = ENTITY_NAME_LOOKUP[entity]
+    SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
 

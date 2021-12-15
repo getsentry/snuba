@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Mapping, Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -36,7 +36,6 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.granularity_processor import GranularityProcessor
@@ -113,9 +112,6 @@ class MetricsEntity(Entity, ABC):
             ],
             required_time_column="timestamp",
         )
-
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {}
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [

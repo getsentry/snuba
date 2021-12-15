@@ -1,4 +1,4 @@
-from functools import partial
+from typing import Union
 
 import pytest
 
@@ -8,9 +8,10 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal, StringifyVisitor
 from snuba.reader import Reader
-from snuba.request import Language
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
@@ -62,15 +63,12 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
     }
 
     dataset = get_dataset(dataset_name)
-    parser = partial(parse_snql_query, [])
 
-    schema = RequestSchema.build_with_extensions(
-        entity.get_extensions(), HTTPRequestSettings, Language.SNQL,
-    )
+    schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         query_body,
-        parser,
+        parse_snql_query,
         HTTPRequestSettings,
         schema,
         dataset,
@@ -80,8 +78,11 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
     # --------------------------------------------------------------------
 
     def query_verifier(
-        query: Query, settings: RequestSettings, reader: Reader
+        query: Union[Query, CompositeQuery[Table]],
+        settings: RequestSettings,
+        reader: Reader,
     ) -> QueryResult:
+        assert isinstance(query, Query)
         # in local and CI there's a table name difference
         # errors_local vs errors_dist and discover_local vs discover_dist
         # so we check using `in` instead of `==`
@@ -121,6 +122,11 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
         assert condition is not None
         condition.accept(verifier)
         assert verifier.found_span_condition
+
+        return QueryResult(
+            result={"meta": [], "data": [], "totals": {}},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        )
 
     entity.get_query_pipeline_builder().build_execution_pipeline(
         request, query_verifier

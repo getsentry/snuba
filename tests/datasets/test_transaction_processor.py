@@ -227,7 +227,8 @@ class TransactionEvent:
             "span_op_breakdowns.value": [62.512, 109.774, 172.286],
             "spans.op": [span[0] for span in spans],
             "spans.group": [span[1] for span in spans],
-            "spans.exclusive_time": [span[2] for span in spans],
+            "spans.exclusive_time": [0 for span in spans],
+            "spans.exclusive_time_32": [span[2] for span in spans],
         }
 
         if self.ipv4:
@@ -318,7 +319,7 @@ class TestTransactionsProcessor:
     def test_base_process(self) -> None:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
-        set_config("write_span_columns_projects", "[1]")
+        set_config("write_span_columns_rollout_percentage", 100)
 
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
@@ -395,7 +396,8 @@ class TestTransactionsProcessor:
         result = message.build_result(meta)
         result["spans.op"] = ["navigation"]
         result["spans.group"] = [int("a" * 16, 16)]
-        result["spans.exclusive_time"] = [1.2345]
+        result["spans.exclusive_time"] = [0]
+        result["spans.exclusive_time_32"] = [1.2345]
 
         assert TransactionsMessageProcessor().process_message(
             payload, meta

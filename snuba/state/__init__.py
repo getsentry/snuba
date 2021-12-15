@@ -189,8 +189,27 @@ def delete_config(key: str, user: Optional[Any] = None) -> None:
     return set_config(key, None, user=user)
 
 
-def get_config_changes() -> Sequence[Any]:
+def get_uncached_config(key: str) -> Optional[Any]:
+    value = rds.hget(config_hash, key.encode("utf-8"))
+    if value is not None:
+        return get_typed_value(value.decode("utf-8"))
+    return None
+
+
+def get_config_changes_legacy() -> Sequence[Any]:
     return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
+
+
+def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]:
+    """
+    Like get_config_changes_legacy() but ensures that values are cast to their correct type
+    """
+    changes = get_config_changes_legacy()
+
+    return [
+        (key, ts, user, get_typed_value(before), get_typed_value(after))
+        for [key, [ts, user, before, after]] in changes
+    ]
 
 
 # Query Recording
@@ -255,8 +274,15 @@ def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
     return queries
 
 
-def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
+def is_project_in_rollout_list(rollout_key: str, project_id: int) -> bool:
+    """
+    Helper function for doing selective rollouts by project ids. The config
+    value is assumed to be a string of the form `[project,project,...]`.
+
+    Returns `True` if `project_id` is present in the config.
+    """
     project_rollout_setting = get_config(rollout_key, "")
+    assert isinstance(project_rollout_setting, str)
     if project_rollout_setting:
         # The expected format is [project,project,...]
         project_rollout_setting = project_rollout_setting[1:-1]
@@ -264,4 +290,18 @@ def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
             for p in project_rollout_setting.split(","):
                 if int(p.strip()) == project_id:
                     return True
+    return False
+
+
+def is_project_in_rollout_group(rollout_key: str, project_id: int) -> bool:
+    """
+    Helper function for doing consistent incremental rollouts by project ids.
+    The config value is assumed to be an integer between 0 and 100.
+
+    Returns `True` if `project_id` falls within the rollout group.
+    """
+    project_rollout_percentage = get_config(rollout_key, 0)
+    assert isinstance(project_rollout_percentage, (int, float))
+    if project_rollout_percentage:
+        return project_id % 100 < project_rollout_percentage
     return False

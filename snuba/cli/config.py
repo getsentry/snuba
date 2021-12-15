@@ -106,7 +106,7 @@ def log() -> None:
     "Dump the config change log."
     from datetime import datetime
 
-    for key, (ts, user, before, after) in state.get_config_changes():
+    for key, (ts, user, before, after) in state.get_config_changes_legacy():
         click.echo(
             f"{datetime.fromtimestamp(int(ts)).isoformat()}: "
             f"key={key!r} user={user!r} "

@@ -90,7 +90,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
     return convert
 
 
-@pytest.fixture(params=["legacy", "snql"])
+@pytest.fixture
 def _build_snql_post_methods(
     request: Any,
     test_entity: Union[str, Tuple[str, str]],
@@ -103,11 +103,10 @@ def _build_snql_post_methods(
     else:
         dataset = entity = test_entity
 
-    endpoint = "/query" if request.param == "legacy" else f"/{dataset}/snql"
+    endpoint = f"/{dataset}/snql"
 
     def simple_post(data: str, entity: str = entity, referrer: str = "test") -> Any:
-        if request.param == "snql":
-            data = convert_legacy_to_snql(data, entity)
+        data = convert_legacy_to_snql(data, entity)
         return test_app.post(endpoint, data=data, headers={"referer": referrer})
 
     return simple_post

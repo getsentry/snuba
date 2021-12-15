@@ -50,6 +50,9 @@ class KafkaTopicSpec:
     def topic_creation_config(self) -> Mapping[str, str]:
         return get_topic_creation_config(self.__topic)
 
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, KafkaTopicSpec) and self.topic == other.topic
+
 
 def get_topic_name(topic: Topic) -> str:
     return settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value)

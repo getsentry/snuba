@@ -29,7 +29,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes
-from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.backends.metrics import TestingMetricsBackend
 
 
 def test_scheduler_consumer() -> None:
@@ -46,8 +46,42 @@ def test_scheduler_consumer() -> None:
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
 
+    commit_log_topic = Topic("snuba-commit-log")
+
+    mock_scheduler_producer = mock.Mock()
+
+    from snuba.redis import redis_client
+    from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+    from snuba.subscriptions.entity_subscription import EventsSubscription
+    from snuba.subscriptions.store import RedisSubscriptionDataStore
+
+    entity_key = EntityKey(entity_name)
+    partition_index = 0
+
+    store = RedisSubscriptionDataStore(
+        redis_client, entity_key, PartitionId(partition_index)
+    )
+    store.create(
+        uuid.uuid4(),
+        SnQLSubscriptionData(
+            project_id=1,
+            time_window=timedelta(minutes=1),
+            resolution=timedelta(minutes=1),
+            query="MATCH events SELECT count()",
+            entity_subscription=EventsSubscription(data_dict={}),
+        ),
+    )
+
     builder = scheduler_consumer.SchedulerBuilder(
-        entity_name, str(uuid.uuid1().hex), "events", "latest", None, metrics_backend, 1
+        entity_name,
+        str(uuid.uuid1().hex),
+        "events",
+        mock_scheduler_producer,
+        "latest",
+        60 * 5,
+        None,
+        metrics_backend,
+        1,
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
@@ -55,9 +89,7 @@ def test_scheduler_consumer() -> None:
     scheduler._run_once()
     scheduler._run_once()
 
-    topic = Topic("snuba-commit-log")
-
-    now = datetime.now() - timedelta(seconds=1)
+    epoch = datetime(1970, 1, 1)
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
@@ -66,27 +98,32 @@ def test_scheduler_consumer() -> None:
     )
 
     for (partition, offset, orig_message_ts) in [
-        (0, 0, now - timedelta(seconds=6)),
-        (1, 0, now - timedelta(seconds=4)),
-        (0, 1, now - timedelta(seconds=2)),
-        (1, 1, now),
+        (0, 0, epoch),
+        (1, 0, epoch + timedelta(minutes=1)),
+        (0, 1, epoch + timedelta(minutes=2)),
+        (1, 1, epoch + timedelta(minutes=3)),
     ]:
         fut = producer.produce(
-            topic,
+            commit_log_topic,
             payload=commit_codec.encode(
-                Commit("events", Partition(topic, partition), offset, orig_message_ts)
+                Commit(
+                    "events",
+                    Partition(commit_log_topic, partition),
+                    offset,
+                    orig_message_ts,
+                )
             ),
         )
         fut.result()
 
     producer.close()
 
-    while len(metrics_backend.calls) == 0:
+    for _ in range(5):
         scheduler._run_once()
 
     scheduler._shutdown()
 
-    assert metrics_backend.calls[0] == Timing("partition_lag_ms", 2000, None)
+    assert mock_scheduler_producer.produce.call_count == 2
 
     settings.TOPIC_PARTITION_COUNTS = {}
 

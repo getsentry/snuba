@@ -2,10 +2,21 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractclassmethod, abstractmethod
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
-from typing import Any, Mapping, NamedTuple, NewType, Optional, Sequence, Union
+from typing import (
+    Any,
+    Iterator,
+    Mapping,
+    NamedTuple,
+    NewType,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 from uuid import UUID
 
 from snuba.datasets.dataset import Dataset
@@ -21,7 +32,8 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
-from snuba.request import Language, Request
+from snuba.reader import Result
+from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
@@ -31,6 +43,7 @@ from snuba.subscriptions.entity_subscription import (
     InvalidSubscriptionError,
     SubscriptionType,
 )
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 
@@ -98,6 +111,7 @@ class SubscriptionData(ABC, _SubscriptionData):
         offset: Optional[int],
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
         raise NotImplementedError
 
@@ -175,25 +189,22 @@ class SnQLSubscriptionData(SubscriptionData):
         offset: Optional[int],
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
-        schema = RequestSchema.build_with_extensions(
-            {}, SubscriptionRequestSettings, Language.SNQL,
-        )
+        schema = RequestSchema.build(SubscriptionRequestSettings)
 
         request = build_request(
             {"query": self.query},
-            partial(
-                parse_snql_query,
-                [
-                    self.validate_subscription,
-                    partial(self.add_conditions, timestamp, offset),
-                ],
-            ),
+            parse_snql_query,
             SubscriptionRequestSettings,
             schema,
             dataset,
             timer,
-            SUBSCRIPTION_REFERRER,
+            referrer,
+            [
+                self.validate_subscription,
+                partial(self.add_conditions, timestamp, offset),
+            ],
         )
         return request
 
@@ -227,3 +238,51 @@ class SnQLSubscriptionData(SubscriptionData):
 class Subscription(NamedTuple):
     identifier: SubscriptionIdentifier
     data: SubscriptionData
+
+
+class SubscriptionWithMetadata(NamedTuple):
+    entity: EntityKey
+    subscription: Subscription
+    tick_upper_offset: int
+
+
+@dataclass(frozen=True)
+class ScheduledSubscriptionTask:
+    """
+    A scheduled task represents a unit of work (a task) that is intended to
+    be executed at (or around) a specific time.
+    """
+
+    # The time that this task was scheduled to execute.
+    timestamp: datetime
+
+    # The task that should be executed.
+    task: SubscriptionWithMetadata
+
+
+class SubscriptionScheduler(ABC):
+    """
+    The scheduler maintains the scheduling state for subscription tasks and
+    provides the ability to query the schedule to find tasks that should be
+    scheduled between the time interval of a tick.
+    """
+
+    @abstractmethod
+    def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
+        """
+        Find all of the tasks that were scheduled to be executed between the
+        lower bound (exclusive) and upper bound (inclusive) of the tick's
+        time interval. The tasks returned should be ordered by timestamp in
+        ascending order.
+        """
+        raise NotImplementedError
+
+
+class SubscriptionTaskResultFuture(NamedTuple):
+    task: ScheduledSubscriptionTask
+    future: Future[Tuple[Request, Result]]
+
+
+class SubscriptionTaskResult(NamedTuple):
+    task: ScheduledSubscriptionTask
+    result: Tuple[Request, Result]
