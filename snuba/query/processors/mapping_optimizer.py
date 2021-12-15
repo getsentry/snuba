@@ -1,4 +1,7 @@
+import logging
+import random
 from enum import Enum
+from typing import Optional, Tuple
 
 from snuba import environment
 from snuba.clickhouse.processors import QueryProcessor
@@ -7,22 +10,28 @@ from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
     KEY_MAPPING_PARAM,
     TABLE_MAPPING_PARAM,
+    VALUE_COL_MAPPING_PARAM,
     mapping_pattern,
 )
 from snuba.query.conditions import (
     BooleanFunctions,
+    combine_and_conditions,
+    combine_or_conditions,
     get_first_level_and_conditions,
     get_first_level_or_conditions,
 )
 from snuba.query.expressions import Column, Expression
 from snuba.query.expressions import FunctionCall as FunctionExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.matchers import Any, FunctionCall, Literal, Or, Param, String
+from snuba.query.matchers import Any, AnyOptionalString
+from snuba.query.matchers import Column as ColumnMatcher
+from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
+logger = logging.getLogger("snuba.mapping_optimizer")
 
 ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "=": "\="})
 
@@ -43,6 +52,7 @@ class MappingOptimizer(QueryProcessor):
     `has(_tags_hash_map, cityHash64('my_tag=my_val'))`
 
     Supported use case:
+
     - direct equality. Example above
     - tags expression nested into ifNull conditions like:
       `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ...`
@@ -59,6 +69,13 @@ class MappingOptimizer(QueryProcessor):
     - `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ''`
        this condition is equivalent to looking whether a tag is
        missing, which cannot be done with the hash map.
+        - There is a special case of this where the query will have
+            (
+                ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') != '' AND
+                ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = 'my_tag_value
+            )
+            in this case, the first condition is redundant and will be removed from the query
+            NOTE: The ifNull wrapping is optional, direct comparison will be optimized away as well
     - IN conditions. TODO
     """
 
@@ -67,7 +84,7 @@ class MappingOptimizer(QueryProcessor):
         self.__hash_map_name = hash_map_name
         self.__killswitch = killswitch
 
-        # TODO: Add the support for IN connditions.
+        # TODO: Add the support for IN conditions.
         self.__optimizable_pattern = FunctionCall(
             function_name=String("equals"),
             parameters=(
@@ -83,6 +100,33 @@ class MappingOptimizer(QueryProcessor):
                 Param("right_hand_side", Literal(Any(str))),
             ),
         )
+        self.__tag_exists_patterns = [
+            FunctionCall(
+                function_name=String("notEquals"),
+                parameters=(
+                    Or(
+                        [
+                            mapping_pattern,
+                            FunctionCall(
+                                function_name=String("ifNull"),
+                                parameters=(mapping_pattern, Literal(String(""))),
+                            ),
+                        ]
+                    ),
+                    Param("right_hand_side", Literal(Any(str))),
+                ),
+            ),
+            FunctionCall(
+                function_name=String("has"),
+                parameters=(
+                    ColumnMatcher(
+                        Param(TABLE_MAPPING_PARAM, AnyOptionalString()),
+                        Param(VALUE_COL_MAPPING_PARAM, String(f"{column_name}.key")),
+                    ),
+                    Literal(Param(KEY_MAPPING_PARAM, Any(str))),
+                ),
+            ),
+        ]
 
     def __classify_combined_conditions(self, condition: Expression) -> ConditionClass:
         if not isinstance(condition, FunctionExpr):
@@ -159,23 +203,135 @@ class MappingOptimizer(QueryProcessor):
             ),
         )
 
+    def _get_condition_without_redundant_checks(
+        self, condition: Expression, query: Query
+    ) -> Expression:
+        """Optimizes the case where the query condition contains the following:
+
+        valueOf('my_tag') != '' AND valueOf('my_tag') == "something"
+                          ^                            ^
+                          |                            |
+                      existence check               value check
+
+        the existence check in this clause is redundant and prevents the hashmap
+        optimization from being applied.
+
+        This function will remove all tag existence checks
+        from the condition IFF they are ANDed with a value check for the *same tag name*
+
+        Side effects:
+            This function works by flattening first level AND conditions to find clauses where
+            existence checks and value checks are ANDed together. When the AND conditions are recombined,
+            they are not guaranteed to be in the same structure (but are guaranteed to be functionally equivalent)
+
+            Example:
+                ┌───┐         ┌───┐
+                │AND│         │AND│
+                ├──┬┘         └┬──┤
+                │  │           │  │
+             ┌──┴┐ c           a ┌┴──┐
+             │AND│    becomes    │AND│
+             └┬─┬┘               ├──┬┘
+              │ │                │  │
+              a b                b  c
+        """
+        if not isinstance(condition, FunctionExpr):
+            return condition
+        elif condition.function_name == BooleanFunctions.OR:
+            sub_conditions = get_first_level_or_conditions(condition)
+            pruned_conditions = [
+                self._get_condition_without_redundant_checks(c, query)
+                for c in sub_conditions
+            ]
+            return combine_or_conditions(pruned_conditions)
+        elif condition.function_name == BooleanFunctions.AND:
+            sub_conditions = get_first_level_and_conditions(condition)
+            tag_eq_match_strings = set()
+            matched_tag_exists_conditions = {}
+            for condition_id, cond in enumerate(sub_conditions):
+                tag_exist_match = None
+                for tag_exists_pattern in self.__tag_exists_patterns:
+                    tag_exist_match = tag_exists_pattern.match(cond)
+                    if tag_exist_match:
+                        matched_tag_exists_conditions[condition_id] = tag_exist_match
+                if not tag_exist_match:
+                    eq_match = self.__optimizable_pattern.match(cond)
+                    if eq_match:
+                        tag_eq_match_strings.add(eq_match.string(KEY_MAPPING_PARAM))
+            useful_conditions = []
+            for condition_id, cond in enumerate(sub_conditions):
+                tag_exist_match = matched_tag_exists_conditions.get(condition_id, None)
+                if tag_exist_match:
+                    requested_tag = tag_exist_match.string("key")
+                    if requested_tag in tag_eq_match_strings:
+                        query.add_experiment("redundant_clause_removed", 1)
+                        continue
+                useful_conditions.append(
+                    self._get_condition_without_redundant_checks(cond, query)
+                )
+            return combine_and_conditions(useful_conditions)
+        else:
+            return condition
+
+    def _should_apply_redundant_clause_optimization(self, query: Query) -> bool:
+        """This function is used to measure impact of the redundant clause optimization
+        once that measurement is complete, this code should be removed"""
+        optimizer_skip_rate = get_config("tags_redundant_optimizer_skip_rate", 0)
+        if isinstance(optimizer_skip_rate, float) or isinstance(
+            optimizer_skip_rate, int
+        ):
+            if random.random() >= optimizer_skip_rate:
+                query.add_experiment("tags_redundant_optimizer_enabled", 1)
+                return True
+            else:
+                query.add_experiment("tags_redundant_optimizer_enabled", 0)
+                return False
+        else:
+            # when in doubt, apply the optimization but yell about it
+            query.add_experiment("tags_redundant_optimizer_enabled", 1)
+            logger.error(
+                "Invalid experiment config for 'tags_redundant_optimizer_skip_rate': %s",
+                optimizer_skip_rate,
+            )
+            return True
+
+    def __get_reduced_and_classified_query_clause(
+        self,
+        clause: Optional[Expression],
+        query: Query,
+        should_apply_redundant_clause_optimization: bool,
+    ) -> Tuple[Optional[Expression], ConditionClass]:
+        cond_class = ConditionClass.IRRELEVANT
+        if clause is not None:
+            new_clause = (
+                self._get_condition_without_redundant_checks(clause, query)
+                if should_apply_redundant_clause_optimization
+                else clause
+            )
+            cond_class = self.__classify_combined_conditions(new_clause)
+            return new_clause, cond_class
+        else:
+            return clause, cond_class
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         if not get_config(self.__killswitch, 1):
             return
+        should_apply_redundant_clause_optimization = self._should_apply_redundant_clause_optimization(
+            query
+        )
+        condition, cond_class = self.__get_reduced_and_classified_query_clause(
+            query.get_condition(), query, should_apply_redundant_clause_optimization
+        )
+        query.set_ast_condition(condition)
+        if cond_class == ConditionClass.NOT_OPTIMIZABLE:
+            return
 
-        cond_class = ConditionClass.IRRELEVANT
-        condition = query.get_condition()
-        if condition is not None:
-            cond_class = self.__classify_combined_conditions(condition)
-            if cond_class == ConditionClass.NOT_OPTIMIZABLE:
-                return
-
-        having_cond_class = ConditionClass.IRRELEVANT
-        having_cond = query.get_having()
-        if having_cond is not None:
-            having_cond_class = self.__classify_combined_conditions(having_cond)
-            if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
-                return
+        having_cond, having_cond_class = self.__get_reduced_and_classified_query_clause(
+            query.get_having(), query, should_apply_redundant_clause_optimization
+        )
+        query.set_ast_having(having_cond)
+        if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
+            return
 
         if not (
             cond_class == ConditionClass.OPTIMIZABLE

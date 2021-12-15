@@ -10,7 +10,6 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.types import Condition
 from snuba.query.validation.validators import (
     NoTimeBasedConditionValidator,
     SubscriptionAllowedClausesValidator,
@@ -18,9 +17,7 @@ from snuba.query.validation.validators import (
 
 
 class SubscriptionType(Enum):
-    LEGACY = "legacy"
     SNQL = "snql"
-    DELEGATE = "delegate"
 
 
 class InvalidSubscriptionError(Exception):
@@ -42,16 +39,6 @@ class EntitySubscription(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_entity_subscription_conditions_for_legacy(
-        self, offset: Optional[int] = None
-    ) -> Sequence[Condition]:
-        """
-        Returns a list of extra conditions that are entity specific and required for the
-        legacy subscriptions
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def validate_query(self, query: Union[CompositeQuery[Entity], Query]) -> None:
         """
         Applies entity specific validations on query argument passed
@@ -65,6 +52,7 @@ class EntitySubscription(ABC):
 
 class EntitySubscriptionValidation:
     MAX_ALLOWED_AGGREGATIONS: int = 1
+    disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"]
 
     def validate_query(self, query: Union[CompositeQuery[Entity], Query]) -> None:
         # TODO: Support composite queries with multiple entities.
@@ -73,9 +61,9 @@ class EntitySubscriptionValidation:
             raise InvalidSubscriptionError("Only simple queries are supported")
         entity = get_entity(from_clause.key)
 
-        SubscriptionAllowedClausesValidator(self.MAX_ALLOWED_AGGREGATIONS).validate(
-            query
-        )
+        SubscriptionAllowedClausesValidator(
+            self.MAX_ALLOWED_AGGREGATIONS, self.disallowed_aggregations
+        ).validate(query)
         if entity.required_time_column:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
@@ -103,11 +91,6 @@ class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
             ),
         ]
 
-    def get_entity_subscription_conditions_for_legacy(
-        self, offset: Optional[int] = None
-    ) -> Sequence[Condition]:
-        return []
-
     def to_dict(self) -> Mapping[str, Any]:
         return {"organization": self.organization}
 
@@ -129,14 +112,6 @@ class BaseEventsSubscription(EntitySubscriptionValidation, EntitySubscription, A
             )
         ]
 
-    def get_entity_subscription_conditions_for_legacy(
-        self, offset: Optional[int] = None
-    ) -> Sequence[Condition]:
-        if offset is None:
-            return []
-
-        return [[["ifNull", ["offset", 0]], "<=", offset]]
-
     def to_dict(self) -> Mapping[str, Any]:
         return {}
 
@@ -149,10 +124,16 @@ class TransactionsSubscription(BaseEventsSubscription):
     ...
 
 
+class MetricsCountersSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+    disallowed_aggregations = ["having", "orderby"]
+
+
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
     SessionsSubscription: EntityKey.SESSIONS,
     EventsSubscription: EntityKey.EVENTS,
     TransactionsSubscription: EntityKey.TRANSACTIONS,
+    MetricsCountersSubscription: EntityKey.METRICS_COUNTERS,
 }
 
 ENTITY_KEY_TO_SUBSCRIPTION_MAPPER: Mapping[EntityKey, Type[EntitySubscription]] = {

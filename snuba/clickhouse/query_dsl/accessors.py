@@ -156,3 +156,28 @@ def get_time_range(
     lower_bound = lower[0] if lower else None
     upper_bound = upper[0] if upper else None
     return lower_bound, upper_bound
+
+
+def get_time_range_estimate(
+    query: ProcessableQuery[Table],
+) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """
+    Best guess to find the time range for the query.
+    We pick the first column that is compared with a datetime Literal.
+    """
+    pattern = FunctionCall(
+        Or([String(ConditionFunctions.GT), String(ConditionFunctions.GTE)]),
+        (Column(None, Param("col_name", Any(str))), Literal(Any(datetime))),
+    )
+
+    from_date, to_date = None, None
+    condition = query.get_condition()
+    if condition is None:
+        return None, None
+    for exp in condition:
+        result = pattern.match(exp)
+        if result is not None:
+            from_date, to_date = get_time_range(query, result.string("col_name"))
+            break
+
+    return from_date, to_date

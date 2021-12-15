@@ -1,11 +1,30 @@
+from __future__ import annotations
+
 import logging
+import time
 from collections import deque
+from concurrent.futures import Future
 from datetime import datetime
-from typing import Deque, Mapping, MutableMapping, NamedTuple, Optional, cast
+from typing import (
+    Callable,
+    Deque,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+    cast,
+)
 
-from arroyo import Message
-from arroyo.processing.strategies import ProcessingStrategy
+from arroyo import Message, Partition, Topic
+from arroyo.backends.abstract import Producer
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
+from arroyo.types import Position
 
+from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
+from snuba.subscriptions.data import SubscriptionScheduler
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 
@@ -33,10 +52,14 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
     """
 
     def __init__(
-        self, partitions: int, next_step: ProcessingStrategy[CommittableTick],
+        self,
+        partitions: int,
+        next_step: ProcessingStrategy[CommittableTick],
+        metrics: MetricsBackend,
     ) -> None:
         self.__partitions = partitions
         self.__next_step = next_step
+        self.__metrics = metrics
 
         # Store the last message we received for each partition so know when
         # to commit offsets.
@@ -52,6 +75,8 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
+        start = time.time()
+
         assert not self.__closed
 
         # Update self.__offset_high_watermark
@@ -71,6 +96,10 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         if should_commit:
             self.__offset_low_watermark = message.offset
 
+        self.__metrics.timing(
+            "ProvideCommitStrategy.submit", (time.time() - start) * 1000
+        )
+
     def __should_commit(self, message: Message[Tick]) -> bool:
         return (
             self.__offset_low_watermark is None
@@ -82,8 +111,8 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
     def __update_offset_high_watermark(self, message: Message[Tick]) -> None:
         assert message.partition.index == 0, "Commit log cannot be partitioned"
-
         tick_partition = message.payload.partition
+        assert tick_partition is not None
         self.__latest_messages_by_partition[tick_partition] = message
 
         slowest = message
@@ -126,15 +155,15 @@ class TickBuffer(ProcessingStrategy[Tick]):
     The behavior of the TickBuffer depends on which of the two scheduler
     modes applies.
 
-    If the scheduler mode is IMMEDIATE then there is no buffering and a
+    If the scheduler mode is PARTITION then there is no buffering and a
     message is always immediately submitted to the next processing step.
 
-    If the scheduler mode is WAIT_FOR_SLOWEST_PARTITION then messages are
+    If the scheduler mode is GLOBAL then messages are
     buffered until all partitions are at least up to the timestamp of the
     tick.
 
     `max_ticks_buffered_per_partition` applies if the scheduler mode is
-    WAIT_FOR_SLOWEST_PARTITION. Once the maximum ticks is received for that
+    PARTITION. Once the maximum ticks is received for that
     partition, we start to submit ticks for processing even if that timestamp
     is not received for all partitions yet.
 
@@ -173,6 +202,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
+        start = time.time()
+
         assert not self.__closed
 
         # If the scheduler mode is immediate or there is only one partition
@@ -195,6 +226,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
             self.__latest_ts = message.payload.timestamps.upper
 
         tick_partition = message.payload.partition
+        assert tick_partition is not None
         self.__buffers[tick_partition].append(message)
 
         # If the buffer length exceeds `max_ticks_buffered_per_partition`
@@ -217,6 +249,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
         while all(len(buffer) > 0 for buffer in self.__buffers.values()):
             earliest_ts = message.payload.timestamps.upper
+            assert message.payload.partition is not None
             earliest_ts_partitions = {message.payload.partition}
 
             for partition_index in self.__buffers:
@@ -233,9 +266,11 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
                 if partition_ts < earliest_ts:
                     earliest_ts = tick.timestamps.upper
+                    assert tick.partition is not None
                     earliest_ts_partitions = {tick.partition}
 
                 elif partition_ts == earliest_ts:
+                    assert tick.partition is not None
                     earliest_ts_partitions.add(tick.partition)
 
             for partition_index in earliest_ts_partitions:
@@ -247,6 +282,8 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 (self.__latest_ts - earliest_ts).total_seconds() * 1000,
             )
 
+            self.__metrics.timing("TickBuffer.submit", (time.time() - start) * 1000)
+
     def close(self) -> None:
         self.__closed = True
 
@@ -257,3 +294,194 @@ class TickBuffer(ProcessingStrategy[Tick]):
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
+
+
+class TickSubscription(NamedTuple):
+    tick_message: Message[CommittableTick]
+    subscription_future: Future[Message[KafkaPayload]]
+    should_commit: bool
+
+
+class ScheduledSubscriptionQueue:
+    """
+    Queues ticks with their subscriptions for the ProduceScheduledSubscriptionMessage strategy
+    """
+
+    def __init__(self) -> None:
+        self.__queues: Deque[
+            Tuple[Message[CommittableTick], Deque[Future[Message[KafkaPayload]]]]
+        ] = deque()
+
+    def append(
+        self,
+        tick_message: Message[CommittableTick],
+        futures: Deque[Future[Message[KafkaPayload]]],
+    ) -> None:
+        if len(futures) > 0:
+            self.__queues.append((tick_message, futures))
+
+    def peek(self) -> Optional[TickSubscription]:
+        if self.__queues:
+            tick, futures = self.__queues[0]
+            return TickSubscription(tick, futures[0], len(futures) == 1)
+        return None
+
+    def popleft(self) -> TickSubscription:
+        if self.__queues:
+            tick_message, futures = self.__queues[0]
+            subscription_future = futures.popleft()
+
+            is_empty = len(futures) == 0
+
+            if is_empty:
+                self.__queues.popleft()
+
+            should_commit = is_empty and tick_message.payload.should_commit == True
+
+            return TickSubscription(tick_message, subscription_future, should_commit)
+
+        raise IndexError()
+
+    def __len__(self) -> int:
+        return sum([len(futures) for (_tick, futures) in self.__queues])
+
+
+class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
+    """"
+    This strategy is responsible for producing a message for all of the subscriptions
+    scheduled for a given tick.
+
+    The subscriptions to be scheduled are those that:
+    - Have the same partition index as the tick received, and
+    - Are scheduled to be run within the time interval defined by the tick
+    (taking the jitter into account)
+
+    The subscriptions to be scheduled are encoded and produced to the
+    scheduled topic to be picked up by the subscription executor which
+    will run the actual query later.
+
+    When a tick is submitted to this strategy, we produce all of it's
+    subscriptions and place it in a queue without waiting to see if they
+    were succesfully produced or not.
+
+    On each call to poll(), we remove completed futures from the queue.
+    If all scheduled subscription messages for that tick were succesfully
+    produced and the tick indicates it should be committed, we commit offsets.
+    """
+
+    def __init__(
+        self,
+        schedulers: Mapping[int, SubscriptionScheduler],
+        producer: Producer[KafkaPayload],
+        scheduled_topic_spec: KafkaTopicSpec,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__schedulers = schedulers
+        self.__encoder = SubscriptionScheduledTaskEncoder()
+        self.__producer = producer
+        self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
+        self.__commit = commit
+        self.__metrics = metrics
+        self.__closed = False
+
+        # Stores each tick with it's futures
+        self.__queue = ScheduledSubscriptionQueue()
+
+        # Not a hard max
+        self.__max_buffer_size = 10000
+
+    def poll(self) -> None:
+        start = time.time()
+        # Remove completed tasks from the queue and raise if an exception occurred.
+        # This method does not attempt to recover from any exception.
+        # Also commits any offsets required.
+        while self.__queue:
+            tick_subscription = self.__queue.peek()
+
+            if tick_subscription is None:
+                break
+
+            if not tick_subscription.subscription_future.done():
+                break
+
+            self.__queue.popleft()
+
+            if tick_subscription.should_commit:
+                self.__commit(
+                    {
+                        tick_subscription.tick_message.partition: Position(
+                            tick_subscription.tick_message.offset,
+                            tick_subscription.tick_message.timestamp,
+                        )
+                    }
+                )
+
+        self.__metrics.timing(
+            "ProduceScheduledSubscriptionMessage.poll", (time.time() - start) * 1000
+        )
+
+    def submit(self, message: Message[CommittableTick]) -> None:
+        start = time.time()
+        assert not self.__closed
+
+        # If queue is full, raise MessageRejected to tell the stream
+        # processor to pause consuming
+        if len(self.__queue) >= self.__max_buffer_size:
+            raise MessageRejected
+
+        # Otherwise, add the tick message and all of it's subscriptions to
+        # the queue
+        tick = message.payload.tick
+        assert tick.partition is not None
+        tasks = self.__schedulers[tick.partition].find(tick)
+
+        start_encoding = time.time()
+        encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+        self.__metrics.timing(
+            "ScheduledSubscriptionTask.encode", (time.time() - start_encoding) * 1000
+        )
+
+        self.__queue.append(
+            message,
+            deque(
+                [
+                    self.__producer.produce(self.__scheduled_topic, task)
+                    for task in encoded_tasks
+                ]
+            ),
+        )
+
+        self.__metrics.timing(
+            "ProduceScheduledSubscriptionMessage.submit", (time.time() - start) * 1000
+        )
+
+    def close(self) -> None:
+        self.__closed = True
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        start = time.time()
+
+        while self.__queue:
+            remaining = timeout - (time.time() - start) if timeout is not None else None
+
+            if remaining is not None and remaining <= 0:
+                logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
+                break
+
+            tick_subscription = self.__queue.popleft()
+
+            tick_subscription.subscription_future.result(remaining)
+
+            if tick_subscription.should_commit:
+                self.__commit(
+                    {
+                        tick_subscription.tick_message.partition: Position(
+                            tick_subscription.tick_message.offset,
+                            tick_subscription.tick_message.timestamp,
+                        )
+                    }
+                )

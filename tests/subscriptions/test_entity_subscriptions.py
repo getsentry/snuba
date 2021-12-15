@@ -8,6 +8,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
+    MetricsCountersSubscription,
     SessionsSubscription,
     TransactionsSubscription,
 )
@@ -33,6 +34,18 @@ TESTS = [
         {"data_dict": {}},
         InvalidQueryException,
         id="Sessions subscription",
+    ),
+    pytest.param(
+        MetricsCountersSubscription,
+        {"data_dict": {"organization": 1}},
+        None,
+        id="Metrics counters subscription",
+    ),
+    pytest.param(
+        MetricsCountersSubscription,
+        {"data_dict": {}},
+        InvalidQueryException,
+        id="Metrics counters subscription",
     ),
 ]
 
@@ -87,38 +100,15 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         True,
         id="Sessions subscription of type SNQL",
     ),
-]
-
-TESTS_CONDITIONS_LEGACY_METHOD = [
     pytest.param(
-        EventsSubscription(data_dict={}),
-        [[["ifNull", ["offset", 0]], "<=", 5]],
+        MetricsCountersSubscription(data_dict={"organization": 1}),
+        [
+            binary_condition(
+                ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 1),
+            ),
+        ],
         True,
-        id="Events subscription with offset of type LEGACY",
-    ),
-    pytest.param(
-        EventsSubscription(data_dict={}),
-        [],
-        False,
-        id="Events subscription with no offset of type LEGACY",
-    ),
-    pytest.param(
-        TransactionsSubscription(data_dict={}),
-        [[["ifNull", ["offset", 0]], "<=", 5]],
-        True,
-        id="Transactions subscription with offset of type LEGACY",
-    ),
-    pytest.param(
-        TransactionsSubscription(data_dict={}),
-        [],
-        False,
-        id="Transactions subscription with no offset of type LEGACY",
-    ),
-    pytest.param(
-        SessionsSubscription(data_dict={"organization": 1}),
-        [],
-        True,
-        id="Sessions subscription of type LEGACY",
+        id="Metrics counters subscription of type SNQL",
     ),
 ]
 
@@ -148,21 +138,5 @@ def test_entity_subscription_methods_for_snql(
     offset = 5 if has_offset else None
     assert (
         entity_subscription.get_entity_subscription_conditions_for_snql(offset)
-        == expected_conditions
-    )
-
-
-@pytest.mark.parametrize(
-    "entity_subscription, expected_conditions, has_offset",
-    TESTS_CONDITIONS_LEGACY_METHOD,
-)
-def test_entity_subscription_functions_for_legacy(
-    entity_subscription: EntitySubscription,
-    expected_conditions: List[Any],
-    has_offset: bool,
-) -> None:
-    offset = 5 if has_offset else None
-    assert (
-        entity_subscription.get_entity_subscription_conditions_for_legacy(offset)
         == expected_conditions
     )

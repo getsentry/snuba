@@ -106,11 +106,11 @@ snql_grammar = Grammar(
     match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
-    arrayjoin_clause      = space+ "ARRAY JOIN" space+ (tag_column / subscriptable / simple_term)
+    arrayjoin_clause      = space+ "ARRAY JOIN" space+ arrayjoin_entity arrayjoin_optional
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
-    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name
+    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name limit_by_columns
     limit_clause          = space+ "LIMIT" space+ integer_literal
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
@@ -140,10 +140,14 @@ snql_grammar = Grammar(
     select_columns       = selected_expression space* comma
     selected_expression  = space* (aliased_tag_column / aliased_subscriptable / aliased_column_name / low_pri_arithmetic)
 
+    arrayjoin_entity     = tag_column / subscriptable / simple_term
+    arrayjoin_optional   = (space* comma space* arrayjoin_entity)*
+
     group_list            = group_columns* (selected_expression)
     group_columns         = selected_expression space* comma
     order_list            = order_columns* low_pri_arithmetic space+ ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic space+ ("ASC"/"DESC") space* comma space*
+    limit_by_columns      = (space* comma space* column_name)*
 
     low_pri_arithmetic    = space* high_pri_arithmetic (space* low_pri_tuple)*
     high_pri_arithmetic   = space* arithmetic_term (space* high_pri_tuple)*
@@ -617,11 +621,25 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_limit_by_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Any, Literal, Any, Any, Any, Column],
+        visited_children: Tuple[
+            Any, Any, Any, Literal, Any, Any, Any, Column, Optional[Sequence[Column]]
+        ],
     ) -> LimitBy:
-        _, _, _, limit, _, _, _, column = visited_children
+        _, _, _, limit, _, _, _, column_one, columns_rest = visited_children
         assert isinstance(limit.value, int)  # mypy
-        return LimitBy(limit.value, column)
+        columns = [column_one]
+        if columns_rest is not None:
+            columns.extend(columns_rest)
+        return LimitBy(limit.value, columns)
+
+    def visit_limit_by_columns(
+        self, node: Node, visited_children: Sequence[Tuple[Any, Any, Any, Column]]
+    ) -> Sequence[Column]:
+        columns: List[Column] = []
+        for column_visit in visited_children:
+            _, _, _, column_inst = column_visit
+            columns.append(column_inst)
+        return columns
 
     def visit_limit_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
@@ -718,10 +736,27 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return ret
 
     def visit_arrayjoin_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
-    ) -> Expression:
-        _, _, _, expression = visited_children
-        return expression
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Any, Expression, Optional[List[Expression]]],
+    ) -> Sequence[Expression]:
+        _, _, _, join_first, join_rest = visited_children
+        exprs = [join_first]
+
+        if join_rest is not None:
+            exprs.extend(join_rest)
+
+        return exprs
+
+    def visit_arrayjoin_optional(
+        self, node: Node, visited_children: List[Tuple[Any, Any, Any, Expression]],
+    ) -> List[Expression]:
+        exprs: List[Expression] = list()
+        if visited_children is not None:
+            for child in visited_children:
+                _, _, _, exp = child
+                exprs.append(exp)
+        return exprs
 
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
@@ -996,18 +1031,24 @@ def _unpack_array_conditions(
     entity_alias: Optional[str] = None,
 ) -> None:
     array_columns: Set[str] = set()
-    array_join_col = query.get_arrayjoin()
-    array_join = ""
-    if array_join_col is not None:
-        assert isinstance(array_join_col, Column)
-        array_join = f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+    array_join_arguments = query.get_arrayjoin()
+    array_join_columns = set()
+    if array_join_arguments is not None:
+        for array_join_col in array_join_arguments:
+            assert isinstance(array_join_col, Column)
+            array_join_columns.add(
+                f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+            )
 
     entity_alias = f"{entity_alias}." if entity_alias is not None else ""
     for column in schema:
         if isinstance(column.type, Array):
             aliased_base_name = f"{entity_alias}{column.base_name}"
             aliased_flattened = f"{entity_alias}{column.flattened}"
-            if aliased_base_name == array_join or aliased_flattened == array_join:
+            if (
+                aliased_base_name in array_join_columns
+                or aliased_flattened in array_join_columns
+            ):
                 continue
 
             array_columns.add(aliased_base_name)
@@ -1125,7 +1166,10 @@ def _align_max_days_date_align(
 
     # If there is an = or IN condition on time, we don't need to do any of this
     match = build_match(
-        entity.required_time_column, [ConditionFunctions.EQ], datetime, alias
+        col=entity.required_time_column,
+        ops=[ConditionFunctions.EQ],
+        param_type=datetime,
+        alias=alias,
     )
     if any(match.match(cond) for cond in old_top_level):
         return old_top_level

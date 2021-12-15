@@ -1,7 +1,9 @@
 import functools
+import itertools
 import logging
 import os
 import time
+from collections import defaultdict
 from datetime import datetime
 from typing import (
     Any,
@@ -10,10 +12,13 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
+    Optional,
     Sequence,
+    Set,
     Text,
     Tuple,
     Union,
+    cast,
 )
 from uuid import UUID
 
@@ -31,10 +36,11 @@ from werkzeug.exceptions import InternalServerError
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ConnectionId
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
+from snuba.datasets.entity import Entity
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -57,7 +63,7 @@ from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException
-from snuba.web.converters import DatasetConverter
+from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -92,23 +98,44 @@ def check_clickhouse() -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        for name in get_enabled_dataset_names():
-            dataset = get_dataset(name)
-            for entity in dataset.get_all_entities():
-                for storage in entity.get_all_storages():
-                    clickhouse = storage.get_cluster().get_query_connection(
-                        ClickhouseClientSettings.QUERY
-                    )
-                    clickhouse_tables = clickhouse.execute("show tables")
-                    source = storage.get_schema()
-                    if isinstance(source, TableSchema):
-                        table_name = source.get_table_name()
-                        if (table_name,) not in clickhouse_tables:
-                            return False
+        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+        entities = itertools.chain(
+            *[dataset.get_all_entities() for dataset in datasets]
+        )
+        storages = list(
+            itertools.chain(*[entity.get_all_storages() for entity in entities])
+        )
+
+        connection_grouped_table_names: MutableMapping[
+            ConnectionId, Set[str]
+        ] = defaultdict(set)
+        for storage in storages:
+            if isinstance(storage.get_schema(), TableSchema):
+                cluster = storage.get_cluster()
+                connection_grouped_table_names[cluster.get_connection_id()].add(
+                    cast(TableSchema, storage.get_schema()).get_table_name()
+                )
+
+        # De-dupe clusters by host:TCP port:HTTP port:database
+        unique_clusters = {
+            storage.get_cluster().get_connection_id(): storage.get_cluster()
+            for storage in storages
+        }
+
+        for (cluster_key, cluster) in unique_clusters.items():
+            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            clickhouse_tables = clickhouse.execute("show tables")
+            known_table_names = connection_grouped_table_names[cluster_key]
+            logger.debug(f"checking for {known_table_names} on {cluster_key}")
+            for table in known_table_names:
+                if (table,) not in clickhouse_tables:
+                    logger.error(f"{table} not present in cluster {cluster}")
+                    return False
 
         return True
 
-    except Exception:
+    except Exception as err:
+        logger.error(err)
         return False
 
 
@@ -138,6 +165,7 @@ application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
+application.url_map.converters["entity"] = EntityConverter
 
 
 @application.errorhandler(InvalidJsonRequestException)
@@ -435,13 +463,24 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
     )
 
 
+@application.route("/<dataset:dataset>/<entity:entity>/subscriptions", methods=["POST"])
+# ToDo(ahmed): Deprecate this endpoint
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
-def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
-    entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+def create_subscription(
+    *, dataset: Dataset, timer: Timer, entity: Optional[Entity] = None
+) -> RespTuple:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
+        entity = dataset.get_default_entity()
+    entity_key = ENTITY_NAME_LOOKUP[entity]
 
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
-    identifier = SubscriptionCreator(dataset).create(subscription, timer)
+    identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),
         202,
@@ -450,10 +489,25 @@ def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
 
 
 @application.route(
+    "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
+    methods=["DELETE"],
+)
+# ToDo(ahmed): Deprecate this endpoint
+@application.route(
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
-def delete_subscription(*, dataset: Dataset, partition: int, key: str) -> RespTuple:
-    SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
+def delete_subscription(
+    *, dataset: Dataset, partition: int, key: str, entity: Optional[Entity] = None
+) -> RespTuple:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
+        entity = dataset.get_default_entity()
+    entity_key = ENTITY_NAME_LOOKUP[entity]
+    SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
 

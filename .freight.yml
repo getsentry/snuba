@@ -44,6 +44,18 @@ steps:
     name: querylog-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: snuba-admin
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: metrics-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-errors-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-sessions-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-transactions-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-outcomes-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-loadbalancer-outcomes-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba

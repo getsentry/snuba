@@ -17,32 +17,39 @@ from snuba.subscriptions.codecs import (
 )
 from snuba.subscriptions.data import (
     PartitionId,
+    ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionTaskResult,
+    SubscriptionWithMetadata,
 )
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
+    MetricsCountersSubscription,
     SessionsSubscription,
     SubscriptionType,
 )
-from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.scheduler import ScheduledTask
 
 
 def build_snql_subscription_data(
-    organization: Optional[int] = None,
+    organization: Optional[int] = None, use_metrics: bool = False,
 ) -> SnQLSubscriptionData:
     entity_subscription: EntitySubscription
     if not organization:
         entity_subscription = EventsSubscription(data_dict={})
     else:
-        entity_subscription = SessionsSubscription(
-            data_dict={"organization": organization},
-        )
+        if use_metrics:
+            entity_subscription = MetricsCountersSubscription(
+                data_dict={"organization": organization},
+            )
+        else:
+            entity_subscription = SessionsSubscription(
+                data_dict={"organization": organization},
+            )
     return SnQLSubscriptionData(
         project_id=5,
         time_window=timedelta(minutes=500),
@@ -53,16 +60,21 @@ def build_snql_subscription_data(
 
 
 SNQL_CASES = [
-    pytest.param(build_snql_subscription_data, None, id="snql",),
-    pytest.param(build_snql_subscription_data, 1, id="snql",),
+    pytest.param(build_snql_subscription_data, None, False, id="snql",),
+    pytest.param(build_snql_subscription_data, None, True, id="snql",),
+    pytest.param(build_snql_subscription_data, 1, False, id="snql",),
+    pytest.param(build_snql_subscription_data, 1, True, id="snql",),
 ]
 
 
 def assert_entity_subscription_on_subscription_class(
-    organization: Optional[int], subscription: SubscriptionData,
+    organization: Optional[int], subscription: SubscriptionData, use_metrics: bool
 ) -> None:
     if organization:
-        assert isinstance(subscription.entity_subscription, SessionsSubscription)
+        subscription_cls = (
+            MetricsCountersSubscription if use_metrics else SessionsSubscription
+        )
+        assert isinstance(subscription.entity_subscription, subscription_cls)
         assert subscription.entity_subscription.organization == organization
     else:
         assert isinstance(subscription.entity_subscription, EventsSubscription)
@@ -70,24 +82,35 @@ def assert_entity_subscription_on_subscription_class(
             getattr(subscription.entity_subscription, "organization")
 
 
-@pytest.mark.parametrize("builder, organization", [*SNQL_CASES])
+def get_entity_key(organization: Optional[int], use_metrics: bool) -> EntityKey:
+    if organization and use_metrics:
+        entity_key = EntityKey.METRICS_COUNTERS
+    elif organization:
+        entity_key = EntityKey.SESSIONS
+    else:
+        entity_key = EntityKey.EVENTS
+    return entity_key
+
+
+@pytest.mark.parametrize("builder, organization, use_metrics", [*SNQL_CASES])
 def test_basic(
-    builder: Callable[[Optional[int]], SubscriptionData], organization: Optional[int]
+    builder: Callable[[Optional[int], bool], SubscriptionData],
+    organization: Optional[int],
+    use_metrics: bool,
 ) -> None:
-    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
-    codec = SubscriptionDataCodec(entity)
-    data = builder(organization)
+    codec = SubscriptionDataCodec(get_entity_key(organization, use_metrics))
+    data = builder(organization, use_metrics)
     assert codec.decode(codec.encode(data)) == data
 
 
-@pytest.mark.parametrize("builder, organization", SNQL_CASES)
+@pytest.mark.parametrize("builder, organization, use_metrics", SNQL_CASES)
 def test_encode_snql(
-    builder: Callable[[Optional[int]], SnQLSubscriptionData],
+    builder: Callable[[Optional[int], bool], SnQLSubscriptionData],
     organization: Optional[int],
+    use_metrics: bool,
 ) -> None:
-    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
-    codec = SubscriptionDataCodec(entity)
-    subscription = builder(organization)
+    codec = SubscriptionDataCodec(get_entity_key(organization, use_metrics))
+    subscription = builder(organization, use_metrics)
 
     payload = codec.encode(subscription)
     data = json.loads(payload.decode("utf-8"))
@@ -95,17 +118,19 @@ def test_encode_snql(
     assert data["time_window"] == int(subscription.time_window.total_seconds())
     assert data["resolution"] == int(subscription.resolution.total_seconds())
     assert data["query"] == subscription.query
-    assert_entity_subscription_on_subscription_class(organization, subscription)
+    assert_entity_subscription_on_subscription_class(
+        organization, subscription, use_metrics
+    )
 
 
-@pytest.mark.parametrize("builder, organization", SNQL_CASES)
+@pytest.mark.parametrize("builder, organization, use_metrics", SNQL_CASES)
 def test_decode_snql(
-    builder: Callable[[Optional[int]], SnQLSubscriptionData],
+    builder: Callable[[Optional[int], bool], SnQLSubscriptionData],
     organization: Optional[int],
+    use_metrics: bool,
 ) -> None:
-    entity = EntityKey.SESSIONS if organization else EntityKey.EVENTS
-    codec = SubscriptionDataCodec(entity)
-    subscription = builder(organization)
+    codec = SubscriptionDataCodec(get_entity_key(organization, use_metrics))
+    subscription = builder(organization, use_metrics)
     data = {
         "type": SubscriptionType.SNQL.value,
         "project_id": subscription.project_id,
@@ -143,10 +168,15 @@ def test_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            Subscription(
-                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
+            SubscriptionWithMetadata(
+                EntityKey.EVENTS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                5,
             ),
         ),
         (request, result),
@@ -157,7 +187,9 @@ def test_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
@@ -198,10 +230,15 @@ def test_sessions_subscription_task_result_encoder() -> None:
     }
 
     task_result = SubscriptionTaskResult(
-        ScheduledTask(
+        ScheduledSubscriptionTask(
             timestamp,
-            Subscription(
-                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
+            SubscriptionWithMetadata(
+                EntityKey.SESSIONS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                5,
             ),
         ),
         (request, result),
@@ -212,14 +249,77 @@ def test_sessions_subscription_task_result_encoder() -> None:
     assert data["version"] == 2
     payload = data["payload"]
 
-    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
+    assert payload["request"] == request.body
+    assert payload["result"] == result
+    assert payload["timestamp"] == task_result.task.timestamp.isoformat()
+
+
+def test_metrics_subscription_task_result_encoder() -> None:
+    codec = SubscriptionTaskResultEncoder()
+
+    timestamp = datetime.now()
+
+    entity_subscription = MetricsCountersSubscription(data_dict={"organization": 1})
+    subscription_data = SnQLSubscriptionData(
+        project_id=1,
+        query=(
+            """
+            MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
+            WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(1,2)
+            """
+        ),
+        time_window=timedelta(minutes=1),
+        resolution=timedelta(minutes=1),
+        entity_subscription=entity_subscription,
+    )
+
+    # XXX: This seems way too coupled to the dataset.
+    request = subscription_data.build_request(
+        get_dataset("metrics"), timestamp, None, Timer("timer")
+    )
+    result: Result = {
+        "data": [
+            {"project_id": 1, "tags[3]": 13, "value": 8},
+            {"project_id": 1, "tags[3]": 4, "value": 46},
+        ],
+        "meta": [
+            {"name": "project_id", "type": "UInt64"},
+            {"name": "tags[3]", "type": "UInt64"},
+            {"name": "value", "type": "Float64"},
+        ],
+    }
+    task_result = SubscriptionTaskResult(
+        ScheduledSubscriptionTask(
+            timestamp,
+            SubscriptionWithMetadata(
+                EntityKey.METRICS_COUNTERS,
+                Subscription(
+                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
+                    subscription_data,
+                ),
+                5,
+            ),
+        ),
+        (request, result),
+    )
+    message = codec.encode(task_result)
+    data = json.loads(message.value.decode("utf-8"))
+    assert data["version"] == 2
+    payload = data["payload"]
+
+    assert payload["subscription_id"] == str(
+        task_result.task.task.subscription.identifier
+    )
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
 
 
 def test_subscription_task_encoder() -> None:
-    encoder = SubscriptionScheduledTaskEncoder(EntityKey.EVENTS)
+    encoder = SubscriptionScheduledTaskEncoder()
 
     subscription_data = SnQLSubscriptionData(
         project_id=1,
@@ -233,12 +333,17 @@ def test_subscription_task_encoder() -> None:
 
     epoch = datetime(1970, 1, 1)
 
-    task = ScheduledTask(
-        timestamp=epoch,
-        task=Subscription(
+    tick_upper_offset = 5
+
+    subscription_with_metadata = SubscriptionWithMetadata(
+        EntityKey.EVENTS,
+        Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),
+        tick_upper_offset,
     )
+
+    task = ScheduledSubscriptionTask(timestamp=epoch, task=subscription_with_metadata)
 
     encoded = encoder.encode(task)
 
@@ -247,8 +352,10 @@ def test_subscription_task_encoder() -> None:
     assert encoded.value == (
         b"{"
         b'"timestamp":"1970-01-01T00:00:00",'
+        b'"entity":"events",'
         b'"task":{'
-        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}}'
+        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
+        b'"tick_upper_offset":5'
         b"}"
     )
 
