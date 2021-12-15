@@ -6,7 +6,7 @@ type ConfigType = "string" | "int" | "float";
 
 type Config = { key: ConfigKey; value: ConfigValue; type: ConfigType };
 
-type RowData = [ReactNode, ReactNode, ReactNode];
+type RowData = [ReactNode, ReactNode, ReactNode, ReactNode];
 
 type ConfigChange = {
   key: ConfigKey;

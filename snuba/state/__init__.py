@@ -192,6 +192,13 @@ def delete_config(key: str, user: Optional[Any] = None) -> None:
     return set_config(key, None, user=user)
 
 
+def get_uncached_config(key: str) -> Optional[Any]:
+    value = rds.hget(config_hash, key.encode("utf-8"))
+    if value is not None:
+        return numeric(value.decode("utf-8"))
+    return None
+
+
 def get_config_changes_legacy() -> Sequence[Any]:
     return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
 
