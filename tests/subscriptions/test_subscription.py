@@ -90,7 +90,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
     def test(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
@@ -104,14 +104,14 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID)
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
             creator.create(
                 subscription, self.timer,
             )
 
     def test_invalid_aggregation(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
             creator.create(
                 SnQLSubscriptionData(
@@ -125,7 +125,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_time_window(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
                 SnQLSubscriptionData(
@@ -168,7 +168,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_resolution(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
                 SnQLSubscriptionData(
@@ -188,7 +188,7 @@ class TestSessionsSubscriptionCreator:
     @pytest.mark.parametrize("subscription", TESTS_CREATE_SESSIONS)
     def test(self, subscription: SubscriptionData) -> None:
         dataset = get_dataset("sessions")
-        creator = SubscriptionCreator(dataset)
+        creator = SubscriptionCreator(dataset, EntityKey.SESSIONS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
@@ -257,19 +257,7 @@ class TestMetricsCountersSubscriptionCreator:
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE_METRICS)
     def test(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset)
-        # XXX (ahmed): hack to circumvent using the default entity of a dataset as the default
-        # entity for the metrics dataset is METRICS_SETS, and this subscription type is currently
-        # not supported. Will add a fix shortly that relies on passing the entity key rather
-        # than relying on fetching the default entity from a dataset
-        creator.entity_key = EntityKey.METRICS_COUNTERS
-        writable_storage = get_entity(creator.entity_key).get_writable_storage()
-        assert writable_storage is not None
-        creator.__partitioner = TopicSubscriptionDataPartitioner(
-            writable_storage.get_table_writer()
-            .get_stream_loader()
-            .get_default_topic_spec()
-        )
+        creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
@@ -285,7 +273,7 @@ class TestMetricsCountersSubscriptionCreator:
     def test_missing_conditions_for_groupby_clause(
         self, subscription: SubscriptionData
     ) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
         with raises(InvalidQueryException):
             creator.create(
                 subscription, self.timer,
@@ -294,7 +282,7 @@ class TestMetricsCountersSubscriptionCreator:
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
     def test(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         subscription = SnQLSubscriptionData(
             project_id=1,
             query="MATCH (events) SELECT count() AS count",
@@ -313,7 +301,9 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             == subscription
         )
 
-        SubscriptionDeleter(self.dataset, identifier.partition).delete(identifier.uuid)
+        SubscriptionDeleter(self.entity_key, identifier.partition).delete(
+            identifier.uuid
+        )
         assert (
             RedisSubscriptionDataStore(
                 redis_client, self.entity_key, identifier.partition,
