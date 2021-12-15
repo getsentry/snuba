@@ -72,7 +72,6 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-        capture_tracing_data: bool = False,
     ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a single quick retry in case of
@@ -143,7 +142,6 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-        capture_tracing_data: bool = False,
     ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
@@ -308,6 +306,7 @@ class NativeDriverReader(Reader):
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
         robust: bool = False,
+        capture_tracing_data: bool = False,
     ) -> Result:
         settings = {**settings} if settings is not None else {}
 
