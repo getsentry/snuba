@@ -124,7 +124,7 @@ def set_config(
         enc_original_value = rds.hget(config_hash, key)
         if enc_original_value is not None and value is not None:
             original_value = get_typed_value(enc_original_value.decode("utf-8"))
-            if value == original_value:
+            if value == original_value and type(value) == type(original_value):
                 return
 
             if not force and type(value) != type(original_value):
