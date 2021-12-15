@@ -40,6 +40,8 @@ class TestState:
         state.set_config("test_int", 1)
         assert state.get_config("test_int") == 1
         state.set_config("test_int", 2)
+        state.set_config("test_int", "3")
+        assert state.get_config("test_int", 3)
         with pytest.raises(MismatchedTypeException):
             state.set_config("test_int", 0.1)
         with pytest.raises(MismatchedTypeException):
@@ -50,6 +52,9 @@ class TestState:
         state.set_config("test_float", 0.1)
         assert state.get_config("test_float") == 0.1
         state.set_config("test_float", 0.2)
+        state.set_config("test_float", "0.3")
+        assert state.get_config("test_float") == 0.3
+
         with pytest.raises(MismatchedTypeException):
             state.set_config("test_float", 1)
         with pytest.raises(MismatchedTypeException):
