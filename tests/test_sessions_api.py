@@ -286,13 +286,20 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "sessions"
 
-    def test_snql_with_sessions_entity_subscription(self) -> None:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "sessions/subscriptions",  # Only dataset in url
+            "sessions/sessions/subscriptions",  # dataset and entity in url
+        ],
+    )
+    def test_snql_with_sessions_entity_subscription(self, url: str) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
+                url,
                 data=json.dumps(
                     {
                         "project_id": 1,
