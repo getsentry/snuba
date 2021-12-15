@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Callable, Deque, Mapping, NamedTuple, Optional, Sequence, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple, cast
+from zlib import crc32
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
@@ -13,6 +14,7 @@ from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
+from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
@@ -21,7 +23,11 @@ from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
-from snuba.subscriptions.data import ScheduledSubscriptionTask
+from snuba.subscriptions.data import (
+    ScheduledSubscriptionTask,
+    SubscriptionTaskResult,
+    SubscriptionTaskResultFuture,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -38,6 +44,8 @@ def build_executor_consumer(
     max_concurrent_queries: int,
     auto_offset_reset: str,
     metrics: MetricsBackend,
+    # TODO: Should be removed once testing is done
+    override_result_topic: Optional[str] = None,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
@@ -124,11 +132,6 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         return Noop(commit)
 
 
-class SubscriptionResultFuture(NamedTuple):
-    message: Message[KafkaPayload]
-    future: Future[Tuple[Request, Result]]
-
-
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     """
     Decodes a scheduled subscription task from the Kafka payload, builds
@@ -141,7 +144,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         executor: ThreadPoolExecutor,
         max_concurrent_queries: int,
         metrics: MetricsBackend,
-        next_step: ProcessingStrategy[Future[Tuple[Request, Result]]],
+        next_step: ProcessingStrategy[SubscriptionTaskResult],
     ) -> None:
         self.__dataset = dataset
         self.__executor = executor
@@ -151,7 +154,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
 
-        self.__queue: Deque[SubscriptionResultFuture] = deque()
+        self.__queue: Deque[
+            Tuple[Message[KafkaPayload], SubscriptionTaskResultFuture]
+        ] = deque()
 
         self.__closed = False
 
@@ -190,18 +195,18 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def poll(self) -> None:
         while self.__queue:
-            if not self.__queue[0].future.done():
+            if not self.__queue[0][1].future.done():
                 break
 
-            result_future = self.__queue.popleft()
-
-            message, future = result_future
+            message, result_future = self.__queue.popleft()
 
             self.__next_step.submit(
                 Message(
                     message.partition,
                     message.offset,
-                    future,
+                    SubscriptionTaskResult(
+                        result_future.task, result_future.future.result()
+                    ),
                     message.timestamp,
                     message.next_offset,
                 )
@@ -221,12 +226,28 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         tick_upper_offset = task.task.tick_upper_offset
 
-        self.__queue.append(
-            SubscriptionResultFuture(
-                message,
-                self.__executor.submit(self.__execute_query, task, tick_upper_offset),
-            )
+        # We need to sample queries to ClickHouse while this is being rolled out
+        # as we don't want to duplicate every subscription query
+        executor_sample_rate = cast(
+            float, state.get_config("executor_sample_rate", 0.0)
         )
+        subscription_id = str(task.task.subscription.identifier)
+        should_execute = (
+            (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
+        ) < executor_sample_rate
+
+        if should_execute:
+            self.__queue.append(
+                (
+                    message,
+                    SubscriptionTaskResultFuture(
+                        task,
+                        self.__executor.submit(
+                            self.__execute_query, task, tick_upper_offset
+                        ),
+                    ),
+                )
+            )
 
     def close(self) -> None:
         self.__closed = True
@@ -246,17 +267,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
                 break
 
-            result_future = self.__queue.popleft()
+            message, result_future = self.__queue.popleft()
 
-            result_future.future.result(remaining)
-
-            message, future = result_future
+            subscription_task_result = SubscriptionTaskResult(
+                result_future.task, result_future.future.result(remaining)
+            )
 
             self.__next_step.submit(
                 Message(
                     message.partition,
                     message.offset,
-                    future,
+                    subscription_task_result,
                     message.timestamp,
                     message.next_offset,
                 )
