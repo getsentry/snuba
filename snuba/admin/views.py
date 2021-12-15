@@ -129,6 +129,16 @@ def configs() -> Response:
         )
 
 
+@application.route("/configs/<config_key>", methods=["DELETE"])
+def config(config_key: str) -> Response:
+    if request.method == "DELETE":
+        state.delete_config(config_key)
+        return Response("", 200)
+
+    # TODO: Editing existing config
+    raise NotImplementedError
+
+
 @application.route("/config_auditlog")
 def config_changes() -> Response:
     def serialize(
