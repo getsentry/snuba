@@ -357,6 +357,7 @@ class SubscriptableReference(Pattern[SubscriptableReferenceExpr]):
     If column_name and key arguments are provided, they have to match, otherwise they are ignored.
     """
 
+    table_name: Optional[Pattern[Optional[str]]] = None
     column_name: Optional[Pattern[str]] = None
     key: Optional[Pattern[str]] = None
 
@@ -365,6 +366,12 @@ class SubscriptableReference(Pattern[SubscriptableReferenceExpr]):
             return None
 
         result = MatchResult()
+
+        if self.table_name is not None:
+            partial_result = self.table_name.match(node.column.table_name)
+            if partial_result is None:
+                return None
+            result = result.merge(partial_result)
 
         if self.column_name is not None:
             partial_result = self.column_name.match(node.column.column_name)

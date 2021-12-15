@@ -1,10 +1,17 @@
-from typing import Optional
+from typing import Any, List, MutableMapping, Optional
 
 import simplejson as json
-from flask import Flask, Response, request
+from flask import Flask, Response, jsonify, make_response, request
 
 from snuba import state
 from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.system_queries import (
+    InvalidNodeError,
+    InvalidStorageError,
+    NonExistentSystemQuery,
+    SystemQuery,
+    run_system_query_on_host_by_name,
+)
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -22,6 +29,39 @@ def root() -> Response:
 @application.route("/health")
 def health() -> Response:
     return Response("OK", 200)
+
+
+@application.route("/clickhouse_queries")
+def clickhouse_queries() -> Response:
+    res = [q.to_json() for q in SystemQuery.all_queries()]
+    return make_response(jsonify(res), 200)
+
+
+# Sample cURL command:
+#
+# curl -X POST \
+#  -d '{"query_name": "ActivePartitions"}' \
+#  -H 'Content-Type: application/json' \
+#  http://localhost:1219/run_clickhouse_system_query
+@application.route("/run_clickhouse_system_query", methods=["POST"])
+def clickhouse_system_query() -> Response:
+    req = request.get_json()
+    try:
+        results, columns = run_system_query_on_host_by_name(
+            req.get("host"), req.get("port"), req.get("storage"), req.get("query_name"),
+        )
+        res: MutableMapping[str, Any] = {}
+        rows: List[List[str]] = []
+        res["column_names"] = [name for name, _ in columns]
+        res["rows"] = rows
+        for row in results:
+            res["rows"].append([str(col) for col in row])
+
+        return make_response(jsonify(res), 200)
+    except (InvalidNodeError, NonExistentSystemQuery, InvalidStorageError) as err:
+        return make_response(
+            jsonify({"error": err.__class__.__name__, "data": err.extra_data}), 400
+        )
 
 
 @application.route("/configs", methods=["GET", "POST"])
