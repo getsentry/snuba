@@ -1,14 +1,10 @@
-import datetime
-
 import pytest
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.conditions import binary_condition
 from snuba.query.data_source.join import JoinRelationship, JoinType
-from snuba.query.expressions import Column, Literal
 from snuba.query.snql.parser import parse_snql_query
 
 
@@ -19,26 +15,6 @@ def build_cond(tn: str) -> str:
 
 
 added_condition = build_cond("")
-required_condition = binary_condition(
-    "and",
-    binary_condition(
-        "equals", Column("_snuba_project_id", None, "project_id"), Literal(None, 1),
-    ),
-    binary_condition(
-        "and",
-        binary_condition(
-            "greaterOrEquals",
-            Column("_snuba_timestamp", None, "timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-        ),
-        binary_condition(
-            "less",
-            Column("_snuba_timestamp", None, "timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-        ),
-    ),
-)
-
 
 test_cases = [
     pytest.param(
