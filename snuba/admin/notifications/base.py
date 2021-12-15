@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Any, Dict, MutableMapping, Optional, Union
 
 from snuba import settings
-from snuba.admin.slack.client import SlackClient
-from snuba.admin.slack.utils import build_blocks
+from snuba.admin.notifications.slack.client import SlackClient
+from snuba.admin.notifications.slack.utils import build_blocks
 
 
 class NotificationBase(ABC):
