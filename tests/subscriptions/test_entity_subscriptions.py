@@ -8,6 +8,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
+    MetricsCountersSubscription,
     SessionsSubscription,
     TransactionsSubscription,
 )
@@ -33,6 +34,18 @@ TESTS = [
         {"data_dict": {}},
         InvalidQueryException,
         id="Sessions subscription",
+    ),
+    pytest.param(
+        MetricsCountersSubscription,
+        {"data_dict": {"organization": 1}},
+        None,
+        id="Metrics counters subscription",
+    ),
+    pytest.param(
+        MetricsCountersSubscription,
+        {"data_dict": {}},
+        InvalidQueryException,
+        id="Metrics counters subscription",
     ),
 ]
 
@@ -86,6 +99,16 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         ],
         True,
         id="Sessions subscription of type SNQL",
+    ),
+    pytest.param(
+        MetricsCountersSubscription(data_dict={"organization": 1}),
+        [
+            binary_condition(
+                ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 1),
+            ),
+        ],
+        True,
+        id="Metrics counters subscription of type SNQL",
     ),
 ]
 
