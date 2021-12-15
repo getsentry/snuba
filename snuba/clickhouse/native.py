@@ -30,7 +30,6 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 class ClickhouseResult:
     results: Sequence[Any] = field(default_factory=list)
     meta: Sequence[Any] | None = None
-    profile: Mapping[str, Any] | None = None
 
 
 class ClickhousePool(object):
@@ -103,24 +102,14 @@ class ClickhousePool(object):
                         types_check=types_check,
                         columnar=columnar,
                     )
-                    profile_data = {
-                        "bytes": conn.last_query.profile_info.bytes,
-                        "blocks": conn.last_query.profile_info.blocks,
-                        "rows": conn.last_query.profile_info.rows,
-                        "elapsed": conn.last_query.elapsed,
-                    }
                     if with_column_types:
                         result = ClickhouseResult(
-                            results=result_data[0],
-                            meta=result_data[1],
-                            profile=profile_data,
+                            results=result_data[0], meta=result_data[1],
                         )
                     else:
                         if not isinstance(result_data, (list, tuple)):
                             result_data = [result_data]
-                        result = ClickhouseResult(
-                            results=result_data, profile=profile_data
-                        )
+                        result = ClickhouseResult(results=result_data)
 
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
@@ -280,7 +269,6 @@ class NativeDriverReader(Reader):
         """
         meta = result.meta if result.meta is not None else []
         data = result.results
-        profile = result.profile if result.profile else {}
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent
@@ -303,10 +291,9 @@ class NativeDriverReader(Reader):
                 "data": data,
                 "meta": meta,
                 "totals": totals,
-                "profile": profile,
             }
         else:
-            new_result = {"data": data, "meta": meta, "profile": profile}
+            new_result = {"data": data, "meta": meta}
 
         transform_column_types(new_result)
 
