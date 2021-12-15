@@ -56,6 +56,9 @@ DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.process_message": 0.1,
 }
 
+CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
+CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
+
 # Redis Options
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 

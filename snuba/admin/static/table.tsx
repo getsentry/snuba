@@ -72,6 +72,33 @@ const thStyle = {
 const tdStyle = {
   ...border,
   padding: 10,
+  position: "relative" as const,
 };
 
-export { Table };
+function EditableTableCell(props: {
+  value: string | number;
+  onChange: (value: string) => void;
+}) {
+  const { value, onChange } = props;
+
+  return (
+    <textarea
+      value={value}
+      onChange={(evt) => onChange(evt.target.value)}
+      spellCheck={false}
+      style={textAreaStyle}
+    />
+  );
+}
+
+const textAreaStyle = {
+  position: "absolute" as const,
+  padding: 10,
+  left: 0,
+  right: 0,
+  top: 0,
+  bottom: 0,
+  width: "calc(100% - 24px)",
+};
+
+export { Table, EditableTableCell };

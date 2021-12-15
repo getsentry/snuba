@@ -12,6 +12,7 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
+    Optional,
     Sequence,
     Set,
     Text,
@@ -39,6 +40,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, ConnectionId
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
+from snuba.datasets.entity import Entity
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -61,7 +63,7 @@ from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException
-from snuba.web.converters import DatasetConverter
+from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -163,6 +165,7 @@ application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
+application.url_map.converters["entity"] = EntityConverter
 
 
 @application.errorhandler(InvalidJsonRequestException)
@@ -460,13 +463,24 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
     )
 
 
+@application.route("/<dataset:dataset>/<entity:entity>/subscriptions", methods=["POST"])
+# ToDo(ahmed): Deprecate this endpoint
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
-def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
-    entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+def create_subscription(
+    *, dataset: Dataset, timer: Timer, entity: Optional[Entity] = None
+) -> RespTuple:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
+        entity = dataset.get_default_entity()
+    entity_key = ENTITY_NAME_LOOKUP[entity]
 
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
-    identifier = SubscriptionCreator(dataset).create(subscription, timer)
+    identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),
         202,
@@ -475,10 +489,25 @@ def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
 
 
 @application.route(
+    "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
+    methods=["DELETE"],
+)
+# ToDo(ahmed): Deprecate this endpoint
+@application.route(
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
-def delete_subscription(*, dataset: Dataset, partition: int, key: str) -> RespTuple:
-    SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
+def delete_subscription(
+    *, dataset: Dataset, partition: int, key: str, entity: Optional[Entity] = None
+) -> RespTuple:
+    if entity:
+        if entity not in dataset.get_all_entities():
+            raise InvalidSubscriptionError(
+                "Invalid subscription dataset and entity combination"
+            )
+    else:
+        entity = dataset.get_default_entity()
+    entity_key = ENTITY_NAME_LOOKUP[entity]
+    SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
 
