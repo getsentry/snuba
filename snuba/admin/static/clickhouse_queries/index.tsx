@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
+import { Table } from "../table";
 import { COLORS } from "../theme";
 
 import {
@@ -140,28 +141,10 @@ function ClickhouseQueries(props: { api: Client }) {
               <tr key={queryResult.timestamp}>
                 <td>{queryResult.input_query}</td>
                 <td>
-                  <table style={tableStyle}>
-                    <thead style={headerStyle}>
-                      <tr>
-                        {queryResult.column_names.map((col) => (
-                          <th key={queryResult.timestamp + col}>
-                            <strong>{col}</strong>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {queryResult.rows.map((row, row_idx) => (
-                        <tr>
-                          {row.map((datum, col_idx) => (
-                            <td key={queryResult.timestamp + row_idx + col_idx}>
-                              {datum}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <Table
+                    headerData={queryResult.column_names}
+                    rowData={queryResult.rows}
+                  />
                 </td>
               </tr>
             ))}
