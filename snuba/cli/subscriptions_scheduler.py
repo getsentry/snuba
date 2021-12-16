@@ -1,5 +1,6 @@
 import logging
 import signal
+from contextlib import closing
 from typing import Any, Optional
 
 import click
@@ -143,8 +144,10 @@ def subscriptions_scheduler(
 
     def handler(signum: int, frame: Any) -> None:
         processor.signal_shutdown()
+        producer.close()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    processor.run()
+    with closing(producer):
+        processor.run()
