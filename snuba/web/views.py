@@ -124,7 +124,7 @@ def check_clickhouse() -> bool:
 
         for (cluster_key, cluster) in unique_clusters.items():
             clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-            clickhouse_tables = clickhouse.execute("show tables")
+            clickhouse_tables = clickhouse.execute("show tables").results
             known_table_names = connection_grouped_table_names[cluster_key]
             logger.debug(f"checking for {known_table_names} on {cluster_key}")
             for table in known_table_names:

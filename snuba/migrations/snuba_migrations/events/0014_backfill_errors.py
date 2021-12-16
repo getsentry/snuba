@@ -147,7 +147,7 @@ def backfill_errors(logger: logging.Logger) -> None:
                 ORDER BY timestamp ASC, project_id ASC
                 LIMIT 1
             """
-        )[0]
+        ).results[0]
 
         logger.info("Error data was found")
     except IndexError:
@@ -199,7 +199,7 @@ def backfill_errors(logger: logging.Logger) -> None:
             ORDER BY c DESC, partition
             """,
             {"database": database_name, "table": errors_table_name},
-        )
+        ).results
 
         for partition, _count in partitions:
             clickhouse.execute(
