@@ -176,6 +176,7 @@ def test_subscription_task_result_encoder() -> None:
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
+    assert payload["entity"] == EntityKey.EVENTS.value
 
 
 def test_sessions_subscription_task_result_encoder() -> None:
@@ -238,6 +239,7 @@ def test_sessions_subscription_task_result_encoder() -> None:
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
+    assert payload["entity"] == EntityKey.SESSIONS.value
 
 
 METRICS_CASES = [
@@ -318,6 +320,7 @@ def test_metrics_subscription_task_result_encoder(
     assert payload["request"] == request.body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
+    assert payload["entity"] == entity_key.value
 
 
 def test_subscription_task_encoder() -> None:
