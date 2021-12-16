@@ -129,6 +129,24 @@ def configs() -> Response:
         )
 
 
+@application.route("/configs/<config_key>", methods=["DELETE"])
+def config(config_key: str) -> Response:
+    if request.method == "DELETE":
+        user = request.headers.get("X-Goog-Authenticated-User-Email")
+        state.delete_config(config_key, user=user)
+
+        notification_client.notify(
+            RuntimeConfigAction.REMOVED,
+            {"option": config_key, "old": None, "new": None},
+            user,
+        )
+
+        return Response("", 200)
+
+    # TODO: Editing existing config
+    raise NotImplementedError
+
+
 @application.route("/config_auditlog")
 def config_changes() -> Response:
     def serialize(

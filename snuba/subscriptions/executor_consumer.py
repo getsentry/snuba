@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple, cast
 from zlib import crc32
 
 from arroyo import Message, Partition, Topic
+from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
@@ -22,7 +23,10 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
 from snuba.request import Request
-from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
+from snuba.subscriptions.codecs import (
+    SubscriptionScheduledTaskEncoder,
+    SubscriptionTaskResultEncoder,
+)
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     SubscriptionTaskResult,
@@ -88,6 +92,8 @@ def build_executor_consumer(
             result_topic_spec,
         ), "All entities must have same scheduled and result topics"
 
+    executor = ThreadPoolExecutor(max_concurrent_queries)
+
     return StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
@@ -97,11 +103,19 @@ def build_executor_consumer(
             ),
         ),
         Topic(scheduled_topic_spec.topic_name),
-        SubscriptionExecutorProcessingFactory(),
+        SubscriptionExecutorProcessingFactory(
+            executor,
+            dataset,
+            # If there are max_concurrent_queries + 10 pending futures in the queue,
+            # we will start raising MessageRejected to slow down the consumer as
+            # it means our executor cannot keep up
+            max_concurrent_queries + 10,
+            metrics,
+        ),
     )
 
 
-class Noop(ProcessingStrategy[KafkaPayload]):
+class Noop(ProcessingStrategy[SubscriptionTaskResult]):
     """
     Placeholder.
     """
@@ -112,7 +126,7 @@ class Noop(ProcessingStrategy[KafkaPayload]):
     def poll(self) -> None:
         pass
 
-    def submit(self, message: Message[KafkaPayload]) -> None:
+    def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         self.__commit({message.partition: Position(message.offset, message.timestamp)})
 
     def close(self) -> None:
@@ -126,10 +140,28 @@ class Noop(ProcessingStrategy[KafkaPayload]):
 
 
 class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
+    def __init__(
+        self,
+        executor: ThreadPoolExecutor,
+        dataset: Dataset,
+        buffer_size: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__executor = executor
+        self.__dataset = dataset
+        self.__buffer_size = buffer_size
+        self.__metrics = metrics
+
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
-        return Noop(commit)
+        return ExecuteQuery(
+            self.__dataset,
+            self.__executor,
+            self.__buffer_size,
+            self.__metrics,
+            Noop(commit),
+        )
 
 
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
@@ -142,13 +174,13 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self,
         dataset: Dataset,
         executor: ThreadPoolExecutor,
-        max_concurrent_queries: int,
+        buffer_size: int,
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
     ) -> None:
         self.__dataset = dataset
         self.__executor = executor
-        self.__max_concurrent_queries = max_concurrent_queries
+        self.__buffer_size = buffer_size
         self.__metrics = metrics
         self.__next_step = next_step
 
@@ -219,7 +251,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         # Tell the consumer to pause until we have removed some futures from
         # the queue
-        if len(self.__queue) >= self.__max_concurrent_queries:
+        if len(self.__queue) >= self.__buffer_size:
             raise MessageRejected
 
         task = self.__encoder.decode(message.payload)
@@ -286,3 +318,74 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         remaining = timeout - (time.time() - start) if timeout is not None else None
         self.__next_step.close()
         self.__next_step.join(remaining)
+
+
+class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
+    """
+    Gets a SubscriptionTaskResult from the ExecuteQuery processor, encodes and produces
+    the results to the subscription result topic then commits offsets.
+    """
+
+    def __init__(
+        self,
+        producer: Producer[KafkaPayload],
+        result_topic: str,
+        commit: Callable[[Mapping[Partition, Position]], None],
+    ):
+        self.__producer = producer
+        self.__result_topic = Topic(result_topic)
+        self.__commit = commit
+
+        self.__encoder = SubscriptionTaskResultEncoder()
+
+        self.__queue: Deque[
+            Tuple[Message[SubscriptionTaskResult], Future[Message[KafkaPayload]]]
+        ] = deque()
+
+        self.__max_buffer_size = 10000
+        self.__closed = False
+
+    def poll(self) -> None:
+        while self.__queue:
+            message, future = self.__queue[0]
+
+            if not future.done():
+                break
+
+            self.__queue.popleft()
+            self.__commit(
+                {message.partition: Position(message.offset, message.timestamp)}
+            )
+
+    def submit(self, message: Message[SubscriptionTaskResult]) -> None:
+        assert not self.__closed
+
+        if len(self.__queue) >= self.__max_buffer_size:
+            raise MessageRejected
+
+        encoded = self.__encoder.encode(message.payload)
+        self.__queue.append(
+            (message, self.__producer.produce(self.__result_topic, encoded))
+        )
+
+    def close(self) -> None:
+        self.__closed = True
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        start = time.time()
+        while self.__queue:
+            remaining = timeout - (time.time() - start) if timeout is not None else None
+            if remaining is not None and remaining <= 0:
+                logger.warning(f"Timed out with {len(self.__queue)} futures in queue")
+                break
+
+            message, future = self.__queue.popleft()
+
+            future.result(remaining)
+
+            self.__commit(
+                {message.partition: Position(message.offset, message.timestamp)}
+            )
