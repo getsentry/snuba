@@ -32,14 +32,14 @@ class SingleTableBulkLoader(BulkLoader):
         self.__clickhouse = clickhouse
 
     def __validate_table(self, ignore_existing_data: bool) -> None:
-        clickhouse_tables = self.__clickhouse.execute("show tables")
+        clickhouse_tables = self.__clickhouse.execute("show tables").results
         if (self.__dest_table,) not in clickhouse_tables:
             raise ValueError("Destination table %s does not exists" % self.__dest_table)
 
         if not ignore_existing_data:
             table_content = self.__clickhouse.execute(
                 "select count(*) from %s" % self.__dest_table
-            )
+            ).results
             if table_content != [(0,)]:
                 raise ValueError("Destination Table is not empty")
 

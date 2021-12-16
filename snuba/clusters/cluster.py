@@ -295,7 +295,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
                 ClickhouseClientSettings.QUERY
             ).execute(
                 f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
-            )
+            ).results
         ]
 
 

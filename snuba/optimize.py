@@ -33,7 +33,7 @@ def get_partitions_to_optimize(
     table: str,
     before: Optional[datetime] = None,
 ) -> Sequence[util.Part]:
-    engine = clickhouse.execute(
+    response = clickhouse.execute(
         """
         SELECT engine
         FROM system.tables
@@ -42,14 +42,14 @@ def get_partitions_to_optimize(
         {"database": database, "table": table},
     )
 
-    if not engine:
+    if not response.results:
         logger.warning(
             "Table %s.%s doesn't exist on %s:%s"
             % (database, table, clickhouse.host, clickhouse.port)
         )
         return []
 
-    if engine[0][0].startswith("Replicated"):
+    if response.results[0][0].startswith("Replicated"):
         is_leader = clickhouse.execute(
             """
             SELECT is_leader
@@ -58,9 +58,10 @@ def get_partitions_to_optimize(
             """,
             {"database": database, "table": table},
         )
-
+        if not is_leader:
+            return []
         # response: [(0,)] for non-leader or [(1,)] for leader
-        if not (len(is_leader) == 1 and is_leader[0][0]):
+        if not (len(is_leader.results) == 1 and is_leader.results[0][0]):
             return []
 
     active_parts = clickhouse.execute(
@@ -78,13 +79,12 @@ def get_partitions_to_optimize(
         """,
         {"database": database, "table": table},
     )
-
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     part_format = schema.get_part_format()
     assert part_format is not None
 
-    parts = [util.decode_part_str(part, part_format) for part, count in active_parts]
+    parts = [util.decode_part_str(part, part_format) for part, count in active_parts.results]
 
     if before:
         parts = [
