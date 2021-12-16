@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Tuple, Type, cast
+from typing import Dict, Optional, Sequence, Type
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -18,6 +18,10 @@ class InvalidNodeError(SerializableException):
 
 
 class InvalidStorageError(SerializableException):
+    pass
+
+
+class InvalidResultError(SerializableException):
     pass
 
 
@@ -99,7 +103,7 @@ def run_system_query_on_host_by_name(
     clickhouse_port: int,
     storage_name: str,
     system_query_name: str,
-) -> Tuple[Sequence[Any], Sequence[Tuple[str, str]]]:
+) -> ClickhouseResult:
     query = SystemQuery.from_name(system_query_name)
 
     if not query:
@@ -132,4 +136,4 @@ def run_system_query_on_host_by_name(
     )
     query_result = connection.execute(query=query.sql, with_column_types=True)
     connection.close()
-    return cast(Tuple[Sequence[Any], Sequence[Tuple[str, str]]], query_result,)
+    return query_result

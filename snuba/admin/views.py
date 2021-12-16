@@ -1,4 +1,4 @@
-from typing import Any, List, MutableMapping, Optional
+from typing import Any, List, MutableMapping, Optional, cast
 
 import simplejson as json
 from flask import Flask, Response, jsonify, make_response, request
@@ -7,6 +7,7 @@ from snuba import state
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.system_queries import (
     InvalidNodeError,
+    InvalidResultError,
     InvalidStorageError,
     NonExistentSystemQuery,
     SystemQuery,
@@ -50,18 +51,26 @@ def clickhouse_queries() -> Response:
 def clickhouse_system_query() -> Response:
     req = request.get_json()
     try:
-        results, columns = run_system_query_on_host_by_name(
+        result = run_system_query_on_host_by_name(
             req.get("host"), req.get("port"), req.get("storage"), req.get("query_name"),
         )
-        res: MutableMapping[str, Any] = {}
         rows: List[List[str]] = []
-        res["column_names"] = [name for name, _ in columns]
-        res["rows"] = rows
-        for row in results:
-            res["rows"].append([str(col) for col in row])
+        rows, columns = cast(List[List[str]], result.results), result.meta
 
-        return make_response(jsonify(res), 200)
-    except (InvalidNodeError, NonExistentSystemQuery, InvalidStorageError) as err:
+        if columns:
+            res: MutableMapping[str, Any] = {}
+            res["column_names"] = [name for name, _ in columns]
+            res["rows"] = [[str(col) for col in row] for row in rows]
+
+            return make_response(jsonify(res), 200)
+        else:
+            raise InvalidResultError
+    except (
+        InvalidNodeError,
+        NonExistentSystemQuery,
+        InvalidStorageError,
+        InvalidResultError,
+    ) as err:
         return make_response(
             jsonify({"error": err.__class__.__name__, "data": err.extra_data}), 400
         )
