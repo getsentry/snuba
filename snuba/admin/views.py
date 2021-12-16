@@ -12,6 +12,7 @@ from snuba.admin.clickhouse.system_queries import (
     NonExistentSystemQuery,
     SystemQuery,
     run_system_query_on_host_by_name,
+    run_system_query_on_host_with_sql,
 )
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigLogClient
 from snuba.admin.runtime_config import (
@@ -50,30 +51,60 @@ def clickhouse_queries() -> Response:
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
     req = request.get_json()
+
     try:
-        result = run_system_query_on_host_by_name(
-            req.get("host"), req.get("port"), req.get("storage"), req.get("query_name"),
-        )
-        rows: List[List[str]] = []
+        host = req["host"]
+        port = req["port"]
+        storage = req["storage"]
+    except KeyError:
+        return make_response(jsonify({"error": "Invalid request"}), 400)
+
+    is_predefined_query = req.get("query_name") is not None
+
+    if is_predefined_query:
+        try:
+            result = run_system_query_on_host_by_name(
+                host, port, storage, req.get("query_name"),
+            )
+            rows: List[List[str]] = []
+            rows, columns = cast(List[List[str]], result.results), result.meta
+
+            if columns:
+                res: MutableMapping[str, Any] = {}
+                res["column_names"] = [name for name, _ in columns]
+                res["rows"] = [[str(col) for col in row] for row in rows]
+
+                return make_response(jsonify(res), 200)
+            else:
+                raise InvalidResultError
+        except (
+            InvalidNodeError,
+            NonExistentSystemQuery,
+            InvalidStorageError,
+            InvalidResultError,
+        ) as err:
+            return make_response(
+                jsonify({"error": err.__class__.__name__, "data": err.extra_data}), 400
+            )
+
+    else:
+        try:
+            raw_sql = req["sql"]
+        except KeyError:
+            return make_response(jsonify({"error": "Invalid request"}), 400)
+
+        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
+        rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
         if columns:
-            res: MutableMapping[str, Any] = {}
+            res = {}
             res["column_names"] = [name for name, _ in columns]
             res["rows"] = [[str(col) for col in row] for row in rows]
 
             return make_response(jsonify(res), 200)
-        else:
-            raise InvalidResultError
-    except (
-        InvalidNodeError,
-        NonExistentSystemQuery,
-        InvalidStorageError,
-        InvalidResultError,
-    ) as err:
-        return make_response(
-            jsonify({"error": err.__class__.__name__, "data": err.extra_data}), 400
-        )
+
+    return make_response(jsonify({"error": "Something went wrong"}), 400)
 
 
 @application.route("/configs", methods=["GET", "POST"])
