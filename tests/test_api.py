@@ -2168,21 +2168,15 @@ class TestApi(SimpleAPITest):
 
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
+    entity_key = "events"
 
-    @pytest.mark.parametrize(
-        "url",
-        [
-            "events/subscriptions",  # Only dataset in url
-            "events/events/subscriptions",  # dataset and entity in url
-        ],
-    )
-    def test(self, url: str) -> None:
+    def test(self) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                url,
+                f"{self.dataset_name}/{self.entity_key}/subscriptions",
                 data=json.dumps(
                     {
                         "project_id": 1,
@@ -2246,7 +2240,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                f"events/{entity_key.value}/subscriptions",
+                f"{self.dataset_name}/{entity_key.value}/subscriptions",
                 data=json.dumps(
                     {
                         "project_id": 1,
@@ -2269,7 +2263,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
     def test_time_error(self) -> None:
         resp = self.app.post(
-            "{}/subscriptions".format(self.dataset_name),
+            "{}/{}/subscriptions".format(self.dataset_name, self.entity_key),
             data=json.dumps(
                 {
                     "project_id": 1,
@@ -2295,7 +2289,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
+                "{}/{}/subscriptions".format(self.dataset_name, self.entity_key),
                 data=json.dumps(
                     {
                         "project_id": 1,
@@ -2320,16 +2314,9 @@ class TestDeleteSubscriptionApi(BaseApiTest):
     dataset_name = "events"
     dataset = get_dataset(dataset_name)
 
-    @pytest.mark.parametrize(
-        "url",
-        [
-            "events/subscriptions",  # Only dataset in url
-            "events/events/subscriptions",  # dataset and entity in url
-        ],
-    )
-    def test(self, url: str) -> None:
+    def test(self) -> None:
         resp = self.app.post(
-            url,
+            f"{self.dataset_name}/events/subscriptions",
             data=json.dumps(
                 {
                     "project_id": 1,
@@ -2355,7 +2342,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         )
 
         resp = self.app.delete(
-            f"{self.dataset_name}/subscriptions/{data['subscription_id']}"
+            f"{self.dataset_name}/{entity_key.value}/subscriptions/{data['subscription_id']}"
         )
         assert resp.status_code == 202, resp
         assert (

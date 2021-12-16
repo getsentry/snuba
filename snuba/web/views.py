@@ -12,7 +12,6 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
-    Optional,
     Sequence,
     Set,
     Text,
@@ -464,21 +463,13 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 
 
 @application.route("/<dataset:dataset>/<entity:entity>/subscriptions", methods=["POST"])
-# ToDo(ahmed): Deprecate this endpoint
-@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
-def create_subscription(
-    *, dataset: Dataset, timer: Timer, entity: Optional[Entity] = None
-) -> RespTuple:
-    if entity:
-        if entity not in dataset.get_all_entities():
-            raise InvalidSubscriptionError(
-                "Invalid subscription dataset and entity combination"
-            )
-    else:
-        entity = dataset.get_default_entity()
+def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> RespTuple:
+    if entity not in dataset.get_all_entities():
+        raise InvalidSubscriptionError(
+            "Invalid subscription dataset and entity combination"
+        )
     entity_key = ENTITY_NAME_LOOKUP[entity]
-
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
     return (
@@ -492,20 +483,13 @@ def create_subscription(
     "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
     methods=["DELETE"],
 )
-# ToDo(ahmed): Deprecate this endpoint
-@application.route(
-    "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
-)
 def delete_subscription(
-    *, dataset: Dataset, partition: int, key: str, entity: Optional[Entity] = None
+    *, dataset: Dataset, partition: int, key: str, entity: Entity
 ) -> RespTuple:
-    if entity:
-        if entity not in dataset.get_all_entities():
-            raise InvalidSubscriptionError(
-                "Invalid subscription dataset and entity combination"
-            )
-    else:
-        entity = dataset.get_default_entity()
+    if entity not in dataset.get_all_entities():
+        raise InvalidSubscriptionError(
+            "Invalid subscription dataset and entity combination"
+        )
     entity_key = ENTITY_NAME_LOOKUP[entity]
     SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
