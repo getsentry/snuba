@@ -118,6 +118,7 @@ class Reader(ABC):
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
         robust: bool = False,
+        capture_trace: bool = False,
     ) -> Result:
         """Execute a query."""
         raise NotImplementedError
