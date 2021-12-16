@@ -176,10 +176,10 @@ def test_execute_query_strategy() -> None:
 
     assert next_step.submit.call_args[0][0].timestamp == message.timestamp
     assert next_step.submit.call_args[0][0].offset == message.offset
-    assert next_step.submit.call_args[0][0].payload.result[1] == {
-        "data": [{"count()": 0}],
-        "meta": [{"name": "count()", "type": "UInt64"}],
-    }
+
+    result = next_step.submit.call_args[0][0].payload.result
+    assert result[1]["data"] == [{"count()": 0}]
+    assert result[1]["meta"] == [{"name": "count()", "type": "UInt64"}]
 
     strategy.close()
     strategy.join()

@@ -90,7 +90,7 @@ class Runner:
                     "group": migration_key.group.value,
                     "migration_id": migration_key.migration_id,
                 },
-            )
+            ).results
 
             if data:
                 status, timestamp = data[0]
@@ -331,7 +331,7 @@ class Runner:
                 "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
             },
-        )
+        ).results
         if result:
             (version,) = result[0]
             return int(version) + 1
@@ -356,7 +356,7 @@ class Runner:
         try:
             for row in self.__connection.execute(
                 f"SELECT group, migration_id, status FROM {self.__table_name} FINAL WHERE group IN {migration_groups}"
-            ):
+            ).results:
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
                     status_name

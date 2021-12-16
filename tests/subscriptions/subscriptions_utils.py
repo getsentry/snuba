@@ -1,6 +1,8 @@
 from datetime import timedelta
+from typing import Optional
 from uuid import UUID
 
+from snuba.datasets.entities import EntityKey
 from snuba.subscriptions.data import (
     PartitionId,
     SnQLSubscriptionData,
@@ -8,10 +10,9 @@ from snuba.subscriptions.data import (
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.entity_subscription import (
+    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
     EntitySubscription,
     EventsSubscription,
-    MetricsCountersSubscription,
-    SessionsSubscription,
 )
 
 UUIDS = [
@@ -34,10 +35,11 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
     )
 
 
-def create_entity_subscription(dataset_name: str = "events") -> EntitySubscription:
-    if dataset_name == "sessions":
-        return SessionsSubscription(data_dict={"organization": 1})
-    elif dataset_name == "metrics":
-        return MetricsCountersSubscription(data_dict={"organization": 1})
+def create_entity_subscription(
+    entity_key: EntityKey = EntityKey.EVENTS, org_id: Optional[int] = None
+) -> EntitySubscription:
+    if org_id:
+        data_dict = {"organization": org_id}
     else:
-        return EventsSubscription(data_dict={})
+        data_dict = {}
+    return ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](data_dict=data_dict)

@@ -246,7 +246,7 @@ def perform_select_query(
     limit_clause = (" LIMIT " + limit) if limit else ""
     full_query = select_clause + from_clause + where_clause + limit_clause
 
-    return connection.execute(full_query)
+    return connection.execute(full_query).results
 
 
 def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
