@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-import { COLORS } from "../theme";
 
 import {
   ClickhouseNodeData,
@@ -129,54 +128,19 @@ function ClickhouseQueries(props: { api: Client }) {
       </form>
       <div>
         <h2>Query results</h2>
-        <table style={tableStyle}>
-          <thead style={headerStyle}>
-            <tr>
-              <th>Query</th>
-              <th>Response</th>
-            </tr>
-          </thead>
-          <tbody>
-            {queryResultHistory.map((queryResult) => (
-              <tr key={queryResult.timestamp}>
-                <td>{queryResult.input_query}</td>
-                <td>
-                  <Table
-                    headerData={queryResult.column_names}
-                    rowData={queryResult.rows}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Table
+          headerData={["Query", "Response"]}
+          rowData={queryResultHistory.map((queryResult) => [
+            <span>{queryResult.input_query}</span>,
+            <Table
+              headerData={queryResult.column_names}
+              rowData={queryResult.rows}
+            />,
+          ])}
+        />
       </div>
     </div>
   );
 }
-
-const border = {
-  border: `1px solid ${COLORS.TABLE_BORDER}`,
-};
-
-const tableStyle = {
-  ...border,
-  borderCollapse: "collapse" as const,
-  width: "100%",
-  fontSize: 16,
-  marginBottom: 20,
-};
-
-const headerStyle = {
-  backgroundColor: COLORS.SNUBA_BLUE,
-  color: "white",
-};
-
-const thStyle = {
-  ...border,
-  fontWeight: 600,
-  padding: 10,
-  textAlign: "left" as const,
-};
 
 export default ClickhouseQueries;
