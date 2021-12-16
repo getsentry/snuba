@@ -10,6 +10,7 @@ import { ClickhouseNodeData } from "./clickhouse_queries/types";
 interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
+  deleteConfig: (key: ConfigKey) => Promise<void>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
 }
@@ -38,6 +39,19 @@ function Client() {
             let errMsg = err?.error || "Could not create config";
             throw new Error(errMsg);
           });
+        }
+      });
+    },
+    deleteConfig: (key: ConfigKey) => {
+      const url = baseUrl + "configs/" + encodeURIComponent(key);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+      }).then((res) => {
+        if (res.ok) {
+          return;
+        } else {
+          throw new Error("Could not delete config");
         }
       });
     },
