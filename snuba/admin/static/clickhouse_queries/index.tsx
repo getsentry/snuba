@@ -64,7 +64,6 @@ function ClickhouseQueries(props: { api: Client }) {
     props.api.executeQuery(query as QueryRequest).then((result) => {
       result.input_query = `${query.query_name}(${query.storage},${query.host}:${query.port})`;
       setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
-      console.log(queryResultHistory);
     });
   }
 

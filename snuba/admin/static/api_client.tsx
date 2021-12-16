@@ -70,18 +70,11 @@ function Client() {
     },
     executeQuery: (query: QueryRequest) => {
       const url = baseUrl + "run_clickhouse_system_query";
-      return fetch(
-        new Request(url, {
-          method: "POST",
-          body: new Blob([JSON.stringify(query)], { type: "application/json" }),
-        })
-      )
-        .then((resp) => resp.json())
-        .then((resp: QueryResult) => {
-          // used for keying in history
-          resp.timestamp = Date.now();
-          return resp;
-        });
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => resp.json());
     },
   };
 }

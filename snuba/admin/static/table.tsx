@@ -9,7 +9,7 @@ type TableProps = {
 };
 
 function Table(props: TableProps) {
-  let { headerData, rowData, columnWidths } = props;
+  const { headerData, rowData, columnWidths } = props;
 
   const autoColumnWidths = Array(headerData.length).fill(1);
   const notEmptyColumnWidths = columnWidths ?? autoColumnWidths;
