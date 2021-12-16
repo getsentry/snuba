@@ -1,4 +1,3 @@
-import copy
 import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -1357,8 +1356,7 @@ def parse_snql_query(
         query = parse_snql_query_initial(body)
 
     with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
-        query_copy = copy.deepcopy(query)
-        snql_anonymized = format_snql_anonymized(query_copy).get_sql()
+        snql_anonymized = format_snql_anonymized(query).get_sql()
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
