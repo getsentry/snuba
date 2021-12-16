@@ -136,7 +136,7 @@ def config(config_key: str) -> Response:
         state.delete_config(config_key, user=user)
 
         notification_client.notify(
-            RuntimeConfigAction.ADDED,
+            RuntimeConfigAction.REMOVED,
             {"option": config_key, "old": None, "new": None},
             user,
         )
