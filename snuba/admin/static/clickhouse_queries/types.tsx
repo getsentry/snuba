@@ -10,9 +10,9 @@ type ClickhouseNodeData = {
 };
 
 type ClickhouseCannedQuery = {
-  description?: string;
+  description: string | null;
   name: string;
-  sql?: string;
+  sql: string;
 };
 
 type QueryRequest = {
