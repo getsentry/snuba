@@ -11,15 +11,9 @@ type TableProps = {
 function Table(props: TableProps) {
   let { headerData, rowData, columnWidths } = props;
 
-  let autoColumnWidths = Array(headerData.length).fill(1);
-
-  if (!columnWidths) {
-    columnWidths = autoColumnWidths;
-  }
-
-  let sumColumnWidths = columnWidths.reduce((acc, i) => acc + i, 0);
-
-  console.log(columnWidths, sumColumnWidths);
+  const autoColumnWidths = Array(headerData.length).fill(1);
+  const notEmptyColumnWidths = columnWidths ?? autoColumnWidths;
+  const sumColumnWidths = notEmptyColumnWidths.reduce((acc, i) => acc + i, 0);
 
   return (
     <table style={tableStyle}>
@@ -30,7 +24,9 @@ function Table(props: TableProps) {
               key={idx}
               style={{
                 ...thStyle,
-                width: `${(columnWidths![idx] * 100) / sumColumnWidths}%`,
+                width: `${
+                  (notEmptyColumnWidths[idx] * 100) / sumColumnWidths
+                }%`,
               }}
             >
               {col}
