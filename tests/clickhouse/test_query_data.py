@@ -45,7 +45,8 @@ def test_format_clickhouse_specific_query() -> None:
         "HAVING eq(column1, 123)",
         "ORDER BY column1 ASC",
         "LIMIT 10 BY environment",
-        "LIMIT 100 OFFSET 50",
+        "LIMIT 100",
+        "OFFSET 50",
     ]
 
     assert clickhouse_query.structured() == expected

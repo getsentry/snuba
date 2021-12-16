@@ -1,5 +1,6 @@
 from typing import Optional, Sequence, Type, Union
 
+from snuba.clickhouse.formatter.expression import ExpressionFormatterAnonymized
 from snuba.clickhouse.formatter.nodes import (
     FormattedNode,
     FormattedQuery,
@@ -7,25 +8,32 @@ from snuba.clickhouse.formatter.nodes import (
     PaddingNode,
     StringNode,
 )
+from snuba.clickhouse.formatter.query import (
+    _build_optional_string_node,
+    _format_arrayjoin,
+    _format_groupby,
+    _format_limit,
+    _format_limitby,
+    _format_offset,
+    _format_orderby,
+    _format_select,
+)
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity
 from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.expressions import Expression, ExpressionVisitor
+from snuba.query.expressions import ExpressionVisitor
 from snuba.query.logical import Query
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.snql.anonymize_visitor import AnonymizeAndStringifySnQLVisitor
 
 
 def format_snql_anonymized(
     query: Union[LogicalQuery, CompositeQuery[Entity]]
 ) -> FormattedQuery:
 
-    return FormattedQuery(
-        _format_query_content(query, AnonymizeAndStringifySnQLVisitor)
-    )
+    return FormattedQuery(_format_query_content(query, ExpressionFormatterAnonymized))
 
 
 class StringQueryFormatter(
@@ -94,9 +102,7 @@ def _format_query_content(
             ),
             _format_select(query, formatter),
             _format_groupby(query, formatter),
-            _build_optional_string_nodes(
-                "ARRAY JOIN", query.get_arrayjoin(), formatter
-            ),
+            _format_arrayjoin(query, formatter),
             _build_optional_string_node("WHERE", query.get_condition(), formatter),
             _build_optional_string_node("HAVING", query.get_having(), formatter),
             _format_orderby(query, formatter),
@@ -104,97 +110,9 @@ def _format_query_content(
             _format_limit(query, formatter),
             _format_offset(query, formatter),
             _format_granularity(query, formatter),
-            _format_totals(query, formatter),
         ]
         if v is not None
     ]
-
-
-def _format_select(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> StringNode:
-    selected_cols = [
-        e.expression.accept(formatter) for e in query.get_selected_columns()
-    ]
-    return StringNode(f"SELECT {', '.join(selected_cols)}")
-
-
-def _format_groupby(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
-    ast_groupby = query.get_groupby()
-    if ast_groupby:
-        selected_cols = [e.accept(formatter) for e in ast_groupby]
-        return StringNode(f"BY {', '.join(selected_cols)}")
-    return None
-
-
-def _format_orderby(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
-    ast_orderby = query.get_orderby()
-    if ast_orderby:
-        orderby = [
-            f"{e.expression.accept(formatter)} {e.direction.value}" for e in ast_orderby
-        ]
-        return StringNode(f"ORDER BY {', '.join(orderby)}")
-    else:
-        return None
-
-
-def _build_optional_string_node(
-    name: str, expression: Optional[Expression], formatter: ExpressionVisitor[str],
-) -> Optional[StringNode]:
-    return (
-        StringNode(f"{name} {expression.accept(formatter)}")
-        if expression is not None
-        else None
-    )
-
-
-def _build_optional_string_nodes(
-    name: str,
-    expressions: Optional[Sequence[Expression]],
-    formatter: ExpressionVisitor[str],
-) -> Optional[StringNode]:
-    return (
-        StringNode(
-            f"{name} {', '.join(expression.accept(formatter) for expression in expressions)}"
-        )
-        if expressions is not None
-        else None
-    )
-
-
-def _format_limitby(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
-    ast_limitby = query.get_limitby()
-
-    if ast_limitby is not None:
-        return StringNode(
-            f"LIMIT {ast_limitby.limit} BY {', '.join(expression.accept(formatter) for expression in ast_limitby.columns)}"
-        )
-
-    return None
-
-
-def _format_limit(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
-    ast_limit = query.get_limit()
-    return (
-        StringNode(f"LIMIT {ast_limit}")
-        if ast_limit is not None and ast_limit != 1000
-        else None
-    )
-
-
-def _format_offset(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
-    ast_offset = query.get_offset()
-    return StringNode(f"OFFSET {ast_offset}") if ast_offset != 0 else None
 
 
 def _format_granularity(
@@ -206,10 +124,3 @@ def _format_granularity(
         if ast_granularity is not None
         else None
     )
-
-
-def _format_totals(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
-    ast_totals = query.has_totals()
-    return StringNode(f"TOTALS {ast_totals}") if ast_totals else None
