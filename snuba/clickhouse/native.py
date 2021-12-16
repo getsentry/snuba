@@ -148,8 +148,8 @@ class ClickhousePool(object):
         attempts, (infinite in the case of too many simultaneous queries
         errors) and wait a second between retries.
 
-        This is used by the writer, which needs to either complete its current
-        write successfully or else quit altogether. Note that each retry in this
+        This is by components which need to either complete their current
+        query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
         attempts_remaining = 3
