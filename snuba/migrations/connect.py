@@ -46,7 +46,7 @@ def check_clickhouse_connections() -> None:
 
 
 def check_clickhouse(clickhouse: ClickhousePool) -> None:
-    ver = clickhouse.execute("SELECT version()")[0][0]
+    ver = clickhouse.execute("SELECT version()").results[0][0]
     if version.parse(ver) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
         raise InvalidClickhouseVersion(
             f"Snuba requires Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION}"

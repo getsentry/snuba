@@ -131,7 +131,7 @@ def get_row_count(storage: Storage) -> int:
     return int(
         storage.get_cluster()
         .get_query_connection(ClickhouseClientSettings.INSERT)
-        .execute(f"SELECT count() FROM {schema.get_local_table_name()}")[0][0]
+        .execute(f"SELECT count() FROM {schema.get_local_table_name()}").results[0][0]
     )
 
 

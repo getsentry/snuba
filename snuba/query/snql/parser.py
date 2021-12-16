@@ -248,7 +248,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             else:
                 args["selected_columns"] = args["groupby"] + args["selected_columns"]
 
-            args["groupby"] = map(lambda gb: gb.expression, args["groupby"])
+            args["groupby"] = [gb.expression for gb in args["groupby"]]
 
         if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
             args["from_clause"] = data_source

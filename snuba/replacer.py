@@ -353,7 +353,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             count_query = replacement.get_count_query(table_name)
 
             if count_query is not None:
-                count = clickhouse_read.execute_robust(count_query)[0][0]
+                count = clickhouse_read.execute_robust(count_query).results[0][0]
                 if count == 0:
                     continue
             else:
