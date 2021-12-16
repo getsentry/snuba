@@ -44,7 +44,7 @@ def get_active_partitions(
     assert isinstance(schema, TableSchema)
     part_format = schema.get_part_format()
     assert part_format is not None
-    return [util.decode_part_str(part, part_format) for part, in response]
+    return [util.decode_part_str(part, part_format) for part, in response.results]
 
 
 def filter_stale_partitions(

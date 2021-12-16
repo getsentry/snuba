@@ -1,6 +1,6 @@
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
-from snuba.clickhouse.native import ClickhousePool, Params
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult, Params
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -27,9 +27,9 @@ class FakeClickhousePool(ClickhousePool):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-    ) -> Sequence[Any]:
+    ) -> ClickhouseResult:
         self.__queries.append(query)
-        return [[1]]
+        return ClickhouseResult([[1]])
 
     def get_queries(self) -> Sequence[str]:
         return self.__queries
@@ -49,7 +49,7 @@ class FakeFailingClickhousePool(FakeClickhousePool):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-    ) -> Sequence[Any]:
+    ) -> ClickhouseResult:
         raise ServerExplodedException("The server exploded")
 
     def get_queries(self) -> Sequence[str]:
