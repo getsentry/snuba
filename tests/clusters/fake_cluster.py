@@ -27,6 +27,7 @@ class FakeClickhousePool(ClickhousePool):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
+        capture_trace: bool = False,
     ) -> ClickhouseResult:
         self.__queries.append(query)
         return ClickhouseResult([[1]])
@@ -49,6 +50,7 @@ class FakeFailingClickhousePool(FakeClickhousePool):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
+        capture_trace: bool = False,
     ) -> ClickhouseResult:
         raise ServerExplodedException("The server exploded")
 
