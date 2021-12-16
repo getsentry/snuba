@@ -167,7 +167,7 @@ def test_subscription_task_result_encoder() -> None:
 
     message = codec.encode(task_result)
     data = json.loads(message.value.decode("utf-8"))
-    assert data["version"] == 2
+    assert data["version"] == 3
     payload = data["payload"]
 
     assert payload["subscription_id"] == str(
@@ -230,7 +230,7 @@ def test_sessions_subscription_task_result_encoder() -> None:
 
     message = codec.encode(task_result)
     data = json.loads(message.value.decode("utf-8"))
-    assert data["version"] == 2
+    assert data["version"] == 3
     payload = data["payload"]
 
     assert payload["subscription_id"] == str(
@@ -311,7 +311,7 @@ def test_metrics_subscription_task_result_encoder(
     )
     message = codec.encode(task_result)
     data = json.loads(message.value.decode("utf-8"))
-    assert data["version"] == 2
+    assert data["version"] == 3
     payload = data["payload"]
 
     assert payload["subscription_id"] == str(
