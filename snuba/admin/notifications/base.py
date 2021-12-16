@@ -34,7 +34,7 @@ class NotificationBase(ABC):
         action: RuntimeConfigAction,
         data: NotificationData,
         user: Optional[str],
-        timestamp: Optional[str],
+        timestamp: Optional[str] = None,
     ) -> None:
         """
             Given
@@ -133,5 +133,27 @@ class RuntimeConfigSlackClient(NotificationBase):
         self.client.post_message(message=payload, channel=self.channel_id)
 
 
-rc_log_client = RuntimeConfigLogClient()
-rc_slack_client = RuntimeConfigSlackClient()
+class RuntimeConfigAutoClient(NotificationBase):
+    """
+    Uses the Slack client if is is configured, otherwise falls back to the log client
+    """
+
+    def __init__(self) -> None:
+        is_slack_configured = (
+            settings.SNUBA_SLACK_CHANNEL_ID is not None
+            and settings.SLACK_API_TOKEN is not None
+        )
+        self.__notification_client = (
+            RuntimeConfigSlackClient()
+            if is_slack_configured
+            else RuntimeConfigLogClient()
+        )
+
+    def notify(
+        self,
+        action: RuntimeConfigAction,
+        data: NotificationData,
+        user: Optional[str],
+        timestamp: Optional[str] = None,
+    ) -> None:
+        return self.__notification_client.notify(action, data, user, timestamp)

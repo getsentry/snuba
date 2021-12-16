@@ -40,13 +40,15 @@ function getEditableRow(
 ): RowData {
   return [
     key,
-    <EditableTableCell value={value} onChange={updateValue} />,
+    <code>{value}</code>,
+    // TODO: Edit mode
+    // <EditableTableCell value={value} onChange={updateValue} />,
     type,
     <span>
-      <a style={linkStyle} onClick={() => save()}>
+      {/* <a style={linkStyle} onClick={() => save()}>
         <strong>save changes</strong>
       </a>
-      <Space />
+      <Space /> */}
       <a style={{ ...linkStyle, color: "red" }} onClick={() => deleteRow()}>
         delete
       </a>

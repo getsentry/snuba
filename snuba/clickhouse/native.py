@@ -150,8 +150,8 @@ class ClickhousePool(object):
         attempts, (infinite in the case of too many simultaneous queries
         errors) and wait a second between retries.
 
-        This is used by the writer, which needs to either complete its current
-        write successfully or else quit altogether. Note that each retry in this
+        This is by components which need to either complete their current
+        query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
         attempts_remaining = 3
@@ -171,7 +171,7 @@ class ClickhousePool(object):
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
                 logger.warning(
-                    "Write to ClickHouse failed: %s (%d tries left)",
+                    "ClickHouse query execution failed: %s (%d tries left)",
                     str(e),
                     attempts_remaining,
                 )
@@ -184,7 +184,9 @@ class ClickhousePool(object):
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
-                logger.warning("Write to ClickHouse failed: %s (retrying)", str(e))
+                logger.warning(
+                    "ClickHouse query execution failed: %s (retrying)", str(e)
+                )
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     # Try forever if the server is overloaded.
                     sleep_seconds = state.get_config(
