@@ -179,7 +179,7 @@ class TestApi(SimpleAPITest):
             .get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
         )
-        res = clickhouse.execute("SELECT count() FROM %s" % self.table)
+        res = clickhouse.execute("SELECT count() FROM %s" % self.table).results
         assert res[0][0] == 330
 
         rollup_mins = 60
@@ -2063,17 +2063,17 @@ class TestApi(SimpleAPITest):
         )
 
         # There is data in the events table
-        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) > 0
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) > 0
 
         assert self.app.post("/tests/events/drop").status_code == 200
         writer = storage.get_table_writer()
         table = writer.get_schema().get_table_name()
 
-        assert table not in clickhouse.execute("SHOW TABLES")
+        assert table not in clickhouse.execute("SHOW TABLES").results
         assert self.redis_db_size() == 0
 
         # No data in events table
-        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) == 0
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) == 0
 
     def test_max_limit(self) -> None:
         with pytest.raises(Exception):
