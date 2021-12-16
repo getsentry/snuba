@@ -26,6 +26,10 @@ class InvalidResultError(SerializableException):
     pass
 
 
+class InvalidCustomQuery(SerializableException):
+    pass
+
+
 class _QueryRegistry:
     """Keep a mapping of SystemQueries to their names"""
 
@@ -152,10 +156,6 @@ def run_system_query_on_host_by_name(
     )
 
 
-class InvalidSystemQuery(SerializableException):
-    pass
-
-
 SYSTEM_QUERY_RE = re.compile(
     r"""
         ^ # Start
@@ -195,7 +195,7 @@ def validate_system_query(sql_query: str) -> None:
     Simple validation to ensure query only attempts to access system tables and not
     any others. Will be replaced by AST parser eventually.
 
-    Raises InvalidSystemQuery if query is invalid or not allowed.
+    Raises InvalidCustomQuery if query is invalid or not allowed.
     """
     sql_query = " ".join(sql_query.split())
 
@@ -204,19 +204,19 @@ def validate_system_query(sql_query: str) -> None:
     match = SYSTEM_QUERY_RE.match(sql_query)
 
     if match is None:
-        raise InvalidSystemQuery("Query is invalid")
+        raise InvalidCustomQuery("Query is invalid")
 
     select_statement = match.group("select_statement")
 
     # Extremely quick and dirty way of ensuring there is not a nested select, insert or a join
     for kw in disallowed_keywords:
         if kw in select_statement.lower():
-            raise InvalidSystemQuery(f"{kw} is not allowed here")
+            raise InvalidCustomQuery(f"{kw} is not allowed here")
 
     system_table_name = match.group("system_table_name")
 
     if system_table_name not in VALID_SYSTEM_TABLES:
-        raise InvalidSystemQuery("Invalid table")
+        raise InvalidCustomQuery("Invalid table")
 
     extra = match.group("extra")
 
@@ -225,4 +225,4 @@ def validate_system_query(sql_query: str) -> None:
     if extra is not None:
         for kw in disallowed_keywords:
             if kw in extra.lower():
-                raise InvalidSystemQuery(f"{kw} is not allowed here")
+                raise InvalidCustomQuery(f"{kw} is not allowed here")

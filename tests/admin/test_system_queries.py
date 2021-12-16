@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.admin.clickhouse.system_queries import (
-    InvalidSystemQuery,
+    InvalidCustomQuery,
     validate_system_query,
 )
 
@@ -36,5 +36,5 @@ def test_valid_system_query(sql_query: str) -> None:
     ],
 )
 def test_invalid_system_query(sql_query: str) -> None:
-    with pytest.raises(InvalidSystemQuery):
+    with pytest.raises(InvalidCustomQuery):
         validate_system_query(sql_query)

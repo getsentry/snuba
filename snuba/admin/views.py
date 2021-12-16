@@ -6,6 +6,7 @@ from flask import Flask, Response, jsonify, make_response, request
 from snuba import state
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.system_queries import (
+    InvalidCustomQuery,
     InvalidNodeError,
     InvalidResultError,
     InvalidStorageError,
@@ -93,17 +94,23 @@ def clickhouse_system_query() -> Response:
         except KeyError:
             return make_response(jsonify({"error": "Invalid request"}), 400)
 
-        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
-        rows = []
-        rows, columns = cast(List[List[str]], result.results), result.meta
+        try:
+            result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
+            rows = []
+            rows, columns = cast(List[List[str]], result.results), result.meta
 
-        if columns:
-            res = {}
-            res["column_names"] = [name for name, _ in columns]
-            res["rows"] = [[str(col) for col in row] for row in rows]
+            if columns:
+                res = {}
+                res["column_names"] = [name for name, _ in columns]
+                res["rows"] = [[str(col) for col in row] for row in rows]
 
-            return make_response(jsonify(res), 200)
+                return make_response(jsonify(res), 200)
+        except InvalidCustomQuery as err:
+            return make_response(
+                jsonify({"error": err.message or "Invalid query"}), 400
+            )
 
+    # We should never get here
     return make_response(jsonify({"error": "Something went wrong"}), 400)
 
 
