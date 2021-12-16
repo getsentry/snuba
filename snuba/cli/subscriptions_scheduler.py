@@ -144,7 +144,6 @@ def subscriptions_scheduler(
 
     def handler(signum: int, frame: Any) -> None:
         processor.signal_shutdown()
-        producer.close()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
