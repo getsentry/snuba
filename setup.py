@@ -2,7 +2,7 @@ from typing import Sequence
 from setuptools import setup, find_packages
 
 
-VERSION = "21.12.0.dev0"
+VERSION = "22.1.0.dev0"
 
 
 def get_requirements() -> Sequence[str]:
