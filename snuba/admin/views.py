@@ -12,6 +12,7 @@ from snuba.admin.clickhouse.system_queries import (
     SystemQuery,
     run_system_query_on_host_by_name,
 )
+from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigLogClient
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -19,6 +20,8 @@ from snuba.admin.runtime_config import (
 )
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
+
+notification_client = RuntimeConfigLogClient()
 
 
 @application.route("/")
@@ -90,8 +93,10 @@ def configs() -> Response:
                 {"Content-Type": "application/json"},
             )
 
+        user = request.headers.get("X-Goog-Authenticated-User-Email")
+
         state.set_config(
-            key, value, user=request.headers.get("X-Goog-Authenticated-User-Email"),
+            key, value, user=user,
         )
 
         evaluated_value = state.get_uncached_config(key)
@@ -99,6 +104,12 @@ def configs() -> Response:
         evaluated_type = get_config_type_from_value(evaluated_value)
 
         config = {"key": key, "value": str(evaluated_value), "type": evaluated_type}
+
+        notification_client.notify(
+            RuntimeConfigAction.ADDED,
+            {"option": key, "old": None, "new": evaluated_value},
+            user,
+        )
 
         return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
