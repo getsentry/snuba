@@ -238,6 +238,7 @@ def execute_query(
         query_settings,
         with_totals=clickhouse_query.has_totals(),
         robust=robust,
+        capture_trace=request_settings.get_capture_trace(),
     )
 
     timer.mark("execute")

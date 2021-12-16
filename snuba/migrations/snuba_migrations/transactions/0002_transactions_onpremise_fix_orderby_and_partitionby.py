@@ -35,7 +35,7 @@ def forwards(logger: logging.Logger) -> None:
 
     ((curr_sampling_key, curr_partition_key, curr_primary_key),) = clickhouse.execute(
         f"SELECT sampling_key, partition_key, primary_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
-    )
+    ).results
 
     sampling_key_needs_update = curr_sampling_key != new_sampling_key
     partition_key_needs_update = curr_partition_key != new_partition_key
@@ -54,7 +54,7 @@ def forwards(logger: logging.Logger) -> None:
     # Create transactions_local_new and insert data
     ((curr_create_table_statement,),) = clickhouse.execute(
         f"SHOW CREATE TABLE {database}.{TABLE_NAME}"
-    )
+    ).results
 
     new_create_table_statement = curr_create_table_statement.replace(
         TABLE_NAME, TABLE_NAME_NEW
@@ -93,7 +93,7 @@ def forwards(logger: logging.Logger) -> None:
     clickhouse.execute(new_create_table_statement)
 
     # Copy over data in batches of 100,000
-    [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME}")
+    [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME}").results
     batch_size = 100000
     batch_count = math.ceil(row_count / batch_size)
 
@@ -116,9 +116,10 @@ def forwards(logger: logging.Logger) -> None:
     clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
 
     # Ensure each table has the same number of rows before deleting the old one
-    assert clickhouse.execute(
-        f"SELECT COUNT() FROM {TABLE_NAME} FINAL;"
-    ) == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;")
+    assert (
+        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results
+        == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;").results
+    )
 
     clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 
@@ -137,7 +138,7 @@ def backwards(logger: logging.Logger) -> None:
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
     def table_exists(table_name: str) -> bool:
-        return clickhouse.execute(f"EXISTS TABLE {table_name};") == [(1,)]
+        return clickhouse.execute(f"EXISTS TABLE {table_name};").results == [(1,)]
 
     if not table_exists(TABLE_NAME):
         raise Exception(f"Table {TABLE_NAME} is missing")

@@ -7,13 +7,11 @@ from pytest import raises
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
 from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
-from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
@@ -52,7 +50,7 @@ TESTS_CREATE_SESSIONS = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(dataset_name="sessions"),
+            entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
         ),
         id="Snql subscription",
     ),
@@ -212,9 +210,27 @@ TESTS_CREATE_METRICS = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(dataset_name="metrics"),
+            entity_subscription=create_entity_subscription(
+                EntityKey.METRICS_COUNTERS, 1
+            ),
         ),
-        id="Snql subscription",
+        EntityKey.METRICS_COUNTERS,
+        id="Metrics Counters Snql subscription",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
+                array(6,7)"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+        ),
+        EntityKey.METRICS_SETS,
+        id="Metrics Sets Snql subscription",
     ),
 ]
 
@@ -229,9 +245,11 @@ TESTS_INVALID_METRICS = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(dataset_name="metrics"),
+            entity_subscription=create_entity_subscription(
+                EntityKey.METRICS_COUNTERS, 1
+            ),
         ),
-        id="Snql subscription",
+        id="Metrics Counters subscription missing tags[3] condition",
     ),
     pytest.param(
         SnQLSubscriptionData(
@@ -242,9 +260,37 @@ TESTS_INVALID_METRICS = [
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(dataset_name="metrics"),
+            entity_subscription=create_entity_subscription(
+                EntityKey.METRICS_COUNTERS, 1
+            ),
         ),
-        id="Snql subscription",
+        id="Metrics Counters subscription missing project_id condition",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+        ),
+        id="Metrics Sets subscription missing tags[3] condition",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+        ),
+        id="Metrics Sets subscription missing project_id condition",
     ),
 ]
 
@@ -255,15 +301,15 @@ class TestMetricsCountersSubscriptionCreator:
     def setup_method(self) -> None:
         self.dataset = get_dataset("metrics")
 
-    @pytest.mark.parametrize("subscription", TESTS_CREATE_METRICS)
-    def test(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
+    @pytest.mark.parametrize("subscription, entity_key", TESTS_CREATE_METRICS)
+    def test(self, subscription: SubscriptionData, entity_key: EntityKey) -> None:
+        creator = SubscriptionCreator(self.dataset, entity_key)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, EntityKey.METRICS_COUNTERS, identifier.partition,
+                    redis_client, entity_key, identifier.partition,
                 ).all(),
             )[0][1]
             == subscription

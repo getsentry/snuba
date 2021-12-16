@@ -25,7 +25,7 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     ((curr_primary_key,),) = clickhouse.execute(
         f"SELECT primary_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
-    )
+    ).results
 
     assert curr_primary_key in [
         new_primary_key,
@@ -47,7 +47,7 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     # There shouldn't be any data in the table yet
     assert (
-        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;")[0][0] == 0
+        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0] == 0
     ), f"{TABLE_NAME} is not empty"
 
     new_order_by = f"ORDER BY ({new_primary_key})"
@@ -55,7 +55,7 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     ((curr_create_table_statement,),) = clickhouse.execute(
         f"SHOW CREATE TABLE {database}.{TABLE_NAME}"
-    )
+    ).results
 
     new_create_table_statement = curr_create_table_statement.replace(
         TABLE_NAME, TABLE_NAME_NEW
