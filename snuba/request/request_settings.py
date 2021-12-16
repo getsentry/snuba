@@ -146,3 +146,6 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         pass
+
+    def get_capture_trace(self) -> bool:
+        return False
