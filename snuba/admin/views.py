@@ -12,7 +12,7 @@ from snuba.admin.clickhouse.system_queries import (
     SystemQuery,
     run_system_query_on_host_by_name,
 )
-from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigLogClient
+from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -21,7 +21,7 @@ from snuba.admin.runtime_config import (
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
-notification_client = RuntimeConfigLogClient()
+notification_client = RuntimeConfigAutoClient()
 
 
 @application.route("/")
