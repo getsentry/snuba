@@ -1,5 +1,5 @@
-minVersion: "0.23.1"
-changelogPolicy: none
+minVersion: "0.27.2"
+changelogPolicy: auto
 artifactProvider:
   name: none
 statusProvider:

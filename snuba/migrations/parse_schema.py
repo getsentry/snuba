@@ -220,6 +220,6 @@ def get_local_schema(
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [
-            cols[:6] for cols in conn.execute("DESCRIBE TABLE %s" % table_name)
+            cols[:6] for cols in conn.execute("DESCRIBE TABLE %s" % table_name).results
         ]
     }

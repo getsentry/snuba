@@ -52,6 +52,7 @@ class EntitySubscription(ABC):
 
 class EntitySubscriptionValidation:
     MAX_ALLOWED_AGGREGATIONS: int = 1
+    disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"]
 
     def validate_query(self, query: Union[CompositeQuery[Entity], Query]) -> None:
         # TODO: Support composite queries with multiple entities.
@@ -60,9 +61,9 @@ class EntitySubscriptionValidation:
             raise InvalidSubscriptionError("Only simple queries are supported")
         entity = get_entity(from_clause.key)
 
-        SubscriptionAllowedClausesValidator(self.MAX_ALLOWED_AGGREGATIONS).validate(
-            query
-        )
+        SubscriptionAllowedClausesValidator(
+            self.MAX_ALLOWED_AGGREGATIONS, self.disallowed_aggregations
+        ).validate(query)
         if entity.required_time_column:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
@@ -123,10 +124,22 @@ class TransactionsSubscription(BaseEventsSubscription):
     ...
 
 
+class MetricsCountersSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+    disallowed_aggregations = ["having", "orderby"]
+
+
+class MetricsSetsSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+    disallowed_aggregations = ["having", "orderby"]
+
+
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
     SessionsSubscription: EntityKey.SESSIONS,
     EventsSubscription: EntityKey.EVENTS,
     TransactionsSubscription: EntityKey.TRANSACTIONS,
+    MetricsCountersSubscription: EntityKey.METRICS_COUNTERS,
+    MetricsSetsSubscription: EntityKey.METRICS_SETS,
 }
 
 ENTITY_KEY_TO_SUBSCRIPTION_MAPPER: Mapping[EntityKey, Type[EntitySubscription]] = {

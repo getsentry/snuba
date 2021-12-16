@@ -32,7 +32,7 @@ def setup_function() -> None:
 
         data = connection.execute(
             f"SELECT name FROM system.tables WHERE database = '{database}'"
-        )
+        ).results
         for (table,) in data:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
 
@@ -53,7 +53,7 @@ def test_add_node() -> None:
 
     client = ClickhousePool(host_name, port, user, password, database,)
 
-    assert set(client.execute("SHOW TABLES")) == set()
+    assert set(client.execute("SHOW TABLES").results) == set()
 
     runner.Runner.add_node(
         node_type=cluster.ClickhouseNodeType.LOCAL,
@@ -65,7 +65,7 @@ def test_add_node() -> None:
         database=database,
     )
 
-    assert set(client.execute("SHOW TABLES")) == {
+    assert set(client.execute("SHOW TABLES").results) == {
         ("outcomes_raw_local",),
         ("outcomes_hourly_local",),
         ("outcomes_mv_hourly_local",),
