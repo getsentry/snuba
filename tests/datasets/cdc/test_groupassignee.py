@@ -171,7 +171,7 @@ class TestGroupassignee:
         ret = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute("SELECT * FROM groupassignee_local;")
+            .execute("SELECT * FROM groupassignee_local;").results
         )
         assert ret[0] == (
             42,  # offset
@@ -217,7 +217,7 @@ class TestGroupassignee:
         ret = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute("SELECT * FROM groupassignee_local;")
+            .execute("SELECT * FROM groupassignee_local;").results
         )
         assert ret[0] == (
             0,  # offset
