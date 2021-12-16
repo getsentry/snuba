@@ -17,7 +17,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.snql.parser import parse_snql_query
+from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -224,6 +224,16 @@ def test_get_all_columns() -> None:
             Literal(None, "sentry:dist"),
         )
     }
+
+
+def test_initial_parsing() -> None:
+    # Initial parsing created a map object for groupby clause, should be a list
+    body = "MATCH (events) SELECT col BY title"
+    query = parse_snql_query_initial(body)
+    # casting a map object to a list drains the generator, should be able to cast as much as needed
+    assert list(query.get_groupby()) != []
+    assert list(query.get_groupby()) != []
+    assert isinstance(query.get_groupby(), list)
 
 
 VALIDATION_TESTS = [
