@@ -4,6 +4,7 @@ from typing import Any, Mapping
 import click
 
 from snuba import state
+from snuba.state import MismatchedTypeException
 
 
 def human_fmt(values: Mapping[Any, Any]) -> str:
@@ -56,18 +57,32 @@ def get(*, key: str, format: str) -> None:
 @config.command()
 @click.argument("key")
 @click.argument("value")
-def set(*, key: str, value: str) -> None:
+@click.option(
+    "--force-type", is_flag=True, default=False, help="Override type checking of values"
+)
+def set(*, key: str, value: str, force_type: bool) -> None:
     "Set a single key."
-
-    state.set_config(key, value, user=get_user())
+    try:
+        state.set_config(key, value, user=get_user(), force=force_type)
+    except MismatchedTypeException as exc:
+        print(
+            f"The new value type {exc.new_type} does not match the old value type {exc.original_type}. Use the force option to disable this check"
+        )
 
 
 @config.command("set-many")
 @click.argument("data")
-def set_many(*, data: str) -> None:
+@click.option(
+    "--force-type", is_flag=True, default=False, help="Override type checking of values"
+)
+def set_many(*, data: str, force_type: bool) -> None:
     "Set multiple keys, input as JSON."
-
-    state.set_configs(json.loads(data), user=get_user())
+    try:
+        state.set_configs(json.loads(data), user=get_user(), force=force_type)
+    except MismatchedTypeException as exc:
+        print(
+            f"Mismatched types for {exc.key}: Original type: {exc.original_type}, New type: {exc.new_type}. Use the force option to disable this check"
+        )
 
 
 @config.command()

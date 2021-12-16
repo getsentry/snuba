@@ -53,6 +53,7 @@ from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeExce
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
+from snuba.state import MismatchedTypeException
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -297,16 +298,33 @@ def config(fmt: str = "html") -> Union[Response, RespTuple]:
             )
         else:
             assert http_request.method == "POST"
-            state.set_configs(
-                json.loads(http_request.data),
-                user=http_request.headers.get("x-forwarded-email"),
-            )
-            return (
-                json.dumps(state.get_raw_configs()),
-                200,
-                {"Content-Type": "application/json"},
-            )
-
+            try:
+                state.set_configs(
+                    json.loads(http_request.data),
+                    user=http_request.headers.get("x-forwarded-email"),
+                )
+                return (
+                    json.dumps(state.get_raw_configs()),
+                    200,
+                    {"Content-Type": "application/json"},
+                )
+            except MismatchedTypeException as exc:
+                return (
+                    json.dumps(
+                        {
+                            "error": {
+                                "type": "client_error",
+                                "message": "Existing value and New value have different types. Use option force to override check",
+                                "key": str(exc.key),
+                                "original value type": str(exc.original_type),
+                                "new_value_type": str(exc.new_type),
+                            }
+                        },
+                        indent=4,
+                    ),
+                    400,
+                    {"Content-Type": "application/json"},
+                )
     else:
         return application.send_static_file("config.html")
 
