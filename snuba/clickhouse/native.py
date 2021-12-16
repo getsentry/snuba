@@ -168,7 +168,7 @@ class ClickhousePool(object):
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
                 logger.warning(
-                    "Robust ClickHouse query execution failed: %s (%d tries left)",
+                    "ClickHouse query execution failed: %s (%d tries left)",
                     str(e),
                     attempts_remaining,
                 )
@@ -182,7 +182,7 @@ class ClickhousePool(object):
                 continue
             except errors.ServerException as e:
                 logger.warning(
-                    "Robust ClickHouse query execution failed: %s (retrying)", str(e)
+                    "ClickHouse query execution failed: %s (retrying)", str(e)
                 )
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     # Try forever if the server is overloaded.
