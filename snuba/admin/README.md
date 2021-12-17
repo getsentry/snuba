@@ -1,5 +1,6 @@
 # Running
 
+
 To run the app locally:
 
 ```bash
@@ -11,7 +12,15 @@ The server should be running on http://localhost:1219
 
 # Developing the Javascript
 
-To change the javascript:
+You must have node and yarn installed. To do so:
+
+```
+volta install node
+volta install yarn
+make build-admin
+```
+
+Then
 
 ```
 make watch-admin
