@@ -24,9 +24,9 @@ from snuba.query.parsing import ParsingContext
 
 test_expressions = [
     (Literal(None, "test"), "'test'", "$S"),  # String literal
-    (Literal(None, 123), "123", "$N"),  # INT literal
-    (Literal("something", 123), "(123 AS something)", "$N"),  # INT literal with alias
-    (Literal(None, 123.321), "123.321", "$N"),  # FLOAT literal
+    (Literal(None, 123), "123", "4"),  # INT literal
+    (Literal("something", 123), "(123 AS something)", "4"),  # INT literal with alias
+    (Literal(None, 123.321), "123.321", "4"),  # FLOAT literal
     (Literal(None, None), "NULL", "NULL"),  # NULL
     (
         Literal("not_null", None),
@@ -141,7 +141,7 @@ test_expressions = [
     (
         FunctionCall("alias", "array", (Literal(None, 1), Literal(None, 2))),
         "([1, 2] AS alias)",
-        "([$N, $N] AS alias)",
+        "([4, 4] AS alias)",
     ),  # Formatting an array as [...]
     (
         binary_condition(
@@ -178,7 +178,7 @@ test_expressions = [
             ),
         ),
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
-        "(equals(c1, $N) AND equals(c2, $N) OR equals(c3, $N) OR equals(c4, $N)) AND equals(c5, $N)",
+        "(equals(c1, 4) AND equals(c2, 4) OR equals(c3, 4) OR equals(c4, 4)) AND equals(c5, 4)",
     ),  # Formatting infix expressions
     (
         FunctionCall(

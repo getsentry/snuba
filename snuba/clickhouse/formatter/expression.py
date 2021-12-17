@@ -202,6 +202,11 @@ class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
         )
 
 
+def _gen_random_number() -> int:
+    # https://xkcd.com/221/
+    return 4
+
+
 class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     """
     This Formatter strips string and integer literals and replaces them with a
@@ -212,7 +217,7 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
         return "$S"
 
     def _format_number_literal(self, exp: Literal) -> str:
-        return "$N"
+        return str(_gen_random_number())
 
     def _anonimize_alias(self, alias: str) -> str:
         # there may be an alias that looks like `snuba_tags[something]`
