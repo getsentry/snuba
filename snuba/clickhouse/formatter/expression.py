@@ -215,12 +215,16 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase)
         return "$N"
 
     def _format_boolean_literal(self, exp: Literal) -> str:
-        return "$B"
+        return str(exp.value)
 
     def _format_datetime_literal(self, exp: Literal) -> str:
+        if isinstance(exp.value, datetime):
+            return f'toDateTime({exp.value.isoformat()}, "Universal")'
         return "$DT"
 
     def _format_date_literal(self, exp: Literal) -> str:
+        if isinstance(exp.value, date):
+            return f'toDate({exp.value.isoformat()}, "Universal")'
         return "$D"
 
     def _anonimize_alias(self, alias: str) -> str:
