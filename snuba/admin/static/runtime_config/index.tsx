@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { Table } from "../table";
 import Client from "../api_client";
 import { ConfigKey, ConfigValue, ConfigType, RowData } from "./types";
-import { getReadonlyRow, getNewRow } from "./row_data";
+import { getEditableRow, getReadonlyRow, getNewRow } from "./row_data";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
 
 function RuntimeConfig(props: { api: Client }) {
@@ -56,11 +56,46 @@ function RuntimeConfig(props: { api: Client }) {
     resetCurrentRowData();
   }
 
+  function enterEditMode(key: ConfigKey, value: ConfigValue, type: ConfigType) {
+    setCurrentRowData({ key, value, type });
+    setCurrentlyEditing(key);
+  }
+
   if (data) {
     const rowData: RowData[] = data.map((row) => {
       const { key, value, type } = row;
+      const isEditing = key === currentlyEditing;
+      const showActions = currentlyEditing === null && addingNew === false;
+      return isEditing
+        ? getEditableRow(
+            currentRowData.key,
+            currentRowData.value,
+            currentRowData.type,
+            (newValue) => {
+              setCurrentRowData((prev) => {
+                return { ...prev, value: newValue };
+              });
+            },
+            () => {}, // TODO: Editing existing row
+            () => {
+              if (window.confirm(`Are you sure you want to delete ${key}?`)) {
+                api.deleteConfig(key).then(() => {
+                  setData((prev) => {
+                    if (prev) {
+                      return prev.filter((config) => config.key !== key);
+                    }
 
-      return getReadonlyRow(key, value, type, false, () => {});
+                    return prev;
+                  });
+                  resetForm();
+                });
+              }
+            },
+            () => setCurrentlyEditing(null)
+          )
+        : getReadonlyRow(key, value, type, showActions, () =>
+            enterEditMode(key, value, type)
+          );
     });
 
     if (addingNew) {

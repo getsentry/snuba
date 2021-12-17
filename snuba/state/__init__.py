@@ -1,9 +1,8 @@
 from __future__ import absolute_import
 
 import logging
-import random
-import re
 import time
+from dataclasses import dataclass
 from functools import partial
 from typing import (
     Any,
@@ -13,8 +12,8 @@ from typing import (
     Optional,
     Sequence,
     SupportsFloat,
-    SupportsInt,
     Tuple,
+    Type,
 )
 
 import simplejson as json
@@ -50,6 +49,13 @@ queries_list = "snuba-queries"
 max_query_duration_s = 60
 # Window for determining query rate
 rate_lookback_s = 60
+
+
+@dataclass(frozen=True)
+class MismatchedTypeException(Exception):
+    key: str
+    original_type: Type[Any]
+    new_type: Type[Any]
 
 
 def get_concurrent(bucket: str) -> Any:
@@ -92,9 +98,13 @@ class memoize:
         return wrapper
 
 
-def numeric(value: Any) -> Any:
+def get_typed_value(value: Any) -> Any:
+    # Return the given value based on its correct type
+    # It supports the following types: int, float, string
+    if value is None:
+        return None
     try:
-        assert isinstance(value, (str, SupportsInt))
+        assert isinstance(value, (str, int))
         return int(value)
     except (ValueError, AssertionError):
         try:
@@ -104,59 +114,46 @@ def numeric(value: Any) -> Any:
             return value
 
 
-ABTEST_RE = re.compile("(?:(-?\d+\.?\d*)(?:\:(\d+))?\/?)")
-
-
-def abtest(value: Optional[Any]) -> Optional[Any]:
-    """
-    Recognizes a value that consists of a '/'-separated sequence of
-    value:weight tuples. Value is numeric. Weight is an optional integer and
-    defaults to 1. Returns a weighted random value from the set of values.
-    eg.
-    1000/2000 => returns 1000 or 2000 with equal weight
-    1000:1/2000:1 => returns 1000 or 2000 with equal weight
-    1000:2/2000:1 => returns 1000 twice as often as 2000
-    """
-    if isinstance(value, str) and ABTEST_RE.match(value):
-        values = ABTEST_RE.findall(value)
-        total_weight = sum(int(weight or 1) for (_, weight) in values)
-        r = random.randint(1, total_weight)
-        i = 0
-        for (v, weight) in values:
-            i += int(weight or 1)
-            if i >= r:
-                return numeric(v)
-
-    return value
-
-
-def set_config(key: str, value: Optional[Any], user: Optional[str] = None) -> None:
-    if value is not None:
-        value = "{}".format(value).encode("utf-8")
+def set_config(
+    key: str, value: Optional[Any], user: Optional[str] = None, force: bool = False
+) -> None:
+    value = get_typed_value(value)
+    enc_value = "{}".format(value).encode("utf-8") if value is not None else None
 
     try:
-        original_value = rds.hget(config_hash, key)
-        if value == original_value:
-            return
+        enc_original_value = rds.hget(config_hash, key)
+        if enc_original_value is not None and value is not None:
+            original_value = get_typed_value(enc_original_value.decode("utf-8"))
+            if value == original_value and type(value) == type(original_value):
+                return
 
-        change_record = (time.time(), user, original_value, value)
+            if not force and type(value) != type(original_value):
+                raise MismatchedTypeException(key, type(original_value), type(value))
+
+        change_record = (time.time(), user, enc_original_value, enc_value)
         if value is None:
             rds.hdel(config_hash, key)
             rds.hdel(config_history_hash, key)
         else:
-            rds.hset(config_hash, key, value)
+            rds.hset(config_hash, key, enc_value)
             rds.hset(config_history_hash, key, json.dumps(change_record))
         rds.lpush(config_changes_list, json.dumps((key, change_record)))
         rds.ltrim(config_changes_list, 0, config_changes_list_limit)
+        logger.info(f"Successfully changed option {key} to {value}")
+    except MismatchedTypeException as exc:
+        logger.exception(
+            f"Mismatched types for {exc.key}: Original type: {exc.original_type}, New type: {exc.new_type}"
+        )
+        raise exc
     except Exception as ex:
         logger.exception(ex)
 
 
 def set_configs(
-    values: Mapping[str, Optional[Any]], user: Optional[str] = None
+    values: Mapping[str, Optional[Any]], user: Optional[str] = None, force: bool = False
 ) -> None:
     for k, v in values.items():
-        set_config(k, v, user=user)
+        set_config(k, v, user=user, force=force)
 
 
 def get_config(key: str, default: Optional[Any] = None) -> Optional[Any]:
@@ -171,7 +168,7 @@ def get_configs(
 
 
 def get_all_configs() -> Mapping[str, Optional[Any]]:
-    return {k: abtest(v) for k, v in get_raw_configs().items()}
+    return {k: v for k, v in get_raw_configs().items()}
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
@@ -179,7 +176,7 @@ def get_raw_configs() -> Mapping[str, Optional[Any]]:
     try:
         all_configs = rds.hgetall(config_hash)
         return {
-            k.decode("utf-8"): numeric(v.decode("utf-8"))
+            k.decode("utf-8"): get_typed_value(v.decode("utf-8"))
             for k, v in all_configs.items()
             if v is not None
         }
@@ -195,7 +192,7 @@ def delete_config(key: str, user: Optional[Any] = None) -> None:
 def get_uncached_config(key: str) -> Optional[Any]:
     value = rds.hget(config_hash, key.encode("utf-8"))
     if value is not None:
-        return numeric(value.decode("utf-8"))
+        return get_typed_value(value.decode("utf-8"))
     return None
 
 
@@ -210,7 +207,7 @@ def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]
     changes = get_config_changes_legacy()
 
     return [
-        (key, ts, user, numeric(before), numeric(after))
+        (key, ts, user, get_typed_value(before), get_typed_value(after))
         for [key, [ts, user, before, after]] in changes
     ]
 

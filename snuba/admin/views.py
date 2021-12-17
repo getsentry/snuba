@@ -15,7 +15,7 @@ from snuba.admin.clickhouse.system_queries import (
     run_system_query_on_host_by_name,
     run_system_query_on_host_with_sql,
 )
-from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigLogClient
+from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -24,7 +24,7 @@ from snuba.admin.runtime_config import (
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
-notification_client = RuntimeConfigLogClient()
+notification_client = RuntimeConfigAutoClient()
 
 
 @application.route("/")
@@ -174,6 +174,24 @@ def configs() -> Response:
         return Response(
             json.dumps(config_data), 200, {"Content-Type": "application/json"},
         )
+
+
+@application.route("/configs/<config_key>", methods=["DELETE"])
+def config(config_key: str) -> Response:
+    if request.method == "DELETE":
+        user = request.headers.get("X-Goog-Authenticated-User-Email")
+        state.delete_config(config_key, user=user)
+
+        notification_client.notify(
+            RuntimeConfigAction.REMOVED,
+            {"option": config_key, "old": None, "new": None},
+            user,
+        )
+
+        return Response("", 200)
+
+    # TODO: Editing existing config
+    raise NotImplementedError
 
 
 @application.route("/config_auditlog")
