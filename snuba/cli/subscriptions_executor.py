@@ -16,7 +16,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions", "sessions"]),
+    type=click.Choice(["events", "transactions", "sessions", "metrics"]),
     help="The dataset to target.",
 )
 @click.option(
@@ -24,7 +24,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "entity_names",
     required=True,
     multiple=True,
-    type=click.Choice(["events", "transactions", "sessions"]),
+    type=click.Choice(
+        ["events", "transactions", "sessions", "metrics_counters", "metrics_sets"]
+    ),
     help="The entity to target.",
 )
 @click.option(
