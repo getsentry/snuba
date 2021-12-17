@@ -165,20 +165,13 @@ SYSTEM_QUERY_RE = re.compile(
         \s
         (FROM|from)
         \s
-        system.(?P<system_table_name>\w+)
+        system.[a-z_]+
         (?P<extra>\s[\w\s,=+\(\)']+)?
         ;? # Optional semicolon
         $ # End
     """,
     re.VERBOSE,
 )
-
-# An incomplete list
-VALID_SYSTEM_TABLES = [
-    "clusters",
-    "merges",
-    "parts",
-]
 
 
 def run_system_query_on_host_with_sql(
@@ -212,11 +205,6 @@ def validate_system_query(sql_query: str) -> None:
     for kw in disallowed_keywords:
         if kw in select_statement.lower():
             raise InvalidCustomQuery(f"{kw} is not allowed here")
-
-    system_table_name = match.group("system_table_name")
-
-    if system_table_name not in VALID_SYSTEM_TABLES:
-        raise InvalidCustomQuery("Invalid table")
 
     extra = match.group("extra")
 

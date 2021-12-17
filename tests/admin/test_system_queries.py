@@ -33,6 +33,7 @@ def test_valid_system_query(sql_query: str) -> None:
         "with sum(bytes) as s select s from system.parts group by table;",  # sorry not allowed WITH
         "SELECT 1; SELECT 2;"  # no multiple statements
         "SELECT * FROM system.clusters c INNER JOIN my_table m ON c.cluster == m.something",  # no join
+        "SELECT * from system.as1",  # invalid system table format
     ],
 )
 def test_invalid_system_query(sql_query: str) -> None:
