@@ -202,7 +202,7 @@ class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
         )
 
 
-class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase):
+class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     """
     This Formatter strips string and integer literals and replaces them with a
     a token representing the type of literal.
@@ -213,19 +213,6 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase)
 
     def _format_number_literal(self, exp: Literal) -> str:
         return "$N"
-
-    def _format_boolean_literal(self, exp: Literal) -> str:
-        return str(exp.value)
-
-    def _format_datetime_literal(self, exp: Literal) -> str:
-        if isinstance(exp.value, datetime):
-            return f'toDateTime({exp.value.isoformat()}, "Universal")'
-        return "$DT"
-
-    def _format_date_literal(self, exp: Literal) -> str:
-        if isinstance(exp.value, date):
-            return f'toDate({exp.value.isoformat()}, "Universal")'
-        return "$D"
 
     def _anonimize_alias(self, alias: str) -> str:
         # there may be an alias that looks like `snuba_tags[something]`

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 from snuba.clickhouse.formatter.expression import (
@@ -31,8 +33,18 @@ test_expressions = [
         "(NULL AS not_null)",
         "(NULL AS not_null)",
     ),  # NULL with alias
-    (Literal(None, True), "true", "$B"),  # True
-    (Literal(None, False), "false", "$B"),  # False
+    (Literal(None, True), "true", "true"),
+    (Literal(None, False), "false", "false"),
+    (
+        Literal(None, datetime(2020, 4, 20, 16, 20)),
+        "toDateTime('2020-04-20T16:20:00', 'Universal')",
+        "toDateTime('2020-04-20T16:20:00', 'Universal')",
+    ),
+    (
+        Literal(None, datetime(2020, 4, 20, 16, 20).date()),
+        "toDate('2020-04-20', 'Universal')",
+        "toDate('2020-04-20', 'Universal')",
+    ),
     (
         Column(None, "table1", "column1"),
         "table1.column1",
