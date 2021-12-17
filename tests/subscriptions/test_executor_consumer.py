@@ -47,6 +47,7 @@ from tests.backends.metrics import TestingMetricsBackend
 
 @pytest.mark.ci_only
 def test_executor_consumer() -> None:
+    state.set_config("executor_sample_rate", 1.0)
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
 
@@ -61,7 +62,11 @@ def test_executor_consumer() -> None:
     scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
     assert scheduled_topic_spec is not None
 
-    topic = Topic(scheduled_topic_spec.topic.name)
+    scheduled_topic = Topic(scheduled_topic_spec.topic.name)
+
+    producer = KafkaProducer(
+        build_kafka_producer_configuration(scheduled_topic_spec.topic)
+    )
 
     consumer_group = str(uuid.uuid1().hex)
     auto_offset_reset = "latest"
@@ -69,16 +74,14 @@ def test_executor_consumer() -> None:
         dataset_name,
         [entity_name],
         consumer_group,
+        producer,
         2,
         auto_offset_reset,
         TestingMetricsBackend(),
+        override_result_topic="test-result-topic",
     )
 
     # Produce a scheduled task to the scheduled subscriptions topic
-    producer = KafkaProducer(
-        build_kafka_producer_configuration(scheduled_topic_spec.topic)
-    )
-
     subscription_data = SnQLSubscriptionData(
         project_id=1,
         query="MATCH events SELECT count()",
@@ -107,8 +110,7 @@ def test_executor_consumer() -> None:
 
     encoded_task = encoder.encode(task)
 
-    fut = producer.produce(topic, payload=encoded_task)
-    fut.result()
+    producer.produce(scheduled_topic, payload=encoded_task).result()
 
     producer.close()
 
