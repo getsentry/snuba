@@ -11,7 +11,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.synchronized import commit_codec
 from arroyo.types import Position
 
-from snuba import settings
+from snuba import settings, state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
@@ -304,12 +304,17 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[Tick]:
+        processes = state.get_config("scheduler_processes", 1)
+
+        assert isinstance(processes, int)
+
         schedule_step = ProduceScheduledSubscriptionMessage(
             self.__schedulers,
             self.__producer,
             self.__scheduled_topic_spec,
             commit,
             self.__metrics,
+            processes,
         )
 
         return TickBuffer(

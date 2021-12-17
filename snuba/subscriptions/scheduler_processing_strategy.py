@@ -5,6 +5,7 @@ import time
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime
+from multiprocessing import Pool
 from typing import (
     Callable,
     Deque,
@@ -376,6 +377,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         scheduled_topic_spec: KafkaTopicSpec,
         commit: Callable[[Mapping[Partition, Position]], None],
         metrics: MetricsBackend,
+        processes: int = 1,
     ) -> None:
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
@@ -383,6 +385,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
         self.__commit = commit
         self.__metrics = metrics
+        self.__processes = processes
         self.__closed = False
 
         # Stores each tick with it's futures
@@ -390,6 +393,10 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
         # Not a hard max
         self.__max_buffer_size = 10000
+
+        # Multiprocessing pool
+        if self.__processes > 1:
+            self.__multiprocessing_pool = Pool(self.__processes)
 
     def poll(self) -> None:
         start = time.time()
@@ -437,7 +444,14 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         tasks = self.__schedulers[tick.partition].find(tick)
 
         start_encoding = time.time()
-        encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+
+        if self.__processes > 1:
+            encoded_tasks = self.__multiprocessing_pool.map(
+                self.__encoder.encode, tasks
+            )
+        else:
+            encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+
         self.__metrics.timing(
             "ScheduledSubscriptionTask.encode", (time.time() - start_encoding) * 1000
         )
