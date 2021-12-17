@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from snuba import state
+from snuba import settings
 
 
 class UnauthorizedException(Exception):
@@ -18,7 +18,7 @@ auth_provider = Callable[[], str]
 # TODO: provide a more structured representation of the User that
 # includes the role at least.
 def authorize_request() -> str:
-    provider_id = state.settings.ADMIN_AUTH_PROVIDER
+    provider_id = settings.ADMIN_AUTH_PROVIDER
     provider = AUTH_PROVIDERS.get(provider_id)
     if provider is None:
         raise ValueError("Invalid authorization provider")
