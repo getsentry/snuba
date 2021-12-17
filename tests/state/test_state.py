@@ -3,8 +3,10 @@ import time
 from collections import ChainMap
 from functools import partial
 
+import pytest
+
 from snuba import state
-from snuba.state import safe_dumps
+from snuba.state import MismatchedTypeException, safe_dumps
 
 
 class TestState:
@@ -27,11 +29,54 @@ class TestState:
             [("foo", 100), ("bar", 200), ("noexist", 300), ("noexist-2", None)]
         ) == [1, 2, 300, None]
 
-        state.set_configs({"bar": "quux"})
+        state.set_configs({"bar": "quux"}, force=True)
         all_configs = state.get_all_configs()
         assert all(
             all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)]
         )
+
+    def test_config_types(self) -> None:
+        # Tests for ints
+        state.set_config("test_int", 1)
+        assert state.get_config("test_int") == 1
+        state.set_config("test_int", 2)
+        state.set_config("test_int", "3")
+        assert state.get_config("test_int", 3)
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_int", 0.1)
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_int", "some_string")
+        state.set_config("test_int", None)
+
+        # Tests for floats
+        state.set_config("test_float", 0.1)
+        assert state.get_config("test_float") == 0.1
+        state.set_config("test_float", 0.2)
+        state.set_config("test_float", "0.3")
+        assert state.get_config("test_float") == 0.3
+
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_float", 1)
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_float", "some_string")
+        state.set_config("test_float", None)
+
+        # Tests for strings
+        state.set_config("test_str", "some_string")
+        assert state.get_config("test_str") == "some_string"
+        state.set_config("test_str", "some_other_string")
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_str", 1)
+        with pytest.raises(MismatchedTypeException):
+            state.set_config("test_str", 0.1)
+        state.set_config("test_str", None)
+
+        # Tests with force option
+        state.set_config("some_key", 1)
+        state.set_config("some_key", 0.1, force=True)
+        assert state.get_config("some_key") == 0.1
+        state.set_config("some_key", "some_value", force=True)
+        assert state.get_config("some_key") == "some_value"
 
     def test_memoize(self) -> None:
         @state.memoize(0.1)
@@ -43,13 +88,6 @@ class TestState:
         assert rand1 == rand()
         time.sleep(0.1)
         assert rand1 != rand()
-
-    def test_abtest(self) -> None:
-        assert state.abtest("1000:1/2000:1") in (1000, 2000)
-        assert state.abtest("1000/2000") in (1000, 2000)
-        assert state.abtest("1000/2000:5") in (1000, 2000)
-        assert state.abtest("1000/2000:0") == 1000
-        assert state.abtest("1.5:1/-1.5:1") in (1.5, -1.5)
 
 
 def test_safe_dumps():

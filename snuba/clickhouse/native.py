@@ -72,6 +72,7 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
+        capture_trace: bool = False,
     ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a single quick retry in case of
@@ -142,14 +143,15 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
+        capture_trace: bool = False,
     ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
         attempts, (infinite in the case of too many simultaneous queries
         errors) and wait a second between retries.
 
-        This is used by the writer, which needs to either complete its current
-        write successfully or else quit altogether. Note that each retry in this
+        This is by components which need to either complete their current
+        query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
         attempts_remaining = 3
@@ -164,11 +166,12 @@ class ClickhousePool(object):
                     settings=settings,
                     types_check=types_check,
                     columnar=columnar,
+                    capture_trace=capture_trace,
                 )
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
                 logger.warning(
-                    "Write to ClickHouse failed: %s (%d tries left)",
+                    "ClickHouse query execution failed: %s (%d tries left)",
                     str(e),
                     attempts_remaining,
                 )
@@ -181,7 +184,9 @@ class ClickhousePool(object):
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
-                logger.warning("Write to ClickHouse failed: %s (retrying)", str(e))
+                logger.warning(
+                    "ClickHouse query execution failed: %s (retrying)", str(e)
+                )
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     # Try forever if the server is overloaded.
                     sleep_seconds = state.get_config(
@@ -306,6 +311,7 @@ class NativeDriverReader(Reader):
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
         robust: bool = False,
+        capture_trace: bool = False,
     ) -> Result:
         settings = {**settings} if settings is not None else {}
 
@@ -323,6 +329,7 @@ class NativeDriverReader(Reader):
                 with_column_types=True,
                 query_id=query_id,
                 settings=settings,
+                capture_trace=capture_trace,
             ),
             with_totals=with_totals,
         )
