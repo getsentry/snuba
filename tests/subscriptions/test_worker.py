@@ -244,6 +244,7 @@ def test_subscription_worker(
         future_result = request, result = future.result()
         assert message.payload.task.timestamp == timestamp
         assert message.payload == SubscriptionTaskResult(task, future_result)
+        del result["profile"]
 
         timestamp_field = "timestamp" if dataset_name != "sessions" else "started"
         from_pattern = FunctionCall(
@@ -266,7 +267,8 @@ def test_subscription_worker(
         assert any([from_pattern.match(e) for e in conditions])
         assert any([to_pattern.match(e) for e in conditions])
 
-        assert result == expected_result
+        assert result["data"] == expected_result["data"]
+        assert result["meta"] == expected_result["meta"]
 
 
 def test_subscription_worker_consistent() -> None:
