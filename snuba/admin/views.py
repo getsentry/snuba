@@ -26,6 +26,8 @@ application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 notification_client = RuntimeConfigAutoClient()
 
+USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+
 
 @application.route("/")
 def root() -> Response:
@@ -140,7 +142,7 @@ def configs() -> Response:
                 {"Content-Type": "application/json"},
             )
 
-        user = request.headers.get("X-Goog-Authenticated-User-Email")
+        user = request.headers.get(USER_HEADER_KEY)
 
         state.set_config(
             key, value, user=user,
@@ -176,10 +178,10 @@ def configs() -> Response:
         )
 
 
-@application.route("/configs/<config_key>", methods=["DELETE"])
+@application.route("/configs/<config_key>", methods=["PUT", "DELETE"])
 def config(config_key: str) -> Response:
     if request.method == "DELETE":
-        user = request.headers.get("X-Goog-Authenticated-User-Email")
+        user = request.headers.get(USER_HEADER_KEY)
         state.delete_config(config_key, user=user)
 
         notification_client.notify(
@@ -190,8 +192,49 @@ def config(config_key: str) -> Response:
 
         return Response("", 200)
 
-    # TODO: Editing existing config
-    raise NotImplementedError
+    else:
+        # PUT currently only supports editing existing config when old and
+        # new types match. Does not currently support passing force to
+        # set_config to override the type check.
+
+        user = request.headers.get(USER_HEADER_KEY)
+        data = json.loads(request.data)
+        try:
+            new_value = data["value"]
+
+            assert isinstance(config_key, str), "Invalid key"
+            assert isinstance(new_value, str), "Invalid value"
+            assert config_key != "", "Key cannot be empty string"
+
+            state.set_config(
+                config_key, new_value, user=user,
+            )
+
+        except (KeyError, AssertionError) as exc:
+            return Response(
+                json.dumps({"error": f"Invalid config: {str(exc)}"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+        except (state.MismatchedTypeException):
+            return Response(
+                json.dumps({"error": "Mismatched type"}),
+                400,
+                {"Content-Type": "application/json"},
+            )
+
+        # Value was updated successfully, refetch and return it
+        evaluated_value = state.get_uncached_config(config_key)
+        assert evaluated_value is not None
+        evaluated_type = get_config_type_from_value(evaluated_value)
+
+        config = {
+            "key": config_key,
+            "value": str(evaluated_value),
+            "type": evaluated_type,
+        }
+
+        return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/config_auditlog")
