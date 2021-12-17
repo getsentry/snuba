@@ -45,11 +45,12 @@ def build_executor_consumer(
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    producer: Producer[KafkaPayload],
     max_concurrent_queries: int,
     auto_offset_reset: str,
     metrics: MetricsBackend,
     # TODO: Should be removed once testing is done
-    override_result_topic: Optional[str] = None,
+    override_result_topic: str,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
@@ -107,37 +108,15 @@ def build_executor_consumer(
             executor,
             dataset,
             entity_names,
+            producer,
             # If there are max_concurrent_queries + 10 pending futures in the queue,
             # we will start raising MessageRejected to slow down the consumer as
             # it means our executor cannot keep up
             max_concurrent_queries + 10,
             metrics,
+            override_result_topic,
         ),
     )
-
-
-class Noop(ProcessingStrategy[SubscriptionTaskResult]):
-    """
-    Placeholder.
-    """
-
-    def __init__(self, commit: Callable[[Mapping[Partition, Position]], None]):
-        self.__commit = commit
-
-    def poll(self) -> None:
-        pass
-
-    def submit(self, message: Message[SubscriptionTaskResult]) -> None:
-        self.__commit({message.partition: Position(message.offset, message.timestamp)})
-
-    def close(self) -> None:
-        pass
-
-    def terminate(self) -> None:
-        pass
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
 
 
 class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
@@ -146,14 +125,18 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         executor: ThreadPoolExecutor,
         dataset: Dataset,
         entity_names: Sequence[str],
+        producer: Producer[KafkaPayload],
         buffer_size: int,
         metrics: MetricsBackend,
+        result_topic: str,
     ) -> None:
         self.__executor = executor
         self.__dataset = dataset
         self.__entity_names = entity_names
+        self.__producer = producer
         self.__buffer_size = buffer_size
         self.__metrics = metrics
+        self.__result_topic = result_topic
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
@@ -164,7 +147,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__executor,
             self.__buffer_size,
             self.__metrics,
-            Noop(commit),
+            ProduceResult(self.__producer, self.__result_topic, commit),
         )
 
 
