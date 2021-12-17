@@ -71,3 +71,20 @@ def test_post_configs(admin_api: Any) -> None:
         "/configs", data=json.dumps({"key": "test_string", "value": "bar"})
     )
     assert response.status_code == 400
+
+
+def test_query_trace(admin_api: Any) -> None:
+    response = admin_api.post(
+        "/clickhouse_trace_query",
+        data=json.dumps(
+            {
+                "host": "localhost",
+                "port": 9000,
+                "storage": "errors_ro",
+                "sql": "SELECT count() FROM errors_local",
+            }
+        ),
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "<Debug> executeQuery" in data["trace_output"]

@@ -2,31 +2,17 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Type
 
-from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
-from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.admin.clickhouse.common import InvalidCustomQuery, get_clickhouse_connection
 from snuba.utils.serializable_exception import SerializableException
+from snuba.clickhouse.native import ClickhouseResult
+from snuba.clusters.cluster import ClickhouseCluster
 
 
 class NonExistentSystemQuery(SerializableException):
     pass
 
 
-class InvalidNodeError(SerializableException):
-    pass
-
-
-class InvalidStorageError(SerializableException):
-    pass
-
-
 class InvalidResultError(SerializableException):
-    pass
-
-
-class InvalidCustomQuery(SerializableException):
     pass
 
 
@@ -109,33 +95,10 @@ def _run_sql_query_on_host(
     """
     Run the SQL query. It should be validated before getting to this point
     """
-    storage_key = None
-    try:
-        storage_key = StorageKey(storage_name)
-    except ValueError:
-        raise InvalidStorageError(extra_data={"storage_name": storage_name})
-
-    storage = get_storage(storage_key)
-    cluster = storage.get_cluster()
-
-    if not _is_valid_node(clickhouse_host, clickhouse_port, cluster):
-        raise InvalidNodeError(
-            extra_data={"host": clickhouse_host, "port": clickhouse_port}
-        )
-
-    database = cluster.get_database()
-
-    connection = ClickhousePool(
-        clickhouse_host,
-        clickhouse_port,
-        settings.CLICKHOUSE_READONLY_USER,
-        settings.CLICKHOUSE_READONLY_PASSWORD,
-        database,
-        # force read-only
-        client_settings=ClickhouseClientSettings.QUERY.value.settings,
+    connection = get_clickhouse_connection(
+        clickhouse_host, clickhouse_port, storage_name
     )
     query_result = connection.execute(query=sql, with_column_types=True)
-    connection.close()
 
     return query_result
 

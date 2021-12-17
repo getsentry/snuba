@@ -109,6 +109,9 @@ class ClickhousePool(object):
         failures.
         """
         try:
+            # if capture_trace:
+            #     conn = self._create_conn(send_logs_level="trace")
+            # else:
             conn = self.pool.get(block=True)
 
             attempts_remaining = 2
@@ -120,6 +123,13 @@ class ClickhousePool(object):
                     conn = self._create_conn()
 
                 try:
+                    if capture_trace:
+                        settings = (
+                            {**settings, "send_logs_level": "trace"}
+                            if settings
+                            else {"send_logs_level": "trace"}
+                        )
+
                     query_execute = partial(
                         conn.execute,
                         query,
@@ -134,12 +144,7 @@ class ClickhousePool(object):
                     trace_output = ""
                     if capture_trace:
                         with capture_logging() as buffer:
-                            if settings:
-                                settings = {**settings, "send_logs_level": "trace"}
-                            else:
-                                settings = {"send_logs_level": "trace"}
-                            result_data = query_execute()
-                            # In order to avoid exposing PII the results are discarded
+                            query_execute()  # In order to avoid exposing PII the results are discarded
                             result_data = [[], []] if with_column_types else []
                             trace_output = buffer.getvalue()
                     else:
@@ -256,7 +261,14 @@ class ClickhousePool(object):
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
-    def _create_conn(self) -> Client:
+    def _create_conn(self, **kwargs: str) -> Client:
+        if kwargs:
+            client_settings: Mapping[str, str] = {
+                **self.client_settings,
+                **kwargs,
+            }
+        else:
+            client_settings = self.client_settings
         return Client(
             host=self.host,
             port=self.port,
@@ -265,7 +277,7 @@ class ClickhousePool(object):
             database=self.database,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
-            settings=self.client_settings,
+            settings=client_settings,
         )
 
     def close(self) -> None:

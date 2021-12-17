@@ -3,14 +3,14 @@ import {
   ConfigKey,
   ConfigValue,
   ConfigChange,
-} from "./runtime_config/types";
+} from './runtime_config/types';
 
 import {
   ClickhouseCannedQuery,
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
-} from "./clickhouse_queries/types";
+} from './clickhouse_queries/types';
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -20,70 +20,70 @@ interface Client {
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getClickhouseCannedQueries: () => Promise<[ClickhouseCannedQuery]>;
-  executeQuery: (req: QueryRequest) => Promise<QueryResult>;
+  executeQuery: (req: QueryRequest, endpoint?: string) => Promise<QueryResult>;
 }
 
 function Client() {
-  const baseUrl = "/";
+  const baseUrl = '/';
 
   return {
     getConfigs: () => {
-      const url = baseUrl + "configs";
+      const url = baseUrl + 'configs';
       return fetch(url).then((resp) => resp.json());
     },
     createNewConfig: (key: ConfigKey, value: ConfigValue) => {
-      const url = baseUrl + "configs";
+      const url = baseUrl + 'configs';
       const params = { key, value };
 
       return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
         body: JSON.stringify(params),
       }).then((res) => {
         if (res.ok) {
           return Promise.resolve(res.json());
         } else {
           return res.json().then((err) => {
-            let errMsg = err?.error || "Could not create config";
+            let errMsg = err?.error || 'Could not create config';
             throw new Error(errMsg);
           });
         }
       });
     },
     deleteConfig: (key: ConfigKey) => {
-      const url = baseUrl + "configs/" + encodeURIComponent(key);
+      const url = baseUrl + 'configs/' + encodeURIComponent(key);
       return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "DELETE",
+        headers: { 'Content-Type': 'application/json' },
+        method: 'DELETE',
       }).then((res) => {
         if (res.ok) {
           return;
         } else {
-          throw new Error("Could not delete config");
+          throw new Error('Could not delete config');
         }
       });
     },
     editConfig: (key: ConfigKey, value: ConfigValue) => {
-      const url = baseUrl + "configs/" + encodeURIComponent(key);
+      const url = baseUrl + 'configs/' + encodeURIComponent(key);
       return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "PUT",
+        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT',
         body: JSON.stringify({ value }),
       }).then((res) => {
         if (res.ok) {
           return Promise.resolve(res.json());
         } else {
-          throw new Error("Could not edit config");
+          throw new Error('Could not edit config');
         }
       });
     },
 
     getAuditlog: () => {
-      const url = baseUrl + "config_auditlog";
+      const url = baseUrl + 'config_auditlog';
       return fetch(url).then((resp) => resp.json());
     },
     getClickhouseNodes: () => {
-      const url = baseUrl + "clickhouse_nodes";
+      const url = baseUrl + 'clickhouse_nodes';
       return (
         fetch(url)
           .then((resp) => resp.json())
@@ -95,14 +95,17 @@ function Client() {
       );
     },
     getClickhouseCannedQueries: () => {
-      const url = baseUrl + "clickhouse_queries";
+      const url = baseUrl + 'clickhouse_queries';
       return fetch(url).then((resp) => resp.json());
     },
-    executeQuery: (query: QueryRequest) => {
-      const url = baseUrl + "run_clickhouse_system_query";
+    executeQuery: (query: QueryRequest, endpoint?: string) => {
+      const endpoint_to_use = endpoint
+        ? endpoint
+        : 'run_clickhouse_system_query';
+      const url = baseUrl + endpoint_to_use;
       return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
         body: JSON.stringify(query),
       }).then((resp) => resp.json());
     },
