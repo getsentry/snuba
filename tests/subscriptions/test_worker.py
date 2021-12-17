@@ -267,7 +267,8 @@ def test_subscription_worker(
         assert any([from_pattern.match(e) for e in conditions])
         assert any([to_pattern.match(e) for e in conditions])
 
-        assert result == expected_result
+        assert result["data"] == expected_result["data"]
+        assert result["meta"] == expected_result["meta"]
 
 
 def test_subscription_worker_consistent() -> None:
