@@ -155,13 +155,14 @@ def generate_message(
 def test_execute_query_strategy() -> None:
     state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
+    entity_names = ["events"]
     max_concurrent_queries = 2
     executor = ThreadPoolExecutor(max_concurrent_queries)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
     strategy = ExecuteQuery(
-        dataset, executor, max_concurrent_queries, metrics, next_step
+        dataset, entity_names, executor, max_concurrent_queries, metrics, next_step
     )
 
     make_message = generate_message()
@@ -188,11 +189,12 @@ def test_execute_query_strategy() -> None:
 def test_too_many_concurrent_queries() -> None:
     state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
+    entity_names = ["events"]
     executor = ThreadPoolExecutor(2)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, executor, 4, metrics, next_step)
+    strategy = ExecuteQuery(dataset, entity_names, executor, 4, metrics, next_step)
 
     make_message = generate_message()
 
@@ -268,6 +270,7 @@ def test_produce_result() -> None:
 def test_execute_and_produce_result() -> None:
     state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
+    entity_names = ["events"]
     executor = ThreadPoolExecutor()
     max_concurrent_queries = 2
     metrics = TestingMetricsBackend()
@@ -285,6 +288,7 @@ def test_execute_and_produce_result() -> None:
 
     strategy = ExecuteQuery(
         dataset,
+        entity_names,
         executor,
         max_concurrent_queries,
         metrics,
