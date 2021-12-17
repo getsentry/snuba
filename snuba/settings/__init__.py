@@ -15,6 +15,8 @@ PORT = 1218
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 
+ADMIN_AUTH_PROVIDER = "NOOP"
+
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
