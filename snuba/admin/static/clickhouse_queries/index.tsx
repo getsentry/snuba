@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
+import { COLORS } from "../theme";
 
 import {
   ClickhouseNodeData,
@@ -67,6 +68,10 @@ function ClickhouseQueries(props: { api: Client }) {
     });
   }
 
+  function copyText(text: string) {
+    window.navigator.clipboard.writeText(text);
+  }
+
   return (
     <div>
       <form>
@@ -131,15 +136,26 @@ function ClickhouseQueries(props: { api: Client }) {
           headerData={["Query", "Response"]}
           rowData={queryResultHistory.map((queryResult) => [
             <span>{queryResult.input_query}</span>,
-            <Table
-              headerData={queryResult.column_names}
-              rowData={queryResult.rows}
-            />,
+            <div>
+              <div style={jsonStyle}>{JSON.stringify(queryResult)}</div>
+              <button onClick={() => copyText(JSON.stringify(queryResult))}>
+                Copy to clipboard
+              </button>
+            </div>,
           ])}
         />
       </div>
     </div>
   );
 }
+
+const jsonStyle = {
+  padding: 10,
+  border: `1px solid ${COLORS.TABLE_BORDER}`,
+  fontFamily: "monospace",
+  borderRadius: 4,
+  backgroundColor: COLORS.BG_LIGHT,
+  marginBottom: 10,
+};
 
 export default ClickhouseQueries;

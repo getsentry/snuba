@@ -7,6 +7,7 @@ const COLORS = {
   TEXT_DEFAULT: "black",
   TEXT_LIGHTER: "#464646",
   TEXT_INACTIVE: "#858585",
+  BG_LIGHT: "#E3E3E3",
 };
 
 export { COLORS };
