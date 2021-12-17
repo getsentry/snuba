@@ -16,6 +16,7 @@ interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   deleteConfig: (key: ConfigKey) => Promise<void>;
+  editConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getClickhouseCannedQueries: () => Promise<[ClickhouseCannedQuery]>;
@@ -62,6 +63,21 @@ function Client() {
         }
       });
     },
+    editConfig: (key: ConfigKey, value: ConfigValue) => {
+      const url = baseUrl + "configs/" + encodeURIComponent(key);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+        body: JSON.stringify({ value }),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          throw new Error("Could not edit config");
+        }
+      });
+    },
+
     getAuditlog: () => {
       const url = baseUrl + "config_auditlog";
       return fetch(url).then((resp) => resp.json());
