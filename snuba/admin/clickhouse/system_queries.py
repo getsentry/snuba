@@ -1,8 +1,9 @@
+import re
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Tuple, Type, cast
+from typing import Dict, Optional, Sequence, Type
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -18,6 +19,14 @@ class InvalidNodeError(SerializableException):
 
 
 class InvalidStorageError(SerializableException):
+    pass
+
+
+class InvalidResultError(SerializableException):
+    pass
+
+
+class InvalidCustomQuery(SerializableException):
     pass
 
 
@@ -94,17 +103,12 @@ def _is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
     return host == connection_id.hostname and port == connection_id.tcp_port
 
 
-def run_system_query_on_host_by_name(
-    clickhouse_host: str,
-    clickhouse_port: int,
-    storage_name: str,
-    system_query_name: str,
-) -> Tuple[Sequence[Any], Sequence[Tuple[str, str]]]:
-    query = SystemQuery.from_name(system_query_name)
-
-    if not query:
-        raise NonExistentSystemQuery(extra_data={"query_name": system_query_name})
-
+def _run_sql_query_on_host(
+    clickhouse_host: str, clickhouse_port: int, storage_name: str, sql: str
+) -> ClickhouseResult:
+    """
+    Run the SQL query. It should be validated before getting to this point
+    """
     storage_key = None
     try:
         storage_key = StorageKey(storage_name)
@@ -130,6 +134,83 @@ def run_system_query_on_host_by_name(
         # force read-only
         client_settings=ClickhouseClientSettings.QUERY.value.settings,
     )
-    query_result = connection.execute(query=query.sql, with_column_types=True)
+    query_result = connection.execute(query=sql, with_column_types=True)
     connection.close()
-    return cast(Tuple[Sequence[Any], Sequence[Tuple[str, str]]], query_result,)
+
+    return query_result
+
+
+def run_system_query_on_host_by_name(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    system_query_name: str,
+) -> ClickhouseResult:
+    query = SystemQuery.from_name(system_query_name)
+
+    if not query:
+        raise NonExistentSystemQuery(extra_data={"query_name": system_query_name})
+
+    return _run_sql_query_on_host(
+        clickhouse_host, clickhouse_port, storage_name, query.sql
+    )
+
+
+SYSTEM_QUERY_RE = re.compile(
+    r"""
+        ^ # Start
+        (SELECT|select)
+        \s
+        (?P<select_statement>[\w\s,\(\)]+|\*)
+        \s
+        (FROM|from)
+        \s
+        system.[a-z_]+
+        (?P<extra>\s[\w\s,=+\(\)']+)?
+        ;? # Optional semicolon
+        $ # End
+    """,
+    re.VERBOSE,
+)
+
+
+def run_system_query_on_host_with_sql(
+    clickhouse_host: str, clickhouse_port: int, storage_name: str, system_query_sql: str
+) -> ClickhouseResult:
+    validate_system_query(system_query_sql)
+    return _run_sql_query_on_host(
+        clickhouse_host, clickhouse_port, storage_name, system_query_sql
+    )
+
+
+def validate_system_query(sql_query: str) -> None:
+    """
+    Simple validation to ensure query only attempts to access system tables and not
+    any others. Will be replaced by AST parser eventually.
+
+    Raises InvalidCustomQuery if query is invalid or not allowed.
+    """
+    sql_query = " ".join(sql_query.split())
+
+    disallowed_keywords = ["select", "insert", "join"]
+
+    match = SYSTEM_QUERY_RE.match(sql_query)
+
+    if match is None:
+        raise InvalidCustomQuery("Query is invalid")
+
+    select_statement = match.group("select_statement")
+
+    # Extremely quick and dirty way of ensuring there is not a nested select, insert or a join
+    for kw in disallowed_keywords:
+        if kw in select_statement.lower():
+            raise InvalidCustomQuery(f"{kw} is not allowed here")
+
+    extra = match.group("extra")
+
+    # Unfortunately "extra" is pretty permissive right now, just ensure
+    # there is no attempt to do a select, insert or join in there
+    if extra is not None:
+        for kw in disallowed_keywords:
+            if kw in extra.lower():
+                raise InvalidCustomQuery(f"{kw} is not allowed here")
