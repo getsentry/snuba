@@ -3,20 +3,12 @@ import Client from "../api_client";
 import { Table } from "../table";
 import { COLORS } from "../theme";
 
-import {
-  ClickhouseNodeData,
-  ClickhouseCannedQuery,
-  QueryRequest,
-  QueryResult,
-} from "./types";
+import { ClickhouseNodeData, QueryRequest, QueryResult } from "./types";
 
 type QueryState = Partial<QueryRequest>;
 
 function ClickhouseQueries(props: { api: Client }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-  const [cannedQueries, setCannedQueries] = useState<ClickhouseCannedQuery[]>(
-    []
-  );
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
@@ -25,9 +17,6 @@ function ClickhouseQueries(props: { api: Client }) {
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
       setNodeData(res);
-    });
-    props.api.getClickhouseCannedQueries().then((res) => {
-      setCannedQueries(res);
     });
   }, []);
 
@@ -52,20 +41,25 @@ function ClickhouseQueries(props: { api: Client }) {
     });
   }
 
-  function selectCannedQuery(queryName: string) {
+  function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
-        query_name: queryName,
+        sql,
       };
     });
   }
 
   function executeQuery() {
-    props.api.executeQuery(query as QueryRequest).then((result) => {
-      result.input_query = `${query.query_name}(${query.storage},${query.host}:${query.port})`;
-      setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
-    });
+    props.api
+      .executeQuery(query as QueryRequest)
+      .then((result) => {
+        result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
+        setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
+      })
+      .catch((err) => {
+        window.alert(err?.error || "An error occurred");
+      });
   }
 
   function copyText(text: string) {
@@ -76,59 +70,60 @@ function ClickhouseQueries(props: { api: Client }) {
     <div>
       <form>
         <h2>Construct a query</h2>
-        <select
-          value={query.storage || ""}
-          onChange={(evt) => selectStorage(evt.target.value)}
-        >
-          <option disabled value="">
-            Select a storage
-          </option>
-          {nodeData.map((storage) => (
-            <option key={storage.storage_name} value={storage.storage_name}>
-              {storage.storage_name}
-            </option>
-          ))}
-        </select>
-        {query.storage && (
-          <select
-            value={
-              query.host && query.port ? `${query.host}:${query.port}` : ""
-            }
-            onChange={(evt) => selectHost(evt.target.value)}
-          >
-            <option disabled value="">
-              Select a host
-            </option>
-            {nodeData
-              .find((el) => el.storage_name === query.storage)
-              ?.local_nodes.map((node, nodeIndex) => (
-                <option
-                  key={`${node.host}:${node.port}`}
-                  value={`${node.host}:${node.port}`}
-                >
-                  {node.host}:{node.port}
+        <div>
+          <TextArea value={query.sql || ""} onChange={updateQuerySql} />
+        </div>
+        <div style={executeActionsStyle}>
+          <div>
+            <select
+              value={query.storage || ""}
+              onChange={(evt) => selectStorage(evt.target.value)}
+              style={selectStyle}
+            >
+              <option disabled value="">
+                Select a storage
+              </option>
+              {nodeData.map((storage) => (
+                <option key={storage.storage_name} value={storage.storage_name}>
+                  {storage.storage_name}
                 </option>
               ))}
-          </select>
-        )}
-        {query.storage && query.host && query.port && (
-          <select
-            value={query.query_name || ""}
-            onChange={(evt) => selectCannedQuery(evt.target.value)}
-          >
-            <option disabled value="">
-              Select a query
-            </option>
-            {cannedQueries.map((cannedQuery) => (
-              <option key={`${cannedQuery.name}`} value={`${cannedQuery.name}`}>
-                {cannedQuery.name}: {cannedQuery.description}
+            </select>
+            <select
+              disabled={!query.storage}
+              value={
+                query.host && query.port ? `${query.host}:${query.port}` : ""
+              }
+              onChange={(evt) => selectHost(evt.target.value)}
+              style={selectStyle}
+            >
+              <option disabled value="">
+                Select a host
               </option>
-            ))}
-          </select>
-        )}
-        {query.storage && query.host && query.port && query.query_name && (
-          <button onClick={(_) => executeQuery()}>Execute query</button>
-        )}
+              {nodeData
+                .find((el) => el.storage_name === query.storage)
+                ?.local_nodes.map((node) => (
+                  <option
+                    key={`${node.host}:${node.port}`}
+                    value={`${node.host}:${node.port}`}
+                  >
+                    {node.host}:{node.port}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <button
+              onClick={(_) => executeQuery()}
+              style={executeButtonStyle}
+              disabled={
+                !query.storage || !query.host || !query.port || !query.sql
+              }
+            >
+              Execute query
+            </button>
+          </div>
+        </div>
       </form>
       <div>
         <h2>Query results</h2>
@@ -143,6 +138,7 @@ function ClickhouseQueries(props: { api: Client }) {
               </button>
             </div>,
           ])}
+          columnWidths={[1, 5]}
         />
       </div>
     </div>
@@ -156,6 +152,40 @@ const jsonStyle = {
   borderRadius: 4,
   backgroundColor: COLORS.BG_LIGHT,
   marginBottom: 10,
+  wordBreak: "break-all" as const,
 };
+
+const executeActionsStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  marginTop: 8,
+};
+
+const executeButtonStyle = {
+  height: 30,
+  border: 0,
+  padding: "4px 20px",
+};
+
+const selectStyle = {
+  marginRight: 8,
+  height: 30,
+};
+
+function TextArea(props: {
+  value: string;
+  onChange: (nextValue: string) => void;
+}) {
+  const { value, onChange } = props;
+  return (
+    <textarea
+      spellCheck={false}
+      value={value}
+      onChange={(evt) => onChange(evt.target.value)}
+      style={{ width: "100%", height: 100 }}
+      placeholder={"Write your query here"}
+    />
+  );
+}
 
 export default ClickhouseQueries;
