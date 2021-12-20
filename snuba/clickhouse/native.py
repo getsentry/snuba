@@ -4,9 +4,12 @@ import logging
 import queue
 import re
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Mapping, Optional, Sequence, Union
+from functools import partial
+from io import StringIO
+from typing import Any, Generator, Mapping, Optional, Sequence, TypedDict, Union
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -20,16 +23,39 @@ from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse")
+trace_logger = logging.getLogger("clickhouse_driver.log")
+trace_logger.setLevel("INFO")
 
 Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
 
+ClickhouseProfile = TypedDict(
+    "ClickhouseProfile",
+    {"bytes": int, "blocks": int, "rows": int, "elapsed": float},
+    total=False,
+)
+
+
 @dataclass(frozen=True)
 class ClickhouseResult:
     results: Sequence[Any] = field(default_factory=list)
     meta: Sequence[Any] | None = None
+    profile: ClickhouseProfile | None = None
+    trace_output: str = ""
+
+
+@contextmanager
+def capture_logging() -> Generator[StringIO, None, None]:
+    buffer = StringIO()
+    new_handler = logging.StreamHandler(buffer)
+    trace_logger.addHandler(new_handler)
+
+    yield buffer
+
+    trace_logger.removeHandler(new_handler)
+    buffer.close()
 
 
 class ClickhousePool(object):
@@ -94,7 +120,8 @@ class ClickhousePool(object):
                     conn = self._create_conn()
 
                 try:
-                    result_data: Sequence[Any] = conn.execute(
+                    query_execute = partial(
+                        conn.execute,
                         query,
                         params=params,
                         with_column_types=with_column_types,
@@ -103,14 +130,42 @@ class ClickhousePool(object):
                         types_check=types_check,
                         columnar=columnar,
                     )
+                    result_data: Sequence[Any]
+                    trace_output = ""
+                    if capture_trace:
+                        with capture_logging() as buffer:
+                            if settings:
+                                settings = {**settings, "send_logs_level": "trace"}
+                            else:
+                                settings = {"send_logs_level": "trace"}
+                            result_data = query_execute()
+                            # In order to avoid exposing PII the results are discarded
+                            result_data = [[], []] if with_column_types else []
+                            trace_output = buffer.getvalue()
+                    else:
+                        result_data = query_execute()
+
+                    profile_data: ClickhouseProfile = {
+                        "bytes": conn.last_query.profile_info.bytes,
+                        "blocks": conn.last_query.profile_info.blocks,
+                        "rows": conn.last_query.profile_info.rows,
+                        "elapsed": conn.last_query.elapsed,
+                    }
                     if with_column_types:
                         result = ClickhouseResult(
-                            results=result_data[0], meta=result_data[1],
+                            results=result_data[0],
+                            meta=result_data[1],
+                            profile=profile_data,
+                            trace_output=trace_output,
                         )
                     else:
                         if not isinstance(result_data, (list, tuple)):
                             result_data = [result_data]
-                        result = ClickhouseResult(results=result_data)
+                        result = ClickhouseResult(
+                            results=result_data,
+                            profile=profile_data,
+                            trace_output=trace_output,
+                        )
 
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
@@ -274,6 +329,7 @@ class NativeDriverReader(Reader):
         """
         meta = result.meta if result.meta is not None else []
         data = result.results
+        profile = result.profile if result.profile else {}
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent
@@ -296,9 +352,16 @@ class NativeDriverReader(Reader):
                 "data": data,
                 "meta": meta,
                 "totals": totals,
+                "profile": profile,
+                "trace_output": result.trace_output,
             }
         else:
-            new_result = {"data": data, "meta": meta}
+            new_result = {
+                "data": data,
+                "meta": meta,
+                "profile": profile,
+                "trace_output": result.trace_output,
+            }
 
         transform_column_types(new_result)
 

@@ -5,13 +5,15 @@ import { COLORS } from "./theme";
 type TableProps = {
   headerData: ReactNode[];
   rowData: ReactNode[][];
-  columnWidths: number[];
+  columnWidths?: number[];
 };
 
 function Table(props: TableProps) {
   const { headerData, rowData, columnWidths } = props;
 
-  const sumColumnWidths = columnWidths.reduce((acc, i) => acc + i, 0);
+  const autoColumnWidths = Array(headerData.length).fill(1);
+  const notEmptyColumnWidths = columnWidths ?? autoColumnWidths;
+  const sumColumnWidths = notEmptyColumnWidths.reduce((acc, i) => acc + i, 0);
 
   return (
     <table style={tableStyle}>
@@ -22,7 +24,9 @@ function Table(props: TableProps) {
               key={idx}
               style={{
                 ...thStyle,
-                width: `${(columnWidths[idx] * 100) / sumColumnWidths}%`,
+                width: `${
+                  (notEmptyColumnWidths[idx] * 100) / sumColumnWidths
+                }%`,
               }}
             >
               {col}

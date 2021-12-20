@@ -1,34 +1,42 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
+import { Table } from "../table";
+import { COLORS } from "../theme";
 
-import { ClickhouseNodeData } from "./types";
+import {
+  ClickhouseNodeData,
+  ClickhouseCannedQuery,
+  QueryRequest,
+  QueryResult,
+} from "./types";
 
-type QueryState = {
-  storage: string | null;
-  host: string | null;
-  port: number | null;
-};
+type QueryState = Partial<QueryRequest>;
 
 function ClickhouseQueries(props: { api: Client }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-
-  const [query, setQuery] = useState<QueryState>({
-    storage: null,
-    host: null,
-    port: null,
-  });
+  const [cannedQueries, setCannedQueries] = useState<ClickhouseCannedQuery[]>(
+    []
+  );
+  const [query, setQuery] = useState<QueryState>({});
+  const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
+    []
+  );
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
       setNodeData(res);
     });
+    props.api.getClickhouseCannedQueries().then((res) => {
+      setCannedQueries(res);
+    });
   }, []);
 
   function selectStorage(storage: string) {
-    setQuery({
-      storage,
-      host: null,
-      port: null,
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        storage: storage,
+      };
     });
   }
 
@@ -44,9 +52,30 @@ function ClickhouseQueries(props: { api: Client }) {
     });
   }
 
+  function selectCannedQuery(queryName: string) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        query_name: queryName,
+      };
+    });
+  }
+
+  function executeQuery() {
+    props.api.executeQuery(query as QueryRequest).then((result) => {
+      result.input_query = `${query.query_name}(${query.storage},${query.host}:${query.port})`;
+      setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
+    });
+  }
+
+  function copyText(text: string) {
+    window.navigator.clipboard.writeText(text);
+  }
+
   return (
     <div>
       <form>
+        <h2>Construct a query</h2>
         <select
           value={query.storage || ""}
           onChange={(evt) => selectStorage(evt.target.value)}
@@ -82,9 +111,51 @@ function ClickhouseQueries(props: { api: Client }) {
               ))}
           </select>
         )}
+        {query.storage && query.host && query.port && (
+          <select
+            value={query.query_name || ""}
+            onChange={(evt) => selectCannedQuery(evt.target.value)}
+          >
+            <option disabled value="">
+              Select a query
+            </option>
+            {cannedQueries.map((cannedQuery) => (
+              <option key={`${cannedQuery.name}`} value={`${cannedQuery.name}`}>
+                {cannedQuery.name}: {cannedQuery.description}
+              </option>
+            ))}
+          </select>
+        )}
+        {query.storage && query.host && query.port && query.query_name && (
+          <button onClick={(_) => executeQuery()}>Execute query</button>
+        )}
       </form>
+      <div>
+        <h2>Query results</h2>
+        <Table
+          headerData={["Query", "Response"]}
+          rowData={queryResultHistory.map((queryResult) => [
+            <span>{queryResult.input_query}</span>,
+            <div>
+              <div style={jsonStyle}>{JSON.stringify(queryResult)}</div>
+              <button onClick={() => copyText(JSON.stringify(queryResult))}>
+                Copy to clipboard
+              </button>
+            </div>,
+          ])}
+        />
+      </div>
     </div>
   );
 }
+
+const jsonStyle = {
+  padding: 10,
+  border: `1px solid ${COLORS.TABLE_BORDER}`,
+  fontFamily: "monospace",
+  borderRadius: 4,
+  backgroundColor: COLORS.BG_LIGHT,
+  marginBottom: 10,
+};
 
 export default ClickhouseQueries;
