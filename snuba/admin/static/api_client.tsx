@@ -6,7 +6,6 @@ import {
 } from "./runtime_config/types";
 
 import {
-  ClickhouseCannedQuery,
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
@@ -19,7 +18,6 @@ interface Client {
   editConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
-  getClickhouseCannedQueries: () => Promise<[ClickhouseCannedQuery]>;
   executeQuery: (req: QueryRequest) => Promise<QueryResult>;
 }
 
@@ -94,17 +92,19 @@ function Client() {
           })
       );
     },
-    getClickhouseCannedQueries: () => {
-      const url = baseUrl + "clickhouse_queries";
-      return fetch(url).then((resp) => resp.json());
-    },
     executeQuery: (query: QueryRequest) => {
       const url = baseUrl + "run_clickhouse_system_query";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify(query),
-      }).then((resp) => resp.json());
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
     },
   };
 }
