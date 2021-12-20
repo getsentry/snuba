@@ -5,14 +5,22 @@ import {
   ConfigChange,
 } from "./runtime_config/types";
 
-import { ClickhouseNodeData } from "./clickhouse_queries/types";
+import {
+  ClickhouseCannedQuery,
+  ClickhouseNodeData,
+  QueryRequest,
+  QueryResult,
+} from "./clickhouse_queries/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   deleteConfig: (key: ConfigKey) => Promise<void>;
+  editConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  getClickhouseCannedQueries: () => Promise<[ClickhouseCannedQuery]>;
+  executeQuery: (req: QueryRequest) => Promise<QueryResult>;
 }
 
 function Client() {
@@ -55,6 +63,21 @@ function Client() {
         }
       });
     },
+    editConfig: (key: ConfigKey, value: ConfigValue) => {
+      const url = baseUrl + "configs/" + encodeURIComponent(key);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+        body: JSON.stringify({ value }),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          throw new Error("Could not edit config");
+        }
+      });
+    },
+
     getAuditlog: () => {
       const url = baseUrl + "config_auditlog";
       return fetch(url).then((resp) => resp.json());
@@ -70,6 +93,18 @@ function Client() {
             return res.filter((storage: any) => storage.local_nodes.length > 0);
           })
       );
+    },
+    getClickhouseCannedQueries: () => {
+      const url = baseUrl + "clickhouse_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
+    executeQuery: (query: QueryRequest) => {
+      const url = baseUrl + "run_clickhouse_system_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => resp.json());
     },
   };
 }
