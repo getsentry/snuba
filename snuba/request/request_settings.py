@@ -50,10 +50,6 @@ class RequestSettings(ABC):
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         pass
 
-    @abstractmethod
-    def get_capture_trace(self) -> bool:
-        pass
-
 
 class HTTPRequestSettings(RequestSettings):
     """
@@ -71,7 +67,6 @@ class HTTPRequestSettings(RequestSettings):
         parent_api: str = "<unknown>",
         dry_run: bool = False,
         legacy: bool = False,
-        capture_trace: bool = False,
     ) -> None:
         super().__init__(referrer=referrer)
         self.__turbo = turbo
@@ -81,7 +76,6 @@ class HTTPRequestSettings(RequestSettings):
         self.__dry_run = dry_run
         self.__legacy = legacy
         self.__rate_limit_params: List[RateLimitParameters] = []
-        self.__capture_trace = capture_trace
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -106,9 +100,6 @@ class HTTPRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         self.__rate_limit_params.append(rate_limit_param)
-
-    def get_capture_trace(self) -> bool:
-        return self.__capture_trace
 
 
 class SubscriptionRequestSettings(RequestSettings):
@@ -146,6 +137,3 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         pass
-
-    def get_capture_trace(self) -> bool:
-        return False
