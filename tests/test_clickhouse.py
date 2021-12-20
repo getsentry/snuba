@@ -1,12 +1,14 @@
 from unittest.mock import call, patch
 
 from clickhouse_driver import Client, errors
+
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 
 
 def test_flattened() -> None:
@@ -60,3 +62,22 @@ def test_reconnect(FakeClient: Client) -> None:
             columnar=False,
         ),
     ]
+
+
+def test_capture_trace() -> None:
+    storage = get_storage(StorageKey.EVENTS)
+    clickhouse = storage.get_cluster().get_query_connection(
+        ClickhouseClientSettings.QUERY
+    )
+
+    data = clickhouse.execute(
+        "SELECT count() FROM errors_local", with_column_types=True, capture_trace=True
+    )
+    assert data.results == []
+    assert data.meta == []
+    assert data.trace_output == ""
+    assert data.profile is not None
+    assert data.profile["elapsed"] > 0
+    assert data.profile["bytes"] > 0
+    assert data.profile["rows"] > 0
+    assert data.profile["blocks"] > 0
