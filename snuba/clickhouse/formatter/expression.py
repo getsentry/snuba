@@ -204,7 +204,7 @@ class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
 
 def _gen_random_number() -> int:
     # https://xkcd.com/221/
-    return 4
+    return -1337
 
 
 class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
@@ -214,7 +214,7 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     """
 
     def _format_string_literal(self, exp: Literal) -> str:
-        return "$S"
+        return "'$S'"
 
     def _format_number_literal(self, exp: Literal) -> str:
         return str(_gen_random_number())
