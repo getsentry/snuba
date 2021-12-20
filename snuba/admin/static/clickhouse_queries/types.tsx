@@ -9,17 +9,11 @@ type ClickhouseNodeData = {
   local_nodes: ClickhouseNode[];
 };
 
-type ClickhouseCannedQuery = {
-  description: string | null;
-  name: string;
-  sql: string;
-};
-
 type QueryRequest = {
   storage: string;
   host: string;
   port: number;
-  query_name: string;
+  sql: string;
 };
 
 type QueryResultColumnMetadata = [string];
@@ -32,4 +26,4 @@ type QueryResult = {
   rows: [QueryResultRow];
 };
 
-export { ClickhouseNodeData, ClickhouseCannedQuery, QueryRequest, QueryResult };
+export { ClickhouseNodeData, QueryRequest, QueryResult };
