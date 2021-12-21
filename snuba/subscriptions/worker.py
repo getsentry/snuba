@@ -147,9 +147,9 @@ class SubscriptionWorker(
                     else primary_result
                 )
                 for result in other_results:
-                    match = primary_result_data is not None and handle_nan(
+                    match = primary_result_data is not None and handle_differences(
                         result.result
-                    ) == handle_nan(primary_result_data)
+                    ) == handle_differences(primary_result_data)
                     self.__metrics.increment(
                         "consistent",
                         tags={
@@ -242,7 +242,8 @@ class SubscriptionWorker(
             future.result()
 
 
-def handle_nan(result: Result) -> Result:
+def handle_differences(result: Result) -> Result:
+    # Handle nan values
     result_copy = copy.deepcopy(result)
     for row in result_copy["data"]:
         for key in row:
@@ -251,5 +252,9 @@ def handle_nan(result: Result) -> Result:
                     row[key] = "nan"
             except TypeError:
                 pass
+
+    # Strip the profile information as timings will not be the same
+    if "profile" in result_copy:
+        del result_copy["profile"]
 
     return result_copy
