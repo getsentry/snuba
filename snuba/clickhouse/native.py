@@ -109,9 +109,6 @@ class ClickhousePool(object):
         failures.
         """
         try:
-            # if capture_trace:
-            #     conn = self._create_conn(send_logs_level="trace")
-            # else:
             conn = self.pool.get(block=True)
 
             attempts_remaining = 2

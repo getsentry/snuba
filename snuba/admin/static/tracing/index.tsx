@@ -114,7 +114,10 @@ function TracingQueries(props: { api: Client }) {
           headerData={["Query", "Response", "Error"]}
           rowData={queryResultHistory.map((queryResult) => [
             <span>{queryResult.input_query}</span>,
-            <span>{queryResult.trace_output || ""}</span>,
+            <span>
+              {queryResult.trace_output?.replace(/(?:\r\n|\r|\n)/g, "<br>") ||
+                ""}
+            </span>,
             <span>{queryResult.error || ""}</span>,
           ])}
         />

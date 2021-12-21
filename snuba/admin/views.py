@@ -133,13 +133,11 @@ def clickhouse_trace_query() -> Response:
         host = req["host"]
         port = req["port"]
         storage = req["storage"]
-    except KeyError:
-        return make_response(jsonify({"error": "Invalid request"}), 400)
-
-    try:
         raw_sql = req["sql"]
-    except KeyError:
-        return make_response(jsonify({"error": "Invalid request"}), 400)
+    except KeyError as e:
+        return make_response(
+            jsonify({"error": f"Invalid request, missing key {e.args[0]}"}), 400
+        )
 
     try:
         result = run_query_and_get_trace(host, port, storage, raw_sql)
