@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import Client from '../api_client';
-import { Table } from '../table';
+import React, { useEffect, useState } from "react";
+import Client from "../api_client";
+import { Table } from "../table";
 
-import { ClickhouseNodeData, QueryRequest, QueryResult } from './types';
+import { ClickhouseNodeData, QueryRequest, QueryResult } from "./types";
 
 type QueryState = Partial<QueryRequest>;
 
@@ -29,7 +29,7 @@ function TracingQueries(props: { api: Client }) {
   }
 
   function selectHost(hostString: string) {
-    const [host, portAsString] = hostString.split(':');
+    const [host, portAsString] = hostString.split(":");
 
     setQuery((prevQuery) => {
       return {
@@ -44,7 +44,7 @@ function TracingQueries(props: { api: Client }) {
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
-        query_name: 'tracing',
+        query_name: "tracing",
         sql: query,
       };
     });
@@ -52,7 +52,7 @@ function TracingQueries(props: { api: Client }) {
 
   function executeQuery() {
     props.api
-      .executeQuery(query as QueryRequest, 'clickhouse_trace_query')
+      .executeQuery(query as QueryRequest, "clickhouse_trace_query")
       .then((result) => {
         result.input_query = `${query.storage},${query.host}:${query.port} =>\n${query.query_name}`;
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
@@ -64,10 +64,10 @@ function TracingQueries(props: { api: Client }) {
       <form>
         <h2>Construct a query</h2>
         <select
-          value={query.storage || ''}
+          value={query.storage || ""}
           onChange={(evt) => selectStorage(evt.target.value)}
         >
-          <option disabled value=''>
+          <option disabled value="">
             Select a storage
           </option>
           {nodeData.map((storage) => (
@@ -79,11 +79,11 @@ function TracingQueries(props: { api: Client }) {
         {query.storage && (
           <select
             value={
-              query.host && query.port ? `${query.host}:${query.port}` : ''
+              query.host && query.port ? `${query.host}:${query.port}` : ""
             }
             onChange={(evt) => selectHost(evt.target.value)}
           >
-            <option disabled value=''>
+            <option disabled value="">
               Select a host
             </option>
             {nodeData
@@ -100,7 +100,7 @@ function TracingQueries(props: { api: Client }) {
         )}
         {query.storage && query.host && query.port && (
           <input
-            type='text'
+            type="text"
             onChange={(evt) => selectQuery(evt.target.value)}
           />
         )}
@@ -111,11 +111,11 @@ function TracingQueries(props: { api: Client }) {
       <div>
         <h2>Query results</h2>
         <Table
-          headerData={['Query', 'Response', 'Error']}
+          headerData={["Query", "Response", "Error"]}
           rowData={queryResultHistory.map((queryResult) => [
             <span>{queryResult.input_query}</span>,
-            <span>{queryResult.trace_output || ''}</span>,
-            <span>{queryResult.error || ''}</span>,
+            <span>{queryResult.trace_output || ""}</span>,
+            <span>{queryResult.error || ""}</span>,
           ])}
         />
       </div>
