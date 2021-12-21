@@ -11,11 +11,12 @@ from rediscluster.exceptions import RedisClusterException
 from redis.client import StrictRedis
 from redis.exceptions import BusyLoadingError, ConnectionError
 from snuba import settings
+from snuba.utils.serializable_exception import SerializableException
 
 RedisClientType = Union[StrictRedis, StrictRedisCluster]
 
 
-class FailedClusterInitization(Exception):
+class FailedClusterInitization(SerializableException):
     pass
 
 
@@ -39,25 +40,40 @@ class RetryingStrictRedisCluster(StrictRedisCluster):  # type: ignore #  Missing
             return super(self.__class__, self).execute_command(*args, **kwargs)
 
 
-def _retry(func: Callable[[], RedisClientType]) -> Callable[[], RedisClientType]:
-    @wraps(func)
-    def wrapper() -> RedisClientType:
-        retry_counter = 3
-        while retry_counter > 0:
-            try:
-                return func()
-            except RedisClusterException as e:
-                if "All slots are not" in str(e) and retry_counter >= 0:
-                    time.sleep(random.randint(1, 50) / 1000)
-                    retry_counter -= 1
-                    continue
-                raise
-        raise FailedClusterInitization("Init failed")
+RANDOM_SLEEP_MAX = 50
+KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE = "All slots are not"
 
-    return wrapper
+RedisInitFunction = Callable[[], RedisClientType]
 
 
-@_retry
+def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]:
+    def _retry_inner(
+        func: Callable[[], RedisClientType]
+    ) -> Callable[[], RedisClientType]:
+        @wraps(func)
+        def wrapper() -> RedisClientType:
+            retry_counter = max_retries
+            while retry_counter > 0:
+                try:
+                    return func()
+                except RedisClusterException as e:
+                    if (
+                        KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE in str(e)
+                        and retry_counter >= 0
+                    ):
+                        time.sleep(random.randint(1, RANDOM_SLEEP_MAX) / 1000)
+                        retry_counter -= 1
+                        continue
+                    raise
+            # shouldn't get to here but it pleases mypy
+            raise FailedClusterInitization("Init failed")
+
+        return wrapper
+
+    return _retry_inner
+
+
+@_retry(max_retries=settings.REDIS_INIT_MAX_RETRIES)
 def _initialize_redis_cluster() -> RedisClientType:
     if settings.USE_REDIS_CLUSTER:
         startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
