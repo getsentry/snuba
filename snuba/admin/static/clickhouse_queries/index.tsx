@@ -132,10 +132,13 @@ function ClickhouseQueries(props: { api: Client }) {
           rowData={queryResultHistory.map((queryResult) => [
             <span>{queryResult.input_query}</span>,
             <div>
-              <div style={jsonStyle}>{JSON.stringify(queryResult)}</div>
               <button onClick={() => copyText(JSON.stringify(queryResult))}>
                 Copy to clipboard
               </button>
+              <Table
+                  headerData={queryResult.column_names}
+                  rowData={queryResult.rows}
+              />
             </div>,
           ])}
           columnWidths={[1, 5]}
