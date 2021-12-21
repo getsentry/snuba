@@ -6,7 +6,7 @@ from snuba import redis
 def test_retry_init():
     fails_left = 2
 
-    @redis._retry(1)
+    @redis._retry(2)
     def my_bad_function():
         nonlocal fails_left
         fails_left -= 1
