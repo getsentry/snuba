@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Type
 
 from snuba import settings
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storages import StorageKey
@@ -178,9 +179,18 @@ def run_system_query_on_host_with_sql(
     clickhouse_host: str, clickhouse_port: int, storage_name: str, system_query_sql: str
 ) -> ClickhouseResult:
     validate_system_query(system_query_sql)
-    return _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql
-    )
+    try:
+        return _run_sql_query_on_host(
+            clickhouse_host, clickhouse_port, storage_name, system_query_sql
+        )
+    except ClickhouseError as exc:
+        TABLE_DOES_NOT_EXIST = 60
+        MISSING_COLUMN = 47
+
+        if exc.code in (TABLE_DOES_NOT_EXIST, MISSING_COLUMN):
+            raise InvalidCustomQuery("Invalid query: {exc.message}")
+
+        raise
 
 
 def validate_system_query(sql_query: str) -> None:
