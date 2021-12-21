@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Type
 
 from snuba.admin.clickhouse.common import InvalidCustomQuery, get_clickhouse_connection
-from snuba.utils.serializable_exception import SerializableException
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.utils.serializable_exception import SerializableException
 
 
 class NonExistentSystemQuery(SerializableException):
@@ -85,8 +85,8 @@ class ActivePartitions(SystemQuery):
 
 
 def _is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
-    connection_id = cluster.get_connection_id()
-    return host == connection_id.hostname and port == connection_id.tcp_port
+    nodes = cluster.get_local_nodes()
+    return any(node.host_name == host and node.port == port for node in nodes)
 
 
 def _run_sql_query_on_host(

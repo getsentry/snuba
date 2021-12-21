@@ -596,25 +596,6 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    def test_capture_trace_flag(self) -> None:
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": """
-                MATCH (discover)
-                SELECT count() AS count
-                WHERE
-                    timestamp >= toDateTime('2021-01-01') AND
-                    timestamp <  toDateTime('2022-01-01') AND
-                    project_id IN tuple(5433960)
-                """,
-                    "capture_trace": True,
-                }
-            ),
-        )
-        assert response.status_code == 200
-
     MATCH = "MATCH (e: events) -[grouped]-> (gm: groupedmessage)"
     SELECT = "SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status"
     WHERE = "WHERE e.project_id = 1 AND gm.project_id = 1"
