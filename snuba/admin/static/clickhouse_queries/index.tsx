@@ -136,8 +136,8 @@ function ClickhouseQueries(props: { api: Client }) {
                 Copy to clipboard
               </button>
               <Table
-                headerData={queryResult.column_names}
-                rowData={queryResult.rows}
+                  headerData={queryResult.column_names}
+                  rowData={queryResult.rows}
               />
             </div>,
           ])}
