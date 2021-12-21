@@ -30,7 +30,7 @@ services:
     ulimits:
       nofile: 262144
   redis:
-    image: redis:3.2-alpine
+    image: redis:5.0-alpine
 
 volumes:
   clickhouse:
