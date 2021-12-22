@@ -9,7 +9,7 @@ import {
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
-} from "./clickhouse_queries/types";
+} from "./components/query_display/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
