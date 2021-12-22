@@ -204,7 +204,7 @@ class MappingOptimizer(QueryProcessor):
         )
 
     def _get_condition_without_redundant_checks(
-        self, condition: Expression, query: Query
+        self, condition: Expression, query: Query, should_apply_optimization: bool
     ) -> Expression:
         """Optimizes the case where the query condition contains the following:
 
@@ -240,7 +240,9 @@ class MappingOptimizer(QueryProcessor):
         elif condition.function_name == BooleanFunctions.OR:
             sub_conditions = get_first_level_or_conditions(condition)
             pruned_conditions = [
-                self._get_condition_without_redundant_checks(c, query)
+                self._get_condition_without_redundant_checks(
+                    c, query, should_apply_optimization
+                )
                 for c in sub_conditions
             ]
             return combine_or_conditions(pruned_conditions)
@@ -264,10 +266,15 @@ class MappingOptimizer(QueryProcessor):
                 if tag_exist_match:
                     requested_tag = tag_exist_match.string("key")
                     if requested_tag in tag_eq_match_strings:
-                        query.add_experiment("redundant_clause_removed", 1)
-                        continue
+                        if should_apply_optimization:
+                            query.add_experiment("redundant_clause_removed", 1)
+                            continue
+                        else:
+                            query.add_experiment("redundant_clause_removed", 0)
                 useful_conditions.append(
-                    self._get_condition_without_redundant_checks(cond, query)
+                    self._get_condition_without_redundant_checks(
+                        cond, query, should_apply_optimization
+                    )
                 )
             return combine_and_conditions(useful_conditions)
         else:
@@ -303,10 +310,8 @@ class MappingOptimizer(QueryProcessor):
     ) -> Tuple[Optional[Expression], ConditionClass]:
         cond_class = ConditionClass.IRRELEVANT
         if clause is not None:
-            new_clause = (
-                self._get_condition_without_redundant_checks(clause, query)
-                if should_apply_redundant_clause_optimization
-                else clause
+            new_clause = self._get_condition_without_redundant_checks(
+                clause, query, should_apply_redundant_clause_optimization
             )
             cond_class = self.__classify_combined_conditions(new_clause)
             return new_clause, cond_class
