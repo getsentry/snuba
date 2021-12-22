@@ -62,7 +62,7 @@ function QueriesDisplay(props: {
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
       })
       .catch((err) => {
-        window.alert(err?.error || "An error occurred");
+        window.alert("An error occurred: " + err);
       });
   }
 

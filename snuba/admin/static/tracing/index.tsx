@@ -5,19 +5,39 @@ import { QueryResult } from "../components/query_display/types";
 
 function TracingQueries(props: { api: Client }) {
   function tablePopulator(queryResult: QueryResult) {
+    var elements = {};
+    if (queryResult.error === undefined) {
+      elements = { Trace: [queryResult.trace_output, 400] };
+    } else {
+      elements = { Error: [queryResult.error, 200] };
+    }
+    return tracingOutput(elements);
+  }
+
+  function tracingOutput(elements: Object) {
+    console.log(elements);
+
     return (
       <>
         <br />
         <br />
-        <span>{queryResult.input_query}</span>,
-        <span>
-          {queryResult.trace_output?.split("\n").map((line) => (
-            <p>{line}</p>
-          ))}
-        </span>
+        {Object.entries(elements).map(([title, [value, height]]) => {
+          return (
+            <>
+              {title}
+              <textarea
+                spellCheck={false}
+                value={value}
+                style={{ width: "100%", height: height }}
+                disabled
+              />
+            </>
+          );
+        })}
       </>
     );
   }
+
   return QueriesDisplay({
     api: props.api,
     endpoint: "clickhouse_trace_query",
