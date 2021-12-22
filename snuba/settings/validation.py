@@ -1,7 +1,5 @@
 from typing import Any, Mapping, MutableMapping
 
-from snuba import settings
-
 
 def _validate_settings(locals: Mapping[str, Any]) -> None:
     if locals.get("QUERIES_TOPIC"):
@@ -26,6 +24,7 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
         "event-replacements-legacy",
         "snuba-commit-log",
         "snuba-sessions-commit-log",
+        "snuba-metrics-commit-log",
         "cdc",
         "snuba-metrics",
         "outcomes",
@@ -34,18 +33,12 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
         "scheduled-subscriptions-events",
         "scheduled-subscriptions-transactions",
         "scheduled-subscriptions-sessions",
+        "scheduled-subscriptions-metrics",
         "events-subscription-results",
         "transactions-subscription-results",
         "sessions-subscription-results",
+        "metrics-subscription-results",
     }
-    if settings.ENABLE_METRICS_SUBSCRIPTIONS:
-        topic_names.update(
-            {
-                "snuba-metrics-commit-log",
-                "scheduled-subscriptions-metrics",
-                "metrics-subscription-results",
-            }
-        )
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
         if key not in topic_names:
