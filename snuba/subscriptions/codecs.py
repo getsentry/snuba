@@ -37,18 +37,20 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
 
 class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):
     def encode(self, value: SubscriptionTaskResult) -> KafkaPayload:
-        subscription_id = str(value.task.task.subscription.identifier)
+        entity, subscription, _ = value.task.task
+        subscription_id = str(subscription.identifier)
         request, result = value.result
         return KafkaPayload(
             subscription_id.encode("utf-8"),
             json.dumps(
                 {
-                    "version": 2,
+                    "version": 3,
                     "payload": {
                         "subscription_id": subscription_id,
                         "request": {**request.body},
                         "result": result,
                         "timestamp": value.task.timestamp.isoformat(),
+                        "entity": entity.value,
                     },
                 }
             ).encode("utf-8"),
