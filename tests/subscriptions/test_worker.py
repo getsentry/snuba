@@ -34,7 +34,7 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
-from snuba.subscriptions.worker import SubscriptionWorker, handle_nan
+from snuba.subscriptions.worker import SubscriptionWorker, handle_differences
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.backends.metrics import Increment, TestingMetricsBackend
@@ -336,7 +336,9 @@ def test_subscription_worker_consistent() -> None:
     )
 
 
-def test_handle_nan() -> None:
-    assert handle_nan({"data": [{"a": float("nan"), "b": None}]}) == {
+def test_handle_differences() -> None:
+    assert handle_differences({"data": [{"a": float("nan"), "b": None}]}) == {
         "data": [{"a": "nan", "b": None}]
     }
+
+    assert handle_differences({"data": [], "profile": {}}) == {"data": []}
