@@ -100,9 +100,9 @@ test_cases = [
         (
             "SELECT column1, table1.column2, (column3 AS al) "
             "FROM my_table "
-            "WHERE eq(al, $S) "
+            "WHERE eq(al, '$S') "
             "GROUP BY column1, table1.column2, al, column4 "
-            "HAVING eq(column1, $N) "
+            "HAVING eq(column1, -1337) "
             "ORDER BY column1 ASC, table1.column2 DESC"
         ),
         id="Simple query with aliases and multiple tables",
@@ -180,7 +180,7 @@ test_cases = [
         (
             "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math) "
             "FROM my_table "
-            "WHERE eq(al, $S) AND neq(al, $S) "
+            "WHERE eq(al, '$S') AND neq(al, '$S') "
             "GROUP BY my_complex_math "
             "ORDER BY f(column1) ASC"
         ),
@@ -273,8 +273,8 @@ test_cases = [
         (
             "SELECT (column3 AS al), (column4 AS al2) "
             "FROM my_table "
-            "WHERE (equals(al, $S) OR equals(al2, $S)) AND "
-            "(equals(column5, $S) OR equals(column6, $S))"
+            "WHERE (equals(al, '$S') OR equals(al2, '$S')) AND "
+            "(equals(column5, '$S') OR equals(column6, '$S'))"
         ),
         id="query_complex_condition",
     ),
@@ -338,7 +338,7 @@ test_cases = [
             "FROM ("
             "SELECT column1, (avg(column2) AS sub_average), column3 "
             "FROM my_table "
-            "WHERE eq((column3 AS al), $S) "
+            "WHERE eq((column3 AS al), '$S') "
             "GROUP BY column2"
             ") "
             "GROUP BY alias"
@@ -390,7 +390,7 @@ test_cases = [
             "SELECT (err.event_id AS error_id), (groups.message AS message) "
             "FROM errors_local err INNER JOIN groupedmessage_local groups "
             "ON err.group_id=groups.id "
-            "WHERE eq(groups.id, $N)"
+            "WHERE eq(groups.id, -1337)"
         ),
         id="Simple join",
     ),
@@ -526,12 +526,12 @@ test_cases = [
         (
             "SELECT (err.group_id AS group_id), (count() AS events) "
             "FROM "
-            "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, $N)) err "
+            "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, -1337)) err "
             "INNER JOIN "
-            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, $N)) groups "
+            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, -1337)) groups "
             "ON err.group_id=groups.id "
             "INNER JOIN "
-            "(SELECT group_id FROM groupassignee_local WHERE eq(user, $S)) assignee "
+            "(SELECT group_id FROM groupassignee_local WHERE eq(user, '$S')) assignee "
             "ON err.group_id=assignee.group_id "
             "GROUP BY groups.id"
         ),
@@ -553,6 +553,12 @@ def test_format_expressions(
     clickhouse_query_anonymized = format_query_anonymized(query)
     assert clickhouse_query.get_sql() == formatted_str
     assert clickhouse_query.structured() == formatted_seq
+    if clickhouse_query_anonymized.get_sql() != formatted_anonymized_str:
+        import pdb
+
+        pdb.set_trace()
+        print(clickhouse_query_anonymized.get_sql())
+
     assert clickhouse_query_anonymized.get_sql() == formatted_anonymized_str
 
 

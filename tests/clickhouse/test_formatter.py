@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 from snuba.clickhouse.formatter.expression import (
@@ -21,18 +23,32 @@ from snuba.query.expressions import (
 from snuba.query.parsing import ParsingContext
 
 test_expressions = [
-    (Literal(None, "test"), "'test'", "$S"),  # String literal
-    (Literal(None, 123), "123", "$N"),  # INT literal
-    (Literal("something", 123), "(123 AS something)", "$N"),  # INT literal with alias
-    (Literal(None, 123.321), "123.321", "$N"),  # FLOAT literal
+    (Literal(None, "test"), "'test'", "'$S'"),  # String literal
+    (Literal(None, 123), "123", "-1337"),  # INT literal
+    (
+        Literal("something", 123),
+        "(123 AS something)",
+        "-1337",
+    ),  # INT literal with alias
+    (Literal(None, 123.321), "123.321", "-1337"),  # FLOAT literal
     (Literal(None, None), "NULL", "NULL"),  # NULL
     (
         Literal("not_null", None),
         "(NULL AS not_null)",
         "(NULL AS not_null)",
     ),  # NULL with alias
-    (Literal(None, True), "true", "$B"),  # True
-    (Literal(None, False), "false", "$B"),  # False
+    (Literal(None, True), "true", "true"),
+    (Literal(None, False), "false", "false"),
+    (
+        Literal(None, datetime(2020, 4, 20, 16, 20)),
+        "toDateTime('2020-04-20T16:20:00', 'Universal')",
+        "toDateTime('2020-04-20T16:20:00', 'Universal')",
+    ),
+    (
+        Literal(None, datetime(2020, 4, 20, 16, 20).date()),
+        "toDate('2020-04-20', 'Universal')",
+        "toDate('2020-04-20', 'Universal')",
+    ),
     (
         Column(None, "table1", "column1"),
         "table1.column1",
@@ -61,7 +77,7 @@ test_expressions = [
             ),
         ),
         "f1(table1.tags, table1.param2, NULL, 'test_string')",
-        "f1(table1.tags, table1.param2, NULL, $S)",
+        "f1(table1.tags, table1.param2, NULL, '$S')",
     ),  # Simple function call with columns and literals
     (
         FunctionCall(
@@ -129,7 +145,7 @@ test_expressions = [
     (
         FunctionCall("alias", "array", (Literal(None, 1), Literal(None, 2))),
         "([1, 2] AS alias)",
-        "([$N, $N] AS alias)",
+        "([-1337, -1337] AS alias)",
     ),  # Formatting an array as [...]
     (
         binary_condition(
@@ -166,7 +182,7 @@ test_expressions = [
             ),
         ),
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
-        "(equals(c1, $N) AND equals(c2, $N) OR equals(c3, $N) OR equals(c4, $N)) AND equals(c5, $N)",
+        "(equals(c1, -1337) AND equals(c2, -1337) OR equals(c3, -1337) OR equals(c4, -1337)) AND equals(c5, -1337)",
     ),  # Formatting infix expressions
     (
         FunctionCall(

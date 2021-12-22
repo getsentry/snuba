@@ -18,8 +18,8 @@ function getReadonlyRow(
   edit: () => void
 ): RowData {
   return [
-    <code>{key}</code>,
-    <code>{value}</code>,
+    <code style={{ wordBreak: "break-all" }}>{key}</code>,
+    <code style={{ wordBreak: "break-all" }}>{value}</code>,
     type,
     showActions && (
       <a style={linkStyle} onClick={() => edit()}>
@@ -39,16 +39,14 @@ function getEditableRow(
   cancel: () => void
 ): RowData {
   return [
-    key,
-    <code>{value}</code>,
-    // TODO: Edit mode
-    // <EditableTableCell value={value} onChange={updateValue} />,
+    <code style={{ wordBreak: "break-all" }}>{key}</code>,
+    <EditableTableCell value={value} onChange={updateValue} />,
     type,
     <span>
-      {/* <a style={linkStyle} onClick={() => save()}>
+      <a style={linkStyle} onClick={() => save()}>
         <strong>save changes</strong>
       </a>
-      <Space /> */}
+      <Space />
       <a style={{ ...linkStyle, color: "red" }} onClick={() => deleteRow()}>
         delete
       </a>
