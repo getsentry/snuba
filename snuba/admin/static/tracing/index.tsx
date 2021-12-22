@@ -115,8 +115,9 @@ function TracingQueries(props: { api: Client }) {
           rowData={queryResultHistory.map((queryResult) => [
             <span>{queryResult.input_query}</span>,
             <span>
-              {queryResult.trace_output?.replace(/(?:\r\n|\r|\n)/g, "<br>") ||
-                ""}
+              {queryResult.trace_output?.split("\n").map((line) => (
+                <p>{line}</p>
+              ))}
             </span>,
             <span>{queryResult.error || ""}</span>,
           ])}

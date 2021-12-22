@@ -14,7 +14,7 @@ type QueryRequest = {
   host: string;
   port: number;
   query_name: string;
-  sql?: string;
+  sql: string;
 };
 
 type QueryResultColumnMetadata = [string];

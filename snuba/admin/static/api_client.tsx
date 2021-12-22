@@ -18,7 +18,7 @@ interface Client {
   editConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
-  executeQuery: (req: QueryRequest) => Promise<QueryResult>;
+  executeQuery: (req: QueryRequest, endpoint: string) => Promise<QueryResult>;
 }
 
 function Client() {
@@ -92,8 +92,8 @@ function Client() {
           })
       );
     },
-    executeQuery: (query: QueryRequest) => {
-      const url = baseUrl + "run_clickhouse_system_query";
+    executeQuery: (query: QueryRequest, query_endpoint: string) => {
+      const url = baseUrl + query_endpoint;
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

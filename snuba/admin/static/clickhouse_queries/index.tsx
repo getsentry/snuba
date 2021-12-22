@@ -52,7 +52,7 @@ function ClickhouseQueries(props: { api: Client }) {
 
   function executeQuery() {
     props.api
-      .executeQuery(query as QueryRequest)
+      .executeQuery(query as QueryRequest, "run_clickhouse_system_query")
       .then((result) => {
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
