@@ -169,7 +169,7 @@ SYSTEM_QUERY_RE = re.compile(
         (FROM|from)
         \s
         system.[a-z_]+
-        (?P<extra>\s[\w\s,=+\(\)']+)?
+        (?P<extra>\s[\w\s,=+\(\)'%]+)?
         ;? # Optional semicolon
         $ # End
     """,
