@@ -268,6 +268,8 @@ class MappingOptimizer(QueryProcessor):
                     if requested_tag in tag_eq_match_strings:
                         if should_apply_optimization:
                             query.add_experiment("redundant_clause_removed", 1)
+                            # the clause is redundant, thus we continue the loop
+                            # and do not add it to useful_conditions
                             continue
                         else:
                             query.add_experiment("redundant_clause_removed", 0)
