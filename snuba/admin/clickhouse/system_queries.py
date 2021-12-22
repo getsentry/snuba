@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Type
 
+from clickhouse_driver.errors import ErrorCodes
+
 from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
@@ -184,11 +186,10 @@ def run_system_query_on_host_with_sql(
             clickhouse_host, clickhouse_port, storage_name, system_query_sql
         )
     except ClickhouseError as exc:
-        TABLE_DOES_NOT_EXIST = 60
-        MISSING_COLUMN = 47
-
-        if exc.code in (TABLE_DOES_NOT_EXIST, MISSING_COLUMN):
-            raise InvalidCustomQuery("Invalid query: {exc.message}")
+        # Don't send error to Snuba if it is an unknown table or column as it
+        # will be too noisy
+        if exc.code in (ErrorCodes.UNKNOWN_TABLE, ErrorCodes.UNKNOWN_IDENTIFIER):
+            raise InvalidCustomQuery("Invalid query: {exc.message} {exc.code}")
 
         raise
 
