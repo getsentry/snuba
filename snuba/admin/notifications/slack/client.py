@@ -1,8 +1,11 @@
+import logging
 from typing import Any, MutableMapping, Optional
 
 import requests
 
 from snuba import settings
+
+logger = logging.getLogger("snuba.admin.notifications.slack")
 
 
 class SlackClient(object):
@@ -25,12 +28,11 @@ class SlackClient(object):
             resp = requests.post(
                 "https://slack.com/api/chat.postMessage", headers=headers, json=message,
             )
-        except Exception:
-            # todo: log non 200 failures
-            return
+        except Exception as exc:
+            logger.error(exc, exc_info=True)
 
         # todo: slack is annoying be a 200 could still be a failed case
         # you have to check the "ok" param in the response, so we should
         # check for ok: False and log those failures too.
-        print(resp.status_code)
-        print(resp.content)
+        if resp.status_code != 200:
+            logger.error("Slack error: {resp.content}")

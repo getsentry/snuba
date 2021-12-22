@@ -182,11 +182,15 @@ def configs() -> Response:
 def config(config_key: str) -> Response:
     if request.method == "DELETE":
         user = request.headers.get(USER_HEADER_KEY)
+
+        # Get the old value for notifications
+        old = state.get_uncached_config(config_key)
+
         state.delete_config(config_key, user=user)
 
         notification_client.notify(
             RuntimeConfigAction.REMOVED,
-            {"option": config_key, "old": None, "new": None},
+            {"option": config_key, "old": old, "new": None},
             user,
         )
 
@@ -199,6 +203,10 @@ def config(config_key: str) -> Response:
 
         user = request.headers.get(USER_HEADER_KEY)
         data = json.loads(request.data)
+
+        # Get the previous value for notifications
+        old = state.get_uncached_config(config_key)
+
         try:
             new_value = data["value"]
 
@@ -227,6 +235,13 @@ def config(config_key: str) -> Response:
         evaluated_value = state.get_uncached_config(config_key)
         assert evaluated_value is not None
         evaluated_type = get_config_type_from_value(evaluated_value)
+
+        # Send notification
+        notification_client.notify(
+            RuntimeConfigAction.UPDATED,
+            {"option": config_key, "old": old, "new": evaluated_value},
+            user=user,
+        )
 
         config = {
             "key": config_key,
