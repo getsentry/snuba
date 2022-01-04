@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, List, Mapping, MutableMapping, Optional, cast
 
 import simplejson as json
@@ -147,7 +149,7 @@ def clickhouse_trace_query() -> Response:
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
     except QueryException as err:
         status = 500
-        details: Mapping[str, Any]
+        details: Mapping[str, str | int]
 
         cause = err.__cause__
         if isinstance(cause, ClickhouseError):

@@ -21,8 +21,8 @@ class InvalidStorageError(SerializableException):
 
 
 def is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
-    connection_id = cluster.get_connection_id()
-    return host == connection_id.hostname and port == connection_id.tcp_port
+    nodes = cluster.get_local_nodes()
+    return any(node.host_name == host and node.port == port for node in nodes)
 
 
 CONNECTIONS: MutableMapping[StorageKey, ClickhousePool] = {}
