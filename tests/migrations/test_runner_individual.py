@@ -119,7 +119,7 @@ def generate_transactions() -> None:
     rows = []
 
     for i in range(5):
-        raw_transaction = get_raw_transaction()
+        raw_transaction = get_raw_transaction(f"{i}" * 16)
         # Older versions of this table did not have measurements
         del raw_transaction["data"]["measurements"]
         del raw_transaction["data"]["breakdowns"]
