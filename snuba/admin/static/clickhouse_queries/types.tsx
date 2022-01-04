@@ -24,8 +24,6 @@ type QueryResult = {
   timestamp: number;
   column_names: QueryResultColumnMetadata;
   rows: [QueryResultRow];
-  trace_output?: string;
-  error?: string;
 };
 
 export { ClickhouseNodeData, QueryRequest, QueryResult };
