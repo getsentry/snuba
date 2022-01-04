@@ -258,14 +258,7 @@ class ClickhousePool(object):
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
-    def _create_conn(self, **kwargs: str) -> Client:
-        if kwargs:
-            client_settings: Mapping[str, str] = {
-                **self.client_settings,
-                **kwargs,
-            }
-        else:
-            client_settings = self.client_settings
+    def _create_conn(self) -> Client:
         return Client(
             host=self.host,
             port=self.port,
@@ -274,7 +267,7 @@ class ClickhousePool(object):
             database=self.database,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
-            settings=client_settings,
+            settings=self.client_settings,
         )
 
     def close(self) -> None:

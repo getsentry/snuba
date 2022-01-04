@@ -14,7 +14,7 @@ def validate_trace_query(sql_query: str) -> None:
     if not lowered.startswith("select"):
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    disallowed_keywords = ["insert", "join", ";"]
+    disallowed_keywords = ["insert", ";"]
     for kw in disallowed_keywords:
         if kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
