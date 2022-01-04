@@ -34,7 +34,7 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.utils import Tick
-from snuba.subscriptions.worker import SubscriptionWorker, handle_nan
+from snuba.subscriptions.worker import SubscriptionWorker, handle_differences
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.backends.metrics import Increment, TestingMetricsBackend
@@ -244,6 +244,7 @@ def test_subscription_worker(
         future_result = request, result = future.result()
         assert message.payload.task.timestamp == timestamp
         assert message.payload == SubscriptionTaskResult(task, future_result)
+        del result["profile"]
 
         timestamp_field = "timestamp" if dataset_name != "sessions" else "started"
         from_pattern = FunctionCall(
@@ -266,7 +267,8 @@ def test_subscription_worker(
         assert any([from_pattern.match(e) for e in conditions])
         assert any([to_pattern.match(e) for e in conditions])
 
-        assert result == expected_result
+        assert result["data"] == expected_result["data"]
+        assert result["meta"] == expected_result["meta"]
 
 
 def test_subscription_worker_consistent() -> None:
@@ -334,7 +336,9 @@ def test_subscription_worker_consistent() -> None:
     )
 
 
-def test_handle_nan() -> None:
-    assert handle_nan({"data": [{"a": float("nan"), "b": None}]}) == {
+def test_handle_differences() -> None:
+    assert handle_differences({"data": [{"a": float("nan"), "b": None}]}) == {
         "data": [{"a": "nan", "b": None}]
     }
+
+    assert handle_differences({"data": [], "profile": {}}) == {"data": []}
