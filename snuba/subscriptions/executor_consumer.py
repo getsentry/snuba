@@ -106,13 +106,10 @@ def build_executor_consumer(
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
             executor,
+            max_concurrent_queries,
             dataset,
             entity_names,
             producer,
-            # If there are max_concurrent_queries + 10 pending futures in the queue,
-            # we will start raising MessageRejected to slow down the consumer as
-            # it means our executor cannot keep up
-            max_concurrent_queries + 10,
             metrics,
             override_result_topic,
         ),
@@ -123,18 +120,18 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
     def __init__(
         self,
         executor: ThreadPoolExecutor,
+        max_concurrent_queries: int,
         dataset: Dataset,
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
-        buffer_size: int,
         metrics: MetricsBackend,
         result_topic: str,
     ) -> None:
         self.__executor = executor
+        self.__max_concurrent_queries = max_concurrent_queries
         self.__dataset = dataset
         self.__entity_names = entity_names
         self.__producer = producer
-        self.__buffer_size = buffer_size
         self.__metrics = metrics
         self.__result_topic = result_topic
 
@@ -145,7 +142,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__dataset,
             self.__entity_names,
             self.__executor,
-            self.__buffer_size,
+            self.__max_concurrent_queries,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
         )
@@ -162,7 +159,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         dataset: Dataset,
         entity_names: Sequence[str],
         executor: ThreadPoolExecutor,
-        buffer_size: int,
+        max_concurrent_queries: int,
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
         commit: Optional[Callable[[Mapping[Partition, Position]], None]] = None,
@@ -170,7 +167,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
         self.__executor = executor
-        self.__buffer_size = buffer_size
+        self.__max_concurrent_queries = max_concurrent_queries
         self.__metrics = metrics
         self.__next_step = next_step
         self.__commit = commit
@@ -240,9 +237,18 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def submit(self, message: Message[KafkaPayload]) -> None:
         assert not self.__closed
 
+        # If there are max_concurrent_queries + 10 pending futures in the queue,
+        # we will start raising MessageRejected to slow down the consumer as
+        # it means our executor cannot keep up
+        queue_size_factor = state.get_config("executor_queue_size_factor", 10)
+        assert (
+            queue_size_factor is not None
+        ), "Invalid executor_queue_size_factor config"
+        max_queue_size = self.__max_concurrent_queries * queue_size_factor
+
         # Tell the consumer to pause until we have removed some futures from
         # the queue
-        if len(self.__queue) >= self.__buffer_size:
+        if len(self.__queue) >= max_queue_size:
             raise MessageRejected
 
         task = self.__encoder.decode(message.payload)
@@ -289,7 +295,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def close(self) -> None:
         self.__closed = True
-        self.__next_step.close()
 
     def terminate(self) -> None:
         self.__closed = True
