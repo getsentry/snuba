@@ -337,7 +337,7 @@ def test_experiment() -> None:
         killswitch="tags_hash_map_enabled",
     ).process_query(query, HTTPRequestSettings())
     assert query.get_experiment_value("tags_redundant_optimizer_enabled") == 0
-    assert query.get_experiment_value("redundant_clause_removed") is None
+    assert query.get_experiment_value("redundant_clause_removed") == 0
     assert query == build_query(
         selected_columns=[Column("count", None, "count")],
         condition=and_exp(tag_existence_expression(), tag_equality_expression()),

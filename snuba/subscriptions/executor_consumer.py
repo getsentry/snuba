@@ -165,6 +165,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         buffer_size: int,
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
+        commit: Optional[Callable[[Mapping[Partition, Position]], None]] = None,
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
@@ -172,6 +173,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__buffer_size = buffer_size
         self.__metrics = metrics
         self.__next_step = next_step
+        self.__commit = commit
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
 
@@ -252,6 +254,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         executor_sample_rate = cast(
             float, state.get_config("executor_sample_rate", 0.0)
         )
+
+        # HACK: Just commit offsets and return if we haven't started rollout
+        # yet. This is just a temporary workaround to prevent the lag continuously
+        # growing and dwarfing others on op's Kafka dashboard
+        if self.__commit is not None and executor_sample_rate == 0:
+            self.__commit(
+                {message.partition: Position(message.offset, message.timestamp)}
+            )
+
+            return
+
         subscription_id = str(task.task.subscription.identifier)
         should_execute = (
             (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32

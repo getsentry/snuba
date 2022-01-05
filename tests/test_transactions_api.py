@@ -70,7 +70,7 @@ class TestTransactionsApi(BaseApiTest):
                 # project N sends an event every Nth minute
                 if tock % p == 0:
                     trace_id = "7400045b25c443b885914600aa83ad04"
-                    span_id = "8841662216cc598b"
+                    span_id = f"8841662216cc598b{tock}"[-16:]
                     processed = (
                         self.storage.get_table_writer()
                         .get_stream_loader()
@@ -176,7 +176,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["transaction_name", "ip_address"],
+                    "selected_columns": ["transaction_name", "ip_address", "span_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
@@ -194,7 +194,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["transaction_op", "platform"],
+                    "selected_columns": ["transaction_op", "platform", "span_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
@@ -213,7 +213,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["transaction_name"],
+                    "selected_columns": ["transaction_name", "span_id"],
                     "conditions": [
                         [
                             "start_ts",
@@ -274,6 +274,7 @@ class TestTransactionsApi(BaseApiTest):
                     "selected_columns": ["event_id", "ip_address", "project_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "orderby": ["finish_ts"],
                 }
             ),
         )
@@ -303,7 +304,7 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1
         assert data["data"][0]["event_id"] == first_event_id
-        assert data["data"][0]["span_id"] == "8841662216cc598b"
+        assert data["data"][0]["span_id"] == "841662216cc598b1"
 
     def test_trace_column_formatting(self) -> None:
         response = self.post(
@@ -599,7 +600,7 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["event_id", "span_id"],
-                    "conditions": [["span_id", "=", "8841662216cc598b"]],
+                    "conditions": [["span_id", "=", "841662216cc598b1"]],
                     "limit": 1,
                     "orderby": ["event_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -610,7 +611,7 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
 
-        assert data["data"][0]["span_id"] == "8841662216cc598b"
+        assert data["data"][0]["span_id"] == "841662216cc598b1"
 
         response = self.post(
             json.dumps(
@@ -618,7 +619,7 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["event_id", "span_id"],
-                    "conditions": [["span_id", "IN", ["8841662216cc598b"]]],
+                    "conditions": [["span_id", "IN", ["841662216cc598b1"]]],
                     "limit": 1,
                     "orderby": ["event_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -629,7 +630,7 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
 
-        assert data["data"][0]["span_id"] == "8841662216cc598b"
+        assert data["data"][0]["span_id"] == "841662216cc598b1"
 
     def test_limitby_multicolumn(self) -> None:
         query_str = """MATCH (transactions)
