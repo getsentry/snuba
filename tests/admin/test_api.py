@@ -75,21 +75,22 @@ def test_post_configs(admin_api: Any) -> None:
     assert response.status_code == 400
 
 
-def get_node_for_table(admin_api: Any, table_name: str) -> tuple[str, int]:
+def get_node_for_table(admin_api: Any, storage_name: str) -> tuple[str, str, int]:
     response = admin_api.get("/clickhouse_nodes")
     assert response.status_code == 200, response
     nodes = json.loads(response.data)
     for node in nodes:
-        if node["local_table_name"] == table_name:
+        if node["storage_name"] == storage_name:
+            table = node["local_table_name"]
             host = node["local_nodes"][0]["host"]
             port = node["local_nodes"][0]["port"]
-            return str(host), int(port)
+            return str(table), str(host), int(port)
 
-    raise Exception(f"{table_name} does not have a local node")
+    raise Exception(f"{storage_name} does not have a local node")
 
 
 def test_query_trace(admin_api: Any) -> None:
-    host, port = get_node_for_table(admin_api, "errors_local")
+    table, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
         "/clickhouse_trace_query",
         data=json.dumps(
@@ -97,7 +98,7 @@ def test_query_trace(admin_api: Any) -> None:
                 "host": host,
                 "port": port,
                 "storage": "errors_ro",
-                "sql": "SELECT count() FROM errors_local",
+                "sql": f"SELECT count() FROM {table}",
             }
         ),
     )
@@ -107,7 +108,7 @@ def test_query_trace(admin_api: Any) -> None:
 
 
 def test_query_trace_bad_query(admin_api: Any) -> None:
-    host, port = get_node_for_table(admin_api, "errors_local")
+    table, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
         "/clickhouse_trace_query",
         data=json.dumps(
@@ -115,7 +116,7 @@ def test_query_trace_bad_query(admin_api: Any) -> None:
                 "host": host,
                 "port": port,
                 "storage": "errors_ro",
-                "sql": "SELECT count(asdasds) FROM errors_local",
+                "sql": f"SELECT count(asdasds) FROM {table}",
             }
         ),
     )
@@ -126,7 +127,7 @@ def test_query_trace_bad_query(admin_api: Any) -> None:
 
 
 def test_query_trace_invalid_query(admin_api: Any) -> None:
-    host, port = get_node_for_table(admin_api, "errors_local")
+    table, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
         "/clickhouse_trace_query",
         data=json.dumps(
@@ -134,7 +135,7 @@ def test_query_trace_invalid_query(admin_api: Any) -> None:
                 "host": host,
                 "port": port,
                 "storage": "errors_ro",
-                "sql": "SELECT count() FROM errors_local;",
+                "sql": f"SELECT count() FROM {table};",
             }
         ),
     )
