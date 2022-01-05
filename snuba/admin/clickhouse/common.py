@@ -35,7 +35,10 @@ def get_clickhouse_connection(
     try:
         storage_key = StorageKey(storage_name)
     except ValueError:
-        raise InvalidStorageError(extra_data={"storage_name": storage_name})
+        raise InvalidStorageError(
+            f"storage {storage_name} is not a valid storage name",
+            extra_data={"storage_name": storage_name},
+        )
 
     if storage_key in CONNECTIONS:
         return CONNECTIONS[storage_key]
@@ -45,7 +48,8 @@ def get_clickhouse_connection(
 
     if not is_valid_node(clickhouse_host, clickhouse_port, cluster):
         raise InvalidNodeError(
-            extra_data={"host": clickhouse_host, "port": clickhouse_port}
+            f"host {clickhouse_host} and port {clickhouse_port} are not valid",
+            extra_data={"host": clickhouse_host, "port": clickhouse_port},
         )
 
     database = cluster.get_database()
