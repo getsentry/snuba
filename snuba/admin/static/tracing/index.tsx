@@ -6,24 +6,22 @@ import { QueryResult } from "../components/query_display/types";
 function TracingQueries(props: { api: Client }) {
   function tablePopulator(queryResult: QueryResult) {
     var elements = {};
-    if (queryResult.error === undefined) {
-      elements = { Trace: [queryResult.trace_output, 400] };
-    } else {
+    if (queryResult.error) {
       elements = { Error: [queryResult.error, 200] };
+    } else {
+      elements = { Trace: [queryResult.trace_output, 400] };
     }
     return tracingOutput(elements);
   }
 
   function tracingOutput(elements: Object) {
-    console.log(elements);
-
     return (
       <>
         <br />
         <br />
         {Object.entries(elements).map(([title, [value, height]]) => {
           return (
-            <>
+            <div key={value}>
               {title}
               <textarea
                 spellCheck={false}
@@ -31,7 +29,7 @@ function TracingQueries(props: { api: Client }) {
                 style={{ width: "100%", height: height }}
                 disabled
               />
-            </>
+            </div>
           );
         })}
       </>
