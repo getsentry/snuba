@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Mapping, MutableMapping, Optional, cast
+from typing import Any, List, MutableMapping, Optional, cast
 
 import simplejson as json
 from flask import Flask, Response, g, jsonify, make_response, request
@@ -28,7 +28,6 @@ from snuba.admin.runtime_config import (
     get_config_type_from_value,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.web import QueryException
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
@@ -154,7 +153,15 @@ def clickhouse_trace_query() -> Response:
         raw_sql = req["sql"]
     except KeyError as e:
         return make_response(
-            jsonify({"error": f"Invalid request, missing key {e.args[0]}"}), 400
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
         )
 
     try:
@@ -162,27 +169,28 @@ def clickhouse_trace_query() -> Response:
         trace_output = result.trace_output
         return make_response(jsonify({"trace_output": trace_output}), 200)
     except InvalidCustomQuery as err:
-        return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
-    except QueryException as err:
-        status = 500
-        details: Mapping[str, str | int]
-
-        cause = err.__cause__
-        if isinstance(cause, ClickhouseError):
-            details = {
-                "type": "clickhouse",
-                "message": str(cause),
-                "code": cause.code,
-            }
-        if isinstance(cause, Exception):
-            details = {
-                "type": "unknown",
-                "message": str(cause),
-            }
-        else:
-            raise  # exception should have been chained
-
-        return make_response(jsonify({"error": details, **err.extra}), status)
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "validation",
+                        "message": err.message or "Invalid query",
+                    }
+                }
+            ),
+            400,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}), 500,
+        )
 
 
 @application.route("/configs", methods=["GET", "POST"])

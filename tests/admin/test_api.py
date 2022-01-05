@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 import pytest
@@ -73,13 +75,27 @@ def test_post_configs(admin_api: Any) -> None:
     assert response.status_code == 400
 
 
+def get_node_for_table(admin_api: Any, table_name: str) -> tuple[str, int]:
+    response = admin_api.get("/clickhouse_nodes")
+    assert response.status_code == 200, response
+    nodes = json.loads(response.data)
+    for node in nodes:
+        if node["local_table_name"] == table_name:
+            host = node["local_nodes"][0]["host"]
+            port = node["local_nodes"][0]["port"]
+            return str(host), int(port)
+
+    raise Exception(f"{table_name} does not have a local node")
+
+
 def test_query_trace(admin_api: Any) -> None:
+    host, port = get_node_for_table(admin_api, "errors_local")
     response = admin_api.post(
         "/clickhouse_trace_query",
         data=json.dumps(
             {
-                "host": "localhost",
-                "port": 9000,
+                "host": host,
+                "port": port,
                 "storage": "errors_ro",
                 "sql": "SELECT count() FROM errors_local",
             }
@@ -88,3 +104,41 @@ def test_query_trace(admin_api: Any) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
+
+
+def test_query_trace_bad_query(admin_api: Any) -> None:
+    host, port = get_node_for_table(admin_api, "errors_local")
+    response = admin_api.post(
+        "/clickhouse_trace_query",
+        data=json.dumps(
+            {
+                "host": host,
+                "port": port,
+                "storage": "errors_ro",
+                "sql": "SELECT count(asdasds) FROM errors_local",
+            }
+        ),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert "Exception: Missing columns" in data["error"]["message"]
+    assert "clickhouse" == data["error"]["type"]
+
+
+def test_query_trace_invalid_query(admin_api: Any) -> None:
+    host, port = get_node_for_table(admin_api, "errors_local")
+    response = admin_api.post(
+        "/clickhouse_trace_query",
+        data=json.dumps(
+            {
+                "host": host,
+                "port": port,
+                "storage": "errors_ro",
+                "sql": "SELECT count() FROM errors_local;",
+            }
+        ),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert "; is not allowed in the query" in data["error"]["message"]
+    assert "validation" == data["error"]["type"]
