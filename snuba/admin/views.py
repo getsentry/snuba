@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Any, List, Mapping, MutableMapping, Optional, cast
 
 import simplejson as json
-from flask import Flask, Response, jsonify, make_response, request
+from flask import Flask, Response, g, jsonify, make_response, request
 
 from snuba import state
+from snuba.admin.auth import UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import (
     InvalidCustomQuery,
     InvalidNodeError,
@@ -34,6 +35,21 @@ application = Flask(__name__, static_url_path="/static", static_folder="dist")
 notification_client = RuntimeConfigAutoClient()
 
 USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+
+
+@application.errorhandler(UnauthorizedException)
+def handle_invalid_json(exception: UnauthorizedException) -> Response:
+    return Response(
+        json.dumps({"error": "Unauthorized"}),
+        401,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.before_request
+def authorize() -> None:
+    user = authorize_request()
+    g.user = user
 
 
 @application.route("/")

@@ -106,6 +106,7 @@ def build_executor_consumer(
         SubscriptionExecutorProcessingFactory(
             executor,
             dataset,
+            entity_names,
             # If there are max_concurrent_queries + 10 pending futures in the queue,
             # we will start raising MessageRejected to slow down the consumer as
             # it means our executor cannot keep up
@@ -144,11 +145,13 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self,
         executor: ThreadPoolExecutor,
         dataset: Dataset,
+        entity_names: Sequence[str],
         buffer_size: int,
         metrics: MetricsBackend,
     ) -> None:
         self.__executor = executor
         self.__dataset = dataset
+        self.__entity_names = entity_names
         self.__buffer_size = buffer_size
         self.__metrics = metrics
 
@@ -157,6 +160,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
     ) -> ProcessingStrategy[KafkaPayload]:
         return ExecuteQuery(
             self.__dataset,
+            self.__entity_names,
             self.__executor,
             self.__buffer_size,
             self.__metrics,
@@ -174,6 +178,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def __init__(
         self,
         dataset: Dataset,
+        entity_names: Sequence[str],
         executor: ThreadPoolExecutor,
         buffer_size: int,
         metrics: MetricsBackend,
@@ -181,6 +186,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         commit: Optional[Callable[[Mapping[Partition, Position]], None]] = None,
     ) -> None:
         self.__dataset = dataset
+        self.__entity_names = set(entity_names)
         self.__executor = executor
         self.__buffer_size = buffer_size
         self.__metrics = metrics
@@ -282,7 +288,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
         ) < executor_sample_rate
 
-        if should_execute:
+        entity_name = task.task.entity.value
+
+        if should_execute and entity_name in self.__entity_names:
             self.__queue.append(
                 (
                     message,
@@ -294,6 +302,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                     ),
                 )
             )
+        else:
+            self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
 
     def close(self) -> None:
         self.__closed = True
