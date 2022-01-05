@@ -29,7 +29,10 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
 )
-from snuba.subscriptions.entity_subscription import EventsSubscription
+from snuba.subscriptions.entity_subscription import (
+    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
+    EventsSubscription,
+)
 from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
     ProduceResult,
@@ -42,7 +45,7 @@ from snuba.utils.streams.configuration_builder import (
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from tests.backends.metrics import TestingMetricsBackend
+from tests.backends.metrics import Increment, TestingMetricsBackend
 
 
 @pytest.mark.ci_only
@@ -118,6 +121,7 @@ def test_executor_consumer() -> None:
 
 
 def generate_message(
+    entity_key: EntityKey,
     subscription_identifier: Optional[SubscriptionIdentifier] = None,
 ) -> Iterator[Message[KafkaPayload]]:
     codec = SubscriptionScheduledTaskEncoder()
@@ -127,20 +131,28 @@ def generate_message(
     if subscription_identifier is None:
         subscription_identifier = SubscriptionIdentifier(PartitionId(1), uuid.uuid1())
 
+    data_dict = {}
+    if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
+        data_dict = {"organization": 1}
+
+    entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
+        data_dict=data_dict
+    )
+
     while True:
         payload = codec.encode(
             ScheduledSubscriptionTask(
                 epoch + timedelta(minutes=i),
                 SubscriptionWithMetadata(
-                    EntityKey.EVENTS,
+                    entity_key,
                     Subscription(
                         subscription_identifier,
                         SnQLSubscriptionData(
                             project_id=1,
                             time_window=timedelta(minutes=1),
                             resolution=timedelta(minutes=1),
-                            query="MATCH (events) SELECT count()",
-                            entity_subscription=EventsSubscription(data_dict={}),
+                            query=f"MATCH ({entity_key.value}) SELECT count()",
+                            entity_subscription=entity_subscription,
                         ),
                     ),
                     i + 1,
@@ -155,16 +167,17 @@ def generate_message(
 def test_execute_query_strategy() -> None:
     state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
+    entity_names = ["events"]
     max_concurrent_queries = 2
     executor = ThreadPoolExecutor(max_concurrent_queries)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
     strategy = ExecuteQuery(
-        dataset, executor, max_concurrent_queries, metrics, next_step
+        dataset, entity_names, executor, max_concurrent_queries, metrics, next_step
     )
 
-    make_message = generate_message()
+    make_message = generate_message(EntityKey.EVENTS)
     message = next(make_message)
 
     strategy.submit(message)
@@ -188,13 +201,14 @@ def test_execute_query_strategy() -> None:
 def test_too_many_concurrent_queries() -> None:
     state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
+    entity_names = ["events"]
     executor = ThreadPoolExecutor(2)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, executor, 4, metrics, next_step)
+    strategy = ExecuteQuery(dataset, entity_names, executor, 4, metrics, next_step)
 
-    make_message = generate_message()
+    make_message = generate_message(EntityKey.EVENTS)
 
     for _ in range(4):
         strategy.submit(next(make_message))
@@ -204,6 +218,32 @@ def test_too_many_concurrent_queries() -> None:
 
     strategy.close()
     strategy.join()
+
+
+def test_skip_execution_for_entity() -> None:
+    # Skips execution if the entity name is not on the list
+    state.set_config("executor_sample_rate", 1.0)
+    dataset = get_dataset("metrics")
+    entity_names = ["metrics_sets"]
+    executor = ThreadPoolExecutor()
+    metrics = TestingMetricsBackend()
+    next_step = mock.Mock()
+
+    strategy = ExecuteQuery(dataset, entity_names, executor, 4, metrics, next_step)
+
+    metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
+    strategy.submit(metrics_sets_message)
+    metrics_counters_message = next(generate_message(EntityKey.METRICS_COUNTERS))
+    strategy.submit(metrics_counters_message)
+
+    assert (
+        Increment("skipped_execution", 1, {"entity": "metrics_sets"})
+        not in metrics.calls
+    )
+    assert (
+        Increment("skipped_execution", 1, {"entity": "metrics_counters"})
+        in metrics.calls
+    )
 
 
 def test_produce_result() -> None:
@@ -268,6 +308,7 @@ def test_produce_result() -> None:
 def test_execute_and_produce_result() -> None:
     state.set_config("executor_sample_rate", 1.0)
     dataset = get_dataset("events")
+    entity_names = ["events"]
     executor = ThreadPoolExecutor()
     max_concurrent_queries = 2
     metrics = TestingMetricsBackend()
@@ -285,6 +326,7 @@ def test_execute_and_produce_result() -> None:
 
     strategy = ExecuteQuery(
         dataset,
+        entity_names,
         executor,
         max_concurrent_queries,
         metrics,
@@ -293,7 +335,7 @@ def test_execute_and_produce_result() -> None:
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
 
-    make_message = generate_message(subscription_identifier)
+    make_message = generate_message(EntityKey.EVENTS, subscription_identifier)
     message = next(make_message)
     strategy.submit(message)
 
