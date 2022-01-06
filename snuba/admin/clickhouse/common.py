@@ -60,6 +60,7 @@ def get_ro_node_connection(
         settings.CLICKHOUSE_READONLY_USER,
         settings.CLICKHOUSE_READONLY_PASSWORD,
         database,
+        max_pool_size=2,
         # force read-only
         client_settings=ClickhouseClientSettings.QUERY.value.settings,
     )
