@@ -25,10 +25,10 @@ def is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
     return any(node.host_name == host and node.port == port for node in nodes)
 
 
-CONNECTIONS: MutableMapping[StorageKey, ClickhousePool] = {}
+NODE_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 
 
-def get_clickhouse_connection(
+def get_ro_node_connection(
     clickhouse_host: str, clickhouse_port: int, storage_name: str
 ) -> ClickhousePool:
     storage_key = None
@@ -40,8 +40,9 @@ def get_clickhouse_connection(
             extra_data={"storage_name": storage_name},
         )
 
-    if storage_key in CONNECTIONS:
-        return CONNECTIONS[storage_key]
+    key = f"{storage_key}-{clickhouse_host}"
+    if key in NODE_CONNECTIONS:
+        return NODE_CONNECTIONS[key]
 
     storage = get_storage(storage_key)
     cluster = storage.get_cluster()
@@ -62,5 +63,30 @@ def get_clickhouse_connection(
         # force read-only
         client_settings=ClickhouseClientSettings.QUERY.value.settings,
     )
-    CONNECTIONS[storage_key] = connection
+    NODE_CONNECTIONS[key] = connection
+    return connection
+
+
+CLUSTER_CONNECTIONS: MutableMapping[StorageKey, ClickhousePool] = {}
+
+
+def get_ro_cluster_connection(storage_name: str) -> ClickhousePool:
+
+    storage_key = None
+    try:
+        storage_key = StorageKey(storage_name)
+    except ValueError:
+        raise InvalidStorageError(
+            f"storage {storage_name} is not a valid storage name",
+            extra_data={"storage_name": storage_name},
+        )
+
+    if storage_key in CLUSTER_CONNECTIONS:
+        return CLUSTER_CONNECTIONS[storage_key]
+
+    storage = get_storage(storage_key)
+    cluster = storage.get_cluster()
+    connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+
+    CLUSTER_CONNECTIONS[storage_key] = connection
     return connection

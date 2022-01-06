@@ -553,12 +553,6 @@ def test_format_expressions(
     clickhouse_query_anonymized = format_query_anonymized(query)
     assert clickhouse_query.get_sql() == formatted_str
     assert clickhouse_query.structured() == formatted_seq
-    if clickhouse_query_anonymized.get_sql() != formatted_anonymized_str:
-        import pdb
-
-        pdb.set_trace()
-        print(clickhouse_query_anonymized.get_sql())
-
     assert clickhouse_query_anonymized.get_sql() == formatted_anonymized_str
 
 

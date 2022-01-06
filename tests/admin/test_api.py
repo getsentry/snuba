@@ -89,17 +89,33 @@ def get_node_for_table(admin_api: Any, storage_name: str) -> tuple[str, str, int
     raise Exception(f"{storage_name} does not have a local node")
 
 
-def test_query_trace(admin_api: Any) -> None:
-    table, host, port = get_node_for_table(admin_api, "errors")
+def test_system_query(admin_api: Any) -> None:
+    _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
-        "/clickhouse_trace_query",
+        "/run_clickhouse_system_query",
+        headers={"Content-Type": "application/json"},
         data=json.dumps(
             {
                 "host": host,
                 "port": port,
                 "storage": "errors_ro",
-                "sql": f"SELECT count() FROM {table}",
+                "query_name": "CurrentMerges",
             }
+        ),
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["column_names"] == ["count()", "is_currently_executing"]
+    assert data["rows"] == []
+
+
+def test_query_trace(admin_api: Any) -> None:
+    table, _, _ = get_node_for_table(admin_api, "errors_ro")
+    response = admin_api.post(
+        "/clickhouse_trace_query",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(
+            {"storage": "errors_ro", "sql": f"SELECT count() FROM {table}"}
         ),
     )
     assert response.status_code == 200
@@ -108,16 +124,12 @@ def test_query_trace(admin_api: Any) -> None:
 
 
 def test_query_trace_bad_query(admin_api: Any) -> None:
-    table, host, port = get_node_for_table(admin_api, "errors")
+    table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
+        headers={"Content-Type": "application/json"},
         data=json.dumps(
-            {
-                "host": host,
-                "port": port,
-                "storage": "errors_ro",
-                "sql": f"SELECT count(asdasds) FROM {table}",
-            }
+            {"storage": "errors_ro", "sql": f"SELECT count(asdasds) FROM {table}"}
         ),
     )
     assert response.status_code == 400
@@ -127,16 +139,12 @@ def test_query_trace_bad_query(admin_api: Any) -> None:
 
 
 def test_query_trace_invalid_query(admin_api: Any) -> None:
-    table, host, port = get_node_for_table(admin_api, "errors")
+    table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
+        headers={"Content-Type": "application/json"},
         data=json.dumps(
-            {
-                "host": host,
-                "port": port,
-                "storage": "errors_ro",
-                "sql": f"SELECT count() FROM {table};",
-            }
+            {"storage": "errors_ro", "sql": f"SELECT count() FROM {table};"}
         ),
     )
     assert response.status_code == 400

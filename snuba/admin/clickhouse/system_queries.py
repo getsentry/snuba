@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Type
 
-from snuba.admin.clickhouse.common import InvalidCustomQuery, get_clickhouse_connection
+from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connection
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.utils.serializable_exception import SerializableException
 
@@ -89,9 +89,7 @@ def _run_sql_query_on_host(
     """
     Run the SQL query. It should be validated before getting to this point
     """
-    connection = get_clickhouse_connection(
-        clickhouse_host, clickhouse_port, storage_name
-    )
+    connection = get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name)
     query_result = connection.execute(query=sql, with_column_types=True)
 
     return query_result

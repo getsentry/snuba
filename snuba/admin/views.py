@@ -76,7 +76,6 @@ def clickhouse_queries() -> Response:
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
     req = request.get_json()
-
     try:
         host = req["host"]
         port = req["port"]
@@ -147,8 +146,6 @@ def clickhouse_system_query() -> Response:
 def clickhouse_trace_query() -> Response:
     req = json.loads(request.data)
     try:
-        host = req["host"]
-        port = req["port"]
         storage = req["storage"]
         raw_sql = req["sql"]
     except KeyError as e:
@@ -165,7 +162,7 @@ def clickhouse_trace_query() -> Response:
         )
 
     try:
-        result = run_query_and_get_trace(host, port, storage, raw_sql)
+        result = run_query_and_get_trace(storage, raw_sql)
         trace_output = result.trace_output
         return make_response(jsonify({"trace_output": trace_output}), 200)
     except InvalidCustomQuery as err:
