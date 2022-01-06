@@ -308,6 +308,7 @@ class MappingOptimizer(QueryProcessor):
             return
 
         metrics.increment("optimizable_query")
+        query.add_experiment("tags_hashmap_applied", 1)
 
         if condition is not None:
             query.set_ast_condition(condition.transform(self.__replace_with_hash))
