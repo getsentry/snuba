@@ -2,7 +2,10 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Type
 
+from clickhouse_driver.errors import ErrorCodes
+
 from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connection
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.utils.serializable_exception import SerializableException
 
@@ -133,9 +136,17 @@ def run_system_query_on_host_with_sql(
     clickhouse_host: str, clickhouse_port: int, storage_name: str, system_query_sql: str
 ) -> ClickhouseResult:
     validate_system_query(system_query_sql)
-    return _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql
-    )
+    try:
+        return _run_sql_query_on_host(
+            clickhouse_host, clickhouse_port, storage_name, system_query_sql
+        )
+    except ClickhouseError as exc:
+        # Don't send error to Snuba if it is an unknown table or column as it
+        # will be too noisy
+        if exc.code in (ErrorCodes.UNKNOWN_TABLE, ErrorCodes.UNKNOWN_IDENTIFIER):
+            raise InvalidCustomQuery("Invalid query: {exc.message} {exc.code}")
+
+        raise
 
 
 def validate_system_query(sql_query: str) -> None:

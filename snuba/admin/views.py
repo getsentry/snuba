@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, List, MutableMapping, Optional, cast
 
 import simplejson as json
@@ -28,6 +29,8 @@ from snuba.admin.runtime_config import (
     get_config_type_from_value,
 )
 from snuba.clickhouse.errors import ClickhouseError
+
+logger = logging.getLogger(__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
@@ -129,6 +132,12 @@ def clickhouse_system_query() -> Response:
 
                 return make_response(jsonify(res), 200)
         except InvalidCustomQuery as err:
+            return make_response(
+                jsonify({"error": err.message or "Invalid query"}), 400
+            )
+
+        except ClickhouseError as err:
+            logger.error(err, exc_info=True)
             return make_response(
                 jsonify({"error": err.message or "Invalid query"}), 400
             )

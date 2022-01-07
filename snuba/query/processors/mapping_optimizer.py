@@ -1,5 +1,4 @@
 import logging
-import random
 from enum import Enum
 from typing import Optional, Tuple
 
@@ -204,7 +203,7 @@ class MappingOptimizer(QueryProcessor):
         )
 
     def _get_condition_without_redundant_checks(
-        self, condition: Expression, query: Query, should_apply_optimization: bool
+        self, condition: Expression, query: Query
     ) -> Expression:
         """Optimizes the case where the query condition contains the following:
 
@@ -240,9 +239,7 @@ class MappingOptimizer(QueryProcessor):
         elif condition.function_name == BooleanFunctions.OR:
             sub_conditions = get_first_level_or_conditions(condition)
             pruned_conditions = [
-                self._get_condition_without_redundant_checks(
-                    c, query, should_apply_optimization
-                )
+                self._get_condition_without_redundant_checks(c, query)
                 for c in sub_conditions
             ]
             return combine_or_conditions(pruned_conditions)
@@ -266,55 +263,22 @@ class MappingOptimizer(QueryProcessor):
                 if tag_exist_match:
                     requested_tag = tag_exist_match.string("key")
                     if requested_tag in tag_eq_match_strings:
-                        if should_apply_optimization:
-                            query.add_experiment("redundant_clause_removed", 1)
-                            # the clause is redundant, thus we continue the loop
-                            # and do not add it to useful_conditions
-                            continue
-                        else:
-                            query.add_experiment("redundant_clause_removed", 0)
+                        # the clause is redundant, thus we continue the loop
+                        # and do not add it to useful_conditions
+                        continue
                 useful_conditions.append(
-                    self._get_condition_without_redundant_checks(
-                        cond, query, should_apply_optimization
-                    )
+                    self._get_condition_without_redundant_checks(cond, query)
                 )
             return combine_and_conditions(useful_conditions)
         else:
             return condition
 
-    def _should_apply_redundant_clause_optimization(self, query: Query) -> bool:
-        """This function is used to measure impact of the redundant clause optimization
-        once that measurement is complete, this code should be removed"""
-        optimizer_skip_rate = get_config("tags_redundant_optimizer_skip_rate", 0)
-        if isinstance(optimizer_skip_rate, float) or isinstance(
-            optimizer_skip_rate, int
-        ):
-            if random.random() >= optimizer_skip_rate:
-                query.add_experiment("tags_redundant_optimizer_enabled", 1)
-                return True
-            else:
-                query.add_experiment("tags_redundant_optimizer_enabled", 0)
-                return False
-        else:
-            # when in doubt, apply the optimization but yell about it
-            query.add_experiment("tags_redundant_optimizer_enabled", 1)
-            logger.error(
-                "Invalid experiment config for 'tags_redundant_optimizer_skip_rate': %s",
-                optimizer_skip_rate,
-            )
-            return True
-
     def __get_reduced_and_classified_query_clause(
-        self,
-        clause: Optional[Expression],
-        query: Query,
-        should_apply_redundant_clause_optimization: bool,
+        self, clause: Optional[Expression], query: Query
     ) -> Tuple[Optional[Expression], ConditionClass]:
         cond_class = ConditionClass.IRRELEVANT
         if clause is not None:
-            new_clause = self._get_condition_without_redundant_checks(
-                clause, query, should_apply_redundant_clause_optimization
-            )
+            new_clause = self._get_condition_without_redundant_checks(clause, query)
             cond_class = self.__classify_combined_conditions(new_clause)
             return new_clause, cond_class
         else:
@@ -323,18 +287,15 @@ class MappingOptimizer(QueryProcessor):
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         if not get_config(self.__killswitch, 1):
             return
-        should_apply_redundant_clause_optimization = self._should_apply_redundant_clause_optimization(
-            query
-        )
         condition, cond_class = self.__get_reduced_and_classified_query_clause(
-            query.get_condition(), query, should_apply_redundant_clause_optimization
+            query.get_condition(), query
         )
         query.set_ast_condition(condition)
         if cond_class == ConditionClass.NOT_OPTIMIZABLE:
             return
 
         having_cond, having_cond_class = self.__get_reduced_and_classified_query_clause(
-            query.get_having(), query, should_apply_redundant_clause_optimization
+            query.get_having(), query
         )
         query.set_ast_having(having_cond)
         if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
@@ -347,6 +308,7 @@ class MappingOptimizer(QueryProcessor):
             return
 
         metrics.increment("optimizable_query")
+        query.add_experiment("tags_hashmap_applied", 1)
 
         if condition is not None:
             query.set_ast_condition(condition.transform(self.__replace_with_hash))
