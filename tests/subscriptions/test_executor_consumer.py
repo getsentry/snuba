@@ -160,7 +160,6 @@ def test_executor_consumer() -> None:
     executor.signal_shutdown()
     # Call run here so that the executor shuts down itself cleanly.
     executor.run()
-
     result = result_consumer.poll(5)
     assert result is not None, "Did not receive a result message"
     data = json.loads(result.payload.value)

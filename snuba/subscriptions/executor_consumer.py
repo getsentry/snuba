@@ -298,6 +298,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def terminate(self) -> None:
         self.__closed = True
+
+        self.__executor.shutdown()
         self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
@@ -327,6 +329,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
+        self.__executor.shutdown()
+
         self.__next_step.close()
         self.__next_step.join(remaining)
 
@@ -385,6 +389,8 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
     def terminate(self) -> None:
         self.__closed = True
 
+        self.__producer.close()
+
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
         while self.__queue:
@@ -400,3 +406,4 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__commit(
                 {message.partition: Position(message.offset, message.timestamp)}
             )
+        self.__producer.close()
