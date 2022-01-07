@@ -14,38 +14,41 @@ from snuba.request.request_settings import HTTPRequestSettings
 RO_REFERRER = "RO_REFERRER"
 RW_REFERRER = "RW_REFERRER"
 
+STORAGE_SELECTOR = TransactionsQueryStorageSelector(mappers=transaction_translator)
+STORAGE = get_storage(StorageKey.TRANSACTIONS)
+STORAGE_RO = get_storage(StorageKey.TRANSACTIONS_RO)
+
 
 def test_storage_selector_global_config() -> None:
     state.set_config("enable_transactions_readonly_table", True)
 
-    storage_ro = get_storage(StorageKey.TRANSACTIONS_RO)
-
     query = Query(Entity(EntityKey.TRANSACTIONS, ColumnSet([])), selected_columns=[])
 
-    storage_selector = TransactionsQueryStorageSelector(mappers=transaction_translator)
     assert (
-        storage_selector.select_storage(query, HTTPRequestSettings()).storage
-        == storage_ro
+        STORAGE_SELECTOR.select_storage(query, HTTPRequestSettings()).storage
+        == STORAGE_RO
+    )
+
+    state.set_config("enable_transactions_readonly_table", False)
+    assert (
+        STORAGE_SELECTOR.select_storage(query, HTTPRequestSettings()).storage == STORAGE
     )
 
 
 def test_storage_selector_query_settings() -> None:
     settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS = set([RO_REFERRER])
-    storage = get_storage(StorageKey.TRANSACTIONS)
-    storage_ro = get_storage(StorageKey.TRANSACTIONS_RO)
 
     query = Query(Entity(EntityKey.TRANSACTIONS, ColumnSet([])), selected_columns=[])
 
-    storage_selector = TransactionsQueryStorageSelector(mappers=transaction_translator)
     assert (
-        storage_selector.select_storage(
+        STORAGE_SELECTOR.select_storage(
             query, HTTPRequestSettings(referrer=RO_REFERRER)
         ).storage
-        == storage_ro
+        == STORAGE_RO
     )
     assert (
-        storage_selector.select_storage(
+        STORAGE_SELECTOR.select_storage(
             query, HTTPRequestSettings(referrer=RW_REFERRER)
         ).storage
-        == storage
+        == STORAGE
     )
