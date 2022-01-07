@@ -100,9 +100,8 @@ class TransactionsQueryStorageSelector(QueryStorageSelector):
             request_settings.referrer
             in settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS
         )
-        use_readonly_storage = readonly_referrer or (
-            state.get_config("enable_transactions_readonly_table", False)
-            and not request_settings.get_consistent()
+        use_readonly_storage = readonly_referrer or state.get_config(
+            "enable_transactions_readonly_table", False
         )
         storage = (
             self.__transactions_ro_table
