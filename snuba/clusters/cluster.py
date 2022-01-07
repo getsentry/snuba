@@ -291,11 +291,11 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
         return [
             ClickhouseNode(*host)
-            for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute(
+            for host in self.get_query_connection(
+                ClickhouseClientSettings.QUERY
+            ).execute(
                 f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
-            )
-            .results
+            ).results
         ]
 
 
