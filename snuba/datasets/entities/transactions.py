@@ -1,7 +1,7 @@
 from abc import ABC
 from typing import Optional, Sequence
 
-from snuba import state
+from snuba import settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -96,7 +96,11 @@ class TransactionsQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        use_readonly_storage = (
+        readonly_referrer = (
+            request_settings.referrer
+            in settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS
+        )
+        use_readonly_storage = readonly_referrer or (
             state.get_config("enable_transactions_readonly_table", False)
             and not request_settings.get_consistent()
         )
