@@ -12,7 +12,7 @@ from snuba.datasets.storages.transactions import (
 schema = TableSchema(
     columns=columns,
     local_table_name="transactions_local",
-    dist_table_name="transactions_dist_ro",
+    dist_table_name="transactions_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS_RO,
     mandatory_conditions=[],
 )
