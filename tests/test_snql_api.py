@@ -293,8 +293,8 @@ class TestSnQLApi(BaseApiTest):
                         {
                             "query": f"""MATCH (events)
                             SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
-                            WHERE timestamp >= toDateTime('2021-01-01')
-                            AND timestamp < toDateTime('2022-01-01')
+                            WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                            AND timestamp < toDateTime('{self.next_time.isoformat()}')
                             AND project_id IN tuple({self.project_id})
                             LIMIT 5""",
                         }
@@ -591,25 +591,6 @@ class TestSnQLApi(BaseApiTest):
                     AND e.timestamp >= toDateTime('2021-01-01')
                     AND e.timestamp < toDateTime('2021-01-02')
                     """
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-    def test_capture_trace_flag(self) -> None:
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": """
-                MATCH (discover)
-                SELECT count() AS count
-                WHERE
-                    timestamp >= toDateTime('2021-01-01') AND
-                    timestamp <  toDateTime('2022-01-01') AND
-                    project_id IN tuple(5433960)
-                """,
-                    "capture_trace": True,
                 }
             ),
         )

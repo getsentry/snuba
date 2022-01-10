@@ -9,4 +9,21 @@ type ClickhouseNodeData = {
   local_nodes: ClickhouseNode[];
 };
 
-export { ClickhouseNodeData };
+type QueryRequest = {
+  storage: string;
+  host: string;
+  port: number;
+  sql: string;
+};
+
+type QueryResultColumnMetadata = [string];
+type QueryResultRow = [string];
+
+type QueryResult = {
+  input_query?: string;
+  timestamp: number;
+  column_names: QueryResultColumnMetadata;
+  rows: [QueryResultRow];
+};
+
+export { ClickhouseNodeData, QueryRequest, QueryResult };

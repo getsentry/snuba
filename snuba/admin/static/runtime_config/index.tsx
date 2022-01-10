@@ -76,7 +76,34 @@ function RuntimeConfig(props: { api: Client }) {
                 return { ...prev, value: newValue };
               });
             },
-            () => {}, // TODO: Editing existing row
+            () => {
+              if (
+                window.confirm(
+                  `Are you sure you want to update ${key} to ${currentRowData.value}?`
+                )
+              ) {
+                api
+                  .editConfig(key, currentRowData.value)
+                  .then((res) => {
+                    setData((prev) => {
+                      if (prev) {
+                        const row = prev.find(
+                          (config) => config.key === res.key
+                        );
+                        if (!row) {
+                          throw new Error("An error occurred");
+                        }
+                        row.value = res.value;
+                      }
+                      return prev;
+                    });
+                    resetForm();
+                  })
+                  .catch((err) => {
+                    window.alert(err);
+                  });
+              }
+            },
             () => {
               if (window.confirm(`Are you sure you want to delete ${key}?`)) {
                 api.deleteConfig(key).then(() => {
