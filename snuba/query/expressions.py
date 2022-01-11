@@ -122,6 +122,37 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
 
+class NoopVisitor(ExpressionVisitor[None]):
+    """A noop visitor that will traverse every node but will not
+    return anything. Good for extending for search purposes
+    """
+
+    def visit_literal(self, exp: Literal) -> None:
+        return None
+
+    def visit_column(self, exp: Column) -> None:
+        return None
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> None:
+        return exp.column.accept(self)
+
+    def visit_function_call(self, exp: FunctionCall) -> None:
+        for param in exp.parameters:
+            param.accept(self)
+        return None
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> None:
+        for param in exp.parameters:
+            param.accept(self)
+        return exp.internal_function.accept(self)
+
+    def visit_argument(self, exp: Argument) -> None:
+        return None
+
+    def visit_lambda(self, exp: Lambda) -> None:
+        return exp.transformation.accept(self)
+
+
 class StringifyVisitor(ExpressionVisitor[str]):
     """Visitor implementation to turn an expression into a string format
     Usage:
