@@ -19,6 +19,7 @@ CLUSTERS = [
             "querylog",
             "sessions",
             "transactions",
+            "transactions_ro",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",

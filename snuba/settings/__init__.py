@@ -44,6 +44,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "querylog",
             "sessions",
             "transactions",
+            "transactions_ro",
         },
         "single_node": True,
     },
@@ -171,6 +172,8 @@ SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer
 
 # Temporary setting for subscription scheduler test
 SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 2
+
+TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
