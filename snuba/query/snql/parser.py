@@ -1169,14 +1169,16 @@ def validate_identifiers_in_lambda(
     or in an outer lambda.
     """
     identifiers: Set[str] = set()
+    unseen_identifiers: Set[str] = set()
 
     def validate_lambda(exp: Lambda) -> None:
         for p in exp.parameters:
             identifiers.add(p)
+            unseen_identifiers.discard(p)
 
         for inner_exp in exp.transformation:
             if isinstance(inner_exp, Argument) and inner_exp.name not in identifiers:
-                raise InvalidExpressionException(f"identifier {inner_exp} not defined")
+                unseen_identifiers.add(inner_exp.name)
             elif isinstance(inner_exp, Lambda):
                 validate_lambda(inner_exp)
 
@@ -1186,6 +1188,10 @@ def validate_identifiers_in_lambda(
     for exp in query.get_all_expressions():
         if isinstance(exp, Lambda):
             validate_lambda(exp)
+
+    if len(unseen_identifiers) > 0:
+        ident_str = ",".join(f"`{u}`" for u in unseen_identifiers)
+        raise InvalidExpressionException(f"identifier(s) {ident_str} not defined")
 
 
 def _replace_time_condition(

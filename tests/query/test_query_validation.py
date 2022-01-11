@@ -19,8 +19,13 @@ test_cases = [
     ),
     pytest.param(
         "MATCH (discover_events) SELECT arrayMap((`x`) -> identity(`y`), sdk_integrations) AS sdks WHERE project_id = 1 AND timestamp >= toDateTime('2021-01-01') AND timestamp < toDateTime('2021-01-02')",
-        InvalidExpressionException("identifier y not defined"),
+        InvalidExpressionException("identifier(s) `y` not defined"),
         id="invalid lambda identifier",
+    ),
+    pytest.param(
+        "MATCH (discover_events) SELECT arrayMap((`x`) -> arrayMap((`y`) -> identity(`z`), sdk_integrations), sdk_integrations) AS sdks WHERE project_id = 1 AND timestamp >= toDateTime('2021-01-01') AND timestamp < toDateTime('2021-01-02')",
+        InvalidExpressionException("identifier(s) `z` not defined"),
+        id="invalid nested lambda identifier",
     ),
 ]
 

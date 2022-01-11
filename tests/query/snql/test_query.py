@@ -1766,6 +1766,67 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (discover_events)
+        SELECT arrayMap((`x`) -> identity(arrayMap((`y`) -> tuple(`x`, `y`), sdk_integrations)), sdk_integrations) AS sdks
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "sdks",
+                    FunctionCall(
+                        "_snuba_sdks",
+                        "arrayMap",
+                        (
+                            Lambda(
+                                None,
+                                ("x",),
+                                FunctionCall(
+                                    None,
+                                    "identity",
+                                    (
+                                        FunctionCall(
+                                            None,
+                                            "arrayMap",
+                                            (
+                                                Lambda(
+                                                    None,
+                                                    ("y",),
+                                                    FunctionCall(
+                                                        None,
+                                                        "tuple",
+                                                        (
+                                                            Argument(None, "x"),
+                                                            Argument(None, "y"),
+                                                        ),
+                                                    ),
+                                                ),
+                                                Column(
+                                                    "_snuba_sdk_integrations",
+                                                    None,
+                                                    "sdk_integrations",
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                            Column("_snuba_sdk_integrations", None, "sdk_integrations"),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="higher order function with nested higher order function",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events)
         SELECT arrayReduce('sumIf', spans.op, arrayMap((`x`, `y`) -> if(equals(and(equals(`x`, 'db'), equals(`y`, 'ops')), 1), 1, 0), spans.op, spans.group)) AS spans
         WHERE {added_condition}
         """,
