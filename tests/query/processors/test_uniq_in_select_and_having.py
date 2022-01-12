@@ -34,7 +34,7 @@ INVALID_QUERY_CASES = [
             condition=None,
             having=uniq_expression(),
         ),
-        id="prod issue repro",
+        id="uniq in having, not in select",
     ),
     pytest.param(
         build_query(
@@ -56,12 +56,13 @@ VALID_QUERY_CASES = [
             selected_columns=[
                 Column("_snuba_project_id", None, "project_id"),
                 Column(None, None, "transaction_name"),
-                Column(None, None, "my_alias"),
+                # the parser guarantees alias expansion
+                uniq_expression(alias="my_alias"),
             ],
             condition=None,
             having=uniq_expression(alias="my_alias"),
         ),
-        id="alias in the select",
+        id="same alias",
     ),
     pytest.param(
         build_query(
@@ -89,6 +90,7 @@ def test_invalid_uniq_queries(input_query: ClickhouseQuery) -> None:
 
 @pytest.mark.parametrize("input_query", deepcopy(VALID_QUERY_CASES))
 def test_valid_uniq_queries(input_query: ClickhouseQuery) -> None:
+    set_config("throw_on_uniq_select_and_having", True)
     og_query = deepcopy(input_query)
     UniqInSelectAndHavingProcessor().process_query(input_query, HTTPRequestSettings())
     # query should not change

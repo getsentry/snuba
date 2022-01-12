@@ -13,7 +13,7 @@ from typing import List, Sequence
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, Expression, FunctionCall, NoopVisitor
+from snuba.query.expressions import Expression, FunctionCall, NoopVisitor
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 
@@ -58,11 +58,6 @@ class _ExpressionOrAliasMatcher(NoopVisitor):
         self.expressions_to_match = expressions_to_match
         self.found_expressions = [False] * len(expressions_to_match)
 
-    def visit_column(self, exp: Column) -> None:
-        for i, exp_to_match in enumerate(self.expressions_to_match):
-            if exp_to_match.alias is not None and exp_to_match.alias == exp.column_name:
-                self.found_expressions[i] = True
-
     def visit_function_call(self, exp: FunctionCall) -> None:
         for param in exp.parameters:
             param.accept(self)
@@ -94,4 +89,4 @@ class UniqInSelectAndHavingProcessor(QueryProcessor):
                 if should_throw:
                     raise error
                 else:
-                    logging.exception(error)
+                    logging.warning(str(error))
