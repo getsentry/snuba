@@ -39,6 +39,9 @@ from snuba.query.processors.type_converters.hexint_column_processor import (
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
+from snuba.query.processors.uniq_in_select_and_having import (
+    UniqInSelectAndHavingProcessor,
+)
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 from snuba.web.split import TimeSplitQueryStrategy
@@ -113,6 +116,7 @@ schema = WritableTableSchema(
 )
 
 query_processors = [
+    UniqInSelectAndHavingProcessor(),
     MappingColumnPromoter(
         mapping_specs={
             "tags": {
