@@ -75,7 +75,7 @@ def test_capture_trace() -> None:
     )
     assert data.results == []
     assert data.meta == []
-    assert data.trace_output == ""
+    assert data.trace_output != ""
     assert data.profile is not None
     assert data.profile["elapsed"] > 0
     assert data.profile["bytes"] > 0
