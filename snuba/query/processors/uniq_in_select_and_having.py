@@ -6,6 +6,7 @@ of clickhouse but we have not upgraded yet. This exists as a check so that we
 return an exception to the user but don't crash the clickhouse query node
 """
 
+import logging
 from dataclasses import fields
 from typing import List, Sequence
 
@@ -14,6 +15,7 @@ from snuba.clickhouse.query import Query
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, NoopVisitor
 from snuba.request.request_settings import RequestSettings
+from snuba.state import get_config
 
 
 class MismatchedAggregationException(InvalidQueryException):
@@ -85,6 +87,11 @@ class UniqInSelectAndHavingProcessor(QueryProcessor):
             for col in selected_columns:
                 col.expression.accept(matcher)
             if not all(matcher.found_expressions):
-                raise MismatchedAggregationException(
+                should_throw = get_config("throw_on_uniq_select_and_having", False)
+                error = MismatchedAggregationException(
                     f"Aggregation is in HAVING clause but not SELECT: {uniq_finder.found_functions}"
                 )
+                if should_throw:
+                    raise error
+                else:
+                    logging.exception(error)

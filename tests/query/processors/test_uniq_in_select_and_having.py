@@ -9,6 +9,7 @@ from snuba.query.processors.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
 from snuba.request.request_settings import HTTPRequestSettings
+from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 
 
@@ -79,6 +80,7 @@ VALID_QUERY_CASES = [
 
 @pytest.mark.parametrize("input_query", deepcopy(INVALID_QUERY_CASES))
 def test_invalid_uniq_queries(input_query: ClickhouseQuery) -> None:
+    set_config("throw_on_uniq_select_and_having", True)
     with pytest.raises(MismatchedAggregationException):
         UniqInSelectAndHavingProcessor().process_query(
             input_query, HTTPRequestSettings()
