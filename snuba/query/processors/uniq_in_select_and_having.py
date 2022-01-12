@@ -8,31 +8,20 @@ return an exception to the user but don't crash the clickhouse query node
 
 import logging
 from dataclasses import fields
-from typing import Any, Dict, List, Sequence, cast
+from typing import Any, Dict, Sequence, cast
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Expression, FunctionCall, NoopVisitor
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 
 
 class MismatchedAggregationException(InvalidQueryException):
     pass
-
-
-class _FunctionNameFindingVisitor(NoopVisitor):
-    def __init__(self, function_name_to_find: str):
-        self.function_name_to_find = function_name_to_find
-        self.found_functions: List[FunctionCall] = []
-
-    def visit_function_call(self, exp: FunctionCall) -> None:
-        for param in exp.parameters:
-            param.accept(self)
-        if exp.function_name == self.function_name_to_find:
-            self.found_functions.append(exp)
-        return None
 
 
 def _expressions_equal_ignore_aliases(exp1: Expression, exp2: Expression) -> bool:
@@ -54,7 +43,7 @@ def _expressions_equal_ignore_aliases(exp1: Expression, exp2: Expression) -> boo
 
 
 class _ExpressionOrAliasMatcher(NoopVisitor):
-    def __init__(self, expressions_to_match: Sequence[FunctionCall]):
+    def __init__(self, expressions_to_match: Sequence[Expression]):
         self.expressions_to_match = expressions_to_match
         self.found_expressions = [False] * len(expressions_to_match)
 
@@ -63,7 +52,8 @@ class _ExpressionOrAliasMatcher(NoopVisitor):
             param.accept(self)
         for i, exp_to_match in enumerate(self.expressions_to_match):
             if (
-                exp_to_match.function_name == exp.function_name
+                isinstance(exp_to_match, FunctionCall)
+                and exp_to_match.function_name == exp.function_name
                 and _expressions_equal_ignore_aliases(exp_to_match, exp)
             ):
                 self.found_expressions[i] = True
@@ -75,10 +65,14 @@ class UniqInSelectAndHavingProcessor(QueryProcessor):
         if not having_clause:
             return None
         selected_columns = query.get_selected_columns()
-        uniq_finder = _FunctionNameFindingVisitor("uniq")
-        having_clause.accept(uniq_finder)
-        if uniq_finder.found_functions:
-            matcher = _ExpressionOrAliasMatcher(uniq_finder.found_functions)
+        uniq_matcher = Param("function", FunctionCallMatch(String("uniq")))
+        found_functions = []
+        for exp in having_clause:
+            match = uniq_matcher.match(exp)
+            if match is not None:
+                found_functions.append(match.expression("function"))
+        if found_functions is not None:
+            matcher = _ExpressionOrAliasMatcher(found_functions)
             for col in selected_columns:
                 col.expression.accept(matcher)
             if not all(matcher.found_expressions):
