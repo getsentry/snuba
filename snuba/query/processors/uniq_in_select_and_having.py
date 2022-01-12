@@ -8,7 +8,7 @@ return an exception to the user but don't crash the clickhouse query node
 
 import logging
 from dataclasses import fields
-from typing import List, Sequence
+from typing import Any, Dict, List, Sequence, cast
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -84,9 +84,13 @@ class UniqInSelectAndHavingProcessor(QueryProcessor):
             if not all(matcher.found_expressions):
                 should_throw = get_config("throw_on_uniq_select_and_having", False)
                 error = MismatchedAggregationException(
-                    f"Aggregation is in HAVING clause but not SELECT: {uniq_finder.found_functions}"
+                    "Aggregation is in HAVING clause but not SELECT", query=str(query)
                 )
                 if should_throw:
                     raise error
                 else:
-                    logging.warning(str(error))
+                    logging.warning(
+                        "Aggregation is in HAVING clause but not SELECT",
+                        exc_info=True,
+                        extra=cast(Dict[str, Any], error.to_dict()),
+                    )
