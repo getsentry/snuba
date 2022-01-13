@@ -112,49 +112,47 @@ schema = WritableTableSchema(
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
+query_processors = [
+    MappingColumnPromoter(
+        mapping_specs={
+            "tags": {
+                "environment": "environment",
+                "sentry:release": "release",
+                "sentry:dist": "dist",
+                "sentry:user": "user",
+            },
+            "contexts": {"trace.trace_id": "trace_id", "trace.span_id": "span_id"},
+        }
+    ),
+    UUIDColumnProcessor(set(["event_id", "trace_id"])),
+    HexIntColumnProcessor({"span_id"}),
+    EventsBooleanContextsProcessor(),
+    MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
+    EmptyTagConditionProcessor(),
+    ArrayJoinKeyValueOptimizer("tags"),
+    ArrayJoinKeyValueOptimizer("measurements"),
+    ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
+    # the bloom filter optimizer should occur before the array join optimizer
+    # on the span columns because the array join optimizer will rewrite the
+    # same conditions the bloom filter optimizer is looking for
+    BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
+    ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
+    HexIntArrayColumnProcessor({"spans.group"}),
+    PrewhereProcessor(
+        ["event_id", "trace_id", "span_id", "transaction_name", "transaction", "title"]
+    ),
+    TableRateLimit(),
+]
+
+query_splitters = [TimeSplitQueryStrategy(timestamp_col="finish_ts")]
+
+mandatory_condition_checkers = [ProjectIdEnforcer()]
 
 storage = WritableTableStorage(
     storage_key=StorageKey.TRANSACTIONS,
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schema=schema,
-    query_processors=[
-        MappingColumnPromoter(
-            mapping_specs={
-                "tags": {
-                    "environment": "environment",
-                    "sentry:release": "release",
-                    "sentry:dist": "dist",
-                    "sentry:user": "user",
-                },
-                "contexts": {"trace.trace_id": "trace_id", "trace.span_id": "span_id"},
-            }
-        ),
-        UUIDColumnProcessor(set(["event_id", "trace_id"])),
-        HexIntColumnProcessor({"span_id"}),
-        EventsBooleanContextsProcessor(),
-        MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
-        EmptyTagConditionProcessor(),
-        ArrayJoinKeyValueOptimizer("tags"),
-        ArrayJoinKeyValueOptimizer("measurements"),
-        ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
-        # the bloom filter optimizer should occur before the array join optimizer
-        # on the span columns because the array join optimizer will rewrite the
-        # same conditions the bloom filter optimizer is looking for
-        BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
-        ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
-        HexIntArrayColumnProcessor({"spans.group"}),
-        PrewhereProcessor(
-            [
-                "event_id",
-                "trace_id",
-                "span_id",
-                "transaction_name",
-                "transaction",
-                "title",
-            ]
-        ),
-        TableRateLimit(),
-    ],
+    query_processors=query_processors,
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=TransactionsMessageProcessor(),
         pre_filter=KafkaHeaderFilter("transaction_forwarder", "0"),
@@ -164,8 +162,8 @@ storage = WritableTableStorage(
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_TRANSACTIONS,
     ),
-    query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
-    mandatory_condition_checkers=[ProjectIdEnforcer()],
+    query_splitters=query_splitters,
+    mandatory_condition_checkers=mandatory_condition_checkers,
     writer_options={
         "insert_allow_materialized_columns": 1,
         "input_format_skip_unknown_fields": 1,

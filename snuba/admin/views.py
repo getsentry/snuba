@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from typing import Any, List, MutableMapping, Optional, cast
 
@@ -6,17 +8,20 @@ from flask import Flask, Response, g, jsonify, make_response, request
 
 from snuba import state
 from snuba.admin.auth import UnauthorizedException, authorize_request
-from snuba.admin.clickhouse.nodes import get_storage_info
-from snuba.admin.clickhouse.system_queries import (
+from snuba.admin.clickhouse.common import (
     InvalidCustomQuery,
     InvalidNodeError,
-    InvalidResultError,
     InvalidStorageError,
+)
+from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.system_queries import (
+    InvalidResultError,
     NonExistentSystemQuery,
     SystemQuery,
     run_system_query_on_host_by_name,
     run_system_query_on_host_with_sql,
 )
+from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -74,7 +79,6 @@ def clickhouse_queries() -> Response:
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
     req = request.get_json()
-
     try:
         host = req["host"]
         port = req["port"]
@@ -140,6 +144,59 @@ def clickhouse_system_query() -> Response:
 
     # We should never get here
     return make_response(jsonify({"error": "Something went wrong"}), 400)
+
+
+# Sample cURL command:
+#
+# curl -X POST \
+#  -H 'Content-Type: application/json' \
+#  http://localhost:1219/clickhouse_trace_query?query=SELECT+count()+FROM+errors_local
+@application.route("/clickhouse_trace_query", methods=["POST"])
+def clickhouse_trace_query() -> Response:
+    req = json.loads(request.data)
+    try:
+        storage = req["storage"]
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+
+    try:
+        result = run_query_and_get_trace(storage, raw_sql)
+        trace_output = result.trace_output
+        return make_response(jsonify({"trace_output": trace_output}), 200)
+    except InvalidCustomQuery as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "validation",
+                        "message": err.message or "Invalid query",
+                    }
+                }
+            ),
+            400,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}), 500,
+        )
 
 
 @application.route("/configs", methods=["GET", "POST"])

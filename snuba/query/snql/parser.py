@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -159,10 +161,11 @@ snql_grammar = Grammar(
 
     low_pri_op            = "+" / "-"
     high_pri_op           = "/" / "*"
-    param_expression      = low_pri_arithmetic / quoted_literal
+    param_expression      = low_pri_arithmetic / quoted_literal / identifier
     parameters_list       = parameter* (param_expression)
-    parameter             = param_expression space* comma space*
+    parameter             = (lambda / param_expression) space* comma space*
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space+ "AS" space+ alias_literal)?
+    lambda                = open_paren space* identifier (comma space* identifier)* space* close_paren space* arrow space* function_call
 
     aliased_tag_column    = tag_column space+ "AS" space+ alias_literal
     aliased_subscriptable = subscriptable space+ "AS" space+ alias_literal
@@ -181,11 +184,13 @@ snql_grammar = Grammar(
     subscriptable         = column_name open_square column_name close_square
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:]*"
     tag_column            = "tags" open_square tag_name close_square
-    tag_name             = ~r"[^\[\]]*"
+    tag_name              = ~r"[^\[\]]*"
+    identifier            = backtick ~r"[a-zA-Z_][a-zA-Z0-9_]*" backtick
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
     relationship_name     = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+    arrow                 = "->"
     open_brace            = "{"
     close_brace           = "}"
     open_paren            = "("
@@ -195,6 +200,7 @@ snql_grammar = Grammar(
     space                 = ~r"\s"
     comma                 = ","
     colon                 = ":"
+    backtick              = "`"
 
 """
 )
@@ -822,6 +828,42 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         column, _, _, _, alias = visited_children
         return SelectedExpression(alias.text, column)
 
+    def visit_identifier(
+        self, node: Node, visited_children: Tuple[Any, Node, Any]
+    ) -> Argument:
+        return Argument(None, visited_children[1].text)
+
+    def visit_lambda(
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any,
+            Any,
+            Argument,
+            Union[Node, List[Node | Argument]],
+            Any,
+            Any,
+            Any,
+            Any,
+            Any,
+            Expression,
+        ],
+    ) -> Lambda:
+        first_identifier = visited_children[2]
+        other_identifiers = visited_children[3]
+        functionCall = visited_children[-1]
+        parameters = [first_identifier.name]
+        if isinstance(other_identifiers, list):
+            for other in other_identifiers:
+                if isinstance(other, Argument):
+                    parameters.append(other.name)
+                elif isinstance(other, list):
+                    parameters.extend(
+                        [o.name for o in other if isinstance(o, Argument)]
+                    )
+
+        return Lambda(None, tuple(parameters), functionCall)
+
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
         return generic_visit(node, visited_children)
 
@@ -1119,6 +1161,39 @@ def _mangle_query_aliases(
         query.transform_expressions(mangle_column_value)
 
 
+def validate_identifiers_in_lambda(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    Check to make sure that any identifiers referenced in a lambda were defined in that lambda
+    or in an outer lambda.
+    """
+    identifiers: Set[str] = set()
+    unseen_identifiers: Set[str] = set()
+
+    def validate_lambda(exp: Lambda) -> None:
+        for p in exp.parameters:
+            identifiers.add(p)
+            unseen_identifiers.discard(p)
+
+        for inner_exp in exp.transformation:
+            if isinstance(inner_exp, Argument) and inner_exp.name not in identifiers:
+                unseen_identifiers.add(inner_exp.name)
+            elif isinstance(inner_exp, Lambda):
+                validate_lambda(inner_exp)
+
+        for p in exp.parameters:
+            identifiers.discard(p)
+
+    for exp in query.get_all_expressions():
+        if isinstance(exp, Lambda):
+            validate_lambda(exp)
+
+    if len(unseen_identifiers) > 0:
+        ident_str = ",".join(f"`{u}`" for u in unseen_identifiers)
+        raise InvalidExpressionException(f"identifier(s) {ident_str} not defined")
+
+
 def _replace_time_condition(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
@@ -1340,7 +1415,11 @@ POST_PROCESSORS = [
     _array_column_conditions,
 ]
 
-VALIDATORS = [validate_query, validate_entities_with_query]
+VALIDATORS = [
+    validate_identifiers_in_lambda,
+    validate_query,
+    validate_entities_with_query,
+]
 
 
 CustomProcessors = Sequence[
