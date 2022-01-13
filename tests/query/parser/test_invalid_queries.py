@@ -1,13 +1,13 @@
 from typing import Any, MutableMapping, Type
 
 import pytest
+from snuba_sdk.legacy import json_to_snql
+from snuba_sdk.query_visitors import InvalidQueryError
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
-from snuba_sdk.legacy import json_to_snql
-from snuba_sdk.query_visitors import InvalidQuery
-from snuba.query.snql.parser import parse_snql_query
 from snuba.query.parser.exceptions import AliasShadowingException, ParsingException
+from snuba.query.snql.parser import parse_snql_query
 
 test_cases = [
     pytest.param(
@@ -16,16 +16,16 @@ test_cases = [
         id="Aggregation string cannot be parsed",
     ),
     pytest.param(
-        {"orderby": [[[[["column"]]]]]}, InvalidQuery, id="Nonsensical order by",
+        {"orderby": [[[[["column"]]]]]}, InvalidQueryError, id="Nonsensical order by",
     ),
     pytest.param(
         {"conditions": [["timestamp", "IS NOT NULL", "this makes no sense"]]},
-        InvalidQuery,
+        InvalidQueryError,
         id="Binary condition with unary operator",
     ),
     pytest.param(
         {"conditions": [["project_id", "IN", "2"]]},
-        InvalidQuery,
+        InvalidQueryError,
         id="IN condition without a sequence as right hand side",
     ),
     pytest.param(
