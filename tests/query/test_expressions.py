@@ -1,5 +1,4 @@
 import uuid
-from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime
 from typing import Set
@@ -293,7 +292,7 @@ def test_format(test_expr, expected_str) -> None:
     assert repr(test_expr) == expected_str
 
 
-@pytest.mark.parametrize("test_expr,_formatted_str", deepcopy(TEST_CASES))
+@pytest.mark.parametrize("test_expr,_formatted_str", TEST_CASES)
 def test_functional_eq(test_expr, _formatted_str):
     mangled_expr = test_expr.transform(
         lambda expr: replace(expr, alias=uuid.uuid4().hex)
