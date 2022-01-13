@@ -7,7 +7,6 @@ return an exception to the user but don't crash the clickhouse query node
 """
 
 import logging
-from dataclasses import fields
 from typing import Any, Dict, Sequence, cast
 
 from snuba.clickhouse.processors import QueryProcessor
@@ -24,24 +23,6 @@ class MismatchedAggregationException(InvalidQueryException):
     pass
 
 
-def _expressions_equal_ignore_aliases(exp1: Expression, exp2: Expression) -> bool:
-    if type(exp1) != type(exp2):
-        return False
-    fields_equal = True
-    for field in fields(exp1):
-        if field.name == "alias":
-            continue
-        field_val1 = getattr(exp1, field.name)
-        field_val2 = getattr(exp2, field.name)
-        if isinstance(field_val1, Expression):
-            fields_equal &= _expressions_equal_ignore_aliases(field_val1, field_val2)
-        else:
-            fields_equal &= field_val1 == field_val2
-        if not fields_equal:
-            return False
-    return fields_equal
-
-
 class _ExpressionOrAliasMatcher(NoopVisitor):
     def __init__(self, expressions_to_match: Sequence[Expression]):
         self.expressions_to_match = expressions_to_match
@@ -54,7 +35,7 @@ class _ExpressionOrAliasMatcher(NoopVisitor):
             if (
                 isinstance(exp_to_match, FunctionCall)
                 and exp_to_match.function_name == exp.function_name
-                and _expressions_equal_ignore_aliases(exp_to_match, exp)
+                and exp_to_match.functional_eq(exp)
             ):
                 self.found_expressions[i] = True
 
