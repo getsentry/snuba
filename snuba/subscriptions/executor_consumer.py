@@ -45,11 +45,12 @@ def build_executor_consumer(
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    producer: Producer[KafkaPayload],
     max_concurrent_queries: int,
     auto_offset_reset: str,
     metrics: MetricsBackend,
     # TODO: Should be removed once testing is done
-    override_result_topic: Optional[str] = None,
+    override_result_topic: str,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
@@ -105,63 +106,45 @@ def build_executor_consumer(
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
             executor,
+            max_concurrent_queries,
             dataset,
-            # If there are max_concurrent_queries + 10 pending futures in the queue,
-            # we will start raising MessageRejected to slow down the consumer as
-            # it means our executor cannot keep up
-            max_concurrent_queries + 10,
+            entity_names,
+            producer,
             metrics,
+            override_result_topic,
         ),
     )
-
-
-class Noop(ProcessingStrategy[SubscriptionTaskResult]):
-    """
-    Placeholder.
-    """
-
-    def __init__(self, commit: Callable[[Mapping[Partition, Position]], None]):
-        self.__commit = commit
-
-    def poll(self) -> None:
-        pass
-
-    def submit(self, message: Message[SubscriptionTaskResult]) -> None:
-        self.__commit({message.partition: Position(message.offset, message.timestamp)})
-
-    def close(self) -> None:
-        pass
-
-    def terminate(self) -> None:
-        pass
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
 
 
 class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
         executor: ThreadPoolExecutor,
+        max_concurrent_queries: int,
         dataset: Dataset,
-        buffer_size: int,
+        entity_names: Sequence[str],
+        producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
+        result_topic: str,
     ) -> None:
         self.__executor = executor
+        self.__max_concurrent_queries = max_concurrent_queries
         self.__dataset = dataset
-        self.__buffer_size = buffer_size
+        self.__entity_names = entity_names
+        self.__producer = producer
         self.__metrics = metrics
+        self.__result_topic = result_topic
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
         return ExecuteQuery(
             self.__dataset,
+            self.__entity_names,
             self.__executor,
-            self.__buffer_size,
+            self.__max_concurrent_queries,
             self.__metrics,
-            Noop(commit),
-            commit,  # TODO: this is temporary, remove before rollout
+            ProduceResult(self.__producer, self.__result_topic, commit),
         )
 
 
@@ -174,15 +157,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def __init__(
         self,
         dataset: Dataset,
+        entity_names: Sequence[str],
         executor: ThreadPoolExecutor,
-        buffer_size: int,
+        max_concurrent_queries: int,
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
         commit: Optional[Callable[[Mapping[Partition, Position]], None]] = None,
     ) -> None:
         self.__dataset = dataset
+        self.__entity_names = set(entity_names)
         self.__executor = executor
-        self.__buffer_size = buffer_size
+        self.__max_concurrent_queries = max_concurrent_queries
         self.__metrics = metrics
         self.__next_step = next_step
         self.__commit = commit
@@ -252,9 +237,18 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def submit(self, message: Message[KafkaPayload]) -> None:
         assert not self.__closed
 
+        # If there are max_concurrent_queries + 10 pending futures in the queue,
+        # we will start raising MessageRejected to slow down the consumer as
+        # it means our executor cannot keep up
+        queue_size_factor = state.get_config("executor_queue_size_factor", 10)
+        assert (
+            queue_size_factor is not None
+        ), "Invalid executor_queue_size_factor config"
+        max_queue_size = self.__max_concurrent_queries * queue_size_factor
+
         # Tell the consumer to pause until we have removed some futures from
         # the queue
-        if len(self.__queue) >= self.__buffer_size:
+        if len(self.__queue) >= max_queue_size:
             raise MessageRejected
 
         task = self.__encoder.decode(message.payload)
@@ -282,7 +276,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
         ) < executor_sample_rate
 
-        if should_execute:
+        entity_name = task.task.entity.value
+
+        if should_execute and entity_name in self.__entity_names:
             self.__queue.append(
                 (
                     message,
@@ -294,13 +290,16 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                     ),
                 )
             )
+        else:
+            self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
 
     def close(self) -> None:
         self.__closed = True
-        self.__next_step.close()
 
     def terminate(self) -> None:
         self.__closed = True
+
+        self.__executor.shutdown()
         self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
@@ -330,6 +329,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
+        self.__executor.shutdown()
+
         self.__next_step.close()
         self.__next_step.join(remaining)
 
@@ -388,6 +389,8 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
     def terminate(self) -> None:
         self.__closed = True
 
+        self.__producer.close()
+
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
         while self.__queue:
@@ -403,3 +406,4 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__commit(
                 {message.partition: Position(message.offset, message.timestamp)}
             )
+        self.__producer.close()

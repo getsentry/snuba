@@ -1,32 +1,57 @@
+from __future__ import annotations
+
+import logging
 from typing import Any, List, MutableMapping, Optional, cast
 
 import simplejson as json
-from flask import Flask, Response, jsonify, make_response, request
+from flask import Flask, Response, g, jsonify, make_response, request
 
 from snuba import state
-from snuba.admin.clickhouse.nodes import get_storage_info
-from snuba.admin.clickhouse.system_queries import (
+from snuba.admin.auth import UnauthorizedException, authorize_request
+from snuba.admin.clickhouse.common import (
     InvalidCustomQuery,
     InvalidNodeError,
-    InvalidResultError,
     InvalidStorageError,
+)
+from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.system_queries import (
+    InvalidResultError,
     NonExistentSystemQuery,
     SystemQuery,
     run_system_query_on_host_by_name,
     run_system_query_on_host_with_sql,
 )
+from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
     get_config_type_from_value,
 )
+from snuba.clickhouse.errors import ClickhouseError
+
+logger = logging.getLogger(__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 notification_client = RuntimeConfigAutoClient()
 
 USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+
+
+@application.errorhandler(UnauthorizedException)
+def handle_invalid_json(exception: UnauthorizedException) -> Response:
+    return Response(
+        json.dumps({"error": "Unauthorized"}),
+        401,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.before_request
+def authorize() -> None:
+    user = authorize_request()
+    g.user = user
 
 
 @application.route("/")
@@ -54,7 +79,6 @@ def clickhouse_queries() -> Response:
 @application.route("/run_clickhouse_system_query", methods=["POST"])
 def clickhouse_system_query() -> Response:
     req = request.get_json()
-
     try:
         host = req["host"]
         port = req["port"]
@@ -112,8 +136,67 @@ def clickhouse_system_query() -> Response:
                 jsonify({"error": err.message or "Invalid query"}), 400
             )
 
+        except ClickhouseError as err:
+            logger.error(err, exc_info=True)
+            return make_response(
+                jsonify({"error": err.message or "Invalid query"}), 400
+            )
+
     # We should never get here
     return make_response(jsonify({"error": "Something went wrong"}), 400)
+
+
+# Sample cURL command:
+#
+# curl -X POST \
+#  -H 'Content-Type: application/json' \
+#  http://localhost:1219/clickhouse_trace_query?query=SELECT+count()+FROM+errors_local
+@application.route("/clickhouse_trace_query", methods=["POST"])
+def clickhouse_trace_query() -> Response:
+    req = json.loads(request.data)
+    try:
+        storage = req["storage"]
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+
+    try:
+        result = run_query_and_get_trace(storage, raw_sql)
+        trace_output = result.trace_output
+        return make_response(jsonify({"trace_output": trace_output}), 200)
+    except InvalidCustomQuery as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "validation",
+                        "message": err.message or "Invalid query",
+                    }
+                }
+            ),
+            400,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}), 500,
+        )
 
 
 @application.route("/configs", methods=["GET", "POST"])
@@ -182,11 +265,15 @@ def configs() -> Response:
 def config(config_key: str) -> Response:
     if request.method == "DELETE":
         user = request.headers.get(USER_HEADER_KEY)
+
+        # Get the old value for notifications
+        old = state.get_uncached_config(config_key)
+
         state.delete_config(config_key, user=user)
 
         notification_client.notify(
             RuntimeConfigAction.REMOVED,
-            {"option": config_key, "old": None, "new": None},
+            {"option": config_key, "old": old, "new": None},
             user,
         )
 
@@ -199,6 +286,10 @@ def config(config_key: str) -> Response:
 
         user = request.headers.get(USER_HEADER_KEY)
         data = json.loads(request.data)
+
+        # Get the previous value for notifications
+        old = state.get_uncached_config(config_key)
+
         try:
             new_value = data["value"]
 
@@ -227,6 +318,13 @@ def config(config_key: str) -> Response:
         evaluated_value = state.get_uncached_config(config_key)
         assert evaluated_value is not None
         evaluated_type = get_config_type_from_value(evaluated_value)
+
+        # Send notification
+        notification_client.notify(
+            RuntimeConfigAction.UPDATED,
+            {"option": config_key, "old": old, "new": evaluated_value},
+            user=user,
+        )
 
         config = {
             "key": config_key,

@@ -21,6 +21,7 @@ class TestSnQLApi(BaseApiTest):
         return self.app.post(url, data=data, headers={"referer": "test"})
 
     def setup_method(self, test_method: Callable[..., Any]) -> None:
+        state.set_config("write_span_columns_rollout_percentage", 100)
         super().setup_method(test_method)
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
@@ -293,8 +294,8 @@ class TestSnQLApi(BaseApiTest):
                         {
                             "query": f"""MATCH (events)
                             SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
-                            WHERE timestamp >= toDateTime('2021-01-01')
-                            AND timestamp < toDateTime('2022-01-01')
+                            WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                            AND timestamp < toDateTime('{self.next_time.isoformat()}')
                             AND project_id IN tuple({self.project_id})
                             LIMIT 5""",
                         }
@@ -550,6 +551,34 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
+    def test_suspect_spans_data(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (discover_transactions)
+                    SELECT arrayReduce('sumIf', spans.exclusive_time_32, arrayMap((`x`, `y`) -> if(equals(and(equals(`x`, 'db'), equals(`y`, '05029609156d8133')), 1), 1, 0), spans.op, spans.group)) AS array_spans_exclusive_time
+                    WHERE
+                        transaction_name = '/api/do_things' AND
+                        has(spans.op, 'db') = 1 AND
+                        has(spans.group, '5029609156d8133') = 1 AND
+                        duration < 900000.0 AND
+                        finish_ts >= toDateTime('{self.base_time.isoformat()}') AND
+                        finish_ts < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id})
+                    ORDER BY array_spans_exclusive_time DESC
+                    LIMIT 10
+                    """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 1
+        assert data[0]["array_spans_exclusive_time"] > 0
 
     def test_invalid_column(self) -> None:
         response = self.post(

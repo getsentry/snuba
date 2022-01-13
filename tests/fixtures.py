@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import calendar
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -169,7 +171,7 @@ def get_raw_event() -> InsertEvent:
     }
 
 
-def get_raw_transaction() -> InsertEvent:
+def get_raw_transaction(span_id: str | None = None) -> InsertEvent:
     now = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0, tzinfo=timezone.utc
     )
@@ -177,7 +179,7 @@ def get_raw_transaction() -> InsertEvent:
     end_timestamp = now - timedelta(seconds=2)
     event_received = now - timedelta(seconds=1)
     trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
-    span_id = "8841662216cc598b"
+    span_id = "8841662216cc598b" if not span_id else span_id
 
     return {
         "project_id": PROJECT_ID,
@@ -251,6 +253,8 @@ def get_raw_transaction() -> InsertEvent:
                     "description": "SELECT * FROM users",
                     "data": {},
                     "timestamp": calendar.timegm(end_timestamp.timetuple()),
+                    "hash": "5029609156d8133",
+                    "exclusive_time": 1.2,
                 }
             ],
         },

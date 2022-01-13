@@ -1,9 +1,7 @@
 import pytest
 
-from snuba.admin.clickhouse.system_queries import (
-    InvalidCustomQuery,
-    validate_system_query,
-)
+from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.system_queries import validate_system_query
 
 
 @pytest.mark.parametrize(

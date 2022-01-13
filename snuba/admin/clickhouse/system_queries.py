@@ -2,11 +2,11 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Type
 
-from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
-from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from clickhouse_driver.errors import ErrorCodes
+
+from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connection
+from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -14,19 +14,7 @@ class NonExistentSystemQuery(SerializableException):
     pass
 
 
-class InvalidNodeError(SerializableException):
-    pass
-
-
-class InvalidStorageError(SerializableException):
-    pass
-
-
 class InvalidResultError(SerializableException):
-    pass
-
-
-class InvalidCustomQuery(SerializableException):
     pass
 
 
@@ -98,44 +86,14 @@ class ActivePartitions(SystemQuery):
     """
 
 
-def _is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
-    nodes = cluster.get_local_nodes()
-    return any(node.host_name == host and node.port == port for node in nodes)
-
-
 def _run_sql_query_on_host(
     clickhouse_host: str, clickhouse_port: int, storage_name: str, sql: str
 ) -> ClickhouseResult:
     """
     Run the SQL query. It should be validated before getting to this point
     """
-    storage_key = None
-    try:
-        storage_key = StorageKey(storage_name)
-    except ValueError:
-        raise InvalidStorageError(extra_data={"storage_name": storage_name})
-
-    storage = get_storage(storage_key)
-    cluster = storage.get_cluster()
-
-    if not _is_valid_node(clickhouse_host, clickhouse_port, cluster):
-        raise InvalidNodeError(
-            extra_data={"host": clickhouse_host, "port": clickhouse_port}
-        )
-
-    database = cluster.get_database()
-
-    connection = ClickhousePool(
-        clickhouse_host,
-        clickhouse_port,
-        settings.CLICKHOUSE_READONLY_USER,
-        settings.CLICKHOUSE_READONLY_PASSWORD,
-        database,
-        # force read-only
-        client_settings=ClickhouseClientSettings.QUERY.value.settings,
-    )
+    connection = get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name)
     query_result = connection.execute(query=sql, with_column_types=True)
-    connection.close()
 
     return query_result
 
@@ -178,9 +136,17 @@ def run_system_query_on_host_with_sql(
     clickhouse_host: str, clickhouse_port: int, storage_name: str, system_query_sql: str
 ) -> ClickhouseResult:
     validate_system_query(system_query_sql)
-    return _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql
-    )
+    try:
+        return _run_sql_query_on_host(
+            clickhouse_host, clickhouse_port, storage_name, system_query_sql
+        )
+    except ClickhouseError as exc:
+        # Don't send error to Snuba if it is an unknown table or column as it
+        # will be too noisy
+        if exc.code in (ErrorCodes.UNKNOWN_TABLE, ErrorCodes.UNKNOWN_IDENTIFIER):
+            raise InvalidCustomQuery("Invalid query: {exc.message} {exc.code}")
+
+        raise
 
 
 def validate_system_query(sql_query: str) -> None:

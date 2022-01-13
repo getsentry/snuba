@@ -15,6 +15,8 @@ PORT = 1218
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 
+ADMIN_AUTH_PROVIDER = "NOOP"
+
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
@@ -42,6 +44,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "querylog",
             "sessions",
             "transactions",
+            "transactions_ro",
         },
         "single_node": True,
     },
@@ -170,6 +173,8 @@ SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer
 
 # Temporary setting for subscription scheduler test
 SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 2
+
+TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
