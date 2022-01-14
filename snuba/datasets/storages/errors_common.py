@@ -38,6 +38,9 @@ from snuba.query.processors.type_converters.uuid_array_column_processor import (
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
+from snuba.query.processors.uniq_in_select_and_having import (
+    UniqInSelectAndHavingProcessor,
+)
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
@@ -154,6 +157,7 @@ prewhere_candidates = [
 ]
 
 query_processors = [
+    UniqInSelectAndHavingProcessor(),
     PostReplacementConsistencyEnforcer(
         project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
     ),

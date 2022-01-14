@@ -2,7 +2,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.expressions import Column, FunctionCall, StringifyVisitor
+from snuba.query.expressions import Column, FunctionCall, NoopVisitor
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
@@ -50,14 +50,11 @@ def test_tags_hashmap_optimization() -> None:
     # --------------------------------------------------------------------
 
     def query_verifier(query: Query, settings: RequestSettings, reader: Reader) -> None:
-        # The only reason this extends StringifyVisitor is because it has all the other
-        # visit methods implemented.
-        class ConditionVisitor(StringifyVisitor):
-            def __init__(self, level: int = 0, initial_indent: int = 0) -> None:
+        class ConditionVisitor(NoopVisitor):
+            def __init__(self) -> None:
                 self.found_hashmap_condition = False
-                super().__init__(level=level, initial_indent=initial_indent)
 
-            def visit_function_call(self, exp: FunctionCall) -> str:
+            def visit_function_call(self, exp: FunctionCall) -> None:
                 assert exp.function_name != "arrayElement"
                 if (
                     exp.function_name == "has"

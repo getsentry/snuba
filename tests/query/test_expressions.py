@@ -1,3 +1,5 @@
+import uuid
+from dataclasses import replace
 from datetime import datetime
 from typing import Set
 
@@ -199,97 +201,101 @@ def test_hash() -> None:
     assert len(s) == 6
 
 
-@pytest.mark.parametrize(
-    "test_expr,expected_str",
-    [
-        (Column(None, "t1", "c1"), "t1.c1"),
-        (Column(None, None, "c1"), "c1"),
-        (Literal(None, "meowmeow"), "'meowmeow'"),
-        (Literal(None, 123), "123"),
-        (Literal(None, False), "False"),
-        (
-            Literal(None, datetime(2020, 4, 20, 16, 20)),
-            "datetime(2020-04-20T16:20:00)",
+TEST_CASES = [
+    (Column(None, "t1", "c1"), "t1.c1"),
+    (Column(None, None, "c1"), "c1"),
+    (Literal(None, "meowmeow"), "'meowmeow'"),
+    (Literal(None, 123), "123"),
+    (Literal(None, False), "False"),
+    (Literal(None, datetime(2020, 4, 20, 16, 20)), "datetime(2020-04-20T16:20:00)",),
+    (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "date(2020-04-20)"),
+    (Literal(None, None), "None"),
+    (
+        SubscriptableReference(
+            "catsound",
+            column=Column(None, "cats", "sounds"),
+            key=Literal(None, "meow"),
         ),
-        (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "date(2020-04-20)"),
-        (Literal(None, None), "None"),
-        (
-            SubscriptableReference(
-                "catsound",
-                column=Column(None, "cats", "sounds"),
-                key=Literal(None, "meow"),
-            ),
-            "cats.sounds['meow'] AS `catsound`",
+        "cats.sounds['meow'] AS `catsound`",
+    ),
+    (
+        SubscriptableReference(
+            "catsound",
+            column=Column("kittysounds", "cats", "sounds"),
+            key=Literal(None, "meow"),
         ),
-        (
-            SubscriptableReference(
-                "catsound",
-                column=Column("kittysounds", "cats", "sounds"),
-                key=Literal(None, "meow"),
-            ),
-            "(cats.sounds AS `kittysounds`)['meow'] AS `catsound`",
-        ),
-        (Column("alias", None, "c1"), "c1 AS `alias`"),
-        (
-            FunctionCall(
-                None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
-            ),
-            """f1(
+        "(cats.sounds AS `kittysounds`)['meow'] AS `catsound`",
+    ),
+    (Column("alias", None, "c1"), "c1 AS `alias`"),
+    (
+        FunctionCall(None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))),
+        """f1(
   t1.c1,
   t1.c2
 )""",
-        ),
-        (
-            CurriedFunctionCall(
-                None,
-                FunctionCall(
-                    None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
-                ),
-                (Literal(None, "hello"), Literal(None, "kitty")),
+    ),
+    (
+        CurriedFunctionCall(
+            None,
+            FunctionCall(
+                None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
             ),
-            """f1(
+            (Literal(None, "hello"), Literal(None, "kitty")),
+        ),
+        """f1(
   t1.c1,
   t1.c2
 )(
   'hello',
   'kitty'
 )""",
-        ),
-        (
-            FunctionCall(
-                None,
-                "f1",
-                (
-                    FunctionCall(None, "fnested", (Column(None, "t1", "c1"),)),
-                    Column(None, "t1", "c2"),
-                ),
+    ),
+    (
+        FunctionCall(
+            None,
+            "f1",
+            (
+                FunctionCall(None, "fnested", (Column(None, "t1", "c1"),)),
+                Column(None, "t1", "c2"),
             ),
-            """f1(
+        ),
+        """f1(
   fnested(
     t1.c1
   ),
   t1.c2
 )""",
-        ),
-        (
-            Lambda(
+    ),
+    (
+        Lambda(
+            None,
+            ("a", "b", "c"),
+            FunctionCall(
                 None,
-                ("a", "b", "c"),
-                FunctionCall(
-                    None,
-                    "some_func",
-                    (Argument(None, "a"), Argument(None, "b"), Argument(None, "c")),
-                ),
+                "some_func",
+                (Argument(None, "a"), Argument(None, "b"), Argument(None, "c")),
             ),
-            """(a,b,c ->
+        ),
+        """(a,b,c ->
   some_func(
     a,
     b,
     c
   )
 )""",
-        ),
-    ],
-)
+    ),
+]
+
+
+@pytest.mark.parametrize("test_expr,expected_str", TEST_CASES)
 def test_format(test_expr, expected_str) -> None:
     assert repr(test_expr) == expected_str
+
+
+@pytest.mark.parametrize("test_expr,_formatted_str", TEST_CASES)
+def test_functional_eq(test_expr, _formatted_str):
+    mangled_expr = test_expr.transform(
+        lambda expr: replace(expr, alias=uuid.uuid4().hex)
+    )
+    assert test_expr != mangled_expr
+    assert mangled_expr.functional_eq(test_expr)
