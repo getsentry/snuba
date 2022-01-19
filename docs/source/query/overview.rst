@@ -5,6 +5,57 @@ Querying Snuba
 This guide drives you through the process of authoring and testing a
 Snuba query.
 
+
+Understanding the cost of queries
+=================================
+The cost of a snuba query has many factors but these are key to keep in mind when constructing queries:
+
+* Amount of rows scanned
+* Amount of columns scanned
+* Type of data scanned
+
+Let's take this query as an example::
+
+    MATCH events
+    SELECT count() AS count
+    WHERE 
+        timestamp > "2021-01-01" AND 
+        timestamp <= "2021-01-02" AND
+        project_id = 1
+ 
+The query above will scan two columns: timestamp and project id over one day. Timestamps and integers are also easy comparisons for a computer to make (can be done in one instruction). Thus this query is fairly cheap. The only way to make this query cheaper is to reduce the time window and scan fewer rows.
+
+Now let's see how we can make this query more expensive.
+
+Expanding the time frame::
+
+    MATCH events
+    SELECT count() AS count
+    WHERE 
+        timestamp > "2021-01-01" AND 
+        timestamp <= "2021-03-01" AND
+        project_id = 1
+ 
+
+Adding more fields to scan. Any extra fields that are scanned are extra files which have to be opened by clickhouse::
+
+    MATCH events
+    SELECT count() AS count
+    WHERE 
+        timestamp > "2021-01-01" AND 
+        timestamp <= "2021-03-01" AND
+        project_id = 1 AND
+        browser = "firefox" AND
+        os = "ios" AND
+        url = "https://santry.io/some_path" AND
+        tags[duration_group] = IN tuple("<10s", "<30s")
+        
+
+Nested fields are especially expensive to unnest and compare.
+
+
+
+
 Exploring the Snuba data model
 ==============================
 
