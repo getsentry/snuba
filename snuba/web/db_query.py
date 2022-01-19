@@ -518,6 +518,7 @@ def raw_query(
                 "stats": stats,
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
+                "profile": None,
             }
         ) from cause
     else:
@@ -528,5 +529,6 @@ def raw_query(
                 "stats": stats,
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
+                "profile": result["profile"],
             },
         )

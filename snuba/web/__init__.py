@@ -1,4 +1,4 @@
-from typing import Any, Mapping, NamedTuple
+from typing import Any, Mapping, NamedTuple, Optional
 
 from mypy_extensions import TypedDict
 
@@ -10,6 +10,7 @@ class QueryExtraData(TypedDict):
     stats: Mapping[str, Any]
     sql: str
     experiments: Mapping[str, Any]
+    profile: Optional[Mapping[str, Any]]
 
 
 class QueryException(SerializableException):

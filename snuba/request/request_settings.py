@@ -43,6 +43,14 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
+    def get_team(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_feature(self) -> str:
+        pass
+
+    @abstractmethod
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         pass
 
@@ -67,6 +75,8 @@ class HTTPRequestSettings(RequestSettings):
         parent_api: str = "<unknown>",
         dry_run: bool = False,
         legacy: bool = False,
+        team: str = "<unknown>",
+        feature: str = "<unknown>",
     ) -> None:
         super().__init__(referrer=referrer)
         self.__turbo = turbo
@@ -75,6 +85,8 @@ class HTTPRequestSettings(RequestSettings):
         self.__parent_api = parent_api
         self.__dry_run = dry_run
         self.__legacy = legacy
+        self.__team = team
+        self.__feature = feature
         self.__rate_limit_params: List[RateLimitParameters] = []
 
     def get_turbo(self) -> bool:
@@ -94,6 +106,12 @@ class HTTPRequestSettings(RequestSettings):
 
     def get_legacy(self) -> bool:
         return self.__legacy
+
+    def get_team(self) -> str:
+        return self.__team
+
+    def get_feature(self) -> str:
+        return self.__feature
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return self.__rate_limit_params
@@ -131,6 +149,12 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def get_legacy(self) -> bool:
         return False
+
+    def get_team(self) -> str:
+        return "subscription"
+
+    def get_feature(self) -> str:
+        return "subscription"
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return []

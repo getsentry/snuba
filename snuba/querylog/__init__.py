@@ -12,6 +12,41 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "api")
 
 
+def _record_timer_metrics(
+    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata,
+) -> None:
+    final = str(request.query.get_final())
+    referrer = request.referrer or "none"
+    timer.send_metrics_to(
+        metrics,
+        tags={
+            "status": query_metadata.status.value,
+            "referrer": referrer,
+            "parent_api": request.settings.get_parent_api(),
+            "final": final,
+        },
+        mark_tags={
+            "final": final,
+            "referrer": referrer,
+            "parent_api": request.settings.get_parent_api(),
+        },
+    )
+
+
+def _record_attribution_metrics(
+    request: Request, extra_data: Mapping[str, Any]
+) -> None:
+    tags = {
+        "team": request.settings.get_team(),
+        "feature": request.settings.get_feature(),
+        "parent_api": request.settings.get_parent_api(),
+        "referrer": request.referrer,
+    }
+    profile = extra_data["profile"] if extra_data["profile"] else {}
+    bytes_scanned = profile.get("bytes", 0.0)
+    metrics.increment("snuba.attribution", bytes_scanned, tags=tags)
+
+
 def record_query(
     request: Request,
     timer: Timer,
@@ -28,24 +63,8 @@ def record_query(
         # circular dependency, where state would depend on the higher level
         # QueryMetadata class
         state.record_query(query_metadata.to_dict())
-
-        final = str(request.query.get_final())
-        referrer = request.referrer or "none"
-        timer.send_metrics_to(
-            metrics,
-            tags={
-                "status": query_metadata.status.value,
-                "referrer": referrer,
-                "parent_api": request.settings.get_parent_api(),
-                "final": final,
-            },
-            mark_tags={
-                "final": final,
-                "referrer": referrer,
-                "parent_api": request.settings.get_parent_api(),
-            },
-        )
-
+        _record_timer_metrics(request, timer, query_metadata)
+        _record_attribution_metrics(request, extra_data)
         _add_tags(timer, extra_data.get("experiments"), query_metadata)
 
 

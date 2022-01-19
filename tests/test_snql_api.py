@@ -580,6 +580,24 @@ class TestSnQLApi(BaseApiTest):
         assert len(data) == 1
         assert data[0]["array_spans_exclusive_time"] > 0
 
+    def test_attribution_tags(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS count
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                    "team": "sns",
+                    "feature": "test",
+                }
+            ),
+        )
+        assert response.status_code == 200
+
     def test_invalid_column(self) -> None:
         response = self.post(
             "/outcomes/snql",
