@@ -10,7 +10,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
-from snuba.query.expressions import Column, FunctionCall, Literal, StringifyVisitor
+from snuba.query.expressions import Column, FunctionCall, Literal, NoopVisitor
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
@@ -99,15 +99,12 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
             )
         ]
 
-        # The only reason this extends StringifyVisitor is because it has all the other
-        # visit methods implemented. Really all we care about is the equality comparison
-        # to span_id
-        class SpanIdVerifier(StringifyVisitor):
+        class SpanIdVerifier(NoopVisitor):
             def __init__(self) -> None:
                 self.found_span_condition = False
                 super().__init__()
 
-            def visit_function_call(self, exp: FunctionCall) -> str:
+            def visit_function_call(self, exp: FunctionCall) -> None:
                 if exp.function_name == "equals" and exp.parameters[0] == Column(
                     None, None, "span_id"
                 ):

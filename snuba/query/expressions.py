@@ -79,6 +79,12 @@ class Expression(_Expression, ABC):
         else:
             return super().__repr__()
 
+    def functional_eq(self, other: Expression) -> bool:
+        """Returns if an expression is functionally equivalent to the other. i.e. performs an equality
+        operation ignoring aliases
+        """
+        raise NotImplementedError
+
 
 class ExpressionVisitor(ABC, Generic[TVisited]):
     """
@@ -120,6 +126,37 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     @abstractmethod
     def visit_lambda(self, exp: Lambda) -> TVisited:
         raise NotImplementedError
+
+
+class NoopVisitor(ExpressionVisitor[None]):
+    """A noop visitor that will traverse every node but will not
+    return anything. Good for extending for search purposes
+    """
+
+    def visit_literal(self, exp: Literal) -> None:
+        return None
+
+    def visit_column(self, exp: Column) -> None:
+        return None
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> None:
+        return exp.column.accept(self)
+
+    def visit_function_call(self, exp: FunctionCall) -> None:
+        for param in exp.parameters:
+            param.accept(self)
+        return None
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> None:
+        for param in exp.parameters:
+            param.accept(self)
+        return exp.internal_function.accept(self)
+
+    def visit_argument(self, exp: Argument) -> None:
+        return None
+
+    def visit_lambda(self, exp: Lambda) -> None:
+        return exp.transformation.accept(self)
 
 
 class StringifyVisitor(ExpressionVisitor[str]):
@@ -239,6 +276,11 @@ class Literal(Expression):
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visit_literal(self)
 
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.value == other.value
+
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class Column(Expression):
@@ -257,6 +299,14 @@ class Column(Expression):
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visit_column(self)
+
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return (
+            self.table_name == other.table_name
+            and self.column_name == other.column_name
+        )
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -294,6 +344,13 @@ class SubscriptableReference(Expression):
         for sub in self.key:
             yield sub
         yield self
+
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.column.functional_eq(other.column) and self.key.functional_eq(
+            other.key
+        )
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -344,6 +401,20 @@ class FunctionCall(Expression):
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visit_function_call(self)
 
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        if self.function_name != other.function_name:
+            return False
+        if len(self.parameters) != len(other.parameters):
+            return False
+        for i, param in enumerate(self.parameters):
+            other_parameter = other.parameters[i]
+            params_functionally_equivalent = param.functional_eq(other_parameter)
+            if not params_functionally_equivalent:
+                return False
+        return True
+
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class CurriedFunctionCall(Expression):
@@ -391,6 +462,18 @@ class CurriedFunctionCall(Expression):
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visit_curried_function_call(self)
 
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        if not self.internal_function.functional_eq(other.internal_function):
+            return False
+        for i, param in enumerate(self.parameters):
+            other_parameter = other.parameters[i]
+            params_functionally_equivalent = param.functional_eq(other_parameter)
+            if not params_functionally_equivalent:
+                return False
+        return True
+
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class Argument(Expression):
@@ -409,6 +492,11 @@ class Argument(Expression):
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visit_argument(self)
+
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.name == other.name
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -441,3 +529,12 @@ class Lambda(Expression):
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visit_lambda(self)
+
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        if self.parameters != other.parameters:
+            return False
+        if not self.transformation.functional_eq(other.transformation):
+            return False
+        return True
