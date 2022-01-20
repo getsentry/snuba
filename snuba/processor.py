@@ -34,12 +34,16 @@ class InsertBatch(NamedTuple):
     origin_timestamp: Optional[datetime]
 
 
+class InsertBatchInterpretExpressions(NamedTuple):
+    rowsAsValues: Sequence[WriterTableRow]
+
+
 class ReplacementBatch(NamedTuple):
     key: str
     values: Sequence[Any]
 
 
-ProcessedMessage = Union[InsertBatch, ReplacementBatch]
+ProcessedMessage = Union[InsertBatch, ReplacementBatch, InsertBatchInterpretExpressions]
 
 
 class MessageProcessor(ABC):

@@ -15,6 +15,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.metrics_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
+    DistributionsMetricsProcessorDirectWriter,
     SetsMetricsProcessor,
 )
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -149,10 +150,10 @@ counters_storage = ReadableTableStorage(
 )
 
 
-distributions_storage = ReadableTableStorage(
+distributions_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_DISTRIBUTIONS,
     storage_set_key=StorageSetKey.METRICS,
-    schema=TableSchema(
+    schema=WritableTableSchema(
         local_table_name="metrics_distributions_local",
         dist_table_name="metrics_distributions_dist",
         storage_set_key=StorageSetKey.METRICS,
@@ -174,4 +175,7 @@ distributions_storage = ReadableTableStorage(
         ),
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        DistributionsMetricsProcessorDirectWriter(), default_topic=Topic.METRICS,
+    ),
 )

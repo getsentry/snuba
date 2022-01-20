@@ -200,6 +200,24 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
+    def get_values_writer(
+        self,
+        metrics: MetricsBackend,
+        options: ClickhouseWriterOptions = None,
+        table_name: Optional[str] = None,
+        chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
+    ) -> BatchWriter[JSONRow]:
+        table_name = table_name or self.__table_schema.get_table_name()
+
+        return get_cluster(self.__storage_set).get_batch_writer(
+            metrics,
+            InsertStatement(table_name),
+            encoding=None,
+            options=options,
+            chunk_size=chunk_size,
+            buffer_size=0,
+        )
+
     def get_batch_writer(
         self,
         metrics: MetricsBackend,

@@ -5,6 +5,7 @@ from typing import Any, Mapping, Optional
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     InsertBatch,
+    InsertBatchInterpretExpressions,
     MessageProcessor,
     ProcessedMessage,
     _ensure_valid_date,
@@ -19,6 +20,9 @@ class MetricsProcessor(MessageProcessor, ABC):
     @abstractmethod
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
+
+    def _contains_interpretable_values(self) -> bool:
+        return False
 
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
@@ -54,7 +58,11 @@ class MetricsProcessor(MessageProcessor, ABC):
             "partition": metadata.partition,
             "offset": metadata.offset,
         }
-        return InsertBatch([processed], None)
+
+        if self._contains_interpretable_values():
+            return InsertBatchInterpretExpressions([processed])
+        else:
+            return InsertBatch([processed], None)
 
 
 class SetsMetricsProcessor(MetricsProcessor):
@@ -91,3 +99,22 @@ class DistributionsMetricsProcessor(MetricsProcessor):
                 v, (int, float)
             ), "Illegal value in set. Int expected: {v}"
         return {"values": values}
+
+
+class DistributionsMetricsProcessorDirectWriter(MetricsProcessor):
+    def _contains_interpretable_values(self) -> bool:
+        return True
+
+    def _should_process(self, message: Mapping[str, Any]) -> bool:
+        return message["type"] is not None and message["type"] == "d"
+
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        values = message["value"]
+        for v in values:
+            assert isinstance(
+                v, (int, float)
+            ), "Illegal value in set. Int expected: {v}"
+        escaped_array = "[" + ",".join([str(v) for v in values]) + "]"
+        return {
+            "percentiles": f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {escaped_array})"
+        }
