@@ -251,6 +251,28 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             buffer_size=buffer_size,
         )
 
+    def get_values_batch_writer(
+        self,
+        metrics: MetricsBackend,
+        insert_statement: InsertStatement,
+        encoding: Optional[str],
+        options: ClickhouseWriterOptions,
+        chunk_size: Optional[int],
+        buffer_size: int,
+    ) -> BatchWriter[bytes]:
+        return HTTPBatchWriter(
+            host=self.__query_node.host_name,
+            port=self.__http_port,
+            user=self.__user,
+            password=self.__password,
+            metrics=metrics,
+            statement=insert_statement.with_database(self.__database),
+            encoding=encoding,
+            options=options,
+            chunk_size=chunk_size,
+            buffer_size=buffer_size,
+        )
+
     def is_single_node(self) -> bool:
         """
         This will be used to determine:
@@ -334,6 +356,10 @@ expected_storage_sets = {
     for s in StorageSetKey
     if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
 }
+
+assert (
+    not expected_storage_sets - _unique_registered_storage_sets
+), "All storage sets must be assigned to a cluster"
 
 # Map all storages to clusters via storage sets
 _STORAGE_SET_CLUSTER_MAP = {

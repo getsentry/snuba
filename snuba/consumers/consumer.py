@@ -35,7 +35,7 @@ from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter
+from snuba.datasets.table_storage import DISTRIBUTIONS_COLUMN_SET, TableWriter
 from snuba.environment import setup_sentry
 from snuba.processor import (
     InsertBatch,
@@ -46,7 +46,7 @@ from snuba.processor import (
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.writer import BatchWriter, MockBatchWriter
+from snuba.writer import BatchWriter, MockBatchWriter, WriterTableRow
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -67,17 +67,93 @@ class JSONRowInsertBatch(NamedTuple):
             return type(self), (self.rows, self.origin_timestamp)
 
 
-class ValuesInsertBatchWriter(ProcessingStep[InsertBatchInterpretExpressions]):
-    def __init__(
-        self,
-        writer: BatchWriter[InsertBatchInterpretExpressions],
-        metrics: MetricsBackend,
-    ) -> None:
-        self.writer = writer
-        self.metrics = metrics
+class ValuesInsertBatch(NamedTuple):
+    rows: Sequence[bytes]
+    origin_timestamp: Optional[datetime]
 
-    def submit(self, message: Message[InsertBatchInterpretExpressions]) -> None:
-        assert False
+    @staticmethod
+    def encode_value(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+
+        if isinstance(value, int):
+            return str(value)
+
+        if isinstance(value, list):
+            for x in value:
+                if not isinstance(x, int):
+                    raise TypeError("ints should only contain arrays")
+
+            return "[" + ",".join([str(x) for x in value]) + "]"
+
+        return "0"
+
+    @staticmethod
+    def encode_row(row: WriterTableRow) -> bytes:
+        ordered_columns = [
+            ValuesInsertBatch.encode_value(row[column])
+            for column in DISTRIBUTIONS_COLUMN_SET
+        ]
+        ordered_columns_str = ",".join(ordered_columns)
+        return f"({ordered_columns_str})".encode("utf-8")
+
+
+class ValuesInsertBatchWriter(ProcessingStep[ValuesInsertBatch]):
+    def __init__(self, writer: BatchWriter[bytes], metrics: MetricsBackend,) -> None:
+        self.__writer = writer
+        self.__metrics = metrics
+        self.__messages: MutableSequence[Message[ValuesInsertBatch]] = []
+
+    def poll(self) -> None:
+        pass
+
+    def submit(self, message: Message[ValuesInsertBatch]) -> None:
+        self.__messages.append(message)
+
+    def close(self) -> None:
+        logger.error(self.__messages)
+        message = self.__messages[0]
+        logger.error(message.payload.rows)
+
+        self.__closed = True
+
+        if not self.__messages:
+            return
+
+        write_start = time.time()
+        self.__writer.write(
+            itertools.chain.from_iterable(
+                message.payload.rows for message in self.__messages
+            )
+        )
+        write_finish = time.time()
+
+        for message in self.__messages:
+            self.__metrics.timing(
+                "latency_ms", (write_finish - message.timestamp.timestamp()) * 1000
+            )
+            if message.payload.origin_timestamp is not None:
+                self.__metrics.timing(
+                    "end_to_end_latency_ms",
+                    (write_finish - message.payload.origin_timestamp.timestamp())
+                    * 1000,
+                )
+        self.__metrics.timing("batch_write_ms", write_finish - write_start)
+        rows = sum(len(message.payload.rows) for message in self.__messages)
+        self.__metrics.increment("batch_write_msgs", rows)
+
+        logger.debug(
+            "Waited %0.4f seconds for %r rows to be written to %r.",
+            write_finish - write_start,
+            rows,
+            self.__writer,
+        )
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        pass
 
 
 class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
@@ -266,10 +342,10 @@ class ProcessedMessageBatchWriter(
             self.__insert_batch_writer.submit(
                 cast(Message[JSONRowInsertBatch], message)
             )
-        if isinstance(message.payload, InsertBatchInterpretExpressions):
+        if isinstance(message.payload, ValuesInsertBatch):
             if self.__insert_batch_writer_with_values:
                 self.__insert_batch_writer_with_values.submit(
-                    cast(Message[InsertBatchInterpretExpressions], message)
+                    cast(Message[ValuesInsertBatch], message)
                 )
             else:
                 raise TypeError("writer not configured to support direct values insert")
@@ -281,12 +357,15 @@ class ProcessedMessageBatchWriter(
                 cast(Message[ReplacementBatch], message)
             )
         else:
-            raise TypeError("unexpected payload type")
+            raise TypeError(f"unexpected payload type {message.payload.__class__}")
 
     def close(self) -> None:
         self.__closed = True
 
         self.__insert_batch_writer.close()
+
+        if self.__insert_batch_writer_with_values:
+            self.__insert_batch_writer_with_values.close()
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
@@ -342,8 +421,12 @@ def build_batch_writer(
         else:
             replacement_batch_writer = None
 
+        values_batch_writer = ValuesInsertBatchWriter(
+            table_writer.get_values_writer(metrics), metrics
+        )
+
         return ProcessedMessageBatchWriter(
-            insert_batch_writer, replacement_batch_writer
+            insert_batch_writer, replacement_batch_writer, values_batch_writer
         )
 
     return build_writer
@@ -496,7 +579,7 @@ def process_message_multistorage(
     Tuple[
         StorageKey,
         Union[
-            None, JSONRowInsertBatch, ReplacementBatch, InsertBatchInterpretExpressions
+            None, JSONRowInsertBatch, ReplacementBatch, InsertBatch, ValuesInsertBatch
         ],
     ]
 ]:
@@ -515,8 +598,9 @@ def process_message_multistorage(
             Union[
                 None,
                 JSONRowInsertBatch,
+                InsertBatch,
                 ReplacementBatch,
-                InsertBatchInterpretExpressions,
+                ValuesInsertBatch,
             ],
         ]
     ] = []
@@ -538,6 +622,20 @@ def process_message_multistorage(
                         result.origin_timestamp,
                     ),
                 )
+            )
+        if isinstance(result, InsertBatchInterpretExpressions):
+            results.append(
+                (
+                    storage_key,
+                    ValuesInsertBatch(
+                        rows=[
+                            ValuesInsertBatch.encode_row(row)
+                            for row in result.rowsAsValues
+                        ],
+                        # FIXME
+                        origin_timestamp=datetime.now(),
+                    ),
+                ),
             )
         else:
             results.append((storage_key, result))
@@ -619,6 +717,10 @@ class MultistorageConsumerProcessingStrategyFactory(
         else:
             replacement_batch_writer = None
 
+        values_batch_writer = ValuesInsertBatchWriter(
+            storage.get_table_writer().get_values_writer(self.__metrics), self.__metrics
+        )
+
         return ProcessedMessageBatchWriter(
             InsertBatchWriter(
                 storage.get_table_writer().get_batch_writer(
@@ -632,6 +734,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 ),
             ),
             replacement_batch_writer,
+            values_batch_writer,
         )
 
     def __build_collector(

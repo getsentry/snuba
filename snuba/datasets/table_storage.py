@@ -22,6 +22,18 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
 
+# FIXME
+DISTRIBUTIONS_COLUMN_SET = [
+    "org_id",
+    "project_id",
+    "metric_id",
+    "timestamp",
+    "tags.key",
+    "tags.value",
+    "percentiles",
+    "retention_days",
+]
+
 
 class KafkaTopicSpec:
     def __init__(self, topic: Topic) -> None:
@@ -206,12 +218,13 @@ class TableWriter:
         options: ClickhouseWriterOptions = None,
         table_name: Optional[str] = None,
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
-    ) -> BatchWriter[JSONRow]:
+    ) -> BatchWriter[bytes]:
         table_name = table_name or self.__table_schema.get_table_name()
 
-        return get_cluster(self.__storage_set).get_batch_writer(
+        return get_cluster(self.__storage_set).get_values_batch_writer(
             metrics,
-            InsertStatement(table_name),
+            # FIXME
+            InsertStatement(table_name).with_columns(DISTRIBUTIONS_COLUMN_SET),
             encoding=None,
             options=options,
             chunk_size=chunk_size,

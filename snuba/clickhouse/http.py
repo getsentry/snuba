@@ -75,7 +75,8 @@ class InsertStatement:
         columns_statement = (
             f"({','.join(self.__column_names)}) " if self.__column_names else ""
         )
-        format_statement = f" FORMAT {self.__format}" if self.__format else ""
+        # FIXME maybe but idk what other use empty format has
+        format_statement = f" FORMAT {self.__format}" if self.__format else "VALUES"
         return f"INSERT INTO {self.__database}.{self.__table_name} {columns_statement} {format_statement}"
 
 
@@ -138,7 +139,7 @@ class HTTPWriteBatch:
             "Connection": "keep-alive",
             "Accept-Encoding": "gzip,deflate",
         }
-        if password != '':
+        if password != "":
             headers["X-ClickHouse-Key"] = password
         if encoding:
             headers["Content-Encoding"] = encoding
