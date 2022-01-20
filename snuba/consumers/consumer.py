@@ -298,11 +298,7 @@ class MockReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
 
 
 class ProcessedMessageBatchWriter(
-    ProcessingStep[
-        Union[
-            None, JSONRowInsertBatch, ReplacementBatch, InsertBatchInterpretExpressions
-        ]
-    ]
+    ProcessingStep[Union[None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch]]
 ):
     def __init__(
         self,
@@ -325,12 +321,7 @@ class ProcessedMessageBatchWriter(
     def submit(
         self,
         message: Message[
-            Union[
-                None,
-                JSONRowInsertBatch,
-                ReplacementBatch,
-                InsertBatchInterpretExpressions,
-            ]
+            Union[None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch]
         ],
     ) -> None:
         assert not self.__closed
@@ -462,12 +453,7 @@ class MultistorageCollector(
         Sequence[
             Tuple[
                 StorageKey,
-                Union[
-                    None,
-                    JSONRowInsertBatch,
-                    ReplacementBatch,
-                    InsertBatchInterpretExpressions,
-                ],
+                Union[None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch],
             ]
         ]
     ]
@@ -477,12 +463,7 @@ class MultistorageCollector(
         steps: Mapping[
             StorageKey,
             ProcessingStep[
-                Union[
-                    None,
-                    JSONRowInsertBatch,
-                    ReplacementBatch,
-                    InsertBatchInterpretExpressions,
-                ]
+                Union[None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch]
             ],
         ],
     ):
@@ -501,10 +482,7 @@ class MultistorageCollector(
                 Tuple[
                     StorageKey,
                     Union[
-                        None,
-                        JSONRowInsertBatch,
-                        ReplacementBatch,
-                        InsertBatchInterpretExpressions,
+                        None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch,
                     ],
                 ]
             ]
@@ -578,9 +556,7 @@ def process_message_multistorage(
 ) -> Sequence[
     Tuple[
         StorageKey,
-        Union[
-            None, JSONRowInsertBatch, ReplacementBatch, InsertBatch, ValuesInsertBatch
-        ],
+        Union[None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch],
     ]
 ]:
     # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
@@ -595,13 +571,7 @@ def process_message_multistorage(
     results: MutableSequence[
         Tuple[
             StorageKey,
-            Union[
-                None,
-                JSONRowInsertBatch,
-                InsertBatch,
-                ReplacementBatch,
-                ValuesInsertBatch,
-            ],
+            Union[None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch],
         ]
     ] = []
 
@@ -623,7 +593,7 @@ def process_message_multistorage(
                     ),
                 )
             )
-        if isinstance(result, InsertBatchInterpretExpressions):
+        elif isinstance(result, InsertBatchInterpretExpressions):
             results.append(
                 (
                     storage_key,
@@ -743,12 +713,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         Sequence[
             Tuple[
                 StorageKey,
-                Union[
-                    None,
-                    JSONRowInsertBatch,
-                    ReplacementBatch,
-                    InsertBatchInterpretExpressions,
-                ],
+                Union[None, JSONRowInsertBatch, ReplacementBatch, ValuesInsertBatch],
             ]
         ]
     ]:
