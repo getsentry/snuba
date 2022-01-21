@@ -169,7 +169,12 @@ Snuba provides a magic column `time`, that you can use in groupby. This column g
 
 granularity determines the number of seconds in each of these time buckets. Eg, to count the number of events by hour, you would do
 
-``BY time GRANULARITY 3600``
+Example::
+
+  MATCH(events) count(event_id) AS event_count
+  BY time
+  WHERE timestamp >= toDateTime('2022-01-15T00:00:00.000000') AND timestamp < toDateTime('2022-01-21T00:00:00.000000')
+  GRANULARITY 3600
 
 TOTALS
 ======
