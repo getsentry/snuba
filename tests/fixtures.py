@@ -253,7 +253,7 @@ def get_raw_transaction(span_id: str | None = None) -> InsertEvent:
                     "description": "SELECT * FROM users",
                     "data": {},
                     "timestamp": calendar.timegm(end_timestamp.timetuple()),
-                    "hash": "5029609156d8133",
+                    "hash": "05029609156d8133",
                     "exclusive_time": 1.2,
                 }
             ],
