@@ -165,6 +165,12 @@ GRANULARITY
 
 An integer representing the granularity to group time based results.
 
+Snuba provides a magic column `time`, that you can use in groupby. This column gives a floored time value for each event so that events in the same minute/hour/day/etc. can be grouped.
+
+granularity determines the number of seconds in each of these time buckets. Eg, to count the number of events by hour, you would do
+
+``BY time GRANULARITY 3600``
+
 TOTALS
 ======
 
