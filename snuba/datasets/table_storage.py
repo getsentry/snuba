@@ -245,6 +245,8 @@ class TableWriter:
             encoder = ValuesRowEncoder(
                 [column.name for column in self.__table_schema.__columns]
             )
+        else:
+            raise TypeError("unknown WriteFormat")
         return BatchWriterEncoderWrapper(
             self.get_batch_writer(
                 metrics=metrics,
