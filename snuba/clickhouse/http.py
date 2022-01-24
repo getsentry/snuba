@@ -39,10 +39,36 @@ class JSONRowEncoder(Encoder[bytes, WriterTableRow]):
         else:
             raise TypeError
 
-    def encode(self, value: WriterTableRow) -> JSONRow:
+    def encode(self, value: WriterTableRow) -> bytes:
         return cast(
             bytes, rapidjson.dumps(value, default=self.__default).encode("utf-8")
         )
+
+
+class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
+    def __init__(self, columns: Iterable[str]) -> None:
+        self.__columns = columns
+
+    def encode_value(self, value: Any) -> str:
+        if isinstance(value, str):
+            return value
+
+        if isinstance(value, int):
+            return str(value)
+
+        if isinstance(value, list):
+            for x in value:
+                if not isinstance(x, int):
+                    raise TypeError("ints should only contain arrays")
+
+            return "[" + ",".join([str(x) for x in value]) + "]"
+
+        return "0"
+
+    def encode(self, row: WriterTableRow) -> bytes:
+        ordered_columns = [self.encode_value(row[column]) for column in self.__columns]
+        ordered_columns_str = ",".join(ordered_columns)
+        return f"({ordered_columns_str})".encode("utf-8")
 
 
 class InsertStatement:
@@ -138,7 +164,7 @@ class HTTPWriteBatch:
             "Connection": "keep-alive",
             "Accept-Encoding": "gzip,deflate",
         }
-        if password != '':
+        if password != "":
             headers["X-ClickHouse-Key"] = password
         if encoding:
             headers["Content-Encoding"] = encoding
