@@ -171,6 +171,7 @@ def update_query_metadata_and_stats(
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
     status: QueryStatus,
+    profile_data: Optional[Mapping[str, Any]] = None,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -191,6 +192,7 @@ def update_query_metadata_and_stats(
             status=status,
             profile=generate_profile(query),
             trace_id=trace_id,
+            result_profile=profile_data,
         )
     )
 
@@ -518,17 +520,15 @@ def raw_query(
                 "stats": stats,
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
-                "profile": None,
             }
         ) from cause
     else:
-        stats = update_with_status(QueryStatus.SUCCESS)
+        stats = update_with_status(QueryStatus.SUCCESS, result["profile"])
         return QueryResult(
             result,
             {
                 "stats": stats,
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
-                "profile": result["profile"],
             },
         )

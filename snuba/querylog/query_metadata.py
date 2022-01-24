@@ -73,6 +73,7 @@ class ClickhouseQueryMetadata:
     status: QueryStatus
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
+    result_profile: Optional[Mapping[str, Any]] = None
 
     def to_dict(self) -> Mapping[str, Any]:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
@@ -86,6 +87,7 @@ class ClickhouseQueryMetadata:
             "status": self.status.value,
             "trace_id": self.trace_id,
             "profile": self.profile.to_dict(),
+            "result_profile": self.result_profile,
         }
 
 

@@ -214,7 +214,6 @@ def _dry_run_query_runner(
             "stats": {},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
-            "profile": None,
         },
     )
 
