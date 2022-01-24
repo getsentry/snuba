@@ -3,7 +3,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.message_filters import KafkaHeaderFilter
-from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
@@ -26,6 +26,8 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=mandatory_conditions,
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
+    # This is the default, just showing where it goes for the WIP PR
+    write_format=WriteFormat.JSON,
 )
 
 storage = WritableTableStorage(
