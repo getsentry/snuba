@@ -11,7 +11,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import StreamMessageFilter
-from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
@@ -208,12 +208,17 @@ class TableWriter:
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
-
+        write_format = self.__table_schema.get_write_format()
+        insert_statement = (
+            InsertStatement(table_name).with_format("JSONEachRow")
+            if write_format == WriteFormat.JSON
+            else InsertStatement(table_name).with_format("VALUES")
+        )
         options = self.__update_writer_options(options)
 
         return get_cluster(self.__storage_set).get_batch_writer(
             metrics,
-            InsertStatement(table_name).with_format("JSONEachRow"),
+            insert_statement,
             encoding=None,
             options=options,
             chunk_size=chunk_size,
