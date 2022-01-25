@@ -60,10 +60,6 @@ class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
         elif isinstance(value, ClickhouseInt):
             return str(value.val)
         elif isinstance(value, ClickhouseNumArray):
-            for x in value.val:
-                if not isinstance(x, int):
-                    raise TypeError("ints should only contain arrays")
-
             return "[" + ",".join([str(x) for x in value.val]) + "]"
         else:
             raise TypeError("unknown Clickhouse value type", value.__class__)
