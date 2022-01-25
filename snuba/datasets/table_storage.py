@@ -3,12 +3,7 @@ from typing import Any, Mapping, Optional, Sequence
 from arroyo.backends.kafka import KafkaPayload
 
 from snuba import settings
-from snuba.clickhouse.http import (
-    InsertStatement,
-    JSONRow,
-    JSONRowEncoder,
-    ValuesRowEncoder,
-)
+from snuba.clickhouse.http import InsertStatement, JSONRow
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseWriterOptions,
@@ -23,10 +18,9 @@ from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.subscriptions.utils import SchedulingWatermarkMode
-from snuba.utils.codecs import Encoder
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
-from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
+from snuba.writer import BatchWriter
 
 
 class KafkaTopicSpec:
@@ -230,32 +224,6 @@ class TableWriter:
             options=options,
             chunk_size=chunk_size,
             buffer_size=0,
-        )
-
-    def get_encoding_batch_writer(
-        self,
-        metrics: MetricsBackend,
-        options: ClickhouseWriterOptions = None,
-        table_name: Optional[str] = None,
-        chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
-    ) -> BatchWriterEncoderWrapper[WriterTableRow]:
-        encoder: Encoder[bytes, WriterTableRow]
-        if self.__write_format == WriteFormat.JSON:
-            encoder = JSONRowEncoder()
-        elif self.__write_format == WriteFormat.VALUES:
-            encoder = ValuesRowEncoder(
-                [column.name for column in self.__table_schema.__columns]
-            )
-        else:
-            raise TypeError("unknown WriteFormat")
-        return BatchWriterEncoderWrapper(
-            self.get_batch_writer(
-                metrics=metrics,
-                options=options,
-                table_name=table_name,
-                chunk_size=chunk_size,
-            ),
-            encoder,
         )
 
     def get_bulk_writer(
