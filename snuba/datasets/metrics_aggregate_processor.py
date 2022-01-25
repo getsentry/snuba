@@ -52,6 +52,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
             "retention_days": message["retention_days"],
             "partition": metadata.partition,
             "offset": metadata.offset,
+            "granularity": 60,
         }
         return AggregateInsertBatch([processed], None)
 
@@ -92,5 +93,10 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
 
         escaped_array = "[" + ",".join([str(v) for v in values]) + "]"
         return {
-            "percentiles": f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {escaped_array})"
+            "percentiles": f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {escaped_array})",
+            "min": f"arrayReduce('minState', {escaped_array})",
+            "max": f"arrayReduce('maxState', {escaped_array})",
+            "avg": f"arrayReduce('avgState', {escaped_array})",
+            "sum": f"arrayReduce('sumState', {escaped_array})",
+            "count": f"arrayReduce('countState', {escaped_array})",
         }

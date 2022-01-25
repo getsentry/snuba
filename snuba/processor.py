@@ -20,6 +20,7 @@ import simplejson as json
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
+from snuba.utils.codecs import Encoder
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import WriterTableRow
 
@@ -38,7 +39,7 @@ class InsertBatch(NamedTuple):
 # aggregate function calls defined in
 # https://clickhouse.com/docs/en/sql-reference/data-types/aggregatefunction/
 class AggregateInsertBatch(InsertBatch):
-    pass
+    table_specific_encoder: Encoder[bytes, WriterTableRow]
 
 
 class ReplacementBatch(NamedTuple):

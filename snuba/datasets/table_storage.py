@@ -19,6 +19,7 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.schemas import ReadOnly
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
 
@@ -213,7 +214,8 @@ class TableWriter:
         if self.__write_format == WriteFormat.JSON:
             insert_statement = InsertStatement(table_name).with_format("JSONEachRow")
         elif self.__write_format == WriteFormat.VALUES:
-            column_names = [column.name for column in self.__table_schema.__columns]
+            column_names = self.get_writeable_columns()
+            print(column_names)
             insert_statement = (
                 InsertStatement(table_name)
                 .with_format("VALUES")
@@ -231,6 +233,13 @@ class TableWriter:
             chunk_size=chunk_size,
             buffer_size=0,
         )
+
+    def get_writeable_columns(self) -> Sequence[str]:
+        return [
+            column.flattened
+            for column in self.get_schema().get_columns()
+            if not column.type.has_modifier(ReadOnly)
+        ]
 
     def get_bulk_writer(
         self,

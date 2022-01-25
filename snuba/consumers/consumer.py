@@ -31,13 +31,18 @@ from arroyo.processing.strategies.streaming import (
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-from snuba.clickhouse.http import JSONRow, JSONRowEncoder
+from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
 from snuba.environment import setup_sentry
-from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
+from snuba.processor import (
+    AggregateInsertBatch,
+    InsertBatch,
+    MessageProcessor,
+    ReplacementBatch,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -438,14 +443,25 @@ def process_message_multistorage(
     ] = []
 
     for storage_key in message.payload.storage_keys:
+        table_writer = get_writable_storage(storage_key).get_table_writer()
+        # TODO Creation of this object should be memoized
+        values_row_encoder = ValuesRowEncoder(table_writer.get_writeable_columns())
         result = (
-            get_writable_storage(storage_key)
-            .get_table_writer()
-            .get_stream_loader()
+            table_writer.get_stream_loader()
             .get_processor()
             .process_message(value, metadata)
         )
-        if isinstance(result, InsertBatch):
+        if isinstance(result, AggregateInsertBatch):
+            results.append(
+                (
+                    storage_key,
+                    BytesInsertBatch(
+                        [values_row_encoder.encode(row) for row in result.rows],
+                        result.origin_timestamp,
+                    ),
+                )
+            )
+        elif isinstance(result, InsertBatch):
             results.append(
                 (
                     storage_key,
