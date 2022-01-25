@@ -15,6 +15,11 @@ from urllib3.exceptions import HTTPError
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
+from snuba.clickhouse.value_types import (
+    ClickhouseInt,
+    ClickhouseNumArray,
+    ClickhouseUnguardedExpression,
+)
 from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
@@ -50,20 +55,18 @@ class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
         self.__columns = columns
 
     def encode_value(self, value: Any) -> str:
-        if isinstance(value, str):
-            return value
-
-        if isinstance(value, int):
-            return str(value)
-
-        if isinstance(value, list):
-            for x in value:
+        if isinstance(value, ClickhouseUnguardedExpression):
+            return value.val
+        elif isinstance(value, ClickhouseInt):
+            return str(value.val)
+        elif isinstance(value, ClickhouseNumArray):
+            for x in value.val:
                 if not isinstance(x, int):
                     raise TypeError("ints should only contain arrays")
 
-            return "[" + ",".join([str(x) for x in value]) + "]"
-
-        return "0"
+            return "[" + ",".join([str(x) for x in value.val]) + "]"
+        else:
+            raise TypeError("unknown Clickhouse value type", value.__class__)
 
     def encode(self, row: WriterTableRow) -> bytes:
         ordered_columns = [

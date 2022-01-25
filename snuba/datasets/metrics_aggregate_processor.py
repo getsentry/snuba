@@ -2,6 +2,11 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
+from snuba.clickhouse.value_types import (
+    ClickhouseInt,
+    ClickhouseNumArray,
+    ClickhouseUnguardedExpression,
+)
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     AggregateInsertBatch,
@@ -45,17 +50,19 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
 
         processed = [
             {
-                "org_id": message["org_id"],
-                "project_id": message["project_id"],
-                "metric_id": message["metric_id"],
-                "timestamp": f"toStartOfInterval(toDateTime('{timestamp.isoformat()}'), toIntervalSecond({granularity}))",
-                "tags.key": keys,
-                "tags.value": values,
+                "org_id": ClickhouseInt(message["org_id"]),
+                "project_id": ClickhouseInt(message["project_id"]),
+                "metric_id": ClickhouseInt(message["metric_id"]),
+                "timestamp": ClickhouseUnguardedExpression(
+                    f"toStartOfInterval(toDateTime('{timestamp.isoformat()}'), toIntervalSecond({granularity}))"
+                ),
+                "tags.key": ClickhouseNumArray(keys),
+                "tags.value": ClickhouseNumArray(values),
                 **self._process_values(message),
-                "retention_days": message["retention_days"],
+                "retention_days": ClickhouseInt(message["retention_days"]),
                 "partition": metadata.partition,
                 "offset": metadata.offset,
-                "granularity": granularity,
+                "granularity": ClickhouseInt(granularity),
             }
             for granularity in self.GRANULARITIES
         ]
@@ -72,7 +79,11 @@ class SetsAggregateProcessor(MetricsAggregateProcessor):
             assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
         value_array = "[" + ",".join([str(v) for v in values]) + "]"
 
-        return {"value": f"arrayReduce('uniqState', {value_array})"}
+        return {
+            "value": ClickhouseUnguardedExpression(
+                f"arrayReduce('uniqState', {value_array})"
+            )
+        }
 
 
 class CounterAggregateProcessor(MetricsAggregateProcessor):
@@ -85,7 +96,11 @@ class CounterAggregateProcessor(MetricsAggregateProcessor):
             value, (int, float)
         ), "Illegal value for counter value. Int/Float expected {value}"
 
-        return {"value": f"arrayReduce('sumState', [{value}])"}
+        return {
+            "value": ClickhouseUnguardedExpression(
+                f"arrayReduce('sumState', [{value}])"
+            )
+        }
 
 
 class DistributionsAggregateProcessor(MetricsAggregateProcessor):
@@ -101,10 +116,22 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
 
         value_array = "[" + ",".join([str(v) for v in values]) + "]"
         return {
-            "percentiles": f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {value_array})",
-            "min": f"arrayReduce('minState', {value_array})",
-            "max": f"arrayReduce('maxState', {value_array})",
-            "avg": f"arrayReduce('avgState', {value_array})",
-            "sum": f"arrayReduce('sumState', {value_array})",
-            "count": f"arrayReduce('countState', {value_array})",
+            "percentiles": ClickhouseUnguardedExpression(
+                f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {value_array})"
+            ),
+            "min": ClickhouseUnguardedExpression(
+                f"arrayReduce('minState', {value_array})"
+            ),
+            "max": ClickhouseUnguardedExpression(
+                f"arrayReduce('maxState', {value_array})"
+            ),
+            "avg": ClickhouseUnguardedExpression(
+                f"arrayReduce('avgState', {value_array})"
+            ),
+            "sum": ClickhouseUnguardedExpression(
+                f"arrayReduce('sumState', {value_array})"
+            ),
+            "count": ClickhouseUnguardedExpression(
+                f"arrayReduce('countState', {value_array})"
+            ),
         }
