@@ -95,8 +95,3 @@ class MockBatchWriter(BatchWriter[bytes]):
                 / 1000
             )
         )
-
-
-class MockEncoder(Encoder[bytes, TDecoded]):
-    def encode(self, x: TDecoded) -> bytes:
-        return str(x).encode("utf-8")
