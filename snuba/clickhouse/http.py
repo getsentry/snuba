@@ -101,7 +101,14 @@ class InsertStatement:
         columns_statement = (
             f"({','.join(self.__column_names)}) " if self.__column_names else ""
         )
-        format_statement = f" FORMAT {self.__format}" if self.__format else ""
+        format_statement = ""
+
+        if self.__format:
+            if not self.__format == "VALUES":
+                format_statement = f"FORMAT {self.__format}"
+            else:
+                format_statement = "VALUES"
+
         return f"INSERT INTO {self.__database}.{self.__table_name} {columns_statement} {format_statement}"
 
 

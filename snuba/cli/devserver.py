@@ -152,6 +152,17 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--consumer-group=metrics_group",
                 ],
             ),
+            (
+                "metrics-direct-write-consumer",
+                [
+                    "snuba",
+                    "multistorage-consumer",
+                    "--storage=metrics_distributions",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--consumer-group=metrics_direct_write_group",
+                ],
+            ),
         ]
 
     if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:

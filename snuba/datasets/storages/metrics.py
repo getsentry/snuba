@@ -22,7 +22,7 @@ from snuba.datasets.metrics_bucket_processor import (
     DistributionsMetricsProcessor,
     SetsMetricsProcessor,
 )
-from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema, WriteFormat
+from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
@@ -122,7 +122,7 @@ aggregated_columns = [
 sets_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_SETS,
     storage_set_key=StorageSetKey.METRICS,
-    schema=TableSchema(
+    schema=WritableTableSchema(
         local_table_name="metrics_sets_local",
         dist_table_name="metrics_sets_dist",
         storage_set_key=StorageSetKey.METRICS,
@@ -143,7 +143,7 @@ sets_storage = WritableTableStorage(
 counters_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_COUNTERS,
     storage_set_key=StorageSetKey.METRICS,
-    schema=TableSchema(
+    schema=WritableTableSchema(
         local_table_name="metrics_counters_local",
         dist_table_name="metrics_counters_dist",
         storage_set_key=StorageSetKey.METRICS,
@@ -165,7 +165,7 @@ counters_storage = WritableTableStorage(
 distributions_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_DISTRIBUTIONS,
     storage_set_key=StorageSetKey.METRICS,
-    schema=TableSchema(
+    schema=WritableTableSchema(
         local_table_name="metrics_distributions_local",
         dist_table_name="metrics_distributions_dist",
         storage_set_key=StorageSetKey.METRICS,

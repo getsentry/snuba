@@ -210,11 +210,17 @@ class TableWriter:
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
-        insert_statement = (
-            InsertStatement(table_name).with_format("JSONEachRow")
-            if self.__write_format == WriteFormat.JSON
-            else InsertStatement(table_name).with_format("VALUES")
-        )
+        if self.__write_format == WriteFormat.JSON:
+            insert_statement = InsertStatement(table_name).with_format("JSONEachRow")
+        elif self.__write_format == WriteFormat.VALUES:
+            column_names = [column.name for column in self.__table_schema.__columns]
+            insert_statement = (
+                InsertStatement(table_name)
+                .with_format("VALUES")
+                .with_columns(column_names)
+            )
+        else:
+            raise TypeError("unknown table format", self.__write_format)
         options = self.__update_writer_options(options)
 
         return get_cluster(self.__storage_set).get_batch_writer(

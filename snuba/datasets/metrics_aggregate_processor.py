@@ -89,4 +89,8 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
             assert isinstance(
                 v, (int, float)
             ), "Illegal value in set. Int expected: {v}"
-        return {"values": values}
+
+        escaped_array = "[" + ",".join([str(v) for v in values]) + "]"
+        return {
+            "percentiles": f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {escaped_array})"
+        }
