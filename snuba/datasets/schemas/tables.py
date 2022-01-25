@@ -53,7 +53,6 @@ class TableSchema(Schema):
         storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
         part_format: Optional[Sequence[util.PartSegment]] = None,
-        write_format: WriteFormat = WriteFormat.JSON
     ):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
@@ -61,7 +60,6 @@ class TableSchema(Schema):
         self.__columns = columns
         self.__mandatory_conditions = mandatory_conditions
         self.__part_format = part_format
-        self.__write_format = write_format
 
     def get_data_source(self) -> TableSource:
         """
@@ -100,12 +98,6 @@ class TableSchema(Schema):
         Partition format required for cleanup and optimize.
         """
         return self.__part_format
-
-    def get_write_format(self) -> WriteFormat:
-        """
-        The FORMAT that should be used for insertion in clickhouse.
-        """
-        return self.__write_format
 
 
 class WritableTableSchema(TableSchema):

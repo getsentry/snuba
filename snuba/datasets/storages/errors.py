@@ -26,8 +26,6 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=mandatory_conditions,
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
-    # This is the default, just showing where it goes for the WIP PR
-    write_format=WriteFormat.JSON,
 )
 
 storage = WritableTableStorage(
@@ -47,6 +45,8 @@ storage = WritableTableStorage(
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_EVENTS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),
+    # This is the default, just showing where it goes for the PR
+    write_format=WriteFormat.JSON,
     replacer_processor=ErrorsReplacer(
         schema=schema,
         required_columns=required_columns,

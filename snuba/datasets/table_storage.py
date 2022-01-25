@@ -196,12 +196,14 @@ class TableWriter:
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
+        write_format: WriteFormat = WriteFormat.JSON,
     ) -> None:
         self.__storage_set = storage_set
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
         self.__replacer_processor = replacer_processor
         self.__writer_options = writer_options
+        self.__write_format = write_format
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
@@ -214,10 +216,9 @@ class TableWriter:
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
-        write_format = self.__table_schema.get_write_format()
         insert_statement = (
             InsertStatement(table_name).with_format("JSONEachRow")
-            if write_format == WriteFormat.JSON
+            if self.__write_format == WriteFormat.JSON
             else InsertStatement(table_name).with_format("VALUES")
         )
         options = self.__update_writer_options(options)
@@ -239,9 +240,9 @@ class TableWriter:
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
     ) -> BatchWriterEncoderWrapper[WriterTableRow]:
         encoder: Encoder[bytes, WriterTableRow]
-        if self.__table_schema.get_write_format() == WriteFormat.JSON:
+        if self.__write_format == WriteFormat.JSON:
             encoder = JSONRowEncoder()
-        elif self.__table_schema.get_write_format() == WriteFormat.VALUES:
+        elif self.__write_format == WriteFormat.VALUES:
             encoder = ValuesRowEncoder(
                 [column.name for column in self.__table_schema.__columns]
             )
