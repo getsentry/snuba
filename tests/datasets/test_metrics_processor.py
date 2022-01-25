@@ -5,7 +5,7 @@ import pytest
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.metrics_processor import (
+from snuba.datasets.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
     SetsMetricsProcessor,

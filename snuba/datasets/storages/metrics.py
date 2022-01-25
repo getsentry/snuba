@@ -12,7 +12,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.metrics_processor import (
+from snuba.datasets.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
     SetsMetricsProcessor,
