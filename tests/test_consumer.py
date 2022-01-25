@@ -15,8 +15,8 @@ from arroyo.types import Position
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
+    BytesInsertBatch,
     InsertBatchWriter,
-    JSONRowInsertBatch,
     MultistorageConsumerProcessingStrategyFactory,
     ProcessedMessageBatchWriter,
     ReplacementBatchWriter,
@@ -112,12 +112,12 @@ def test_streaming_consumer_strategy() -> None:
 
 
 def test_json_row_batch_pickle_simple() -> None:
-    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
+    batch = BytesInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
     assert pickle.loads(pickle.dumps(batch)) == batch
 
 
 def test_json_row_batch_pickle_out_of_band() -> None:
-    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
+    batch = BytesInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
 
     buffers: MutableSequence[PickleBuffer] = []
     data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)
@@ -131,7 +131,8 @@ def get_row_count(storage: Storage) -> int:
     return int(
         storage.get_cluster()
         .get_query_connection(ClickhouseClientSettings.INSERT)
-        .execute(f"SELECT count() FROM {schema.get_local_table_name()}").results[0][0]
+        .execute(f"SELECT count() FROM {schema.get_local_table_name()}")
+        .results[0][0]
     )
 
 
