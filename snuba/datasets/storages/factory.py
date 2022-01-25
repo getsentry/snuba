@@ -69,6 +69,8 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             transactions_storage,
             spans_storage,
             metrics_distributions_storage,
+            metrics_sets_storage,
+            metrics_counters_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),

@@ -70,7 +70,9 @@ class SetsAggregateProcessor(MetricsAggregateProcessor):
         values = message["value"]
         for v in values:
             assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
-        return {"set_values": values}
+        value_array = "[" + ",".join([str(v) for v in values]) + "]"
+
+        return {"value": f"arrayReduce('uniqState', {value_array})"}
 
 
 class CounterAggregateProcessor(MetricsAggregateProcessor):
@@ -82,7 +84,8 @@ class CounterAggregateProcessor(MetricsAggregateProcessor):
         assert isinstance(
             value, (int, float)
         ), "Illegal value for counter value. Int/Float expected {value}"
-        return {"value": value}
+
+        return {"value": f"arrayReduce('sumState', [{value}])"}
 
 
 class DistributionsAggregateProcessor(MetricsAggregateProcessor):
@@ -96,12 +99,12 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
                 v, (int, float)
             ), "Illegal value in set. Int expected: {v}"
 
-        escaped_array = "[" + ",".join([str(v) for v in values]) + "]"
+        value_array = "[" + ",".join([str(v) for v in values]) + "]"
         return {
-            "percentiles": f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {escaped_array})",
-            "min": f"arrayReduce('minState', {escaped_array})",
-            "max": f"arrayReduce('maxState', {escaped_array})",
-            "avg": f"arrayReduce('avgState', {escaped_array})",
-            "sum": f"arrayReduce('sumState', {escaped_array})",
-            "count": f"arrayReduce('countState', {escaped_array})",
+            "percentiles": f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {value_array})",
+            "min": f"arrayReduce('minState', {value_array})",
+            "max": f"arrayReduce('maxState', {value_array})",
+            "avg": f"arrayReduce('avgState', {value_array})",
+            "sum": f"arrayReduce('sumState', {value_array})",
+            "count": f"arrayReduce('countState', {value_array})",
         }
