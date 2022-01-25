@@ -12,6 +12,8 @@ from snuba.processor import (
 
 
 class MetricsAggregateProcessor(MessageProcessor, ABC):
+    GRANULARITIES = [10, 3600, 3600 * 24]
+
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         raise NotImplementedError
@@ -41,20 +43,23 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
             assert isinstance(value, int)
             values.append(value)
 
-        processed = {
-            "org_id": message["org_id"],
-            "project_id": message["project_id"],
-            "metric_id": message["metric_id"],
-            "timestamp": timestamp,
-            "tags.key": keys,
-            "tags.value": values,
-            **self._process_values(message),
-            "retention_days": message["retention_days"],
-            "partition": metadata.partition,
-            "offset": metadata.offset,
-            "granularity": 60,
-        }
-        return AggregateInsertBatch([processed], None)
+        processed = [
+            {
+                "org_id": message["org_id"],
+                "project_id": message["project_id"],
+                "metric_id": message["metric_id"],
+                "timestamp": f"toStartOfInterval(toDateTime('{timestamp.isoformat()}'), toIntervalSecond({granularity}))",
+                "tags.key": keys,
+                "tags.value": values,
+                **self._process_values(message),
+                "retention_days": message["retention_days"],
+                "partition": metadata.partition,
+                "offset": metadata.offset,
+                "granularity": granularity,
+            }
+            for granularity in self.GRANULARITIES
+        ]
+        return AggregateInsertBatch(processed, None)
 
 
 class SetsAggregateProcessor(MetricsAggregateProcessor):
