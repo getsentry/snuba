@@ -201,3 +201,48 @@ def test_multistorage_strategy(
         ):
             strategy.close()
             strategy.join()
+
+
+def test_aggregate_batch_writing() -> None:
+    from snuba.datasets.storages.metrics import (
+        counters_storage,
+        distributions_storage,
+        sets_storage,
+    )
+
+    dist_message = """
+        {
+            "org_id":1,
+            "project_id":2,
+            "name":"sentry.transactions.transaction.duration",
+            "unit":"ms",
+            "type":"d",
+            "value":[24.0,80.0,119.0,146.0,182.0],
+            "timestamp":1641418510,
+            "tags":{"6":91,"9":134,"4":117,"5":7},
+            "metric_id":8,
+            "retention_days":90
+        }
+    """
+
+    commit = Mock()
+
+    storages = [
+        distributions_storage,
+        sets_storage,
+        counters_storage,
+    ]
+
+    strategy = MultistorageConsumerProcessingStrategyFactory(
+        storages, 10, 10, None, None, None, TestingMetricsBackend(),
+    ).create(commit)
+
+    payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
+    now = datetime.now()
+    messages = [
+        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
+        for offset, payload in enumerate(payloads)
+    ]
+
+    for message in messages:
+        strategy.submit(message)
