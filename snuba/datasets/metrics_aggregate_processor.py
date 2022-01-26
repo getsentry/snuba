@@ -17,7 +17,7 @@ from snuba.processor import (
 
 
 class MetricsAggregateProcessor(MessageProcessor, ABC):
-    GRANULARITIES = [10, 3600, 3600 * 24]
+    GRANULARITIES_SECONDS = [10, 3600, 3600 * 24]
 
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
@@ -62,7 +62,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
                 "offset": metadata.offset,
                 "granularity": ClickhouseInt(granularity),
             }
-            for granularity in self.GRANULARITIES
+            for granularity in self.GRANULARITIES_SECONDS
         ]
         return AggregateInsertBatch(processed, None)
 
@@ -110,7 +110,7 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
         for v in values:
             assert isinstance(
                 v, (int, float)
-            ), "Illegal value in set. Int expected: {v}"
+            ), "Illegal value in set. Int/Float expected: {v}"
 
         value_array = "[" + ",".join([str(v) for v in values]) + "]"
         return {
