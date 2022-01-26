@@ -111,7 +111,7 @@ TEST_CASES_BUCKETS = [
                 "offset": 100,
             }
         ],
-        id="Simple set with valid content",
+        id="Simple distribution with valid content",
     ),
 ]
 
@@ -208,7 +208,88 @@ TEST_CASES_AGGREGATES = [
         None,
         None,
         id="Simple set with valid content",
-    )
+    ),
+    pytest.param(
+        {
+            "org_id": 1,
+            "project_id": 2,
+            "metric_id": 1232341,
+            "type": "c",
+            "timestamp": 1619225296,
+            "tags": {"10": 11, "20": 22, "30": 33},
+            "value": 123.123,
+            "retention_days": 30,
+        },
+        None,
+        explode_test_cases_with_granularities(
+            {
+                "org_id": ClickhouseInt(1),
+                "project_id": ClickhouseInt(2),
+                "metric_id": ClickhouseInt(1232341),
+                "timestamp": ClickhouseUnguardedExpression(
+                    val="toStartOfInterval(toDateTime('2021-04-24T00:48:16'), toIntervalSecond({gran}))"
+                ),
+                "tags.key": ClickhouseNumArray([10, 20, 30]),
+                "tags.value": ClickhouseNumArray([11, 22, 33]),
+                "value": ClickhouseUnguardedExpression(
+                    val="arrayReduce('sumState', [123.123])"
+                ),
+                "retention_days": ClickhouseInt(30),
+                "partition": 1,
+                "offset": 100,
+            }
+        ),
+        None,
+        id="Simple counter with valid content",
+    ),
+    pytest.param(
+        {
+            "org_id": 1,
+            "project_id": 2,
+            "metric_id": 1232341,
+            "type": "d",
+            "timestamp": 1619225296,
+            "tags": {"10": 11, "20": 22, "30": 33},
+            "value": [324.12, 345.23, 4564.56, 567567],
+            "retention_days": 30,
+        },
+        None,
+        None,
+        explode_test_cases_with_granularities(
+            {
+                "org_id": ClickhouseInt(1),
+                "project_id": ClickhouseInt(2),
+                "metric_id": ClickhouseInt(1232341),
+                "timestamp": ClickhouseUnguardedExpression(
+                    val="toStartOfInterval(toDateTime('2021-04-24T00:48:16'), toIntervalSecond({gran}))"
+                ),
+                "tags.key": ClickhouseNumArray([10, 20, 30]),
+                "tags.value": ClickhouseNumArray([11, 22, 33]),
+                "percentiles": ClickhouseUnguardedExpression(
+                    val="arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', [324.12,345.23,4564.56,567567])"
+                ),
+                "min": ClickhouseUnguardedExpression(
+                    val="arrayReduce('minState', [324.12,345.23,4564.56,567567])"
+                ),
+                "max": ClickhouseUnguardedExpression(
+                    val="arrayReduce('maxState', [324.12,345.23,4564.56,567567])"
+                ),
+                "avg": ClickhouseUnguardedExpression(
+                    val="arrayReduce('avgState', [324.12,345.23,4564.56,567567])"
+                ),
+                "sum": ClickhouseUnguardedExpression(
+                    val="arrayReduce('sumState', [324.12,345.23,4564.56,567567])"
+                ),
+                "count": ClickhouseUnguardedExpression(
+                    val="arrayReduce('countState', [324.12,345.23,4564.56,567567])"
+                ),
+                "retention_days": ClickhouseInt(30),
+                "partition": 1,
+                "offset": 100,
+            }
+        ),
+        id="Simple distribution with valid content",
+    ),
 ]
 
 
