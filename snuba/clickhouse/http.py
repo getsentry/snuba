@@ -69,7 +69,6 @@ class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
             self.encode_value(row.get(column)) for column in self.__columns
         ]
         ordered_columns_str = ",".join(ordered_columns)
-        print(ordered_columns_str)
         return f"({ordered_columns_str})".encode("utf-8")
 
 
