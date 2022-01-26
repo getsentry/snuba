@@ -28,8 +28,6 @@ class ReplacementMessage(NamedTuple):
 
 
 class Replacement(ABC):
-    metadata: ReplacementMessageMetadata
-
     @abstractmethod
     def get_insert_query(self, table_name: str) -> Optional[str]:
         raise NotImplementedError()

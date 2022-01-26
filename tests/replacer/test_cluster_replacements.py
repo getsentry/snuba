@@ -18,6 +18,7 @@ from snuba.replacer import (
     RoundRobinConnectionPool,
     ShardedExecutor,
 )
+from snuba.replacers.replacer_processor import ReplacementMessageMetadata
 from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -141,6 +142,8 @@ REPLACEMENT_TYPE = (
     ReplacementType.EXCLUDE_GROUPS
 )  # Arbitrary replacement type, no impact on tests
 
+REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata("replacements", 0, 0)
+
 
 @pytest.mark.parametrize(
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
@@ -171,6 +174,7 @@ def test_write_each_node(
                 FINAL_QUERY_TEMPLATE,
                 (NEEDS_FINAL, 1),
                 REPLACEMENT_TYPE,
+                REPLACEMENT_MESSAGE_METADATA,
             )
         ]
     )
@@ -202,6 +206,7 @@ def test_failing_query(
                     FINAL_QUERY_TEMPLATE,
                     (NEEDS_FINAL, 1),
                     REPLACEMENT_TYPE,
+                    REPLACEMENT_MESSAGE_METADATA,
                 )
             ]
         )
@@ -226,6 +231,7 @@ def test_load_balancing(
         FINAL_QUERY_TEMPLATE,
         (NEEDS_FINAL, 1),
         REPLACEMENT_TYPE,
+        REPLACEMENT_MESSAGE_METADATA,
     )
     replacer.flush_batch([replacement, replacement])
 
@@ -385,6 +391,7 @@ def test_local_executor(
             FINAL_QUERY_TEMPLATE,
             (NEEDS_FINAL, 1),
             REPLACEMENT_TYPE,
+            REPLACEMENT_MESSAGE_METADATA,
         ),
         records_count=1,
     )
