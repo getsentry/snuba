@@ -203,7 +203,7 @@ def test_multistorage_strategy(
             strategy.join()
 
 
-def test_aggregate_batch_writing() -> None:
+def test_metrics_writing_e2e() -> None:
     from snuba.datasets.storages.metrics import (
         counters_storage,
         distributions_storage,
@@ -244,5 +244,17 @@ def test_aggregate_batch_writing() -> None:
         for offset, payload in enumerate(payloads)
     ]
 
-    for message in messages:
-        strategy.submit(message)
+    # 3 rows written, one for each granularity
+    with assert_changes(
+        lambda: get_row_count(distributions_storage), 0, 3
+    ), assert_changes(lambda: get_row_count(distributions_storage), 0, 3):
+        for message in messages:
+            strategy.submit(message)
+
+        with assert_changes(
+            lambda: commit.call_args_list,
+            [],
+            [call({Partition(Topic("topic"), 0): Position(1, now)})],
+        ):
+            strategy.close()
+            strategy.join()
