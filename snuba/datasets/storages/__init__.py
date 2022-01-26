@@ -28,3 +28,4 @@ class StorageKey(Enum):
     SPANS = "spans"
     TRANSACTIONS = "transactions"
     TRANSACTIONS_RO = "transactions_ro"
+    ERRORS_V2 = "errors_v2"

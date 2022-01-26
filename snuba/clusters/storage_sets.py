@@ -27,6 +27,7 @@ class StorageSetKey(Enum):
     SESSIONS = "sessions"
     TRANSACTIONS = "transactions"
     TRANSACTIONS_RO = "transactions_ro"
+    ERRORS_V2 = "errors_v2"
 
 
 # Storage sets enabled only when development features are enabled.
