@@ -230,8 +230,7 @@ def test_metrics_aggregate_processor(
         AggregateInsertBatch(expected_set, None) if expected_set is not None else None
     )
     assert (
-        SetsAggregateProcessor().process_message(message, meta).rows[0]
-        == expected_set_result.rows[0]
+        SetsAggregateProcessor().process_message(message, meta) == expected_set_result
     )
 
     expected_counter_result = (
