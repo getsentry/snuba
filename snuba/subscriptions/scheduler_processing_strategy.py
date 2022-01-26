@@ -462,8 +462,6 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
     def terminate(self) -> None:
         self.__closed = True
 
-        self.__producer.close()
-
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
 
@@ -487,5 +485,3 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                         )
                     }
                 )
-
-        self.__producer.close()

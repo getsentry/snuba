@@ -167,6 +167,8 @@ def test_executor_consumer() -> None:
         data["payload"]["subscription_id"] == "1/91b46cb6224f11ecb2ddacde48001122"
     ), "Invalid subscription id"
 
+    result_producer.close()
+
 
 def generate_message(
     entity_key: EntityKey,
