@@ -30,8 +30,6 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        # TODO: Support messages with multiple buckets
-
         if not self._should_process(message):
             return None
 
