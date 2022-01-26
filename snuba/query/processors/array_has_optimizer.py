@@ -53,7 +53,7 @@ class ArrayHasOptimizer(QueryProcessor):
         def replace_expression(expr: Expression) -> Expression:
             match = self.__array_has_pattern.match(expr)
 
-            # The arrayJoins we are looking for are not present, so skip this entirely
+            # The has condition we are looking for are not present, so skip this entirely
             if match is None:
                 return expr
 
