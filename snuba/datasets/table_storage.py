@@ -215,7 +215,6 @@ class TableWriter:
             insert_statement = InsertStatement(table_name).with_format("JSONEachRow")
         elif self.__write_format == WriteFormat.VALUES:
             column_names = self.get_writeable_columns()
-            print(column_names)
             insert_statement = (
                 InsertStatement(table_name)
                 .with_format("VALUES")
