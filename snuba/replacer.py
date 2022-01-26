@@ -20,7 +20,11 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
-from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
+from snuba.replacers.replacer_processor import (
+    Replacement,
+    ReplacementMessage,
+    ReplacementMessageMetadata,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
 
@@ -333,11 +337,19 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         seq_message = json.loads(message.payload.value)
-        version = seq_message[0]
+        [version, action_type, data] = seq_message
 
         if version == 2:
             return self.__replacer_processor.process_message(
-                ReplacementMessage(seq_message[1], seq_message[2])
+                ReplacementMessage(
+                    action_type=action_type,
+                    data=data,
+                    metadata=ReplacementMessageMetadata(
+                        topic_name=message.partition.topic.name,
+                        partition_index=message.partition.index,
+                        offset=message.offset,
+                    ),
+                )
             )
         else:
             raise InvalidMessageVersion("Unknown message format: " + str(seq_message))

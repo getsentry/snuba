@@ -524,6 +524,8 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
+        if processed is not None:
+            processed.metadata = message.metadata
         return processed
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
@@ -564,6 +566,12 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             return True
 
         return False
+
+    def post_replacement(self, replacement: Replacement, matching_records: int) -> None:
+        """
+        Replace the "processing" entry for this replacement with "processed" in Redis.
+        """
+        pass
 
 
 def _build_event_tombstone_replacement(

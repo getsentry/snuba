@@ -5,6 +5,16 @@ from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.schemas.tables import WritableTableSchema
 
 
+class ReplacementMessageMetadata(NamedTuple):
+    """
+    Metadata from the original Kafka Message for a Replacement Message.
+    """
+
+    topic_name: str
+    partition_index: int
+    offset: int
+
+
 class ReplacementMessage(NamedTuple):
     """
     Represent a generic replacement message (version 2 in our protocol) that we
@@ -14,9 +24,12 @@ class ReplacementMessage(NamedTuple):
 
     action_type: ReplacementType  # This is a string to make this class agnostic to the dataset
     data: Mapping[str, Any]
+    metadata: ReplacementMessageMetadata
 
 
 class Replacement(ABC):
+    metadata: ReplacementMessageMetadata
+
     @abstractmethod
     def get_insert_query(self, table_name: str) -> Optional[str]:
         raise NotImplementedError()
