@@ -7,6 +7,7 @@ from typing import (
     Any,
     Callable,
     Mapping,
+    MutableMapping,
     MutableSequence,
     NamedTuple,
     Optional,
@@ -276,6 +277,20 @@ class ProcessedMessageBatchWriter(
 
 json_row_encoder = JSONRowEncoder()
 
+values_row_encoders: MutableMapping[StorageKey, ValuesRowEncoder] = dict()
+
+
+def get_values_row_encoder(storage_key: StorageKey) -> ValuesRowEncoder:
+    from snuba.datasets.storages.factory import get_writable_storage
+
+    if storage_key not in values_row_encoders:
+        table_writer = get_writable_storage(storage_key).get_table_writer()
+        values_row_encoders[storage_key] = ValuesRowEncoder(
+            table_writer.get_writeable_columns()
+        )
+
+    return values_row_encoders[storage_key]
+
 
 def build_batch_writer(
     table_writer: TableWriter,
@@ -443,15 +458,15 @@ def process_message_multistorage(
     ] = []
 
     for storage_key in message.payload.storage_keys:
-        table_writer = get_writable_storage(storage_key).get_table_writer()
-        # TODO Creation of this object should be memoized
-        values_row_encoder = ValuesRowEncoder(table_writer.get_writeable_columns())
         result = (
-            table_writer.get_stream_loader()
+            get_writable_storage(storage_key)
+            .get_table_writer()
+            .get_stream_loader()
             .get_processor()
             .process_message(value, metadata)
         )
         if isinstance(result, AggregateInsertBatch):
+            values_row_encoder = get_values_row_encoder(storage_key)
             results.append(
                 (
                     storage_key,
