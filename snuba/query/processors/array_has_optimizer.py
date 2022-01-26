@@ -2,10 +2,7 @@ from typing import Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
-from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import (
     Any,
     Column,
@@ -31,14 +28,22 @@ leverage the bloom filter index if they exist.
 
 class ArrayHasOptimizer(QueryProcessor):
     def __init__(self, array_columns: Sequence[str]):
-        column_name = Param("col", Or([String(column) for column in array_columns]))
-
         self.__array_has_pattern = FunctionCall(
             String("equals"),
             (
-                FunctionCall(
-                    String("has"),
-                    (Column(column_name=column_name), Literal(Param("val", Any(str))),),
+                Param(
+                    "has",
+                    FunctionCall(
+                        String("has"),
+                        (
+                            Column(
+                                column_name=Or(
+                                    [String(column) for column in array_columns]
+                                )
+                            ),
+                            Literal(Any(str)),
+                        ),
+                    ),
                 ),
                 Literal(Integer(1)),
             ),
@@ -52,11 +57,6 @@ class ArrayHasOptimizer(QueryProcessor):
             if match is None:
                 return expr
 
-            col = match.string("col")
-            val = match.string("val")
-
-            return FunctionCallExpr(
-                None, "has", (ColumnExpr(None, None, col), LiteralExpr(None, val)),
-            )
+            return match.expression("has")
 
         query.transform_expressions(replace_expression)
