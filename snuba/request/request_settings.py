@@ -127,10 +127,18 @@ class SubscriptionRequestSettings(RequestSettings):
     """
 
     def __init__(
-        self, referrer: str, consistent: bool = True, parent_api: str = "subscription"
+        self,
+        referrer: str,
+        consistent: bool = True,
+        parent_api: str = "subscription",
+        team: str = "workflow",
+        feature: str = "subscription",
     ) -> None:
         super().__init__(referrer=referrer)
         self.__consistent = consistent
+        self.__parent_api = parent_api
+        self.__team = team
+        self.__feature = feature
 
     def get_turbo(self) -> bool:
         return False
@@ -142,7 +150,7 @@ class SubscriptionRequestSettings(RequestSettings):
         return False
 
     def get_parent_api(self) -> str:
-        return "subscription"
+        return self.__parent_api
 
     def get_dry_run(self) -> bool:
         return False
@@ -151,10 +159,10 @@ class SubscriptionRequestSettings(RequestSettings):
         return False
 
     def get_team(self) -> str:
-        return "subscription"
+        return self.__team
 
     def get_feature(self) -> str:
-        return "subscription"
+        return self.__feature
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return []
