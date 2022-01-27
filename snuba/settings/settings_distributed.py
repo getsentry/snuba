@@ -20,6 +20,7 @@ CLUSTERS = [
             "sessions",
             "transactions",
             "transactions_ro",
+            "errors_v2",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
