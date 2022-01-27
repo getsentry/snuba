@@ -20,6 +20,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
+from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
@@ -340,6 +341,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         [version, action_type, data] = seq_message
 
         if version == 2:
+            if self._message_already_processed(message):
+                return None
             return self.__replacer_processor.process_message(
                 ReplacementMessage(
                     action_type=action_type,
@@ -353,6 +356,26 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             )
         else:
             raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
+
+    def _message_already_processed(self, message: Message[KafkaPayload]) -> bool:
+
+        CONSUMER_STUFF = "consumer-stuff"
+        PROCESSED = "processed"
+
+        key = self._build_topic_group_index_key(message)
+        processed_or_processing_offset = redis_client.hget(CONSUMER_STUFF, key)
+
+        if processed_or_processing_offset is not None:
+            action, offset = str(processed_or_processing_offset).split(":")
+            if action == PROCESSED:
+                return message.offset <= int(offset)
+            else:
+                return message.offset < int(offset)
+
+        return False
+
+    def _build_topic_group_index_key(self, message: Message[KafkaPayload]) -> str:
+        return f"{message.partition.topic.name}:group:{message.partition.index}"
 
     def flush_batch(self, batch: Sequence[Replacement]) -> None:
         need_optimize = False
