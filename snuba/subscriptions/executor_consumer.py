@@ -145,6 +145,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__max_concurrent_queries,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
+            commit,
         )
 
 
