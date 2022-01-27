@@ -1,6 +1,6 @@
 import React from "react";
 import Client from "../api_client";
-import QueriesDisplay from "../components/query_display/query_display";
+import QueryDisplay from "../components/query_display/query_display";
 import { QueryResult } from "../components/query_display/types";
 
 function TracingQueries(props: { api: Client }) {
@@ -36,7 +36,7 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  return QueriesDisplay({
+  return QueryDisplay({
     api: props.api,
     endpoint: "clickhouse_trace_query",
     resultDataPopulator: tablePopulator,

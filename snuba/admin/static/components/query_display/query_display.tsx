@@ -7,7 +7,7 @@ import { ClickhouseNodeData, QueryRequest, QueryResult } from "./types";
 
 type QueryState = Partial<QueryRequest>;
 
-function QueriesDisplay(props: {
+function QueryDisplay(props: {
   api: Client;
   endpoint: string;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
@@ -196,4 +196,4 @@ function TextArea(props: {
   );
 }
 
-export default QueriesDisplay;
+export default QueryDisplay;
