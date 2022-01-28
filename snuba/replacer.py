@@ -20,7 +20,6 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
-from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
@@ -34,9 +33,6 @@ logger = logging.getLogger("snuba.replacer")
 executor = ThreadPoolExecutor()
 
 NODES_REFRESH_PERIOD = 10
-
-CONSUMER_STUFF = "consumer-stuff"
-REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 2 * 60 * 1000  # 2 minutes in ms
 
 
 class ShardedConnectionPool(ABC):
@@ -344,8 +340,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         [version, action_type, data] = seq_message
 
         if version == 2:
-            if self._message_already_processed(message):
-                return None
             return self.__replacer_processor.process_message(
                 ReplacementMessage(
                     action_type=action_type,
@@ -360,30 +354,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         else:
             raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
 
-    def _message_already_processed(self, message: Message[KafkaPayload]) -> bool:
-        """
-        Figure out whether or not the message was already processed.
-
-        Check whether there is an entry in Redis for this specific
-        topic, consumer group, and partition. If there is, we can conclude whether
-        or not to process the incoming message by looking at the most recently
-        processed offset.
-        """
-        key = self._build_topic_group_index_key(
-            message.partition.topic.name, "", message.partition.index
-        )
-        processed_offset = redis_client.hget(CONSUMER_STUFF, key)
-        if processed_offset is not None:
-            offset = int(processed_offset)
-            return message.offset <= int(offset)
-
-        return False
-
-    def _build_topic_group_index_key(
-        self, topic_name: str, consumer_group: str, partition_index: int
-    ) -> str:
-        return ":".join([topic_name, consumer_group, str(partition_index)])
-
     def flush_batch(self, batch: Sequence[Replacement]) -> None:
         need_optimize = False
         clickhouse_read = self.__storage.get_cluster().get_query_connection(
@@ -391,7 +361,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
         for replacement in batch:
-            start_time = time.time()
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
 
@@ -414,8 +383,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self.__replacer_processor.post_replacement(replacement, count)
 
-            self._write_offset_to_redis(replacement, start_time, time.time())
-
         if need_optimize:
             from snuba.optimize import run_optimize
 
@@ -426,18 +393,3 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             logger.info(
                 "Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host)
             )
-
-    def _write_offset_to_redis(
-        self, replacement: Replacement, start: float, end: float
-    ) -> None:
-        """
-        Write the most recently processed offset to Redis if it took longer than
-        the given threshold.
-        """
-        if (end - start) < REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
-            return
-        message_metadata = replacement.get_message_metadata()
-        key = self._build_topic_group_index_key(
-            message_metadata.topic_name, "", message_metadata.partition_index
-        )
-        redis_client.hset(CONSUMER_STUFF, key, message_metadata.offset)
