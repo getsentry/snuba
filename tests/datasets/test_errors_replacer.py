@@ -682,7 +682,7 @@ class TestReplacer:
 
         old_offset: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
-            42,
+            41,
             KafkaPayload(
                 None,
                 json.dumps((2, ReplacementType.END_UNMERGE, {},)).encode("utf-8"),
