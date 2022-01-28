@@ -35,6 +35,10 @@ executor = ThreadPoolExecutor()
 
 NODES_REFRESH_PERIOD = 10
 
+CONSUMER_STUFF = "consumer-stuff"
+PROCESSED = "processed"
+PROCESSING = "processing"
+
 
 class ShardedConnectionPool(ABC):
     """
@@ -358,10 +362,14 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
 
     def _message_already_processed(self, message: Message[KafkaPayload]) -> bool:
+        """
+        Figure out whether or not the message was already processed.
 
-        CONSUMER_STUFF = "consumer-stuff"
-        PROCESSED = "processed"
-
+        Check whether there is an entry in Redis for this specific
+        topic, consumer group, and partition. If there is, we can conclude whether
+        or not to process the incoming message by looking at the most recent
+        processed or processing offset.
+        """
         key = self._build_topic_group_index_key(message)
         processed_or_processing_offset = redis_client.hget(CONSUMER_STUFF, key)
 
