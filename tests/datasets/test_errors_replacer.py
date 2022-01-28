@@ -492,7 +492,7 @@ class TestReplacer:
 
         message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
-            42,
+            41,
             KafkaPayload(
                 None,
                 json.dumps(
@@ -629,3 +629,78 @@ class TestReplacer:
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
+
+    def test_process_offset_twice(self) -> None:
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
+
+        timestamp = datetime.utcnow()
+
+        project_id = self.project_id
+
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        ReplacementType.END_UNMERGE,
+                        {
+                            "project_id": project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hashes": ["a" * 32],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        processed = self.replacer.process_message(message)
+        self.replacer.flush_batch([processed])
+
+        # should be None since the offset should be in Redis, indicating it should be skipped
+        assert self.replacer.process_message(message) is None
+
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
+
+    def test_offset_already_processed(self) -> None:
+        """
+        Don't process an offset that already exists in Redis.
+        """
+        key = "replacements:errors:1"
+        redis_client.set(key, 42)
+
+        old_offset: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps((2, ReplacementType.END_UNMERGE, {},)).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        same_offset: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps((2, ReplacementType.END_UNMERGE, {},)).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        assert self.replacer.process_message(old_offset) is None
+        assert self.replacer.process_message(same_offset) is None
