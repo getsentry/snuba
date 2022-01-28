@@ -35,7 +35,10 @@ METRICS_COUNTERS_TYPE = "c"
 
 
 class MetricsAggregateProcessor(MessageProcessor, ABC):
-    GRANULARITIES_SECONDS = [10, 3600, 3600 * 24]
+    TEN_SECONDS = 10
+    ONE_HOUR = 3600
+    ONE_DAY = 3600 * 24
+    GRANULARITIES_SECONDS = [TEN_SECONDS, ONE_HOUR, ONE_DAY]
 
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
