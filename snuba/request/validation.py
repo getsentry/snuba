@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import random
 import textwrap
 import uuid
-from typing import Any, MutableMapping, Optional, Protocol, Type, Union
+from typing import Any, Mapping, MutableMapping, Optional, Protocol, Type, Union
 
 import sentry_sdk
 
@@ -73,7 +75,7 @@ def build_request(
         try:
             request_parts = schema.validate(body)
             if settings_class == HTTPRequestSettings:
-                settings = {
+                settings: Mapping[str, bool | str] = {
                     **request_parts.settings,
                     "consistent": _consistent_override(
                         request_parts.settings.get("consistent", False), referrer
