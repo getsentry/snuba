@@ -540,8 +540,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
 
-        self._indicate_replacement_processing(replacement)
-
         # Backward compatibility with the old keys already in Redis, we will let double write
         # the old key structure and the new one for a while then we can get rid of the old one.
         compatibility_double_write = self.__state_name == ReplacerState.EVENTS
@@ -578,21 +576,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             return True
 
         return False
-
-    def _indicate_replacement_processing(self, replacement: Replacement) -> None:
-        """
-        Store info in Redis indicating that a replacement is being processed.
-        This info includes which topic, consumer group, partition, and offset the original
-        Kafka included.
-        """
-        # redis_client.hset(CONSUMER_STUFFs)
-        pass
-
-    def post_replacement(self, replacement: Replacement, matching_records: int) -> None:
-        """
-        Replace the "processing" entry for this replacement with "processed" in Redis.
-        """
-        pass
 
 
 def _build_event_tombstone_replacement(
