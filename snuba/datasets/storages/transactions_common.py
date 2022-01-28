@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
+from snuba.query.processors.array_has_optimizer import ArrayHasOptimizer
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -122,6 +123,7 @@ query_processors = [
     # same conditions the bloom filter optimizer is looking for
     BloomFilterOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
     ArrayJoinOptimizer("spans", ["op", "group"], ["exclusive_time_32"]),
+    ArrayHasOptimizer(["spans.op", "spans.group"]),
     HexIntArrayColumnProcessor({"spans.group"}),
     PrewhereProcessor(
         ["event_id", "trace_id", "span_id", "transaction_name", "transaction", "title"]

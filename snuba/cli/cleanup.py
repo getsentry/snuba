@@ -5,7 +5,7 @@ import click
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.environment import setup_logging
+from snuba.environment import setup_logging, setup_sentry
 
 
 @click.command()
@@ -42,6 +42,7 @@ def cleanup(
     """
 
     setup_logging(log_level)
+    setup_sentry()
 
     from snuba.cleanup import logger, run_cleanup
     from snuba.clickhouse.native import ClickhousePool
