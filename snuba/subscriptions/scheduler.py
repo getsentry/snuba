@@ -241,17 +241,15 @@ class DelegateTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        immediate_task = self.__immediate_builder.get_task(
-            subscription_with_metadata, timestamp
-        )
-        jittered_task = self.__jittered_builder.get_task(
-            subscription_with_metadata, timestamp
-        )
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
         if primary_builder == TaskBuilderMode.JITTERED:
-            return jittered_task
+            return self.__jittered_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
         else:
-            return immediate_task
+            return self.__immediate_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
 
     def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
