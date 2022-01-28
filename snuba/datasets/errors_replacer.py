@@ -56,9 +56,6 @@ In theory this will be needed only during the events to errors migration.
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "errors.replacer")
 
-CONSUMER_STUFF = "consumer-stuff"
-REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 2 * 60 * 1000  # 2 minutes in ms
-
 
 class ReplacerState(Enum):
     EVENTS = "events"
@@ -550,11 +547,11 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
         Check whether there is an entry in Redis for this specific
         topic, consumer group, and partition. If there is, we can conclude whether
-        or not to process the incoming message by looking at the most recently
-        processed offset.
+        or not to process the incoming message by comparing the incoming message
+        to the offset in Redis.
         """
         key = self._build_topic_group_index_key(message.metadata)
-        processed_offset = redis_client.hget(CONSUMER_STUFF, key)
+        processed_offset = redis_client.get(key)
         if processed_offset is not None:
             offset = int(processed_offset)
             return message.metadata.offset <= int(offset)
@@ -567,10 +564,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         """
         Builds a unique key for a message being processed for a specific
         topic, consumer group, and partition.
-
-        Consumer group identifier can be anything that differentiates keys between
-        different consumer groups, it does not necessarily need to be some sort of
-        consumer group ID.
         """
         return ":".join(
             [
@@ -622,12 +615,20 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         return False
 
     def post_replacement(self, replacement: Replacement, matching_records: int) -> None:
-        if (time.time() - self.__start_time) < REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
+        """
+        Write the offset just processed to Redis if execution took longer than the threshold.
+        """
+        if (
+            time.time() - self.__start_time
+        ) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
             return
         message_metadata = replacement.get_message_metadata()
         key = self._build_topic_group_index_key(message_metadata)
-        redis_client.hset(CONSUMER_STUFF, key, message_metadata.offset + 3)
-        self.__start_time = float("-inf")
+        redis_client.set(
+            key,
+            message_metadata.offset,
+            ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
+        )
 
 
 def _build_event_tombstone_replacement(
