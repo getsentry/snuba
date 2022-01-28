@@ -15,11 +15,8 @@ from urllib3.exceptions import HTTPError
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
-from snuba.clickhouse.value_types import (
-    ClickhouseInt,
-    ClickhouseNumArray,
-    ClickhouseUnguardedExpression,
-)
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.query import Expression
 from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
@@ -53,14 +50,11 @@ class JSONRowEncoder(Encoder[bytes, WriterTableRow]):
 class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
     def __init__(self, columns: Iterable[str]) -> None:
         self.__columns = columns
+        self.__formatter = ClickhouseExpressionFormatter()
 
     def encode_value(self, value: Any) -> str:
-        if isinstance(value, ClickhouseUnguardedExpression):
-            return value.val
-        elif isinstance(value, ClickhouseInt):
-            return str(value.val)
-        elif isinstance(value, ClickhouseNumArray):
-            return "[" + ",".join([str(x) for x in value.val]) + "]"
+        if isinstance(value, Expression):
+            return value.accept(self.__formatter)
         else:
             raise TypeError("unknown Clickhouse value type", value.__class__)
 

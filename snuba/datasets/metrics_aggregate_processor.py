@@ -1,12 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
-from snuba.clickhouse.value_types import (
-    ClickhouseInt,
-    ClickhouseNumArray,
-    ClickhouseUnguardedExpression,
-)
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     AggregateInsertBatch,
@@ -14,6 +9,29 @@ from snuba.processor import (
     ProcessedMessage,
     _ensure_valid_date,
 )
+from snuba.query.expressions import (
+    Expression,
+    FunctionCall,
+    Literal,
+    OptionalScalarType,
+)
+
+
+def _literal(value: OptionalScalarType) -> Literal:
+    return Literal(None, value)
+
+
+def _array_literal(values: Sequence[OptionalScalarType]) -> FunctionCall:
+    return FunctionCall(None, "array", tuple(map(_literal, values)))
+
+
+def _call(function_name: str, arguments: Tuple[Expression, ...]) -> FunctionCall:
+    return FunctionCall(None, function_name, arguments)
+
+
+METRICS_SET_TYPE = "s"
+METRICS_DISTRIBUTIONS_TYPE = "d"
+METRICS_COUNTERS_TYPE = "c"
 
 
 class MetricsAggregateProcessor(MessageProcessor, ABC):
@@ -48,19 +66,23 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
 
         processed = [
             {
-                "org_id": ClickhouseInt(message["org_id"]),
-                "project_id": ClickhouseInt(message["project_id"]),
-                "metric_id": ClickhouseInt(message["metric_id"]),
-                "timestamp": ClickhouseUnguardedExpression(
-                    f"toStartOfInterval(toDateTime('{timestamp.isoformat()}'), toIntervalSecond({granularity}))"
+                "org_id": _literal(message["org_id"]),
+                "project_id": _literal(message["project_id"]),
+                "metric_id": _literal(message["metric_id"]),
+                "timestamp": _call(
+                    "toStartOfInterval",
+                    (
+                        _call("toDateTime", (_literal(timestamp.isoformat()),),),
+                        _call("toIntervalSecond", (_literal(granularity),)),
+                    ),
                 ),
-                "tags.key": ClickhouseNumArray(keys),
-                "tags.value": ClickhouseNumArray(values),
+                "tags.key": _array_literal(keys),
+                "tags.value": _array_literal(values),
                 **self._process_values(message),
-                "retention_days": ClickhouseInt(message["retention_days"]),
+                "retention_days": _literal(message["retention_days"]),
                 "partition": metadata.partition,
                 "offset": metadata.offset,
-                "granularity": ClickhouseInt(granularity),
+                "granularity": _literal(granularity),
             }
             for granularity in self.GRANULARITIES_SECONDS
         ]
@@ -69,24 +91,23 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
 
 class SetsAggregateProcessor(MetricsAggregateProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "s"
+        return message["type"] is not None and message["type"] == METRICS_SET_TYPE
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]
         for v in values:
             assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
-        value_array = "[" + ",".join([str(v) for v in values]) + "]"
 
         return {
-            "value": ClickhouseUnguardedExpression(
-                f"arrayReduce('uniqState', {value_array})"
+            "value": _call(
+                "arrayReduce", (_literal("uniqState"), _array_literal(values)),
             )
         }
 
 
 class CounterAggregateProcessor(MetricsAggregateProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "c"
+        return message["type"] is not None and message["type"] == METRICS_COUNTERS_TYPE
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         value = message["value"]
@@ -95,15 +116,18 @@ class CounterAggregateProcessor(MetricsAggregateProcessor):
         ), "Illegal value for counter value. Int/Float expected {value}"
 
         return {
-            "value": ClickhouseUnguardedExpression(
-                f"arrayReduce('sumState', [{value}])"
-            )
+            "value": _call(
+                "arrayReduce", (_literal("sumState"), _array_literal([value]),),
+            ),
         }
 
 
 class DistributionsAggregateProcessor(MetricsAggregateProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "d"
+        return (
+            message["type"] is not None
+            and message["type"] == METRICS_DISTRIBUTIONS_TYPE
+        )
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]
@@ -112,24 +136,28 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
                 v, (int, float)
             ), "Illegal value in set. Int/Float expected: {v}"
 
-        value_array = "[" + ",".join([str(v) for v in values]) + "]"
         return {
-            "percentiles": ClickhouseUnguardedExpression(
-                f"arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', {value_array})"
+            "percentiles": _call(
+                "arrayReduce",
+                (
+                    _literal("quantilesState(0.5,0.75,0.9,0.95,0.99)"),
+                    _array_literal(values),
+                ),
             ),
-            "min": ClickhouseUnguardedExpression(
-                f"arrayReduce('minState', {value_array})"
+            "min": _call(
+                "arrayReduce", (_literal("minState"), _array_literal([min(values)])),
             ),
-            "max": ClickhouseUnguardedExpression(
-                f"arrayReduce('maxState', {value_array})"
+            "max": _call(
+                "arrayReduce", (_literal("maxState"), _array_literal([max(values)])),
             ),
-            "avg": ClickhouseUnguardedExpression(
-                f"arrayReduce('avgState', {value_array})"
+            "avg": _call(
+                "arrayReduce", (_literal("avgState"), _array_literal(values),),
             ),
-            "sum": ClickhouseUnguardedExpression(
-                f"arrayReduce('sumState', {value_array})"
+            "sum": _call(
+                "arrayReduce", (_literal("sumState"), _array_literal([sum(values)]),),
             ),
-            "count": ClickhouseUnguardedExpression(
-                f"arrayReduce('countState', {value_array})"
+            "count": _call(
+                "arrayReduce",
+                (_literal("countState"), _array_literal([float(len(values))]),),
             ),
         }

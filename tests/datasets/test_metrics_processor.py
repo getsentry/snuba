@@ -4,16 +4,15 @@ from typing import Any, Mapping, Optional, Sequence
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.value_types import (
-    ClickhouseInt,
-    ClickhouseNumArray,
-    ClickhouseUnguardedExpression,
-)
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_aggregate_processor import (
     CounterAggregateProcessor,
     DistributionsAggregateProcessor,
+    MetricsAggregateProcessor,
     SetsAggregateProcessor,
+    _array_literal,
+    _call,
+    _literal,
 )
 from snuba.datasets.metrics_bucket_processor import (
     CounterMetricsProcessor,
@@ -154,27 +153,7 @@ def test_metrics_processor(
     )
 
 
-def explode_test_cases_with_granularities(
-    template: Mapping[str, Any],
-    granularities: Sequence[int] = [10, 3600, 86400],
-    placeholder: str = "{gran}",
-) -> Sequence[Mapping[str, Any]]:
-    return [
-        {
-            **{
-                k: ClickhouseUnguardedExpression(
-                    v.val.replace(placeholder, str(granularity))
-                )
-                if isinstance(v, ClickhouseUnguardedExpression)
-                else v
-                for (k, v) in template.items()
-            },
-            "granularity": ClickhouseInt(granularity),
-        }
-        for granularity in granularities
-    ]
-
-
+DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
 TEST_CASES_AGGREGATES = [
     pytest.param(
         {
@@ -187,24 +166,34 @@ TEST_CASES_AGGREGATES = [
             "value": [324234, 345345, 456456, 567567],
             "retention_days": 30,
         },
-        explode_test_cases_with_granularities(
+        [
             {
-                "org_id": ClickhouseInt(1),
-                "project_id": ClickhouseInt(2),
-                "metric_id": ClickhouseInt(1232341),
-                "timestamp": ClickhouseUnguardedExpression(
-                    val="toStartOfInterval(toDateTime('2021-04-24T00:48:16'), toIntervalSecond({gran}))"
+                "org_id": _literal(1),
+                "project_id": _literal(2),
+                "metric_id": _literal(1232341),
+                "timestamp": _call(
+                    "toStartOfInterval",
+                    (
+                        _call("toDateTime", (_literal("2021-04-24T00:48:16"),)),
+                        _call("toIntervalSecond", (_literal(granularity),)),
+                    ),
                 ),
-                "tags.key": ClickhouseNumArray([10, 20, 30]),
-                "tags.value": ClickhouseNumArray([11, 22, 33]),
-                "value": ClickhouseUnguardedExpression(
-                    val="arrayReduce('uniqState', [324234,345345,456456,567567])"
+                "tags.key": _array_literal([10, 20, 30]),
+                "tags.value": _array_literal([11, 22, 33]),
+                "value": _call(
+                    "arrayReduce",
+                    (
+                        _literal("uniqState"),
+                        _array_literal([324234, 345345, 456456, 567567]),
+                    ),
                 ),
-                "retention_days": ClickhouseInt(30),
+                "retention_days": _literal(30),
+                "granularity": _literal(granularity),
                 "partition": 1,
                 "offset": 100,
             }
-        ),
+            for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
+        ],
         None,
         None,
         id="Simple set with valid content",
@@ -221,24 +210,30 @@ TEST_CASES_AGGREGATES = [
             "retention_days": 30,
         },
         None,
-        explode_test_cases_with_granularities(
+        [
             {
-                "org_id": ClickhouseInt(1),
-                "project_id": ClickhouseInt(2),
-                "metric_id": ClickhouseInt(1232341),
-                "timestamp": ClickhouseUnguardedExpression(
-                    val="toStartOfInterval(toDateTime('2021-04-24T00:48:16'), toIntervalSecond({gran}))"
+                "org_id": _literal(1),
+                "project_id": _literal(2),
+                "metric_id": _literal(1232341),
+                "timestamp": _call(
+                    "toStartOfInterval",
+                    (
+                        _call("toDateTime", (_literal("2021-04-24T00:48:16"),)),
+                        _call("toIntervalSecond", (_literal(granularity),)),
+                    ),
                 ),
-                "tags.key": ClickhouseNumArray([10, 20, 30]),
-                "tags.value": ClickhouseNumArray([11, 22, 33]),
-                "value": ClickhouseUnguardedExpression(
-                    val="arrayReduce('sumState', [123.123])"
+                "tags.key": _array_literal([10, 20, 30]),
+                "tags.value": _array_literal([11, 22, 33]),
+                "value": _call(
+                    "arrayReduce", (_literal("sumState"), _array_literal([123.123]))
                 ),
-                "retention_days": ClickhouseInt(30),
+                "retention_days": _literal(30),
+                "granularity": _literal(granularity),
                 "partition": 1,
                 "offset": 100,
             }
-        ),
+            for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
+        ],
         None,
         id="Simple counter with valid content",
     ),
@@ -250,44 +245,59 @@ TEST_CASES_AGGREGATES = [
             "type": "d",
             "timestamp": 1619225296,
             "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324.12, 345.23, 4564.56, 567567],
+            "value": DIST_VALUES,
             "retention_days": 30,
         },
         None,
         None,
-        explode_test_cases_with_granularities(
+        [
             {
-                "org_id": ClickhouseInt(1),
-                "project_id": ClickhouseInt(2),
-                "metric_id": ClickhouseInt(1232341),
-                "timestamp": ClickhouseUnguardedExpression(
-                    val="toStartOfInterval(toDateTime('2021-04-24T00:48:16'), toIntervalSecond({gran}))"
+                "org_id": _literal(1),
+                "project_id": _literal(2),
+                "metric_id": _literal(1232341),
+                "timestamp": _call(
+                    "toStartOfInterval",
+                    (
+                        _call("toDateTime", (_literal("2021-04-24T00:48:16"),)),
+                        _call("toIntervalSecond", (_literal(granularity),)),
+                    ),
                 ),
-                "tags.key": ClickhouseNumArray([10, 20, 30]),
-                "tags.value": ClickhouseNumArray([11, 22, 33]),
-                "percentiles": ClickhouseUnguardedExpression(
-                    val="arrayReduce('quantilesState(0.5,0.75,0.9,0.95,0.99)', [324.12,345.23,4564.56,567567])"
+                "tags.key": _array_literal([10, 20, 30]),
+                "tags.value": _array_literal([11, 22, 33]),
+                "percentiles": _call(
+                    "arrayReduce",
+                    (
+                        _literal("quantilesState(0.5,0.75,0.9,0.95,0.99)"),
+                        _array_literal(DIST_VALUES),
+                    ),
                 ),
-                "min": ClickhouseUnguardedExpression(
-                    val="arrayReduce('minState', [324.12,345.23,4564.56,567567])"
+                "min": _call(
+                    "arrayReduce", (_literal("minState"), _array_literal([324.12]),)
                 ),
-                "max": ClickhouseUnguardedExpression(
-                    val="arrayReduce('maxState', [324.12,345.23,4564.56,567567])"
+                "max": _call(
+                    "arrayReduce", (_literal("maxState"), _array_literal([567567]),)
                 ),
-                "avg": ClickhouseUnguardedExpression(
-                    val="arrayReduce('avgState', [324.12,345.23,4564.56,567567])"
+                "avg": _call(
+                    "arrayReduce", (_literal("avgState"), _array_literal(DIST_VALUES),),
                 ),
-                "sum": ClickhouseUnguardedExpression(
-                    val="arrayReduce('sumState', [324.12,345.23,4564.56,567567])"
+                "sum": _call(
+                    "arrayReduce",
+                    (_literal("sumState"), _array_literal([sum(DIST_VALUES)]),),
                 ),
-                "count": ClickhouseUnguardedExpression(
-                    val="arrayReduce('countState', [324.12,345.23,4564.56,567567])"
+                "count": _call(
+                    "arrayReduce",
+                    (
+                        _literal("countState"),
+                        _array_literal([float(len(DIST_VALUES))]),
+                    ),
                 ),
-                "retention_days": ClickhouseInt(30),
+                "retention_days": _literal(30),
+                "granularity": _literal(granularity),
                 "partition": 1,
                 "offset": 100,
             }
-        ),
+            for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
+        ],
         id="Simple distribution with valid content",
     ),
 ]
