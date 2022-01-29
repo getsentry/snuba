@@ -4,6 +4,7 @@ import logging
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import lru_cache
 from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple, cast
 from zlib import crc32
 
@@ -145,7 +146,15 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__max_concurrent_queries,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
+            commit,
         )
+
+
+@lru_cache(maxsize=50000)
+def subscription_id_to_float(subscription_id: str) -> float:
+    # Converts a subscription ID string to a float between 0 and 1
+    # Used for sampling query execution by subscription ID during rollout
+    return (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
 
 
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
@@ -273,8 +282,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         subscription_id = str(task.task.subscription.identifier)
         should_execute = (
-            (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
-        ) < executor_sample_rate
+            subscription_id_to_float(subscription_id) < executor_sample_rate
+        )
 
         entity_name = task.task.entity.value
 

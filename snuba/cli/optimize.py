@@ -6,7 +6,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.environment import setup_logging
+from snuba.environment import setup_logging, setup_sentry
 
 
 @click.command()
@@ -37,6 +37,7 @@ def optimize(
     from snuba.optimize import logger, run_optimize
 
     setup_logging(log_level)
+    setup_sentry()
 
     storage: ReadableTableStorage
 
