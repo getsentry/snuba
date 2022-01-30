@@ -56,6 +56,7 @@ metrics = MetricsWrapper(environment.metrics, "errors.replacer")
 class ReplacerState(Enum):
     EVENTS = "events"
     ERRORS = "errors"
+    ERRORS_V2 = "errors_v2"
 
 
 @dataclass(frozen=True)
