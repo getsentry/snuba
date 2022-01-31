@@ -134,6 +134,31 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
+class ConnectionCache:
+    def __init__(self) -> None:
+        self.__cache: MutableMapping[
+            Tuple[ClickhouseNode, ClickhouseClientSettings], ClickhousePool
+        ] = {}
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.__cache
+
+    def __getitem__(
+        self, key: Tuple[ClickhouseNode, ClickhouseClientSettings]
+    ) -> ClickhousePool:
+        return self.__cache[key]
+
+    def __setitem__(
+        self,
+        key: Tuple[ClickhouseNode, ClickhouseClientSettings],
+        value: ClickhousePool,
+    ) -> None:
+        self.__cache[key] = value
+
+
+connection_cache = ConnectionCache()
+
+
 class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     """
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
@@ -177,9 +202,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader] = None
-        self.__connection_cache: MutableMapping[
-            Tuple[ClickhouseNode, ClickhouseClientSettings], ClickhousePool
-        ] = {}
+        self.__connection_cache = connection_cache
 
     def __str__(self) -> str:
         return str(self.__query_node)
