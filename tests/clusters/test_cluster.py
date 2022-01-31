@@ -142,6 +142,10 @@ def test_cache_connections() -> None:
         "localhost", 8000, "default", "", "default", 8001, {"events"}, True
     )
 
+    cluster_2 = cluster.ClickhouseCluster(
+        "localhost", 8000, "default", "", "default", 8001, {"transsactions"}, True
+    )
+
     assert cluster_1.get_query_connection(
         cluster.ClickhouseClientSettings.QUERY
     ) == cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
@@ -153,3 +157,7 @@ def test_cache_connections() -> None:
         cluster.ClickhouseClientSettings.OPTIMIZE,
         cluster.ClickhouseNode("localhost", 8002),
     )
+
+    assert cluster_1.get_query_connection(
+        cluster.ClickhouseClientSettings.QUERY
+    ) == cluster_2.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
