@@ -5,13 +5,20 @@ import {
   ConfigChange,
 } from "./runtime_config/types";
 
-import { ClickhouseNodeData } from "./clickhouse_queries/types";
+import {
+  ClickhouseNodeData,
+  QueryRequest,
+  QueryResult,
+} from "./components/query_display/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
+  deleteConfig: (key: ConfigKey) => Promise<void>;
+  editConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  executeQuery: (req: QueryRequest, endpoint: string) => Promise<QueryResult>;
 }
 
 function Client() {
@@ -41,6 +48,34 @@ function Client() {
         }
       });
     },
+    deleteConfig: (key: ConfigKey) => {
+      const url = baseUrl + "configs/" + encodeURIComponent(key);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+      }).then((res) => {
+        if (res.ok) {
+          return;
+        } else {
+          throw new Error("Could not delete config");
+        }
+      });
+    },
+    editConfig: (key: ConfigKey, value: ConfigValue) => {
+      const url = baseUrl + "configs/" + encodeURIComponent(key);
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+        body: JSON.stringify({ value }),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          throw new Error("Could not edit config");
+        }
+      });
+    },
+
     getAuditlog: () => {
       const url = baseUrl + "config_auditlog";
       return fetch(url).then((resp) => resp.json());
@@ -56,6 +91,20 @@ function Client() {
             return res.filter((storage: any) => storage.local_nodes.length > 0);
           })
       );
+    },
+    executeQuery: (query: QueryRequest, query_endpoint: string) => {
+      const url = baseUrl + query_endpoint;
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
     },
   };
 }

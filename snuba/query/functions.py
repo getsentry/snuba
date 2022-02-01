@@ -194,8 +194,37 @@ CUSTOM_FUNCTIONS = {
     "notHandled",
 }
 
+# Functions that take lambdas as arguments
+HIGHER_ORDER_FUNCTIONS = {
+    "arrayCount",
+    "arraySort",
+    "arrayReverseSort",
+    "arrayMap",
+    "arrayFilter",
+    "arrayFill",
+    "arrayReverseFill",
+    "arraySplit",
+    "arrayReverseSplit",
+    "arrayExists",
+    "arrayAll",
+    "arrayFirst",
+    "arrayLast",
+    "arrayFirstIndex",
+    "arrayLastIndex",
+    "arrayMin",
+    "arrayMax",
+    "arraySum",
+    "arrayAvg",
+    "arrayCumSum",
+    "arraySumNonNegative",
+}
+
 GLOBAL_VALID_FUNCTIONS = (
-    set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS | CUSTOM_FUNCTIONS
+    set()
+    | REGULAR_FUNCTIONS
+    | AGGREGATION_FUNCTIONS
+    | CUSTOM_FUNCTIONS
+    | HIGHER_ORDER_FUNCTIONS
 )
 
 

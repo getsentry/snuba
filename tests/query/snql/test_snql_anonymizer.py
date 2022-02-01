@@ -21,10 +21,10 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
         (
             "MATCH Entity(events) "
-            "SELECT minus($N, $N), c, d, e "
-            "WHERE equals(project_id, $N) "
-            "AND greaterOrEquals(timestamp, toDateTime($S)) "
-            "AND less(timestamp, toDateTime($S)) "
+            "SELECT minus(-1337, -1337), c, d, e "
+            "WHERE equals(project_id, -1337) "
+            "AND greaterOrEquals(timestamp, toDateTime('$S')) "
+            "AND less(timestamp, toDateTime('$S')) "
             "LIMIT 5 BY c,d,e"
         ),
         id="limit by multiple columns",
@@ -35,10 +35,10 @@ test_cases = [
             "MATCH Entity(events) "
             "SELECT `tags[key]`, `measurements[lcp.elementSize]`, (count() AS count) "
             "GROUP BY `tags[key]`, `measurements[lcp.elementSize]` "
-            "WHERE greater(`measurements[lcp.elementSize]`, $N) "
-            "AND equals(project_id, $N) AND "
-            "greaterOrEquals(timestamp, toDateTime($S)) AND "
-            "less(timestamp, toDateTime($S))"
+            "WHERE greater(`measurements[lcp.elementSize]`, -1337) "
+            "AND equals(project_id, -1337) AND "
+            "greaterOrEquals(timestamp, toDateTime('$S')) AND "
+            "less(timestamp, toDateTime('$S'))"
         ),
         id="Basic query with subscriptables",
     ),
@@ -50,10 +50,10 @@ test_cases = [
             "WHERE (notEquals(name, bob) "
             "OR less(last_seen, afternoon) "
             "AND (equals(location, gps(x, y, z)) "
-            "OR greater(times_seen, $N))) "
-            "AND equals(project_id, $N) "
-            "AND greaterOrEquals(timestamp, toDateTime($S)) "
-            "AND less(timestamp, toDateTime($S))"
+            "OR greater(times_seen, -1337))) "
+            "AND equals(project_id, -1337) "
+            "AND greaterOrEquals(timestamp, toDateTime('$S')) "
+            "AND less(timestamp, toDateTime('$S'))"
         ),
         id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
     ),
@@ -66,9 +66,9 @@ test_cases = [
         (
             "MATCH Entity(events) "
             "SELECT a, `b[c]` "
-            "WHERE in(project_id, tuple($N, $N)) "
-            "AND greaterOrEquals(timestamp, toDateTime($S)) "
-            "AND less(timestamp, toDateTime($S))"
+            "WHERE in(project_id, tuple(-1337, -1337)) "
+            "AND greaterOrEquals(timestamp, toDateTime('$S')) "
+            "AND less(timestamp, toDateTime('$S'))"
         ),
         id="Query with IN condition",
     ),
@@ -78,12 +78,12 @@ test_cases = [
         WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         (
             "MATCH Entity(events) "
-            "SELECT minus($N, $N), multiply($N, (foo(c) AS foo)), c "
-            "WHERE equals((equals(arrayExists(a, $S, $S), $N) "
-            "OR equals(arrayAll(b, $S, tuple($S, $S)), $N)), $N) "
-            "AND equals(project_id, $N) "
-            "AND greaterOrEquals(timestamp, toDateTime($S)) "
-            "AND less(timestamp, toDateTime($S))"
+            "SELECT minus(-1337, -1337), multiply(-1337, (foo(c) AS foo)), c "
+            "WHERE equals((equals(arrayExists(a, '$S', '$S'), -1337) "
+            "OR equals(arrayAll(b, '$S', tuple('$S', '$S')), -1337)), -1337) "
+            "AND equals(project_id, -1337) "
+            "AND greaterOrEquals(timestamp, toDateTime('$S')) "
+            "AND less(timestamp, toDateTime('$S'))"
         ),
         id="Special array join functions",
     ),
@@ -99,13 +99,13 @@ test_cases = [
             "LEFT e, Entity(events) "
             "TYPE JoinType.INNER RIGHT ga, Entity(groupassignee)\n ON e.event_id ga.group_id "
             "TYPE JoinType.INNER RIGHT t, Entity(transactions)\n ON e.event_id t.event_id "
-            "SELECT minus($N, $N), ga.c "
-            "WHERE equals(e.project_id, $N) "
-            "AND greaterOrEquals(e.timestamp, toDateTime($S)) "
-            "AND less(e.timestamp, toDateTime($S)) "
-            "AND equals(t.project_id, $N) "
-            "AND greaterOrEquals(t.finish_ts, toDateTime($S)) "
-            "AND less(t.finish_ts, toDateTime($S))"
+            "SELECT minus(-1337, -1337), ga.c "
+            "WHERE equals(e.project_id, -1337) "
+            "AND greaterOrEquals(e.timestamp, toDateTime('$S')) "
+            "AND less(e.timestamp, toDateTime('$S')) "
+            "AND equals(t.project_id, -1337) "
+            "AND greaterOrEquals(t.finish_ts, toDateTime('$S')) "
+            "AND less(t.finish_ts, toDateTime('$S'))"
         ),
         id="Multi join match",
     ),
@@ -117,9 +117,9 @@ test_cases = [
             "(MATCH Entity(events) "
             "SELECT title, (count() AS count) "
             "GROUP BY title "
-            "WHERE equals(project_id, $N) "
-            "AND greaterOrEquals(timestamp, toDateTime($S)) "
-            "AND less(timestamp, toDateTime($S))) "
+            "WHERE equals(project_id, -1337) "
+            "AND greaterOrEquals(timestamp, toDateTime('$S')) "
+            "AND less(timestamp, toDateTime('$S'))) "
             "SELECT (max(count) AS max_count)"
         ),
         id="sub query match",
@@ -133,9 +133,9 @@ test_cases = [
             "MATCH Entity(discover_events) "
             "SELECT transaction_name, (count() AS count) "
             "GROUP BY transaction_name "
-            "WHERE equals(project_id, $N) "
-            "AND greaterOrEquals(timestamp, toDateTime($S)) "
-            "AND less(timestamp, toDateTime($S))"
+            "WHERE equals(project_id, -1337) "
+            "AND greaterOrEquals(timestamp, toDateTime('$S')) "
+            "AND less(timestamp, toDateTime('$S'))"
         ),
         id="aliased columns in select and group by",
     ),

@@ -1,5 +1,6 @@
 import logging
 import signal
+from contextlib import closing
 from typing import Any, Optional
 
 import click
@@ -23,7 +24,9 @@ logger = logging.getLogger(__name__)
     "--entity",
     "entity_name",
     required=True,
-    type=click.Choice(["events", "transactions", "sessions"]),
+    type=click.Choice(
+        ["events", "transactions", "sessions", "metrics_sets", "metrics_counters"]
+    ),
     help="The entity to target",
 )
 @click.option(
@@ -147,4 +150,5 @@ def subscriptions_scheduler(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    processor.run()
+    with closing(producer):
+        processor.run()

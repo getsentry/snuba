@@ -244,7 +244,6 @@ def test_recursive_useless_condition(
         killswitch="tags_hash_map_enabled",
     ).process_query(input_query, HTTPRequestSettings())
     assert input_query == expected_query
-    assert input_query.get_experiment_value("tags_redundant_optimizer_enabled") == 1
 
 
 @pytest.mark.parametrize("input_query, expected_query", deepcopy(TEST_CASES))
@@ -267,7 +266,6 @@ def test_useless_has_condition(
         killswitch="tags_hash_map_enabled",
     ).process_query(input_query, HTTPRequestSettings())
     assert input_query == expected_query
-    assert input_query.get_experiment_value("tags_redundant_optimizer_enabled") == 1
 
 
 # The optimizer returns early if the condition clause is NOT_OPTIMIZABLE, thus not touching
@@ -323,34 +321,3 @@ def test_having_special_case(
         killswitch="tags_hash_map_enabled",
     ).process_query(input_query, HTTPRequestSettings())
     assert input_query == expected_query
-
-
-def test_experiment() -> None:
-    state.set_config("tags_redundant_optimizer_skip_rate", 1)
-    query = build_query(
-        selected_columns=[Column("count", None, "count")],
-        condition=and_exp(tag_existence_expression(), tag_equality_expression()),
-    )
-    MappingOptimizer(
-        column_name="tags",
-        hash_map_name="_tags_hash_map",
-        killswitch="tags_hash_map_enabled",
-    ).process_query(query, HTTPRequestSettings())
-    assert query.get_experiment_value("tags_redundant_optimizer_enabled") == 0
-    assert query.get_experiment_value("redundant_clause_removed") is None
-    assert query == build_query(
-        selected_columns=[Column("count", None, "count")],
-        condition=and_exp(tag_existence_expression(), tag_equality_expression()),
-    )
-
-    state.set_config("tags_redundant_optimizer_skip_rate", 0)
-    query = build_query(
-        selected_columns=[Column("count", None, "count")],
-        condition=and_exp(tag_existence_expression(), tag_equality_expression()),
-    )
-    MappingOptimizer(
-        column_name="tags",
-        hash_map_name="_tags_hash_map",
-        killswitch="tags_hash_map_enabled",
-    ).process_query(query, HTTPRequestSettings())
-    assert query.get_experiment_value("redundant_clause_removed") == 1

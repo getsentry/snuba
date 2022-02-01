@@ -12,7 +12,6 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
-    Optional,
     Sequence,
     Set,
     Text,
@@ -54,6 +53,7 @@ from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeExce
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
+from snuba.state import MismatchedTypeException
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -298,16 +298,33 @@ def config(fmt: str = "html") -> Union[Response, RespTuple]:
             )
         else:
             assert http_request.method == "POST"
-            state.set_configs(
-                json.loads(http_request.data),
-                user=http_request.headers.get("x-forwarded-email"),
-            )
-            return (
-                json.dumps(state.get_raw_configs()),
-                200,
-                {"Content-Type": "application/json"},
-            )
-
+            try:
+                state.set_configs(
+                    json.loads(http_request.data),
+                    user=http_request.headers.get("x-forwarded-email"),
+                )
+                return (
+                    json.dumps(state.get_raw_configs()),
+                    200,
+                    {"Content-Type": "application/json"},
+                )
+            except MismatchedTypeException as exc:
+                return (
+                    json.dumps(
+                        {
+                            "error": {
+                                "type": "client_error",
+                                "message": "Existing value and New value have different types. Use option force to override check",
+                                "key": str(exc.key),
+                                "original value type": str(exc.original_type),
+                                "new_value_type": str(exc.new_type),
+                            }
+                        },
+                        indent=4,
+                    ),
+                    400,
+                    {"Content-Type": "application/json"},
+                )
     else:
         return application.send_static_file("config.html")
 
@@ -464,21 +481,13 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 
 
 @application.route("/<dataset:dataset>/<entity:entity>/subscriptions", methods=["POST"])
-# ToDo(ahmed): Deprecate this endpoint
-@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
-def create_subscription(
-    *, dataset: Dataset, timer: Timer, entity: Optional[Entity] = None
-) -> RespTuple:
-    if entity:
-        if entity not in dataset.get_all_entities():
-            raise InvalidSubscriptionError(
-                "Invalid subscription dataset and entity combination"
-            )
-    else:
-        entity = dataset.get_default_entity()
+def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> RespTuple:
+    if entity not in dataset.get_all_entities():
+        raise InvalidSubscriptionError(
+            "Invalid subscription dataset and entity combination"
+        )
     entity_key = ENTITY_NAME_LOOKUP[entity]
-
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
     return (
@@ -492,20 +501,13 @@ def create_subscription(
     "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
     methods=["DELETE"],
 )
-# ToDo(ahmed): Deprecate this endpoint
-@application.route(
-    "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
-)
 def delete_subscription(
-    *, dataset: Dataset, partition: int, key: str, entity: Optional[Entity] = None
+    *, dataset: Dataset, partition: int, key: str, entity: Entity
 ) -> RespTuple:
-    if entity:
-        if entity not in dataset.get_all_entities():
-            raise InvalidSubscriptionError(
-                "Invalid subscription dataset and entity combination"
-            )
-    else:
-        entity = dataset.get_default_entity()
+    if entity not in dataset.get_all_entities():
+        raise InvalidSubscriptionError(
+            "Invalid subscription dataset and entity combination"
+        )
     entity_key = ENTITY_NAME_LOOKUP[entity]
     SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
