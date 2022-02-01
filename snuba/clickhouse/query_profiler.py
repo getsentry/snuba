@@ -78,7 +78,7 @@ def _list_mappings(condition_expression: Mapping[str, Expression]) -> Columnset:
 
 
 def generate_profile(
-    query: Union[Query, CompositeQuery[Table]]
+    query: Union[Query, CompositeQuery[Table]],
 ) -> ClickhouseQueryProfile:
     """
     Takes a Physical query in, analyzes it and produces the

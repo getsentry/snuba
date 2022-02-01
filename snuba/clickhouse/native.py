@@ -30,11 +30,12 @@ Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
-ClickhouseProfile = TypedDict(
-    "ClickhouseProfile",
-    {"bytes": int, "blocks": int, "rows": int, "elapsed": float},
-    total=False,
-)
+
+class ClickhouseProfile(TypedDict):
+    bytes: int
+    blocks: int
+    rows: int
+    elapsed: float
 
 
 @dataclass(frozen=True)
@@ -146,12 +147,12 @@ class ClickhousePool(object):
                     else:
                         result_data = query_execute()
 
-                    profile_data: ClickhouseProfile = {
-                        "bytes": conn.last_query.profile_info.bytes,
-                        "blocks": conn.last_query.profile_info.blocks,
-                        "rows": conn.last_query.profile_info.rows,
-                        "elapsed": conn.last_query.elapsed,
-                    }
+                    profile_data = ClickhouseProfile(
+                        bytes=conn.last_query.profile_info.bytes or 0,
+                        blocks=conn.last_query.profile_info.blocks or 0,
+                        rows=conn.last_query.profile_info.rows or 0,
+                        elapsed=conn.last_query.elapsed or 0.0,
+                    )
                     if with_column_types:
                         result = ClickhouseResult(
                             results=result_data[0],
@@ -341,7 +342,7 @@ class NativeDriverReader(Reader):
         """
         meta = result.meta if result.meta is not None else []
         data = result.results
-        profile = result.profile if result.profile else {}
+        profile = result.profile
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent
