@@ -422,7 +422,6 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         )
 
     def submit(self, message: Message[CommittableTick]) -> None:
-        start = time.time()
         assert not self.__closed
 
         # If queue is full, raise MessageRejected to tell the stream
@@ -442,11 +441,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             (time.time() - start_find_tasks) * 1000,
         )
 
-        start_encoding = time.time()
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
-        self.__metrics.timing(
-            "ScheduledSubscriptionTask.encode", (time.time() - start_encoding) * 1000
-        )
 
         self.__queue.append(
             message,
@@ -456,10 +451,6 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     for task in encoded_tasks
                 ]
             ),
-        )
-
-        self.__metrics.timing(
-            "ProduceScheduledSubscriptionMessage.submit", (time.time() - start) * 1000
         )
 
     def close(self) -> None:
