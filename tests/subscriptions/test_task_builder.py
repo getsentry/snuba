@@ -17,7 +17,6 @@ from snuba.subscriptions.scheduler import (
     Tags,
     TaskBuilder,
 )
-from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.subscriptions.subscriptions_utils import UUIDS, build_subscription
 
 ALIGNED_TIMESTAMP = 1625518080  # Aligned to start of a minute
@@ -145,7 +144,7 @@ TEST_CASES = [
         id="Do not apply jitter if resolution is above threshold",
     ),
     pytest.param(
-        DelegateTaskBuilder(DummyMetricsBackend()),
+        DelegateTaskBuilder(),
         "jittered",
         [
             (ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=1), 0)),
@@ -175,7 +174,7 @@ TEST_CASES = [
         id="Delegate returns the jittered one.",
     ),
     pytest.param(
-        DelegateTaskBuilder(DummyMetricsBackend()),
+        DelegateTaskBuilder(),
         "transition_jitter",
         [
             (ALIGNED_TIMESTAMP + 30, build_subscription(timedelta(minutes=1), 0)),
