@@ -25,7 +25,8 @@ test_cases = [
             "WHERE equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "
-            "LIMIT 5 BY c,d,e"
+            "LIMIT 5 BY c,d,e "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="limit by multiple columns",
     ),
@@ -38,7 +39,8 @@ test_cases = [
             "WHERE greater(`measurements[lcp.elementSize]`, -1337) "
             "AND equals(project_id, -1337) AND "
             "greaterOrEquals(timestamp, toDateTime('$S')) AND "
-            "less(timestamp, toDateTime('$S'))"
+            "less(timestamp, toDateTime('$S')) "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="Basic query with subscriptables",
     ),
@@ -53,7 +55,8 @@ test_cases = [
             "OR greater(times_seen, -1337))) "
             "AND equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
-            "AND less(timestamp, toDateTime('$S'))"
+            "AND less(timestamp, toDateTime('$S')) "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
     ),
@@ -68,7 +71,8 @@ test_cases = [
             "SELECT a, `b[c]` "
             "WHERE in(project_id, tuple(-1337, -1337)) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
-            "AND less(timestamp, toDateTime('$S'))"
+            "AND less(timestamp, toDateTime('$S')) "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="Query with IN condition",
     ),
@@ -83,7 +87,8 @@ test_cases = [
             "OR equals(arrayAll(b, '$S', tuple('$S', '$S')), -1337)), -1337) "
             "AND equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
-            "AND less(timestamp, toDateTime('$S'))"
+            "AND less(timestamp, toDateTime('$S')) "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="Special array join functions",
     ),
@@ -105,7 +110,8 @@ test_cases = [
             "AND less(e.timestamp, toDateTime('$S')) "
             "AND equals(t.project_id, -1337) "
             "AND greaterOrEquals(t.finish_ts, toDateTime('$S')) "
-            "AND less(t.finish_ts, toDateTime('$S'))"
+            "AND less(t.finish_ts, toDateTime('$S')) "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="Multi join match",
     ),
@@ -120,7 +126,8 @@ test_cases = [
             "WHERE equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S'))) "
-            "SELECT (max(count) AS max_count)"
+            "SELECT (max(count) AS max_count) "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="sub query match",
     ),
@@ -135,7 +142,8 @@ test_cases = [
             "GROUP BY transaction_name "
             "WHERE equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
-            "AND less(timestamp, toDateTime('$S'))"
+            "AND less(timestamp, toDateTime('$S')) "
+            "LIMIT 1000 OFFSET 0"
         ),
         id="aliased columns in select and group by",
     ),

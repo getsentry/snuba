@@ -14,7 +14,6 @@ from snuba.clickhouse.formatter.query import (
     _format_groupby,
     _format_limit,
     _format_limitby,
-    _format_offset,
     _format_orderby,
     _format_select,
 )
@@ -108,7 +107,6 @@ def _format_query_content(
             _format_orderby(query, formatter),
             _format_limitby(query, formatter),
             _format_limit(query, formatter),
-            _format_offset(query, formatter),
             _format_granularity(query, formatter),
         ]
         if v is not None

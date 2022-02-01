@@ -117,7 +117,6 @@ def _format_query_content(
             _format_orderby(query, formatter),
             _format_limitby(query, formatter),
             _format_limit(query, formatter),
-            _format_offset(query, formatter),
         ]
         if v is not None
     ]
@@ -199,17 +198,10 @@ def _format_limit(
 ) -> Optional[StringNode]:
     ast_limit = query.get_limit()
     return (
-        StringNode(f"LIMIT {ast_limit}")
-        if ast_limit is not None and ast_limit != 1000
+        StringNode(f"LIMIT {ast_limit} OFFSET {query.get_offset()}")
+        if ast_limit is not None
         else None
     )
-
-
-def _format_offset(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
-    ast_offset = query.get_offset()
-    return StringNode(f"OFFSET {ast_offset}") if ast_offset != 0 else None
 
 
 class JoinFormatter(JoinVisitor[FormattedNode, Table]):
