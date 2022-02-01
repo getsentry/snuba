@@ -207,64 +207,12 @@ def _gen_random_number() -> int:
     return -1337
 
 
-class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
-    """
-    This Formatter strips string and integer literals and replaces them with a
-    a token representing the type of literal.
-    """
-
+class ExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     def _format_string_literal(self, exp: Literal) -> str:
         return "'$S'"
 
     def _format_number_literal(self, exp: Literal) -> str:
         return str(_gen_random_number())
-
-    def _anonimize_alias(self, alias: str) -> str:
-        # there may be an alias that looks like `snuba_tags[something]`
-        # the string between the square brackets has the potential to be PII
-        # This function will anonimize that which is between the brackets.
-        # this may erroneously anonimize aliases with square brackets
-        # if they are input by the user, but that is better than leaking PII
-        return _BETWEEN_SQUARE_BRACKETS_REGEX.sub("$A", alias)
-
-    def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
-        if not alias:
-            return formatted_exp
-        elif self._parsing_context.is_alias_present(alias):
-            ret = escape_alias(alias)
-            # This is for the type checker. escape_alias can return None if
-            # we pass None. But here we do not pass None so a None return value
-            # is not valid.
-            assert ret is not None
-            return ret
-        else:
-            self._parsing_context.add_alias(alias)
-            return f"({formatted_exp} AS {escape_alias(self._anonimize_alias(alias))})"
-
-
-class ExpressionFormatterAnonymized(ExpressionFormatterBase):
-    def _format_string_literal(self, exp: Literal) -> str:
-        return "'$S'"
-
-    def _format_number_literal(self, exp: Literal) -> str:
-        return str(_gen_random_number())
-
-    def _format_boolean_literal(self, exp: Literal) -> str:
-        if exp.value is True:
-            return self._alias("true", exp.alias)
-        return self._alias("false", exp.alias)
-
-    def _format_datetime_literal(self, exp: Literal) -> str:
-        value = cast(datetime, exp.value).replace(tzinfo=None, microsecond=0)
-        return self._alias(
-            "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
-        )
-
-    def _format_date_literal(self, exp: Literal) -> str:
-        return self._alias(
-            "toDate('{}', 'Universal')".format(cast(date, exp.value).isoformat()),
-            exp.alias,
-        )
 
     def _anonimize_alias(self, alias: str) -> str:
         # there may be an alias that looks like `snuba_tags[something]`
