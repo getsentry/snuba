@@ -231,43 +231,26 @@ class DelegateTaskBuilder(TaskBuilder):
     second 0.
     """
 
-    def __init__(self, metrics: MetricsBackend) -> None:
+    def __init__(self) -> None:
         self.__immediate_builder = ImmediateTaskBuilder()
         self.__jittered_builder = JitteredTaskBuilder()
         self.__rollout_state = TaskBuilderModeState()
-        self.__metrics = metrics
 
     def get_task(
         self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        start_get_current_mode = datetime.now()
-
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
 
-        self.__metrics.timing(
-            "DelegateTaskBuilder.get_current_mode",
-            (datetime.now() - start_get_current_mode).total_seconds() * 1000.0,
-        )
-
-        start_get_task = datetime.now()
-
         if primary_builder == TaskBuilderMode.JITTERED:
-            task = self.__jittered_builder.get_task(
+            return self.__jittered_builder.get_task(
                 subscription_with_metadata, timestamp
             )
         else:
-            task = self.__immediate_builder.get_task(
+            return self.__immediate_builder.get_task(
                 subscription_with_metadata, timestamp
             )
-
-        self.__metrics.timing(
-            "DelegateTaskBuilder.get_task",
-            (datetime.now() - start_get_task).total_seconds() * 1000.0,
-        )
-
-        return task
 
     def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
@@ -310,7 +293,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
 
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
-        self.__builder = DelegateTaskBuilder(metrics)
+        self.__builder = DelegateTaskBuilder()
 
     def __get_subscriptions(self) -> List[Subscription]:
         current_time = datetime.now()
