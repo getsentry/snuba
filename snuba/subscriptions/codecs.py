@@ -77,7 +77,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
                     {
                         "timestamp": value.timestamp.isoformat(),
                         "entity": entity.value,
-                        "task": {"data": value.task.subscription.data.to_dict()},
+                        "task": {"data": subscription.data.to_dict()},
                         "tick_upper_offset": tick_upper_offset,
                     }
                 ),
