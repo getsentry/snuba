@@ -11,7 +11,7 @@ from snuba.processor import (
 )
 
 
-class MetricsProcessor(MessageProcessor, ABC):
+class MetricsBucketProcessor(MessageProcessor, ABC):
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         raise NotImplementedError
@@ -57,7 +57,7 @@ class MetricsProcessor(MessageProcessor, ABC):
         return InsertBatch([processed], None)
 
 
-class SetsMetricsProcessor(MetricsProcessor):
+class SetsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "s"
 
@@ -68,7 +68,7 @@ class SetsMetricsProcessor(MetricsProcessor):
         return {"set_values": values}
 
 
-class CounterMetricsProcessor(MetricsProcessor):
+class CounterMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "c"
 
@@ -80,7 +80,7 @@ class CounterMetricsProcessor(MetricsProcessor):
         return {"value": value}
 
 
-class DistributionsMetricsProcessor(MetricsProcessor):
+class DistributionsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "d"
 
