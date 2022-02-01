@@ -14,10 +14,15 @@ def test_encode_preserves_column_order(values_encoder: ValuesRowEncoder) -> None
         {
             "col2": Literal(None, 5),
             "col3": Literal(None, "test_string"),
-            "col1": FunctionCall(None, "test", tuple()),
+            "col1": FunctionCall(
+                None,
+                "test",
+                (FunctionCall(None, "inner", (Literal(None, "inner_arg"),)),),
+            ),
         }
     )
-    assert encoded == "(test(),5,'test_string')".encode("utf-8")
+    print(encoded)
+    assert encoded == "(test(inner('inner_arg')),5,'test_string')".encode("utf-8")
 
 
 def test_encode_fails_on_non_expression(values_encoder: ValuesRowEncoder) -> None:
