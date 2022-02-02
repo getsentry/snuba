@@ -242,6 +242,7 @@ class DelegateTaskBuilder(TaskBuilder):
         subscription = subscription_with_metadata.subscription
 
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
+
         if primary_builder == TaskBuilderMode.JITTERED:
             return self.__jittered_builder.get_task(
                 subscription_with_metadata, timestamp
@@ -317,13 +318,21 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             (current_time - self.__last_refresh).total_seconds() * 1000.0,
             tags={"partition": str(self.__partition_id)},
         )
-
         return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
+        start_get_subscriptions = datetime.now()
+
         interval = tick.timestamps
 
         subscriptions = self.__get_subscriptions()
+
+        self.__metrics.timing(
+            "getting_subscriptions",
+            (datetime.now() - start_get_subscriptions).total_seconds() * 1000.0,
+        )
+
+        start_get_task = datetime.now()
 
         for timestamp in range(
             math.ceil(interval.lower.timestamp()),
@@ -339,7 +348,18 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
                 if task is not None:
                     yield task
 
+        self.__metrics.timing(
+            "getting_tasks", (datetime.now() - start_get_task).total_seconds() * 1000.0
+        )
+
+        start_reset_metrics = datetime.now()
+
         metrics = self.__builder.reset_metrics()
         if any(metric for metric in metrics if metric[1] > 0):
             for metric in metrics:
                 self.__metrics.increment(metric[0], metric[1], tags=metric[2])
+
+        self.__metrics.timing(
+            "updating_metrics",
+            (datetime.now() - start_reset_metrics).total_seconds() * 1000,
+        )
