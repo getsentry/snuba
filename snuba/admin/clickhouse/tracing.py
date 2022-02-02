@@ -1,4 +1,7 @@
-from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_cluster_connection
+from snuba.admin.clickhouse.common import (
+    InvalidCustomQuery,
+    get_ro_query_node_connection,
+)
 from snuba.clickhouse.native import ClickhouseResult
 
 
@@ -22,6 +25,7 @@ def validate_trace_query(sql_query: str) -> None:
 
 def run_query_and_get_trace(storage_name: str, query: str) -> ClickhouseResult:
     validate_trace_query(query)
-    connection = get_ro_cluster_connection(storage_name)
+
+    connection = get_ro_query_node_connection(storage_name)
     query_result = connection.execute(query=query, capture_trace=True)
     return query_result
