@@ -143,7 +143,7 @@ def test_cache_connections() -> None:
     )
 
     cluster_2 = cluster.ClickhouseCluster(
-        "localhost", 8000, "default", "", "default", 8001, {"transsactions"}, True
+        "localhost", 8000, "default", "", "default", 8001, {"transactions"}, True
     )
 
     assert cluster_1.get_query_connection(
