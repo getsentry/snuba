@@ -88,10 +88,12 @@ class SubscriptionWorker(
     def __execute_query(
         self, request: Request, timer: Timer, task: ScheduledSubscriptionTask
     ) -> Tuple[Request, Result]:
+        partition = task.task.subscription.identifier.partition
         with self.__concurrent_gauge:
             is_consistent_query = request.settings.get_consistent()
 
             def run_consistent() -> Result:
+                start = time.time()
                 request_copy = Request(
                     id=request.id,
                     body=copy.deepcopy(request.body),
@@ -101,7 +103,7 @@ class SubscriptionWorker(
                     ),
                 )
 
-                return parse_and_run_query(
+                res = parse_and_run_query(
                     self.__dataset,
                     request_copy,
                     timer,
@@ -110,8 +112,15 @@ class SubscriptionWorker(
                     if is_consistent_query
                     else None,
                 ).result
+                self.__metrics.timing(
+                    "clickhouse_query.latency",
+                    (time.time() - start) * 1000,
+                    tags={"partition": str(partition), "consistent": "1"},
+                )
+                return res
 
             def run_non_consistent() -> Result:
+                start = time.time()
                 request_copy = Request(
                     id=request.id,
                     body=copy.deepcopy(request.body),
@@ -121,7 +130,7 @@ class SubscriptionWorker(
                     ),
                 )
 
-                return parse_and_run_query(
+                res = parse_and_run_query(
                     self.__dataset,
                     request_copy,
                     timer,
@@ -130,6 +139,12 @@ class SubscriptionWorker(
                     if not is_consistent_query
                     else None,
                 ).result
+                self.__metrics.timing(
+                    "clickhouse_query.latency",
+                    (time.time() - start) * 1000,
+                    tags={"partition": str(partition), "consistent": "0"},
+                )
+                return res
 
             def selector_func(run_snuplicator: bool) -> Tuple[str, List[str]]:
                 primary = "consistent" if is_consistent_query else "non_consistent"
