@@ -27,7 +27,7 @@ def _get_local_nodes(storage_key: StorageKey) -> Sequence[Node]:
             {"host": node.host_name, "port": node.port}
             for node in storage.get_cluster().get_local_nodes()
         ]
-    except AssertionError:
+    except (AssertionError, KeyError):
         # If cluster_name is not defined just return an empty list
         return []
 
