@@ -27,7 +27,7 @@ def _get_local_nodes(storage_key: StorageKey) -> Sequence[Node]:
             {"host": node.host_name, "port": node.port}
             for node in storage.get_cluster().get_local_nodes()
         ]
-    except AssertionError:
+    except (AssertionError, KeyError):
         # If cluster_name is not defined just return an empty list
         return []
 
@@ -40,4 +40,6 @@ def get_storage_info() -> Sequence[Storage]:
             "local_nodes": _get_local_nodes(storage_key),
         }
         for storage_key in sorted(STORAGES, key=lambda storage_key: storage_key.value)
+        # HACK: Transactions_v2 is temporarily not assigned to a cluster
+        if storage_key != StorageKey.TRANSACTIONS_V2
     ]
