@@ -11,7 +11,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import StreamMessageFilter
-from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
@@ -19,6 +19,7 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.schemas import ReadOnly
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
 
@@ -190,12 +191,14 @@ class TableWriter:
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
+        write_format: WriteFormat = WriteFormat.JSON,
     ) -> None:
         self.__storage_set = storage_set
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
         self.__replacer_processor = replacer_processor
         self.__writer_options = writer_options
+        self.__write_format = write_format
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
@@ -208,17 +211,34 @@ class TableWriter:
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
-
+        if self.__write_format == WriteFormat.JSON:
+            insert_statement = InsertStatement(table_name).with_format("JSONEachRow")
+        elif self.__write_format == WriteFormat.VALUES:
+            column_names = self.get_writeable_columns()
+            insert_statement = (
+                InsertStatement(table_name)
+                .with_format("VALUES")
+                .with_columns(column_names)
+            )
+        else:
+            raise TypeError("unknown table format", self.__write_format)
         options = self.__update_writer_options(options)
 
         return get_cluster(self.__storage_set).get_batch_writer(
             metrics,
-            InsertStatement(table_name).with_format("JSONEachRow"),
+            insert_statement,
             encoding=None,
             options=options,
             chunk_size=chunk_size,
             buffer_size=0,
         )
+
+    def get_writeable_columns(self) -> Sequence[str]:
+        return [
+            column.flattened
+            for column in self.get_schema().get_columns()
+            if not column.type.has_modifier(ReadOnly)
+        ]
 
     def get_bulk_writer(
         self,

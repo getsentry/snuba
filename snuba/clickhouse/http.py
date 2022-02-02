@@ -15,6 +15,8 @@ from urllib3.exceptions import HTTPError
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.query import Expression
 from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
@@ -39,10 +41,29 @@ class JSONRowEncoder(Encoder[bytes, WriterTableRow]):
         else:
             raise TypeError
 
-    def encode(self, value: WriterTableRow) -> JSONRow:
+    def encode(self, value: WriterTableRow) -> bytes:
         return cast(
             bytes, rapidjson.dumps(value, default=self.__default).encode("utf-8")
         )
+
+
+class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
+    def __init__(self, columns: Iterable[str]) -> None:
+        self.__columns = columns
+        self.__formatter = ClickhouseExpressionFormatter()
+
+    def encode_value(self, value: Any) -> str:
+        if isinstance(value, Expression):
+            return value.accept(self.__formatter)
+        else:
+            raise TypeError("unknown Clickhouse value type", value.__class__)
+
+    def encode(self, row: WriterTableRow) -> bytes:
+        ordered_columns = [
+            self.encode_value(row.get(column)) for column in self.__columns
+        ]
+        ordered_columns_str = ",".join(ordered_columns)
+        return f"({ordered_columns_str})".encode("utf-8")
 
 
 class InsertStatement:
@@ -75,7 +96,14 @@ class InsertStatement:
         columns_statement = (
             f"({','.join(self.__column_names)}) " if self.__column_names else ""
         )
-        format_statement = f" FORMAT {self.__format}" if self.__format else ""
+        format_statement = ""
+
+        if self.__format:
+            if not self.__format == "VALUES":
+                format_statement = f"FORMAT {self.__format}"
+            else:
+                format_statement = "VALUES"
+
         return f"INSERT INTO {self.__database}.{self.__table_name} {columns_statement} {format_statement}"
 
 
@@ -138,7 +166,7 @@ class HTTPWriteBatch:
             "Connection": "keep-alive",
             "Accept-Encoding": "gzip,deflate",
         }
-        if password != '':
+        if password != "":
             headers["X-ClickHouse-Key"] = password
         if encoding:
             headers["Content-Encoding"] = encoding
