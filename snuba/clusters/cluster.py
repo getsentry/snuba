@@ -134,26 +134,35 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
+CacheKey = Tuple[ClickhouseNode, ClickhouseClientSettings, str, str, str]
+
+
 class ConnectionCache:
     def __init__(self) -> None:
-        self.__cache: MutableMapping[
-            Tuple[ClickhouseNode, ClickhouseClientSettings], ClickhousePool
-        ] = {}
+        self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
 
-    def __contains__(self, key: object) -> bool:
-        return key in self.__cache
-
-    def __getitem__(
-        self, key: Tuple[ClickhouseNode, ClickhouseClientSettings]
-    ) -> ClickhousePool:
-        return self.__cache[key]
-
-    def __setitem__(
+    def get_node_connection(
         self,
-        key: Tuple[ClickhouseNode, ClickhouseClientSettings],
-        value: ClickhousePool,
-    ) -> None:
-        self.__cache[key] = value
+        client_settings: ClickhouseClientSettings,
+        node: ClickhouseNode,
+        user: str,
+        password: str,
+        database: str,
+    ) -> ClickhousePool:
+        settings, timeout = client_settings.value
+        cache_key = (node, client_settings, user, password, database)
+        if cache_key not in self.__cache:
+            self.__cache[cache_key] = ClickhousePool(
+                node.host_name,
+                node.port,
+                user,
+                password,
+                database,
+                client_settings=settings,
+                send_receive_timeout=timeout,
+            )
+
+        return self.__cache[cache_key]
 
 
 connection_cache = ConnectionCache()
@@ -230,20 +239,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         connection.
         """
 
-        settings, timeout = client_settings.value
-        cache_key = (node, client_settings)
-        if cache_key not in self.__connection_cache:
-            self.__connection_cache[cache_key] = ClickhousePool(
-                node.host_name,
-                node.port,
-                self.__user,
-                self.__password,
-                self.__database,
-                client_settings=settings,
-                send_receive_timeout=timeout,
-            )
-
-        return self.__connection_cache[cache_key]
+        return self.__connection_cache.get_node_connection(
+            client_settings, node, self.__user, self.__password, self.__database
+        )
 
     def get_reader(self) -> Reader:
         if not self.__reader:
