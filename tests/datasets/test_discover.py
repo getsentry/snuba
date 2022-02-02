@@ -167,6 +167,6 @@ def test_data_source(
         query_body["selected_columns"] = ["project_id"]
 
     snql_query = json_to_snql(query_body, "discover")
-    query = parse_snql_query(str(snql_query), dataset)
+    query, _ = parse_snql_query(str(snql_query), dataset)
 
     assert query.get_from_clause().key == expected_entity

@@ -163,7 +163,7 @@ def test_get_all_columns_legacy() -> None:
     }
     events = get_dataset("events")
     snql_query = json_to_snql(query_body, "events")
-    query = parse_snql_query(str(snql_query), events)
+    query, _ = parse_snql_query(str(snql_query), events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_column1", None, "column1"),
@@ -203,7 +203,7 @@ def test_get_all_columns() -> None:
         HAVING times_seen > 1
         """
     events = get_dataset("events")
-    query = parse_snql_query(query_body, events)
+    query, _ = parse_snql_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_column1", None, "column1"),
@@ -298,7 +298,7 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     snql_query = json_to_snql(query_body, "events")
-    query = parse_snql_query(str(snql_query), events)
+    query, _ = parse_snql_query(str(snql_query), events)
     settings = HTTPRequestSettings()
     query_plan = (
         events.get_default_entity()

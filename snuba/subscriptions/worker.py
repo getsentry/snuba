@@ -96,6 +96,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=True
                     ),
@@ -116,6 +117,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=False
                     ),
