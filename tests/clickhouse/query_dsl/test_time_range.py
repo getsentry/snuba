@@ -23,7 +23,7 @@ def test_get_time_range() -> None:
         """
 
     events = get_dataset("events")
-    query = parse_snql_query(body, events)
+    query, _ = parse_snql_query(body, events)
     processors = events.get_default_entity().get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):

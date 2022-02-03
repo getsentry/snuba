@@ -50,6 +50,7 @@ def build_executor_consumer(
     max_concurrent_queries: int,
     auto_offset_reset: str,
     metrics: MetricsBackend,
+    executor: ThreadPoolExecutor,
     # TODO: Should be removed once testing is done
     override_result_topic: str,
 ) -> StreamProcessor[KafkaPayload]:
@@ -93,8 +94,6 @@ def build_executor_consumer(
             scheduled_topic_spec,
             result_topic_spec,
         ), "All entities must have same scheduled and result topics"
-
-    executor = ThreadPoolExecutor(max_concurrent_queries)
 
     return StreamProcessor(
         KafkaConsumer(
@@ -308,7 +307,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def terminate(self) -> None:
         self.__closed = True
 
-        self.__executor.shutdown()
         self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
@@ -338,7 +336,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
-        self.__executor.shutdown()
 
         self.__next_step.close()
         self.__next_step.join(remaining)
