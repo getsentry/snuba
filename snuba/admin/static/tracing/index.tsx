@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useState } from "react";
 import Client from "../api_client";
 import QueryDisplay from "../components/query_display/query_display";
 import { QueryResult } from "../components/query_display/types";
@@ -11,6 +11,8 @@ type LogLine = {
   component: string;
   message: string;
 };
+
+type BucketedLogs = Map<String, Map<MessageCategory, LogLine[]>>;
 
 const logLineMatcher =
   /\[ (?<hostname>\S+) \] \[ (?<pid>\d+) \] \{(?<local_query_id>[^}]+)\} <(?<log_level>[^>]+)> (?<component>[^:]+): (?<message>.*)/;
@@ -76,6 +78,38 @@ function getMessageCategory(logLine: LogLine): MessageCategory {
 
 let collapsibleStyle = { listStyleType: "none", fontFamily: "Monaco" };
 
+function NodalDisplay(props: {
+  host: string;
+  category: MessageCategory;
+  title?: string;
+  logsBucketed: BucketedLogs;
+}) {
+  const [visible, setVisible] = useState<boolean>(false);
+
+  const nodeKey = props.host + "-" + props.category;
+  return (
+    <li key={nodeKey} onClick={() => setVisible(!visible)}>
+      <span>
+        {props.title} - Click to {visible ? "collapse" : "expand"}
+      </span>
+
+      <ol key={nodeKey + "-child"} style={collapsibleStyle}>
+        {visible &&
+          props.logsBucketed
+            .get(props.host)
+            ?.get(props.category)
+            ?.map((line, index) => {
+              return (
+                <li key={nodeKey + index}>
+                  [{line?.log_level}] {line?.component}: {line?.message}
+                </li>
+              );
+            })}
+      </ol>
+    </li>
+  );
+}
+
 function TracingQueries(props: { api: Client }) {
   function tablePopulator(queryResult: QueryResult) {
     var elements = {};
@@ -121,6 +155,17 @@ function TracingQueries(props: { api: Client }) {
     resultDataPopulator: tablePopulator,
   });
 
+  // query execution flow:
+  // [high-level query node]
+  //    [housekeeping] (access control, parsing)
+  //    [propagation step]
+  //       [for each storage node]
+  //          [housekeeping]
+  //          [select executor + MergeTreeSelectProcessor]
+  //          [aggregating transform]
+  //          [memory tracker]
+  //    [aggregating transform]
+  //    [memory tracker]
   function heirarchicalTraceDisplay(
     title: string,
     value: any
@@ -130,22 +175,8 @@ function TracingQueries(props: { api: Client }) {
       .map(parseLogLine)
       .filter((x: LogLine | null) => x != null);
 
-    // query execution flow:
-    // [high-level query node]
-    //    [housekeeping] (access control, parsing)
-    //    [propagation step]
-    //       [for each storage node]
-    //          [housekeeping]
-    //          [select executor + MergeTreeSelectProcessor]
-    //          [aggregating transform]
-    //          [memory tracker]
-    //    [aggregating transform]
-    //    [memory tracker]
     // logsBucketed maps host -> (category -> logs)
-    const logsBucketed: Map<
-      String,
-      Map<MessageCategory, LogLine[]>
-    > = new Map();
+    const logsBucketed: BucketedLogs = new Map();
 
     const orderedHosts: string[] = [];
     parsedLines.forEach((line) => {
@@ -172,55 +203,52 @@ function TracingQueries(props: { api: Client }) {
     let rootHost = orderedHosts[0];
 
     console.log(logsBucketed);
-    const HOUSEKEEPING = "Housekeeping";
-    const SELECT_EXECUTION = "Select execution";
+    const CATEGORIES_ORDERED = [
+      MessageCategory.housekeeping,
+      MessageCategory.select_execution,
+      MessageCategory.aggregation,
+      MessageCategory.memory_tracker,
+    ];
+    const CATEGORY_HEADERS = new Map<MessageCategory, string>([
+      [MessageCategory.housekeeping, "Housekeeping"],
+      [MessageCategory.select_execution, "Select execution"],
+      [MessageCategory.aggregation, "Aggregation"],
+      [MessageCategory.memory_tracker, "Memory Tracking"],
+    ]);
 
     return (
       <ol style={collapsibleStyle} key={title + "-root"}>
-        <li>Query node - {rootHost}</li>
-        <li>
+        <li key="header-root">Query node - {rootHost}</li>
+        <li key="root-storages">
           <ol style={collapsibleStyle}>
-            {sectionForNode(
-              rootHost,
-              HOUSEKEEPING,
-              MessageCategory.housekeeping
-            )}
+            <NodalDisplay
+              host={rootHost}
+              title={CATEGORY_HEADERS.get(MessageCategory.housekeeping)}
+              category={MessageCategory.housekeeping}
+              logsBucketed={logsBucketed}
+            />
             <li>
               <span>Storage nodes</span>
               <ol style={collapsibleStyle}>
                 {orderedHosts.slice(1).map((host) => {
-                  logsBucketed.get(host);
                   return (
-                    <li>
+                    <li key={"top-" + host}>
                       <span>Storage node - {host}</span>
-                      <ol style={collapsibleStyle}>
-                        {sectionForNode(
-                          host,
-                          HOUSEKEEPING,
-                          MessageCategory.housekeeping
-                        )}
-                      </ol>
-                      <ol style={collapsibleStyle}>
-                        {sectionForNode(
-                          host,
-                          SELECT_EXECUTION,
-                          MessageCategory.select_execution
-                        )}
-                      </ol>
-                      <ol style={collapsibleStyle}>
-                        {sectionForNode(
-                          host,
-                          "Aggregation",
-                          MessageCategory.aggregation
-                        )}
-                      </ol>
-                      <ol style={collapsibleStyle}>
-                        {sectionForNode(
-                          host,
-                          "Memory tracking",
-                          MessageCategory.memory_tracker
-                        )}
-                      </ol>
+                      {CATEGORIES_ORDERED.map((category) => {
+                        return (
+                          <ol
+                            key={"section-" + category + "-" + host}
+                            style={collapsibleStyle}
+                          >
+                            <NodalDisplay
+                              host={host}
+                              title={CATEGORY_HEADERS.get(category)}
+                              category={category}
+                              logsBucketed={logsBucketed}
+                            />
+                          </ol>
+                        );
+                      })}
                     </li>
                   );
                 })}
@@ -228,53 +256,28 @@ function TracingQueries(props: { api: Client }) {
             </li>
             <li>
               <ol style={collapsibleStyle}>
-                {sectionForNode(
-                  rootHost,
-                  "Aggregation",
-                  MessageCategory.aggregation
-                )}
+                <NodalDisplay
+                  host={rootHost}
+                  title={CATEGORY_HEADERS.get(MessageCategory.aggregation)}
+                  category={MessageCategory.aggregation}
+                  logsBucketed={logsBucketed}
+                />
               </ol>
             </li>
             <li>
               <ol style={collapsibleStyle}>
-                {sectionForNode(
-                  rootHost,
-                  "Memory tracking",
-                  MessageCategory.memory_tracker
-                )}
+                <NodalDisplay
+                  host={rootHost}
+                  title={CATEGORY_HEADERS.get(MessageCategory.memory_tracker)}
+                  category={MessageCategory.memory_tracker}
+                  logsBucketed={logsBucketed}
+                />
               </ol>
             </li>
           </ol>
         </li>
       </ol>
     );
-
-    function sectionForNode(
-      host: string,
-      title: string,
-      category: MessageCategory
-    ) {
-      return (
-        <li>
-          <span>{title}</span>
-          <ol
-            style={collapsibleStyle}
-            onClick={() => console.log("should hide/show section", host, title)}
-          >
-            {logsBucketed
-              .get(host)
-              ?.get(category)
-              ?.map((line, index) => {
-                return (
-                  <li key={index}>
-                    {line?.component}:{line?.message}
-                  </li>
-                );
-              })}
-          </ol>
-        </li>
-      );
-    }
   }
 }
 
