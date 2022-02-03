@@ -24,7 +24,7 @@ def test_tags_expander() -> None:
     """
 
     events = get_dataset("events")
-    query = parse_snql_query(query_body, events)
+    query, _ = parse_snql_query(query_body, events)
 
     processor = TagsExpanderProcessor()
     request_settings = HTTPRequestSettings()
