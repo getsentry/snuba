@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from threading import Lock
 from typing import (
     Any,
     Generic,
@@ -140,6 +141,7 @@ CacheKey = Tuple[ClickhouseNode, ClickhouseClientSettings, str, str, str]
 class ConnectionCache:
     def __init__(self) -> None:
         self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
+        self.__lock = Lock()
 
     def get_node_connection(
         self,
@@ -149,20 +151,21 @@ class ConnectionCache:
         password: str,
         database: str,
     ) -> ClickhousePool:
-        settings, timeout = client_settings.value
-        cache_key = (node, client_settings, user, password, database)
-        if cache_key not in self.__cache:
-            self.__cache[cache_key] = ClickhousePool(
-                node.host_name,
-                node.port,
-                user,
-                password,
-                database,
-                client_settings=settings,
-                send_receive_timeout=timeout,
-            )
+        with self.__lock:
+            settings, timeout = client_settings.value
+            cache_key = (node, client_settings, user, password, database)
+            if cache_key not in self.__cache:
+                self.__cache[cache_key] = ClickhousePool(
+                    node.host_name,
+                    node.port,
+                    user,
+                    password,
+                    database,
+                    client_settings=settings,
+                    send_receive_timeout=timeout,
+                )
 
-        return self.__cache[cache_key]
+            return self.__cache[cache_key]
 
 
 connection_cache = ConnectionCache()
