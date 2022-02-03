@@ -49,7 +49,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             "tags.key": keys,
             "tags.value": values,
             **self._process_values(message),
-            "materialization_version": 0,
+            "materialization_version": 1,
             "retention_days": message["retention_days"],
             "partition": metadata.partition,
             "offset": metadata.offset,
