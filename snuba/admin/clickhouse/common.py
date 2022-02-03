@@ -68,12 +68,13 @@ def get_ro_node_connection(
     return connection
 
 
-CLUSTER_CONNECTIONS: MutableMapping[StorageKey, ClickhousePool] = {}
+CLUSTER_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 
 
-def get_ro_cluster_connection(storage_name: str) -> ClickhousePool:
+def get_ro_query_node_connection(storage_name: str) -> ClickhousePool:
+    if storage_name in CLUSTER_CONNECTIONS:
+        return CLUSTER_CONNECTIONS[storage_name]
 
-    storage_key = None
     try:
         storage_key = StorageKey(storage_name)
     except ValueError:
@@ -82,12 +83,12 @@ def get_ro_cluster_connection(storage_name: str) -> ClickhousePool:
             extra_data={"storage_name": storage_name},
         )
 
-    if storage_key in CLUSTER_CONNECTIONS:
-        return CLUSTER_CONNECTIONS[storage_key]
-
     storage = get_storage(storage_key)
     cluster = storage.get_cluster()
-    connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+    connection_id = cluster.get_connection_id()
+    connection = get_ro_node_connection(
+        connection_id.hostname, connection_id.tcp_port, storage_name
+    )
 
-    CLUSTER_CONNECTIONS[storage_key] = connection
+    CLUSTER_CONNECTIONS[storage_name] = connection
     return connection
