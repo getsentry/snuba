@@ -265,6 +265,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_database(self) -> str:
         return self.__database
 
+    def get_query_node(self) -> ClickhouseNode:
+        return self.__query_node
+
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
             return [self.__query_node]
