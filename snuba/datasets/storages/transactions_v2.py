@@ -19,14 +19,14 @@ schema = WritableTableSchema(
     columns=columns,
     local_table_name="transactions_local",
     dist_table_name="transactions_dist",
-    storage_set_key=StorageSetKey.TRANSACTIONS,
+    storage_set_key=StorageSetKey.TRANSACTIONS_V2,
     mandatory_conditions=[],
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
 storage = WritableTableStorage(
-    storage_key=StorageKey.TRANSACTIONS,
-    storage_set_key=StorageSetKey.TRANSACTIONS,
+    storage_key=StorageKey.TRANSACTIONS_V2,
+    storage_set_key=StorageSetKey.TRANSACTIONS_V2,
     schema=schema,
     query_processors=query_processors,
     stream_loader=build_kafka_stream_loader_from_settings(

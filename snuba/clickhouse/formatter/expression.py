@@ -25,7 +25,7 @@ from snuba.query.parsing import ParsingContext
 _BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
 
 
-class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
+class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     """
     This Visitor implementation is able to format one expression in the Snuba
     Query for Clickhouse.
@@ -169,7 +169,7 @@ class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
         return self._alias(ret, exp.alias)
 
 
-class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
+class ClickhouseExpressionFormatter(ExpressionFormatterBase):
     """
     This Formatter produces a properly escaped string. The result should never
     be further escaped. This should be the only place where expression
@@ -207,12 +207,7 @@ def _gen_random_number() -> int:
     return -1337
 
 
-class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
-    """
-    This Formatter strips string and integer literals and replaces them with a
-    a token representing the type of literal.
-    """
-
+class ExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     def _format_string_literal(self, exp: Literal) -> str:
         return "'$S'"
 

@@ -3,7 +3,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.message_filters import KafkaHeaderFilter
-from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
@@ -45,6 +45,8 @@ storage = WritableTableStorage(
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_EVENTS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),
+    # This is the default, just showing where it goes for the PR
+    write_format=WriteFormat.JSON,
     replacer_processor=ErrorsReplacer(
         schema=schema,
         required_columns=required_columns,

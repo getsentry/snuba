@@ -4,7 +4,7 @@ import pytest
 
 from snuba.clickhouse.formatter.expression import (
     ClickhouseExpressionFormatter,
-    ClickHouseExpressionFormatterAnonymized,
+    ExpressionFormatterAnonymized,
 )
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -215,7 +215,7 @@ def test_format_expressions(
     expression: Expression, expected_clickhouse: str, expected_anonymized: str
 ) -> None:
     visitor = ClickhouseExpressionFormatter()
-    anonymized_visitor = ClickHouseExpressionFormatterAnonymized()
+    anonymized_visitor = ExpressionFormatterAnonymized()
     assert expression.accept(visitor) == expected_clickhouse
     assert expression.accept(anonymized_visitor) == expected_anonymized
 

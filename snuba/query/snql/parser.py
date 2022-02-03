@@ -74,6 +74,7 @@ from snuba.query.parser import (
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
 from snuba.query.schema import POSITIVE_OPERATORS
+from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -1429,9 +1430,12 @@ CustomProcessors = Sequence[
 
 def parse_snql_query(
     body: str, dataset: Dataset, custom_processing: Optional[CustomProcessors] = None,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
+
+    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+        snql_anonymized = format_snql_anonymized(query).get_sql()
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
@@ -1454,4 +1458,4 @@ def parse_snql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
-    return query
+    return query, snql_anonymized
