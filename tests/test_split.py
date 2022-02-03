@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Any, MutableMapping, Sequence
 
+import pytest
 from snuba_sdk.legacy import json_to_snql
 
-import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -312,7 +312,7 @@ def test_col_split_conditions(
 ) -> None:
     dataset = get_dataset("events")
     snql_query = json_to_snql(query, "events")
-    query = parse_snql_query(str(snql_query), dataset)
+    query, _ = parse_snql_query(str(snql_query), dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
 
     def do_query(
@@ -364,7 +364,7 @@ def test_time_split_ast() -> None:
         LIMIT 10
         """
 
-    query = parse_snql_query(body, get_dataset("events"))
+    query, _ = parse_snql_query(body, get_dataset("events"))
     entity = get_entity(query.get_from_clause().key)
     settings = HTTPRequestSettings()
     for p in entity.get_query_processors():

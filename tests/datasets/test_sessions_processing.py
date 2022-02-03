@@ -2,13 +2,13 @@ import json
 from typing import Any, MutableMapping
 
 import pytest
+from snuba_sdk.legacy import json_to_snql
 
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.sessions import raw_schema, read_schema
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba_sdk.legacy import json_to_snql
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
@@ -34,8 +34,14 @@ def test_sessions_processing() -> None:
     }
 
     sessions = get_dataset("sessions")
-    query = parse_snql_query(query_body["query"], sessions)
-    request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
+    query, snql_anonymized = parse_snql_query(query_body["query"], sessions)
+    request = Request(
+        id="",
+        body=query_body,
+        query=query,
+        snql_anonymized=snql_anonymized,
+        settings=HTTPRequestSettings(referrer=""),
+    )
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
@@ -183,12 +189,18 @@ def test_select_storage(
 ) -> None:
     sessions = get_dataset("sessions")
     snql_query = json_to_snql(query_body, "sessions")
-    query = parse_snql_query(str(snql_query), sessions)
+    query, snql_anonymized = parse_snql_query(str(snql_query), sessions)
     query_body = json.loads(snql_query.snuba())
     subscription_settings = (
         SubscriptionRequestSettings if is_subscription else HTTPRequestSettings
     )
-    request = Request("", query_body, query, subscription_settings(referrer=""))
+    request = Request(
+        id="",
+        body=query_body,
+        query=query,
+        snql_anonymized=snql_anonymized,
+        settings=subscription_settings(referrer=""),
+    )
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
