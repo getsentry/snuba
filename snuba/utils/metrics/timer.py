@@ -90,7 +90,10 @@ class Timer:
         mark_tags: Optional[Tags] = None,
     ) -> None:
         data = self.finish()
-        merged_tags = {**self.__tags, **tags} if tags else self.__tags
+        merged_tags = {**data["tags"], **tags} if tags else self.__tags
         backend.timing(self.__name, data["duration_ms"], tags=merged_tags)
         for mark, duration in data["marks_ms"].items():
-            backend.timing(f"{self.__name}.{mark}", duration, tags=mark_tags)
+            merged_mark_tags = (
+                {**data["tags"], **mark_tags} if mark_tags else data["tags"]
+            )
+            backend.timing(f"{self.__name}.{mark}", duration, tags=merged_mark_tags)
