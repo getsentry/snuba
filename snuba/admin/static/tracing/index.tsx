@@ -89,9 +89,9 @@ function NodalDisplay(props: {
   const nodeKey = props.host + "-" + props.category;
   return (
     <li key={nodeKey}>
-      <a onClick={() => setVisible(!visible)}>
+      <span onClick={() => setVisible(!visible)}>
         {props.title} - Click to {visible ? "collapse" : "expand"}
-      </a>
+      </span>
 
       <ol key={nodeKey + "-child"} style={collapsibleStyle}>
         {visible &&
@@ -253,26 +253,18 @@ function TracingQueries(props: { api: Client }) {
                 })}
               </ol>
             </li>
-            <li>
-              <ol style={collapsibleStyle}>
-                <NodalDisplay
-                  host={rootHost}
-                  title={CATEGORY_HEADERS.get(MessageCategory.aggregation)}
-                  category={MessageCategory.aggregation}
-                  logsBucketed={logsBucketed}
-                />
-              </ol>
-            </li>
-            <li>
-              <ol style={collapsibleStyle}>
-                <NodalDisplay
-                  host={rootHost}
-                  title={CATEGORY_HEADERS.get(MessageCategory.memory_tracker)}
-                  category={MessageCategory.memory_tracker}
-                  logsBucketed={logsBucketed}
-                />
-              </ol>
-            </li>
+            <NodalDisplay
+              host={rootHost}
+              title={CATEGORY_HEADERS.get(MessageCategory.aggregation)}
+              category={MessageCategory.aggregation}
+              logsBucketed={logsBucketed}
+            />
+            <NodalDisplay
+              host={rootHost}
+              title={CATEGORY_HEADERS.get(MessageCategory.memory_tracker)}
+              category={MessageCategory.memory_tracker}
+              logsBucketed={logsBucketed}
+            />
           </ol>
         </li>
       </ol>
