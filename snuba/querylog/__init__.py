@@ -30,6 +30,7 @@ def _record_timer_metrics(
             "final": final,
             "referrer": referrer,
             "parent_api": request.settings.get_parent_api(),
+            "dataset": query_metadata.dataset,
         },
     )
 
