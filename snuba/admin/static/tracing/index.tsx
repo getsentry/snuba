@@ -88,10 +88,10 @@ function NodalDisplay(props: {
 
   const nodeKey = props.host + "-" + props.category;
   return (
-    <li key={nodeKey} onClick={() => setVisible(!visible)}>
-      <span>
+    <li key={nodeKey}>
+      <a onClick={() => setVisible(!visible)}>
         {props.title} - Click to {visible ? "collapse" : "expand"}
-      </span>
+      </a>
 
       <ol key={nodeKey + "-child"} style={collapsibleStyle}>
         {visible &&
@@ -202,7 +202,6 @@ function TracingQueries(props: { api: Client }) {
 
     let rootHost = orderedHosts[0];
 
-    console.log(logsBucketed);
     const CATEGORIES_ORDERED = [
       MessageCategory.housekeeping,
       MessageCategory.select_execution,
