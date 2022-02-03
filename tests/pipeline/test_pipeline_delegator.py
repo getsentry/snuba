@@ -40,7 +40,7 @@ def test() -> None:
     }
 
     events = get_dataset("events")
-    query = parse_snql_query(query_body["query"], events)
+    query, _ = parse_snql_query(query_body["query"], events)
 
     errors_pipeline = SimplePipelineBuilder(
         query_plan_builder=SingleStorageQueryPlanBuilder(
@@ -66,7 +66,7 @@ def test() -> None:
     with cv:
         request_settings = HTTPRequestSettings(referrer="ref")
         delegator.build_execution_pipeline(
-            Request("", query_body, query, request_settings), mock_query_runner,
+            Request("", query_body, query, "", request_settings), mock_query_runner,
         ).execute()
         cv.wait(timeout=5)
 
