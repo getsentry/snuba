@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     AggregateInsertBatch,
@@ -15,6 +16,9 @@ from snuba.query.expressions import (
     Literal,
     OptionalScalarType,
 )
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+snuba_metrics = MetricsWrapper(environment.metrics, "metrics.processor")
 
 
 def _literal(value: OptionalScalarType) -> Literal:
@@ -101,6 +105,7 @@ class SetsAggregateProcessor(MetricsAggregateProcessor):
         values = message["value"]
         for v in values:
             assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
+        snuba_metrics.gauge("set.size", len(values))
 
         return {
             "value": _call(
@@ -139,6 +144,7 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
             assert isinstance(
                 v, (int, float)
             ), "Illegal value in set. Int/Float expected: {v}"
+        snuba_metrics.gauge("distribution.size", len(values))
 
         return {
             "percentiles": _call(

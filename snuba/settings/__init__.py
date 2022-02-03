@@ -58,6 +58,8 @@ DOGSTATSD_PORT = 8125
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
+    "metrics.processor.set.size": 0.1,
+    "metrics.processor.distribution.size": 0.1,
 }
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
