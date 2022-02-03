@@ -244,10 +244,10 @@ def test_metrics_writing_e2e() -> None:
         for offset, payload in enumerate(payloads)
     ]
 
-    # 3 rows written, one for each granularity
+    # 4 rows written, one for each metrics granularity
     with assert_changes(
-        lambda: get_row_count(distributions_storage), 0, 3
-    ), assert_changes(lambda: get_row_count(distributions_storage), 0, 3):
+        lambda: get_row_count(distributions_storage), 0, 4
+    ), assert_changes(lambda: get_row_count(distributions_storage), 0, 4):
         for message in messages:
             strategy.submit(message)
 
