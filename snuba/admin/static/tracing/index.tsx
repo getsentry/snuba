@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
-import { TracingResult } from "./types";
-import { QueryRequest } from "../components/query_display/types";
+import { TracingRequest, TracingResult } from "./types";
 import { Table } from "../table";
-import { COLORS } from "../theme";
 
-type QueryState = Partial<QueryRequest>;
+type QueryState = Partial<TracingRequest>;
 
 function TracingQueries(props: { api: Client }) {
   const [storages, setStorages] = useState<string[]>([]);
@@ -46,7 +44,7 @@ function TracingQueries(props: { api: Client }) {
     }
     setIsExecuting(true);
     props.api
-      .executeQuery(query as QueryRequest, endpoint)
+      .executeTracingQuery(query as TracingRequest)
       .then((result) => {
         const tracing_result = {
           input_query: `${query.sql}`,
@@ -161,16 +159,6 @@ function TracingQueries(props: { api: Client }) {
     </div>
   );
 }
-
-const jsonStyle = {
-  padding: 10,
-  border: `1px solid ${COLORS.TABLE_BORDER}`,
-  fontFamily: "monospace",
-  borderRadius: 4,
-  backgroundColor: COLORS.BG_LIGHT,
-  marginBottom: 10,
-  wordBreak: "break-all" as const,
-};
 
 const executeActionsStyle = {
   display: "flex",

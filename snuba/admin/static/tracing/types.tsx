@@ -1,3 +1,8 @@
+type TracingRequest = {
+  storage: string;
+  sql: string;
+};
+
 type TracingResult = {
   input_query?: string;
   timestamp: number;
@@ -5,4 +10,4 @@ type TracingResult = {
   error?: string;
 };
 
-export { TracingResult };
+export { TracingRequest, TracingResult };
