@@ -120,6 +120,35 @@ test_cases = [
         id="sample on entity",
     ),
     pytest.param(
+        f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression("e", Column("_snuba_e", None, "e")),
+            ],
+            condition=required_condition,
+            limitby=LimitBy(
+                5,
+                [
+                    Column("_snuba_c", None, "c"),
+                    Column("_snuba_d", None, "d"),
+                    Column("_snuba_e", None, "e"),
+                ],
+            ),
+            limit=1000,
+            offset=0,
+        ),
+        id="limit by multiple columns",
+    ),
+    pytest.param(
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 BY c",
         LogicalQuery(
             QueryEntity(
@@ -133,11 +162,11 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=required_condition,
-            limitby=LimitBy(5, Column("_snuba_c", None, "c")),
+            limitby=LimitBy(5, [Column("_snuba_c", None, "c")]),
             limit=1000,
             offset=0,
         ),
-        id="limit by column",
+        id="limit by single column",
     ),
     pytest.param(
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 OFFSET 3",
@@ -1618,6 +1647,250 @@ test_cases = [
         ),
         id="aliased columns in select and group by",
     ),
+    pytest.param(
+        f"""MATCH (discover_events)
+        SELECT arrayMap((`x`) -> identity(`x`), sdk_integrations) AS sdks
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "sdks",
+                    FunctionCall(
+                        "_snuba_sdks",
+                        "arrayMap",
+                        (
+                            Lambda(
+                                None,
+                                ("x",),
+                                FunctionCall(None, "identity", (Argument(None, "x"),)),
+                            ),
+                            Column("_snuba_sdk_integrations", None, "sdk_integrations"),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="higher order functions single identifier",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events)
+        SELECT arrayMap((`x`, `y`) -> identity(tuple(`x`, `y`)), sdk_integrations) AS sdks
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "sdks",
+                    FunctionCall(
+                        "_snuba_sdks",
+                        "arrayMap",
+                        (
+                            Lambda(
+                                None,
+                                ("x", "y"),
+                                FunctionCall(
+                                    None,
+                                    "identity",
+                                    (
+                                        FunctionCall(
+                                            None,
+                                            "tuple",
+                                            (Argument(None, "x"), Argument(None, "y")),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                            Column("_snuba_sdk_integrations", None, "sdk_integrations"),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="higher order function multiple identifier",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events)
+        SELECT arrayMap((`x`, `y`, `z`) -> tuple(`x`, `y`, `z`), sdk_integrations) AS sdks
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "sdks",
+                    FunctionCall(
+                        "_snuba_sdks",
+                        "arrayMap",
+                        (
+                            Lambda(
+                                None,
+                                ("x", "y", "z"),
+                                FunctionCall(
+                                    None,
+                                    "tuple",
+                                    (
+                                        Argument(None, "x"),
+                                        Argument(None, "y"),
+                                        Argument(None, "z"),
+                                    ),
+                                ),
+                            ),
+                            Column("_snuba_sdk_integrations", None, "sdk_integrations"),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="higher order function lots of identifier",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events)
+        SELECT arrayMap((`x`) -> identity(arrayMap((`y`) -> tuple(`x`, `y`), sdk_integrations)), sdk_integrations) AS sdks
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "sdks",
+                    FunctionCall(
+                        "_snuba_sdks",
+                        "arrayMap",
+                        (
+                            Lambda(
+                                None,
+                                ("x",),
+                                FunctionCall(
+                                    None,
+                                    "identity",
+                                    (
+                                        FunctionCall(
+                                            None,
+                                            "arrayMap",
+                                            (
+                                                Lambda(
+                                                    None,
+                                                    ("y",),
+                                                    FunctionCall(
+                                                        None,
+                                                        "tuple",
+                                                        (
+                                                            Argument(None, "x"),
+                                                            Argument(None, "y"),
+                                                        ),
+                                                    ),
+                                                ),
+                                                Column(
+                                                    "_snuba_sdk_integrations",
+                                                    None,
+                                                    "sdk_integrations",
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                            Column("_snuba_sdk_integrations", None, "sdk_integrations"),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="higher order function with nested higher order function",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events)
+        SELECT arrayReduce('sumIf', spans.op, arrayMap((`x`, `y`) -> if(equals(and(equals(`x`, 'db'), equals(`y`, 'ops')), 1), 1, 0), spans.op, spans.group)) AS spans
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "spans",
+                    FunctionCall(
+                        "_snuba_spans",
+                        "arrayReduce",
+                        (
+                            Literal(None, "sumIf"),
+                            Column("_snuba_spans.op", None, "spans.op"),
+                            FunctionCall(
+                                None,
+                                "arrayMap",
+                                (
+                                    Lambda(
+                                        None,
+                                        ("x", "y"),
+                                        FunctionCall(
+                                            None,
+                                            "if",
+                                            (
+                                                binary_condition(
+                                                    "equals",
+                                                    binary_condition(
+                                                        "and",
+                                                        binary_condition(
+                                                            "equals",
+                                                            Argument(None, "x"),
+                                                            Literal(None, "db"),
+                                                        ),
+                                                        binary_condition(
+                                                            "equals",
+                                                            Argument(None, "y"),
+                                                            Literal(None, "ops"),
+                                                        ),
+                                                    ),
+                                                    Literal(None, 1),
+                                                ),
+                                                Literal(None, 1),
+                                                Literal(None, 0),
+                                            ),
+                                        ),
+                                    ),
+                                    Column("_snuba_spans.op", None, "spans.op"),
+                                    Column("_snuba_spans.group", None, "spans.group"),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="higher order function complex case",
+    ),
 ]
 
 
@@ -1645,7 +1918,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events_entity = get_entity(EntityKey.EVENTS)
     setattr(events_entity, "get_join_relationship", events_mock)
 
-    query = parse_snql_query(query_body, events)
+    query, _ = parse_snql_query(query_body, events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason

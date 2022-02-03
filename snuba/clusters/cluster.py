@@ -29,12 +29,18 @@ class ClickhouseClientSettingsType(NamedTuple):
     timeout: Optional[int]
 
 
+class ConnectionId(NamedTuple):
+    hostname: str
+    tcp_port: int
+    http_port: int
+    database_name: str
+
+
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
     MIGRATE = ClickhouseClientSettingsType(
-        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2},
-        10000
+        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
@@ -274,14 +280,22 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         ), "distributed_cluster_name must be set"
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
 
+    def get_connection_id(self) -> ConnectionId:
+        return ConnectionId(
+            hostname=self.__query_node.host_name,
+            tcp_port=self.__query_node.port,
+            http_port=self.__http_port,
+            database_name=self.__database,
+        )
+
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
         return [
             ClickhouseNode(*host)
-            for host in self.get_query_connection(
-                ClickhouseClientSettings.QUERY
-            ).execute(
+            for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
+            .execute(
                 f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
             )
+            .results
         ]
 
 
@@ -320,10 +334,6 @@ expected_storage_sets = {
     for s in StorageSetKey
     if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
 }
-
-assert (
-    not expected_storage_sets - _unique_registered_storage_sets
-), "All storage sets must be assigned to a cluster"
 
 # Map all storages to clusters via storage sets
 _STORAGE_SET_CLUSTER_MAP = {

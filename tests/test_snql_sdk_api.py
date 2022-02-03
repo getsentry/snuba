@@ -3,14 +3,22 @@ from datetime import datetime, timedelta
 from typing import Any, Callable
 
 import simplejson as json
-from snuba_sdk.column import Column
-from snuba_sdk.conditions import Condition, Op
-from snuba_sdk.entity import Entity
-from snuba_sdk.function import Function
-from snuba_sdk.orderby import Direction, OrderBy
-from snuba_sdk.query import Query
-from snuba_sdk.relationships import Join, Relationship
+from snuba_sdk import (
+    Column,
+    Condition,
+    Direction,
+    Entity,
+    Function,
+    Identifier,
+    Join,
+    Lambda,
+    Op,
+    OrderBy,
+    Query,
+    Relationship,
+)
 
+from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
@@ -25,6 +33,7 @@ class TestSDKSnQLApi(BaseApiTest):
         return self.app.post(url, data=data, headers={"referer": "test"})
 
     def setup_method(self, test_method: Callable[..., Any]) -> None:
+        state.set_config("write_span_columns_rollout_percentage", 100)
         super().setup_method(test_method)
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
@@ -179,7 +188,7 @@ class TestSDKSnQLApi(BaseApiTest):
                 ]
             )
             .set_groupby([Column("exception_frames.filename")])
-            .set_array_join(Column("exception_frames.filename"))
+            .set_array_join([Column("exception_frames.filename")])
             .set_where(
                 [
                     Condition(Column("exception_frames.filename"), Op.LIKE, "%.java"),
@@ -290,3 +299,90 @@ class TestSDKSnQLApi(BaseApiTest):
         response = self.post("/events/snql", data=query.snuba())
         data = json.loads(response.data)
         assert response.status_code == 200, data
+
+    def test_suspect_spans_lambdas(self) -> None:
+        query = (
+            Query("discover", Entity("discover_transactions"))
+            .set_select(
+                [
+                    Column("spans.op"),
+                    Column("spans.group"),
+                    Function(
+                        "arrayReduce",
+                        [
+                            "sumIf",
+                            Column("spans.exclusive_time_32"),
+                            Function(
+                                "arrayMap",
+                                [
+                                    Lambda(
+                                        ["x", "y"],
+                                        Function(
+                                            "if",
+                                            [
+                                                Function(
+                                                    "equals",
+                                                    [
+                                                        Function(
+                                                            "and",
+                                                            [
+                                                                Function(
+                                                                    "equals",
+                                                                    [
+                                                                        Identifier("x"),
+                                                                        "db",
+                                                                    ],
+                                                                ),
+                                                                Function(
+                                                                    "equals",
+                                                                    [
+                                                                        Identifier("y"),
+                                                                        "05029609156d8133",
+                                                                    ],
+                                                                ),
+                                                            ],
+                                                        ),
+                                                        1,
+                                                    ],
+                                                ),
+                                                1,
+                                                0,
+                                            ],
+                                        ),
+                                    ),
+                                    Column("spans.op"),
+                                    Column("spans.group"),
+                                ],
+                            ),
+                        ],
+                        "array_spans_exclusive_time",
+                    ),
+                ]
+            )
+            .set_where(
+                [
+                    Condition(Column("transaction_name"), Op.EQ, "/api/do_things"),
+                    Condition(Function("has", [Column("spans.op"), "db"]), Op.EQ, 1),
+                    Condition(
+                        Function("has", [Column("spans.group"), "05029609156d8133"]),
+                        Op.EQ,
+                        1,
+                    ),
+                    Condition(Column("duration"), Op.LT, 900000.0),
+                    Condition(Column("finish_ts"), Op.GTE, self.base_time),
+                    Condition(Column("finish_ts"), Op.LT, self.next_time),
+                    Condition(Column("project_id"), Op.IN, (self.project_id,)),
+                ]
+            )
+            .set_orderby(
+                [OrderBy(Column("array_spans_exclusive_time"), Direction.DESC)]
+            )
+            .set_limit(10)
+        )
+
+        response = self.post("/discover/snql", data=query.snuba())
+        resp = json.loads(response.data)
+        assert response.status_code == 200, resp
+        data = resp["data"]
+        assert len(data) == 1
+        assert data[0]["array_spans_exclusive_time"] > 0

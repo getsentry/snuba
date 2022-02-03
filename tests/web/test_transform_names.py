@@ -76,7 +76,9 @@ def test_transform_column_names() -> None:
 
     result = parse_and_run_query(
         dataset,
-        Request(id="asd", body={}, query=query, settings=query_settings),
+        Request(
+            id="asd", body={}, query=query, snql_anonymized="", settings=query_settings
+        ),
         timer,
     )
 

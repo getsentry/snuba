@@ -26,6 +26,8 @@ class StorageSetKey(Enum):
     QUERYLOG = "querylog"
     SESSIONS = "sessions"
     TRANSACTIONS = "transactions"
+    TRANSACTIONS_RO = "transactions_ro"
+    TRANSACTIONS_V2 = "transactions_v2"
 
 
 # Storage sets enabled only when development features are enabled.

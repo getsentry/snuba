@@ -73,7 +73,7 @@ class TestReplacer:
             AND project_id = {project_id}
             GROUP BY group_id
             """
-        )
+        ).results
 
         return [{"group_id": row[0], "count": row[1]} for row in data]
 
@@ -485,7 +485,7 @@ class TestReplacer:
                 {total_cond}
                 GROUP BY group_id
                 """
-            )
+            ).results
 
             return [{"group_id": row[0], "count": row[1]} for row in data]
 

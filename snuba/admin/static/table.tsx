@@ -5,13 +5,15 @@ import { COLORS } from "./theme";
 type TableProps = {
   headerData: ReactNode[];
   rowData: ReactNode[][];
-  columnWidths: number[];
+  columnWidths?: number[];
 };
 
 function Table(props: TableProps) {
   const { headerData, rowData, columnWidths } = props;
 
-  const sumColumnWidths = columnWidths.reduce((acc, i) => acc + i, 0);
+  const autoColumnWidths = Array(headerData.length).fill(1);
+  const notEmptyColumnWidths = columnWidths ?? autoColumnWidths;
+  const sumColumnWidths = notEmptyColumnWidths.reduce((acc, i) => acc + i, 0);
 
   return (
     <table style={tableStyle}>
@@ -22,7 +24,9 @@ function Table(props: TableProps) {
               key={idx}
               style={{
                 ...thStyle,
-                width: `${(columnWidths[idx] * 100) / sumColumnWidths}%`,
+                width: `${
+                  (notEmptyColumnWidths[idx] * 100) / sumColumnWidths
+                }%`,
               }}
             >
               {col}
@@ -72,6 +76,33 @@ const thStyle = {
 const tdStyle = {
   ...border,
   padding: 10,
+  position: "relative" as const,
 };
 
-export { Table };
+function EditableTableCell(props: {
+  value: string | number;
+  onChange: (value: string) => void;
+}) {
+  const { value, onChange } = props;
+
+  return (
+    <textarea
+      value={value}
+      onChange={(evt) => onChange(evt.target.value)}
+      spellCheck={false}
+      style={textAreaStyle}
+    />
+  );
+}
+
+const textAreaStyle = {
+  position: "absolute" as const,
+  padding: 10,
+  left: 0,
+  right: 0,
+  top: 0,
+  bottom: 0,
+  width: "calc(100% - 24px)",
+};
+
+export { Table, EditableTableCell };

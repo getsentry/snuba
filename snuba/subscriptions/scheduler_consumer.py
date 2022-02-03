@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
 from arroyo import Message, Partition, Topic
-from arroyo.backends.abstract import Consumer
+from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
@@ -14,8 +14,11 @@ from arroyo.types import Position
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.subscriptions.data import PartitionId
+from snuba.subscriptions.scheduler_load_testing import LoadTestingSubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
-    CommittableTick,
+    ProduceScheduledSubscriptionMessage,
     ProvideCommitStrategy,
     TickBuffer,
 )
@@ -187,14 +190,16 @@ class SchedulerBuilder:
         entity_name: str,
         consumer_group: str,
         followed_consumer_group: str,
+        producer: Producer[KafkaPayload],
         auto_offset_reset: str,
+        schedule_ttl: int,
         delay_seconds: Optional[int],
         metrics: MetricsBackend,
         load_factor: int,
     ) -> None:
-        self.__entity = get_entity(EntityKey(entity_name))
+        self.__entity_key = EntityKey(entity_name)
 
-        storage = self.__entity.get_writable_storage()
+        storage = get_entity(self.__entity_key).get_writable_storage()
 
         assert (
             storage is not None
@@ -206,6 +211,10 @@ class SchedulerBuilder:
         assert commit_log_topic_spec is not None
         self.__commit_log_topic_spec = commit_log_topic_spec
 
+        scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
+        assert scheduled_topic_spec is not None
+        self.__scheduled_topic_spec = scheduled_topic_spec
+
         mode = stream_loader.get_subscription_scheduler_mode()
         assert mode is not None
 
@@ -215,13 +224,12 @@ class SchedulerBuilder:
 
         self.__consumer_group = consumer_group
         self.__followed_consumer_group = followed_consumer_group
+        self.__producer = producer
         self.__auto_offset_reset = auto_offset_reset
+        self.__schedule_ttl = schedule_ttl
         self.__delay_seconds = delay_seconds
         self.__metrics = metrics
-
-        self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
-            entity_name, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
-        )
+        self.__load_factor = load_factor
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
@@ -232,7 +240,14 @@ class SchedulerBuilder:
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
         return SubscriptionSchedulerProcessingFactory(
-            self.__mode, self.__partitions, self.__buffer_size, self.__metrics
+            self.__entity_key,
+            self.__mode,
+            self.__schedule_ttl,
+            self.__partitions,
+            self.__producer,
+            self.__scheduled_topic_spec,
+            self.__metrics,
+            self.__load_factor,
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
@@ -253,50 +268,54 @@ class SchedulerBuilder:
         )
 
 
-class NextStep(ProcessingStrategy[CommittableTick]):
-    def __init__(self, commit: Callable[[Mapping[Partition, Position]], None]) -> None:
-        self.__commit = commit
-
-    def poll(self) -> None:
-        pass
-
-    def submit(self, message: Message[CommittableTick]) -> None:
-        self.__commit({message.partition: Position(message.offset, message.timestamp)})
-
-    def close(self) -> None:
-        pass
-
-    def terminate(self) -> None:
-        pass
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
-
-
 class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     def __init__(
         self,
+        entity_key: EntityKey,
         mode: SchedulingWatermarkMode,
+        schedule_ttl: int,
         partitions: int,
-        buffer_size: int,
+        producer: Producer[KafkaPayload],
+        scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
+        load_factor: int,
     ) -> None:
         self.__mode = mode
         self.__partitions = partitions
-        self.__buffer_size = buffer_size
+        self.__producer = producer
+        self.__scheduled_topic_spec = scheduled_topic_spec
         self.__metrics = metrics
+
+        self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
+            entity_key.value, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
+        )
+
+        self.__schedulers = {
+            index: LoadTestingSubscriptionScheduler(
+                PartitionId(index),
+                cache_ttl=timedelta(seconds=schedule_ttl),
+                metrics=self.__metrics,
+                entity_key=entity_key,
+                load_factor=load_factor,
+            )
+            for index in range(self.__partitions)
+        }
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[Tick]:
-        # TODO: Temporarily hardcoding global mode for testing
-        mode = SchedulingWatermarkMode.GLOBAL
-        next_step = NextStep(commit)
+        schedule_step = ProduceScheduledSubscriptionMessage(
+            self.__schedulers,
+            self.__producer,
+            self.__scheduled_topic_spec,
+            commit,
+            self.__metrics,
+        )
 
         return TickBuffer(
-            mode,
+            self.__mode,
             self.__partitions,
             self.__buffer_size,
-            ProvideCommitStrategy(self.__partitions, next_step),
+            ProvideCommitStrategy(self.__partitions, schedule_step, self.__metrics),
             self.__metrics,
         )

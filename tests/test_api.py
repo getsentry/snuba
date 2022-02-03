@@ -179,7 +179,7 @@ class TestApi(SimpleAPITest):
             .get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
         )
-        res = clickhouse.execute("SELECT count() FROM %s" % self.table)
+        res = clickhouse.execute("SELECT count() FROM %s" % self.table).results
         assert res[0][0] == 330
 
         rollup_mins = 60
@@ -2063,17 +2063,17 @@ class TestApi(SimpleAPITest):
         )
 
         # There is data in the events table
-        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) > 0
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) > 0
 
         assert self.app.post("/tests/events/drop").status_code == 200
         writer = storage.get_table_writer()
         table = writer.get_schema().get_table_name()
 
-        assert table not in clickhouse.execute("SHOW TABLES")
+        assert table not in clickhouse.execute("SHOW TABLES").results
         assert self.redis_db_size() == 0
 
         # No data in events table
-        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) == 0
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) == 0
 
     def test_max_limit(self) -> None:
         with pytest.raises(Exception):
@@ -2168,6 +2168,7 @@ class TestApi(SimpleAPITest):
 
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
+    entity_key = "events"
 
     def test(self) -> None:
         expected_uuid = uuid.uuid1()
@@ -2175,7 +2176,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
+                f"{self.dataset_name}/{self.entity_key}/subscriptions",
                 data=json.dumps(
                     {
                         "project_id": 1,
@@ -2192,9 +2193,77 @@ class TestCreateSubscriptionApi(BaseApiTest):
             "subscription_id": f"0/{expected_uuid.hex}",
         }
 
+    def test_selected_entity_is_used(self) -> None:
+        """
+        Test that ensures that the passed entity is the selected one, not the dataset's default
+        entity
+        """
+
+        expected_uuid = uuid.uuid1()
+        entity_key = EntityKey.METRICS_COUNTERS
+
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                f"metrics/{entity_key.value}/subscriptions",
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "organization": 1,
+                        "query": "MATCH (metrics_counters) SELECT sum(value) AS value BY "
+                        "project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND "
+                        "tags[3] IN array(1,34) AND metric_id = 7",
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                    }
+                ).encode("utf-8"),
+            )
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {
+            "subscription_id": f"0/{expected_uuid.hex}",
+        }
+        subscription_id = data["subscription_id"]
+        partition = subscription_id.split("/", 1)[0]
+        assert (
+            len(
+                RedisSubscriptionDataStore(redis_client, entity_key, partition,).all()
+                # type: ignore
+            )
+            == 1
+        )
+
+    def test_invalid_dataset_and_entity_combination(self):
+        expected_uuid = uuid.uuid1()
+        entity_key = EntityKey.METRICS_COUNTERS
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                f"{self.dataset_name}/{entity_key.value}/subscriptions",
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                        "organization": 1,
+                    }
+                ).encode("utf-8"),
+            )
+
+        assert resp.status_code == 400
+        data = json.loads(resp.data)
+        assert data == {
+            "error": {
+                "message": "Invalid subscription dataset and entity combination",
+                "type": "subscription",
+            }
+        }
+
     def test_time_error(self) -> None:
         resp = self.app.post(
-            "{}/subscriptions".format(self.dataset_name),
+            "{}/{}/subscriptions".format(self.dataset_name, self.entity_key),
             data=json.dumps(
                 {
                     "project_id": 1,
@@ -2214,45 +2283,16 @@ class TestCreateSubscriptionApi(BaseApiTest):
             }
         }
 
-    def test_delegate(self) -> None:
+    def test_with_bad_snql(self) -> None:
         expected_uuid = uuid.uuid1()
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
+                "{}/{}/subscriptions".format(self.dataset_name, self.entity_key),
                 data=json.dumps(
                     {
-                        "type": "delegate",
                         "project_id": 1,
-                        "conditions": [["platform", "IN", ["a"]]],
-                        "aggregations": [["count()", "", "count"]],
-                        "time_window": int(timedelta(minutes=10).total_seconds()),
-                        "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') AND project_id = 1",
-                    }
-                ).encode("utf-8"),
-            )
-
-        assert resp.status_code == 202
-        data = json.loads(resp.data)
-        assert data == {
-            "subscription_id": f"0/{expected_uuid.hex}",
-        }
-
-    def test_delegate_with_bad_snql(self) -> None:
-        expected_uuid = uuid.uuid1()
-
-        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
-            uuid4.return_value = expected_uuid
-            resp = self.app.post(
-                "{}/subscriptions".format(self.dataset_name),
-                data=json.dumps(
-                    {
-                        "type": "delegate",
-                        "project_id": 1,
-                        "conditions": [["platform", "IN", ["a"]]],
-                        "aggregations": [["count()", "", "count"]],
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
                         "query": "MATCH (events) SELECT count() AS count BY project_id WHERE platform IN tuple('a')",
@@ -2276,7 +2316,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
 
     def test(self) -> None:
         resp = self.app.post(
-            "{}/subscriptions".format(self.dataset_name),
+            f"{self.dataset_name}/events/subscriptions",
             data=json.dumps(
                 {
                     "project_id": 1,
@@ -2302,9 +2342,30 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         )
 
         resp = self.app.delete(
-            f"{self.dataset_name}/subscriptions/{data['subscription_id']}"
+            f"{self.dataset_name}/{entity_key.value}/subscriptions/{data['subscription_id']}"
         )
         assert resp.status_code == 202, resp
         assert (
             RedisSubscriptionDataStore(redis_client, entity_key, partition,).all() == []
         )
+
+    def test_invalid_dataset_and_entity_combination(self) -> None:
+        resp = self.app.post(
+            "events/metrics_counters/subscriptions",
+            data=json.dumps(
+                {
+                    "project_id": 1,
+                    "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
+                    "time_window": int(timedelta(minutes=10).total_seconds()),
+                    "resolution": int(timedelta(minutes=1).total_seconds()),
+                }
+            ).encode("utf-8"),
+        )
+        assert resp.status_code == 400
+        data = json.loads(resp.data)
+        assert data == {
+            "error": {
+                "message": "Invalid subscription dataset and entity combination",
+                "type": "subscription",
+            }
+        }

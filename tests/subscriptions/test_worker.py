@@ -2,7 +2,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Generator, Iterable, MutableMapping, Optional, Tuple
+from typing import Any, Iterable, MutableMapping, Optional, Tuple
 from uuid import UUID, uuid1
 
 import pytest
@@ -12,6 +12,7 @@ from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.utils.clock import TestingClock
 
 from snuba import state
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import ConditionFunctions, get_first_level_and_conditions
 from snuba.query.matchers import (
@@ -22,22 +23,18 @@ from snuba.query.matchers import (
     Pattern,
     String,
 )
-from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     PartitionId,
     SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionTaskResult,
 )
-from snuba.subscriptions.entity_subscription import SessionsSubscription
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
-from snuba.subscriptions.worker import (
-    SubscriptionTaskResult,
-    SubscriptionWorker,
-    handle_nan,
-)
+from snuba.subscriptions.utils import Tick
+from snuba.subscriptions.worker import SubscriptionWorker, handle_differences
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.backends.metrics import Increment, TestingMetricsBackend
@@ -73,47 +70,113 @@ class Datetime(Pattern[datetime]):
         return MatchResult() if node == self.value else None
 
 
-@pytest.fixture(
-    ids=["SnQL", "Crash Rate Alert Delegate"],
-    params=[
-        SnQLSubscriptionData(
-            project_id=1,
-            query=("MATCH (events) SELECT count() AS count"),
-            time_window=timedelta(minutes=60),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(),
-        ),
-        SnQLSubscriptionData(
-            project_id=123,
-            query=(
-                """MATCH (sessions) SELECT if(greater(sessions,0),
+SUBSCRIPTION_FIXTURES = [
+    SnQLSubscriptionData(
+        project_id=1,
+        query=("MATCH (events) SELECT count() AS count"),
+        time_window=timedelta(minutes=60),
+        resolution=timedelta(minutes=1),
+        entity_subscription=create_entity_subscription(),
+    ),
+    SnQLSubscriptionData(
+        project_id=123,
+        query=(
+            """MATCH (sessions) SELECT if(greater(sessions,0),
                 divide(sessions_crashed,sessions),null)
                 AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
                 WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
                 OFFSET 0 GRANULARITY 3600"""
-            ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
-            entity_subscription=create_entity_subscription(dataset_name="sessions"),
         ),
-    ],
+        time_window=timedelta(minutes=10),
+        resolution=timedelta(minutes=1),
+        entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
+    ),
+    SnQLSubscriptionData(
+        project_id=123,
+        query=(
+            """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND tags[3] IN array(3,4,
+                5) AND metric_id=7"""
+        ),
+        time_window=timedelta(minutes=10),
+        resolution=timedelta(minutes=1),
+        entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS, 1),
+    ),
+    SnQLSubscriptionData(
+        project_id=123,
+        query=(
+            """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
+                WHERE org_id = 1 AND project_id IN array(1) AND tags[3] IN array(3,4,
+                5) AND metric_id=7"""
+        ),
+        time_window=timedelta(minutes=10),
+        resolution=timedelta(minutes=1),
+        entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+    ),
+]
+
+SUBSCRIPTION_WORKER_TEST_CASES = [
+    pytest.param(
+        SUBSCRIPTION_FIXTURES[0],
+        "events",
+        EntityKey.EVENTS,
+        {"meta": [{"name": "count", "type": "UInt64"}], "data": [{"count": 0}]},
+        id="snql",
+    ),
+    pytest.param(
+        SUBSCRIPTION_FIXTURES[1],
+        "sessions",
+        EntityKey.SESSIONS,
+        {
+            "meta": [
+                {"name": "_crash_rate_alert_aggregate", "type": "Nullable(Float64)"},
+                {"type": "UInt64", "name": "_total_sessions"},
+            ],
+            "data": [{"_crash_rate_alert_aggregate": None, "_total_sessions": 0}],
+        },
+        id="snql",
+    ),
+    pytest.param(
+        SUBSCRIPTION_FIXTURES[2],
+        "metrics",
+        EntityKey.METRICS_COUNTERS,
+        {
+            "data": [],
+            "meta": [
+                {"name": "project_id", "type": "UInt64"},
+                {"name": "tags[3]", "type": "UInt64"},
+                {"name": "value", "type": "Float64"},
+            ],
+        },
+        id="snql",
+    ),
+    pytest.param(
+        SUBSCRIPTION_FIXTURES[3],
+        "metrics",
+        EntityKey.METRICS_SETS,
+        {
+            "data": [],
+            "meta": [
+                {"name": "project_id", "type": "UInt64"},
+                {"name": "tags[3]", "type": "UInt64"},
+                {"name": "value", "type": "UInt64"},
+            ],
+        },
+        id="snql",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "subscription_data, dataset_name, entity_key, expected_result",
+    SUBSCRIPTION_WORKER_TEST_CASES,
 )
-def subscription_data(request: Any) -> SubscriptionData:
-    assert isinstance(request.param, SubscriptionData)
-    return request.param
-
-
-@pytest.fixture
-def subscription_rollout() -> Generator[None, None, None]:
-    state.set_config("snql_subscription_rollout_pct", 1.0)
-    yield
-    state.set_config("snql_subscription_rollout", 0.0)
-
-
-def test_subscription_worker(subscription_data: SubscriptionData) -> None:
-    uses_sessions_dataset = isinstance(
-        subscription_data.entity_subscription, SessionsSubscription
-    )
+def test_subscription_worker(
+    subscription_data: SubscriptionData,
+    dataset_name: str,
+    entity_key: EntityKey,
+    expected_result: MutableMapping[str, Any],
+) -> None:
 
     broker: Broker[SubscriptionTaskResult] = Broker(
         MemoryMessageStorage(), TestingClock()
@@ -135,13 +198,15 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
 
     metrics = DummyMetricsBackend(strict=True)
 
-    dataset = (
-        get_dataset("events") if not uses_sessions_dataset else get_dataset("sessions")
-    )
+    dataset = get_dataset(dataset_name)
     worker = SubscriptionWorker(
         dataset,
         ThreadPoolExecutor(),
-        {0: SubscriptionScheduler(store, PartitionId(0), timedelta(), metrics)},
+        {
+            0: SubscriptionScheduler(
+                entity_key, store, PartitionId(0), timedelta(), metrics
+            )
+        },
         broker.get_producer(),
         result_topic,
         metrics,
@@ -150,11 +215,12 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
     now = datetime(2000, 1, 1)
 
     tick = Tick(
+        None,
         offsets=Interval(0, 1),
         timestamps=Interval(now - (frequency * evaluations), now),
     )
 
-    topic = Topic("events") if not uses_sessions_dataset else Topic("sessions")
+    topic = Topic(dataset_name)
     result_futures = worker.process_message(Message(Partition(topic, 0), 0, tick, now))
 
     assert result_futures is not None and len(result_futures) == evaluations
@@ -178,8 +244,9 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         future_result = request, result = future.result()
         assert message.payload.task.timestamp == timestamp
         assert message.payload == SubscriptionTaskResult(task, future_result)
+        del result["profile"]
 
-        timestamp_field = "timestamp" if not uses_sessions_dataset else "started"
+        timestamp_field = "timestamp" if dataset_name != "sessions" else "started"
         from_pattern = FunctionCall(
             String(ConditionFunctions.GTE),
             (
@@ -200,27 +267,12 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
         assert any([from_pattern.match(e) for e in conditions])
         assert any([to_pattern.match(e) for e in conditions])
 
-        if uses_sessions_dataset:
-            expected_result = {
-                "meta": [
-                    {
-                        "name": "_crash_rate_alert_aggregate",
-                        "type": "Nullable(Float64)",
-                    },
-                    {"type": "UInt64", "name": "_total_sessions"},
-                ],
-                "data": [{"_crash_rate_alert_aggregate": None, "_total_sessions": 0}],
-            }
-        else:
-            expected_result = {
-                "meta": [{"name": "count", "type": "UInt64"}],
-                "data": [{"count": 0}],
-            }
-
-        assert result == expected_result
+        assert result["data"] == expected_result["data"]
+        assert result["meta"] == expected_result["meta"]
 
 
-def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> None:
+def test_subscription_worker_consistent() -> None:
+    subscription_data = SUBSCRIPTION_FIXTURES[0]
     state.set_config("event_subscription_non_consistent_sample_rate", 1)
     broker: Broker[SubscriptionTaskResult] = Broker(
         MemoryMessageStorage(), TestingClock()
@@ -248,7 +300,11 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
         ThreadPoolExecutor(),
         {
             0: SubscriptionScheduler(
-                store, PartitionId(0), timedelta(), DummyMetricsBackend(strict=True)
+                EntityKey.EVENTS,
+                store,
+                PartitionId(0),
+                timedelta(),
+                DummyMetricsBackend(strict=True),
             )
         },
         broker.get_producer(),
@@ -259,6 +315,7 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
     now = datetime(2000, 1, 1)
 
     tick = Tick(
+        None,
         offsets=Interval(0, 1),
         timestamps=Interval(now - (frequency * evaluations), now),
     )
@@ -279,7 +336,9 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
     )
 
 
-def test_handle_nan() -> None:
-    assert handle_nan({"data": [{"a": float("nan"), "b": None}]}) == {
+def test_handle_differences() -> None:
+    assert handle_differences({"data": [{"a": float("nan"), "b": None}]}) == {
         "data": [{"a": "nan", "b": None}]
     }
+
+    assert handle_differences({"data": [], "profile": {}}) == {"data": []}

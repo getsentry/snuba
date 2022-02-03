@@ -2,8 +2,8 @@ from datetime import datetime
 from uuid import UUID, uuid1
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import enforce_table_writer, get_entity
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     PartitionId,
@@ -22,12 +22,13 @@ class SubscriptionCreator:
     the resulting query is valid.
     """
 
-    def __init__(self, dataset: Dataset):
+    def __init__(self, dataset: Dataset, entity_key: EntityKey):
         self.dataset = dataset
-        self.entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+        self.entity_key = entity_key
 
+        entity = get_entity(entity_key)
         self.__partitioner = TopicSubscriptionDataPartitioner(
-            enforce_table_writer(dataset).get_stream_loader().get_default_topic_spec()
+            enforce_table_writer(entity).get_stream_loader().get_default_topic_spec()
         )
 
     def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
@@ -53,9 +54,8 @@ class SubscriptionDeleter:
     Handles deletion of a `Subscription`, based on its ID and partition.
     """
 
-    def __init__(self, dataset: Dataset, partition: PartitionId):
-        self.dataset = dataset
-        self.entity_key = ENTITY_NAME_LOOKUP[dataset.get_default_entity()]
+    def __init__(self, entity_key: EntityKey, partition: PartitionId):
+        self.entity_key = entity_key
         self.partition = partition
 
     def delete(self, subscription_id: UUID) -> None:

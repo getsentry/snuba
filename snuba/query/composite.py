@@ -37,7 +37,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Expression] = None,
+        array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
@@ -62,6 +62,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
             granularity=granularity,
         )
         self.__from_clause = from_clause
+        self.__final = False
 
     def __repr__(self) -> str:
         from snuba.query.formatters.tracing import format_query
@@ -106,7 +107,10 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         self.__from_clause = from_clause
 
     def get_final(self) -> bool:
-        return False
+        return self.__final
+
+    def set_final(self, final: bool) -> None:
+        self.__final = final
 
     def _get_expressions_impl(self) -> Iterable[Expression]:
         return []

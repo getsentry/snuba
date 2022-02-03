@@ -6,8 +6,8 @@ import logging
 import math
 import random
 import time
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from typing import List, Mapping, NamedTuple, Optional, Sequence, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Mapping, Optional, Sequence, Tuple
 
 from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
@@ -19,12 +19,16 @@ from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
-from snuba.subscriptions.consumer import Tick
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import (
+    ScheduledSubscriptionTask,
+    SubscriptionScheduler,
+    SubscriptionTaskResult,
+    SubscriptionTaskResultFuture,
+)
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.utils.threaded_function_delegator import (
     Result as ThreadedFunctionDelegatorResult,
 )
@@ -34,16 +38,6 @@ from snuba.web.query import parse_and_run_query
 logger = logging.getLogger("snuba.subscriptions")
 
 
-class SubscriptionTaskResultFuture(NamedTuple):
-    task: ScheduledTask[Subscription]
-    future: Future[Tuple[Request, Result]]
-
-
-class SubscriptionTaskResult(NamedTuple):
-    task: ScheduledTask[Subscription]
-    result: Tuple[Request, Result]
-
-
 class SubscriptionWorker(
     AbstractBatchWorker[Tick, Sequence[SubscriptionTaskResultFuture]]
 ):
@@ -51,7 +45,7 @@ class SubscriptionWorker(
         self,
         dataset: Dataset,
         executor: ThreadPoolExecutor,
-        schedulers: Mapping[int, Scheduler[Subscription]],
+        schedulers: Mapping[int, SubscriptionScheduler],
         producer: Producer[SubscriptionTaskResult],
         topic: Topic,
         metrics: MetricsBackend,
@@ -73,7 +67,7 @@ class SubscriptionWorker(
         )
 
     def __execute(
-        self, task: ScheduledTask[Subscription], tick: Tick
+        self, task: ScheduledSubscriptionTask, tick: Tick
     ) -> Tuple[Request, Result]:
         # Measure the amount of time that took between this task being
         # scheduled and it beginning to execute.
@@ -86,13 +80,13 @@ class SubscriptionWorker(
         # execution environment.
         timer = Timer("query")
 
-        request = task.task.data.build_request(
-            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
+        request = task.task.subscription.data.build_request(
+            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics,
         )
         return self.__execute_query(request, timer, task)
 
     def __execute_query(
-        self, request: Request, timer: Timer, task: ScheduledTask[Subscription]
+        self, request: Request, timer: Timer, task: ScheduledSubscriptionTask
     ) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
             is_consistent_query = request.settings.get_consistent()
@@ -102,6 +96,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=True
                     ),
@@ -122,6 +117,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=False
                     ),
@@ -153,9 +149,9 @@ class SubscriptionWorker(
                     else primary_result
                 )
                 for result in other_results:
-                    match = primary_result_data is not None and handle_nan(
+                    match = primary_result_data is not None and handle_differences(
                         result.result
-                    ) == handle_nan(primary_result_data)
+                    ) == handle_differences(primary_result_data)
                     self.__metrics.increment(
                         "consistent",
                         tags={
@@ -175,8 +171,8 @@ class SubscriptionWorker(
                                 "other": result.result,
                                 "query_columns": request.query.get_selected_columns(),
                                 "query_condition": request.query.get_condition(),
-                                "subscription_id": task.task.identifier,
-                                "project": task.task.data.project_id,
+                                "subscription_id": task.task.subscription.identifier,
+                                "project": task.task.subscription.data.project_id,
                             },
                         )
 
@@ -223,7 +219,7 @@ class SubscriptionWorker(
             SubscriptionTaskResultFuture(
                 task, self.__executor.submit(self.__execute, task, tick)
             )
-            for task in self.__schedulers[message.partition.index].find(tick.timestamps)
+            for task in self.__schedulers[message.partition.index].find(tick)
         ]
 
     def flush_batch(
@@ -248,7 +244,8 @@ class SubscriptionWorker(
             future.result()
 
 
-def handle_nan(result: Result) -> Result:
+def handle_differences(result: Result) -> Result:
+    # Handle nan values
     result_copy = copy.deepcopy(result)
     for row in result_copy["data"]:
         for key in row:
@@ -257,5 +254,9 @@ def handle_nan(result: Result) -> Result:
                     row[key] = "nan"
             except TypeError:
                 pass
+
+    # Strip the profile information as timings will not be the same
+    if "profile" in result_copy:
+        del result_copy["profile"]
 
     return result_copy

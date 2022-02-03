@@ -1,5 +1,6 @@
 import calendar
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Callable, Tuple, Union
 
@@ -13,6 +14,9 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
+
+SNQL_ROUTE = "/transactions/snql"
+LIMIT_BY_COUNT = 5
 
 
 class TestTransactionsApi(BaseApiTest):
@@ -33,7 +37,7 @@ class TestTransactionsApi(BaseApiTest):
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
-        self.environments = ["prød", "test"]  # 2 environments
+        self.environments = ["prød", "staging", "test"]  # 3 environments
         self.platforms = ["a", "b"]  # 2 platforms
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
@@ -66,7 +70,7 @@ class TestTransactionsApi(BaseApiTest):
                 # project N sends an event every Nth minute
                 if tock % p == 0:
                     trace_id = "7400045b25c443b885914600aa83ad04"
-                    span_id = "8841662216cc598b"
+                    span_id = f"8841662216cc598b{tock}"[-16:]
                     processed = (
                         self.storage.get_table_writer()
                         .get_stream_loader()
@@ -172,7 +176,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["transaction_name", "ip_address"],
+                    "selected_columns": ["transaction_name", "ip_address", "span_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
@@ -190,7 +194,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["transaction_op", "platform"],
+                    "selected_columns": ["transaction_op", "platform", "span_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
@@ -209,7 +213,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["transaction_name"],
+                    "selected_columns": ["transaction_name", "span_id"],
                     "conditions": [
                         [
                             "start_ts",
@@ -270,6 +274,7 @@ class TestTransactionsApi(BaseApiTest):
                     "selected_columns": ["event_id", "ip_address", "project_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
+                    "orderby": ["finish_ts"],
                 }
             ),
         )
@@ -299,7 +304,7 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1
         assert data["data"][0]["event_id"] == first_event_id
-        assert data["data"][0]["span_id"] == "8841662216cc598b"
+        assert data["data"][0]["span_id"] == "841662216cc598b1"
 
     def test_trace_column_formatting(self) -> None:
         response = self.post(
@@ -595,7 +600,7 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["event_id", "span_id"],
-                    "conditions": [["span_id", "=", "8841662216cc598b"]],
+                    "conditions": [["span_id", "=", "841662216cc598b1"]],
                     "limit": 1,
                     "orderby": ["event_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -606,7 +611,7 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
 
-        assert data["data"][0]["span_id"] == "8841662216cc598b"
+        assert data["data"][0]["span_id"] == "841662216cc598b1"
 
         response = self.post(
             json.dumps(
@@ -614,7 +619,7 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["event_id", "span_id"],
-                    "conditions": [["span_id", "IN", ["8841662216cc598b"]]],
+                    "conditions": [["span_id", "IN", ["841662216cc598b1"]]],
                     "limit": 1,
                     "orderby": ["event_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),
@@ -625,4 +630,79 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
 
-        assert data["data"][0]["span_id"] == "8841662216cc598b"
+        assert data["data"][0]["span_id"] == "841662216cc598b1"
+
+    def test_limitby_multicolumn(self) -> None:
+        query_str = """MATCH (transactions)
+                    SELECT project_id,
+                           environment,
+                           platform,
+                           event_id
+                    WHERE project_id = 1
+                    AND finish_ts >= toDateTime('{start_time}')
+                    AND finish_ts < toDateTime('{end_time}')
+                    LIMIT {limit_by_count} BY environment, platform
+                    """.format(
+            start_time=(self.base_time - self.skew).isoformat(),
+            end_time=(self.base_time + self.skew).isoformat(),
+            limit_by_count=LIMIT_BY_COUNT,
+        )
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"})
+        )
+        parsed_data = json.loads(response.data)
+
+        assert response.status_code == 200
+        # Note that the following assertions will be wrong if there isn't a sufficient cross-product
+        # of generated test data (meaning each environment needs to have at least
+        # LIMIT_BY_COUNT records present for each platform). The number of environments
+        # had to be made unequal to the number of platforms to get the test data generator
+        # to write suitable input data
+        assert (
+            parsed_data["stats"]["result_rows"]
+            == len(self.platforms) * len(self.environments) * LIMIT_BY_COUNT
+        )
+
+        records_by_limit_columns = defaultdict(list)
+
+        for datum in parsed_data["data"]:
+            records_by_limit_columns[(datum["platform"], datum["environment"])].append(
+                datum
+            )
+
+        for key in records_by_limit_columns.keys():
+            assert len(records_by_limit_columns[key]) == LIMIT_BY_COUNT, key
+
+    def test_arrayjoin_multicolumn(self) -> None:
+        query_str = """MATCH (transactions)
+                    SELECT event_id,
+                           measurements.key,
+                           measurements.value
+                    ARRAY JOIN measurements.key, measurements.value
+                    WHERE project_id = 1
+                    AND finish_ts >= toDateTime('{start_time}')
+                    AND finish_ts < toDateTime('{end_time}')
+                    ORDER BY event_id ASC, measurements.key ASC
+                    LIMIT 4
+                    """.format(
+            start_time=(self.base_time - self.skew).isoformat(),
+            end_time=(self.base_time + self.skew).isoformat(),
+        )
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "transactions"})
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 4, data
+        key_column = "measurements.key"
+        value_column = "measurements.value"
+
+        assert data["data"][0][key_column] == "lcp"
+        assert data["data"][0][value_column] == 32.129
+        assert data["data"][1][key_column] == "lcp.elementSize"
+        assert data["data"][1][value_column] == 4242
+        assert data["data"][2][key_column] == "lcp"
+        assert data["data"][2][value_column] == 32.129
+        assert data["data"][3][key_column] == "lcp.elementSize"
+        assert data["data"][3][value_column] == 4242

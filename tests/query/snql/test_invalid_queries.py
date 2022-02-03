@@ -80,6 +80,16 @@ test_cases = [
         "Parsing error on line 1 at '  ORDER BY f '",
         id="aliases are only in the select",
     ),
+    pytest.param(
+        "MATCH (discover_events) SELECT arrayMap((x) -> identity(`x`), sdk_integrations) AS sdks WHERE project_id = 1 AND timestamp >= toDateTime('2021-01-01') AND timestamp < toDateTime('2021-01-02')",
+        "Parsing error on line 1 at 'ap((x) -> ide'",
+        id="identifiers have backticks",
+    ),
+    pytest.param(
+        "MATCH (discover_events) SELECT arrayMap((`x`) -> `x`, sdk_integrations) AS sdks WHERE project_id = 1 AND timestamp >= toDateTime('2021-01-01') AND timestamp < toDateTime('2021-01-02')",
+        "Parsing error on line 1 at 'ap((`x`) -> `'",
+        id="ensure function after arrow",
+    ),
 ]
 
 
