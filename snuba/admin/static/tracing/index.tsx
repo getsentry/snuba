@@ -90,7 +90,7 @@ function NodalDisplay(props: {
   return (
     <li key={nodeKey}>
       <span onClick={() => setVisible(!visible)}>
-        {props.title} - Click to {visible ? "collapse" : "expand"}
+        {visible ? "[-]" : "[+]"} {props.title}
       </span>
 
       <ol key={nodeKey + "-child"} style={collapsibleStyle}>
