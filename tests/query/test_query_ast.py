@@ -17,7 +17,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.snql.parser import parse_snql_query
+from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -163,7 +163,7 @@ def test_get_all_columns_legacy() -> None:
     }
     events = get_dataset("events")
     snql_query = json_to_snql(query_body, "events")
-    query = parse_snql_query(str(snql_query), events)
+    query, _ = parse_snql_query(str(snql_query), events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_column1", None, "column1"),
@@ -203,7 +203,7 @@ def test_get_all_columns() -> None:
         HAVING times_seen > 1
         """
     events = get_dataset("events")
-    query = parse_snql_query(query_body, events)
+    query, _ = parse_snql_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_column1", None, "column1"),
@@ -224,6 +224,16 @@ def test_get_all_columns() -> None:
             Literal(None, "sentry:dist"),
         )
     }
+
+
+def test_initial_parsing() -> None:
+    # Initial parsing created a map object for groupby clause, should be a list
+    body = "MATCH (events) SELECT col BY title"
+    query = parse_snql_query_initial(body)
+    # casting a map object to a list drains the generator, should be able to cast as much as needed
+    assert list(query.get_groupby()) != []
+    assert list(query.get_groupby()) != []
+    assert isinstance(query.get_groupby(), list)
 
 
 VALIDATION_TESTS = [
@@ -288,7 +298,7 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     snql_query = json_to_snql(query_body, "events")
-    query = parse_snql_query(str(snql_query), events)
+    query, _ = parse_snql_query(str(snql_query), events)
     settings = HTTPRequestSettings()
     query_plan = (
         events.get_default_entity()

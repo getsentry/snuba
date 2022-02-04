@@ -2,6 +2,8 @@ import importlib
 import os
 from copy import deepcopy
 
+import pytest
+
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters import cluster
@@ -30,7 +32,7 @@ def setup_function() -> None:
 
         data = connection.execute(
             f"SELECT name FROM system.tables WHERE database = '{database}'"
-        )
+        ).results
         for (table,) in data:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
 
@@ -41,6 +43,7 @@ def teardown_function() -> None:
     importlib.reload(runner)
 
 
+@pytest.mark.ci_only
 def test_add_node() -> None:
     host_name = os.environ.get("CLICKHOUSE_HOST", "localhost")
     port = int(os.environ.get("CLICKHOUSE_PORT", 9000))
@@ -50,7 +53,7 @@ def test_add_node() -> None:
 
     client = ClickhousePool(host_name, port, user, password, database,)
 
-    assert set(client.execute("SHOW TABLES")) == set()
+    assert set(client.execute("SHOW TABLES").results) == set()
 
     runner.Runner.add_node(
         node_type=cluster.ClickhouseNodeType.LOCAL,
@@ -62,7 +65,7 @@ def test_add_node() -> None:
         database=database,
     )
 
-    assert set(client.execute("SHOW TABLES")) == {
+    assert set(client.execute("SHOW TABLES").results) == {
         ("outcomes_raw_local",),
         ("outcomes_hourly_local",),
         ("outcomes_mv_hourly_local",),

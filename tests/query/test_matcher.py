@@ -302,7 +302,7 @@ test_cases = [
     ),
     (
         "subscriptable match with column",
-        SubscriptableReference(String("stuff")),
+        SubscriptableReference(column_name=String("stuff")),
         SubscriptableReferenceExpr(
             None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
         ),
@@ -318,7 +318,7 @@ test_cases = [
     ),
     (
         "subscriptable match with column and key",
-        SubscriptableReference(String("stuff"), String("things")),
+        SubscriptableReference(column_name=String("stuff"), key=String("things")),
         SubscriptableReferenceExpr(
             None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
         ),
@@ -326,11 +326,27 @@ test_cases = [
     ),
     (
         "subscriptable match with wrong column and key",
-        SubscriptableReference(String("notstuff"), String("things")),
+        SubscriptableReference(column_name=String("notstuff"), key=String("things")),
         SubscriptableReferenceExpr(
             None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
         ),
         None,
+    ),
+    (
+        "Matches a column with all fields",
+        SubscriptableReference(
+            table_name=Param("p_table_name", AnyOptionalString()),
+            column_name=Param("col_name", String("notstuff")),
+            key=Param("key", String("things")),
+        ),
+        SubscriptableReferenceExpr(
+            alias=None,
+            column=ColumnExpr(None, "table_name", "notstuff"),
+            key=LiteralExpr(None, "things"),
+        ),
+        MatchResult(
+            {"p_table_name": "table_name", "col_name": "notstuff", "key": "things"}
+        ),
     ),
 ]
 

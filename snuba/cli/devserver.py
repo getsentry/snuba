@@ -137,7 +137,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         ),
     ]
 
-    if settings.ENABLE_DEV_FEATURES and "metrics" not in settings.DISABLED_DATASETS:
+    if settings.ENABLE_SENTRY_METRICS_DEV:
         daemons += [
             (
                 "metrics-consumer",
@@ -153,6 +153,45 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 ],
             ),
         ]
+        if settings.ENABLE_METRICS_SUBSCRIPTIONS:
+            daemons += [
+                (
+                    "subscriptions-consumer-metrics-counters",
+                    [
+                        "snuba",
+                        "subscriptions",
+                        "--auto-offset-reset=latest",
+                        "--log-level=debug",
+                        "--max-batch-size=1",
+                        "--consumer-group=snuba-metrics-subscriptions-consumers",
+                        "--dataset=metrics",
+                        "--entity=metrics_counters",
+                        "--commit-log-topic=snuba-metrics-commit-log",
+                        "--commit-log-group=metrics_group",
+                        "--delay-seconds=1",
+                        "--schedule-ttl=10",
+                        "--max-query-workers=1",
+                    ],
+                ),
+                (
+                    "subscriptions-consumer-metrics-sets",
+                    [
+                        "snuba",
+                        "subscriptions",
+                        "--auto-offset-reset=latest",
+                        "--log-level=debug",
+                        "--max-batch-size=1",
+                        "--consumer-group=snuba-metrics-subscriptions-consumers",
+                        "--dataset=metrics",
+                        "--entity=metrics_sets",
+                        "--commit-log-topic=snuba-metrics-commit-log",
+                        "--commit-log-group=metrics_group",
+                        "--delay-seconds=1",
+                        "--schedule-ttl=10",
+                        "--max-query-workers=1",
+                    ],
+                ),
+            ]
 
     if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         daemons += [

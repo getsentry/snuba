@@ -9,7 +9,7 @@ jobs:
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -22,13 +22,15 @@ jobs:
         # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
         #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
+        # we skip the `no-commit-to-branch` because in CI we are in fact on master already
+        # and we have merged to it
         run: |
-          pre-commit run --files $(git diff --diff-filter=d --name-only master)
+          SKIP=no-commit-to-branch pre-commit run --files $(git diff --diff-filter=d --name-only master)
 
   typing:
     name: "mypy typing"
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -41,7 +43,7 @@ jobs:
           make install-python-dependencies
       - name: Run mypy
         run: |
-          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba tests/subscriptions
+          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba tests/subscriptions tests/admin
 
   snuba-image:
     name: Build snuba CI image

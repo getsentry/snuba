@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Mapping, MutableSequence, Optional, Set
 
@@ -66,19 +67,27 @@ class ClickhouseQueryProfile:
 class ClickhouseQueryMetadata:
     sql: str
     sql_anonymized: str
+    start_timestamp: Optional[datetime]
+    end_timestamp: Optional[datetime]
     stats: Mapping[str, Any]
     status: QueryStatus
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
+    result_profile: Optional[Mapping[str, Any]] = None
 
     def to_dict(self) -> Mapping[str, Any]:
+        start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
+        end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         return {
             "sql": self.sql,
             "sql_anonymized": self.sql_anonymized,
+            "start_timestamp": start,
+            "end_timestamp": end,
             "stats": self.stats,
             "status": self.status.value,
             "trace_id": self.trace_id,
             "profile": self.profile.to_dict(),
+            "result_profile": self.result_profile,
         }
 
 
@@ -89,12 +98,17 @@ class SnubaQueryMetadata:
     """
 
     request: Request
+    start_timestamp: Optional[datetime]
+    end_timestamp: Optional[datetime]
     dataset: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
     projects: Set[int]
+    snql_anonymized: str
 
     def to_dict(self) -> Dict[str, Any]:
+        start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
+        end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         return {
             "request": {
                 "id": self.request.id,
@@ -102,10 +116,13 @@ class SnubaQueryMetadata:
                 "referrer": self.request.referrer,
             },
             "dataset": self.dataset,
+            "start_timestamp": start,
+            "end_timestamp": end,
             "query_list": [q.to_dict() for q in self.query_list],
             "status": self.status.value,
             "timing": self.timer.for_json(),
             "projects": list(self.projects),
+            "snql_anonymized": self.snql_anonymized,
         }
 
     @property

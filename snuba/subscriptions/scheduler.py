@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
-    Generic,
     Iterator,
     List,
     Mapping,
@@ -15,18 +14,25 @@ from typing import (
 )
 
 from snuba import settings, state
-from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
+from snuba.datasets.entities import EntityKey
+from snuba.subscriptions.data import (
+    PartitionId,
+    ScheduledSubscriptionTask,
+    Subscription,
+    SubscriptionIdentifier,
+)
+from snuba.subscriptions.data import SubscriptionScheduler as SubscriptionSchedulerBase
+from snuba.subscriptions.data import SubscriptionWithMetadata
 from snuba.subscriptions.store import SubscriptionDataStore
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.scheduler import ScheduledTask, Scheduler
-from snuba.utils.types import Interval
 
 TSubscription = TypeVar("TSubscription")
 
 Tags = Mapping[str, str]
 
 
-class TaskBuilder(ABC, Generic[TSubscription]):
+class TaskBuilder(ABC):
     """
     Takes a Subscription and a timestamp, decides whether we should
     schedule that task at the current timestamp and provides the
@@ -35,8 +41,8 @@ class TaskBuilder(ABC, Generic[TSubscription]):
 
     @abstractmethod
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[TSubscription]]:
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
+    ) -> Optional[ScheduledSubscriptionTask]:
         raise NotImplementedError
 
     @abstractmethod
@@ -44,7 +50,7 @@ class TaskBuilder(ABC, Generic[TSubscription]):
         raise NotImplementedError
 
 
-class ImmediateTaskBuilder(TaskBuilder[Subscription]):
+class ImmediateTaskBuilder(TaskBuilder):
     """
     Schedules a subscription as soon as possible
     """
@@ -53,12 +59,16 @@ class ImmediateTaskBuilder(TaskBuilder[Subscription]):
         self.__count = 0
 
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[Subscription]]:
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
+    ) -> Optional[ScheduledSubscriptionTask]:
+        subscription = subscription_with_metadata.subscription
+
         resolution = int(subscription.data.resolution.total_seconds())
         if timestamp % resolution == 0:
             self.__count += 1
-            return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
+            return ScheduledSubscriptionTask(
+                datetime.fromtimestamp(timestamp), subscription_with_metadata
+            )
         else:
             return None
 
@@ -68,7 +78,7 @@ class ImmediateTaskBuilder(TaskBuilder[Subscription]):
         return metrics
 
 
-class JitteredTaskBuilder(TaskBuilder[Subscription]):
+class JitteredTaskBuilder(TaskBuilder):
     """
     Schedules subscriptions applying a jitter to distribute subscriptions
     evenly in the resolution period.
@@ -96,23 +106,27 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
         self.__count_max_resolution = 0
 
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[Subscription]]:
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
+    ) -> Optional[ScheduledSubscriptionTask]:
+        subscription = subscription_with_metadata.subscription
+
         resolution = int(subscription.data.resolution.total_seconds())
 
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
             if timestamp % resolution == 0:
                 self.__count += 1
                 self.__count_max_resolution += 1
-                return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
+                return ScheduledSubscriptionTask(
+                    datetime.fromtimestamp(timestamp), subscription_with_metadata
+                )
             else:
                 return None
 
         jitter = subscription.identifier.uuid.int % resolution
         if timestamp % resolution == jitter:
             self.__count += 1
-            return ScheduledTask(
-                datetime.fromtimestamp(timestamp - jitter), subscription
+            return ScheduledSubscriptionTask(
+                datetime.fromtimestamp(timestamp - jitter), subscription_with_metadata
             )
         else:
             return None
@@ -198,7 +212,7 @@ class TaskBuilderModeState:
         )
 
 
-class DelegateTaskBuilder(TaskBuilder[Subscription]):
+class DelegateTaskBuilder(TaskBuilder):
     """
     A delegate capable of switching back and forth between the
     immediate and jittered task builders according to runtime
@@ -223,15 +237,20 @@ class DelegateTaskBuilder(TaskBuilder[Subscription]):
         self.__rollout_state = TaskBuilderModeState()
 
     def get_task(
-        self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[Subscription]]:
-        immediate_task = self.__immediate_builder.get_task(subscription, timestamp)
-        jittered_task = self.__jittered_builder.get_task(subscription, timestamp)
+        self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
+    ) -> Optional[ScheduledSubscriptionTask]:
+        subscription = subscription_with_metadata.subscription
+
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
+
         if primary_builder == TaskBuilderMode.JITTERED:
-            return jittered_task
+            return self.__jittered_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
         else:
-            return immediate_task
+            return self.__immediate_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
 
     def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
@@ -257,14 +276,16 @@ class DelegateTaskBuilder(TaskBuilder[Subscription]):
         ]
 
 
-class SubscriptionScheduler(Scheduler[Subscription]):
+class SubscriptionScheduler(SubscriptionSchedulerBase):
     def __init__(
         self,
+        entity_key: EntityKey,
         store: SubscriptionDataStore,
         partition_id: PartitionId,
         cache_ttl: timedelta,
         metrics: MetricsBackend,
     ) -> None:
+        self.__entity_key = entity_key
         self.__store = store
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id
@@ -297,24 +318,48 @@ class SubscriptionScheduler(Scheduler[Subscription]):
             (current_time - self.__last_refresh).total_seconds() * 1000.0,
             tags={"partition": str(self.__partition_id)},
         )
-
         return self.__subscriptions
 
-    def find(
-        self, interval: Interval[datetime]
-    ) -> Iterator[ScheduledTask[Subscription]]:
+    def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
+        start_get_subscriptions = datetime.now()
+
+        interval = tick.timestamps
+
         subscriptions = self.__get_subscriptions()
+
+        self.__metrics.timing(
+            "getting_subscriptions",
+            (datetime.now() - start_get_subscriptions).total_seconds() * 1000.0,
+        )
+
+        start_get_task = datetime.now()
 
         for timestamp in range(
             math.ceil(interval.lower.timestamp()),
             math.ceil(interval.upper.timestamp()),
         ):
             for subscription in subscriptions:
-                task = self.__builder.get_task(subscription, timestamp)
+                task = self.__builder.get_task(
+                    SubscriptionWithMetadata(
+                        self.__entity_key, subscription, tick.offsets.upper
+                    ),
+                    timestamp,
+                )
                 if task is not None:
                     yield task
+
+        self.__metrics.timing(
+            "getting_tasks", (datetime.now() - start_get_task).total_seconds() * 1000.0
+        )
+
+        start_reset_metrics = datetime.now()
 
         metrics = self.__builder.reset_metrics()
         if any(metric for metric in metrics if metric[1] > 0):
             for metric in metrics:
                 self.__metrics.increment(metric[0], metric[1], tags=metric[2])
+
+        self.__metrics.timing(
+            "updating_metrics",
+            (datetime.now() - start_reset_metrics).total_seconds() * 1000,
+        )

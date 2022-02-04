@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from threading import Lock
 from typing import (
     Any,
     Generic,
@@ -29,12 +30,18 @@ class ClickhouseClientSettingsType(NamedTuple):
     timeout: Optional[int]
 
 
+class ConnectionId(NamedTuple):
+    hostname: str
+    tcp_port: int
+    http_port: int
+    database_name: str
+
+
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
     MIGRATE = ClickhouseClientSettingsType(
-        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2},
-        10000
+        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
@@ -128,6 +135,42 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
+CacheKey = Tuple[ClickhouseNode, ClickhouseClientSettings, str, str, str]
+
+
+class ConnectionCache:
+    def __init__(self) -> None:
+        self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
+        self.__lock = Lock()
+
+    def get_node_connection(
+        self,
+        client_settings: ClickhouseClientSettings,
+        node: ClickhouseNode,
+        user: str,
+        password: str,
+        database: str,
+    ) -> ClickhousePool:
+        with self.__lock:
+            settings, timeout = client_settings.value
+            cache_key = (node, client_settings, user, password, database)
+            if cache_key not in self.__cache:
+                self.__cache[cache_key] = ClickhousePool(
+                    node.host_name,
+                    node.port,
+                    user,
+                    password,
+                    database,
+                    client_settings=settings,
+                    send_receive_timeout=timeout,
+                )
+
+            return self.__cache[cache_key]
+
+
+connection_cache = ConnectionCache()
+
+
 class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     """
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
@@ -171,9 +214,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader] = None
-        self.__connection_cache: MutableMapping[
-            Tuple[ClickhouseNode, ClickhouseClientSettings], ClickhousePool
-        ] = {}
+        self.__connection_cache = connection_cache
 
     def __str__(self) -> str:
         return str(self.__query_node)
@@ -201,20 +242,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         connection.
         """
 
-        settings, timeout = client_settings.value
-        cache_key = (node, client_settings)
-        if cache_key not in self.__connection_cache:
-            self.__connection_cache[cache_key] = ClickhousePool(
-                node.host_name,
-                node.port,
-                self.__user,
-                self.__password,
-                self.__database,
-                client_settings=settings,
-                send_receive_timeout=timeout,
-            )
-
-        return self.__connection_cache[cache_key]
+        return self.__connection_cache.get_node_connection(
+            client_settings, node, self.__user, self.__password, self.__database
+        )
 
     def get_reader(self) -> Reader:
         if not self.__reader:
@@ -259,6 +289,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_database(self) -> str:
         return self.__database
 
+    def get_query_node(self) -> ClickhouseNode:
+        return self.__query_node
+
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
             return [self.__query_node]
@@ -274,14 +307,22 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         ), "distributed_cluster_name must be set"
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
 
+    def get_connection_id(self) -> ConnectionId:
+        return ConnectionId(
+            hostname=self.__query_node.host_name,
+            tcp_port=self.__query_node.port,
+            http_port=self.__http_port,
+            database_name=self.__database,
+        )
+
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
         return [
             ClickhouseNode(*host)
-            for host in self.get_query_connection(
-                ClickhouseClientSettings.QUERY
-            ).execute(
+            for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
+            .execute(
                 f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
             )
+            .results
         ]
 
 
@@ -320,10 +361,6 @@ expected_storage_sets = {
     for s in StorageSetKey
     if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
 }
-
-assert (
-    not expected_storage_sets - _unique_registered_storage_sets
-), "All storage sets must be assigned to a cluster"
 
 # Map all storages to clusters via storage sets
 _STORAGE_SET_CLUSTER_MAP = {

@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Optional, Sequence, cast
@@ -21,8 +22,10 @@ from snuba.query.expressions import (
 )
 from snuba.query.parsing import ParsingContext
 
+_BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
 
-class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
+
+class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     """
     This Visitor implementation is able to format one expression in the Snuba
     Query for Clickhouse.
@@ -35,14 +38,14 @@ class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
     """
 
     def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
-        self.__parsing_context = (
+        self._parsing_context = (
             parsing_context if parsing_context is not None else ParsingContext()
         )
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
             return formatted_exp
-        elif self.__parsing_context.is_alias_present(alias):
+        elif self._parsing_context.is_alias_present(alias):
             ret = escape_alias(alias)
             # This is for the type checker. escape_alias can return None if
             # we pass None. But here we do not pass None so a None return value
@@ -50,7 +53,7 @@ class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
             assert ret is not None
             return ret
         else:
-            self.__parsing_context.add_alias(alias)
+            self._parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
     @abstractmethod
@@ -166,7 +169,7 @@ class ClickhouseExpressionFormatterBase(ExpressionVisitor[str], ABC):
         return self._alias(ret, exp.alias)
 
 
-class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
+class ClickhouseExpressionFormatter(ExpressionFormatterBase):
     """
     This Formatter produces a properly escaped string. The result should never
     be further escaped. This should be the only place where expression
@@ -199,23 +202,36 @@ class ClickhouseExpressionFormatter(ClickhouseExpressionFormatterBase):
         )
 
 
-class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase):
-    """
-    This Formatter strips string and integer literals and replaces them with a
-    a token representing the type of literal.
-    """
+def _gen_random_number() -> int:
+    # https://xkcd.com/221/
+    return -1337
 
+
+class ExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     def _format_string_literal(self, exp: Literal) -> str:
-        return "$S"
+        return "'$S'"
 
     def _format_number_literal(self, exp: Literal) -> str:
-        return "$N"
+        return str(_gen_random_number())
 
-    def _format_boolean_literal(self, exp: Literal) -> str:
-        return "$B"
+    def _anonimize_alias(self, alias: str) -> str:
+        # there may be an alias that looks like `snuba_tags[something]`
+        # the string between the square brackets has the potential to be PII
+        # This function will anonimize that which is between the brackets.
+        # this may erroneously anonimize aliases with square brackets
+        # if they are input by the user, but that is better than leaking PII
+        return _BETWEEN_SQUARE_BRACKETS_REGEX.sub("$A", alias)
 
-    def _format_datetime_literal(self, exp: Literal) -> str:
-        return "$DT"
-
-    def _format_date_literal(self, exp: Literal) -> str:
-        return "$D"
+    def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
+        if not alias:
+            return formatted_exp
+        elif self._parsing_context.is_alias_present(alias):
+            ret = escape_alias(alias)
+            # This is for the type checker. escape_alias can return None if
+            # we pass None. But here we do not pass None so a None return value
+            # is not valid.
+            assert ret is not None
+            return ret
+        else:
+            self._parsing_context.add_alias(alias)
+            return f"({formatted_exp} AS {escape_alias(self._anonimize_alias(alias))})"

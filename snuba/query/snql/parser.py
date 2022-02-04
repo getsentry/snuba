@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -22,10 +24,11 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
-from snuba.clickhouse.columns import Array, ColumnSet
+from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -63,14 +66,15 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
-    _apply_column_aliases,
-    _expand_aliases,
-    _parse_subscriptables,
-    _validate_aliases,
+    apply_column_aliases,
+    expand_aliases,
+    parse_subscriptables,
+    validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
 from snuba.query.schema import POSITIVE_OPERATORS
+from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -105,11 +109,11 @@ snql_grammar = Grammar(
     match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
-    arrayjoin_clause      = space+ "ARRAY JOIN" space+ (tag_column / subscriptable / simple_term)
+    arrayjoin_clause      = space+ "ARRAY JOIN" space+ arrayjoin_entity arrayjoin_optional
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
-    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name
+    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name limit_by_columns
     limit_clause          = space+ "LIMIT" space+ integer_literal
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
@@ -139,10 +143,14 @@ snql_grammar = Grammar(
     select_columns       = selected_expression space* comma
     selected_expression  = space* (aliased_tag_column / aliased_subscriptable / aliased_column_name / low_pri_arithmetic)
 
+    arrayjoin_entity     = tag_column / subscriptable / simple_term
+    arrayjoin_optional   = (space* comma space* arrayjoin_entity)*
+
     group_list            = group_columns* (selected_expression)
     group_columns         = selected_expression space* comma
     order_list            = order_columns* low_pri_arithmetic space+ ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic space+ ("ASC"/"DESC") space* comma space*
+    limit_by_columns      = (space* comma space* column_name)*
 
     low_pri_arithmetic    = space* high_pri_arithmetic (space* low_pri_tuple)*
     high_pri_arithmetic   = space* arithmetic_term (space* high_pri_tuple)*
@@ -154,10 +162,11 @@ snql_grammar = Grammar(
 
     low_pri_op            = "+" / "-"
     high_pri_op           = "/" / "*"
-    param_expression      = low_pri_arithmetic / quoted_literal
+    param_expression      = low_pri_arithmetic / quoted_literal / identifier
     parameters_list       = parameter* (param_expression)
-    parameter             = param_expression space* comma space*
+    parameter             = (lambda / param_expression) space* comma space*
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space+ "AS" space+ alias_literal)?
+    lambda                = open_paren space* identifier (comma space* identifier)* space* close_paren space* arrow space* function_call
 
     aliased_tag_column    = tag_column space+ "AS" space+ alias_literal
     aliased_subscriptable = subscriptable space+ "AS" space+ alias_literal
@@ -176,11 +185,13 @@ snql_grammar = Grammar(
     subscriptable         = column_name open_square column_name close_square
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:]*"
     tag_column            = "tags" open_square tag_name close_square
-    tag_name             = ~r"[^\[\]]*"
+    tag_name              = ~r"[^\[\]]*"
+    identifier            = backtick ~r"[a-zA-Z_][a-zA-Z0-9_]*" backtick
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
     relationship_name     = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+    arrow                 = "->"
     open_brace            = "{"
     close_brace           = "}"
     open_paren            = "("
@@ -190,6 +201,7 @@ snql_grammar = Grammar(
     space                 = ~r"\s"
     comma                 = ","
     colon                 = ":"
+    backtick              = "`"
 
 """
 )
@@ -241,7 +253,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             else:
                 args["selected_columns"] = args["groupby"] + args["selected_columns"]
 
-            args["groupby"] = map(lambda gb: gb.expression, args["groupby"])
+            args["groupby"] = [gb.expression for gb in args["groupby"]]
 
         if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
             args["from_clause"] = data_source
@@ -616,11 +628,25 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_limit_by_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Any, Literal, Any, Any, Any, Column],
+        visited_children: Tuple[
+            Any, Any, Any, Literal, Any, Any, Any, Column, Optional[Sequence[Column]]
+        ],
     ) -> LimitBy:
-        _, _, _, limit, _, _, _, column = visited_children
+        _, _, _, limit, _, _, _, column_one, columns_rest = visited_children
         assert isinstance(limit.value, int)  # mypy
-        return LimitBy(limit.value, column)
+        columns = [column_one]
+        if columns_rest is not None:
+            columns.extend(columns_rest)
+        return LimitBy(limit.value, columns)
+
+    def visit_limit_by_columns(
+        self, node: Node, visited_children: Sequence[Tuple[Any, Any, Any, Column]]
+    ) -> Sequence[Column]:
+        columns: List[Column] = []
+        for column_visit in visited_children:
+            _, _, _, column_inst = column_visit
+            columns.append(column_inst)
+        return columns
 
     def visit_limit_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
@@ -717,10 +743,27 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return ret
 
     def visit_arrayjoin_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
-    ) -> Expression:
-        _, _, _, expression = visited_children
-        return expression
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Any, Expression, Optional[List[Expression]]],
+    ) -> Sequence[Expression]:
+        _, _, _, join_first, join_rest = visited_children
+        exprs = [join_first]
+
+        if join_rest is not None:
+            exprs.extend(join_rest)
+
+        return exprs
+
+    def visit_arrayjoin_optional(
+        self, node: Node, visited_children: List[Tuple[Any, Any, Any, Expression]],
+    ) -> List[Expression]:
+        exprs: List[Expression] = list()
+        if visited_children is not None:
+            for child in visited_children:
+                _, _, _, exp = child
+                exprs.append(exp)
+        return exprs
 
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
@@ -785,6 +828,42 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
         return SelectedExpression(alias.text, column)
+
+    def visit_identifier(
+        self, node: Node, visited_children: Tuple[Any, Node, Any]
+    ) -> Argument:
+        return Argument(None, visited_children[1].text)
+
+    def visit_lambda(
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any,
+            Any,
+            Argument,
+            Union[Node, List[Node | Argument]],
+            Any,
+            Any,
+            Any,
+            Any,
+            Any,
+            Expression,
+        ],
+    ) -> Lambda:
+        first_identifier = visited_children[2]
+        other_identifiers = visited_children[3]
+        functionCall = visited_children[-1]
+        parameters = [first_identifier.name]
+        if isinstance(other_identifiers, list):
+            for other in other_identifiers:
+                if isinstance(other, Argument):
+                    parameters.append(other.name)
+                elif isinstance(other, list):
+                    parameters.extend(
+                        [o.name for o in other if isinstance(o, Argument)]
+                    )
+
+        return Lambda(None, tuple(parameters), functionCall)
 
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
         return generic_visit(node, visited_children)
@@ -991,22 +1070,28 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 def _unpack_array_conditions(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    schema: ColumnSet,
+    schema: EntityColumnSet,
     entity_alias: Optional[str] = None,
 ) -> None:
-    array_columns = set()
-    array_join_col = query.get_arrayjoin()
-    array_join = ""
-    if array_join_col is not None:
-        assert isinstance(array_join_col, Column)
-        array_join = f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+    array_columns: Set[str] = set()
+    array_join_arguments = query.get_arrayjoin()
+    array_join_columns = set()
+    if array_join_arguments is not None:
+        for array_join_col in array_join_arguments:
+            assert isinstance(array_join_col, Column)
+            array_join_columns.add(
+                f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+            )
 
     entity_alias = f"{entity_alias}." if entity_alias is not None else ""
     for column in schema:
         if isinstance(column.type, Array):
             aliased_base_name = f"{entity_alias}{column.base_name}"
             aliased_flattened = f"{entity_alias}{column.flattened}"
-            if aliased_base_name == array_join or aliased_flattened == array_join:
+            if (
+                aliased_base_name in array_join_columns
+                or aliased_flattened in array_join_columns
+            ):
                 continue
 
             array_columns.add(aliased_base_name)
@@ -1077,6 +1162,39 @@ def _mangle_query_aliases(
         query.transform_expressions(mangle_column_value)
 
 
+def validate_identifiers_in_lambda(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    Check to make sure that any identifiers referenced in a lambda were defined in that lambda
+    or in an outer lambda.
+    """
+    identifiers: Set[str] = set()
+    unseen_identifiers: Set[str] = set()
+
+    def validate_lambda(exp: Lambda) -> None:
+        for p in exp.parameters:
+            identifiers.add(p)
+            unseen_identifiers.discard(p)
+
+        for inner_exp in exp.transformation:
+            if isinstance(inner_exp, Argument) and inner_exp.name not in identifiers:
+                unseen_identifiers.add(inner_exp.name)
+            elif isinstance(inner_exp, Lambda):
+                validate_lambda(inner_exp)
+
+        for p in exp.parameters:
+            identifiers.discard(p)
+
+    for exp in query.get_all_expressions():
+        if isinstance(exp, Lambda):
+            validate_lambda(exp)
+
+    if len(unseen_identifiers) > 0:
+        ident_str = ",".join(f"`{u}`" for u in unseen_identifiers)
+        raise InvalidExpressionException(f"identifier(s) {ident_str} not defined")
+
+
 def _replace_time_condition(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
@@ -1124,7 +1242,10 @@ def _align_max_days_date_align(
 
     # If there is an = or IN condition on time, we don't need to do any of this
     match = build_match(
-        entity.required_time_column, [ConditionFunctions.EQ], datetime, alias
+        col=entity.required_time_column,
+        ops=[ConditionFunctions.EQ],
+        param_type=datetime,
+        alias=alias,
     )
     if any(match.match(cond) for cond in old_top_level):
         return old_top_level
@@ -1198,7 +1319,7 @@ def validate_entities_with_query(
                 entity = get_entity(node.data_source.key)
                 try:
                     for v in entity.get_validators():
-                        v.validate(query)
+                        v.validate(query, alias)
                 except InvalidQueryException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
@@ -1285,17 +1406,21 @@ def _post_process(
 
 POST_PROCESSORS = [
     _parse_datetime_literals,
-    _validate_aliases,
-    _parse_subscriptables,  # -> This should be part of the grammar
-    _apply_column_aliases,
-    _expand_aliases,
+    validate_aliases,
+    parse_subscriptables,  # -> This should be part of the grammar
+    apply_column_aliases,
+    expand_aliases,
     _mangle_query_aliases,
     _array_join_transformation,
     _qualify_columns,
     _array_column_conditions,
 ]
 
-VALIDATORS = [validate_query, validate_entities_with_query]
+VALIDATORS = [
+    validate_identifiers_in_lambda,
+    validate_query,
+    validate_entities_with_query,
+]
 
 
 CustomProcessors = Sequence[
@@ -1305,9 +1430,12 @@ CustomProcessors = Sequence[
 
 def parse_snql_query(
     body: str, dataset: Dataset, custom_processing: Optional[CustomProcessors] = None,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
+
+    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+        snql_anonymized = format_snql_anonymized(query).get_sql()
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
@@ -1330,4 +1458,4 @@ def parse_snql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
-    return query
+    return query, snql_anonymized

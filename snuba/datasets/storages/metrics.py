@@ -24,6 +24,7 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
 PRE_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
@@ -58,10 +59,14 @@ sets_buckets = WritableTableStorage(
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=SetsMetricsProcessor(), default_topic=Topic.METRICS,
+        processor=SetsMetricsProcessor(),
+        default_topic=Topic.METRICS,
+        commit_log_topic=Topic.METRICS_COMMIT_LOG,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
     ),
 )
-
 
 counters_buckets = WritableTableStorage(
     storage_key=StorageKey.METRICS_COUNTERS_BUCKETS,
@@ -76,7 +81,12 @@ counters_buckets = WritableTableStorage(
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=CounterMetricsProcessor(), default_topic=Topic.METRICS,
+        processor=CounterMetricsProcessor(),
+        default_topic=Topic.METRICS,
+        commit_log_topic=Topic.METRICS_COMMIT_LOG,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
     ),
 )
 
@@ -162,7 +172,7 @@ distributions_storage = ReadableTableStorage(
                 Column(
                     "percentiles",
                     AggregateFunction(
-                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99, 1)", [Float(64)]
+                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]
                     ),
                 ),
                 Column("min", AggregateFunction("min", [Float(64)])),

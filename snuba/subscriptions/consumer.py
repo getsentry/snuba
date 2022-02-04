@@ -17,6 +17,7 @@ from arroyo.backends.abstract import Consumer
 from arroyo.errors import ConsumerError
 from arroyo.types import Position
 
+from snuba.subscriptions.utils import Tick
 from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
@@ -25,21 +26,6 @@ logger = logging.getLogger(__name__)
 class MessageDetails(NamedTuple):
     offset: int
     timestamp: datetime
-
-
-class Tick(NamedTuple):
-    offsets: Interval[int]
-    timestamps: Interval[datetime]
-
-    def time_shift(self, delta: timedelta) -> Tick:
-        """
-        Returns a new ``Tick`` instance that has had the bounds of its time
-        interval shifted by the provided delta.
-        """
-        return Tick(
-            self.offsets,
-            Interval(self.timestamps.lower + delta, self.timestamps.upper + delta),
-        )
 
 
 class TickConsumer(Consumer[Tick]):
@@ -158,6 +144,7 @@ class TickConsumer(Consumer[Tick]):
                     message.partition,
                     previous_message.offset,
                     Tick(
+                        None,
                         Interval(previous_message.offset, message.offset),
                         time_interval,
                     ).time_shift(self.__time_shift),

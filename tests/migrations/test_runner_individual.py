@@ -119,7 +119,7 @@ def generate_transactions() -> None:
     rows = []
 
     for i in range(5):
-        raw_transaction = get_raw_transaction()
+        raw_transaction = get_raw_transaction(f"{i}" * 16)
         # Older versions of this table did not have measurements
         del raw_transaction["data"]["measurements"]
         del raw_transaction["data"]["breakdowns"]
@@ -246,7 +246,7 @@ def perform_select_query(
     limit_clause = (" LIMIT " + limit) if limit else ""
     full_query = select_clause + from_clause + where_clause + limit_clause
 
-    return connection.execute(full_query)
+    return connection.execute(full_query).results
 
 
 def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:

@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 import logging
 import queue
 import re
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Mapping, Optional, Sequence, Union
+from functools import partial
+from io import StringIO
+from typing import Any, Generator, Mapping, Optional, Sequence, TypedDict, Union
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -17,10 +23,39 @@ from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse")
+trace_logger = logging.getLogger("clickhouse_driver.log")
+trace_logger.setLevel("INFO")
 
 Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
+
+
+class ClickhouseProfile(TypedDict):
+    bytes: int
+    blocks: int
+    rows: int
+    elapsed: float
+
+
+@dataclass(frozen=True)
+class ClickhouseResult:
+    results: Sequence[Any] = field(default_factory=list)
+    meta: Sequence[Any] | None = None
+    profile: ClickhouseProfile | None = None
+    trace_output: str = ""
+
+
+@contextmanager
+def capture_logging() -> Generator[StringIO, None, None]:
+    buffer = StringIO()
+    new_handler = logging.StreamHandler(buffer)
+    trace_logger.addHandler(new_handler)
+
+    yield buffer
+
+    trace_logger.removeHandler(new_handler)
+    buffer.close()
 
 
 class ClickhousePool(object):
@@ -63,7 +98,8 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-    ) -> Sequence[Any]:
+        capture_trace: bool = False,
+    ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a single quick retry in case of
         connection failure.
@@ -84,7 +120,15 @@ class ClickhousePool(object):
                     conn = self._create_conn()
 
                 try:
-                    result: Sequence[Any] = conn.execute(
+                    if capture_trace:
+                        settings = (
+                            {**settings, "send_logs_level": "trace"}
+                            if settings
+                            else {"send_logs_level": "trace"}
+                        )
+
+                    query_execute = partial(
+                        conn.execute,
                         query,
                         params=params,
                         with_column_types=with_column_types,
@@ -93,6 +137,38 @@ class ClickhousePool(object):
                         types_check=types_check,
                         columnar=columnar,
                     )
+                    result_data: Sequence[Any]
+                    trace_output = ""
+                    if capture_trace:
+                        with capture_logging() as buffer:
+                            query_execute()  # In order to avoid exposing PII the results are discarded
+                            result_data = [[], []] if with_column_types else []
+                            trace_output = buffer.getvalue()
+                    else:
+                        result_data = query_execute()
+
+                    profile_data = ClickhouseProfile(
+                        bytes=conn.last_query.profile_info.bytes or 0,
+                        blocks=conn.last_query.profile_info.blocks or 0,
+                        rows=conn.last_query.profile_info.rows or 0,
+                        elapsed=conn.last_query.elapsed or 0.0,
+                    )
+                    if with_column_types:
+                        result = ClickhouseResult(
+                            results=result_data[0],
+                            meta=result_data[1],
+                            profile=profile_data,
+                            trace_output=trace_output,
+                        )
+                    else:
+                        if not isinstance(result_data, (list, tuple)):
+                            result_data = [result_data]
+                        result = ClickhouseResult(
+                            results=result_data,
+                            profile=profile_data,
+                            trace_output=trace_output,
+                        )
+
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     metrics.increment("connection_error")
@@ -113,7 +189,7 @@ class ClickhousePool(object):
         finally:
             self.pool.put(conn, block=False)
 
-        return []
+        return ClickhouseResult()
 
     def execute_robust(
         self,
@@ -124,17 +200,19 @@ class ClickhousePool(object):
         settings: Optional[Mapping[str, Any]] = None,
         types_check: bool = False,
         columnar: bool = False,
-    ) -> Sequence[Any]:
+        capture_trace: bool = False,
+    ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
         attempts, (infinite in the case of too many simultaneous queries
         errors) and wait a second between retries.
 
-        This is used by the writer, which needs to either complete its current
-        write successfully or else quit altogether. Note that each retry in this
+        This is by components which need to either complete their current
+        query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
-        attempts_remaining = 3
+        total_attempts = 3
+        attempts_remaining = total_attempts
 
         while True:
             try:
@@ -146,11 +224,12 @@ class ClickhousePool(object):
                     settings=settings,
                     types_check=types_check,
                     columnar=columnar,
+                    capture_trace=capture_trace,
                 )
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
                 logger.warning(
-                    "Write to ClickHouse failed: %s (%d tries left)",
+                    "ClickHouse query execution failed: %s (%d tries left)",
                     str(e),
                     attempts_remaining,
                 )
@@ -162,19 +241,31 @@ class ClickhousePool(object):
                         raise e
                 time.sleep(1)
                 continue
-            except errors.ServerException as e:
-                logger.warning("Write to ClickHouse failed: %s (retrying)", str(e))
+            except ClickhouseError as e:
+                logger.warning(
+                    "ClickHouse query execution failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
+                )
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    # Try forever if the server is overloaded.
-                    sleep_seconds = state.get_config(
+                    attempts_remaining -= 1
+                    if attempts_remaining <= 0:
+                        raise e
+                    sleep_interval_seconds = state.get_config(
                         "simultaneous_queries_sleep_seconds", 1
                     )
-                    assert sleep_seconds is not None
-                    time.sleep(float(sleep_seconds))
+                    assert sleep_interval_seconds is not None
+                    # Linear backoff. Adds one second at each iteration.
+                    time.sleep(
+                        float(
+                            (total_attempts - attempts_remaining)
+                            * sleep_interval_seconds
+                        )
+                    )
                     continue
                 else:
                     # Quit immediately for other types of server errors.
-                    raise ClickhouseError(e.message, code=e.code) from e
+                    raise e
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
@@ -244,13 +335,14 @@ class NativeDriverReader(Reader):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
-    def __transform_result(self, result: Sequence[Any], with_totals: bool) -> Result:
+    def __transform_result(self, result: ClickhouseResult, with_totals: bool) -> Result:
         """
         Transform a native driver response into a response that is
         structurally similar to a ClickHouse-flavored JSON response.
         """
-        data, meta = result
-
+        meta = result.meta if result.meta is not None else []
+        data = result.results
+        profile = result.profile
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent
@@ -269,9 +361,20 @@ class NativeDriverReader(Reader):
         if with_totals:
             assert len(data) > 0
             totals = data.pop(-1)
-            new_result = {"data": data, "meta": meta, "totals": totals}
+            new_result = {
+                "data": data,
+                "meta": meta,
+                "totals": totals,
+                "profile": profile,
+                "trace_output": result.trace_output,
+            }
         else:
-            new_result = {"data": data, "meta": meta}
+            new_result = {
+                "data": data,
+                "meta": meta,
+                "profile": profile,
+                "trace_output": result.trace_output,
+            }
 
         transform_column_types(new_result)
 
@@ -284,6 +387,7 @@ class NativeDriverReader(Reader):
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
         robust: bool = False,
+        capture_trace: bool = False,
     ) -> Result:
         settings = {**settings} if settings is not None else {}
 
@@ -301,6 +405,7 @@ class NativeDriverReader(Reader):
                 with_column_types=True,
                 query_id=query_id,
                 settings=settings,
+                capture_trace=capture_trace,
             ),
             with_totals=with_totals,
         )

@@ -1,7 +1,7 @@
 from abc import ABC
-from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Optional, Sequence
 
+from snuba import settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -12,13 +12,14 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
@@ -28,9 +29,8 @@ from snuba.query.processors.performance_expressions import (
 )
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-from snuba.query.project_extension import ProjectExtension
-from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.request.request_settings import RequestSettings
 
 transaction_translator = TranslationMappers(
     columns=[
@@ -62,6 +62,7 @@ transaction_translator = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "message", None, "transaction_name"),
         ColumnToColumn(None, "title", None, "transaction_name"),
+        ColumnToColumn(None, "spans.exclusive_time", None, "spans.exclusive_time_32"),
         ColumnToMapping(
             None,
             "geo_country_code",
@@ -86,17 +87,42 @@ transaction_translator = TranslationMappers(
 )
 
 
+class TransactionsQueryStorageSelector(QueryStorageSelector):
+    def __init__(self, mappers: TranslationMappers) -> None:
+        self.__transactions_table = get_writable_storage(StorageKey.TRANSACTIONS)
+        self.__transactions_ro_table = get_storage(StorageKey.TRANSACTIONS_RO)
+        self.__mappers = mappers
+
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> StorageAndMappers:
+        readonly_referrer = (
+            request_settings.referrer
+            in settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS
+        )
+        use_readonly_storage = readonly_referrer or state.get_config(
+            "enable_transactions_readonly_table", False
+        )
+        storage = (
+            self.__transactions_ro_table
+            if use_readonly_storage
+            else self.__transactions_table
+        )
+        return StorageAndMappers(storage, self.__mappers)
+
+
 class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
 
         pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage,
-                mappers=transaction_translator
-                if custom_mappers is None
-                else transaction_translator.concat(custom_mappers),
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=TransactionsQueryStorageSelector(
+                    mappers=transaction_translator
+                    if custom_mappers is None
+                    else transaction_translator.concat(custom_mappers)
+                )
             ),
         )
 
@@ -123,16 +149,6 @@ class BaseTransactionsEntity(Entity, ABC):
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
         )
-
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "project": ProjectExtension(project_column="project_id"),
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=5),
-                timestamp_column="finish_ts",
-            ),
-        }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [

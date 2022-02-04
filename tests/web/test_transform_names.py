@@ -1,6 +1,6 @@
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from snuba import settings
 from snuba.datasets.entities import EntityKey
@@ -14,7 +14,6 @@ from snuba.query.logical import Query
 from snuba.reader import Column as MetaColumn
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import apply_query_extensions
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.helpers import write_unprocessed_events
@@ -71,29 +70,15 @@ def test_transform_column_names() -> None:
         ],
     )
     query_settings = HTTPRequestSettings(referrer="asd")
-    apply_query_extensions(
-        query,
-        {
-            "timeseries": {
-                "from_date": (event_date - timedelta(minutes=5)).strftime(
-                    settings.PAYLOAD_DATETIME_FORMAT
-                ),
-                "to_date": (event_date + timedelta(minutes=1)).strftime(
-                    settings.PAYLOAD_DATETIME_FORMAT
-                ),
-                "granularity": 3600,
-            },
-            "project": {"project": [1]},
-        },
-        query_settings,
-    )
 
     dataset = get_dataset("events")
     timer = Timer("test")
 
     result = parse_and_run_query(
         dataset,
-        Request(id="asd", body={}, query=query, settings=query_settings),
+        Request(
+            id="asd", body={}, query=query, snql_anonymized="", settings=query_settings
+        ),
         timer,
     )
 

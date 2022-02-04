@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional, Sequence
 
 from snuba import util
@@ -9,6 +10,11 @@ from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.expressions import FunctionCall
+
+
+class WriteFormat(Enum):
+    JSON = "json"
+    VALUES = "values"
 
 
 @dataclass(frozen=True)

@@ -34,6 +34,13 @@ class InsertBatch(NamedTuple):
     origin_timestamp: Optional[datetime]
 
 
+# Indicates that we need an encoder that will interpolate
+# aggregate function calls defined in
+# https://clickhouse.com/docs/en/sql-reference/data-types/aggregatefunction/
+class AggregateInsertBatch(InsertBatch):
+    pass
+
+
 class ReplacementBatch(NamedTuple):
     key: str
     values: Sequence[Any]

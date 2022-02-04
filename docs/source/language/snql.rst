@@ -12,8 +12,8 @@ This is the query structure.::
     ARRAY JOIN [column]
     WHERE condition [[AND | OR] condition]*
     HAVING condition [[AND | OR] condition]*
-    ORDER BY expressions ASC|DESC [, expressions ASC|DESC]*
-    LIMIT expression BY n
+    ORDER BY expression ASC|DESC [, expression ASC|DESC]*
+    LIMIT n BY [expressions]
     LIMIT n
     OFFSET n
     GRANULARITY n
@@ -164,6 +164,19 @@ GRANULARITY
 ===========
 
 An integer representing the granularity to group time based results.
+
+Some of the entities in Snuba provides a magic column that you can use to group data by. The column gives a floored time value for each row so that rows in the same minute/hour/day/etc. can be grouped.
+
+The magic column for a given entity can be found by finding the TimeSeriesProcessor for the entity. Example, for errors, you can find the TimeSeriesProcessor defined `here <https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/events.py#L186-L188>`_. You can see that the magic column is `time` and it uses the `timestamp` column for grouping.
+
+Granularity determines the number of seconds in each of these time buckets. Eg, to count the number of events by hour, you would do
+
+Example::
+
+  MATCH(events) count(event_id) AS event_count
+  BY time
+  WHERE timestamp >= toDateTime('2022-01-15T00:00:00.000000') AND timestamp < toDateTime('2022-01-21T00:00:00.000000')
+  GRANULARITY 3600
 
 TOTALS
 ======

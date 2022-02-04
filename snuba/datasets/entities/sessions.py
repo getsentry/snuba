@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
@@ -26,9 +26,7 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import (
@@ -39,8 +37,6 @@ from snuba.query.processors.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
-from snuba.query.project_extension import ProjectExtension
-from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings, SubscriptionRequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -271,17 +267,6 @@ class SessionsEntity(Entity):
             required_time_column="started",
         )
 
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=7),
-                timestamp_column="started",
-            ),
-            "organization": OrganizationExtension(),
-            "project": ProjectExtension(project_column="project_id"),
-        }
-
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
@@ -314,9 +299,6 @@ class OrgSessionsEntity(Entity):
             validators=None,
             required_time_column="started",
         )
-
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {}
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [

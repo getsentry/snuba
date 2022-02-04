@@ -14,6 +14,7 @@ class Request:
     id: str
     body: Mapping[str, Any]
     query: Union[Query, CompositeQuery[Entity]]
+    snql_anonymized: str
     settings: RequestSettings  # settings provided by the request
 
     @property
