@@ -5,4 +5,13 @@ type TracingResult = {
   error?: string;
 };
 
-export { TracingResult };
+type LogLine = {
+  host: string;
+  pid: string;
+  query_id: string;
+  log_level: string;
+  component: string;
+  message: string;
+};
+
+export { TracingResult, LogLine };

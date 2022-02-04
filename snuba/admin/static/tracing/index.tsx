@@ -1,49 +1,14 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
-import { TracingResult } from "./types";
+import { LogLine, TracingResult } from "./types";
 import { QueryRequest } from "../components/query_display/types";
 import { Table } from "../table";
 import { COLORS } from "../theme";
+import { parseLogLine } from "./util";
 
 type QueryState = Partial<QueryRequest>;
 
-type LogLine = {
-  host: string;
-  pid: string;
-  query_id: string;
-  log_level: string;
-  component: string;
-  message: string;
-};
-
 type BucketedLogs = Map<String, Map<MessageCategory, LogLine[]>>;
-
-const logLineMatcher =
-  /\[ (?<hostname>\S+) \] \[ (?<pid>\d+) \] \{(?<local_query_id>[^}]+)\} <(?<log_level>[^>]+)> (?<component>[^:]+): (?<message>.*)/;
-
-function parseLogLine(logLine: string): LogLine | null {
-  const logLineRegexMatch = logLine.match(logLineMatcher);
-  const host = logLineRegexMatch?.groups?.hostname;
-  const pid = logLineRegexMatch?.groups?.pid;
-  const local_query_id = logLineRegexMatch?.groups?.local_query_id;
-  const log_level = logLineRegexMatch?.groups?.log_level;
-  const message = logLineRegexMatch?.groups?.message;
-  const component = logLineRegexMatch?.groups?.component;
-
-  if (host && pid && local_query_id && log_level && message) {
-    const logLineParsed: LogLine = {
-      host: host,
-      pid: pid!,
-      query_id: local_query_id,
-      log_level: log_level!,
-      component: component!,
-      message: message!,
-    };
-    return logLineParsed;
-  } else {
-    return null;
-  }
-}
 
 enum MessageCategory {
   housekeeping,
@@ -388,16 +353,6 @@ function TracingQueries(props: { api: Client }) {
     </div>
   );
 }
-
-const jsonStyle = {
-  padding: 10,
-  border: `1px solid ${COLORS.TABLE_BORDER}`,
-  fontFamily: "monospace",
-  borderRadius: 4,
-  backgroundColor: COLORS.BG_LIGHT,
-  marginBottom: 10,
-  wordBreak: "break-all" as const,
-};
 
 const executeActionsStyle = {
   display: "flex",
