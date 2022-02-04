@@ -152,7 +152,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=metrics_sets",
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
-                    "--consumer-group=metrics_aggregates_group",
+                    "--consumer-group=metrics_group",
                 ],
             ),
         ]
