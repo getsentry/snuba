@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
-from snuba import environment
+from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     AggregateInsertBatch,
@@ -99,7 +99,11 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
 
 class SetsAggregateProcessor(MetricsAggregateProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == METRICS_SET_TYPE
+        return (
+            settings.WRITE_METRICS_AGG_DIRECTLY
+            and message["type"] is not None
+            and message["type"] == METRICS_SET_TYPE
+        )
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]
@@ -116,7 +120,11 @@ class SetsAggregateProcessor(MetricsAggregateProcessor):
 
 class CounterAggregateProcessor(MetricsAggregateProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == METRICS_COUNTERS_TYPE
+        return (
+            settings.WRITE_METRICS_AGG_DIRECTLY
+            and message["type"] is not None
+            and message["type"] == METRICS_COUNTERS_TYPE
+        )
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         value = message["value"]
@@ -134,7 +142,8 @@ class CounterAggregateProcessor(MetricsAggregateProcessor):
 class DistributionsAggregateProcessor(MetricsAggregateProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return (
-            message["type"] is not None
+            settings.WRITE_METRICS_AGG_DIRECTLY
+            and message["type"] is not None
             and message["type"] == METRICS_DISTRIBUTIONS_TYPE
         )
 

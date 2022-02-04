@@ -13,6 +13,7 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
 from arroyo.types import Position
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
@@ -210,6 +211,8 @@ def test_metrics_writing_e2e() -> None:
         sets_storage,
     )
 
+    settings.WRITE_METRICS_AGG_DIRECTLY = True
+
     dist_message = """
         {
             "org_id":1,
@@ -258,3 +261,5 @@ def test_metrics_writing_e2e() -> None:
         ):
             strategy.close()
             strategy.join()
+
+    settings.WRITE_METRICS_AGG_DIRECTLY = False

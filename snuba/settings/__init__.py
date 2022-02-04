@@ -179,6 +179,10 @@ SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 2
 
 TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
+# Used for migrating to/from writing metrics directly to aggregate tables
+# rather than using materialized views
+WRITE_METRICS_AGG_DIRECTLY = False
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

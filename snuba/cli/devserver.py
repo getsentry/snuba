@@ -140,23 +140,13 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
     if settings.ENABLE_SENTRY_METRICS_DEV:
         daemons += [
             (
-                "metrics-buckets-consumer",
+                "metrics-consumer",
                 [
                     "snuba",
                     "multistorage-consumer",
                     "--storage=metrics_counters_buckets",
                     "--storage=metrics_distributions_buckets",
                     "--storage=metrics_buckets",
-                    "--auto-offset-reset=latest",
-                    "--log-level=debug",
-                    "--consumer-group=metrics_group",
-                ],
-            ),
-            (
-                "metrics-aggregates-consumer",
-                [
-                    "snuba",
-                    "multistorage-consumer",
                     "--storage=metrics_distributions",
                     "--storage=metrics_counters",
                     "--storage=metrics_sets",
