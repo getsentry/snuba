@@ -75,7 +75,7 @@ class ConsumerBuilder:
         max_batch_size: int,
         max_batch_time_ms: int,
         metrics: MetricsBackend,
-        stats_callback: Optional[Callable[[str], None]],
+        stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
         mock_parameters: Optional[MockParameters] = None,
