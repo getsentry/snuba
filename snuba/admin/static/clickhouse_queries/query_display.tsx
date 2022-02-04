@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
+import { Collapse } from "../collapse";
 import { Table } from "../table";
-import { COLORS } from "../theme";
 
 import { ClickhouseNodeData, QueryRequest, QueryResult } from "./types";
 
@@ -131,11 +131,26 @@ function QueryDisplay(props: {
       </form>
       <div>
         <h2>Query results</h2>
-        <Table
-          headerData={["Query", "Response"]}
-          rowData={queryResultHistory.map((queryResult) => [
-            <span>{queryResult.input_query}</span>,
-            <div>
+        {queryResultHistory.map((queryResult, idx) => {
+          if (idx === 0) {
+            return (
+              <div key={idx}>
+                <p>{queryResult.input_query}</p>
+                <p>
+                  <button
+                    style={executeButtonStyle}
+                    onClick={() => copyText(JSON.stringify(queryResult))}
+                  >
+                    Copy to clipboard
+                  </button>
+                </p>
+                {props.resultDataPopulator(queryResult)}
+              </div>
+            );
+          }
+
+          return (
+            <Collapse key={idx} text={queryResult.input_query}>
               <button
                 style={executeButtonStyle}
                 onClick={() => copyText(JSON.stringify(queryResult))}
@@ -143,24 +158,13 @@ function QueryDisplay(props: {
                 Copy to clipboard
               </button>
               {props.resultDataPopulator(queryResult)}
-            </div>,
-          ])}
-          columnWidths={[1, 5]}
-        />
+            </Collapse>
+          );
+        })}
       </div>
     </div>
   );
 }
-
-const jsonStyle = {
-  padding: 10,
-  border: `1px solid ${COLORS.TABLE_BORDER}`,
-  fontFamily: "monospace",
-  borderRadius: 4,
-  backgroundColor: COLORS.BG_LIGHT,
-  marginBottom: 10,
-  wordBreak: "break-all" as const,
-};
 
 const executeActionsStyle = {
   display: "flex",
