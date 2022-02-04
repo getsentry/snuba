@@ -1,4 +1,5 @@
 import signal
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from typing import Any, Optional, Sequence
 
@@ -107,6 +108,8 @@ def subscriptions_executor(
         )
     )
 
+    executor = ThreadPoolExecutor(max_concurrent_queries)
+
     processor = build_executor_consumer(
         dataset_name,
         entity_names,
@@ -115,6 +118,7 @@ def subscriptions_executor(
         max_concurrent_queries,
         auto_offset_reset,
         metrics,
+        executor,
         override_result_topic,
     )
 
@@ -124,5 +128,5 @@ def subscriptions_executor(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with closing(producer):
+    with closing(producer), executor:
         processor.run()

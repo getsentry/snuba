@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Protocol, Type, Union
+from typing import Any, Mapping, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
 
@@ -35,7 +35,7 @@ class Parser(Protocol):
         settings: RequestSettings,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
-    ) -> Union[Query, CompositeQuery[Entity]]:
+    ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
         ...
 
 
@@ -44,7 +44,7 @@ def parse_snql_query(
     settings: RequestSettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
-) -> Union[Query, CompositeQuery[Entity]]:
+) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
     return _parse_snql_query(request_parts.query["query"], dataset, custom_processing)
 
 
@@ -93,7 +93,9 @@ def build_request(
                     referrer=referrer, consistent=_consistent_override(True, referrer),
                 )
 
-            query = parser(request_parts, settings_obj, dataset, custom_processing)
+            query, snql_anonymized = parser(
+                request_parts, settings_obj, dataset, custom_processing
+            )
 
             project_ids = get_object_ids_in_query_ast(query, "project_id")
             if project_ids is not None and len(project_ids) == 1:
@@ -111,6 +113,7 @@ def build_request(
                 # to be careful with the change.
                 request_parts.query,
                 query,
+                snql_anonymized,
                 settings_obj,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:

@@ -104,6 +104,7 @@ class SnubaQueryMetadata:
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
     projects: Set[int]
+    snql_anonymized: str
 
     def to_dict(self) -> Dict[str, Any]:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
@@ -121,6 +122,7 @@ class SnubaQueryMetadata:
             "status": self.status.value,
             "timing": self.timer.for_json(),
             "projects": list(self.projects),
+            "snql_anonymized": self.snql_anonymized,
         }
 
     @property
