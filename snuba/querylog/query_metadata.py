@@ -114,6 +114,8 @@ class SnubaQueryMetadata:
                 "id": self.request.id,
                 "body": self.request.body,
                 "referrer": self.request.referrer,
+                "team": self.request.settings.get_team(),
+                "feature": self.request.settings.get_feature(),
             },
             "dataset": self.dataset,
             "start_timestamp": start,
