@@ -78,7 +78,10 @@ class SubscriptionWorker(
         # XXX: The ``query`` name is taken from the web views so that all query
         # performance metrics are reported to the same spot, regardless of
         # execution environment.
-        timer = Timer("query")
+        timer = Timer(
+            "query",
+            tags={"partition": str(tick.partition), "entity": task.task.entity.name},
+        )
 
         request = task.task.subscription.data.build_request(
             self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics,
@@ -96,6 +99,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=True
                     ),
@@ -116,6 +120,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=False
                     ),

@@ -113,6 +113,7 @@ def test_executor_consumer() -> None:
         2,
         auto_offset_reset,
         TestingMetricsBackend(),
+        ThreadPoolExecutor(2),
         override_result_topic=scheduled_result_topic_spec.topic.value,
     )
     for i in range(1, 5):
