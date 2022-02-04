@@ -127,8 +127,6 @@ function TracingQueries(props: { api: Client }) {
         <br />
         <br />
         {Object.entries(elements).map(([title, [value, height]]) => {
-          console.log(title);
-
           if (title === "Error") {
             return (
               <div key={value}>
