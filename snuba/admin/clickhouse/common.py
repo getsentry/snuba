@@ -63,7 +63,7 @@ def get_ro_node_connection(
         database,
         max_pool_size=2,
         # force read-only
-        client_settings=ClickhouseClientSettings.QUERY.value.settings,
+        client_settings=ClickhouseClientSettings.TOOLING.value.settings,
     )
     NODE_CONNECTIONS[key] = connection
     return connection
