@@ -51,7 +51,6 @@ class CurrentMerges(SystemQuery):
         elapsed,
         progress,
         result_part_name
-        count(),
     FROM system.merges
     """
 
