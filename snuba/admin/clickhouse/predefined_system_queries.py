@@ -13,9 +13,6 @@ class _QueryRegistry:
         if not existing_class:
             self.__mapping[cls.__name__] = cls
 
-    def get_class_by_name(self, cls_name: str) -> Optional[Type["SystemQuery"]]:
-        return self.__mapping.get(cls_name)
-
     @property
     def all_queries(self) -> Sequence[Type["SystemQuery"]]:
         return list(self.__mapping.values())
@@ -39,10 +36,6 @@ class SystemQuery:
     def __init_subclass__(cls) -> None:
         _QUERY_REGISTRY.register_class(cls)
         return super().__init_subclass__()
-
-    @classmethod
-    def from_name(cls, name: str) -> Optional[Type["SystemQuery"]]:
-        return _QUERY_REGISTRY.get_class_by_name(name)
 
     @classmethod
     def all_queries(cls) -> Sequence[Type["SystemQuery"]]:
