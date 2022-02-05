@@ -131,26 +131,33 @@ function QueryDisplay(props: {
       </form>
       <div>
         <h2>Query results</h2>
-        <Table
-          headerData={["Query", "Response"]}
-          rowData={queryResultHistory.map((queryResult) => [
-            <span>{queryResult.input_query}</span>,
-            <div>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard
-              </button>
-              {props.resultDataPopulator(queryResult)}
-            </div>,
-          ])}
-          columnWidths={[1, 5]}
-        />
+        <div style={scroll}>
+          <Table
+            headerData={["Query", "Response"]}
+            rowData={queryResultHistory.map((queryResult) => [
+              <span>{queryResult.input_query}</span>,
+              <div>
+                <button
+                  style={executeButtonStyle}
+                  onClick={() => copyText(JSON.stringify(queryResult))}
+                >
+                  Copy to clipboard
+                </button>
+                {props.resultDataPopulator(queryResult)}
+              </div>,
+            ])}
+            columnWidths={[1, 5]}
+          />
+        </div>
       </div>
     </div>
   );
 }
+
+const scroll = {
+  overflowX: "scroll" as const,
+  width: "100%",
+};
 
 const jsonStyle = {
   padding: 10,
