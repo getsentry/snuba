@@ -3,7 +3,6 @@ import re
 from clickhouse_driver.errors import ErrorCodes
 
 from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connection
-from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.utils.serializable_exception import SerializableException
@@ -27,22 +26,6 @@ def _run_sql_query_on_host(
     query_result = connection.execute(query=sql, with_column_types=True)
 
     return query_result
-
-
-def run_system_query_on_host_by_name(
-    clickhouse_host: str,
-    clickhouse_port: int,
-    storage_name: str,
-    system_query_name: str,
-) -> ClickhouseResult:
-    query = SystemQuery.from_name(system_query_name)
-
-    if not query:
-        raise NonExistentSystemQuery(extra_data={"query_name": system_query_name})
-
-    return _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, query.sql
-    )
 
 
 SYSTEM_QUERY_RE = re.compile(
