@@ -9,7 +9,6 @@ from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from functools import cached_property
 from typing import (
     Any,
@@ -43,6 +42,7 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
     ReplacerProcessor,
+    ReplacerState,
 )
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -55,11 +55,6 @@ In theory this will be needed only during the events to errors migration.
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "errors.replacer")
-
-
-class ReplacerState(Enum):
-    EVENTS = "events"
-    ERRORS = "errors"
 
 
 @dataclass(frozen=True)
@@ -485,11 +480,8 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             tag_column_map=self.__tag_column_map,
             promoted_tags=self.__promoted_tags,
         )
-        self.__start_time = float("-inf")
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
-        if self._message_already_processed(message):
-            return None
         type_ = message.action_type
 
         if type_ in REPLACEMENT_EVENT_TYPES:
@@ -541,41 +533,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
         return processed
 
-    def _message_already_processed(self, message: ReplacementMessage) -> bool:
-        """
-        Figure out whether or not the message was already processed.
-
-        Check whether there is an entry in Redis for this specific
-        topic, consumer group, and partition. If there is, we can conclude whether
-        or not to process the incoming message by comparing the incoming message
-        to the offset in Redis.
-        """
-        key = self._build_topic_group_index_key(message.metadata)
-        processed_offset = redis_client.get(key)
-        if processed_offset is not None:
-            offset = int(processed_offset)
-            return message.metadata.offset <= int(offset)
-
-        return False
-
-    def _build_topic_group_index_key(
-        self, message_metadata: ReplacementMessageMetadata
-    ) -> str:
-        """
-        Builds a unique key for a message being processed for a specific
-        topic, consumer group, and partition.
-        """
-        return ":".join(
-            [
-                message_metadata.topic_name,
-                self.__state_name.value,
-                str(message_metadata.partition_index),
-            ]
-        )
+    def get_state(self) -> ReplacerState:
+        return self.__state_name
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
-
-        self.__start_time = time.time()
 
         # Backward compatibility with the old keys already in Redis, we will let double write
         # the old key structure and the new one for a while then we can get rid of the old one.
@@ -613,22 +574,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             return True
 
         return False
-
-    def post_replacement(self, replacement: Replacement, matching_records: int) -> None:
-        """
-        Write the offset just processed to Redis if execution took longer than the threshold.
-        """
-        if (
-            time.time() - self.__start_time
-        ) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
-            return
-        message_metadata = replacement.get_message_metadata()
-        key = self._build_topic_group_index_key(message_metadata)
-        redis_client.set(
-            key,
-            message_metadata.offset,
-            ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
-        )
 
 
 def _build_event_tombstone_replacement(

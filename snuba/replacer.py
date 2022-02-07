@@ -12,6 +12,7 @@ from arroyo import Message
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
+from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
@@ -20,6 +21,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
+from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
@@ -336,19 +338,20 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
+        metadata = ReplacementMessageMetadata(
+            topic_name=message.partition.topic.name,
+            partition_index=message.partition.index,
+            offset=message.offset,
+        )
+        if self._message_already_processed(metadata):
+            return None
         seq_message = json.loads(message.payload.value)
         [version, action_type, data] = seq_message
 
         if version == 2:
             return self.__replacer_processor.process_message(
                 ReplacementMessage(
-                    action_type=action_type,
-                    data=data,
-                    metadata=ReplacementMessageMetadata(
-                        topic_name=message.partition.topic.name,
-                        partition_index=message.partition.index,
-                        offset=message.offset,
-                    ),
+                    action_type=action_type, data=data, metadata=metadata,
                 )
             )
         else:
@@ -361,6 +364,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
         for replacement in batch:
+
+            start_time = time.time()
+
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
 
@@ -383,6 +389,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self.__replacer_processor.post_replacement(replacement, count)
 
+            self._write_to_redis(replacement, start_time)
+
         if need_optimize:
             from snuba.optimize import run_optimize
 
@@ -393,3 +401,49 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             logger.info(
                 "Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host)
             )
+
+    def _message_already_processed(self, metadata: ReplacementMessageMetadata) -> bool:
+        """
+        Figure out whether or not the message was already processed.
+
+        Check whether there is an entry in Redis for this specific
+        topic, consumer group, and partition. If there is, we can conclude whether
+        or not to process the incoming message by comparing the incoming message
+        to the offset in Redis.
+        """
+        key = self._build_topic_group_index_key(metadata)
+        processed_offset = redis_client.get(key)
+        if processed_offset is not None:
+            offset = int(processed_offset)
+            return metadata.offset <= int(offset)
+
+        return False
+
+    def _build_topic_group_index_key(
+        self, message_metadata: ReplacementMessageMetadata
+    ) -> str:
+        """
+        Builds a unique key for a message being processed for a specific
+        topic, consumer group, and partition.
+        """
+        return ":".join(
+            [
+                message_metadata.topic_name,
+                self.__replacer_processor.get_state().value,
+                str(message_metadata.partition_index),
+            ]
+        )
+
+    def _write_to_redis(self, replacement: Replacement, start_time: float) -> None:
+        """
+        Write the offset just processed to Redis if execution took longer than the threshold.
+        """
+        if (time.time() - start_time) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
+            return
+        message_metadata = replacement.get_message_metadata()
+        key = self._build_topic_group_index_key(message_metadata)
+        redis_client.set(
+            key,
+            message_metadata.offset,
+            ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
+        )

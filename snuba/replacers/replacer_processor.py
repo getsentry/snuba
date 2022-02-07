@@ -1,8 +1,14 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, Generic, Mapping, NamedTuple, Optional, TypeVar
 
 from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.schemas.tables import WritableTableSchema
+
+
+class ReplacerState(Enum):
+    EVENTS = "events"
+    ERRORS = "errors"
 
 
 class ReplacementMessageMetadata(NamedTuple):
@@ -68,6 +74,10 @@ class ReplacerProcessor(ABC, Generic[R]):
 
     def get_schema(self) -> WritableTableSchema:
         return self.__schema
+
+    @abstractmethod
+    def get_state(self) -> ReplacerState:
+        raise NotImplementedError
 
     def pre_replacement(self, replacement: R, matching_records: int) -> bool:
         """
