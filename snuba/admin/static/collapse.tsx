@@ -54,7 +54,6 @@ const downArrow = {
 };
 
 const indent = {
-  position: "absolute" as const,
   marginLeft: 20,
 };
 
