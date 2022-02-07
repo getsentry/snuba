@@ -20,7 +20,7 @@ type QueryResultColumnMetadata = [string];
 type QueryResultRow = [string];
 
 type QueryResult = {
-  input_query?: string;
+  input_query: string;
   timestamp: number;
   column_names: QueryResultColumnMetadata;
   rows: [QueryResultRow];
