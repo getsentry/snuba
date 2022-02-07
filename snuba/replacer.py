@@ -428,6 +428,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         """
         return ":".join(
             [
+                "processed",
                 message_metadata.topic_name,
                 self.__replacer_processor.get_state().value,
                 str(message_metadata.partition_index),
