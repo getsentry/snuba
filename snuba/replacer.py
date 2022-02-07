@@ -416,9 +416,16 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         if self.__prolonged_offset == float("-inf"):
             key = self._build_topic_group_index_key(metadata)
             processed_offset = redis_client.get(key)
-            self.__prolonged_offset = (
-                -1 if processed_offset is None else int(processed_offset)
-            )
+            try:
+                self.__prolonged_offset = (
+                    -1 if processed_offset is None else int(processed_offset)
+                )
+            except ValueError as e:
+                redis_client.delete(key)
+                logger.warning(
+                    "Unexpected value found for an offset in Redis", exc_info=e,
+                )
+
         return metadata.offset <= self.__prolonged_offset
 
     def _check_timing_and_write_to_redis(
