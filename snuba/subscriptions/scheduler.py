@@ -170,23 +170,23 @@ class TaskBuilderModeState:
     def __init__(self) -> None:
         self.__state: MutableMapping[int, TaskBuilderMode] = {}
 
+    def get_final_mode(self, transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+        return (
+            TaskBuilderMode.IMMEDIATE
+            if transition_mode == TaskBuilderMode.TRANSITION_IMMEDIATE
+            else TaskBuilderMode.JITTERED
+        )
+
+    def get_start_mode(self, transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+        return (
+            TaskBuilderMode.IMMEDIATE
+            if transition_mode == TaskBuilderMode.TRANSITION_JITTER
+            else TaskBuilderMode.JITTERED
+        )
+
     def get_current_mode(
         self, subscription: Subscription, timestamp: int
     ) -> TaskBuilderMode:
-        def get_final_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
-            return (
-                TaskBuilderMode.IMMEDIATE
-                if transition_mode == TaskBuilderMode.TRANSITION_IMMEDIATE
-                else TaskBuilderMode.JITTERED
-            )
-
-        def get_start_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
-            return (
-                TaskBuilderMode.IMMEDIATE
-                if transition_mode == TaskBuilderMode.TRANSITION_JITTER
-                else TaskBuilderMode.JITTERED
-            )
-
         general_mode = TaskBuilderMode(
             state.get_config(
                 "subscription_primary_task_builder", TaskBuilderMode.JITTERED
@@ -201,14 +201,16 @@ class TaskBuilderModeState:
 
         resolution = int(subscription.data.resolution.total_seconds())
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
-            return get_final_mode(general_mode)
+            return self.get_final_mode(general_mode)
 
         if timestamp % resolution == 0:
-            self.__state[resolution] = get_final_mode(general_mode)
+            self.__state[resolution] = self.get_final_mode(general_mode)
 
         current_state = self.__state.get(resolution)
         return (
-            current_state if current_state is not None else get_start_mode(general_mode)
+            current_state
+            if current_state is not None
+            else self.get_start_mode(general_mode)
         )
 
 
