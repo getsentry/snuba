@@ -10,6 +10,7 @@ from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.synchronized import commit_codec
 from arroyo.types import Position
+from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 
 from snuba import settings
 from snuba.datasets.entities import EntityKey
@@ -195,7 +196,8 @@ class SchedulerBuilder:
         schedule_ttl: int,
         delay_seconds: Optional[int],
         metrics: MetricsBackend,
-        load_factor: int,
+        profile_path: Optional[str] = None,
+        load_factor: int = 1,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
@@ -229,6 +231,7 @@ class SchedulerBuilder:
         self.__schedule_ttl = schedule_ttl
         self.__delay_seconds = delay_seconds
         self.__metrics = metrics
+        self.__profile_path = profile_path
         self.__load_factor = load_factor
 
     def build_consumer(self) -> StreamProcessor[Tick]:
@@ -239,7 +242,7 @@ class SchedulerBuilder:
         )
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
-        return SubscriptionSchedulerProcessingFactory(
+        strategy_factory = SubscriptionSchedulerProcessingFactory(
             self.__entity_key,
             self.__mode,
             self.__schedule_ttl,
@@ -249,6 +252,13 @@ class SchedulerBuilder:
             self.__metrics,
             self.__load_factor,
         )
+
+        if self.__profile_path is not None:
+            return ProcessingStrategyProfilerWrapperFactory(
+                strategy_factory, self.__profile_path
+            )
+
+        return strategy_factory
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
         return CommitLogTickConsumer(

@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
 @click.option(
+    "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
+)
+@click.option(
     "--load-factor",
     type=int,
     default=settings.SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR,
@@ -63,6 +66,7 @@ def subscriptions_scheduler(
     schedule_ttl: int,
     log_level: Optional[str],
     delay_seconds: Optional[int],
+    profile_path: Optional[str],
     load_factor: int,
 ) -> None:
     """
@@ -138,6 +142,7 @@ def subscriptions_scheduler(
         schedule_ttl,
         delay_seconds,
         metrics,
+        profile_path,
         # TODO: Just for testing, should be removed before the scheduler is actually used
         load_factor,
     )
