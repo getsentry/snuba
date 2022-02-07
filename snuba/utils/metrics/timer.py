@@ -12,6 +12,7 @@ if TYPE_CHECKING:
         timestamp: int
         duration_ms: int
         marks_ms: Mapping[str, int]
+        tags: Tags
 
 
 else:
@@ -21,7 +22,12 @@ else:
 
 
 class Timer:
-    def __init__(self, name: str, clock: Clock = SystemClock()):
+    def __init__(
+        self,
+        name: str,
+        clock: Clock = SystemClock(),
+        tags: Optional[Mapping[str, str]] = None,
+    ):
         self.__name = name
         self.__clock = clock
 
@@ -29,6 +35,7 @@ class Timer:
             (self.__name, self.__clock.time())
         ]
         self.__data: Optional[TimerData] = None
+        self.__tags: Tags = tags or {}
 
     def mark(self, name: str) -> None:
         self.__data = None
@@ -68,6 +75,7 @@ class Timer:
                     key: sum(d[1] for d in group)
                     for key, group in groupby(sorted(durations), key=lambda x: x[0])
                 },
+                "tags": self.__tags,
             }
 
         return self.__data
@@ -82,6 +90,10 @@ class Timer:
         mark_tags: Optional[Tags] = None,
     ) -> None:
         data = self.finish()
-        backend.timing(self.__name, data["duration_ms"], tags=tags)
+        merged_tags = {**data["tags"], **tags} if tags else self.__tags
+        backend.timing(self.__name, data["duration_ms"], tags=merged_tags)
         for mark, duration in data["marks_ms"].items():
-            backend.timing(f"{self.__name}.{mark}", duration, tags=mark_tags)
+            merged_mark_tags = (
+                {**data["tags"], **mark_tags} if mark_tags else data["tags"]
+            )
+            backend.timing(f"{self.__name}.{mark}", duration, tags=merged_mark_tags)

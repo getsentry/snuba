@@ -21,7 +21,8 @@ class InvalidStorageError(SerializableException):
 
 
 def is_valid_node(host: str, port: int, cluster: ClickhouseCluster) -> bool:
-    nodes = cluster.get_local_nodes()
+    nodes = [*cluster.get_local_nodes(), cluster.get_query_node()]
+
     return any(node.host_name == host and node.port == port for node in nodes)
 
 
@@ -62,7 +63,7 @@ def get_ro_node_connection(
         database,
         max_pool_size=2,
         # force read-only
-        client_settings=ClickhouseClientSettings.QUERY.value.settings,
+        client_settings=ClickhouseClientSettings.TOOLING.value.settings,
     )
     NODE_CONNECTIONS[key] = connection
     return connection
