@@ -273,6 +273,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__sharded_pool = RoundRobinConnectionPool(self.__storage.get_cluster())
         self.__rate_limiter = RateLimiter("replacements")
 
+        self.__prolonged_offset = float("-inf")
+
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
         """
         Some replacements need to be executed on each storage node of the
@@ -389,7 +391,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self.__replacer_processor.post_replacement(replacement, count)
 
-            self._write_to_redis(replacement, start_time)
+            self._check_timing_and_write_to_redis(replacement, start_time)
 
         if need_optimize:
             from snuba.optimize import run_optimize
@@ -406,18 +408,39 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         """
         Figure out whether or not the message was already processed.
 
-        Check whether there is an entry in Redis for this specific
-        topic, consumer group, and partition. If there is, we can conclude whether
-        or not to process the incoming message by comparing the incoming message
-        to the offset in Redis.
+        Check if there exists a recorded offset that took too long to execute.
+        If there is, we can conclude whether or not to process the incoming
+        message by comparing the incoming message to the recorded offset.
         """
-        key = self._build_topic_group_index_key(metadata)
-        processed_offset = redis_client.get(key)
-        if processed_offset is not None:
-            offset = int(processed_offset)
-            return metadata.offset <= int(offset)
+        # float("-inf") implies this is the first message this worker is processing since startup
+        if self.__prolonged_offset == float("-inf"):
+            key = self._build_topic_group_index_key(metadata)
+            processed_offset = redis_client.get(key)
+            self.__prolonged_offset = (
+                -1 if processed_offset is None else int(processed_offset)
+            )
+        return metadata.offset <= self.__prolonged_offset
 
-        return False
+    def _check_timing_and_write_to_redis(
+        self, replacement: Replacement, start_time: float
+    ) -> None:
+        """
+        Write the offset just processed to Redis if execution took longer than the threshold.
+        Also store the offset locally to avoid Read calls to Redis.
+
+        If the Consumer dies while the insert query for the message was being executed,
+        the most recently executed offset would be present in Redis.
+        """
+        if (time.time() - start_time) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
+            return
+        message_metadata = replacement.get_message_metadata()
+        key = self._build_topic_group_index_key(message_metadata)
+        redis_client.set(
+            key,
+            message_metadata.offset,
+            ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
+        )
+        self.__prolonged_offset = message_metadata.offset
 
     def _build_topic_group_index_key(
         self, message_metadata: ReplacementMessageMetadata
@@ -433,18 +456,4 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 self.__replacer_processor.get_state().value,
                 str(message_metadata.partition_index),
             ]
-        )
-
-    def _write_to_redis(self, replacement: Replacement, start_time: float) -> None:
-        """
-        Write the offset just processed to Redis if execution took longer than the threshold.
-        """
-        if (time.time() - start_time) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
-            return
-        message_metadata = replacement.get_message_metadata()
-        key = self._build_topic_group_index_key(message_metadata)
-        redis_client.set(
-            key,
-            message_metadata.offset,
-            ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
         )
