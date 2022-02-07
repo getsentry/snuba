@@ -7,7 +7,12 @@ import { QueryResult } from "./types";
 function ClickhouseQueries(props: { api: Client }) {
   function tablePopulator(queryResult: QueryResult) {
     return (
-      <Table headerData={queryResult.column_names} rowData={queryResult.rows} />
+      <div style={scroll}>
+        <Table
+          headerData={queryResult.column_names}
+          rowData={queryResult.rows}
+        />
+      </div>
     );
   }
   return QueryDisplay({
@@ -15,5 +20,10 @@ function ClickhouseQueries(props: { api: Client }) {
     resultDataPopulator: tablePopulator,
   });
 }
+
+const scroll = {
+  overflowX: "scroll" as const,
+  width: "100%",
+};
 
 export default ClickhouseQueries;
