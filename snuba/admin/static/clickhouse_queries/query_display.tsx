@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import Client from "../../api_client";
-import { Table } from "../../table";
-import { COLORS } from "../../theme";
+import Client from "../api_client";
+import { Table } from "../table";
+import { COLORS } from "../theme";
 
 import { ClickhouseNodeData, QueryRequest, QueryResult } from "./types";
 
@@ -9,7 +9,6 @@ type QueryState = Partial<QueryRequest>;
 
 function QueryDisplay(props: {
   api: Client;
-  endpoint: string;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
@@ -56,7 +55,7 @@ function QueryDisplay(props: {
 
   function executeQuery() {
     props.api
-      .executeQuery(query as QueryRequest, props.endpoint)
+      .executeSystemQuery(query as QueryRequest)
       .then((result) => {
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);

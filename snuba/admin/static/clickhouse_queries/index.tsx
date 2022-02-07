@@ -1,8 +1,8 @@
 import React from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-import QueryDisplay from "../components/query_display/query_display";
-import { QueryResult } from "../components/query_display/types";
+import QueryDisplay from "./query_display";
+import { QueryResult } from "./types";
 
 function ClickhouseQueries(props: { api: Client }) {
   function tablePopulator(queryResult: QueryResult) {
@@ -12,7 +12,6 @@ function ClickhouseQueries(props: { api: Client }) {
   }
   return QueryDisplay({
     api: props.api,
-    endpoint: "run_clickhouse_system_query",
     resultDataPopulator: tablePopulator,
   });
 }
