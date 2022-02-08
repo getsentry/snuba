@@ -135,7 +135,7 @@ def consumer(
 
     def stats_callback(stats_json: str) -> None:
         stats = rapidjson.loads(stats_json)
-        metrics.gauge("total_queue_size", stats["replyq"])
+        metrics.gauge("total_queue_size", stats.get("replyq", 0))
 
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
