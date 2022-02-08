@@ -118,7 +118,10 @@ function QueryDisplay(props: {
           </div>
           <div>
             <button
-              onClick={(_) => executeQuery()}
+              onClick={(evt) => {
+                evt.preventDefault();
+                executeQuery();
+              }}
               style={executeButtonStyle}
               disabled={
                 !query.storage || !query.host || !query.port || !query.sql
