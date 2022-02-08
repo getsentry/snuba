@@ -53,6 +53,13 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
 
+    def timestamp_to_bucket(
+        self, timestamp: datetime, interval_seconds: int
+    ) -> datetime:
+        time_seconds = timestamp.timestamp()
+        out_seconds = interval_seconds * (time_seconds // interval_seconds)
+        return datetime.fromtimestamp(out_seconds)
+
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -78,10 +85,11 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
                 "project_id": _literal(message["project_id"]),
                 "metric_id": _literal(message["metric_id"]),
                 "timestamp": _call(
-                    "toStartOfInterval",
+                    "toDateTime",
                     (
-                        _call("toDateTime", (_literal(timestamp.isoformat()),),),
-                        _call("toIntervalSecond", (_literal(granularity),)),
+                        _literal(
+                            self.timestamp_to_bucket(timestamp, granularity).isoformat()
+                        ),
                     ),
                 ),
                 "tags.key": _array_literal(keys),

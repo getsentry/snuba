@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
+from unittest.mock import patch
 
 import pytest
 
@@ -153,6 +154,7 @@ def test_metrics_processor(
     )
 
 
+MOCK_TIME_BUCKET = datetime(2021, 4, 24, 0, 0, 0)
 DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
 TEST_CASES_AGGREGATES = [
     pytest.param(
@@ -172,11 +174,7 @@ TEST_CASES_AGGREGATES = [
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
                 "timestamp": _call(
-                    "toStartOfInterval",
-                    (
-                        _call("toDateTime", (_literal("2021-04-24T00:48:16"),)),
-                        _call("toIntervalSecond", (_literal(granularity),)),
-                    ),
+                    "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
                 "tags.key": _array_literal([10, 20, 30]),
                 "tags.value": _array_literal([11, 22, 33]),
@@ -214,11 +212,7 @@ TEST_CASES_AGGREGATES = [
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
                 "timestamp": _call(
-                    "toStartOfInterval",
-                    (
-                        _call("toDateTime", (_literal("2021-04-24T00:48:16"),)),
-                        _call("toIntervalSecond", (_literal(granularity),)),
-                    ),
+                    "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
                 "tags.key": _array_literal([10, 20, 30]),
                 "tags.value": _array_literal([11, 22, 33]),
@@ -252,11 +246,7 @@ TEST_CASES_AGGREGATES = [
                 "project_id": _literal(2),
                 "metric_id": _literal(1232341),
                 "timestamp": _call(
-                    "toStartOfInterval",
-                    (
-                        _call("toDateTime", (_literal("2021-04-24T00:48:16"),)),
-                        _call("toIntervalSecond", (_literal(granularity),)),
-                    ),
+                    "toDateTime", (_literal(MOCK_TIME_BUCKET.isoformat()),)
                 ),
                 "tags.key": _array_literal([10, 20, 30]),
                 "tags.value": _array_literal([11, 22, 33]),
@@ -297,6 +287,27 @@ TEST_CASES_AGGREGATES = [
 ]
 
 
+def test_time_bucketing() -> None:
+    # Verified these output timestamps as rounding down properly
+    # from today's date at time of writing
+    base_timestamp = 1644349789
+    base_datetime = datetime.fromtimestamp(base_timestamp)
+
+    metrics_agg_processor = SetsAggregateProcessor()
+
+    ten_s_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 10)
+    assert ten_s_bucket.timestamp() == 1644349780
+
+    one_min_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 60)
+    assert one_min_bucket.timestamp() == 1644349740
+
+    one_hour_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 3600)
+    assert one_hour_bucket.timestamp() == 1644346800
+
+    one_day_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 86400)
+    assert one_day_bucket.timestamp() == 1644278400
+
+
 @pytest.mark.parametrize(
     "message, expected_set, expected_counter, expected_distributions",
     TEST_CASES_AGGREGATES,
@@ -315,28 +326,36 @@ def test_metrics_aggregate_processor(
     expected_set_result = (
         AggregateInsertBatch(expected_set, None) if expected_set is not None else None
     )
-    assert (
-        SetsAggregateProcessor().process_message(message, meta) == expected_set_result
-    )
+    # test_time_bucketing tests the bucket function, parameterizing the output times here
+    # would require repeating the code in the class we're testing
+    with patch.object(
+        MetricsAggregateProcessor,
+        "timestamp_to_bucket",
+        lambda _, __, ___: MOCK_TIME_BUCKET,
+    ):
+        assert (
+            SetsAggregateProcessor().process_message(message, meta)
+            == expected_set_result
+        )
 
-    expected_counter_result = (
-        AggregateInsertBatch(expected_counter, None)
-        if expected_counter is not None
-        else None
-    )
-    assert (
-        CounterAggregateProcessor().process_message(message, meta)
-        == expected_counter_result
-    )
+        expected_counter_result = (
+            AggregateInsertBatch(expected_counter, None)
+            if expected_counter is not None
+            else None
+        )
+        assert (
+            CounterAggregateProcessor().process_message(message, meta)
+            == expected_counter_result
+        )
 
-    expected_distributions_result = (
-        AggregateInsertBatch(expected_distributions, None)
-        if expected_distributions is not None
-        else None
-    )
-    assert (
-        DistributionsAggregateProcessor().process_message(message, meta)
-        == expected_distributions_result
-    )
+        expected_distributions_result = (
+            AggregateInsertBatch(expected_distributions, None)
+            if expected_distributions is not None
+            else None
+        )
+        assert (
+            DistributionsAggregateProcessor().process_message(message, meta)
+            == expected_distributions_result
+        )
 
-    settings.WRITE_METRICS_AGG_DIRECTLY = False
+        settings.WRITE_METRICS_AGG_DIRECTLY = False
