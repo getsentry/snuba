@@ -53,8 +53,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 
 
 # Dogstatsd Options
-DOGSTATSD_HOST = "localhost"
-DOGSTATSD_PORT = 8125
+DOGSTATSD_HOST = None
+DOGSTATSD_PORT = None
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,

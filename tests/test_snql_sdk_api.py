@@ -23,6 +23,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.utils.metrics.backends.dummy import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -386,3 +387,29 @@ class TestSDKSnQLApi(BaseApiTest):
         data = resp["data"]
         assert len(data) == 1
         assert data[0]["array_spans_exclusive_time"] > 0
+
+    def test_attribution_tags(self) -> None:
+        query = (
+            Query("events", Entity("events"))
+            .set_select([Function("count", [], "count")])
+            .set_where(
+                [
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.base_time),
+                    Condition(Column("timestamp"), Op.LT, self.next_time),
+                ]
+            )
+            .set_team("sns")
+            .set_feature("test")
+        )
+
+        response = self.post("/events/snql", data=query.snuba())
+        resp = json.loads(response.data)
+        assert response.status_code == 200, resp
+        metric_calls = get_recorded_metric_calls("increment", "api.snuba.attribution")
+        assert metric_calls is not None
+        assert len(metric_calls) > 0
+        expected_metric = [c for c in metric_calls if c[1]["team"] == "sns"].pop()
+        assert expected_metric[0] > 0
+        assert expected_metric[1]["team"] == "sns"
+        assert expected_metric[1]["feature"] == "test"

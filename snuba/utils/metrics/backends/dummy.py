@@ -1,8 +1,36 @@
-from collections import Mapping
-from typing import Optional, Union
+from __future__ import annotations
+
+from typing import List, Mapping, MutableMapping, Optional, Tuple, Union
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
+
+RecordedMetricCalls = List[Tuple[Union[int, float], Tags]]
+
+RECORDED_METRIC_CALLS: MutableMapping[
+    str, MutableMapping[str, RecordedMetricCalls]
+] = {}
+
+
+def record_metric_call(
+    mtype: str, name: str, value: int | float, tags: Optional[Tags]
+) -> None:
+    if mtype not in RECORDED_METRIC_CALLS:
+        RECORDED_METRIC_CALLS[mtype] = {}
+
+    if name not in RECORDED_METRIC_CALLS[mtype]:
+        RECORDED_METRIC_CALLS[mtype][name] = []
+
+    if tags is None:
+        tags = {}
+    RECORDED_METRIC_CALLS[mtype][name].append((value, tags))
+
+
+def get_recorded_metric_calls(mtype: str, name: str) -> RecordedMetricCalls | None:
+    """
+    Used in tests to determine if the metrics were called with the correct values
+    """
+    return RECORDED_METRIC_CALLS.get(mtype, dict()).get(name)
 
 
 class DummyMetricsBackend(MetricsBackend):
@@ -27,6 +55,7 @@ class DummyMetricsBackend(MetricsBackend):
     def increment(
         self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
     ) -> None:
+        record_metric_call("increment", name, value, tags)
         if self.__strict:
             assert isinstance(name, str)
             assert isinstance(value, (int, float))
@@ -36,6 +65,7 @@ class DummyMetricsBackend(MetricsBackend):
     def gauge(
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
+        record_metric_call("gauge", name, value, tags)
         if self.__strict:
             assert isinstance(name, str)
             assert isinstance(value, (int, float))
@@ -45,6 +75,7 @@ class DummyMetricsBackend(MetricsBackend):
     def timing(
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
+        record_metric_call("timing", name, value, tags)
         if self.__strict:
             assert isinstance(name, str)
             assert isinstance(value, (int, float))
