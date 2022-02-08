@@ -109,7 +109,7 @@ class SetsAggregateProcessor(MetricsAggregateProcessor):
         values = message["value"]
         for v in values:
             assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
-        snuba_metrics.gauge("set.size", len(values))
+        snuba_metrics.increment("set.size", len(values))
 
         return {
             "value": _call(
@@ -153,7 +153,7 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
             assert isinstance(
                 v, (int, float)
             ), "Illegal value in set. Int/Float expected: {v}"
-        snuba_metrics.gauge("distribution.size", len(values))
+        snuba_metrics.increment("distribution.size", len(values))
 
         return {
             "percentiles": _call(
