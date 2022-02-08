@@ -677,7 +677,7 @@ class TestReplacer:
         """
         Don't process an offset that already exists in Redis.
         """
-        key = "processed:replacements:errors:1"
+        key = "replacement:replacements:errors:1"
         redis_client.set(key, 42)
 
         old_offset: Message[KafkaPayload] = Message(
