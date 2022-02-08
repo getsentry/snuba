@@ -88,8 +88,6 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
                 "tags.value": _array_literal(values),
                 **self._process_values(message),
                 "retention_days": _literal(message["retention_days"]),
-                "partition": metadata.partition,
-                "offset": metadata.offset,
                 "granularity": _literal(granularity),
             }
             for granularity in self.GRANULARITIES_SECONDS

@@ -189,8 +189,6 @@ TEST_CASES_AGGREGATES = [
                 ),
                 "retention_days": _literal(30),
                 "granularity": _literal(granularity),
-                "partition": 1,
-                "offset": 100,
             }
             for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
         ],
@@ -229,8 +227,6 @@ TEST_CASES_AGGREGATES = [
                 ),
                 "retention_days": _literal(30),
                 "granularity": _literal(granularity),
-                "partition": 1,
-                "offset": 100,
             }
             for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
         ],
@@ -293,8 +289,6 @@ TEST_CASES_AGGREGATES = [
                 ),
                 "retention_days": _literal(30),
                 "granularity": _literal(granularity),
-                "partition": 1,
-                "offset": 100,
             }
             for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
         ],
