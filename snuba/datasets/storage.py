@@ -170,6 +170,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
+        ignore_write_errors: bool = False,
     ) -> None:
         super().__init__(
             storage_key,
@@ -188,9 +189,13 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             writer_options=writer_options,
             write_format=write_format,
         )
+        self.__ignore_write_errors = ignore_write_errors
 
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer
+
+    def get_is_write_error_ignorable(self) -> bool:
+        return self.__ignore_write_errors
 
 
 class StorageAndMappers(NamedTuple):
