@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 import argparse
 import os
+from datetime import datetime, timedelta
 
-from arroyo import Topic
+from arroyo import Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.abstract import TopicExists
 from arroyo.backends.local.storages.file import FileMessageStorage
+from arroyo.synchronized import Commit, commit_codec
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -20,9 +22,25 @@ parser.add_argument(
     choices=["events"],
     default="events",
 )
+parser.add_argument(
+    "--number",
+    type=int,
+    help="Number of commit log ticks to write",
+    dest="number",
+    required=True,
+)
+parser.add_argument(
+    "--group-id",
+    type=str,
+    help="Consumer group ID",
+    dest="group_id",
+    default="snuba-commit-log",
+)
 
 parsed = parser.parse_args()
 entity_name = parsed.entity
+number = parsed.number
+consumer_group = parsed.group_id
 
 entity = get_entity(EntityKey(entity_name))
 storage = entity.get_writable_storage()
@@ -30,11 +48,37 @@ assert storage is not None
 stream_loader = storage.get_table_writer().get_stream_loader()
 commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
 assert commit_log_topic_spec is not None
+topic = Topic(commit_log_topic_spec.topic_name)
 
 # Create the commit log topic
+directory_path = os.getcwd() + "/.broker_data"
+
 try:
-    directory_path = os.getcwd() + "/.broker_data"
-    broker: Broker[KafkaPayload] = Broker(FileMessageStorage(directory_path))
-    broker.create_topic(Topic(commit_log_topic_spec.topic_name), partitions=1)
+    os.mkdir(directory_path)
+except FileExistsError:
+    pass
+
+broker: Broker[KafkaPayload] = Broker(FileMessageStorage(directory_path))
+
+try:
+    broker.create_topic(topic, partitions=1)
 except TopicExists:
     pass
+
+# Write ticks for every partition starting at 0 and 1 second ago
+partitions_number = stream_loader.get_default_topic_spec().partitions_number
+partitions = [Partition(topic, i) for i in range(partitions_number)]
+
+now = datetime.now() - timedelta(minutes=2)
+
+for n in range(number):
+    offset = n
+    orig_message_ts = now - timedelta(seconds=0.1 * (number - n))
+
+    for partition in partitions:
+        commit = Commit(consumer_group, partition, offset, orig_message_ts)
+
+        kafka_payload = commit_codec.encode(commit)
+
+        producer = broker.get_producer()
+        producer.produce(partition, kafka_payload).result()
