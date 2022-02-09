@@ -607,7 +607,9 @@ if application.debug or application.testing:
         else:
             from snuba.replacer import ReplacerWorker
 
-            worker = ReplacerWorker(storage, metrics=metrics)
+            worker = ReplacerWorker(
+                storage, "replacements", "consumer_group", metrics=metrics
+            )
             processed = worker.process_message(message)
             if processed is not None:
                 batch = [processed]

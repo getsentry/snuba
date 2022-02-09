@@ -259,7 +259,13 @@ class ShardedExecutor(InsertExecutor):
 
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
-    def __init__(self, storage: WritableTableStorage, metrics: MetricsBackend) -> None:
+    def __init__(
+        self,
+        storage: WritableTableStorage,
+        replacements_topic: str,
+        consumer_group: str,
+        metrics: MetricsBackend,
+    ) -> None:
         self.__storage = storage
 
         self.metrics = metrics
@@ -274,6 +280,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__rate_limiter = RateLimiter("replacements")
 
         self.__prolonged_offset = float("-inf")
+        self.__replacements_topic = replacements_topic
+        self.__consumer_group = consumer_group
 
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
         """
@@ -341,9 +349,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         metadata = ReplacementMessageMetadata(
-            topic_name=message.partition.topic.name,
-            partition_index=message.partition.index,
-            offset=message.offset,
+            partition_index=message.partition.index, offset=message.offset,
         )
         if self._message_already_processed(metadata):
             return None
@@ -454,12 +460,13 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     ) -> str:
         """
         Builds a unique key for a message being processed for a specific
-        topic, consumer group, and partition.
+        consumer group and partition.
         """
         return ":".join(
             [
                 "replacement",
-                message_metadata.topic_name,
+                self.__consumer_group,
+                self.__replacements_topic,
                 self.__replacer_processor.get_state().value,
                 str(message_metadata.partition_index),
             ]

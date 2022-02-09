@@ -16,7 +16,6 @@ class ReplacementMessageMetadata(NamedTuple):
     Metadata from the original Kafka Message for a Replacement Message.
     """
 
-    topic_name: str
     partition_index: int
     offset: int
 

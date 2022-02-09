@@ -46,7 +46,10 @@ class TestReplacer:
 
         self.storage = get_writable_storage(StorageKey.ERRORS)
         self.replacer = replacer.ReplacerWorker(
-            self.storage, DummyMetricsBackend(strict=True)
+            self.storage,
+            "replacements",
+            "consumer_group",
+            DummyMetricsBackend(strict=True),
         )
 
         # Total query time range is 24h before to 24h after now to account
@@ -677,7 +680,7 @@ class TestReplacer:
         """
         Don't process an offset that already exists in Redis.
         """
-        key = "replacement:replacements:errors:1"
+        key = "replacement:consumer_group:replacements:errors:1"
         redis_client.set(key, 42)
 
         old_offset: Message[KafkaPayload] = Message(

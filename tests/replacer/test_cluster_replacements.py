@@ -142,7 +142,7 @@ REPLACEMENT_TYPE = (
     ReplacementType.EXCLUDE_GROUPS
 )  # Arbitrary replacement type, no impact on tests
 
-REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata("replacements", 0, 0)
+REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata(0, 0)
 
 
 @pytest.mark.parametrize(
@@ -163,7 +163,10 @@ def test_write_each_node(
     test_cluster = override_func(True)
 
     replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+        get_writable_storage(StorageKey.ERRORS),
+        "replacements",
+        "consumer_group",
+        DummyMetricsBackend(),
     )
 
     replacer.flush_batch(
@@ -194,7 +197,10 @@ def test_failing_query(
     override_cluster(False)
 
     replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+        get_writable_storage(StorageKey.ERRORS),
+        "replacements",
+        "consumer_group",
+        DummyMetricsBackend(),
     )
 
     with pytest.raises(ServerExplodedException):
@@ -223,7 +229,10 @@ def test_load_balancing(
     cluster = override_cluster(True)
 
     replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+        get_writable_storage(StorageKey.ERRORS),
+        "replacements",
+        "consumer_group",
+        DummyMetricsBackend(),
     )
     replacement = LegacyReplacement(
         COUNT_QUERY_TEMPLATE,

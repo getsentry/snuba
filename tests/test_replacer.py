@@ -37,7 +37,10 @@ class TestReplacer:
         self.storage = get_storage(StorageKey.EVENTS)
 
         self.replacer = replacer.ReplacerWorker(
-            self.storage, DummyMetricsBackend(strict=True)
+            self.storage,
+            "replacements",
+            "consumer_group",
+            DummyMetricsBackend(strict=True),
         )
 
         self.project_id = 1
