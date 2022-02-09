@@ -14,8 +14,14 @@ class MetricsBackend(ABC):
         self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
     ) -> None:
         """
-        Emit a single instance of a non-timing metric that can be counted,
-        sliced/diced into percentiles, or summed
+        Increment a counter metric. These increments can also be
+        sliced/diced into percentiles, or the sum read over a window. For "decrement",
+        use a negative value.
+
+        Examples:
+
+        metrics.increment("messages_procesed", finished_message_count)
+        metrics.increment("net_account_deposits", -withdrawal_amount)
         """
         raise NotImplementedError
 
@@ -24,7 +30,11 @@ class MetricsBackend(ABC):
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         """
-        Emit a metric that is the authoritative value at a point in time
+        Emit a metric that is the authoritative value for a quantity at a point in time
+
+        Examples:
+
+        metrics.gauge(f"clickhouse.node_{hostname}.memory_usage", free_memory_in_bytes)
         """
         raise NotImplementedError
 
@@ -33,6 +43,10 @@ class MetricsBackend(ABC):
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         """
-        Emit a metric for the performance of an operation
+        Emit a metric for the timing performance of an operation.
+
+        Example:
+
+        metrics.timing("request.latency", request_latency_in_ms)
         """
         raise NotImplementedError
