@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
-import { LogLine, TracingResult } from "./types";
-import { QueryRequest } from "../components/query_display/types";
 import { Table } from "../table";
-import { COLORS } from "../theme";
+import { LogLine, TracingRequest, TracingResult } from "./types";
 import { parseLogLine } from "./util";
 
-type QueryState = Partial<QueryRequest>;
+type QueryState = Partial<TracingRequest>;
 
 type BucketedLogs = Map<String, Map<MessageCategory, LogLine[]>>;
 
@@ -118,7 +116,7 @@ function TracingQueries(props: { api: Client }) {
     }
     setIsExecuting(true);
     props.api
-      .executeQuery(query as QueryRequest, endpoint)
+      .executeTracingQuery(query as TracingRequest)
       .then((result) => {
         const tracing_result = {
           input_query: `${query.sql}`,
