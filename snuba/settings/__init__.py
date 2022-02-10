@@ -24,15 +24,21 @@ DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
+CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", "localhost")
+CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", 9000))
+CLICKHOUSE_USER = os.environ.get("CLICKHOUSE_USER", "default")
+CLICKHOUSE_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD", "")
+CLICKHOUSE_DATABASE = os.environ.get("CLICKHOUSE_DATABASE", "default")
+CLICKHOUSE_HTTP_PORT = int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123))
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-        "user": os.environ.get("CLICKHOUSE_USER", "default"),
-        "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
-        "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+        "host": CLICKHOUSE_HOST,
+        "port": CLICKHOUSE_PORT,
+        "user": CLICKHOUSE_USER,
+        "password": CLICKHOUSE_PASSWORD,
+        "database": CLICKHOUSE_DATABASE,
+        "http_port": CLICKHOUSE_HTTP_PORT,
         "storage_sets": {
             "cdc",
             "discover",
@@ -46,6 +52,18 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions",
             "transactions_ro",
             "transactions_v2",
+        },
+        "single_node": True,
+    },
+    {
+        "host": os.environ.get("CLICKHOUSE_PROFILING_HOST", CLICKHOUSE_HOST),
+        "port": int(os.environ.get("CLICKHOUSE_PROFILING_PORT", CLICKHOUSE_PORT)),
+        "user": os.environ.get("CLICKHOUSE_PROFILING_USER", CLICKHOUSE_USER),
+        "password": os.environ.get("CLICKHOUSE_PROFILING_PASSWORD", CLICKHOUSE_PASSWORD),
+        "database": os.environ.get("CLICKHOUSE_PROFILING_DATABASE", CLICKHOUSE_DATABASE),
+        "http_port": int(os.environ.get("CLICKHOUSE_PROFILING_HTTP_PORT", CLICKHOUSE_HTTP_PORT)),
+        "storage_sets": {
+            "stacktraces",
         },
         "single_node": True,
     },
