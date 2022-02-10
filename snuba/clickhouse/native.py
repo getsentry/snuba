@@ -111,7 +111,7 @@ class ClickhousePool(object):
         try:
             conn = self.pool.get(block=True)
 
-            attempts_remaining = 2
+            attempts_remaining = 3
             while attempts_remaining > 0:
                 attempts_remaining -= 1
                 # Lazily create connection instances
