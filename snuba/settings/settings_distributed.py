@@ -28,11 +28,11 @@ CLUSTERS = [
     },
     {
         "host": os.environ.get("CLICKHOUSE_PROFILING_HOST", "localhost"),
-        "port": int(os.environ.get("CLICKHOUSE_PROFILING_PORT", 9000)),
+        "port": int(os.environ.get("CLICKHOUSE_PROFILING_PORT", 9001)),
         "user": os.environ.get("CLICKHOUSE_PROFILING_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PROFILING_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_PROFILING_DATABASE", "default"),
-        "http_port": int(os.environ.get("CLICKHOUSE_PROFILING_HTTP_PORT", 8123)),
+        "http_port": int(os.environ.get("CLICKHOUSE_PROFILING_HTTP_PORT", 8124)),
         "storage_sets": {
             "stacktraces",
         },
