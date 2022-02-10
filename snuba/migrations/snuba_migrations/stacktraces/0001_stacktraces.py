@@ -41,7 +41,7 @@ columns: List[Column[Modifiers]] = [
     Column("error_description", String(Modifiers(low_cardinality=True, nullable=True))),
 
     Column("duration_ns", UInt(64)),
-    Column("ingested_at_ts", DateTime()),
+    Column("received_ts", DateTime()),
 
     # internal data
     Column("retention_days", UInt(16)),
@@ -59,7 +59,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.MergeTree(
                     storage_set=StorageSetKey.STACKTRACES,
-                    order_by="(project_id, transaction_id, ingested_at_ts)",
+                    order_by="(project_id, transaction_id, received_ts)",
                     ttl="finish_ts + toIntervalDay(retention_days)",
                     settings={"index_granularity": "8192"},
                 ),
