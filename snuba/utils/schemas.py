@@ -10,7 +10,7 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
-    Tuple,
+    Tuple as PTuple,
     Type,
     TypeVar,
     Union,
@@ -157,7 +157,7 @@ class Column(Generic[TModifiers]):
 
     @staticmethod
     def to_columns(
-        columns: Sequence[Union[Column[TModifiers], Tuple[str, ColumnType[TModifiers]]]]
+        columns: Sequence[Union[Column[TModifiers], PTuple[str, ColumnType[TModifiers]]]]
     ) -> Sequence[Column[TModifiers]]:
         return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
@@ -356,7 +356,7 @@ class Nested(ColumnType[TModifiers]):
     def __init__(
         self,
         nested_columns: Sequence[
-            Union[Column[TModifiers], Tuple[str, ColumnType[TModifiers]]]
+            Union[Column[TModifiers], PTuple[str, ColumnType[TModifiers]]]
         ],
         modifiers: Optional[TModifiers] = None,
     ) -> None:
@@ -533,7 +533,7 @@ class DateTime(ColumnType[TModifiers]):
 
 class Enum(ColumnType[TModifiers]):
     def __init__(
-        self, values: Sequence[Tuple[str, int]], modifiers: Optional[TModifiers] = None,
+        self, values: Sequence[PTuple[str, int]], modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.values = values
@@ -558,3 +558,61 @@ class Enum(ColumnType[TModifiers]):
 
     def get_raw(self) -> Enum[TModifiers]:
         return Enum(self.values)
+
+class Tuple(ColumnType[TModifiers]):
+    def __init__(
+        self, types: PTuple[ColumnType, ...], modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.types = types
+
+    def _repr_content(self) -> str:
+        return ", ".join("{}".format(v) for v in self.types)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
+            and self.types == cast(PTuple[TModifiers], other).types
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Tuple({})".format(
+            ", ".join("{}".format(t) for t in self.types)
+        )
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
+        return Tuple(types=self.types, modifiers=modifiers)
+
+    def get_raw(self) -> Tuple[TModifiers]:
+        return Tuple(self.types)
+
+class NamedTuple(ColumnType[TModifiers]):
+    def __init__(
+        self, types: PTuple[PTuple[str, ColumnType], ...], modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.types = types
+
+    def _repr_content(self) -> str:
+        return ", ".join("{} {}".format(t[0], t[1]) for t in self.types)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
+            and self.types == cast(PTuple[TModifiers], other).types
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Tuple({})".format(
+            ", ".join("{} {}".format(t[0], t[1]) for t in self.types)
+        )
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> NamedTuple[TModifiers]:
+        return NamedTuple(types=self.types, modifiers=modifiers)
+
+    def get_raw(self) -> NamedTuple[TModifiers]:
+        return NamedTuple(self.types)
+
+
