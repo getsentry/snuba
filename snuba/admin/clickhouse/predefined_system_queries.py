@@ -1,20 +1,22 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Dict, Optional, Sequence, Type
+from typing import Dict, Sequence, Type
 
 
 class _QueryRegistry:
     """Keep a mapping of SystemQueries to their names"""
 
     def __init__(self) -> None:
-        self.__mapping: Dict[str, Type["SystemQuery"]] = {}
+        self.__mapping: Dict[str, Type[SystemQuery]] = {}
 
-    def register_class(self, cls: Type["SystemQuery"]) -> None:
+    def register_class(self, cls: Type[SystemQuery]) -> None:
         existing_class = self.__mapping.get(cls.__name__)
         if not existing_class:
             self.__mapping[cls.__name__] = cls
 
     @property
-    def all_queries(self) -> Sequence[Type["SystemQuery"]]:
+    def all_queries(self) -> Sequence[Type[SystemQuery]]:
         return list(self.__mapping.values())
 
 
@@ -26,10 +28,10 @@ class SystemQuery:
     sql: str
 
     @classmethod
-    def to_json(cls) -> Dict[str, Optional[str]]:
+    def to_json(cls) -> Dict[str, str]:
         return {
             "sql": cls.sql,
-            "description": cls.__doc__,
+            "description": cls.__doc__ or "",
             "name": cls.__name__,
         }
 
@@ -38,7 +40,7 @@ class SystemQuery:
         return super().__init_subclass__()
 
     @classmethod
-    def all_queries(cls) -> Sequence[Type["SystemQuery"]]:
+    def all_queries(cls) -> Sequence[Type[SystemQuery]]:
         return _QUERY_REGISTRY.all_queries
 
 
