@@ -5,6 +5,7 @@ from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequ
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
@@ -95,6 +96,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
         self.__followed_consumer_group = followed_consumer_group
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
         self.__time_shift = time_shift if time_shift is not None else timedelta()
+        self.__end_of_messages = False
 
     def subscribe(
         self,
@@ -110,6 +112,9 @@ class CommitLogTickConsumer(Consumer[Tick]):
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[Tick]]:
         message = self.__consumer.poll(timeout)
         if message is None:
+            if self.__end_of_messages is False:
+                self.__end_of_messages = True
+                print("No more messages!")
             return None
 
         commit = commit_codec.decode(message.payload)
@@ -188,6 +193,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
 class SchedulerBuilder:
     def __init__(
         self,
+        broker: Broker[KafkaPayload],
         entity_name: str,
         consumer_group: str,
         followed_consumer_group: str,
@@ -199,6 +205,7 @@ class SchedulerBuilder:
         profile_path: Optional[str] = None,
         load_factor: int = 1,
     ) -> None:
+        self.__broker = broker
         self.__entity_key = EntityKey(entity_name)
 
         storage = get_entity(self.__entity_key).get_writable_storage()
@@ -236,7 +243,7 @@ class SchedulerBuilder:
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
-            self.__build_tick_consumer(),
+            self.__build_file_tick_consumer(),
             Topic(self.__commit_log_topic_spec.topic_name),
             self.__build_strategy_factory(),
         )
@@ -259,6 +266,18 @@ class SchedulerBuilder:
             )
 
         return strategy_factory
+
+    def __build_file_tick_consumer(self) -> CommitLogTickConsumer:
+        consumer = self.__broker.get_consumer(self.__commit_log_topic_spec.topic_name)
+        return CommitLogTickConsumer(
+            consumer,
+            followed_consumer_group=self.__followed_consumer_group,
+            time_shift=(
+                timedelta(seconds=self.__delay_seconds * -1)
+                if self.__delay_seconds is not None
+                else None
+            ),
+        )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
         return CommitLogTickConsumer(

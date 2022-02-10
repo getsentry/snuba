@@ -73,7 +73,7 @@ now = datetime.now() - timedelta(minutes=2)
 
 for n in range(number):
     offset = n
-    orig_message_ts = now - timedelta(seconds=0.1 * (number - n))
+    orig_message_ts = now - timedelta(seconds=1 * (number - n))
 
     for partition in partitions:
         commit = Commit(consumer_group, partition, offset, orig_message_ts)

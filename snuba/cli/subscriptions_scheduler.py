@@ -1,11 +1,15 @@
 import logging
+import os
 import signal
 from contextlib import closing
 from typing import Any, Optional
 
 import click
-from arroyo import configure_metrics
-from arroyo.backends.kafka import KafkaProducer
+from arroyo import Topic, configure_metrics
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.abstract import TopicExists
+from arroyo.backends.local.storages.file import FileMessageStorage
 
 from snuba import environment, settings
 from snuba.datasets.entities import EntityKey
@@ -13,7 +17,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.scheduler_consumer import SchedulerBuilder
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 logger = logging.getLogger(__name__)
@@ -127,13 +130,20 @@ def subscriptions_scheduler(
     scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
     assert scheduled_topic_spec is not None
 
-    producer = KafkaProducer(
-        build_kafka_producer_configuration(
-            scheduled_topic_spec.topic, override_params={"partitioner": "consistent"},
-        )
-    )
+    directory_path = os.getcwd() + "/.broker_data"
+    broker: Broker[KafkaPayload] = Broker(FileMessageStorage(directory_path))
+
+    # Create the scheduled topic if it doesn't exist
+    topic = Topic(scheduled_topic_spec.topic_name)
+    try:
+        broker.create_topic(topic, partitions=1)
+    except TopicExists:
+        pass
+
+    producer = broker.get_producer()
 
     builder = SchedulerBuilder(
+        broker,
         entity_name,
         consumer_group,
         followed_consumer_group,

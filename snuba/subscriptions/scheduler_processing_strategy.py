@@ -443,6 +443,8 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
+        print("Tasks:", len(encoded_tasks))
+
         self.__queue.append(
             message,
             deque(
