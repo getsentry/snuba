@@ -10,10 +10,8 @@ from snuba import state
 from snuba.admin.auth import UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.nodes import get_storage_info
-from snuba.admin.clickhouse.system_queries import (
-    SystemQuery,
-    run_system_query_on_host_with_sql,
-)
+from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
+from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
