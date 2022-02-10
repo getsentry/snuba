@@ -601,7 +601,7 @@ class NamedTuple(ColumnType[TModifiers]):
         return (
             self.__class__ == other.__class__
             and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
-            and self.types == cast(Tuple[TModifiers], other).types
+            and self.types == cast(NamedTuple[TModifiers], other).types
         )
 
     def _for_schema_impl(self) -> str:
