@@ -164,7 +164,6 @@ def test_write_each_node(
 
     replacer = ReplacerWorker(
         get_writable_storage(StorageKey.ERRORS),
-        "replacements",
         "consumer_group",
         DummyMetricsBackend(),
     )
@@ -198,7 +197,6 @@ def test_failing_query(
 
     replacer = ReplacerWorker(
         get_writable_storage(StorageKey.ERRORS),
-        "replacements",
         "consumer_group",
         DummyMetricsBackend(),
     )
@@ -230,7 +228,6 @@ def test_load_balancing(
 
     replacer = ReplacerWorker(
         get_writable_storage(StorageKey.ERRORS),
-        "replacements",
         "consumer_group",
         DummyMetricsBackend(),
     )

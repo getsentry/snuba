@@ -265,7 +265,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(
         self,
         storage: WritableTableStorage,
-        replacements_topic: str,
         consumer_group: str,
         metrics: MetricsBackend,
     ) -> None:
@@ -283,7 +282,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__rate_limiter = RateLimiter("replacements")
 
         self.__prolonged_offset = float("-inf")
-        self.__replacements_topic = replacements_topic
         self.__consumer_group = consumer_group
 
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
@@ -490,7 +488,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             [
                 "replacement",
                 self.__consumer_group,
-                self.__replacements_topic,
                 self.__replacer_processor.get_state().value,
                 str(message_metadata.partition_index),
             ]

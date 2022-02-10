@@ -24,8 +24,6 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
 
-# arbitrary strings for testing purposes
-REPLACEMENTS_TOPIC = "replacements"
 CONSUMER_GROUP = "consumer_group"
 
 
@@ -51,10 +49,7 @@ class TestReplacer:
 
         self.storage = get_writable_storage(StorageKey.ERRORS)
         self.replacer = replacer.ReplacerWorker(
-            self.storage,
-            REPLACEMENTS_TOPIC,
-            CONSUMER_GROUP,
-            DummyMetricsBackend(strict=True),
+            self.storage, CONSUMER_GROUP, DummyMetricsBackend(strict=True),
         )
 
         # Total query time range is 24h before to 24h after now to account
@@ -684,7 +679,7 @@ class TestReplacer:
         self.event["primary_hash"] = "a" * 32
         write_unprocessed_events(self.storage, [self.event])
 
-        key = f"replacement:{CONSUMER_GROUP}:{REPLACEMENTS_TOPIC}:errors:1"
+        key = f"replacement:{CONSUMER_GROUP}:errors:1"
         redis_client.set(key, 42)
 
         old_offset: Message[KafkaPayload] = Message(

@@ -25,8 +25,6 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
 
-# arbitrary strings for testing purposes
-REPLACEMENTS_TOPIC = "replacements"
 CONSUMER_GROUP = "consumer_group"
 
 
@@ -41,10 +39,7 @@ class TestReplacer:
         self.storage = get_storage(StorageKey.EVENTS)
 
         self.replacer = replacer.ReplacerWorker(
-            self.storage,
-            REPLACEMENTS_TOPIC,
-            CONSUMER_GROUP,
-            DummyMetricsBackend(strict=True),
+            self.storage, CONSUMER_GROUP, DummyMetricsBackend(strict=True),
         )
 
         self.project_id = 1
