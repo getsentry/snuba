@@ -1,14 +1,23 @@
 from __future__ import annotations
 
-from typing import List, Mapping, MutableMapping, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import List, Mapping, MutableMapping, Optional, Union
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
 
-RecordedMetricCalls = List[Tuple[Union[int, float], Tags]]
+
+@dataclass(frozen=True)
+class RecordedMetricCall:
+    value: int | float
+    tags: Tags
+
+
+RecordedMetricCalls = List[RecordedMetricCall]
+
 
 RECORDED_METRIC_CALLS: MutableMapping[
-    str, MutableMapping[str, RecordedMetricCalls]
+    str, MutableMapping[str, List[RecordedMetricCall]]
 ] = {}
 
 
@@ -23,7 +32,12 @@ def record_metric_call(
 
     if tags is None:
         tags = {}
-    RECORDED_METRIC_CALLS[mtype][name].append((value, tags))
+    RECORDED_METRIC_CALLS[mtype][name].append(RecordedMetricCall(value, tags))
+
+
+def clear_recorded_metric_calls() -> None:
+    global RECORDED_METRIC_CALLS
+    RECORDED_METRIC_CALLS = {}
 
 
 def get_recorded_metric_calls(mtype: str, name: str) -> RecordedMetricCalls | None:

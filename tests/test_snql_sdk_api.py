@@ -408,8 +408,7 @@ class TestSDKSnQLApi(BaseApiTest):
         assert response.status_code == 200, resp
         metric_calls = get_recorded_metric_calls("increment", "api.snuba.attribution")
         assert metric_calls is not None
-        assert len(metric_calls) > 0
-        expected_metric = [c for c in metric_calls if c[1]["team"] == "sns"].pop()
-        assert expected_metric[0] > 0
-        assert expected_metric[1]["team"] == "sns"
-        assert expected_metric[1]["feature"] == "test"
+        assert len(metric_calls) == 1
+        assert metric_calls[0].value > 0
+        assert metric_calls[0].tags["team"] == "sns"
+        assert metric_calls[0].tags["feature"] == "test"
