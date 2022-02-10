@@ -82,16 +82,7 @@ class TestCleanup:
             return datetime(rounded.year, rounded.month, rounded.day)
 
         # In prod the dates have hours/seconds etc.
-        prebase = datetime.utcnow()
-        base = datetime(
-            1999,
-            12,
-            26,
-            prebase.hour,
-            prebase.minute,
-            prebase.second,
-            prebase.microsecond,
-        )  # a sunday
+        base = datetime(1999, 12, 26, 1, 14, 35)  # a sunday
         current_time.return_value = base
 
         storage = get_writable_storage(storage_key)
