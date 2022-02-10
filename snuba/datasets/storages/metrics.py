@@ -12,13 +12,18 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.metrics_processor import (
+from snuba.datasets.metrics_aggregate_processor import (
+    CounterAggregateProcessor,
+    DistributionsAggregateProcessor,
+    SetsAggregateProcessor,
+)
+from snuba.datasets.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
     SetsMetricsProcessor,
 )
-from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
-from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
+from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -124,10 +129,10 @@ aggregated_columns = [
 ]
 
 
-sets_storage = ReadableTableStorage(
+sets_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_SETS,
     storage_set_key=StorageSetKey.METRICS,
-    schema=TableSchema(
+    schema=WritableTableSchema(
         local_table_name="metrics_sets_local",
         dist_table_name="metrics_sets_dist",
         storage_set_key=StorageSetKey.METRICS,
@@ -139,12 +144,16 @@ sets_storage = ReadableTableStorage(
         ),
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        SetsAggregateProcessor(), default_topic=Topic.METRICS,
+    ),
+    write_format=WriteFormat.VALUES,
 )
 
-counters_storage = ReadableTableStorage(
+counters_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_COUNTERS,
     storage_set_key=StorageSetKey.METRICS,
-    schema=TableSchema(
+    schema=WritableTableSchema(
         local_table_name="metrics_counters_local",
         dist_table_name="metrics_counters_dist",
         storage_set_key=StorageSetKey.METRICS,
@@ -156,13 +165,17 @@ counters_storage = ReadableTableStorage(
         ),
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        CounterAggregateProcessor(), default_topic=Topic.METRICS,
+    ),
+    write_format=WriteFormat.VALUES,
 )
 
 
-distributions_storage = ReadableTableStorage(
+distributions_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_DISTRIBUTIONS,
     storage_set_key=StorageSetKey.METRICS,
-    schema=TableSchema(
+    schema=WritableTableSchema(
         local_table_name="metrics_distributions_local",
         dist_table_name="metrics_distributions_dist",
         storage_set_key=StorageSetKey.METRICS,
@@ -184,4 +197,8 @@ distributions_storage = ReadableTableStorage(
         ),
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        DistributionsAggregateProcessor(), default_topic=Topic.METRICS,
+    ),
+    write_format=WriteFormat.VALUES,
 )

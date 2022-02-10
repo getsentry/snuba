@@ -1,4 +1,5 @@
 import functools
+import logging
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
@@ -32,6 +33,8 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -92,6 +95,7 @@ class ConsumerBuilder:
         self.broker_config = get_default_kafka_configuration(
             topic, bootstrap_servers=kafka_params.bootstrap_servers
         )
+        logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
         self.producer_broker_config = build_kafka_producer_configuration(
             topic,
             bootstrap_servers=kafka_params.bootstrap_servers,
