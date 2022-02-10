@@ -140,7 +140,9 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
-TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {
+    "events": 64,
+}  # (topic name, # of partitions)
 
 ERRORS_ROLLOUT_ALL: bool = True
 
