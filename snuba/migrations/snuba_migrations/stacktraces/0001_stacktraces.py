@@ -27,7 +27,7 @@ columns: List[Column[Modifiers]] = [
     Column("transaction_name", String(Modifiers(low_cardinality=True))),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
 
-    Column("version", NamedTuple((("name", String), ("code", String)), Modifiers(low_cardinality=True))),
+    Column("version", NamedTuple((("name", String()), ("code", String())), Modifiers(low_cardinality=True))),
     Column("platform", String(Modifiers(low_cardinality=True))),
     Column("android_api_level", UInt(32, Modifiers(nullable=True))),
     Column("device_classification", String(Modifiers(low_cardinality=True))),
@@ -45,7 +45,7 @@ columns: List[Column[Modifiers]] = [
     Column("ingested_at_ts", DateTime()),
 
     # internal data
-    Column("retention_days", UInt(16, Modifiers(default=30))),
+    Column("retention_days", UInt(16)),
 ]
 
 
@@ -58,7 +58,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.STACKTRACES,
                 table_name="stacktraces_local",
                 columns=columns,
-                engine=table_engines.ReplacingMergeTree(
+                engine=table_engines.MergeTree(
                     storage_set=StorageSetKey.STACKTRACES,
                     order_by="(project_id, transaction_id, ingested_at_ts)",
                     ttl="finish_ts + toIntervalDay(retention_days)",

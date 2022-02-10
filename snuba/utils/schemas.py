@@ -561,7 +561,7 @@ class Enum(ColumnType[TModifiers]):
 
 class Tuple(ColumnType[TModifiers]):
     def __init__(
-        self, types: PTuple[ColumnType, ...], modifiers: Optional[TModifiers] = None,
+        self, types: PTuple[ColumnType[TModifiers], ...], modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.types = types
@@ -573,7 +573,7 @@ class Tuple(ColumnType[TModifiers]):
         return (
             self.__class__ == other.__class__
             and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
-            and self.types == cast(PTuple[TModifiers], other).types
+            and self.types == cast(Tuple[TModifiers], other).types
         )
 
     def _for_schema_impl(self) -> str:
@@ -589,7 +589,7 @@ class Tuple(ColumnType[TModifiers]):
 
 class NamedTuple(ColumnType[TModifiers]):
     def __init__(
-        self, types: PTuple[PTuple[str, ColumnType], ...], modifiers: Optional[TModifiers] = None,
+        self, types: PTuple[PTuple[str, ColumnType[TModifiers]], ...], modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.types = types
@@ -601,7 +601,7 @@ class NamedTuple(ColumnType[TModifiers]):
         return (
             self.__class__ == other.__class__
             and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
-            and self.types == cast(PTuple[TModifiers], other).types
+            and self.types == cast(Tuple[TModifiers], other).types
         )
 
     def _for_schema_impl(self) -> str:
