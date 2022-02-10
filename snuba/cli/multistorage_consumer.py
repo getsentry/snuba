@@ -38,6 +38,10 @@ logger = logging.getLogger(__name__)
     "--consumer-group", default="snuba-consumers",
 )
 @click.option(
+    "--commit-log-topic",
+    help="Topic for committed offsets to be written to, triggering post-processing task(s)",
+)
+@click.option(
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
@@ -78,6 +82,7 @@ logger = logging.getLogger(__name__)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
+    commit_log_topic: str,
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -121,26 +126,31 @@ def multistorage_consumer(
     if topics:
         raise ValueError("only one topic is supported")
 
-    # XXX: The ``CommitLogConsumer`` also only supports a single topic at this
-    # time. (It is less easily modified.) This also assumes the commit log
-    # topic is on the same Kafka cluster as the input topic.
-    commit_log_topics = {
-        spec.topic_name
-        for spec in (
-            storage.get_table_writer().get_stream_loader().get_commit_log_topic_spec()
-            for storage in storages.values()
-        )
-        if spec is not None
-    }
-
-    commit_log_topic: Optional[Topic]
-    if commit_log_topics:
-        commit_log_topic = Topic(commit_log_topics.pop())
+    commit_log: Optional[Topic]
+    if commit_log_topic:
+        commit_log = Topic(commit_log_topic)
     else:
-        commit_log_topic = None
+        # XXX: The ``CommitLogConsumer`` also only supports a single topic at this
+        # time. (It is less easily modified.) This also assumes the commit log
+        # topic is on the same Kafka cluster as the input topic.
+        commit_log_topics = {
+            spec.topic_name
+            for spec in (
+                storage.get_table_writer()
+                .get_stream_loader()
+                .get_commit_log_topic_spec()
+                for storage in storages.values()
+            )
+            if spec is not None
+        }
 
-    if commit_log_topics:
-        raise ValueError("only one commit log topic is supported")
+        if commit_log_topics:
+            commit_log = Topic(commit_log_topics.pop())
+        else:
+            commit_log = None
+
+        if commit_log_topics:
+            raise ValueError("only one commit log topic is supported")
 
     # XXX: This requires that all storages are associated with the same Kafka
     # cluster so that they can be consumed by the same consumer instance.
@@ -182,7 +192,7 @@ def multistorage_consumer(
         ):
             raise ValueError("storages cannot be located on different Kafka clusters")
 
-    if commit_log_topic is None:
+    if commit_log is None:
         consumer = KafkaConsumer(consumer_configuration)
     else:
         # XXX: This relies on the assumptions that a.) all storages are
@@ -200,9 +210,7 @@ def multistorage_consumer(
             build_kafka_producer_configuration(commit_log_topic_spec.topic)
         )
         consumer = KafkaConsumerWithCommitLog(
-            consumer_configuration,
-            producer=producer,
-            commit_log_topic=commit_log_topic,
+            consumer_configuration, producer=producer, commit_log_topic=commit_log,
         )
 
     metrics = MetricsWrapper(environment.metrics, "consumer")
