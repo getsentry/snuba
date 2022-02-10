@@ -44,4 +44,5 @@ storage = WritableTableStorage(
         "insert_allow_materialized_columns": 1,
         "input_format_skip_unknown_fields": 1,
     },
+    ignore_write_errors=True,
 )
