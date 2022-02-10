@@ -6,7 +6,6 @@ from snuba.clickhouse.columns import (
     DateTime,
     String,
     UInt,
-    Tuple,
     NamedTuple,
 )
 from snuba.clusters.storage_sets import StorageSetKey
@@ -27,7 +26,7 @@ columns: List[Column[Modifiers]] = [
     Column("transaction_name", String(Modifiers(low_cardinality=True))),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
 
-    Column("version", NamedTuple((("name", String()), ("code", String())), Modifiers(low_cardinality=True))),
+    Column("version", NamedTuple((("name", String()), ("code", String())))),
     Column("platform", String(Modifiers(low_cardinality=True))),
     Column("android_api_level", UInt(32, Modifiers(nullable=True))),
     Column("device_classification", String(Modifiers(low_cardinality=True))),
