@@ -10,7 +10,6 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
-    Tuple as PTuple,
     Type,
     TypeVar,
     Union,
@@ -157,7 +156,7 @@ class Column(Generic[TModifiers]):
 
     @staticmethod
     def to_columns(
-        columns: Sequence[Union[Column[TModifiers], PTuple[str, ColumnType[TModifiers]]]]
+        columns: Sequence[Union[Column[TModifiers], tuple[str, ColumnType[TModifiers]]]]
     ) -> Sequence[Column[TModifiers]]:
         return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
@@ -356,7 +355,7 @@ class Nested(ColumnType[TModifiers]):
     def __init__(
         self,
         nested_columns: Sequence[
-            Union[Column[TModifiers], PTuple[str, ColumnType[TModifiers]]]
+            Union[Column[TModifiers], tuple[str, ColumnType[TModifiers]]]
         ],
         modifiers: Optional[TModifiers] = None,
     ) -> None:
@@ -533,7 +532,7 @@ class DateTime(ColumnType[TModifiers]):
 
 class Enum(ColumnType[TModifiers]):
     def __init__(
-        self, values: Sequence[PTuple[str, int]], modifiers: Optional[TModifiers] = None,
+        self, values: Sequence[tuple[str, int]], modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.values = values
@@ -561,7 +560,7 @@ class Enum(ColumnType[TModifiers]):
 
 class Tuple(ColumnType[TModifiers]):
     def __init__(
-        self, types: PTuple[ColumnType[TModifiers], ...], modifiers: Optional[TModifiers] = None,
+        self, types: tuple[ColumnType[TModifiers], ...], modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.types = types
@@ -589,7 +588,7 @@ class Tuple(ColumnType[TModifiers]):
 
 class NamedTuple(ColumnType[TModifiers]):
     def __init__(
-        self, types: PTuple[PTuple[str, ColumnType[TModifiers]], ...], modifiers: Optional[TModifiers] = None,
+        self, types: tuple[tuple[str, ColumnType[TModifiers]], ...], modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.types = types
