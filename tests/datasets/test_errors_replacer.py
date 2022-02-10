@@ -19,9 +19,14 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize
 from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
+from snuba.state import set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
+
+# arbitrary strings for testing purposes
+REPLACEMENTS_TOPIC = "replacements"
+CONSUMER_GROUP = "consumer_group"
 
 
 class TestReplacer:
@@ -47,8 +52,8 @@ class TestReplacer:
         self.storage = get_writable_storage(StorageKey.ERRORS)
         self.replacer = replacer.ReplacerWorker(
             self.storage,
-            "replacements",
-            "consumer_group",
+            REPLACEMENTS_TOPIC,
+            CONSUMER_GROUP,
             DummyMetricsBackend(strict=True),
         )
 
@@ -639,12 +644,6 @@ class TestReplacer:
         self.event["primary_hash"] = "a" * 32
         write_unprocessed_events(self.storage, [self.event])
 
-        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
-
-        timestamp = datetime.utcnow()
-
-        project_id = self.project_id
-
         message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
@@ -655,11 +654,13 @@ class TestReplacer:
                         2,
                         ReplacementType.END_UNMERGE,
                         {
-                            "project_id": project_id,
+                            "project_id": self.project_id,
                             "previous_group_id": 1,
                             "new_group_id": 2,
                             "hashes": ["a" * 32],
-                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                            "datetime": datetime.utcnow().strftime(
+                                PAYLOAD_DATETIME_FORMAT
+                            ),
                         },
                     )
                 ).encode("utf-8"),
@@ -674,13 +675,16 @@ class TestReplacer:
         # should be None since the offset should be in Redis, indicating it should be skipped
         assert self.replacer.process_message(message) is None
 
-        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
-
     def test_offset_already_processed(self) -> None:
         """
         Don't process an offset that already exists in Redis.
         """
-        key = "replacement:consumer_group:replacements:errors:1"
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        key = f"replacement:{CONSUMER_GROUP}:{REPLACEMENTS_TOPIC}:errors:1"
         redis_client.set(key, 42)
 
         old_offset: Message[KafkaPayload] = Message(
@@ -707,3 +711,41 @@ class TestReplacer:
 
         assert self.replacer.process_message(old_offset) is None
         assert self.replacer.process_message(same_offset) is None
+
+    def test_reset_consumer_group_offset_check(self) -> None:
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        ReplacementType.END_UNMERGE,
+                        {
+                            "project_id": self.project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hashes": ["a" * 32],
+                            "datetime": datetime.utcnow().strftime(
+                                PAYLOAD_DATETIME_FORMAT
+                            ),
+                        },
+                    )
+                ).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        self.replacer.flush_batch([self.replacer.process_message(message)])
+
+        set_config(replacer.RESET_CHECK_CONFIG, f"[{CONSUMER_GROUP}]")
+
+        # Offset to check against should be reset so this message shouldn't be skipped
+        assert self.replacer.process_message(message) is not None

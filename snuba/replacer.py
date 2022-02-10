@@ -27,6 +27,7 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
+from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
 
@@ -35,6 +36,8 @@ logger = logging.getLogger("snuba.replacer")
 executor = ThreadPoolExecutor()
 
 NODES_REFRESH_PERIOD = 10
+
+RESET_CHECK_CONFIG = "consumer_groups_to_reset_offset_check"
 
 
 class ShardedConnectionPool(ABC):
@@ -418,9 +421,11 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         If there is, we can conclude whether or not to process the incoming
         message by comparing the incoming message to the recorded offset.
         """
+        key = self._build_topic_group_index_key(metadata)
+        self._reset_offset_check(key)
+
         # float("-inf") implies this is the first message this worker is processing since startup
         if self.__prolonged_offset == float("-inf"):
-            key = self._build_topic_group_index_key(metadata)
             processed_offset = redis_client.get(key)
             try:
                 self.__prolonged_offset = (
@@ -433,6 +438,25 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 )
 
         return metadata.offset <= self.__prolonged_offset
+
+    def _reset_offset_check(self, key: str) -> None:
+        """
+        We may need to clear the offset the replacer is comparing incoming messages
+        against.
+
+        Eg. The offset is manually reset in Kafka to start processing messages
+        again from an older offset. The replacer will ignore this and just skip
+        messages till it's back to the offset stored in Redis.
+
+        There exists a config which tells us which consumer groups require their
+        replacer(s) reset. Ideally this config is populated with consumer groups
+        temporarily, then cleared once relevant consumers restart.
+        """
+        # expected format is "[consumer_group1, consumer_group2, ..]"
+        consumer_groups = (get_config(RESET_CHECK_CONFIG) or "[]")[1:-1].split(",")
+        if self.__consumer_group in consumer_groups:
+            self.__prolonged_offset = -1
+            redis_client.delete(key)
 
     def _check_timing_and_write_to_redis(
         self, replacement: Replacement, start_time: float
