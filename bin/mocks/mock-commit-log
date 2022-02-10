@@ -34,7 +34,7 @@ parser.add_argument(
     type=str,
     help="Consumer group ID",
     dest="group_id",
-    default="snuba-commit-log",
+    default="snuba-consumers",
 )
 
 parsed = parser.parse_args()
