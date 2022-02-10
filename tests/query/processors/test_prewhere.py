@@ -196,7 +196,8 @@ def test_prewhere(
         ["project_id", "=", 1],
     ]
     snql_query = json_to_snql(query_body, "events")
-    query = identity_translate(parse_snql_query(str(snql_query), events))
+    query, _ = parse_snql_query(str(snql_query), events)
+    query = identity_translate(query)
     query.set_from_clause(Table("my_table", all_columns, final=final))
 
     request_settings = HTTPRequestSettings()

@@ -31,11 +31,11 @@ Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
 metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
 
-ClickhouseProfile = TypedDict(
-    "ClickhouseProfile",
-    {"bytes": int, "blocks": int, "rows": int, "elapsed": float},
-    total=False,
-)
+class ClickhouseProfile(TypedDict):
+    bytes: int
+    blocks: int
+    rows: int
+    elapsed: float
 
 
 @dataclass(frozen=True)
@@ -147,12 +147,12 @@ class ClickhousePool(object):
                     else:
                         result_data = query_execute()
 
-                    profile_data: ClickhouseProfile = {
-                        "bytes": conn.last_query.profile_info.bytes,
-                        "blocks": conn.last_query.profile_info.blocks,
-                        "rows": conn.last_query.profile_info.rows,
-                        "elapsed": conn.last_query.elapsed,
-                    }
+                    profile_data = ClickhouseProfile(
+                        bytes=conn.last_query.profile_info.bytes or 0,
+                        blocks=conn.last_query.profile_info.blocks or 0,
+                        rows=conn.last_query.profile_info.rows or 0,
+                        elapsed=conn.last_query.elapsed or 0.0,
+                    )
                     if with_column_types:
                         result = ClickhouseResult(
                             results=result_data[0],
@@ -211,7 +211,8 @@ class ClickhousePool(object):
         query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
-        attempts_remaining = 3
+        total_attempts = 3
+        attempts_remaining = total_attempts
 
         while True:
             try:
@@ -240,21 +241,31 @@ class ClickhousePool(object):
                         raise e
                 time.sleep(1)
                 continue
-            except errors.ServerException as e:
+            except ClickhouseError as e:
                 logger.warning(
-                    "ClickHouse query execution failed: %s (retrying)", str(e)
+                    "ClickHouse query execution failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
                 )
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    # Try forever if the server is overloaded.
-                    sleep_seconds = state.get_config(
+                    attempts_remaining -= 1
+                    if attempts_remaining <= 0:
+                        raise e
+                    sleep_interval_seconds = state.get_config(
                         "simultaneous_queries_sleep_seconds", 1
                     )
-                    assert sleep_seconds is not None
-                    time.sleep(float(sleep_seconds))
+                    assert sleep_interval_seconds is not None
+                    # Linear backoff. Adds one second at each iteration.
+                    time.sleep(
+                        float(
+                            (total_attempts - attempts_remaining)
+                            * sleep_interval_seconds
+                        )
+                    )
                     continue
                 else:
                     # Quit immediately for other types of server errors.
-                    raise ClickhouseError(e.message, code=e.code) from e
+                    raise e
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
@@ -331,7 +342,7 @@ class NativeDriverReader(Reader):
         """
         meta = result.meta if result.meta is not None else []
         data = result.results
-        profile = result.profile if result.profile else {}
+        profile = result.profile
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent

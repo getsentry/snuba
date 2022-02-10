@@ -170,23 +170,23 @@ class TaskBuilderModeState:
     def __init__(self) -> None:
         self.__state: MutableMapping[int, TaskBuilderMode] = {}
 
+    def get_final_mode(self, transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+        return (
+            TaskBuilderMode.IMMEDIATE
+            if transition_mode == TaskBuilderMode.TRANSITION_IMMEDIATE
+            else TaskBuilderMode.JITTERED
+        )
+
+    def get_start_mode(self, transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+        return (
+            TaskBuilderMode.IMMEDIATE
+            if transition_mode == TaskBuilderMode.TRANSITION_JITTER
+            else TaskBuilderMode.JITTERED
+        )
+
     def get_current_mode(
         self, subscription: Subscription, timestamp: int
     ) -> TaskBuilderMode:
-        def get_final_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
-            return (
-                TaskBuilderMode.IMMEDIATE
-                if transition_mode == TaskBuilderMode.TRANSITION_IMMEDIATE
-                else TaskBuilderMode.JITTERED
-            )
-
-        def get_start_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
-            return (
-                TaskBuilderMode.IMMEDIATE
-                if transition_mode == TaskBuilderMode.TRANSITION_JITTER
-                else TaskBuilderMode.JITTERED
-            )
-
         general_mode = TaskBuilderMode(
             state.get_config(
                 "subscription_primary_task_builder", TaskBuilderMode.JITTERED
@@ -201,14 +201,16 @@ class TaskBuilderModeState:
 
         resolution = int(subscription.data.resolution.total_seconds())
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
-            return get_final_mode(general_mode)
+            return self.get_final_mode(general_mode)
 
         if timestamp % resolution == 0:
-            self.__state[resolution] = get_final_mode(general_mode)
+            self.__state[resolution] = self.get_final_mode(general_mode)
 
         current_state = self.__state.get(resolution)
         return (
-            current_state if current_state is not None else get_start_mode(general_mode)
+            current_state
+            if current_state is not None
+            else self.get_start_mode(general_mode)
         )
 
 
@@ -241,17 +243,16 @@ class DelegateTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        immediate_task = self.__immediate_builder.get_task(
-            subscription_with_metadata, timestamp
-        )
-        jittered_task = self.__jittered_builder.get_task(
-            subscription_with_metadata, timestamp
-        )
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
+
         if primary_builder == TaskBuilderMode.JITTERED:
-            return jittered_task
+            return self.__jittered_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
         else:
-            return immediate_task
+            return self.__immediate_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
 
     def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
@@ -319,13 +320,21 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             (current_time - self.__last_refresh).total_seconds() * 1000.0,
             tags={"partition": str(self.__partition_id)},
         )
-
         return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
+        start_get_subscriptions = datetime.now()
+
         interval = tick.timestamps
 
         subscriptions = self.__get_subscriptions()
+
+        self.__metrics.timing(
+            "getting_subscriptions",
+            (datetime.now() - start_get_subscriptions).total_seconds() * 1000.0,
+        )
+
+        start_get_task = datetime.now()
 
         for timestamp in range(
             math.ceil(interval.lower.timestamp()),
@@ -341,7 +350,18 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
                 if task is not None:
                     yield task
 
+        self.__metrics.timing(
+            "getting_tasks", (datetime.now() - start_get_task).total_seconds() * 1000.0
+        )
+
+        start_reset_metrics = datetime.now()
+
         metrics = self.__builder.reset_metrics()
         if any(metric for metric in metrics if metric[1] > 0):
             for metric in metrics:
                 self.__metrics.increment(metric[0], metric[1], tags=metric[2])
+
+        self.__metrics.timing(
+            "updating_metrics",
+            (datetime.now() - start_reset_metrics).total_seconds() * 1000,
+        )

@@ -10,6 +10,7 @@ import {
   QueryRequest,
   QueryResult,
 } from "./clickhouse_queries/types";
+import { TracingRequest, TracingResult } from "./tracing/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -18,7 +19,8 @@ interface Client {
   editConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
-  executeQuery: (req: QueryRequest) => Promise<QueryResult>;
+  executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
+  executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
 }
 
 function Client() {
@@ -92,8 +94,23 @@ function Client() {
           })
       );
     },
-    executeQuery: (query: QueryRequest) => {
+
+    executeSystemQuery: (query: QueryRequest) => {
       const url = baseUrl + "run_clickhouse_system_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    executeTracingQuery: (query: TracingRequest) => {
+      const url = baseUrl + "clickhouse_trace_query";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

@@ -147,12 +147,54 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=metrics_counters_buckets",
                     "--storage=metrics_distributions_buckets",
                     "--storage=metrics_buckets",
+                    "--storage=metrics_distributions",
+                    "--storage=metrics_counters",
+                    "--storage=metrics_sets",
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
                     "--consumer-group=metrics_group",
                 ],
             ),
         ]
+        if settings.ENABLE_METRICS_SUBSCRIPTIONS:
+            daemons += [
+                (
+                    "subscriptions-consumer-metrics-counters",
+                    [
+                        "snuba",
+                        "subscriptions",
+                        "--auto-offset-reset=latest",
+                        "--log-level=debug",
+                        "--max-batch-size=1",
+                        "--consumer-group=snuba-metrics-subscriptions-consumers",
+                        "--dataset=metrics",
+                        "--entity=metrics_counters",
+                        "--commit-log-topic=snuba-metrics-commit-log",
+                        "--commit-log-group=metrics_group",
+                        "--delay-seconds=1",
+                        "--schedule-ttl=10",
+                        "--max-query-workers=1",
+                    ],
+                ),
+                (
+                    "subscriptions-consumer-metrics-sets",
+                    [
+                        "snuba",
+                        "subscriptions",
+                        "--auto-offset-reset=latest",
+                        "--log-level=debug",
+                        "--max-batch-size=1",
+                        "--consumer-group=snuba-metrics-subscriptions-consumers",
+                        "--dataset=metrics",
+                        "--entity=metrics_sets",
+                        "--commit-log-topic=snuba-metrics-commit-log",
+                        "--commit-log-group=metrics_group",
+                        "--delay-seconds=1",
+                        "--schedule-ttl=10",
+                        "--max-query-workers=1",
+                    ],
+                ),
+            ]
 
     if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         daemons += [

@@ -178,9 +178,11 @@ def test_find_projects(
     if expected_projects is None:
         with pytest.raises(ParsingException):
             snql_query = json_to_snql(query_body, "events")
-            identity_translate(parse_snql_query(str(snql_query), events))
+            query, _ = parse_snql_query(str(snql_query), events)
+            identity_translate(query)
     else:
         snql_query = json_to_snql(query_body, "events")
-        query = identity_translate(parse_snql_query(str(snql_query), events))
+        query, _ = parse_snql_query(str(snql_query), events)
+        query = identity_translate(query)
         project_ids_ast = get_object_ids_in_query_ast(query, "project_id")
         assert project_ids_ast == expected_projects

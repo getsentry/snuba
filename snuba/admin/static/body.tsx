@@ -22,6 +22,7 @@ function Body(props: Props) {
 
 const bodyStyle = {
   width: "100%",
+  maxWidth: "calc(100% - 290px)",
   margin: 20,
   fontSize: 20,
 };

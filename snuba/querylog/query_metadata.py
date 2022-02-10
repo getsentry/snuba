@@ -73,6 +73,7 @@ class ClickhouseQueryMetadata:
     status: QueryStatus
     profile: ClickhouseQueryProfile
     trace_id: Optional[str] = None
+    result_profile: Optional[Mapping[str, Any]] = None
 
     def to_dict(self) -> Mapping[str, Any]:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
@@ -86,6 +87,7 @@ class ClickhouseQueryMetadata:
             "status": self.status.value,
             "trace_id": self.trace_id,
             "profile": self.profile.to_dict(),
+            "result_profile": self.result_profile,
         }
 
 
@@ -102,6 +104,7 @@ class SnubaQueryMetadata:
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
     projects: Set[int]
+    snql_anonymized: str
 
     def to_dict(self) -> Dict[str, Any]:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
@@ -111,6 +114,8 @@ class SnubaQueryMetadata:
                 "id": self.request.id,
                 "body": self.request.body,
                 "referrer": self.request.referrer,
+                "team": self.request.settings.get_team(),
+                "feature": self.request.settings.get_feature(),
             },
             "dataset": self.dataset,
             "start_timestamp": start,
@@ -119,6 +124,7 @@ class SnubaQueryMetadata:
             "status": self.status.value,
             "timing": self.timer.for_json(),
             "projects": list(self.projects),
+            "snql_anonymized": self.snql_anonymized,
         }
 
     @property

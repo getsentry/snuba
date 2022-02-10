@@ -37,6 +37,7 @@ from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
 from snuba.datasets.storages.spans import storage as spans_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.transactions_ro import storage as transactions_ro_storage
+from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
 
@@ -54,6 +55,9 @@ METRICS_WRITEABLE_STORAGES = {
     metrics_counters_buckets.get_storage_key(): metrics_counters_buckets,
     metrics_distributions_buckets.get_storage_key(): metrics_distributions_buckets,
     metrics_sets_buckets.get_storage_key(): metrics_sets_buckets,
+    metrics_distributions_storage.get_storage_key(): metrics_distributions_storage,
+    metrics_sets_storage.get_storage_key(): metrics_sets_storage,
+    metrics_counters_storage.get_storage_key(): metrics_counters_storage,
 }
 
 WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
@@ -69,6 +73,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             sessions_raw_storage,
             transactions_storage,
             spans_storage,
+            transactions_v2_storage,
             errors_v2_storage,
         ]
     },

@@ -4,6 +4,7 @@ import logging
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import lru_cache
 from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple, cast
 from zlib import crc32
 
@@ -49,6 +50,7 @@ def build_executor_consumer(
     max_concurrent_queries: int,
     auto_offset_reset: str,
     metrics: MetricsBackend,
+    executor: ThreadPoolExecutor,
     # TODO: Should be removed once testing is done
     override_result_topic: str,
 ) -> StreamProcessor[KafkaPayload]:
@@ -92,8 +94,6 @@ def build_executor_consumer(
             scheduled_topic_spec,
             result_topic_spec,
         ), "All entities must have same scheduled and result topics"
-
-    executor = ThreadPoolExecutor(max_concurrent_queries)
 
     return StreamProcessor(
         KafkaConsumer(
@@ -145,7 +145,15 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__max_concurrent_queries,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
+            commit,
         )
+
+
+@lru_cache(maxsize=50000)
+def subscription_id_to_float(subscription_id: str) -> float:
+    # Converts a subscription ID string to a float between 0 and 1
+    # Used for sampling query execution by subscription ID during rollout
+    return (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
 
 
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
@@ -273,8 +281,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         subscription_id = str(task.task.subscription.identifier)
         should_execute = (
-            (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
-        ) < executor_sample_rate
+            subscription_id_to_float(subscription_id) < executor_sample_rate
+        )
 
         entity_name = task.task.entity.value
 
@@ -299,7 +307,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def terminate(self) -> None:
         self.__closed = True
 
-        self.__executor.shutdown()
         self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
@@ -329,7 +336,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
-        self.__executor.shutdown()
 
         self.__next_step.close()
         self.__next_step.join(remaining)

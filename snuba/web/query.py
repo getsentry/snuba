@@ -127,6 +127,7 @@ def parse_and_run_query(
         timer=timer,
         query_list=[],
         projects=ProjectsFinder().visit(request.query),
+        snql_anonymized=request.snql_anonymized,
     )
 
     try:
