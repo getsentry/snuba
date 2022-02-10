@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+import argparse
+import random
+from datetime import timedelta
+
+from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
+from snuba.datasets.factory import get_dataset
+from snuba.redis import redis_client
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.entity_subscription import ENTITY_KEY_TO_SUBSCRIPTION_MAPPER
+from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.subscriptions.subscription import SubscriptionCreator
+from snuba.utils.metrics.timer import Timer
+
+parser = argparse.ArgumentParser(description="Mock subscriptions")
+parser.add_argument(
+    "--number", type=int, help="Number of subscriptions to create", dest="number"
+)
+parser.add_argument(
+    "--project-id",
+    type=int,
+    help="Project IDs for subscriptions",
+    dest="project",
+    nargs="+",
+)
+parser.add_argument(
+    "--dataset",
+    type=str,
+    help="Dataset for subscriptions",
+    dest="dataset",
+    choices=["events"],
+    default="events",
+)
+parsed = parser.parse_args()
+
+dataset_name = parsed.dataset
+dataset = get_dataset(dataset_name)
+entity = dataset.get_default_entity()
+entity_key = ENTITY_NAME_LOOKUP[entity]
+storage = entity.get_writable_storage()
+assert storage is not None
+stream_loader = storage.get_table_writer().get_stream_loader()
+topic_spec = stream_loader.get_default_topic_spec()
+
+entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](data_dict={})
+
+timer = Timer("mock-subscriptions")
+
+for _ in range(parsed.number):
+    project_id = random.choice(parsed.project)
+
+    subscription_data = SnQLSubscriptionData(
+        query=f"MATCH ({entity_key.value}) SELECT count() AS count WHERE project_id = {project_id}",
+        project_id=project_id,
+        time_window=timedelta(minutes=1),
+        resolution=timedelta(minutes=1),
+        entity_subscription=entity_subscription,
+    )
+
+    identifier = SubscriptionCreator(dataset, entity_key).create(
+        subscription_data, timer
+    )
+
+    print(f"Created {identifier}")
+
+# Print all subscriptions currently registered
+stores = [
+    RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(i))
+    for i in range(topic_spec.partitions_number)
+]
+
+print(f"Total {entity_key.value} subscriptions:")
+for i, store in enumerate(stores):
+    print(f"Store {i}: {len([s for s in store.all()])} subscriptions")
