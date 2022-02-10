@@ -17,6 +17,7 @@ class MigrationGroup(Enum):
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
     SPANS_EXPERIMENTAL = "spans_experimental"
+    STACKTRACES = "stacktraces"
 
 
 # Migration groups are mandatory by default, unless they are on this list
@@ -25,6 +26,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
     MigrationGroup.SPANS_EXPERIMENTAL,
+    MigrationGroup.STACKTRACES,
 }
 
 
@@ -201,6 +203,13 @@ class SpansExperimentalLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return ["0001_spans_experimental"]
 
+class StacktracesLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.stacktraces")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_stacktraces"]
+
 
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
@@ -212,6 +221,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
     MigrationGroup.SPANS_EXPERIMENTAL: SpansExperimentalLoader(),
+    MigrationGroup.STACKTRACES: StacktracesLoader(),
 }
 
 
