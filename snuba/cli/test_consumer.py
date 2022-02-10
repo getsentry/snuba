@@ -132,6 +132,7 @@ def test_consumer(
             auto_offset_reset=auto_offset_reset,
             queued_max_messages_kbytes=queued_max_messages_kbytes,
             queued_min_messages=queued_min_messages,
+            stats_collection_frequency_ms=None,
         ),
         processing_params=ProcessingParameters(
             processes=processes,

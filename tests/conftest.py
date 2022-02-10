@@ -80,6 +80,15 @@ def run_migrations() -> Iterator[None]:
     redis_client.flushdb()
 
 
+@pytest.fixture(autouse=True)
+def clear_recorded_metrics() -> Iterator[None]:
+    from snuba.utils.metrics.backends.dummy import clear_recorded_metric_calls
+
+    yield
+
+    clear_recorded_metric_calls()
+
+
 @pytest.fixture
 def convert_legacy_to_snql() -> Callable[[str, str], str]:
     def convert(data: str, entity: str) -> str:
