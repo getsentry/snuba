@@ -38,6 +38,7 @@ rds = redis_client
 ratelimit_prefix = "snuba-ratelimit:"
 query_lock_prefix = "snuba-query-lock:"
 config_hash = "snuba-config"
+config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
 config_changes_list_limit = 25
@@ -115,28 +116,42 @@ def get_typed_value(value: Any) -> Any:
 
 
 def set_config(
-    key: str, value: Optional[Any], user: Optional[str] = None, force: bool = False
+    key: str,
+    value: Optional[Any],
+    user: Optional[str] = None,
+    description: Optional[str] = "",
+    force: bool = False,
 ) -> None:
     value = get_typed_value(value)
     enc_value = "{}".format(value).encode("utf-8") if value is not None else None
 
     try:
         enc_original_value = rds.hget(config_hash, key)
+        original_desc = (rds.hget(config_description_hash, key) or b"").decode("utf-8")
         if enc_original_value is not None and value is not None:
             original_value = get_typed_value(enc_original_value.decode("utf-8"))
-            if value == original_value and type(value) == type(original_value):
+            if (
+                value == original_value
+                and type(value) == type(original_value)
+                and original_desc == description
+            ):
                 return
 
             if not force and type(value) != type(original_value):
                 raise MismatchedTypeException(key, type(original_value), type(value))
 
+        # figure out change record
         change_record = (time.time(), user, enc_original_value, enc_value)
+
         if value is None:
             rds.hdel(config_hash, key)
             rds.hdel(config_history_hash, key)
+            rds.hdel(config_description_hash, key)
         else:
             rds.hset(config_hash, key, enc_value)
             rds.hset(config_history_hash, key, json.dumps(change_record))
+            rds.hset(config_description_hash, key, description)
+
         rds.lpush(config_changes_list, json.dumps((key, change_record)))
         rds.ltrim(config_changes_list, 0, config_changes_list_limit)
         logger.info(f"Successfully changed option {key} to {value}")
