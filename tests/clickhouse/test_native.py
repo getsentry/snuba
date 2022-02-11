@@ -101,4 +101,4 @@ def test_fallback_logic() -> None:
 
 def teardown_function(_: Callable[..., Any]) -> None:
     state.delete_config("use_fallback_host_in_native_connection_pool")
-    state.delete_config(f"fallback_hosts:{TEST_DB_NAME}")
+    state.delete_config(f"fallback_hosts:{CLUSTER_HOST}:{CLUSTER_PORT}")
