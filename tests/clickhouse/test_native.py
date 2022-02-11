@@ -55,8 +55,8 @@ CLUSTER_PORT = 100
 
 
 def test_get_fallback_host() -> None:
-    FALLBACK_HOSTS_CONFIG_VAL = "host1,host2,host3"
-    FALLBACK_HOSTS = ["host1", "host2", "host3"]
+    FALLBACK_HOSTS_CONFIG_VAL = "host1:100,host2:100,host3:100"
+    FALLBACK_HOSTS = [("host1", 100), ("host2", 100), ("host3", 100)]
 
     state.set_config(
         f"fallback_hosts:{CLUSTER_HOST}:{CLUSTER_PORT}", FALLBACK_HOSTS_CONFIG_VAL
@@ -68,7 +68,7 @@ def test_get_fallback_host() -> None:
 
 
 def test_fallback_logic() -> None:
-    state.set_config("use_fallback_host_in_native_connection_pool", "True")
+    state.set_config("use_fallback_host_in_native_connection_pool", 1)
 
     network_failure_connection = mock.Mock()
     network_failure_connection.execute.side_effect = EOFError()

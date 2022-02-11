@@ -10,7 +10,17 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import partial
 from io import StringIO
-from typing import Any, Generator, Mapping, Optional, Sequence, TypedDict, Union, cast
+from typing import (
+    Any,
+    Generator,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+    cast,
+)
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -97,19 +107,22 @@ class ClickhousePool(object):
             self.fallback_pool.put(None)
 
     def fallback_pool_enabled(self) -> bool:
-        return (
-            state.get_config("use_fallback_host_in_native_connection_pool", "False")
-            == "True"
-        )
+        return state.get_config("use_fallback_host_in_native_connection_pool", 0) == 1
 
-    def get_fallback_host(self) -> Optional[str]:
+    def get_fallback_host(self) -> Tuple[str, int]:
         config_hosts_str = state.get_config(
             f"fallback_hosts:{self.host}:{self.port}", None
         )
-        if not config_hosts_str:
-            return None
+        assert config_hosts_str, f"no fallback hosts found for {self.host}:{self.port}"
+
         config_hosts = cast(str, config_hosts_str).split(",")
-        return random.choice(config_hosts)
+        selected_host_port = random.choice(config_hosts).split(":")
+
+        assert (
+            len(selected_host_port) == 2
+        ), f"expected host:port format in fallback hosts for {self.host}:{self.port}"
+
+        return (selected_host_port[0], int(selected_host_port[1]))
 
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
@@ -316,9 +329,11 @@ class ClickhousePool(object):
                 raise ClickhouseError(e.message, code=e.code) from e
 
     def _create_conn(self, use_fallback_host: bool = False) -> Client:
+        if use_fallback_host:
+            (fallback_host, fallback_port) = self.get_fallback_host()
         return Client(
-            host=(self.host if not use_fallback_host else self.get_fallback_host()),
-            port=self.port,
+            host=(self.host if not use_fallback_host else fallback_host),
+            port=(self.port if not use_fallback_host else fallback_port),
             user=self.user,
             password=self.password,
             database=self.database,
