@@ -81,4 +81,4 @@ for n in range(number):
         kafka_payload = commit_codec.encode(commit)
 
         producer = broker.get_producer()
-        producer.produce(partition, kafka_payload).result()
+        producer.produce(Partition(topic, 0), kafka_payload).result()
