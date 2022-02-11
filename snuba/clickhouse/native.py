@@ -184,6 +184,7 @@ class ClickhousePool(object):
                     if (
                         attempts_remaining == 1
                         and USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL
+                        and self.fallback_host is not None
                     ):
                         use_fallback_host = True
                     elif attempts_remaining == 0:
