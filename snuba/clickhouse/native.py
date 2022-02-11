@@ -15,11 +15,11 @@ from uuid import UUID
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
-from settings import USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
+from snuba.settings import USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
