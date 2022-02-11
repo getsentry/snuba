@@ -151,7 +151,6 @@ class ConnectionCache:
         user: str,
         password: str,
         database: str,
-        fallback_host: Optional[str] = None,
     ) -> ClickhousePool:
         with self.__lock:
             settings, timeout = client_settings.value
@@ -165,7 +164,6 @@ class ConnectionCache:
                     database,
                     client_settings=settings,
                     send_receive_timeout=timeout,
-                    fallback_host=fallback_host,
                 )
 
             return self.__cache[cache_key]
@@ -206,8 +204,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         # The cluster name and distributed cluster name only apply if single_node is set to False
         cluster_name: Optional[str] = None,
         distributed_cluster_name: Optional[str] = None,
-        # Temporary mitigation for query node issue
-        fallback_host: Optional[str] = None,
     ):
         super().__init__(storage_sets)
         self.__query_node = ClickhouseNode(host, port)
@@ -220,7 +216,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader] = None
         self.__connection_cache = connection_cache
-        self.__fallback_host = fallback_host
 
     def __str__(self) -> str:
         return str(self.__query_node)
@@ -249,12 +244,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         """
 
         return self.__connection_cache.get_node_connection(
-            client_settings,
-            node,
-            self.__user,
-            self.__password,
-            self.__database,
-            self.__fallback_host,
+            client_settings, node, self.__user, self.__password, self.__database,
         )
 
     def get_reader(self) -> Reader:

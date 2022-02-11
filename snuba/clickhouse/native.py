@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import random
 import re
 import time
 from contextlib import contextmanager
@@ -9,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import partial
 from io import StringIO
-from typing import Any, Generator, Mapping, Optional, Sequence, TypedDict, Union
+from typing import Any, Generator, Mapping, Optional, Sequence, TypedDict, Union, cast
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -19,7 +20,6 @@ from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
-from snuba.settings import USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -71,7 +71,6 @@ class ClickhousePool(object):
         send_receive_timeout: Optional[int] = 300,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
-        fallback_host: Optional[str] = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -81,14 +80,27 @@ class ClickhousePool(object):
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
-        self.fallback_host = fallback_host
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
+        self.fallback_pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(3)
         self.__gauge = ThreadSafeGauge(metrics, "connections")
 
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
+
+    def fallback_pool_enabled(self) -> bool:
+        return (
+            state.get_config("use_fallback_host_in_native_connection_pool", "False")
+            == "True"
+        )
+
+    def get_fallback_host(self) -> Optional[str]:
+        config_hosts_str = state.get_config(f"fallback_hosts:{self.database}", None)
+        if not config_hosts_str:
+            return None
+        config_hosts = cast(str, config_hosts_str).split(",")
+        return random.choice(config_hosts)
 
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
@@ -111,19 +123,18 @@ class ClickhousePool(object):
         return relatively quickly with an error in case of more persistent
         failures.
         """
+        fallback_mode = False
+
         try:
             conn = self.pool.get(block=True)
 
-            attempts_remaining = 3 + (
-                1 if USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL else 0
-            )
-            use_fallback_host = False
+            attempts_remaining = 3 + (1 if self.fallback_pool_enabled() else 0)
             while attempts_remaining > 0:
                 attempts_remaining -= 1
                 # Lazily create connection instances
                 if conn is None:
                     self.__gauge.increment()
-                    conn = self._create_conn(use_fallback_host)
+                    conn = self._create_conn(fallback_mode)
 
                 try:
                     if capture_trace:
@@ -177,29 +188,43 @@ class ClickhousePool(object):
 
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
-                    metrics.increment("connection_error")
-                    # Force a reconnection next time
-                    conn = None
-                    self.__gauge.decrement()
-                    if (
-                        attempts_remaining == 1
-                        and USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL
-                        and self.fallback_host is not None
-                    ):
-                        use_fallback_host = True
-                    elif attempts_remaining == 0:
-                        if isinstance(e, errors.Error):
-                            raise ClickhouseError(e.message, code=e.code) from e
-                        else:
-                            raise e
+                    metrics.increment(
+                        "connection_error"
+                        if not fallback_mode
+                        else "fallback_connection_error"
+                    )
+
+                    # Move to fallback-mode for one last try if it's enabled
+                    if attempts_remaining == 1 and self.fallback_pool_enabled():
+                        # return the non-fallback client instance back to the main connection pool
+                        self.pool.put(conn, block=False)
+                        # turn fallback mode on (so new connections will come from run-time config)
+                        fallback_mode = True
+                        # try reusing a connection from the fallback connection pool, but if
+                        # it's None we'll create the connection on-demand later because fallback_mode = True
+                        conn = self.fallback_pool.get(block=True)
                     else:
-                        # Short sleep to make sure we give the load
-                        # balancer a chance to mark a bad host as down.
-                        time.sleep(0.1)
+                        # Force a reconnection next time
+                        conn = None
+                        self.__gauge.decrement()
+
+                        if attempts_remaining == 0:
+                            if isinstance(e, errors.Error):
+                                raise ClickhouseError(e.message, code=e.code) from e
+                            else:
+                                raise e
+                        else:
+                            # Short sleep to make sure we give the load
+                            # balancer a chance to mark a bad host as down.
+                            time.sleep(0.1)
                 except errors.Error as e:
                     raise ClickhouseError(e.message, code=e.code) from e
         finally:
-            self.pool.put(conn, block=False)
+            # Return finished connection to the appropriate connection pool
+            if not fallback_mode:
+                self.pool.put(conn, block=False)
+            else:
+                self.fallback_pool.put(conn, block=False)
 
         return ClickhouseResult()
 
@@ -283,7 +308,7 @@ class ClickhousePool(object):
 
     def _create_conn(self, use_fallback_host: bool = False) -> Client:
         return Client(
-            host=(self.host if not use_fallback_host else self.fallback_host),
+            host=(self.host if not use_fallback_host else self.get_fallback_host()),
             port=self.port,
             user=self.user,
             password=self.password,
