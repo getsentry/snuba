@@ -60,6 +60,8 @@ def capture_logging() -> Generator[StringIO, None, None]:
 
 
 class ClickhousePool(object):
+    FALLBACK_POOL_SIZE = 3
+
     def __init__(
         self,
         host: str,
@@ -82,12 +84,17 @@ class ClickhousePool(object):
         self.client_settings = client_settings
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
-        self.fallback_pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(3)
+        self.fallback_pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(
+            self.FALLBACK_POOL_SIZE
+        )
         self.__gauge = ThreadSafeGauge(metrics, "connections")
 
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
+
+        for _ in range(self.FALLBACK_POOL_SIZE):
+            self.fallback_pool.put(None)
 
     def fallback_pool_enabled(self) -> bool:
         return (
@@ -194,20 +201,20 @@ class ClickhousePool(object):
                         else "fallback_connection_error"
                     )
 
+                    # Force a reconnection next time
+                    conn = None
+                    self.__gauge.decrement()
+
                     # Move to fallback-mode for one last try if it's enabled
                     if attempts_remaining == 1 and self.fallback_pool_enabled():
-                        # return the non-fallback client instance back to the main connection pool
-                        self.pool.put(conn, block=False)
+                        # return a client instance placeholder back to the main connection pool
+                        self.pool.put(None, block=False)
                         # turn fallback mode on (so new connections will come from run-time config)
                         fallback_mode = True
                         # try reusing a connection from the fallback connection pool, but if
-                        # it's None we'll create the connection on-demand later because fallback_mode = True
+                        # it's None we'll create the connection on-demand later
                         conn = self.fallback_pool.get(block=True)
                     else:
-                        # Force a reconnection next time
-                        conn = None
-                        self.__gauge.decrement()
-
                         if attempts_remaining == 0:
                             if isinstance(e, errors.Error):
                                 raise ClickhouseError(e.message, code=e.code) from e
