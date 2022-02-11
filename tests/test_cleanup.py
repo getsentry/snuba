@@ -193,12 +193,17 @@ class TestCleanup:
         storage_key: StorageKey,
         create_event_row_for_date: Callable[[datetime, Optional[int]], InsertBatch],
     ) -> None:
+        """
+        This test is simulating a failure case that happened in production, where when the script ran,
+        it attempted to delete a part whose last day was within the retention period. The script was
+        using datetimes not aligned to midnight, and so it was removing a part on the same day, but
+        technically outside of the window because of the script's extra time.
+
+        """
+
         def to_monday(d: datetime) -> datetime:
             rounded = d - timedelta(days=d.weekday())
             return datetime(rounded.year, rounded.month, rounded.day)
-
-        base = datetime(2022, 1, 29, 0, 4, 37)  # time the script might run
-        current_time.return_value = base
 
         storage = get_writable_storage(storage_key)
         clickhouse = storage.get_cluster().get_query_connection(
@@ -206,12 +211,17 @@ class TestCleanup:
         )
 
         table = storage.get_table_writer().get_schema().get_local_table_name()
-
         database = storage.get_cluster().get_database()
 
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
         assert parts == []
 
+        # Pick a time a few minutes after midnight
+        base = datetime(2022, 1, 29, 0, 4, 37)
+        current_time.return_value = base
+
+        # Insert an event that is outside retention, but its last day is just inside retention
+        # Note that without rounding the base time to midnight, base - retention > last_day(timestamp)
         timestamp = datetime(2021, 10, 25)
         write_processed_messages(storage, [create_event_row_for_date(timestamp, 90)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
