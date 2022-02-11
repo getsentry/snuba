@@ -27,11 +27,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.state import (
-    get_config,
-    is_project_in_rollout_group,
-    is_project_in_rollout_list,
-)
+from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -303,13 +299,6 @@ class TransactionsMessageProcessor(MessageProcessor):
             max_spans_per_transaction = 2000
 
         try:
-            if not is_project_in_rollout_list(
-                "write_span_columns_projects", processed["project_id"]
-            ) and not is_project_in_rollout_group(
-                "write_span_columns_rollout_percentage", processed["project_id"]
-            ):
-                return
-
             num_processed = 0
             processed_spans = []
 
