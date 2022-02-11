@@ -115,6 +115,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
             if self.__end_of_messages is False:
                 self.__end_of_messages = True
                 print("No more messages!")
+                raise Exception("No more messages")
             return None
 
         commit = commit_codec.decode(message.payload)

@@ -110,7 +110,8 @@ class JitteredTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        resolution = int(subscription.data.resolution.total_seconds())
+        # resolution = int(subscription.data.resolution.total_seconds())
+        resolution = 60
 
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
             if timestamp % resolution == 0:
@@ -241,18 +242,16 @@ class DelegateTaskBuilder(TaskBuilder):
     def get_task(
         self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
     ) -> Optional[ScheduledSubscriptionTask]:
-        subscription = subscription_with_metadata.subscription
+        # subscription = subscription_with_metadata.subscription
 
-        primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
+        # primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
 
-        if primary_builder == TaskBuilderMode.JITTERED:
-            return self.__jittered_builder.get_task(
-                subscription_with_metadata, timestamp
-            )
-        else:
-            return self.__immediate_builder.get_task(
-                subscription_with_metadata, timestamp
-            )
+        # if primary_builder == TaskBuilderMode.JITTERED:
+        return self.__jittered_builder.get_task(subscription_with_metadata, timestamp)
+        # else:
+        #     return self.__immediate_builder.get_task(
+        #         subscription_with_metadata, timestamp
+        #     )
 
     def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
