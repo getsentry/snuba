@@ -353,6 +353,13 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             partition_index=message.partition.index, offset=message.offset,
         )
         if self._message_already_processed(metadata):
+            logger.warning(
+                f"Replacer ignored a message, consumer group: {self.__consumer_group}",
+                extra={
+                    "partition": metadata.partition_index,
+                    "offset": metadata.offset,
+                },
+            )
             return None
         seq_message = json.loads(message.payload.value)
         [version, action_type, data] = seq_message
@@ -450,7 +457,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         replacer(s) reset. Ideally this config is populated with consumer groups
         temporarily, then cleared once relevant consumers restart.
         """
-        # expected format is "[consumer_group1, consumer_group2, ..]"
+        # expected format is "[consumer_group1,consumer_group2,..]"
         consumer_groups = (get_config(RESET_CHECK_CONFIG) or "[]")[1:-1].split(",")
         if self.__consumer_group in consumer_groups:
             self.__prolonged_offset = -1
