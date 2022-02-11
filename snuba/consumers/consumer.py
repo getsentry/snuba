@@ -13,6 +13,7 @@ from typing import (
     NamedTuple,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
     cast,
@@ -364,10 +365,11 @@ class MultistorageCollector(
         steps: Mapping[
             StorageKey, ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
+        ignore_errors: Optional[Set[StorageKey]] = None,
     ):
         self.__steps = steps
-
         self.__closed = False
+        self.__ignore_errors = ignore_errors
 
     def poll(self) -> None:
         for step in self.__steps.values():
@@ -395,8 +397,14 @@ class MultistorageCollector(
     def close(self) -> None:
         self.__closed = True
 
-        for step in self.__steps.values():
-            step.close()
+        for storage_key, step in self.__steps.items():
+            if self.__ignore_errors and storage_key in self.__ignore_errors:
+                try:
+                    step.close()
+                except Exception as e:
+                    logger.warning("Error while writing data to clickhouse", exc_info=e)
+            else:
+                step.close()
 
     def terminate(self) -> None:
         self.__closed = True
@@ -600,7 +608,12 @@ class MultistorageConsumerProcessingStrategyFactory(
             {
                 storage.get_storage_key(): self.__build_batch_writer(storage)
                 for storage in self.__storages
-            }
+            },
+            ignore_errors={
+                storage.get_storage_key()
+                for storage in self.__storages
+                if storage.get_is_write_error_ignorable() is True
+            },
         )
 
     def create(

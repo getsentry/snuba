@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
+from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     InsertBatch,
@@ -10,8 +11,11 @@ from snuba.processor import (
     _ensure_valid_date,
 )
 
+DISABLED_MATERIALIZATION_VERSION = 1
+ENABLED_MATERIALIZATION_VERSION = 0
 
-class MetricsProcessor(MessageProcessor, ABC):
+
+class MetricsBucketProcessor(MessageProcessor, ABC):
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         raise NotImplementedError
@@ -41,6 +45,12 @@ class MetricsProcessor(MessageProcessor, ABC):
             assert isinstance(value, int)
             values.append(value)
 
+        mat_version = (
+            DISABLED_MATERIALIZATION_VERSION
+            if settings.WRITE_METRICS_AGG_DIRECTLY
+            else ENABLED_MATERIALIZATION_VERSION
+        )
+
         processed = {
             "org_id": message["org_id"],
             "project_id": message["project_id"],
@@ -49,7 +59,7 @@ class MetricsProcessor(MessageProcessor, ABC):
             "tags.key": keys,
             "tags.value": values,
             **self._process_values(message),
-            "materialization_version": 0,
+            "materialization_version": mat_version,
             "retention_days": message["retention_days"],
             "partition": metadata.partition,
             "offset": metadata.offset,
@@ -57,7 +67,7 @@ class MetricsProcessor(MessageProcessor, ABC):
         return InsertBatch([processed], None)
 
 
-class SetsMetricsProcessor(MetricsProcessor):
+class SetsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "s"
 
@@ -68,7 +78,7 @@ class SetsMetricsProcessor(MetricsProcessor):
         return {"set_values": values}
 
 
-class CounterMetricsProcessor(MetricsProcessor):
+class CounterMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "c"
 
@@ -80,7 +90,7 @@ class CounterMetricsProcessor(MetricsProcessor):
         return {"value": value}
 
 
-class DistributionsMetricsProcessor(MetricsProcessor):
+class DistributionsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "d"
 
