@@ -15,6 +15,7 @@ from uuid import UUID
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
+from settings import USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -70,6 +71,7 @@ class ClickhousePool(object):
         send_receive_timeout: Optional[int] = 300,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
+        fallback_host: Optional[str] = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -79,6 +81,7 @@ class ClickhousePool(object):
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
+        self.fallback_host = fallback_host
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
         self.__gauge = ThreadSafeGauge(metrics, "connections")
@@ -111,13 +114,16 @@ class ClickhousePool(object):
         try:
             conn = self.pool.get(block=True)
 
-            attempts_remaining = 3
+            attempts_remaining = 3 + (
+                1 if USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL else 0
+            )
+            use_fallback_host = False
             while attempts_remaining > 0:
                 attempts_remaining -= 1
                 # Lazily create connection instances
                 if conn is None:
                     self.__gauge.increment()
-                    conn = self._create_conn()
+                    conn = self._create_conn(use_fallback_host)
 
                 try:
                     if capture_trace:
@@ -175,7 +181,12 @@ class ClickhousePool(object):
                     # Force a reconnection next time
                     conn = None
                     self.__gauge.decrement()
-                    if attempts_remaining == 0:
+                    if (
+                        attempts_remaining == 1
+                        and USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL
+                    ):
+                        use_fallback_host = True
+                    elif attempts_remaining == 0:
                         if isinstance(e, errors.Error):
                             raise ClickhouseError(e.message, code=e.code) from e
                         else:
@@ -269,9 +280,9 @@ class ClickhousePool(object):
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
-    def _create_conn(self) -> Client:
+    def _create_conn(self, use_fallback_host: bool = False) -> Client:
         return Client(
-            host=self.host,
+            host=(self.host if not use_fallback_host else self.fallback_host),
             port=self.port,
             user=self.user,
             password=self.password,

@@ -183,6 +183,9 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
 
+# Temporary setting to mitigate a production issue where query nodes are unreliable
+USE_FALLBACK_HOST_IN_NATIVE_CONNECTION_POOL: bool = False
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
