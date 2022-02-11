@@ -92,7 +92,6 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
         subscription_identifier = value.key.decode("utf-8")
 
         scheduled_subscription_dict = rapidjson.loads(payload_value.decode("utf-8"))
-        assert scheduled_subscription_dict["task"]["data"]["type"] == "snql"
 
         entity_key = EntityKey(scheduled_subscription_dict["entity"])
 
