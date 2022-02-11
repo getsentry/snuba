@@ -103,7 +103,9 @@ class ClickhousePool(object):
         )
 
     def get_fallback_host(self) -> Optional[str]:
-        config_hosts_str = state.get_config(f"fallback_hosts:{self.database}", None)
+        config_hosts_str = state.get_config(
+            f"fallback_hosts:{self.host}:{self.port}", None
+        )
         if not config_hosts_str:
             return None
         config_hosts = cast(str, config_hosts_str).split(",")

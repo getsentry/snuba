@@ -50,15 +50,19 @@ def test_concurrency_limit() -> None:
 
 
 TEST_DB_NAME = "test"
+CLUSTER_HOST = "host"
+CLUSTER_PORT = 100
 
 
 def test_get_fallback_host() -> None:
     FALLBACK_HOSTS_CONFIG_VAL = "host1,host2,host3"
     FALLBACK_HOSTS = ["host1", "host2", "host3"]
 
-    state.set_config(f"fallback_hosts:{TEST_DB_NAME}", FALLBACK_HOSTS_CONFIG_VAL)
+    state.set_config(
+        f"fallback_hosts:{CLUSTER_HOST}:{CLUSTER_PORT}", FALLBACK_HOSTS_CONFIG_VAL
+    )
 
-    pool = ClickhousePool("host", 100, "test", "test", TEST_DB_NAME)
+    pool = ClickhousePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
 
     assert pool.get_fallback_host() in FALLBACK_HOSTS
 
@@ -72,7 +76,7 @@ def test_fallback_logic() -> None:
     verification_connection = mock.Mock()
     verification_connection.execute.return_value = []
 
-    pool = ClickhousePool("host", 100, "test", "test", TEST_DB_NAME)
+    pool = ClickhousePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
 
     # The execute method will try to reuse a single slot in the connection
     # pool but reestablish new connections with _create_conn if a connection
