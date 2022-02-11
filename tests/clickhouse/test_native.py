@@ -1,11 +1,13 @@
 import queue
 from datetime import datetime, timedelta
+from typing import Any, Callable
 from unittest import mock
 
 import pytest
 from clickhouse_driver import errors
 from dateutil.tz import tz
 
+from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhousePool, transform_datetime
 
@@ -45,3 +47,54 @@ def test_concurrency_limit() -> None:
     with pytest.raises(ClickhouseError):
         pool.execute_robust("SELECT something")
     assert connection.execute.call_count == 3, "Expected three attempts"
+
+
+TEST_DB_NAME = "test"
+
+
+def test_get_fallback_host() -> None:
+    FALLBACK_HOSTS_CONFIG_VAL = "host1,host2,host3"
+    FALLBACK_HOSTS = ["host1", "host2", "host3"]
+
+    state.set_config(f"fallback_hosts:{TEST_DB_NAME}", FALLBACK_HOSTS_CONFIG_VAL)
+
+    pool = ClickhousePool("host", 100, "test", "test", TEST_DB_NAME)
+
+    assert pool.get_fallback_host() in FALLBACK_HOSTS
+
+
+def test_fallback_logic() -> None:
+    state.set_config("use_fallback_host_in_native_connection_pool", "True")
+
+    network_failure_connection = mock.Mock()
+    network_failure_connection.execute.side_effect = EOFError()
+
+    verification_connection = mock.Mock()
+    verification_connection.execute.return_value = []
+
+    pool = ClickhousePool("host", 100, "test", "test", TEST_DB_NAME)
+
+    # The execute method will try to reuse a single slot in the connection
+    # pool but reestablish new connections with _create_conn if a connection
+    # fails with a network-related error. It may be cleaner to move connection
+    # negotation/establishment into another class for separation of concerns.
+    with mock.patch.object(
+        pool, "_create_conn", lambda x, y=False: network_failure_connection
+    ):
+        pool.pool = queue.LifoQueue(1)
+        pool.pool.put(network_failure_connection, block=False)
+        pool.fallback_pool = queue.LifoQueue(1)
+        pool.fallback_pool.put(verification_connection, block=False)
+        pool.execute("SELECT something")
+
+    assert (
+        network_failure_connection.execute.call_count == 3
+    ), "Expected three (failed) attempts with main connection pool"
+    assert (
+        verification_connection.execute.call_count == 1
+    ), "Expected one (successful) attempt with fallback connection pool"
+
+
+def teardown_function(_: Callable[..., Any]) -> None:
+    state.delete_config("use_fallback_host_in_native_connection_pool")
+    state.delete_config(f"fallback_hosts:{TEST_DB_NAME}")
