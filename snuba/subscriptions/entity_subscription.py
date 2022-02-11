@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import Any, Mapping, Optional, Sequence, Type, Union
 
 from snuba.datasets.entities import EntityKey
@@ -14,10 +13,6 @@ from snuba.query.validation.validators import (
     NoTimeBasedConditionValidator,
     SubscriptionAllowedClausesValidator,
 )
-
-
-class SubscriptionType(Enum):
-    SNQL = "snql"
 
 
 class InvalidSubscriptionError(Exception):
