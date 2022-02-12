@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
+from typing import Sequence
 
 from snuba import util
 from snuba.clickhouse.native import ClickhousePool
@@ -47,21 +47,25 @@ def get_active_partitions(
     return [util.decode_part_str(part, part_format) for part, in response.results]
 
 
-def filter_stale_partitions(
-    parts: Sequence[util.Part], as_of: Optional[datetime] = None
-) -> Sequence[util.Part]:
-    """Filter partitions down to ones that are out of the retention
-    window based on `as_of` (default: now)."""
+def current_time() -> datetime:
+    """Returns the current day. Separate function for mocking purposes."""
+    return datetime.utcnow()
 
-    if as_of is None:
-        as_of = datetime.utcnow()
+
+def filter_stale_partitions(parts: Sequence[util.Part]) -> Sequence[util.Part]:
+    """
+    Filter partitions down to ones that are out of the retention window based on the current time."""
+
+    def midnight(a_date: datetime) -> datetime:
+        return datetime(a_date.year, a_date.month, a_date.day)
+
+    as_of = midnight(current_time())
 
     stale_parts = []
     for part in parts:
         part_date = part.date
         retention_days = part.retention_days
-        part_last_day = part_date + timedelta(days=6 - part_date.weekday())
-
+        part_last_day = midnight(part_date + timedelta(days=6 - part_date.weekday()))
         if part_last_day < (as_of - timedelta(days=retention_days)):
             stale_parts.append(part)
     return stale_parts

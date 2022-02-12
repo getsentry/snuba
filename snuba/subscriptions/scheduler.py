@@ -294,7 +294,31 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
 
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
-        self.__builder = DelegateTaskBuilder()
+
+        self.__delegate_builder = DelegateTaskBuilder()
+        self.__jittered_builder = JitteredTaskBuilder()
+        self.__immediate_builder = ImmediateTaskBuilder()
+
+        self.__reset_builder()
+
+    def __reset_builder(self) -> None:
+        """
+        Use the jittered or immediate builder directly if we can as it is faster.
+        If we are in transition between the two modes, we must use the delegate builder.
+        This function is called for every tick.
+        """
+        general_mode = TaskBuilderMode(
+            state.get_config(
+                "subscription_primary_task_builder", TaskBuilderMode.JITTERED
+            )
+        )
+        if general_mode == TaskBuilderMode.JITTERED:
+            self.__builder: TaskBuilder = self.__jittered_builder
+        elif general_mode == TaskBuilderMode.IMMEDIATE:
+            self.__builder = self.__immediate_builder
+        else:
+            # We are transitioning between jittered and immediate mode. We must use the delegate builder.
+            self.__builder = self.__delegate_builder
 
     def __get_subscriptions(self) -> List[Subscription]:
         current_time = datetime.now()
@@ -322,6 +346,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
+        self.__reset_builder()
         start_get_subscriptions = datetime.now()
 
         interval = tick.timestamps
