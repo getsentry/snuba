@@ -24,12 +24,6 @@ columns: List[Column[Modifiers]] = [
     Column("symbols", String(Modifiers(codecs=["LZ4HC(9)"]))),
 
     # filtering data
-    Column("trace_id", UUID()),
-    Column("transaction_name", String(Modifiers(low_cardinality=True))),
-    Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
-
-    Column("version", NamedTuple((("name", String()), ("code", String())))),
-    Column("platform", String(Modifiers(low_cardinality=True))),
     Column("android_api_level", UInt(32, Modifiers(nullable=True))),
     Column("device_classification", String(Modifiers(low_cardinality=True))),
     Column("device_locale", String(Modifiers(low_cardinality=True))),
@@ -38,11 +32,14 @@ columns: List[Column[Modifiers]] = [
     Column("device_os_build_number", String(Modifiers(low_cardinality=True))),
     Column("device_os_name", String(Modifiers(low_cardinality=True))),
     Column("device_os_version", String(Modifiers(low_cardinality=True))),
-
+    Column("duration_ns", UInt(64)),
+    Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("error_code", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("error_description", String(Modifiers(low_cardinality=True, nullable=True))),
-
-    Column("duration_ns", UInt(64)),
+    Column("platform", String(Modifiers(low_cardinality=True))),
+    Column("trace_id", UUID()),
+    Column("transaction_name", String(Modifiers(low_cardinality=True))),
+    Column("version", NamedTuple((("name", String()), ("code", String())))),
 
     # internal data
     Column("retention_days", UInt(16)),
