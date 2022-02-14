@@ -15,10 +15,12 @@ PORT = 1218
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 
+ADMIN_AUTH_PROVIDER = "NOOP"
+
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS: Set[str] = {"metrics"}
+DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -42,6 +44,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "querylog",
             "sessions",
             "transactions",
+            "transactions_ro",
+            "transactions_v2",
         },
         "single_node": True,
     },
@@ -49,12 +53,17 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 
 
 # Dogstatsd Options
-DOGSTATSD_HOST = "localhost"
-DOGSTATSD_PORT = 8125
+DOGSTATSD_HOST = None
+DOGSTATSD_PORT = None
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
+    "metrics.processor.set.size": 0.1,
+    "metrics.processor.distribution.size": 0.1,
 }
+
+CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
+CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
 
 # Redis Options
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
@@ -64,6 +73,7 @@ REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
+REDIS_INIT_MAX_RETRIES = 3
 
 USE_RESULT_CACHE = True
 
@@ -141,7 +151,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"metrics", "querylog", "spans_experimental"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -153,12 +163,25 @@ TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
 # Map the Zookeeper path for the replicated merge tree to something else
 CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 
+# Enable Sentry Metrics (used for the snuba metrics consumer)
+ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
+
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
+ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
+
+# Temporary setting for subscription scheduler test
+SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 5
+
+TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
+
+# Used for migrating to/from writing metrics directly to aggregate tables
+# rather than using materialized views
+WRITE_METRICS_AGG_DIRECTLY = False
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

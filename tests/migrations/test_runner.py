@@ -24,7 +24,7 @@ def _drop_all_tables() -> None:
 
         data = connection.execute(
             f"SELECT name FROM system.tables WHERE database = '{database}'"
-        )
+        ).results
         for (table,) in data:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
 
@@ -82,7 +82,7 @@ def test_run_migration() -> None:
     )
     assert connection.execute(
         "SELECT group, migration_id, status, version FROM migrations_local;"
-    ) == [("system", "0001_migrations", "completed", 1)]
+    ).results == [("system", "0001_migrations", "completed", 1)]
 
     # Invalid migration ID
     with pytest.raises(MigrationError):
@@ -96,7 +96,7 @@ def test_run_migration() -> None:
     runner.run_migration(
         MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"), fake=True
     )
-    assert connection.execute("SHOW TABLES LIKE 'sentry_local'") == []
+    assert connection.execute("SHOW TABLES LIKE 'sentry_local'").results == []
 
 
 def test_reverse_migration() -> None:
@@ -122,7 +122,7 @@ def test_reverse_migration() -> None:
             MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True
         )
     assert (
-        len(connection.execute("SHOW TABLES LIKE 'sentry_local'")) == 1
+        len(connection.execute("SHOW TABLES LIKE 'sentry_local'").results) == 1
     ), "Table still exists"
 
 
@@ -155,7 +155,7 @@ def test_reverse_all() -> None:
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert connection.execute("SHOW TABLES") == [], "All tables should be deleted"
+    assert connection.execute("SHOW TABLES").results == [], "All tables should be deleted"
 
 
 def get_total_migration_count() -> int:
@@ -207,10 +207,10 @@ def test_no_schema_differences() -> None:
 def test_settings_skipped_group() -> None:
     from snuba.migrations import runner
 
-    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog", "metrics"}):
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
         runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert connection.execute("SHOW TABLES LIKE 'querylog_local'") == []
+    assert connection.execute("SHOW TABLES LIKE 'querylog_local'").results == []

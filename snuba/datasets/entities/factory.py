@@ -3,6 +3,7 @@ from typing import Callable, MutableMapping
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.table_storage import TableWriter
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -37,11 +38,7 @@ def get_entity(name: EntityKey) -> Entity:
     from snuba.datasets.entities.spans import SpansEntity
     from snuba.datasets.entities.transactions import TransactionsEntity
 
-    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
-        EntityKey.METRICS_SETS: MetricsSetsEntity,
-        EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
-        EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
-    }
+    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
 
     entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
         EntityKey.DISCOVER: DiscoverEntity,
@@ -56,6 +53,9 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.SPANS: SpansEntity,
         EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
         EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
+        EntityKey.METRICS_SETS: MetricsSetsEntity,
+        EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
+        EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
         **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
     }
 
@@ -66,3 +66,12 @@ def get_entity(name: EntityKey) -> Entity:
         raise InvalidEntityError(f"entity {name!r} does not exist") from error
 
     return entity
+
+
+def enforce_table_writer(entity: Entity) -> TableWriter:
+    writable_storage = entity.get_writable_storage()
+
+    assert (
+        writable_storage is not None
+    ), f"Entity {ENTITY_NAME_LOOKUP[entity]} does not have a writable storage."
+    return writable_storage.get_table_writer()

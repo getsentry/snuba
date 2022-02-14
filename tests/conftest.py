@@ -80,6 +80,15 @@ def run_migrations() -> Iterator[None]:
     redis_client.flushdb()
 
 
+@pytest.fixture(autouse=True)
+def clear_recorded_metrics() -> Iterator[None]:
+    from snuba.utils.metrics.backends.dummy import clear_recorded_metric_calls
+
+    yield
+
+    clear_recorded_metric_calls()
+
+
 @pytest.fixture
 def convert_legacy_to_snql() -> Callable[[str, str], str]:
     def convert(data: str, entity: str) -> str:
@@ -117,6 +126,6 @@ def disable_query_cache() -> Generator[None, None, None]:
     cache, readthrough = state.get_configs(
         [("use_cache", settings.USE_RESULT_CACHE), ("use_readthrough_query_cache", 1)]
     )
-    state.set_configs({"use_cache": 0, "use_readthrough_query_cache": 0})
+    state.set_configs({"use_cache": False, "use_readthrough_query_cache": 0})
     yield
     state.set_configs({"use_cache": cache, "use_readthrough_query_cache": readthrough})

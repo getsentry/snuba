@@ -29,9 +29,13 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: loadbalancer-outcomes-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
+    name: outcomes-billing-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-scheduler
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: events-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
@@ -44,6 +48,18 @@ steps:
     name: querylog-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: snuba-admin
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: metrics-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-errors-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-sessions-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-transactions-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-outcomes-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: loadtest-loadbalancer-outcomes-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba

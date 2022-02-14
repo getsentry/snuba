@@ -17,6 +17,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
@@ -170,6 +171,7 @@ def update_query_metadata_and_stats(
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
     status: QueryStatus,
+    profile_data: Optional[Mapping[str, Any]] = None,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -178,15 +180,19 @@ def update_query_metadata_and_stats(
     """
     stats.update(query_settings)
     sql_anonymized = format_query_anonymized(query).get_sql()
+    start, end = get_time_range_estimate(query)
 
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
             sql=sql,
             sql_anonymized=sql_anonymized,
+            start_timestamp=start,
+            end_timestamp=end,
             stats=stats,
             status=status,
             profile=generate_profile(query),
             trace_id=trace_id,
+            result_profile=profile_data,
         )
     )
 
@@ -517,7 +523,7 @@ def raw_query(
             }
         ) from cause
     else:
-        stats = update_with_status(QueryStatus.SUCCESS)
+        stats = update_with_status(QueryStatus.SUCCESS, result["profile"])
         return QueryResult(
             result,
             {

@@ -1,6 +1,6 @@
 import uuid
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities import EntityKey
@@ -41,6 +41,7 @@ def test_simple() -> None:
         uuid.UUID("a" * 32).hex,
         request_body,
         query,
+        "",
         HTTPRequestSettings(referrer="search"),
     )
 
@@ -51,12 +52,16 @@ def test_simple() -> None:
 
     message = SnubaQueryMetadata(
         request=request,
+        start_timestamp=datetime.utcnow() - timedelta(days=3),
+        end_timestamp=datetime.utcnow(),
         dataset="events",
         timer=timer,
         query_list=[
             ClickhouseQueryMetadata(
                 sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
                 sql_anonymized="select event_id from sentry_dist sample 0.1 prewhere project_id in ($I) limit 50, 100",
+                start_timestamp=datetime.utcnow() - timedelta(days=3),
+                end_timestamp=datetime.utcnow(),
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
                 profile=ClickhouseQueryProfile(
@@ -74,6 +79,7 @@ def test_simple() -> None:
             )
         ],
         projects={2},
+        snql_anonymized=request.snql_anonymized,
     ).to_dict()
 
     processor = (
@@ -143,6 +149,7 @@ def test_missing_fields() -> None:
         uuid.UUID("a" * 32).hex,
         request_body,
         query,
+        "",
         HTTPRequestSettings(referrer="search"),
     )
 
@@ -153,12 +160,16 @@ def test_missing_fields() -> None:
 
     orig_message = SnubaQueryMetadata(
         request=request,
+        start_timestamp=None,
+        end_timestamp=None,
         dataset="events",
         timer=timer,
         query_list=[
             ClickhouseQueryMetadata(
                 sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
                 sql_anonymized="select event_id from sentry_dist sample 0.1 prewhere project_id in ($I) limit 50, 100",
+                start_timestamp=None,
+                end_timestamp=None,
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
                 profile=ClickhouseQueryProfile(
@@ -176,6 +187,7 @@ def test_missing_fields() -> None:
             )
         ],
         projects={2},
+        snql_anonymized=request.snql_anonymized,
     ).to_dict()
 
     messages = []

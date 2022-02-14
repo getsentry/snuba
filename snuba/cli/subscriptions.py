@@ -7,15 +7,20 @@ from datetime import timedelta
 from typing import Any, Optional, Sequence
 
 import click
-from arroyo import Topic
+from arroyo import Topic, configure_metrics
 from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
 from arroyo.synchronized import SynchronizedConsumer
 
 from snuba import environment, settings
-from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
-from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import (
+    ENTITY_NAME_LOOKUP,
+    enforce_table_writer,
+    get_entity,
+)
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
 from snuba.subscriptions.codecs import SubscriptionTaskResultEncoder
@@ -42,6 +47,9 @@ logger = logging.getLogger(__name__)
     default="events",
     type=click.Choice(DATASET_NAMES),
     help="The dataset to target",
+)
+@click.option(
+    "--entity", "entity_name", help="The entity to target",
 )
 @click.option("--topic")
 @click.option("--partitions", type=int)
@@ -104,6 +112,7 @@ logger = logging.getLogger(__name__)
 def subscriptions(
     *,
     dataset_name: str,
+    entity_name: Optional[str],
     topic: Optional[str],
     partitions: Optional[int],
     commit_log_topic: Optional[str],
@@ -129,15 +138,19 @@ def subscriptions(
 
     dataset = get_dataset(dataset_name)
 
-    entity = dataset.get_default_entity()
-    entity_key = ENTITY_NAME_LOOKUP[entity]
+    if not entity_name:
+        entity = dataset.get_default_entity()
+        entity_key = ENTITY_NAME_LOOKUP[entity]
+    else:
+        entity_key = EntityKey(entity_name)
+        entity = get_entity(entity_key)
 
-    storage = dataset.get_default_entity().get_writable_storage()
+    storage = entity.get_writable_storage()
     assert (
         storage is not None
-    ), f"Dataset {dataset_name} does not have a writable storage by default."
+    ), f"Entity {entity_key} does not have a writable storage by default."
 
-    loader = enforce_table_writer(dataset).get_stream_loader()
+    loader = enforce_table_writer(entity).get_stream_loader()
     commit_log_topic_spec = loader.get_commit_log_topic_spec()
     assert commit_log_topic_spec is not None
 
@@ -149,6 +162,8 @@ def subscriptions(
         "subscriptions",
         tags={"group": consumer_group, "dataset": dataset_name},
     )
+
+    configure_metrics(StreamMetricsAdapter(metrics))
 
     consumer = TickConsumer(
         SynchronizedConsumer(
@@ -206,9 +221,6 @@ def subscriptions(
     metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
     with closing(consumer), executor, closing(producer):
-        from arroyo import configure_metrics
-
-        configure_metrics(StreamMetricsAdapter(metrics))
         batching_consumer = StreamProcessor(
             consumer,
             (
@@ -222,6 +234,7 @@ def subscriptions(
                     executor,
                     {
                         index: SubscriptionScheduler(
+                            entity_key,
                             RedisSubscriptionDataStore(
                                 redis_client, entity_key, PartitionId(index)
                             ),

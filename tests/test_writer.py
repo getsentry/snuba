@@ -3,9 +3,11 @@ from typing import Optional
 
 import pytest
 import rapidjson
+
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.entities.factory import enforce_table_writer
+from snuba.datasets.factory import get_dataset
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
@@ -14,12 +16,12 @@ class TestHTTPBatchWriter:
     metrics = DummyMetricsBackend(strict=True)
 
     def test_empty_batch(self) -> None:
-        enforce_table_writer(self.dataset).get_batch_writer(metrics=self.metrics).write(
-            []
-        )
+        enforce_table_writer(self.dataset.get_default_entity()).get_batch_writer(
+            metrics=self.metrics
+        ).write([])
 
     def test_error_handling(self) -> None:
-        table_writer = enforce_table_writer(self.dataset)
+        table_writer = enforce_table_writer(self.dataset.get_default_entity())
 
         with pytest.raises(ClickhouseWriterError) as error:
             table_writer.get_batch_writer(
@@ -53,7 +55,7 @@ def test_gzip_load() -> None:
 
     dataset = get_dataset("groupedmessage")
     metrics = DummyMetricsBackend(strict=True)
-    writer = enforce_table_writer(dataset).get_bulk_writer(
+    writer = enforce_table_writer(dataset.get_default_entity()).get_bulk_writer(
         metrics,
         "gzip",
         [
