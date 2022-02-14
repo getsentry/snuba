@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta
-from typing import Generator, Optional, Type, Union
+from typing import Optional, Type, Union
 
 import pytest
 
-from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
@@ -92,12 +91,6 @@ TESTS_OVER_SESSIONS = [
 
 class TestBuildRequestBase:
     dataset: Dataset
-
-    @pytest.fixture(autouse=True)
-    def subscription_rollout(self) -> Generator[None, None, None]:
-        state.set_config("snql_subscription_rollout_pct", 1.0)
-        yield
-        state.set_config("snql_subscription_rollout", 0.0)
 
     def compare_conditions(
         self,
