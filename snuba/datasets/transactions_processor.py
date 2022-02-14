@@ -298,53 +298,43 @@ class TransactionsMessageProcessor(MessageProcessor):
             metrics.increment("bad_config.max_spans_per_transaction")
             max_spans_per_transaction = 2000
 
-        try:
-            num_processed = 0
-            processed_spans = []
+        num_processed = 0
+        processed_spans = []
 
-            processed_root_span = self._process_span(trace_context)
-            if processed_root_span is not None:
+        processed_root_span = self._process_span(trace_context)
+        if processed_root_span is not None:
+            num_processed += 1
+            processed_spans.append(processed_root_span)
+
+        for span in data.get("spans", []):
+            # The number of spans should not exceed 1000 as enforced by SDKs.
+            # As a safety precaution, enforce a hard limit on the number of
+            # spans we actually store .
+            if num_processed >= max_spans_per_transaction:
+                metrics.increment("too_many_spans")
+                break
+
+            processed_span = self._process_span(span)
+
+            if processed_span is not None:
                 num_processed += 1
-                processed_spans.append(processed_root_span)
+                processed_spans.append(processed_span)
 
-            for span in data.get("spans", []):
-                # The number of spans should not exceed 1000 as enforced by SDKs.
-                # As a safety precaution, enforce a hard limit on the number of
-                # spans we actually store .
-                if num_processed >= max_spans_per_transaction:
-                    metrics.increment("too_many_spans")
-                    break
+        processed["spans.op"] = []
+        processed["spans.group"] = []
+        processed["spans.exclusive_time"] = []
+        processed["spans.exclusive_time_32"] = []
 
-                processed_span = self._process_span(span)
+        for op, group, exclusive_time in sorted(processed_spans):
+            processed["spans.op"].append(op)
+            processed["spans.group"].append(group)
+            processed["spans.exclusive_time"].append(0)
+            processed["spans.exclusive_time_32"].append(exclusive_time)
 
-                if processed_span is not None:
-                    num_processed += 1
-                    processed_spans.append(processed_span)
-
-            processed["spans.op"] = []
-            processed["spans.group"] = []
-            processed["spans.exclusive_time"] = []
-            processed["spans.exclusive_time_32"] = []
-
-            for op, group, exclusive_time in sorted(processed_spans):
-                processed["spans.op"].append(op)
-                processed["spans.group"].append(group)
-                processed["spans.exclusive_time"].append(0)
-                processed["spans.exclusive_time_32"].append(exclusive_time)
-
-            # The hash and exclusive_time is being stored in the spans columns
-            # so there is no need to store it again in the context array.
-            trace_context.pop("hash", None)
-            trace_context.pop("exclusive_time", None)
-
-        except Exception:
-            # Not failing the event in this case just yet, because we are still
-            # developing this feature.
-            logger.warning(
-                "Invalid span fields.",
-                extra={"trace_context": trace_context},
-                exc_info=True,
-            )
+        # The hash and exclusive_time is being stored in the spans columns
+        # so there is no need to store it again in the context array.
+        trace_context.pop("hash", None)
+        trace_context.pop("exclusive_time", None)
 
     def process_message(
         self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
