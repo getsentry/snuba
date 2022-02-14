@@ -213,7 +213,11 @@ def multistorage_consumer(
             consumer_configuration, producer=producer, commit_log_topic=commit_log,
         )
 
-    metrics = MetricsWrapper(environment.metrics, "consumer")
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "consumer",
+        tags={"group": consumer_group, "storage": storage_keys[0].value},
+    )
 
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
