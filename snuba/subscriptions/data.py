@@ -41,7 +41,6 @@ from snuba.subscriptions.entity_subscription import (
     ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
     EntitySubscription,
     InvalidSubscriptionError,
-    SubscriptionType,
 )
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
@@ -82,8 +81,6 @@ class SubscriptionData(ABC, _SubscriptionData):
     """
     Represents the state of a subscription.
     """
-
-    TYPE_FIELD = "type"
 
     def __post_init__(self) -> None:
         if self.time_window < timedelta(minutes=1):
@@ -226,7 +223,6 @@ class SnQLSubscriptionData(SubscriptionData):
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
-            self.TYPE_FIELD: SubscriptionType.SNQL.value,
             "project_id": self.project_id,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
