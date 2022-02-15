@@ -5,7 +5,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import Callable, List, Mapping, Optional, Sequence
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence
 
 import simplejson as json
 from arroyo import Message
@@ -281,7 +281,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__sharded_pool = RoundRobinConnectionPool(self.__storage.get_cluster())
         self.__rate_limiter = RateLimiter("replacements")
 
-        self.__prolonged_offset = float("-inf")
+        self.__last_offset_processed_per_partition: MutableMapping[str, int] = dict()
         self.__consumer_group = consumer_group
 
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
@@ -429,11 +429,10 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         key = self._build_topic_group_index_key(metadata)
         self._reset_offset_check(key)
 
-        # float("-inf") implies this is the first message this worker is processing since startup
-        if self.__prolonged_offset == float("-inf"):
+        if key not in self.__last_offset_processed_per_partition:
             processed_offset = redis_client.get(key)
             try:
-                self.__prolonged_offset = (
+                self.__last_offset_processed_per_partition[key] = (
                     -1 if processed_offset is None else int(processed_offset)
                 )
             except ValueError as e:
@@ -441,8 +440,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 logger.warning(
                     "Unexpected value found for an offset in Redis", exc_info=e,
                 )
+                self.__last_offset_processed_per_partition[key] = -1
 
-        return metadata.offset <= self.__prolonged_offset
+        return metadata.offset <= self.__last_offset_processed_per_partition[key]
 
     def _reset_offset_check(self, key: str) -> None:
         """
@@ -460,7 +460,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         # expected format is "[consumer_group1,consumer_group2,..]"
         consumer_groups = (get_config(RESET_CHECK_CONFIG) or "[]")[1:-1].split(",")
         if self.__consumer_group in consumer_groups:
-            self.__prolonged_offset = -1
+            self.__last_offset_processed_per_partition[key] = -1
             redis_client.delete(key)
 
     def _check_timing_and_write_to_redis(
@@ -482,7 +482,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             message_metadata.offset,
             ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
         )
-        self.__prolonged_offset = message_metadata.offset
+        self.__last_offset_processed_per_partition[key] = message_metadata.offset
 
     def _build_topic_group_index_key(
         self, message_metadata: ReplacementMessageMetadata

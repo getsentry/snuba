@@ -707,6 +707,47 @@ class TestReplacer:
         assert self.replacer.process_message(old_offset) is None
         assert self.replacer.process_message(same_offset) is None
 
+    def test_multiple_partitions(self) -> None:
+        """
+        Different partitions should have independent offset checks.
+        """
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        payload = KafkaPayload(
+            None,
+            json.dumps(
+                (
+                    2,
+                    ReplacementType.END_UNMERGE,
+                    {
+                        "project_id": self.project_id,
+                        "previous_group_id": 1,
+                        "new_group_id": 2,
+                        "hashes": ["a" * 32],
+                        "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
+                    },
+                )
+            ).encode("utf-8"),
+            [],
+        )
+        offset = 42
+        timestamp = datetime.now()
+
+        partition_one: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1), offset, payload, timestamp,
+        )
+        partition_two: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 2), offset, payload, timestamp,
+        )
+
+        processed = self.replacer.process_message(partition_one)
+        self.replacer.flush_batch([processed])
+        # different partition should be unaffected even if it's the same offset
+        assert self.replacer.process_message(partition_two) is not None
+
     def test_reset_consumer_group_offset_check(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
