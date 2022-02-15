@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import FrozenSet
+from typing import FrozenSet, Set
 
 
 class StorageSetKey(Enum):
@@ -28,6 +28,10 @@ class StorageSetKey(Enum):
     TRANSACTIONS = "transactions"
     TRANSACTIONS_RO = "transactions_ro"
     TRANSACTIONS_V2 = "transactions_v2"
+
+    @classmethod
+    def to_set(cls) -> Set[str]:
+        return set(storage.value for storage in StorageSetKey)
 
 
 # Storage sets enabled only when development features are enabled.
