@@ -3,7 +3,6 @@ from typing import Optional
 
 import pytest
 
-from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -95,8 +94,6 @@ test_cases = [
 
 @pytest.mark.parametrize("query_body, message", test_cases)
 def test_failures(query_body: str, message: str) -> None:
-    state.set_config("query_parsing_expand_aliases", 1)
-
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
