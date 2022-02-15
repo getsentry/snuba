@@ -122,46 +122,72 @@ def set_config(
     description: Optional[str] = "",
     force: bool = False,
 ) -> None:
+    """
+
+    value, desc
+
+    if og_val and new_val not None:
+        replace value if they different but same type
+    if og_desc and new_desc not None:
+        replace desc if they different
+    """
     value = get_typed_value(value)
     enc_value = "{}".format(value).encode("utf-8") if value is not None else None
+    enc_desc = (
+        "{}".format(description).encode("utf-8") if description is not None else None
+    )
+
+    p = rds.pipeline()
 
     try:
-        enc_original_value = rds.hget(config_hash, key)
-        original_desc = (rds.hget(config_description_hash, key) or b"").decode("utf-8")
+        p.hget(config_hash, key)
+        p.hget(config_description_hash, key)
+        [enc_original_value, enc_original_desc] = p.execute()
+
+        change_value = True
         if enc_original_value is not None and value is not None:
             original_value = get_typed_value(enc_original_value.decode("utf-8"))
-            if (
-                value == original_value
-                and type(value) == type(original_value)
-                and original_desc == description
-            ):
-                return
-
-            if not force and type(value) != type(original_value):
+            if original_value == value and type(value) == type(original_value):
+                change_value = False
+            elif not force and type(value) != type(original_value):
                 raise MismatchedTypeException(key, type(original_value), type(value))
 
-        # figure out change record
-        change_record = (time.time(), user, enc_original_value, enc_value)
+        change_desc = True
+        if enc_original_desc is not None and description is not None:
+            change_desc = enc_original_desc.decode("utf-8") != description
 
-        if value is None:
-            rds.hdel(config_hash, key)
-            rds.hdel(config_history_hash, key)
-            rds.hdel(config_description_hash, key)
-        else:
-            rds.hset(config_hash, key, enc_value)
-            rds.hset(config_history_hash, key, json.dumps(change_record))
-            rds.hset(config_description_hash, key, description)
+        if change_value:
+            change_record = (time.time(), user, enc_original_value, enc_value)
+            if value is None:
+                p.hdel(config_hash, key)
+                p.hdel(config_history_hash, key)
+                p.hdel(config_description_hash, key)
+            else:
+                p.hset(config_hash, key, enc_value)
+                p.hset(config_history_hash, key, json.dumps(change_record))
 
-        rds.lpush(config_changes_list, json.dumps((key, change_record)))
-        rds.ltrim(config_changes_list, 0, config_changes_list_limit)
-        logger.info(f"Successfully changed option {key} to {value}")
-    except MismatchedTypeException as exc:
+            p.lpush(config_changes_list, json.dumps((key, change_record)))
+            p.ltrim(config_changes_list, 0, config_changes_list_limit)
+            logger.info(f"Successfully changed config value for {key} to {value}")
+
+        if change_desc:
+            if description is None:
+                p.hdel(config_description_hash, key)
+            else:
+                p.hset(config_description_hash, key, enc_desc)
+            logger.info(
+                f"Successfully changed config description for {key} to '{description}'"
+            )
+
+        p.execute()
+
+    except MismatchedTypeException as e:
         logger.exception(
-            f"Mismatched types for {exc.key}: Original type: {exc.original_type}, New type: {exc.new_type}"
+            f"Mismatched types for {e.key}: Original type: {e.original_type}, New type: {e.new_type}"
         )
-        raise exc
-    except Exception as ex:
-        logger.exception(ex)
+        raise MismatchedTypeException(e.key, e.original_type, e.new_type)
+    except Exception as e:
+        logger.exception(e)
 
 
 def set_configs(
