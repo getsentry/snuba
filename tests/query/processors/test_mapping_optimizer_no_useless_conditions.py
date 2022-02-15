@@ -2,7 +2,6 @@ from copy import deepcopy
 
 import pytest
 
-from snuba import state
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
@@ -233,7 +232,6 @@ TEST_CASES = [
 def test_recursive_useless_condition(
     input_query: ClickhouseQuery, expected_query: ClickhouseQuery,
 ) -> None:
-    state.set_config("tags_redundant_optimizer_skip_rate", 0)
     # copy the condition to the having condition so that we test both being
     # applied in one test
     input_query.set_ast_having(deepcopy(input_query.get_condition()))
@@ -254,7 +252,6 @@ def test_useless_has_condition(
         EmptyTagConditionProcessor,
     )
 
-    state.set_config("tags_redundant_optimizer_skip_rate", 0)
     # change the existence expression to be a has(tags, 'my_tag') expression for boh queries
     # this allows reuse of the previous test cases
     EmptyTagConditionProcessor().process_query(input_query, HTTPRequestSettings())

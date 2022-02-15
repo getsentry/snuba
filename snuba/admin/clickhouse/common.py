@@ -30,7 +30,10 @@ NODE_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 
 
 def get_ro_node_connection(
-    clickhouse_host: str, clickhouse_port: int, storage_name: str
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
     storage_key = None
     try:
@@ -62,8 +65,7 @@ def get_ro_node_connection(
         settings.CLICKHOUSE_READONLY_PASSWORD,
         database,
         max_pool_size=2,
-        # force read-only
-        client_settings=ClickhouseClientSettings.TOOLING.value.settings,
+        client_settings=client_settings.value.settings,
     )
     NODE_CONNECTIONS[key] = connection
     return connection
@@ -72,7 +74,9 @@ def get_ro_node_connection(
 CLUSTER_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 
 
-def get_ro_query_node_connection(storage_name: str) -> ClickhousePool:
+def get_ro_query_node_connection(
+    storage_name: str, client_settings: ClickhouseClientSettings
+) -> ClickhousePool:
     if storage_name in CLUSTER_CONNECTIONS:
         return CLUSTER_CONNECTIONS[storage_name]
 
@@ -88,7 +92,7 @@ def get_ro_query_node_connection(storage_name: str) -> ClickhousePool:
     cluster = storage.get_cluster()
     connection_id = cluster.get_connection_id()
     connection = get_ro_node_connection(
-        connection_id.hostname, connection_id.tcp_port, storage_name
+        connection_id.hostname, connection_id.tcp_port, storage_name, client_settings
     )
 
     CLUSTER_CONNECTIONS[storage_name] = connection
