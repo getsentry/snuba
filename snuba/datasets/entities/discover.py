@@ -1,8 +1,7 @@
-from copy import deepcopy
 from dataclasses import dataclass
 from typing import Optional, Sequence, Set, Union
 
-from snuba import environment, settings, state
+from snuba import settings
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -13,7 +12,6 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
@@ -39,7 +37,7 @@ from snuba.datasets.plans.single_storage import (
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
-from snuba.pipeline.simple_pipeline import EntityQueryPlanner, SimplePipelineBuilder
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -48,7 +46,6 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import Any
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
@@ -60,11 +57,7 @@ from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProc
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
-from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
-from snuba.utils.metrics.wrapper import MetricsWrapper
-
-metrics = MetricsWrapper(environment.metrics, "snuplicator.sampling")
 
 
 @dataclass(frozen=True)
@@ -290,38 +283,6 @@ null_function_translation_mappers = TranslationMappers(
     curried_functions=[DefaultIfNullCurriedFunctionMapper()],
     functions=[DefaultIfNullFunctionMapper()],
 )
-
-
-class SampledSimplePipelineBuilder(SimplePipelineBuilder):
-    def build_planner(
-        self, query: LogicalQuery, settings: RequestSettings,
-    ) -> EntityQueryPlanner:
-        new_query = deepcopy(query)
-        sampling_rate = state.get_config("snuplicator-sampling-rate", 1.0)
-        assert isinstance(sampling_rate, float)
-        new_query.set_sample(sampling_rate)
-        return super().build_planner(new_query, settings)
-
-
-def is_in_experiment(query: LogicalQuery, referrer: str) -> bool:
-    if referrer != "tagstore.__get_tag_keys":
-        return False
-
-    project_ids = get_object_ids_in_query_ast(query, "project_id")
-    if not project_ids:
-        return False
-
-    test_projects_raw = state.get_config("snuplicator-sampling-projects", "")
-    test_projects = set()
-    if (
-        isinstance(test_projects_raw, str) and test_projects_raw != ""
-    ):  # should be in the form [1,2,3]
-        test_projects_raw = test_projects_raw[1:-1]
-        test_projects = set(int(p) for p in test_projects_raw.split(",") if p)
-    elif isinstance(test_projects_raw, (int, float)):
-        test_projects = {int(test_projects_raw)}
-
-    return project_ids.issubset(test_projects)
 
 
 class DiscoverEntity(Entity):

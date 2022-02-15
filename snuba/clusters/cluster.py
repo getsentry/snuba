@@ -45,7 +45,7 @@ class ClickhouseClientSettings(Enum):
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
-    TOOLING = ClickhouseClientSettingsType({"readonly": 2}, None)
+    TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple for each
