@@ -352,7 +352,10 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         metadata = ReplacementMessageMetadata(
             partition_index=message.partition.index, offset=message.offset,
         )
-        if self._message_already_processed(metadata):
+        # lazy eval: method only called if config is True
+        if get_config("skip_seen_offsets", False) and self._message_already_processed(
+            metadata
+        ):
             logger.warning(
                 f"Replacer ignored a message, consumer group: {self.__consumer_group}",
                 extra={
@@ -405,7 +408,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self.__replacer_processor.post_replacement(replacement, count)
 
-            self._check_timing_and_write_to_redis(replacement, start_time)
+            if get_config("skip_seen_offsets", False):
+                self._check_timing_and_write_to_redis(replacement, start_time)
 
         if need_optimize:
             from snuba.optimize import run_optimize

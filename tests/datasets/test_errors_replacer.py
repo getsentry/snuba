@@ -634,6 +634,7 @@ class TestReplacer:
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
 
     def test_process_offset_twice(self) -> None:
+        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -674,6 +675,7 @@ class TestReplacer:
         """
         Don't process an offset that already exists in Redis.
         """
+        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -711,6 +713,7 @@ class TestReplacer:
         """
         Different partitions should have independent offset checks.
         """
+        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -749,6 +752,7 @@ class TestReplacer:
         assert self.replacer.process_message(partition_two) is not None
 
     def test_reset_consumer_group_offset_check(self) -> None:
+        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
