@@ -1654,8 +1654,6 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
     def test_tagstore_sampling(self) -> None:
-        state.set_config("snuplicator-sampling-experiment-rate", 1.0)
-        state.set_config("snuplicator-sampling-projects", f"[{self.project_id}]")
         state.set_config("snuplicator-sampling-rate", 0.1)
 
         response = self.post(
