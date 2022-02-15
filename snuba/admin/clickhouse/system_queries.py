@@ -5,6 +5,7 @@ from clickhouse_driver.errors import ErrorCodes
 from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connection
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -22,7 +23,9 @@ def _run_sql_query_on_host(
     """
     Run the SQL query. It should be validated before getting to this point
     """
-    connection = get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name)
+    connection = get_ro_node_connection(
+        clickhouse_host, clickhouse_port, storage_name, ClickhouseClientSettings.QUERY
+    )
     query_result = connection.execute(query=sql, with_column_types=True)
 
     return query_result
