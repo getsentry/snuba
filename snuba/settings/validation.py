@@ -1,7 +1,7 @@
 from typing import Any, Mapping, MutableMapping
 
 
-def _validate_settings(locals: Mapping[str, Any]) -> None:
+def validate_settings(locals: Mapping[str, Any]) -> None:
     if locals.get("QUERIES_TOPIC"):
         raise ValueError("QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead.")
 

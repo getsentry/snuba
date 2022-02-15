@@ -1,7 +1,7 @@
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
-from snuba.settings.validation import _validate_settings
+from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -222,4 +222,4 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
-_validate_settings(locals())
+validate_settings(locals())
