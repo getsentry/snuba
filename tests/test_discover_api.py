@@ -5,7 +5,6 @@ import pytest
 import pytz
 import simplejson as json
 
-from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
@@ -1654,8 +1653,6 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
     def test_tagstore_sampling(self) -> None:
-        state.set_config("snuplicator-sampling-rate", 0.1)
-
         response = self.post(
             json.dumps(
                 {
