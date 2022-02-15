@@ -18,7 +18,6 @@ from snuba_sdk import (
     Relationship,
 )
 
-from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
@@ -34,7 +33,6 @@ class TestSDKSnQLApi(BaseApiTest):
         return self.app.post(url, data=data, headers={"referer": "test"})
 
     def setup_method(self, test_method: Callable[..., Any]) -> None:
-        state.set_config("write_span_columns_rollout_percentage", 100)
         super().setup_method(test_method)
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
