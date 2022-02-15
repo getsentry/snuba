@@ -31,7 +31,6 @@ from snuba.subscriptions.entity_subscription import (
     MetricsCountersSubscription,
     MetricsSetsSubscription,
     SessionsSubscription,
-    SubscriptionType,
 )
 from snuba.utils.metrics.timer import Timer
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
@@ -115,7 +114,6 @@ def test_decode_snql(
     codec = SubscriptionDataCodec(entity_key)
     subscription = builder(entity_key, organization)
     data = {
-        "type": SubscriptionType.SNQL.value,
         "project_id": subscription.project_id,
         "time_window": int(subscription.time_window.total_seconds()),
         "resolution": int(subscription.resolution.total_seconds()),
@@ -359,7 +357,7 @@ def test_subscription_task_encoder() -> None:
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"entity":"events",'
         b'"task":{'
-        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
+        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
         b'"tick_upper_offset":5'
         b"}"
     )
