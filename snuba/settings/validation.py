@@ -55,8 +55,12 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
 
     for cluster in locals["CLUSTERS"]:
         for cluster_storage_set in cluster["storage_sets"]:
-            if cluster_storage_set in StorageSetKey.to_set():
+            try:
                 storage_set_to_cluster[StorageSetKey(cluster_storage_set)] = cluster
+            except ValueError:
+                # We allow definition of storage_sets in configuration files
+                # that are not defined in StorageSetKey.
+                pass
 
     for group in JOINABLE_STORAGE_SETS:
         clusters = [storage_set_to_cluster[storage_set] for storage_set in group]

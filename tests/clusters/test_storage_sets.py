@@ -1,5 +1,3 @@
-import pytest
-
 from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
 
 
@@ -18,11 +16,3 @@ def test_storage_set_combination() -> None:
         )
         is False
     )
-
-
-@pytest.mark.parametrize(
-    "storage,expected",
-    [("events", True), ("transactions", True), ("non-existent-storage", False)],
-)
-def test_storage_set_to_set_method(storage: str, expected: bool) -> None:
-    assert (storage in StorageSetKey.to_set()) is expected
