@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.2.0
+
+### Various fixes & improvements
+
+- fix(admin): Fix the system query tool (#2414) by @lynnagara
+- ref: Clean up snql config use in tests (#2412) by @lynnagara
+- ref: Remove use of deprecated config in test (#2411) by @lynnagara
+- ref: Don't set query_parsing_expand_aliases in tests (#2413) by @lynnagara
+- perf(subscriptions): Increase scheduler load factor to 5 (#2406) by @lynnagara
+- feat(stability) - fallback host retry (#2398) by @onewland
+- Revert "feat(errors): Add a new errors_v2 storage option (#2349)" (#2404) by @nikhars
+- perf(subscriptions): Increase the load factor to 3 (#2401) by @lynnagara
+- ref(subscriptions): Remove unnecessary assertion (#2402) by @lynnagara
+- feat(errors): Add a new errors_v2 storage option (#2349) by @nikhars
+- perf(subscriptions): Avoid slow delegate task builder where possible (#2399) by @lynnagara
+- fix(cleanup) Fix rounding error in cleanup script (#2394) by @evanh
+- fix(conn) increase retry count by 1 in ClickhousePool.execute (#2397) by @onewland
+- feat(ingestion): Allow for failures during writes (#2395) by @nikhars
+- ref(snuba-admin): Edit predefined queries (#2382) by @MeredithAnya
+- feat(consumer-util): Expose metric of consumer utilization (#2245) by @nikhars
+- ref(attribution) Add test hook for metrics (#2391) by @evanh
+- ref: Add outcomes-billing-consumer to freight (#2384) by @evanh
+- fix(consumer): Allow commit log topic to be passed to multistorage consumer (#2393) by @nikhars
+- feat(metrics): directly write aggregates to metrics table (#2361) by @onewland
+- docs(internal): Add some doc comments for MetricsBackend (#2389) by @onewland
+- chore(kafka): Add a log message of librdkafka log level (#2208) by @nikhars
+- feat(dev): Mock data for subscriptions (#2390) by @lynnagara
+- Fix metrics init (#2392) by @fpacifici
+
+_Plus 40 more_
+
 ## 22.1.0
 
 ### Various fixes & improvements
