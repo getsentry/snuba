@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-import random
 import time
 from functools import wraps
 from typing import Any, Callable, Union
@@ -52,20 +51,19 @@ def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]
     ) -> Callable[[], RedisClientType]:
         @wraps(func)
         def wrapper() -> RedisClientType:
-            retry_counter = max_retries
-            while retry_counter > 0:
+            retry_counter = 0
+            while retry_counter < max_retries:
                 try:
                     return func()
                 except RedisClusterException as e:
-                    if (
-                        KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE in str(e)
-                        and retry_counter >= 0
-                    ):
-                        time.sleep(random.randint(1, RANDOM_SLEEP_MAX) / 1000)
-                        retry_counter -= 1
+                    if KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE in str(e):
+                        # Exponentially increase the sleep starting from
+                        # 0.5 seconds on each retry
+                        sleep_duration = 0.5 * (2 ** retry_counter)
+                        time.sleep(sleep_duration)
+                        retry_counter += 1
                         continue
                     raise
-            # shouldn't get to here but it pleases mypy
             raise FailedClusterInitization("Init failed")
 
         return wrapper
