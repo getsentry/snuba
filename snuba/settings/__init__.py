@@ -46,7 +46,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions",
             "transactions_ro",
             "transactions_v2",
-            "errors_v2",
         },
         "single_node": True,
     },
@@ -176,7 +175,7 @@ SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
 # Temporary setting for subscription scheduler test
-SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 2
+SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 5
 
 TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 

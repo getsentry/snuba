@@ -45,7 +45,7 @@ class ClickhouseClientSettings(Enum):
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
-    TOOLING = ClickhouseClientSettingsType({"readonly": 2}, None)
+    TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple for each
@@ -244,7 +244,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         """
 
         return self.__connection_cache.get_node_connection(
-            client_settings, node, self.__user, self.__password, self.__database
+            client_settings, node, self.__user, self.__password, self.__database,
         )
 
     def get_reader(self) -> Reader:
