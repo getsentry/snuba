@@ -131,14 +131,16 @@ def set_config(
                 raise MismatchedTypeException(key, type(original_value), type(value))
 
         change_record = (time.time(), user, enc_original_value, enc_value)
+        p = rds.pipeline()
         if value is None:
-            rds.hdel(config_hash, key)
-            rds.hdel(config_history_hash, key)
+            p.hdel(config_hash, key)
+            p.hdel(config_history_hash, key)
         else:
-            rds.hset(config_hash, key, enc_value)
-            rds.hset(config_history_hash, key, json.dumps(change_record))
-        rds.lpush(config_changes_list, json.dumps((key, change_record)))
-        rds.ltrim(config_changes_list, 0, config_changes_list_limit)
+            p.hset(config_hash, key, enc_value)
+            p.hset(config_history_hash, key, json.dumps(change_record))
+        p.lpush(config_changes_list, json.dumps((key, change_record)))
+        p.ltrim(config_changes_list, 0, config_changes_list_limit)
+        p.execute()
         logger.info(f"Successfully changed option {key} to {value}")
     except MismatchedTypeException as exc:
         logger.exception(
