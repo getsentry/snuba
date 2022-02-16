@@ -597,12 +597,6 @@ class NamedTuple(ColumnType[TModifiers]):
         super().__init__(modifiers)
         self.types = tuple(Column(*t) for t in types)
 
-    def flatten(self, name: str) -> Sequence[FlattenedColumn]:
-        return [
-            FlattenedColumn(name, column.name, Array(column.type))
-            for column in self.types
-        ]
-
     def _repr_content(self) -> str:
         return repr(self.types)
 
