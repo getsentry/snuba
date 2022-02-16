@@ -569,7 +569,7 @@ class Tuple(ColumnType[TModifiers]):
         self.types = types
 
     def _repr_content(self) -> str:
-        return ", ".join("{}".format(v.__class__.__name__) for v in self.types)
+        return ", ".join("{}".format(repr(v)) for v in self.types)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -579,7 +579,7 @@ class Tuple(ColumnType[TModifiers]):
         )
 
     def _for_schema_impl(self) -> str:
-        return "Tuple({})".format(", ".join("{}".format(t) for t in self.types))
+        return "Tuple({})".format(", ".join([repr(t) for t in self.types]))
 
     def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
         return Tuple(types=self.types, modifiers=modifiers)
@@ -595,12 +595,16 @@ class NamedTuple(ColumnType[TModifiers]):
         modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
-        self.types = types
+        self.types = tuple(Column(*t) for t in types)
+
+    def flatten(self, name: str) -> Sequence[FlattenedColumn]:
+        return [
+            FlattenedColumn(name, column.name, Array(column.type))
+            for column in self.types
+        ]
 
     def _repr_content(self) -> str:
-        return ", ".join(
-            "{} {}".format(t[0], t[1].__class__.__name__) for t in self.types
-        )
+        return repr(self.types)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -610,12 +614,12 @@ class NamedTuple(ColumnType[TModifiers]):
         )
 
     def _for_schema_impl(self) -> str:
-        return "Tuple({})".format(
-            ", ".join("{} {}".format(t[0], t[1]) for t in self.types)
-        )
+        return "Tuple({})".format(", ".join(t.for_schema() for t in self.types))
 
     def set_modifiers(self, modifiers: Optional[TModifiers]) -> NamedTuple[TModifiers]:
-        return NamedTuple(types=self.types, modifiers=modifiers)
+        return NamedTuple(
+            types=tuple((t.name, t.type) for t in self.types), modifiers=modifiers
+        )
 
     def get_raw(self) -> NamedTuple[TModifiers]:
-        return NamedTuple(self.types)
+        return NamedTuple(tuple((t.name, t.type) for t in self.types))

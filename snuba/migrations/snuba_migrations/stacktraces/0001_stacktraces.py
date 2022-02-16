@@ -33,7 +33,7 @@ columns: List[Column[Modifiers]] = [
     Column("version", NamedTuple((("name", String()), ("code", String())))),
     # internal data
     Column("retention_days", UInt(16)),
-    Column("version", UInt(16)),
+    Column("deleted", UInt(8)),
     Column("partition", UInt(16)),
     Column("offset", UInt(16)),
 ]
@@ -53,7 +53,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     order_by="(organization_id, project_id, transaction_id)",
                     ttl="received + toIntervalDay(retention_days)",
                     settings={"index_granularity": "8192"},
-                    version_column="version",
+                    version_column="deleted",
                     partition_by="(organization_id, project_id, toMonday(received))",
                 ),
             )
