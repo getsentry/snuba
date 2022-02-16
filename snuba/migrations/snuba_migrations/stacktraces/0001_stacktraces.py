@@ -33,6 +33,7 @@ columns: List[Column[Modifiers]] = [
     Column("version", NamedTuple((("name", String()), ("code", String())))),
     # internal data
     Column("retention_days", UInt(16)),
+    Column("version", UInt(16)),
 ]
 
 
@@ -45,11 +46,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.STACKTRACES,
                 table_name="stacktraces_local",
                 columns=columns,
-                engine=table_engines.MergeTree(
+                engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.STACKTRACES,
                     order_by="(organiation_id, project_id, transaction_id, received)",
                     ttl="received + toIntervalDay(retention_days)",
                     settings={"index_granularity": "8192"},
+                    version_column="version",
                 ),
             )
         ]
