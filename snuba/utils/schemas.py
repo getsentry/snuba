@@ -574,12 +574,12 @@ class Tuple(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
+            and self.get_modifiers() == cast(Tuple[TModifiers], other).get_modifiers()
             and self.types == cast(Tuple[TModifiers], other).types
         )
 
     def _for_schema_impl(self) -> str:
-        return "Tuple({})".format(", ".join([repr(t) for t in self.types]))
+        return "Tuple({})".format(", ".join([t.for_schema() for t in self.types]))
 
     def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
         return Tuple(types=self.types, modifiers=modifiers)
@@ -609,7 +609,8 @@ class NamedTuple(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
+            and self.get_modifiers()
+            == cast(NamedTuple[TModifiers], other).get_modifiers()
             and self.types == cast(NamedTuple[TModifiers], other).types
         )
 
