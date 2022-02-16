@@ -1,13 +1,6 @@
 from typing import List, Sequence
 
-from snuba.clickhouse.columns import (
-    UUID,
-    Column,
-    DateTime,
-    String,
-    UInt,
-    NamedTuple,
-)
+from snuba.clickhouse.columns import UUID, Column, DateTime, NamedTuple, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -18,11 +11,9 @@ columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("transaction_id", UUID()),
     Column("received", DateTime()),
-
     # profiling data
     Column("stacktrace", String(Modifiers(codecs=["LZ4HC(9)"]))),
     Column("symbols", String(Modifiers(codecs=["LZ4HC(9)"]))),
-
     # filtering data
     Column("android_api_level", UInt(32, Modifiers(nullable=True))),
     Column("device_classification", String(Modifiers(low_cardinality=True))),
@@ -40,7 +31,6 @@ columns: List[Column[Modifiers]] = [
     Column("trace_id", UUID()),
     Column("transaction_name", String(Modifiers(low_cardinality=True))),
     Column("version", NamedTuple((("name", String()), ("code", String())))),
-
     # internal data
     Column("retention_days", UInt(16)),
 ]

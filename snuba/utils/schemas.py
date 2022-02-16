@@ -558,15 +558,18 @@ class Enum(ColumnType[TModifiers]):
     def get_raw(self) -> Enum[TModifiers]:
         return Enum(self.values)
 
+
 class Tuple(ColumnType[TModifiers]):
     def __init__(
-        self, types: tuple[ColumnType[TModifiers], ...], modifiers: Optional[TModifiers] = None,
+        self,
+        types: tuple[ColumnType[TModifiers], ...],
+        modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.types = types
 
     def _repr_content(self) -> str:
-        return ", ".join("{}".format(v) for v in self.types)
+        return ", ".join("{}".format(v.__class__.__name__) for v in self.types)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -576,9 +579,7 @@ class Tuple(ColumnType[TModifiers]):
         )
 
     def _for_schema_impl(self) -> str:
-        return "Tuple({})".format(
-            ", ".join("{}".format(t) for t in self.types)
-        )
+        return "Tuple({})".format(", ".join("{}".format(t) for t in self.types))
 
     def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
         return Tuple(types=self.types, modifiers=modifiers)
@@ -586,15 +587,20 @@ class Tuple(ColumnType[TModifiers]):
     def get_raw(self) -> Tuple[TModifiers]:
         return Tuple(self.types)
 
+
 class NamedTuple(ColumnType[TModifiers]):
     def __init__(
-        self, types: tuple[tuple[str, ColumnType[TModifiers]], ...], modifiers: Optional[TModifiers] = None,
+        self,
+        types: tuple[tuple[str, ColumnType[TModifiers]], ...],
+        modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.types = types
 
     def _repr_content(self) -> str:
-        return ", ".join("{} {}".format(t[0], t[1]) for t in self.types)
+        return ", ".join(
+            "{} {}".format(t[0], t[1].__class__.__name__) for t in self.types
+        )
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -613,5 +619,3 @@ class NamedTuple(ColumnType[TModifiers]):
 
     def get_raw(self) -> NamedTuple[TModifiers]:
         return NamedTuple(self.types)
-
-
