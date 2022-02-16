@@ -1,4 +1,5 @@
 import functools
+import logging
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
@@ -33,6 +34,8 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class KafkaParameters:
@@ -44,6 +47,7 @@ class KafkaParameters:
     auto_offset_reset: str
     queued_max_messages_kbytes: int
     queued_min_messages: int
+    stats_collection_frequency_ms: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,7 @@ class ConsumerBuilder:
         max_batch_size: int,
         max_batch_time_ms: int,
         metrics: MetricsBackend,
+        stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
         mock_parameters: Optional[MockParameters] = None,
@@ -90,6 +95,7 @@ class ConsumerBuilder:
         self.broker_config = get_default_kafka_configuration(
             topic, bootstrap_servers=kafka_params.bootstrap_servers
         )
+        logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
         self.producer_broker_config = build_kafka_producer_configuration(
             topic,
             bootstrap_servers=kafka_params.bootstrap_servers,
@@ -127,12 +133,20 @@ class ConsumerBuilder:
             else:
                 self.commit_log_topic = None
 
+        if kafka_params.stats_collection_frequency_ms is not None:
+            self.stats_collection_frequency_ms = (
+                kafka_params.stats_collection_frequency_ms
+            )
+            assert stats_callback is not None
+            self.stats_callback = stats_callback
+        else:
+            self.stats_collection_frequency_ms = 0
+
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
         self.producer = Producer(self.producer_broker_config)
 
         self.metrics = metrics
-
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
         self.group_id = kafka_params.group_id
@@ -174,6 +188,14 @@ class ConsumerBuilder:
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
+
+        if self.stats_collection_frequency_ms > 0:
+            configuration.update(
+                {
+                    "statistics.interval.ms": self.stats_collection_frequency_ms,
+                    "stats_cb": self.stats_callback,
+                }
+            )
 
         if self.commit_log_topic is None:
             consumer = KafkaConsumer(

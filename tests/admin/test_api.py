@@ -99,7 +99,7 @@ def test_system_query(admin_api: Any) -> None:
                 "host": host,
                 "port": port,
                 "storage": "errors_ro",
-                "query_name": "CurrentMerges",
+                "sql": "SELECT count(), is_currently_executing from system.replication_queue GROUP BY is_currently_executing",
             }
         ),
     )

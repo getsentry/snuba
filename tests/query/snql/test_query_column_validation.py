@@ -428,7 +428,6 @@ def set_configs() -> Generator[None, None, None]:
 def test_entity_column_validation(
     query_body: str, expected_query: LogicalQuery, set_configs: Any
 ) -> None:
-    state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
 
     # TODO: Potentially remove this once entities have actual join relationships
@@ -451,7 +450,7 @@ def test_entity_column_validation(
 
     try:
         setattr(events_entity, "get_join_relationship", events_mock)
-        query = parse_snql_query(query_body, events)
+        query, _ = parse_snql_query(query_body, events)
         eq, reason = query.equals(expected_query)
         assert eq, reason
     finally:

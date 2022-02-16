@@ -319,7 +319,6 @@ class TestTransactionsProcessor:
     def test_base_process(self) -> None:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
-        set_config("write_span_columns_rollout_percentage", 100)
 
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
@@ -357,7 +356,6 @@ class TestTransactionsProcessor:
     def test_too_many_spans(self) -> None:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
-        set_config("write_span_columns_projects", "[1]")
         set_config("max_spans_per_transaction", 1)
 
         start, finish = self.__get_timestamps()

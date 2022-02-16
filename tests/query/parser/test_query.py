@@ -3,7 +3,6 @@ from typing import Optional
 
 import pytest
 
-from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -1120,9 +1119,8 @@ test_cases = [
 
 @pytest.mark.parametrize("query_body, expected_query", test_cases)
 def test_format_expressions(query_body: str, expected_query: Query) -> None:
-    state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
-    query = parse_snql_query(str(query_body), events)
+    query, _ = parse_snql_query(str(query_body), events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason

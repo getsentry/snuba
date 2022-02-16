@@ -18,11 +18,11 @@ from snuba_sdk import (
     Relationship,
 )
 
-from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.utils.metrics.backends.dummy import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -33,7 +33,6 @@ class TestSDKSnQLApi(BaseApiTest):
         return self.app.post(url, data=data, headers={"referer": "test"})
 
     def setup_method(self, test_method: Callable[..., Any]) -> None:
-        state.set_config("write_span_columns_rollout_percentage", 100)
         super().setup_method(test_method)
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
@@ -386,3 +385,28 @@ class TestSDKSnQLApi(BaseApiTest):
         data = resp["data"]
         assert len(data) == 1
         assert data[0]["array_spans_exclusive_time"] > 0
+
+    def test_attribution_tags(self) -> None:
+        query = (
+            Query("events", Entity("events"))
+            .set_select([Function("count", [], "count")])
+            .set_where(
+                [
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.base_time),
+                    Condition(Column("timestamp"), Op.LT, self.next_time),
+                ]
+            )
+            .set_team("sns")
+            .set_feature("test")
+        )
+
+        response = self.post("/events/snql", data=query.snuba())
+        resp = json.loads(response.data)
+        assert response.status_code == 200, resp
+        metric_calls = get_recorded_metric_calls("increment", "api.snuba.attribution")
+        assert metric_calls is not None
+        assert len(metric_calls) == 1
+        assert metric_calls[0].value > 0
+        assert metric_calls[0].tags["team"] == "sns"
+        assert metric_calls[0].tags["feature"] == "test"

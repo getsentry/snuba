@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import random
 import re
 import time
 from contextlib import contextmanager
@@ -9,7 +10,17 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import partial
 from io import StringIO
-from typing import Any, Generator, Mapping, Optional, Sequence, TypedDict, Union
+from typing import (
+    Any,
+    Generator,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+    cast,
+)
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -59,6 +70,8 @@ def capture_logging() -> Generator[StringIO, None, None]:
 
 
 class ClickhousePool(object):
+    FALLBACK_POOL_SIZE = 3
+
     def __init__(
         self,
         host: str,
@@ -81,11 +94,35 @@ class ClickhousePool(object):
         self.client_settings = client_settings
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
+        self.fallback_pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(
+            self.FALLBACK_POOL_SIZE
+        )
         self.__gauge = ThreadSafeGauge(metrics, "connections")
 
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
+
+        for _ in range(self.FALLBACK_POOL_SIZE):
+            self.fallback_pool.put(None)
+
+    def fallback_pool_enabled(self) -> bool:
+        return state.get_config("use_fallback_host_in_native_connection_pool", 0) == 1
+
+    def get_fallback_host(self) -> Tuple[str, int]:
+        config_hosts_str = state.get_config(
+            f"fallback_hosts:{self.host}:{self.port}", None
+        )
+        assert config_hosts_str, f"no fallback hosts found for {self.host}:{self.port}"
+
+        config_hosts = cast(str, config_hosts_str).split(",")
+        selected_host_port = random.choice(config_hosts).split(":")
+
+        assert (
+            len(selected_host_port) == 2
+        ), f"expected host:port format in fallback hosts for {self.host}:{self.port}"
+
+        return (selected_host_port[0], int(selected_host_port[1]))
 
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
@@ -108,16 +145,18 @@ class ClickhousePool(object):
         return relatively quickly with an error in case of more persistent
         failures.
         """
+        fallback_mode = False
+
         try:
             conn = self.pool.get(block=True)
 
-            attempts_remaining = 2
+            attempts_remaining = 3 + (1 if self.fallback_pool_enabled() else 0)
             while attempts_remaining > 0:
                 attempts_remaining -= 1
                 # Lazily create connection instances
                 if conn is None:
                     self.__gauge.increment()
-                    conn = self._create_conn()
+                    conn = self._create_conn(fallback_mode)
 
                 try:
                     if capture_trace:
@@ -171,23 +210,43 @@ class ClickhousePool(object):
 
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
-                    metrics.increment("connection_error")
+                    metrics.increment(
+                        "connection_error"
+                        if not fallback_mode
+                        else "fallback_connection_error"
+                    )
+
                     # Force a reconnection next time
                     conn = None
                     self.__gauge.decrement()
-                    if attempts_remaining == 0:
-                        if isinstance(e, errors.Error):
-                            raise ClickhouseError(e.message, code=e.code) from e
-                        else:
-                            raise e
+
+                    # Move to fallback-mode for one last try if it's enabled
+                    if attempts_remaining == 1 and self.fallback_pool_enabled():
+                        # return a client instance placeholder back to the main connection pool
+                        self.pool.put(None, block=False)
+                        # turn fallback mode on (so new connections will come from run-time config)
+                        fallback_mode = True
+                        # try reusing a connection from the fallback connection pool, but if
+                        # it's None we'll create the connection on-demand later
+                        conn = self.fallback_pool.get(block=True)
                     else:
-                        # Short sleep to make sure we give the load
-                        # balancer a chance to mark a bad host as down.
-                        time.sleep(0.1)
+                        if attempts_remaining == 0:
+                            if isinstance(e, errors.Error):
+                                raise ClickhouseError(e.message, code=e.code) from e
+                            else:
+                                raise e
+                        else:
+                            # Short sleep to make sure we give the load
+                            # balancer a chance to mark a bad host as down.
+                            time.sleep(0.1)
                 except errors.Error as e:
                     raise ClickhouseError(e.message, code=e.code) from e
         finally:
-            self.pool.put(conn, block=False)
+            # Return finished connection to the appropriate connection pool
+            if not fallback_mode:
+                self.pool.put(conn, block=False)
+            else:
+                self.fallback_pool.put(conn, block=False)
 
         return ClickhouseResult()
 
@@ -211,7 +270,8 @@ class ClickhousePool(object):
         query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
-        attempts_remaining = 3
+        total_attempts = 3
+        attempts_remaining = total_attempts
 
         while True:
             try:
@@ -240,28 +300,40 @@ class ClickhousePool(object):
                         raise e
                 time.sleep(1)
                 continue
-            except errors.ServerException as e:
+            except ClickhouseError as e:
                 logger.warning(
-                    "ClickHouse query execution failed: %s (retrying)", str(e)
+                    "ClickHouse query execution failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
                 )
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    # Try forever if the server is overloaded.
-                    sleep_seconds = state.get_config(
+                    attempts_remaining -= 1
+                    if attempts_remaining <= 0:
+                        raise e
+                    sleep_interval_seconds = state.get_config(
                         "simultaneous_queries_sleep_seconds", 1
                     )
-                    assert sleep_seconds is not None
-                    time.sleep(float(sleep_seconds))
+                    assert sleep_interval_seconds is not None
+                    # Linear backoff. Adds one second at each iteration.
+                    time.sleep(
+                        float(
+                            (total_attempts - attempts_remaining)
+                            * sleep_interval_seconds
+                        )
+                    )
                     continue
                 else:
                     # Quit immediately for other types of server errors.
-                    raise ClickhouseError(e.message, code=e.code) from e
+                    raise e
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
-    def _create_conn(self) -> Client:
+    def _create_conn(self, use_fallback_host: bool = False) -> Client:
+        if use_fallback_host:
+            (fallback_host, fallback_port) = self.get_fallback_host()
         return Client(
-            host=self.host,
-            port=self.port,
+            host=(self.host if not use_fallback_host else fallback_host),
+            port=(self.port if not use_fallback_host else fallback_port),
             user=self.user,
             password=self.password,
             database=self.database,

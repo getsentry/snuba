@@ -384,8 +384,14 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     snql_query = json_to_snql(query_body, "transactions")
     body = json.loads(snql_query.snuba())
-    query = parse_snql_query(str(snql_query), dataset)
-    request = Request("a", body, query, HTTPRequestSettings(referrer="r"))
+    query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
+    request = Request(
+        id="a",
+        body=body,
+        query=query,
+        snql_anonymized=snql_anonymized,
+        settings=HTTPRequestSettings(referrer="r"),
+    )
     entity = get_entity(query.get_from_clause().key)
     storage = entity.get_writable_storage()
     assert storage is not None

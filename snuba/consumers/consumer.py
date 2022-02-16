@@ -1,3 +1,4 @@
+import copy
 import itertools
 import logging
 import time
@@ -7,10 +8,12 @@ from typing import (
     Any,
     Callable,
     Mapping,
+    MutableMapping,
     MutableSequence,
     NamedTuple,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
     cast,
@@ -31,13 +34,18 @@ from arroyo.processing.strategies.streaming import (
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-from snuba.clickhouse.http import JSONRow, JSONRowEncoder
+from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
 from snuba.environment import setup_sentry
-from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
+from snuba.processor import (
+    AggregateInsertBatch,
+    InsertBatch,
+    MessageProcessor,
+    ReplacementBatch,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -46,8 +54,8 @@ from snuba.writer import BatchWriter, MockBatchWriter
 logger = logging.getLogger("snuba.consumer")
 
 
-class JSONRowInsertBatch(NamedTuple):
-    rows: Sequence[JSONRow]
+class BytesInsertBatch(NamedTuple):
+    rows: Sequence[bytes]
     origin_timestamp: Optional[datetime]
 
     def __reduce_ex__(
@@ -62,18 +70,18 @@ class JSONRowInsertBatch(NamedTuple):
             return type(self), (self.rows, self.origin_timestamp)
 
 
-class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
+class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
     def __init__(self, writer: BatchWriter[JSONRow], metrics: MetricsBackend) -> None:
         self.__writer = writer
         self.__metrics = metrics
 
-        self.__messages: MutableSequence[Message[JSONRowInsertBatch]] = []
+        self.__messages: MutableSequence[Message[BytesInsertBatch]] = []
         self.__closed = False
 
     def poll(self) -> None:
         pass
 
-    def submit(self, message: Message[JSONRowInsertBatch]) -> None:
+    def submit(self, message: Message[BytesInsertBatch]) -> None:
         assert not self.__closed
 
         self.__messages.append(message)
@@ -204,7 +212,7 @@ class MockReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
 
 
 class ProcessedMessageBatchWriter(
-    ProcessingStep[Union[None, JSONRowInsertBatch, ReplacementBatch]]
+    ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]
 ):
     def __init__(
         self,
@@ -223,17 +231,15 @@ class ProcessedMessageBatchWriter(
             self.__replacement_batch_writer.poll()
 
     def submit(
-        self, message: Message[Union[None, JSONRowInsertBatch, ReplacementBatch]]
+        self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]]
     ) -> None:
         assert not self.__closed
 
         if message.payload is None:
             return
 
-        if isinstance(message.payload, JSONRowInsertBatch):
-            self.__insert_batch_writer.submit(
-                cast(Message[JSONRowInsertBatch], message)
-            )
+        if isinstance(message.payload, BytesInsertBatch):
+            self.__insert_batch_writer.submit(cast(Message[BytesInsertBatch], message))
         elif isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
                 raise TypeError("writer not configured to support replacements")
@@ -272,6 +278,20 @@ class ProcessedMessageBatchWriter(
 
 
 json_row_encoder = JSONRowEncoder()
+
+values_row_encoders: MutableMapping[StorageKey, ValuesRowEncoder] = dict()
+
+
+def get_values_row_encoder(storage_key: StorageKey) -> ValuesRowEncoder:
+    from snuba.datasets.storages.factory import get_writable_storage
+
+    if storage_key not in values_row_encoders:
+        table_writer = get_writable_storage(storage_key).get_table_writer()
+        values_row_encoders[storage_key] = ValuesRowEncoder(
+            table_writer.get_writeable_columns()
+        )
+
+    return values_row_encoders[storage_key]
 
 
 def build_batch_writer(
@@ -337,19 +357,19 @@ def build_mock_batch_writer(
 
 class MultistorageCollector(
     ProcessingStep[
-        Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]
+        Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
     ]
 ):
     def __init__(
         self,
         steps: Mapping[
-            StorageKey,
-            ProcessingStep[Union[None, JSONRowInsertBatch, ReplacementBatch]],
+            StorageKey, ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
+        ignore_errors: Optional[Set[StorageKey]] = None,
     ):
         self.__steps = steps
-
         self.__closed = False
+        self.__ignore_errors = ignore_errors
 
     def poll(self) -> None:
         for step in self.__steps.values():
@@ -358,9 +378,7 @@ class MultistorageCollector(
     def submit(
         self,
         message: Message[
-            Sequence[
-                Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
-            ]
+            Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
         ],
     ) -> None:
         assert not self.__closed
@@ -379,8 +397,14 @@ class MultistorageCollector(
     def close(self) -> None:
         self.__closed = True
 
-        for step in self.__steps.values():
-            step.close()
+        for storage_key, step in self.__steps.items():
+            if self.__ignore_errors and storage_key in self.__ignore_errors:
+                try:
+                    step.close()
+                except Exception as e:
+                    logger.warning("Error while writing data to clickhouse", exc_info=e)
+            else:
+                step.close()
 
     def terminate(self) -> None:
         self.__closed = True
@@ -409,7 +433,7 @@ class MultistorageKafkaPayload(NamedTuple):
 
 def process_message(
     processor: MessageProcessor, message: Message[KafkaPayload]
-) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
+) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     result = processor.process_message(
         rapidjson.loads(message.payload.value),
         KafkaMessageMetadata(
@@ -418,7 +442,7 @@ def process_message(
     )
 
     if isinstance(result, InsertBatch):
-        return JSONRowInsertBatch(
+        return BytesInsertBatch(
             [json_row_encoder.encode(row) for row in result.rows],
             result.origin_timestamp,
         )
@@ -428,7 +452,7 @@ def process_message(
 
 def process_message_multistorage(
     message: Message[MultistorageKafkaPayload],
-) -> Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]:
+) -> Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]:
     # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
     # is itself removed.
     from snuba.datasets.storages.factory import get_writable_storage
@@ -439,22 +463,42 @@ def process_message_multistorage(
     )
 
     results: MutableSequence[
-        Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
+        Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
     ] = []
 
-    for storage_key in message.payload.storage_keys:
+    for index, storage_key in enumerate(message.payload.storage_keys):
+        # The `process_message` api of individual storage processors could modify the content of the payload
+        # in some cases. For example, they can remove redundant data from the payload to decrease size of
+        # storage on clickhouse. Hence, we need to make copies of the payload and send the copies to the api.
+        # The last storage will use the original payload to avoid unnecessary copying.
+        storage_message = (
+            copy.deepcopy(value)
+            if (index < len(message.payload.storage_keys) - 1)
+            else value
+        )
         result = (
             get_writable_storage(storage_key)
             .get_table_writer()
             .get_stream_loader()
             .get_processor()
-            .process_message(value, metadata)
+            .process_message(storage_message, metadata)
         )
-        if isinstance(result, InsertBatch):
+        if isinstance(result, AggregateInsertBatch):
+            values_row_encoder = get_values_row_encoder(storage_key)
             results.append(
                 (
                     storage_key,
-                    JSONRowInsertBatch(
+                    BytesInsertBatch(
+                        [values_row_encoder.encode(row) for row in result.rows],
+                        result.origin_timestamp,
+                    ),
+                )
+            )
+        elif isinstance(result, InsertBatch):
+            results.append(
+                (
+                    storage_key,
+                    BytesInsertBatch(
                         [json_row_encoder.encode(row) for row in result.rows],
                         result.origin_timestamp,
                     ),
@@ -558,13 +602,18 @@ class MultistorageConsumerProcessingStrategyFactory(
     def __build_collector(
         self,
     ) -> ProcessingStep[
-        Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]
+        Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
     ]:
         return MultistorageCollector(
             {
                 storage.get_storage_key(): self.__build_batch_writer(storage)
                 for storage in self.__storages
-            }
+            },
+            ignore_errors={
+                storage.get_storage_key()
+                for storage in self.__storages
+                if storage.get_is_write_error_ignorable() is True
+            },
         )
 
     def create(

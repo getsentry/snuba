@@ -170,23 +170,23 @@ class TaskBuilderModeState:
     def __init__(self) -> None:
         self.__state: MutableMapping[int, TaskBuilderMode] = {}
 
+    def get_final_mode(self, transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+        return (
+            TaskBuilderMode.IMMEDIATE
+            if transition_mode == TaskBuilderMode.TRANSITION_IMMEDIATE
+            else TaskBuilderMode.JITTERED
+        )
+
+    def get_start_mode(self, transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+        return (
+            TaskBuilderMode.IMMEDIATE
+            if transition_mode == TaskBuilderMode.TRANSITION_JITTER
+            else TaskBuilderMode.JITTERED
+        )
+
     def get_current_mode(
         self, subscription: Subscription, timestamp: int
     ) -> TaskBuilderMode:
-        def get_final_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
-            return (
-                TaskBuilderMode.IMMEDIATE
-                if transition_mode == TaskBuilderMode.TRANSITION_IMMEDIATE
-                else TaskBuilderMode.JITTERED
-            )
-
-        def get_start_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
-            return (
-                TaskBuilderMode.IMMEDIATE
-                if transition_mode == TaskBuilderMode.TRANSITION_JITTER
-                else TaskBuilderMode.JITTERED
-            )
-
         general_mode = TaskBuilderMode(
             state.get_config(
                 "subscription_primary_task_builder", TaskBuilderMode.JITTERED
@@ -201,14 +201,16 @@ class TaskBuilderModeState:
 
         resolution = int(subscription.data.resolution.total_seconds())
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
-            return get_final_mode(general_mode)
+            return self.get_final_mode(general_mode)
 
         if timestamp % resolution == 0:
-            self.__state[resolution] = get_final_mode(general_mode)
+            self.__state[resolution] = self.get_final_mode(general_mode)
 
         current_state = self.__state.get(resolution)
         return (
-            current_state if current_state is not None else get_start_mode(general_mode)
+            current_state
+            if current_state is not None
+            else self.get_start_mode(general_mode)
         )
 
 
@@ -241,17 +243,16 @@ class DelegateTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        immediate_task = self.__immediate_builder.get_task(
-            subscription_with_metadata, timestamp
-        )
-        jittered_task = self.__jittered_builder.get_task(
-            subscription_with_metadata, timestamp
-        )
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
+
         if primary_builder == TaskBuilderMode.JITTERED:
-            return jittered_task
+            return self.__jittered_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
         else:
-            return immediate_task
+            return self.__immediate_builder.get_task(
+                subscription_with_metadata, timestamp
+            )
 
     def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
@@ -294,7 +295,31 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
 
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
-        self.__builder = DelegateTaskBuilder()
+
+        self.__delegate_builder = DelegateTaskBuilder()
+        self.__jittered_builder = JitteredTaskBuilder()
+        self.__immediate_builder = ImmediateTaskBuilder()
+
+        self.__reset_builder()
+
+    def __reset_builder(self) -> None:
+        """
+        Use the jittered or immediate builder directly if we can as it is faster.
+        If we are in transition between the two modes, we must use the delegate builder.
+        This function is called for every tick.
+        """
+        general_mode = TaskBuilderMode(
+            state.get_config(
+                "subscription_primary_task_builder", TaskBuilderMode.JITTERED
+            )
+        )
+        if general_mode == TaskBuilderMode.JITTERED:
+            self.__builder: TaskBuilder = self.__jittered_builder
+        elif general_mode == TaskBuilderMode.IMMEDIATE:
+            self.__builder = self.__immediate_builder
+        else:
+            # We are transitioning between jittered and immediate mode. We must use the delegate builder.
+            self.__builder = self.__delegate_builder
 
     def __get_subscriptions(self) -> List[Subscription]:
         current_time = datetime.now()
@@ -319,10 +344,11 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             (current_time - self.__last_refresh).total_seconds() * 1000.0,
             tags={"partition": str(self.__partition_id)},
         )
-
         return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
+        self.__reset_builder()
+
         interval = tick.timestamps
 
         subscriptions = self.__get_subscriptions()

@@ -184,9 +184,15 @@ def test_metrics_processing(
     }
 
     metrics_dataset = get_dataset("metrics")
-    query = parse_snql_query(query_body["query"], metrics_dataset)
+    query, snql_anonymized = parse_snql_query(query_body["query"], metrics_dataset)
 
-    request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
+    request = Request(
+        id="",
+        body=query_body,
+        query=query,
+        snql_anonymized="",
+        settings=HTTPRequestSettings(referrer=""),
+    )
 
     def query_runner(
         query: Union[Query, CompositeQuery[Table]],

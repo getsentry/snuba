@@ -185,14 +185,6 @@ def track_bad_query(
                 "missing_columns": missing_columns,
             },
         )
-        logger.warning(
-            "Discover generated impossible query",
-            extra={
-                "selected_table": selected_entity_str,
-                "missing_columns": missing_columns,
-            },
-            exc_info=True,
-        )
 
     if selected_entity == EVENTS_AND_TRANSACTIONS and (
         event_columns or transaction_columns
@@ -206,14 +198,6 @@ def track_bad_query(
                 "missing_events_columns": missing_events_columns,
                 "missing_transactions_columns": missing_transactions_columns,
             },
-        )
-        logger.warning(
-            "Discover generated impossible query - merge table",
-            extra={
-                "missing_events_columns": missing_events_columns,
-                "missing_transactions_columns": missing_transactions_columns,
-            },
-            exc_info=True,
         )
 
     else:

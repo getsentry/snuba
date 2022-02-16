@@ -11,7 +11,7 @@ from snuba.clusters.cluster import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.schemas import Schema
-from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.expressions import Expression
@@ -169,6 +169,8 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
+        write_format: WriteFormat = WriteFormat.JSON,
+        ignore_write_errors: bool = False,
     ) -> None:
         super().__init__(
             storage_key,
@@ -185,10 +187,15 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             stream_loader=stream_loader,
             replacer_processor=replacer_processor,
             writer_options=writer_options,
+            write_format=write_format,
         )
+        self.__ignore_write_errors = ignore_write_errors
 
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer
+
+    def get_is_write_error_ignorable(self) -> bool:
+        return self.__ignore_write_errors
 
 
 class StorageAndMappers(NamedTuple):

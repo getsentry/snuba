@@ -1,26 +1,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, List, MutableMapping, Optional, cast
+from typing import List, Optional, cast
 
 import simplejson as json
 from flask import Flask, Response, g, jsonify, make_response, request
 
 from snuba import state
 from snuba.admin.auth import UnauthorizedException, authorize_request
-from snuba.admin.clickhouse.common import (
-    InvalidCustomQuery,
-    InvalidNodeError,
-    InvalidStorageError,
-)
+from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.nodes import get_storage_info
-from snuba.admin.clickhouse.system_queries import (
-    InvalidResultError,
-    NonExistentSystemQuery,
-    SystemQuery,
-    run_system_query_on_host_by_name,
-    run_system_query_on_host_with_sql,
-)
+from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
+from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
@@ -73,7 +64,7 @@ def clickhouse_queries() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"query_name": "ActivePartitions"}' \
+#  -d '{"host": "localhost", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
 #  -H 'Content-Type: application/json' \
 #  http://localhost:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
@@ -83,64 +74,27 @@ def clickhouse_system_query() -> Response:
         host = req["host"]
         port = req["port"]
         storage = req["storage"]
+        raw_sql = req["sql"]
     except KeyError:
         return make_response(jsonify({"error": "Invalid request"}), 400)
 
-    is_predefined_query = req.get("query_name") is not None
+    try:
+        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
+        rows = []
+        rows, columns = cast(List[List[str]], result.results), result.meta
 
-    if is_predefined_query:
-        try:
-            result = run_system_query_on_host_by_name(
-                host, port, storage, req.get("query_name"),
-            )
-            rows: List[List[str]] = []
-            rows, columns = cast(List[List[str]], result.results), result.meta
+        if columns:
+            res = {}
+            res["column_names"] = [name for name, _ in columns]
+            res["rows"] = [[str(col) for col in row] for row in rows]
 
-            if columns:
-                res: MutableMapping[str, Any] = {}
-                res["column_names"] = [name for name, _ in columns]
-                res["rows"] = [[str(col) for col in row] for row in rows]
+            return make_response(jsonify(res), 200)
+    except InvalidCustomQuery as err:
+        return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
-                return make_response(jsonify(res), 200)
-            else:
-                raise InvalidResultError
-        except (
-            InvalidNodeError,
-            NonExistentSystemQuery,
-            InvalidStorageError,
-            InvalidResultError,
-        ) as err:
-            return make_response(
-                jsonify({"error": err.__class__.__name__, "data": err.extra_data}), 400
-            )
-
-    else:
-        try:
-            raw_sql = req["sql"]
-        except KeyError:
-            return make_response(jsonify({"error": "Invalid request"}), 400)
-
-        try:
-            result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
-            rows = []
-            rows, columns = cast(List[List[str]], result.results), result.meta
-
-            if columns:
-                res = {}
-                res["column_names"] = [name for name, _ in columns]
-                res["rows"] = [[str(col) for col in row] for row in rows]
-
-                return make_response(jsonify(res), 200)
-        except InvalidCustomQuery as err:
-            return make_response(
-                jsonify({"error": err.message or "Invalid query"}), 400
-            )
-
-        except ClickhouseError as err:
-            logger.error(err, exc_info=True)
-            return make_response(
-                jsonify({"error": err.message or "Invalid query"}), 400
-            )
+    except ClickhouseError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
     # We should never get here
     return make_response(jsonify({"error": "Something went wrong"}), 400)

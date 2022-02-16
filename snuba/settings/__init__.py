@@ -1,7 +1,7 @@
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
-from snuba.settings.validation import _validate_settings
+from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -45,6 +45,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "sessions",
             "transactions",
             "transactions_ro",
+            "transactions_v2",
         },
         "single_node": True,
     },
@@ -52,11 +53,13 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 
 
 # Dogstatsd Options
-DOGSTATSD_HOST = "localhost"
-DOGSTATSD_PORT = 8125
+DOGSTATSD_HOST = None
+DOGSTATSD_PORT = None
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
+    "metrics.processor.set.size": 0.1,
+    "metrics.processor.distribution.size": 0.1,
 }
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
@@ -167,15 +170,20 @@ ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
 
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
+ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
 # Temporary setting for subscription scheduler test
-SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 2
+SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 5
 
 TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
+
+# Used for migrating to/from writing metrics directly to aggregate tables
+# rather than using materialized views
+WRITE_METRICS_AGG_DIRECTLY = False
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
@@ -216,4 +224,4 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
-_validate_settings(locals())
+validate_settings(locals())

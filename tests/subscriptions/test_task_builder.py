@@ -167,7 +167,7 @@ TEST_CASES = [
             )
         ],
         [
-            ("tasks.built", 1, {"type": "immediate"}),
+            ("tasks.built", 0, {"type": "immediate"}),
             ("tasks.built", 1, {"type": "jittered"}),
             ("tasks.above.resolution", 0, {"type": "jittered"}),
         ],
@@ -203,8 +203,8 @@ TEST_CASES = [
             )
         ],
         [
-            ("tasks.built", 2, {"type": "immediate"}),
-            ("tasks.built", 2, {"type": "jittered"}),
+            ("tasks.built", 0, {"type": "immediate"}),
+            ("tasks.built", 1, {"type": "jittered"}),
             ("tasks.above.resolution", 0, {"type": "jittered"}),
         ],
         id="Delegate transitions to jittered mode.",

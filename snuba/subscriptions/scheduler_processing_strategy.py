@@ -75,8 +75,6 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
-        start = time.time()
-
         assert not self.__closed
 
         # Update self.__offset_high_watermark
@@ -95,10 +93,6 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         )
         if should_commit:
             self.__offset_low_watermark = message.offset
-
-        self.__metrics.timing(
-            "ProvideCommitStrategy.submit", (time.time() - start) * 1000
-        )
 
     def __should_commit(self, message: Message[Tick]) -> bool:
         return (
@@ -202,8 +196,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
-        start = time.time()
-
         assert not self.__closed
 
         # If the scheduler mode is immediate or there is only one partition
@@ -281,8 +273,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
                 "partition_lag_ms",
                 (self.__latest_ts - earliest_ts).total_seconds() * 1000,
             )
-
-            self.__metrics.timing("TickBuffer.submit", (time.time() - start) * 1000)
 
     def close(self) -> None:
         self.__closed = True
@@ -392,7 +382,6 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__max_buffer_size = 10000
 
     def poll(self) -> None:
-        start = time.time()
         # Remove completed tasks from the queue and raise if an exception occurred.
         # This method does not attempt to recover from any exception.
         # Also commits any offsets required.
@@ -417,12 +406,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     }
                 )
 
-        self.__metrics.timing(
-            "ProduceScheduledSubscriptionMessage.poll", (time.time() - start) * 1000
-        )
-
     def submit(self, message: Message[CommittableTick]) -> None:
-        start = time.time()
         assert not self.__closed
 
         # If queue is full, raise MessageRejected to tell the stream
@@ -434,13 +418,10 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # the queue
         tick = message.payload.tick
         assert tick.partition is not None
-        tasks = self.__schedulers[tick.partition].find(tick)
 
-        start_encoding = time.time()
+        tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
+
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
-        self.__metrics.timing(
-            "ScheduledSubscriptionTask.encode", (time.time() - start_encoding) * 1000
-        )
 
         self.__queue.append(
             message,
@@ -450,10 +431,6 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     for task in encoded_tasks
                 ]
             ),
-        )
-
-        self.__metrics.timing(
-            "ProduceScheduledSubscriptionMessage.submit", (time.time() - start) * 1000
         )
 
     def close(self) -> None:

@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Any, Optional, Sequence
 
 import click
-from arroyo import Topic
+from arroyo import Topic, configure_metrics
 from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
@@ -163,6 +163,8 @@ def subscriptions(
         tags={"group": consumer_group, "dataset": dataset_name},
     )
 
+    configure_metrics(StreamMetricsAdapter(metrics))
+
     consumer = TickConsumer(
         SynchronizedConsumer(
             KafkaConsumer(
@@ -219,9 +221,6 @@ def subscriptions(
     metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
     with closing(consumer), executor, closing(producer):
-        from arroyo import configure_metrics
-
-        configure_metrics(StreamMetricsAdapter(metrics))
         batching_consumer = StreamProcessor(
             consumer,
             (

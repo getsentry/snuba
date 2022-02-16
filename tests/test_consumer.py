@@ -13,10 +13,11 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
 from arroyo.types import Position
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
+    BytesInsertBatch,
     InsertBatchWriter,
-    JSONRowInsertBatch,
     MultistorageConsumerProcessingStrategyFactory,
     ProcessedMessageBatchWriter,
     ReplacementBatchWriter,
@@ -112,12 +113,12 @@ def test_streaming_consumer_strategy() -> None:
 
 
 def test_json_row_batch_pickle_simple() -> None:
-    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
+    batch = BytesInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
     assert pickle.loads(pickle.dumps(batch)) == batch
 
 
 def test_json_row_batch_pickle_out_of_band() -> None:
-    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
+    batch = BytesInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
 
     buffers: MutableSequence[PickleBuffer] = []
     data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)
@@ -131,7 +132,8 @@ def get_row_count(storage: Storage) -> int:
     return int(
         storage.get_cluster()
         .get_query_connection(ClickhouseClientSettings.INSERT)
-        .execute(f"SELECT count() FROM {schema.get_local_table_name()}").results[0][0]
+        .execute(f"SELECT count() FROM {schema.get_local_table_name()}")
+        .results[0][0]
     )
 
 
@@ -200,3 +202,64 @@ def test_multistorage_strategy(
         ):
             strategy.close()
             strategy.join()
+
+
+def test_metrics_writing_e2e() -> None:
+    from snuba.datasets.storages.metrics import (
+        counters_storage,
+        distributions_storage,
+        sets_storage,
+    )
+
+    settings.WRITE_METRICS_AGG_DIRECTLY = True
+
+    dist_message = """
+        {
+            "org_id":1,
+            "project_id":2,
+            "name":"sentry.transactions.transaction.duration",
+            "unit":"ms",
+            "type":"d",
+            "value":[24.0,80.0,119.0,146.0,182.0],
+            "timestamp":1641418510,
+            "tags":{"6":91,"9":134,"4":117,"5":7},
+            "metric_id":8,
+            "retention_days":90
+        }
+    """
+
+    commit = Mock()
+
+    storages = [
+        distributions_storage,
+        sets_storage,
+        counters_storage,
+    ]
+
+    strategy = MultistorageConsumerProcessingStrategyFactory(
+        storages, 10, 10, None, None, None, TestingMetricsBackend(),
+    ).create(commit)
+
+    payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
+    now = datetime.now()
+    messages = [
+        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
+        for offset, payload in enumerate(payloads)
+    ]
+
+    # 4 rows written, one for each metrics granularity
+    with assert_changes(
+        lambda: get_row_count(distributions_storage), 0, 4
+    ), assert_changes(lambda: get_row_count(distributions_storage), 0, 4):
+        for message in messages:
+            strategy.submit(message)
+
+        with assert_changes(
+            lambda: commit.call_args_list,
+            [],
+            [call({Partition(Topic("topic"), 0): Position(1, now)})],
+        ):
+            strategy.close()
+            strategy.join()
+
+    settings.WRITE_METRICS_AGG_DIRECTLY = False
