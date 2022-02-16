@@ -8,8 +8,8 @@ from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
-    SnQLSubscriptionData,
     Subscription,
+    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionWithMetadata,
 )
@@ -30,7 +30,7 @@ class TestSubscriptionScheduler:
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            SnQLSubscriptionData(
+            SubscriptionData(
                 project_id=1,
                 query="MATCH (events) SELECT count() AS count",
                 time_window=timedelta(minutes=1),
