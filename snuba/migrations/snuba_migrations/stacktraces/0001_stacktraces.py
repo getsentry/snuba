@@ -34,6 +34,8 @@ columns: List[Column[Modifiers]] = [
     # internal data
     Column("retention_days", UInt(16)),
     Column("version", UInt(16)),
+    Column("partition", UInt(16)),
+    Column("offset", UInt(16)),
 ]
 
 
@@ -48,10 +50,11 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.STACKTRACES,
-                    order_by="(organization_id, project_id, transaction_id, received)",
+                    order_by="(organization_id, project_id, transaction_id)",
                     ttl="received + toIntervalDay(retention_days)",
                     settings={"index_granularity": "8192"},
                     version_column="version",
+                    partition_by="(organization_id, project_id, toMonday(received))",
                 ),
             )
         ]
@@ -71,7 +74,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="stacktraces_local",
-                    sharding_key="cityHash64(project_id, transaction_name)",
+                    sharding_key="cityHash64(transaction_id)",
                 ),
             )
         ]
