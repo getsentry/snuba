@@ -48,7 +48,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.STACKTRACES,
-                    order_by="(organiation_id, project_id, transaction_id, received)",
+                    order_by="(organization_id, project_id, transaction_id, received)",
                     ttl="received + toIntervalDay(retention_days)",
                     settings={"index_granularity": "8192"},
                     version_column="version",
