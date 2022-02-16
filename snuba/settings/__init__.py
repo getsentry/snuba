@@ -1,7 +1,7 @@
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
-from snuba.settings.validation import _validate_settings
+from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -176,7 +176,7 @@ SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
 # Temporary setting for subscription scheduler test
-SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 3
+SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 5
 
 TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
@@ -223,4 +223,4 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
-_validate_settings(locals())
+validate_settings(locals())
