@@ -19,9 +19,12 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize
 from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
+from snuba.state import set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
+
+CONSUMER_GROUP = "consumer_group"
 
 
 class TestReplacer:
@@ -46,7 +49,7 @@ class TestReplacer:
 
         self.storage = get_writable_storage(StorageKey.ERRORS)
         self.replacer = replacer.ReplacerWorker(
-            self.storage, DummyMetricsBackend(strict=True)
+            self.storage, CONSUMER_GROUP, DummyMetricsBackend(strict=True),
         )
 
         # Total query time range is 24h before to 24h after now to account
@@ -492,7 +495,7 @@ class TestReplacer:
 
         message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
-            42,
+            41,
             KafkaPayload(
                 None,
                 json.dumps(
@@ -629,3 +632,160 @@ class TestReplacer:
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
+
+    def test_process_offset_twice(self) -> None:
+        set_config("skip_seen_offsets", True)
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        ReplacementType.END_UNMERGE,
+                        {
+                            "project_id": self.project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hashes": ["a" * 32],
+                            "datetime": datetime.utcnow().strftime(
+                                PAYLOAD_DATETIME_FORMAT
+                            ),
+                        },
+                    )
+                ).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        processed = self.replacer.process_message(message)
+        self.replacer.flush_batch([processed])
+
+        # should be None since the offset should be in Redis, indicating it should be skipped
+        assert self.replacer.process_message(message) is None
+
+    def test_offset_already_processed(self) -> None:
+        """
+        Don't process an offset that already exists in Redis.
+        """
+        set_config("skip_seen_offsets", True)
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        key = f"replacement:{CONSUMER_GROUP}:errors:1"
+        redis_client.set(key, 42)
+
+        old_offset: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            41,
+            KafkaPayload(
+                None,
+                json.dumps((2, ReplacementType.END_UNMERGE, {},)).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        same_offset: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps((2, ReplacementType.END_UNMERGE, {},)).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        assert self.replacer.process_message(old_offset) is None
+        assert self.replacer.process_message(same_offset) is None
+
+    def test_multiple_partitions(self) -> None:
+        """
+        Different partitions should have independent offset checks.
+        """
+        set_config("skip_seen_offsets", True)
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        payload = KafkaPayload(
+            None,
+            json.dumps(
+                (
+                    2,
+                    ReplacementType.END_UNMERGE,
+                    {
+                        "project_id": self.project_id,
+                        "previous_group_id": 1,
+                        "new_group_id": 2,
+                        "hashes": ["a" * 32],
+                        "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
+                    },
+                )
+            ).encode("utf-8"),
+            [],
+        )
+        offset = 42
+        timestamp = datetime.now()
+
+        partition_one: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1), offset, payload, timestamp,
+        )
+        partition_two: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 2), offset, payload, timestamp,
+        )
+
+        processed = self.replacer.process_message(partition_one)
+        self.replacer.flush_batch([processed])
+        # different partition should be unaffected even if it's the same offset
+        assert self.replacer.process_message(partition_two) is not None
+
+    def test_reset_consumer_group_offset_check(self) -> None:
+        set_config("skip_seen_offsets", True)
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "a" * 32
+        write_unprocessed_events(self.storage, [self.event])
+
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        ReplacementType.END_UNMERGE,
+                        {
+                            "project_id": self.project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hashes": ["a" * 32],
+                            "datetime": datetime.utcnow().strftime(
+                                PAYLOAD_DATETIME_FORMAT
+                            ),
+                        },
+                    )
+                ).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        self.replacer.flush_batch([self.replacer.process_message(message)])
+
+        set_config(replacer.RESET_CHECK_CONFIG, f"[{CONSUMER_GROUP}]")
+
+        # Offset to check against should be reset so this message shouldn't be skipped
+        assert self.replacer.process_message(message) is not None

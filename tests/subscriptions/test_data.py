@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta
-from typing import Generator, Optional, Type, Union
+from typing import Optional, Type, Union
 
 import pytest
 
-from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
-from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
+from snuba.subscriptions.data import SubscriptionData
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
@@ -17,7 +16,7 @@ from tests.test_sessions_api import BaseSessionsMockTest
 
 TESTS = [
     pytest.param(
-        SnQLSubscriptionData(
+        SubscriptionData(
             project_id=1,
             query=(
                 "MATCH (events) "
@@ -33,7 +32,7 @@ TESTS = [
         id="SnQL subscription",
     ),
     pytest.param(
-        SnQLSubscriptionData(
+        SubscriptionData(
             project_id=1,
             query=(
                 "MATCH (events) "
@@ -49,7 +48,7 @@ TESTS = [
         id="SnQL subscription with 2 many aggregates",
     ),
     pytest.param(
-        SnQLSubscriptionData(
+        SubscriptionData(
             project_id=1,
             query=(
                 "MATCH (events) "
@@ -68,7 +67,7 @@ TESTS = [
 
 TESTS_OVER_SESSIONS = [
     pytest.param(
-        SnQLSubscriptionData(
+        SubscriptionData(
             project_id=1,
             query=(
                 """
@@ -92,12 +91,6 @@ TESTS_OVER_SESSIONS = [
 
 class TestBuildRequestBase:
     dataset: Dataset
-
-    @pytest.fixture(autouse=True)
-    def subscription_rollout(self) -> Generator[None, None, None]:
-        state.set_config("snql_subscription_rollout_pct", 1.0)
-        yield
-        state.set_config("snql_subscription_rollout", 0.0)
 
     def compare_conditions(
         self,

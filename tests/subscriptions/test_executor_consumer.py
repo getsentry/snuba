@@ -24,8 +24,8 @@ from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
-    SnQLSubscriptionData,
     Subscription,
+    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
@@ -122,7 +122,7 @@ def test_executor_consumer() -> None:
         executor._run_once()
 
     # Produce a scheduled task to the scheduled subscriptions topic
-    subscription_data = SnQLSubscriptionData(
+    subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count()",
         time_window=timedelta(minutes=1),
@@ -198,7 +198,7 @@ def generate_message(
                     entity_key,
                     Subscription(
                         subscription_identifier,
-                        SnQLSubscriptionData(
+                        SubscriptionData(
                             project_id=1,
                             time_window=timedelta(minutes=1),
                             resolution=timedelta(minutes=1),
@@ -313,7 +313,7 @@ def test_produce_result() -> None:
 
     strategy = ProduceResult(producer, result_topic.name, commit)
 
-    subscription_data = SnQLSubscriptionData(
+    subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
         time_window=timedelta(minutes=1),

@@ -9,7 +9,6 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
@@ -41,6 +40,7 @@ from snuba.query.processors.type_converters.uuid_column_processor import (
 from snuba.query.processors.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
+from snuba.replacers.replacer_processor import ReplacerState
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
