@@ -9,6 +9,7 @@ from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
     PROJECT_REFERRER_RATE_LIMIT_NAME,
+    REFERRER_RATE_LIMIT_NAME,
     RateLimitParameters,
 )
 
@@ -142,6 +143,25 @@ class ProjectReferrerRateLimiter(ObjectIDRateLimiterProcessor):
         )
 
         request_settings.add_rate_limit(rate_limit)
+
+
+class ReferrerRateLimiterProcessor(ObjectIDRateLimiterProcessor):
+    """This is more of a load shedder than a rate limiter. we limit a specific
+    referrer regardless of customer"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "nocolumn",
+            REFERRER_RATE_LIMIT_NAME,
+            "project_referrer_per_second_limit",
+            "project_referrer_concurrent_limit",
+            request_settings_field="referrer",
+        )
+
+    def get_object_id(
+        self, query: Query, request_settings: RequestSettings
+    ) -> Optional[str]:
+        return request_settings.referrer
 
 
 class ProjectRateLimiterProcessor(ObjectIDRateLimiterProcessor):
