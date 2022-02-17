@@ -153,8 +153,8 @@ class ReferrerRateLimiterProcessor(ObjectIDRateLimiterProcessor):
         super().__init__(
             "nocolumn",
             REFERRER_RATE_LIMIT_NAME,
-            "project_referrer_per_second_limit",
-            "project_referrer_concurrent_limit",
+            "referrer_per_second_limit",
+            "referrer_concurrent_limit",
             request_settings_field="referrer",
         )
 
