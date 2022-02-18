@@ -62,14 +62,26 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
                 obj_id = f"{obj_id}_{request_settings_field_val}"
         return str(obj_id)
 
+    def get_per_second_name(
+        self, query: Query, request_settings: RequestSettings
+    ) -> str:
+        return self.per_second_name
+
+    def get_concurrent_name(
+        self, query: Query, request_settings: RequestSettings
+    ) -> str:
+        return self.concurrent_name
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # If the settings don't already have an object rate limit, add one
         if self._is_already_applied(request_settings):
             return
+        per_second_name = self.get_per_second_name(query, request_settings)
+        concurrent_name = self.get_concurrent_name(query, request_settings)
         object_rate_limit, object_concurrent_limit = get_configs(
             [
-                (self.per_second_name, self.default_limit),
-                (self.concurrent_name, self.default_limit),
+                (per_second_name, self.default_limit),
+                (concurrent_name, self.default_limit),
             ]
         )
         obj_id = self.get_object_id(query, request_settings)
@@ -78,8 +90,8 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         # Specific objects can have their rate limits overridden
         (per_second, concurr) = get_configs(
             [
-                (f"{self.per_second_name}_{obj_id}", object_rate_limit),
-                (f"{self.concurrent_name}_{obj_id}", object_concurrent_limit),
+                (f"{per_second_name}_{obj_id}", object_rate_limit),
+                (f"{concurrent_name}_{obj_id}", object_concurrent_limit),
             ]
         )
 
@@ -96,10 +108,13 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
 class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # If the settings don't already have an object rate limit, add one
+        per_second_name = self.get_per_second_name(query, request_settings)
+        concurrent_name = self.get_concurrent_name(query, request_settings)
+
         if self._is_already_applied(request_settings):
             return
         object_rate_limit, object_concurrent_limit = get_configs(
-            [(self.per_second_name, None), (self.concurrent_name, None)]
+            [(per_second_name, None), (concurrent_name, None)]
         )
         obj_id = self.get_object_id(query, request_settings)
         if obj_id is None:
@@ -107,8 +122,8 @@ class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
         # don't enforce any limit that isn't specified
         (per_second, concurr) = get_configs(
             [
-                (f"{self.per_second_name}_{obj_id}", object_rate_limit),
-                (f"{self.concurrent_name}_{obj_id}", object_concurrent_limit),
+                (f"{per_second_name}_{obj_id}", object_rate_limit),
+                (f"{concurrent_name}_{obj_id}", object_concurrent_limit),
             ]
         )
 
@@ -150,6 +165,27 @@ class ProjectReferrerRateLimiter(OnlyIfConfiguredRateLimitProcessor):
             "project_referrer_concurrent_limit",
             request_settings_field="referrer",
         )
+
+    def get_concurrent_name(
+        self, query: Query, request_settings: RequestSettings
+    ) -> str:
+        return f"{self.concurrent_name}_{request_settings.referrer}"
+
+    def get_per_second_name(
+        self, query: Query, request_settings: RequestSettings
+    ) -> str:
+        return f"{self.per_second_name}_{request_settings.referrer}"
+
+    def get_object_id(
+        self, query: Query, request_settings: RequestSettings
+    ) -> Optional[str]:
+        obj_ids = get_object_ids_in_query_ast(query, self.object_column)
+        if not obj_ids:
+            return None
+
+        # TODO: Add logic for multiple IDs
+        obj_id = str(obj_ids.pop())
+        return str(obj_id)
 
 
 class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
