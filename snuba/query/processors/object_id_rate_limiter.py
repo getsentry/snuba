@@ -77,7 +77,7 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         if self._is_already_applied(request_settings):
             return
         per_second_name = self.get_per_second_name(query, request_settings)
-        concurrent_name = self.get_per_second_name(query, request_settings)
+        concurrent_name = self.get_concurrent_name(query, request_settings)
         object_rate_limit, object_concurrent_limit = get_configs(
             [
                 (per_second_name, self.default_limit),
@@ -109,7 +109,7 @@ class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # If the settings don't already have an object rate limit, add one
         per_second_name = self.get_per_second_name(query, request_settings)
-        concurrent_name = self.get_per_second_name(query, request_settings)
+        concurrent_name = self.get_concurrent_name(query, request_settings)
 
         if self._is_already_applied(request_settings):
             return
