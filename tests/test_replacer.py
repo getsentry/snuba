@@ -13,16 +13,19 @@ from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets import errors_replacer
-from snuba.datasets.errors_replacer import NeedsFinal, ProjectsQueryFlags, ReplacerState
+from snuba.datasets.errors_replacer import NeedsFinal, ProjectsQueryFlags
 from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.optimize import run_optimize
 from snuba.redis import redis_client
+from snuba.replacers.replacer_processor import ReplacerState
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
+
+CONSUMER_GROUP = "consumer_group"
 
 
 class TestReplacer:
@@ -36,7 +39,7 @@ class TestReplacer:
         self.storage = get_storage(StorageKey.EVENTS)
 
         self.replacer = replacer.ReplacerWorker(
-            self.storage, DummyMetricsBackend(strict=True)
+            self.storage, CONSUMER_GROUP, DummyMetricsBackend(strict=True),
         )
 
         self.project_id = 1

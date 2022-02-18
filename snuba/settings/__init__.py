@@ -46,6 +46,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions",
             "transactions_ro",
             "transactions_v2",
+            "errors_v2",
             "profiles",
         },
         "single_node": True,
@@ -137,6 +138,8 @@ REPLACER_MAX_MEMORY_USAGE = 10 * (1024 ** 3)  # 10GB
 REPLACER_KEY_TTL = 12 * 60 * 60
 REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
 REPLACER_IMMEDIATE_OPTIMIZE = False
+REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 2 * 60  # 2 minutes in seconds
+REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL = 60 * 60  # 1 hour in seconds
 
 TURBO_SAMPLE_RATE = 0.1
 
