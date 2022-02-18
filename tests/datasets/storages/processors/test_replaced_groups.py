@@ -7,7 +7,6 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.errors_replacer import (
-    ReplacerState,
     set_project_exclude_groups,
     set_project_needs_final,
 )
@@ -19,6 +18,7 @@ from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.redis import redis_client
+from snuba.replacers.replacer_processor import ReplacerState
 from snuba.request.request_settings import HTTPRequestSettings
 
 
