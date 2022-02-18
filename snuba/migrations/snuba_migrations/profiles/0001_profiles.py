@@ -49,12 +49,13 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="profiles_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    storage_set=StorageSetKey.PROFILES,
-                    order_by="(organization_id, project_id, transaction_id)",
-                    ttl="received + toIntervalDay(retention_days)",
+                    order_by="(organization_id, project_id, toStartOfDay(received), transaction_id)",
+                    partition_by="(retention_days, toMonday(received))",
+                    sample_by="cityHash64(transaction_id)",
                     settings={"index_granularity": "8192"},
+                    storage_set=StorageSetKey.PROFILES,
+                    ttl="received + toIntervalDay(retention_days)",
                     version_column="deleted",
-                    partition_by="(organization_id, project_id, toMonday(received))",
                 ),
             )
         ]
