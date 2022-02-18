@@ -29,12 +29,14 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         per_second_name: str,
         concurrent_name: str,
         request_settings_field: Optional[str] = None,
+        default_limit: int = DEFAULT_LIMIT,
     ) -> None:
         self.object_column = object_column
         self.rate_limit_name = rate_limit_name
         self.per_second_name = per_second_name
         self.concurrent_name = concurrent_name
         self.request_settings_field = request_settings_field
+        self.default_limit = default_limit
 
     def _is_already_applied(self, request_settings: RequestSettings) -> bool:
         existing = request_settings.get_rate_limit_params()
@@ -66,8 +68,8 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
             return
         object_rate_limit, object_concurrent_limit = get_configs(
             [
-                (self.per_second_name, DEFAULT_LIMIT),
-                (self.concurrent_name, DEFAULT_LIMIT),
+                (self.per_second_name, self.default_limit),
+                (self.concurrent_name, self.default_limit),
             ]
         )
         obj_id = self.get_object_id(query, request_settings)
@@ -81,6 +83,38 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
             ]
         )
 
+        rate_limit = RateLimitParameters(
+            rate_limit_name=self.rate_limit_name,
+            bucket=str(obj_id),
+            per_second_limit=per_second,
+            concurrent_limit=concurr,
+        )
+
+        request_settings.add_rate_limit(rate_limit)
+
+
+class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        # If the settings don't already have an object rate limit, add one
+        if self._is_already_applied(request_settings):
+            return
+        object_rate_limit, object_concurrent_limit = get_configs(
+            [(self.per_second_name, None), (self.concurrent_name, None)]
+        )
+        obj_id = self.get_object_id(query, request_settings)
+        if obj_id is None:
+            return
+        # don't enforce any limit that isn't specified
+        (per_second, concurr) = get_configs(
+            [
+                (f"{self.per_second_name}_{obj_id}", object_rate_limit),
+                (f"{self.concurrent_name}_{obj_id}", object_concurrent_limit),
+            ]
+        )
+
+        # Specific objects can have their rate limits overridden
+        if per_second is None and concurr is None:
+            return
         rate_limit = RateLimitParameters(
             rate_limit_name=self.rate_limit_name,
             bucket=str(obj_id),
@@ -145,7 +179,7 @@ class ProjectReferrerRateLimiter(ObjectIDRateLimiterProcessor):
         request_settings.add_rate_limit(rate_limit)
 
 
-class ReferrerRateLimiterProcessor(ObjectIDRateLimiterProcessor):
+class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
     """This is more of a load shedder than a rate limiter. we limit a specific
     referrer regardless of customer"""
 
@@ -158,9 +192,7 @@ class ReferrerRateLimiterProcessor(ObjectIDRateLimiterProcessor):
             request_settings_field="referrer",
         )
 
-    def get_object_id(
-        self, query: Query, request_settings: RequestSettings
-    ) -> Optional[str]:
+    def get_object_id(self, query: Query, request_settings: RequestSettings) -> str:
         return request_settings.referrer
 
 

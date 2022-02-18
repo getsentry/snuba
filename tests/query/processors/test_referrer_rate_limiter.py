@@ -53,12 +53,8 @@ def test_project_rate_limit_processor() -> None:
     num_before = len(settings.get_rate_limit_params())
     for query in queries:
         ReferrerRateLimiterProcessor().process_query(query, settings)
-    assert len(settings.get_rate_limit_params()) == num_before + 1
-    rate_limiter = settings.get_rate_limit_params()[-1]
-    assert rate_limiter.rate_limit_name == REFERRER_RATE_LIMIT_NAME
-    assert rate_limiter.bucket == "foo"
-    assert rate_limiter.per_second_limit == 1000
-    assert rate_limiter.concurrent_limit == 1000
+    # if the limiter is not configured, do not apply it
+    assert len(settings.get_rate_limit_params()) == num_before
 
 
 def test_project_rate_limit_processor_overridden() -> None:
@@ -75,4 +71,20 @@ def test_project_rate_limit_processor_overridden() -> None:
     assert rate_limiter.rate_limit_name == REFERRER_RATE_LIMIT_NAME
     assert rate_limiter.bucket == referrer_name
     assert rate_limiter.per_second_limit == 5
+    assert rate_limiter.concurrent_limit == 10
+
+
+def test_project_rate_limit_processor_overridden_only_one() -> None:
+    referrer_name = "foo"
+    settings = HTTPRequestSettings(referrer="foo")
+    state.set_config(f"referrer_concurrent_limit_{referrer_name}", 10)
+
+    num_before = len(settings.get_rate_limit_params())
+    for query in queries:
+        ReferrerRateLimiterProcessor().process_query(query, settings)
+    assert len(settings.get_rate_limit_params()) == num_before + 1
+    rate_limiter = settings.get_rate_limit_params()[-1]
+    assert rate_limiter.rate_limit_name == REFERRER_RATE_LIMIT_NAME
+    assert rate_limiter.bucket == referrer_name
+    assert rate_limiter.per_second_limit is None
     assert rate_limiter.concurrent_limit == 10
