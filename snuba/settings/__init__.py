@@ -46,7 +46,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions",
             "transactions_ro",
             "transactions_v2",
-            "stacktraces",
+            "profiles",
         },
         "single_node": True,
     },

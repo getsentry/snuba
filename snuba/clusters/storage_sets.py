@@ -28,7 +28,7 @@ class StorageSetKey(Enum):
     TRANSACTIONS = "transactions"
     TRANSACTIONS_RO = "transactions_ro"
     TRANSACTIONS_V2 = "transactions_v2"
-    STACKTRACES = "stacktraces"
+    PROFILES = "profiles"
 
 
 # Storage sets enabled only when development features are enabled.

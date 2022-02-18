@@ -45,11 +45,11 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.STACKTRACES,
-                table_name="stacktraces_local",
+                storage_set=StorageSetKey.PROFILES,
+                table_name="profiles_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    storage_set=StorageSetKey.STACKTRACES,
+                    storage_set=StorageSetKey.PROFILES,
                     order_by="(organization_id, project_id, transaction_id)",
                     ttl="received + toIntervalDay(retention_days)",
                     settings={"index_granularity": "8192"},
@@ -62,18 +62,18 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.STACKTRACES, table_name="stacktraces_local",
+                storage_set=StorageSetKey.PROFILES, table_name="profiles_local",
             )
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.STACKTRACES,
-                table_name="stacktraces_dist",
+                storage_set=StorageSetKey.PROFILES,
+                table_name="profiles_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="stacktraces_local",
+                    local_table_name="profiles_local",
                     sharding_key="cityHash64(transaction_id)",
                 ),
             )
@@ -82,6 +82,6 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.STACKTRACES, table_name="stacktraces_dist",
+                storage_set=StorageSetKey.PROFILES, table_name="profiles_dist",
             )
         ]

@@ -37,12 +37,16 @@ CLUSTERS = [
         "host": os.environ.get("CLICKHOUSE_PROFILING_HOST", CLICKHOUSE_HOST),
         "port": int(os.environ.get("CLICKHOUSE_PROFILING_PORT", CLICKHOUSE_PORT)),
         "user": os.environ.get("CLICKHOUSE_PROFILING_USER", CLICKHOUSE_USER),
-        "password": os.environ.get("CLICKHOUSE_PROFILING_PASSWORD", CLICKHOUSE_PASSWORD),
-        "database": os.environ.get("CLICKHOUSE_PROFILING_DATABASE", CLICKHOUSE_DATABASE),
-        "http_port": int(os.environ.get("CLICKHOUSE_PROFILING_HTTP_PORT", CLICKHOUSE_HTTP_PORT)),
-        "storage_sets": {
-            "stacktraces",
-        },
+        "password": os.environ.get(
+            "CLICKHOUSE_PROFILING_PASSWORD", CLICKHOUSE_PASSWORD
+        ),
+        "database": os.environ.get(
+            "CLICKHOUSE_PROFILING_DATABASE", CLICKHOUSE_DATABASE
+        ),
+        "http_port": int(
+            os.environ.get("CLICKHOUSE_PROFILING_HTTP_PORT", CLICKHOUSE_HTTP_PORT)
+        ),
+        "storage_sets": {"profiles"},
         "single_node": False,
         "cluster_name": "profiling_cluster",
         "distributed_cluster_name": "profiling_cluster",
