@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
+from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
 
 
@@ -58,6 +59,14 @@ class RequestSettings(ABC):
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         pass
 
+    @abstractmethod
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        pass
+
+    @abstractmethod
+    def add_resource_quota(self, quota: ResourceQuota) -> None:
+        pass
+
 
 class HTTPRequestSettings(RequestSettings):
     """
@@ -88,6 +97,7 @@ class HTTPRequestSettings(RequestSettings):
         self.__team = team
         self.__feature = feature
         self.__rate_limit_params: List[RateLimitParameters] = []
+        self.__resource_quota: Optional[ResourceQuota] = None
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -118,6 +128,12 @@ class HTTPRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         self.__rate_limit_params.append(rate_limit_param)
+
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        return self.__resource_quota
+
+    def add_resource_quota(self, quota: ResourceQuota) -> None:
+        self.__resource_quota = quota
 
 
 class SubscriptionRequestSettings(RequestSettings):
@@ -169,3 +185,6 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         pass
+
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        return None
