@@ -9,4 +9,4 @@ class ResourceQuota:
     As of now we only represent that in threads.
     """
 
-    thread_quota: int
+    max_threads: int
