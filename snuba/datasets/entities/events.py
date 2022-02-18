@@ -25,6 +25,7 @@ from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
+    ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
@@ -189,6 +190,7 @@ class BaseEventsEntity(Entity, ABC):
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             HandledFunctionsProcessor("exception_stacks.mechanism_handled"),
+            ReferrerRateLimiterProcessor(),
             ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
         ]
