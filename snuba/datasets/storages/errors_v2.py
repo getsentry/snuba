@@ -1,7 +1,7 @@
 from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
-from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.errors_replacer import ErrorsReplacer
 from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
@@ -46,6 +46,7 @@ from snuba.query.processors.type_converters.uuid_column_processor import (
 from snuba.query.processors.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
+from snuba.replacers.replacer_processor import ReplacerState
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
