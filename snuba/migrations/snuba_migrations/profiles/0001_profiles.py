@@ -12,7 +12,7 @@ columns: List[Column[Modifiers]] = [
     Column("transaction_id", UUID()),
     Column("received", DateTime()),
     # profiling data
-    Column("stacktrace", String(Modifiers(codecs=["LZ4HC(9)"]))),
+    Column("profile", String(Modifiers(codecs=["LZ4HC(9)"]))),
     Column("symbols", String(Modifiers(codecs=["LZ4HC(9)"]))),
     # filtering data
     Column("android_api_level", UInt(32, Modifiers(nullable=True))),
