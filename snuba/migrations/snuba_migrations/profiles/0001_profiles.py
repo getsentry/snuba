@@ -35,7 +35,7 @@ columns: List[Column[Modifiers]] = [
     Column("retention_days", UInt(16)),
     Column("deleted", UInt(8)),
     Column("partition", UInt(16)),
-    Column("offset", UInt(16)),
+    Column("offset", UInt(64)),
 ]
 
 
