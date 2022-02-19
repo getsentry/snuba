@@ -188,3 +188,6 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def get_resource_quota(self) -> Optional[ResourceQuota]:
         return None
+
+    def add_resource_quota(self, quota: ResourceQuota) -> None:
+        pass
