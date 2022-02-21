@@ -186,6 +186,13 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
 
+# This is used to rollout specific referrers during the errors Clickhosue upgrade.
+# This mapping decides when to trust the upgraded version
+ERRORS_UPGRADE_TRUST_SECONDARY: Mapping[str, float] = {}
+ERRORS_UPGRADE_TRUST_SECONDARY_GLOBAL = 0.0
+ERRORS_UPGRADE_EXECUTE_BOTH: Mapping[str, float] = {}
+ERRORS_UPGRADE_EXECUTE_BOTH_GLOBAL = 0.0
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
