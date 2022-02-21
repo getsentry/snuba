@@ -1,5 +1,6 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from datetime import datetime
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
 
@@ -192,6 +193,9 @@ ERRORS_UPGRADE_TRUST_SECONDARY: Mapping[str, float] = {}
 ERRORS_UPGRADE_TRUST_SECONDARY_GLOBAL = 0.0
 ERRORS_UPGRADE_EXECUTE_BOTH: Mapping[str, float] = {}
 ERRORS_UPGRADE_EXECUTE_BOTH_GLOBAL = 0.0
+
+# Place the actual time we start ingesting on the new version.
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = None
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

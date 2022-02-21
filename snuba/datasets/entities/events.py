@@ -2,6 +2,7 @@ from abc import ABC
 from typing import List, Optional, Sequence, Tuple
 
 from snuba import settings, state
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -20,6 +21,7 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
@@ -143,6 +145,28 @@ class ErrorsV2QueryStorageSelector(QueryStorageSelector):
         return StorageAndMappers(self.__errors_table, self.__mappers)
 
 
+def selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
+    if settings.ERRORS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
+        query, ProcessableQuery
+    ):
+        return ("errors_v1", [])
+
+    range = get_time_range(query, "timestamp")
+    print(range)
+    if range[0] is None or range[0] < settings.ERRORS_UPGRADE_BEGINING_OF_TIME:
+        return ("errors_v1", [])
+
+    mapping = {
+        Option.ERRORS: "errors_v1",
+        Option.ERRORS_V2: "errors_v2",
+    }
+    choice = RolloutSelector(Option.ERRORS, Option.ERRORS_V2, "errors").choose(referrer)
+    if choice.secondary is None:
+        return (mapping[choice.primary], [])
+    else:
+        return (mapping[choice.primary], [mapping[choice.secondary]])
+
+
 class BaseEventsEntity(Entity, ABC):
     """
     Represents the collection of classic sentry "error" type events
@@ -169,21 +193,6 @@ class BaseEventsEntity(Entity, ABC):
                     )
                 )
             )
-
-            def selector_function(
-                _query: Query, referrer: str
-            ) -> Tuple[str, List[str]]:
-                mapping = {
-                    Option.ERRORS: "errors_v1",
-                    Option.ERRORS_V2: "errors_v2",
-                }
-                choice = RolloutSelector(
-                    Option.ERRORS, Option.ERRORS_V2, "errors"
-                ).choose(referrer)
-                if choice.secondary is None:
-                    return (mapping[choice.primary], [])
-                else:
-                    return (mapping[choice.primary], [mapping[choice.secondary]])
 
             events_storage = get_writable_storage(StorageKey.ERRORS)
             pipeline_builder: QueryPipelineBuilder[
