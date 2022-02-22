@@ -597,6 +597,38 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
+    def test_missing_alias_bug(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT group_id, count(), divide(uniq(tags[url]) AS a+*, 1)
+                    BY group_id
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id = {self.project_id}
+                    ORDER BY count() DESC
+                    LIMIT 3
+                    """,
+                    "dataset": "events",
+                    "team": "sns",
+                    "feature": "test",
+                    "debug": True,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        result = json.loads(response.data)
+        assert len(result["data"]) > 0
+        assert "count()" in result["data"][0]
+        assert "divide(uniq(tags[url]) AS a+*, 1)" in result["data"][0]
+        assert {"name": "count()", "type": "UInt64"} in result["meta"]
+        assert {
+            "name": "divide(uniq(tags[url]) AS a+*, 1)",
+            "type": "Float64",
+        } in result["meta"]
+
     def test_invalid_column(self) -> None:
         response = self.post(
             "/outcomes/snql",
