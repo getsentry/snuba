@@ -25,7 +25,6 @@ from snuba.query.matchers import (
 )
 from snuba.subscriptions.data import (
     PartitionId,
-    SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
@@ -71,14 +70,14 @@ class Datetime(Pattern[datetime]):
 
 
 SUBSCRIPTION_FIXTURES = [
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=1,
         query=("MATCH (events) SELECT count() AS count"),
         time_window=timedelta(minutes=60),
         resolution=timedelta(minutes=1),
         entity_subscription=create_entity_subscription(),
     ),
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=123,
         query=(
             """MATCH (sessions) SELECT if(greater(sessions,0),
@@ -91,7 +90,7 @@ SUBSCRIPTION_FIXTURES = [
         resolution=timedelta(minutes=1),
         entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
     ),
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=123,
         query=(
             """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
@@ -102,7 +101,7 @@ SUBSCRIPTION_FIXTURES = [
         resolution=timedelta(minutes=1),
         entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS, 1),
     ),
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=123,
         query=(
             """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]

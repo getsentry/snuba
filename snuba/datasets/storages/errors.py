@@ -1,7 +1,7 @@
 from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
-from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.errors_replacer import ErrorsReplacer
 from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
@@ -16,6 +16,7 @@ from snuba.datasets.storages.errors_common import (
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
+from snuba.replacers.replacer_processor import ReplacerState
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 

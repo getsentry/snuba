@@ -18,8 +18,8 @@ from snuba.subscriptions.codecs import (
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
-    SnQLSubscriptionData,
     Subscription,
+    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
@@ -31,7 +31,6 @@ from snuba.subscriptions.entity_subscription import (
     MetricsCountersSubscription,
     MetricsSetsSubscription,
     SessionsSubscription,
-    SubscriptionType,
 )
 from snuba.utils.metrics.timer import Timer
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
@@ -39,9 +38,9 @@ from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 def build_snql_subscription_data(
     entity_key: EntityKey, organization: Optional[int] = None,
-) -> SnQLSubscriptionData:
+) -> SubscriptionData:
 
-    return SnQLSubscriptionData(
+    return SubscriptionData(
         project_id=5,
         time_window=timedelta(minutes=500),
         resolution=timedelta(minutes=1),
@@ -61,9 +60,7 @@ SNQL_CASES = [
 
 
 def assert_entity_subscription_on_subscription_class(
-    organization: Optional[int],
-    subscription: SnQLSubscriptionData,
-    entity_key: EntityKey,
+    organization: Optional[int], subscription: SubscriptionData, entity_key: EntityKey,
 ) -> None:
     subscription_cls = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key]
     if organization:
@@ -77,7 +74,7 @@ def assert_entity_subscription_on_subscription_class(
 
 @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)
 def test_basic(
-    builder: Callable[[EntityKey, Optional[int]], SnQLSubscriptionData],
+    builder: Callable[[EntityKey, Optional[int]], SubscriptionData],
     organization: Optional[int],
     entity_key: EntityKey,
 ) -> None:
@@ -88,7 +85,7 @@ def test_basic(
 
 @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)
 def test_encode_snql(
-    builder: Callable[[EntityKey, Optional[int]], SnQLSubscriptionData],
+    builder: Callable[[EntityKey, Optional[int]], SubscriptionData],
     organization: Optional[int],
     entity_key: EntityKey,
 ) -> None:
@@ -108,14 +105,13 @@ def test_encode_snql(
 
 @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)
 def test_decode_snql(
-    builder: Callable[[EntityKey, Optional[int]], SnQLSubscriptionData],
+    builder: Callable[[EntityKey, Optional[int]], SubscriptionData],
     organization: Optional[int],
     entity_key: EntityKey,
 ) -> None:
     codec = SubscriptionDataCodec(entity_key)
     subscription = builder(entity_key, organization)
     data = {
-        "type": SubscriptionType.SNQL.value,
         "project_id": subscription.project_id,
         "time_window": int(subscription.time_window.total_seconds()),
         "resolution": int(subscription.resolution.total_seconds()),
@@ -133,7 +129,7 @@ def test_subscription_task_result_encoder() -> None:
     timestamp = datetime.now()
 
     entity_subscription = EventsSubscription(data_dict={})
-    subscription_data = SnQLSubscriptionData(
+    subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
         time_window=timedelta(minutes=1),
@@ -185,7 +181,7 @@ def test_sessions_subscription_task_result_encoder() -> None:
     timestamp = datetime.now()
 
     entity_subscription = SessionsSubscription(data_dict={"organization": 1})
-    subscription_data = SnQLSubscriptionData(
+    subscription_data = SubscriptionData(
         project_id=1,
         query=(
             """
@@ -267,7 +263,7 @@ def test_metrics_subscription_task_result_encoder(
     timestamp = datetime.now()
 
     entity_subscription = subscription_cls(data_dict={"organization": 1})
-    subscription_data = SnQLSubscriptionData(
+    subscription_data = SubscriptionData(
         project_id=1,
         query=(
             f"""
@@ -326,7 +322,7 @@ def test_metrics_subscription_task_result_encoder(
 def test_subscription_task_encoder() -> None:
     encoder = SubscriptionScheduledTaskEncoder()
 
-    subscription_data = SnQLSubscriptionData(
+    subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH events SELECT count()",
         time_window=timedelta(minutes=1),
@@ -359,7 +355,7 @@ def test_subscription_task_encoder() -> None:
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"entity":"events",'
         b'"task":{'
-        b'"data":{"type":"snql","project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
+        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
         b'"tick_upper_offset":5'
         b"}"
     )

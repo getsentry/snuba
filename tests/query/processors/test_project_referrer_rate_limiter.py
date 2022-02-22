@@ -26,16 +26,14 @@ tests = [
 
 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
-def test_referrer_rate_limit_processor(
-    unprocessed: Expression, project_id: int
-) -> None:
+def test_referrer_unspecified_project(unprocessed: Expression, project_id: int) -> None:
     query = Query(
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
-    state.set_config("project_referrer_per_second_limit_1_abusive_delivery", 1000)
-    state.set_config("project_referrer_concurrent_limit_1_abusive_delivery", 1000)
+    state.set_config("project_referrer_per_second_limit_abusive_delivery", 1000)
+    state.set_config("project_referrer_concurrent_limit_abusive_delivery", 1000)
     referrer = "abusive_delivery"
     settings = HTTPRequestSettings()
     settings.referrer = referrer
@@ -45,9 +43,32 @@ def test_referrer_rate_limit_processor(
     assert len(settings.get_rate_limit_params()) == num_before + 1
     rate_limiter = settings.get_rate_limit_params()[-1]
     assert rate_limiter.rate_limit_name == PROJECT_REFERRER_RATE_LIMIT_NAME
-    assert rate_limiter.bucket == f"{project_id}_{referrer}"
+    assert rate_limiter.bucket == f"{project_id}"
     assert rate_limiter.per_second_limit == 1000
     assert rate_limiter.concurrent_limit == 1000
+
+
+@pytest.mark.parametrize("unprocessed, project_id", tests)
+def test_referrer_specified_project(unprocessed: Expression, project_id: int) -> None:
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=unprocessed,
+    )
+    state.set_config("project_referrer_per_second_limit_abusive_delivery_1", 10)
+    state.set_config("project_referrer_concurrent_limit_abusive_delivery_1", 10)
+    referrer = "abusive_delivery"
+    settings = HTTPRequestSettings()
+    settings.referrer = referrer
+
+    num_before = len(settings.get_rate_limit_params())
+    ProjectReferrerRateLimiter("project_id").process_query(query, settings)
+    assert len(settings.get_rate_limit_params()) == num_before + 1
+    rate_limiter = settings.get_rate_limit_params()[-1]
+    assert rate_limiter.rate_limit_name == PROJECT_REFERRER_RATE_LIMIT_NAME
+    assert rate_limiter.bucket == f"{project_id}"
+    assert rate_limiter.per_second_limit == 10
+    assert rate_limiter.concurrent_limit == 10
 
 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
