@@ -2,7 +2,13 @@ import React, { ReactNode } from "react";
 
 import { linkStyle } from "./styles";
 import { EditableTableCell } from "../table";
-import { ConfigKey, ConfigValue, ConfigType, RowData } from "./types";
+import {
+  ConfigKey,
+  ConfigValue,
+  ConfigType,
+  RowData,
+  ConfigDescription,
+} from "./types";
 
 const TYPES = ["string", "int", "float"];
 
@@ -13,6 +19,7 @@ function Space() {
 function getReadonlyRow(
   key: ConfigKey,
   value: ConfigValue,
+  description: ConfigDescription,
   type: ConfigType,
   showActions: boolean,
   edit: () => void
@@ -20,6 +27,7 @@ function getReadonlyRow(
   return [
     <code style={{ wordBreak: "break-all" }}>{key}</code>,
     <code style={{ wordBreak: "break-all" }}>{value}</code>,
+    description,
     type,
     showActions && (
       <a style={linkStyle} onClick={() => edit()}>
@@ -32,8 +40,10 @@ function getReadonlyRow(
 function getEditableRow(
   key: ConfigKey,
   value: ConfigValue,
+  description: ConfigDescription,
   type: ConfigType,
   updateValue: (value: ConfigValue) => void,
+  updateDescription: (desc: ConfigDescription) => void,
   save: () => void,
   deleteRow: () => void,
   cancel: () => void
@@ -41,6 +51,7 @@ function getEditableRow(
   return [
     <code style={{ wordBreak: "break-all" }}>{key}</code>,
     <EditableTableCell value={value} onChange={updateValue} />,
+    <EditableTableCell value={description} onChange={updateDescription} />,
     type,
     <span>
       <a style={linkStyle} onClick={() => save()}>
@@ -61,14 +72,17 @@ function getEditableRow(
 function getNewRow(
   key: ConfigKey,
   value: ConfigValue,
+  description: ConfigDescription,
   updateKey: (key: ConfigKey) => void,
   updateValue: (value: ConfigValue) => void,
+  updateDescription: (desc: ConfigDescription) => void,
   cancel: () => void,
   save: () => void
-): [ReactNode, ReactNode, ReactNode, ReactNode] {
+): [ReactNode, ReactNode, ReactNode, ReactNode, ReactNode] {
   return [
     <EditableTableCell value={key} onChange={updateKey} />,
     <EditableTableCell value={value} onChange={updateValue} />,
+    <EditableTableCell value={description} onChange={updateDescription} />,
     null,
     <span>
       <a style={linkStyle} onClick={save}>

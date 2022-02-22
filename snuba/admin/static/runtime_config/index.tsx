@@ -2,7 +2,13 @@ import React, { useState } from "react";
 
 import { Table } from "../table";
 import Client from "../api_client";
-import { ConfigKey, ConfigValue, ConfigType, RowData } from "./types";
+import {
+  ConfigKey,
+  ConfigValue,
+  ConfigType,
+  ConfigDescription,
+  RowData,
+} from "./types";
 import { getEditableRow, getReadonlyRow, getNewRow } from "./row_data";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
 
@@ -11,7 +17,13 @@ function RuntimeConfig(props: { api: Client }) {
 
   // Data from the API
   const [data, setData] = useState<
-    { key: ConfigKey; value: ConfigValue; type: ConfigType }[] | null
+    | {
+        key: ConfigKey;
+        value: ConfigValue;
+        description: ConfigDescription;
+        type: ConfigType;
+      }[]
+    | null
   >(null);
 
   // Key of existing row being edited (if any)
@@ -26,11 +38,12 @@ function RuntimeConfig(props: { api: Client }) {
   const [currentRowData, setCurrentRowData] = useState<{
     key: ConfigKey;
     value: ConfigValue;
+    description: ConfigDescription;
     type: ConfigType;
-  }>({ key: "", value: "", type: "string" });
+  }>({ key: "", value: "", description: "", type: "string" });
 
   function resetCurrentRowData() {
-    setCurrentRowData({ key: "", value: "", type: "string" });
+    setCurrentRowData({ key: "", value: "", description: "", type: "string" });
   }
 
   // Load data if it was not previously loaded
@@ -56,24 +69,35 @@ function RuntimeConfig(props: { api: Client }) {
     resetCurrentRowData();
   }
 
-  function enterEditMode(key: ConfigKey, value: ConfigValue, type: ConfigType) {
-    setCurrentRowData({ key, value, type });
+  function enterEditMode(
+    key: ConfigKey,
+    value: ConfigValue,
+    description: ConfigDescription,
+    type: ConfigType
+  ) {
+    setCurrentRowData({ key, value, description, type });
     setCurrentlyEditing(key);
   }
 
   if (data) {
     const rowData: RowData[] = data.map((row) => {
-      const { key, value, type } = row;
+      const { key, value, description, type } = row;
       const isEditing = key === currentlyEditing;
       const showActions = currentlyEditing === null && addingNew === false;
       return isEditing
         ? getEditableRow(
             currentRowData.key,
             currentRowData.value,
+            currentRowData.description,
             currentRowData.type,
             (newValue) => {
               setCurrentRowData((prev) => {
                 return { ...prev, value: newValue };
+              });
+            },
+            (newDescription) => {
+              setCurrentRowData((prev) => {
+                return { ...prev, description: newDescription };
               });
             },
             () => {
@@ -83,7 +107,11 @@ function RuntimeConfig(props: { api: Client }) {
                 )
               ) {
                 api
-                  .editConfig(key, currentRowData.value)
+                  .editConfig(
+                    key,
+                    currentRowData.value,
+                    currentRowData.description
+                  )
                   .then((res) => {
                     setData((prev) => {
                       if (prev) {
@@ -94,6 +122,7 @@ function RuntimeConfig(props: { api: Client }) {
                           throw new Error("An error occurred");
                         }
                         row.value = res.value;
+                        row.description = res.description;
                       }
                       return prev;
                     });
@@ -120,8 +149,8 @@ function RuntimeConfig(props: { api: Client }) {
             },
             () => setCurrentlyEditing(null)
           )
-        : getReadonlyRow(key, value, type, showActions, () =>
-            enterEditMode(key, value, type)
+        : getReadonlyRow(key, value, description, type, showActions, () =>
+            enterEditMode(key, value, description, type)
           );
     });
 
@@ -130,6 +159,7 @@ function RuntimeConfig(props: { api: Client }) {
         getNewRow(
           currentRowData.key,
           currentRowData.value,
+          currentRowData.description,
           (newKey) =>
             setCurrentRowData((prev) => {
               return { ...prev, key: newKey };
@@ -138,10 +168,18 @@ function RuntimeConfig(props: { api: Client }) {
             setCurrentRowData((prev) => {
               return { ...prev, value: newValue };
             }),
+          (newDescription) =>
+            setCurrentRowData((prev) => {
+              return { ...prev, description: newDescription };
+            }),
           resetForm,
           () => {
             api
-              .createNewConfig(currentRowData.key, currentRowData.value)
+              .createNewConfig(
+                currentRowData.key,
+                currentRowData.value,
+                currentRowData.description
+              )
               .then((res) => {
                 setData((prev) => {
                   if (prev) {
@@ -168,9 +206,9 @@ function RuntimeConfig(props: { api: Client }) {
       <div style={containerStyle}>
         <p style={paragraphStyle}>These are the current configurations.</p>
         <Table
-          headerData={["Key", "Value", "Type", "Actions"]}
+          headerData={["Key", "Value", "Description", "Type", "Actions"]}
           rowData={rowData}
-          columnWidths={[3, 5, 2, 1]}
+          columnWidths={[3, 5, 3, 2, 1]}
         />
         {!addingNew && !currentlyEditing && (
           <a onClick={addNewConfig} style={linkStyle}>

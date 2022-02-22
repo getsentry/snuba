@@ -29,48 +29,70 @@ def test_get_configs(admin_api: Any) -> None:
     # Add float config
     state.set_config("cfg3", "1.0")
 
+    # Add config with description
+    state.set_config("cfg4", "test")
+    state.set_config_description("cfg4", "test desc")
+
     response = admin_api.get("/configs")
     assert response.status_code == 200
     assert json.loads(response.data) == [
-        {"key": "cfg1", "type": "string", "value": "hello world"},
-        {"key": "cfg2", "type": "int", "value": "12"},
-        {"key": "cfg3", "type": "float", "value": "1.0"},
+        {"key": "cfg1", "type": "string", "value": "hello world", "description": None},
+        {"key": "cfg2", "type": "int", "value": "12", "description": None},
+        {"key": "cfg3", "type": "float", "value": "1.0", "description": None},
+        {"key": "cfg4", "type": "string", "value": "test", "description": "test desc"},
     ]
 
 
 def test_post_configs(admin_api: Any) -> None:
     # int
     response = admin_api.post(
-        "/configs", data=json.dumps({"key": "test_int", "value": "1"})
+        "/configs",
+        data=json.dumps({"key": "test_int", "value": "1", "description": "test int"}),
     )
     assert response.status_code == 200
-    assert json.loads(response.data) == {"key": "test_int", "value": "1", "type": "int"}
+    assert json.loads(response.data) == {
+        "key": "test_int",
+        "value": "1",
+        "type": "int",
+        "description": "test int",
+    }
 
     # float
     response = admin_api.post(
-        "/configs", data=json.dumps({"key": "test_float", "value": "0.1"})
+        "/configs",
+        data=json.dumps(
+            {"key": "test_float", "value": "0.1", "description": "test float"}
+        ),
     )
     assert response.status_code == 200
     assert json.loads(response.data) == {
         "key": "test_float",
         "value": "0.1",
         "type": "float",
+        "description": "test float",
     }
 
     # string
     response = admin_api.post(
-        "/configs", data=json.dumps({"key": "test_string", "value": "foo"})
+        "/configs",
+        data=json.dumps(
+            {"key": "test_string", "value": "foo", "description": "test string"}
+        ),
     )
     assert response.status_code == 200
     assert json.loads(response.data) == {
         "key": "test_string",
         "value": "foo",
         "type": "string",
+        "description": "test string",
     }
 
     # reject duplicate key
     response = admin_api.post(
-        "/configs", data=json.dumps({"key": "test_string", "value": "bar"})
+        "/configs",
+        data=json.dumps(
+            {"key": "test_string", "value": "bar", "description": "test string 2"}
+        ),
     )
     assert response.status_code == 400
 
