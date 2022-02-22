@@ -93,8 +93,8 @@ class ReplacingMergeTree(MergeTree):
     def __init__(
         self,
         storage_set: StorageSetKey,
-        version_column: str,
         order_by: str,
+        version_column: Optional[str] = None,
         partition_by: Optional[str] = None,
         sample_by: Optional[str] = None,
         ttl: Optional[str] = None,
