@@ -11,7 +11,11 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
+from snuba.datasets.entities.clickhouse_upgrade import (
+    Option,
+    RolloutSelector,
+    comparison_callback,
+)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
@@ -203,7 +207,7 @@ class BaseEventsEntity(Entity, ABC):
                     "errors_v2": v2_pipeline_builder,
                 },
                 selector_func=selector_function,
-                callback_func=None,
+                callback_func=comparison_callback,
             )
         else:
             events_storage = get_writable_storage(StorageKey.EVENTS)
