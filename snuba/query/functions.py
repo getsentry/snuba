@@ -87,6 +87,7 @@ _AGGREGATION_SUFFIXES = {
     "SampleState",
     "State",
     "Merge",
+    "MergeIf",
     "MergeState",
     "ForEach",
     "OrDefault",
