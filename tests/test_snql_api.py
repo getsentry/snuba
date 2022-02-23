@@ -309,6 +309,29 @@ class TestSnQLApi(BaseApiTest):
             assert metadata["request"]["referrer"] == "test"
             assert len(metadata["query_list"]) == expected_query_count
 
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.state.record_query")
+    def test_record_queries_on_error(self, record_query_mock: Any) -> None:
+        record_query_mock.reset_mock()
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                        SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
+                        WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN tuple({self.project_id})
+                        AND tags[a] = 1
+                        LIMIT 5""",
+                }
+            ),
+        )
+
+        assert response.status_code == 500
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["query_list"][0]["stats"]["error_code"] == 386
+
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
         from rediscluster.utils import ClusterDownError
