@@ -170,8 +170,11 @@ def calculate_score(
         result1_index[row.key].append(row)
 
     row_similarities: MutableSequence[float] = []
+    result2_index: MutableMapping[Key, List[SplitRow]] = defaultdict(list)
     for i in range(min(len(data_row2), settings.MAX_ROWS_TO_CHECK_FOR_SIMILARITY)):
         row = split_row(data_row2[i], schema)
+        result2_index[row.key].append(row)
+
         if row.key not in result1_index:
             row_similarities.append(0.0)
         else:
@@ -185,17 +188,10 @@ def calculate_score(
             ]
             row_similarities.append(max(key_similarities))
 
-    result2_index: MutableMapping[Key, List[SplitRow]] = defaultdict(list)
-    for i in range(min(len(data_row2), settings.MAX_ROWS_TO_CHECK_FOR_SIMILARITY)):
-        row = split_row(data_row2[i], schema)
-        result2_index[row.key].append(row)
-
-    for i in range(min(len(data_row1), settings.MAX_ROWS_TO_CHECK_FOR_SIMILARITY)):
-        row = split_row(data_row1[i], schema)
-        if row.key not in result2_index:
+    for key in result1_index.keys():
+        if key not in result2_index:
             row_similarities.append(0.0)
 
-    print(row_similarities)
     return (
         sum(row_similarities) / len(row_similarities)
         if len(row_similarities) > 0
