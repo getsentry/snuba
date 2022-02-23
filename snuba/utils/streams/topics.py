@@ -25,6 +25,7 @@ class Topic(Enum):
     SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     QUERYLOG = "snuba-queries"
+    PROFILES = "processed-profiles"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
