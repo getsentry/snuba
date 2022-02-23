@@ -265,8 +265,11 @@ def row_similarity(row1: SplitRow, row2: SplitRow) -> float:
         if isinstance(val, bool):
             similarities.append(0.0 if val != row2.values[index] else 1.0)
         else:
-            similarities.append(
-                min(val, row2.values[index]) / max(val, row2.values[index])
-            )
+            left = min(val, row2.values[index])
+            right = max(val, row2.values[index])
+            if right > 0.0:
+                similarities.append(left / right)
+            else:
+                similarities.append(1.0 if left == 0.0 else 0.0)
 
     return sum(similarities) / len(similarities)
