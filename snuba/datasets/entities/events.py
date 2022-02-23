@@ -1,7 +1,8 @@
 from abc import ABC
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 from snuba import settings, state
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -10,12 +11,17 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
 from snuba.datasets.entity import Entity
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.pipeline.pipeline_delegator import PipelineDelegator
+from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
@@ -125,6 +131,41 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         return StorageAndMappers(storage, self.__mappers)
 
 
+class ErrorsV2QueryStorageSelector(QueryStorageSelector):
+    def __init__(self, mappers: TranslationMappers) -> None:
+        self.__errors_table = get_writable_storage(StorageKey.ERRORS_V2)
+        # TODO: Register ERRORS_V2_RO and then remove comment
+        # self.__errors_ro_table = get_storage(StorageKey.ERRORS_RO)
+        self.__mappers = mappers
+
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> StorageAndMappers:
+        # TODO: Register ERRORS_V2_RO and support the ro storage
+        return StorageAndMappers(self.__errors_table, self.__mappers)
+
+
+def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
+    if settings.ERRORS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
+        query, ProcessableQuery
+    ):
+        return ("errors_v1", [])
+
+    range = get_time_range(query, "timestamp")
+    if range[0] is None or range[0] < settings.ERRORS_UPGRADE_BEGINING_OF_TIME:
+        return ("errors_v1", [])
+
+    mapping = {
+        Option.ERRORS: "errors_v1",
+        Option.ERRORS_V2: "errors_v2",
+    }
+    choice = RolloutSelector(Option.ERRORS, Option.ERRORS_V2, "errors").choose(referrer)
+    if choice.secondary is None:
+        return (mapping[choice.primary], [])
+    else:
+        return (mapping[choice.primary], [mapping[choice.secondary]])
+
+
 class BaseEventsEntity(Entity, ABC):
     """
     Represents the collection of classic sentry "error" type events
@@ -133,15 +174,35 @@ class BaseEventsEntity(Entity, ABC):
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         if settings.ERRORS_ROLLOUT_ALL:
-            events_storage = get_writable_storage(StorageKey.ERRORS)
-            pipeline_builder = SimplePipelineBuilder(
+            v1_pipeline_builder = SimplePipelineBuilder(
                 query_plan_builder=SelectedStorageQueryPlanBuilder(
                     selector=ErrorsQueryStorageSelector(
                         mappers=errors_translators
                         if custom_mappers is None
                         else errors_translators.concat(custom_mappers)
                     )
-                ),
+                )
+            )
+            v2_pipeline_builder = SimplePipelineBuilder(
+                query_plan_builder=SelectedStorageQueryPlanBuilder(
+                    selector=ErrorsV2QueryStorageSelector(
+                        mappers=errors_translators
+                        if custom_mappers is None
+                        else errors_translators.concat(custom_mappers)
+                    )
+                )
+            )
+
+            events_storage = get_writable_storage(StorageKey.ERRORS)
+            pipeline_builder: QueryPipelineBuilder[
+                ClickhouseQueryPlan
+            ] = PipelineDelegator(
+                query_pipeline_builders={
+                    "errors_v1": v1_pipeline_builder,
+                    "errors_v2": v2_pipeline_builder,
+                },
+                selector_func=v2_selector_function,
+                callback_func=None,
             )
         else:
             events_storage = get_writable_storage(StorageKey.EVENTS)

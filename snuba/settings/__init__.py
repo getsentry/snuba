@@ -1,5 +1,6 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from datetime import datetime
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
 
@@ -186,6 +187,9 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
+
+# Place the actual time we start ingesting on the new version.
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
