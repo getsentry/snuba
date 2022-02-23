@@ -93,8 +93,8 @@ class ReplacingMergeTree(MergeTree):
     def __init__(
         self,
         storage_set: StorageSetKey,
-        version_column: str,
         order_by: str,
+        version_column: Optional[str] = None,
         partition_by: Optional[str] = None,
         sample_by: Optional[str] = None,
         ttl: Optional[str] = None,
@@ -108,10 +108,14 @@ class ReplacingMergeTree(MergeTree):
 
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
-            return f"ReplacingMergeTree({self.__version_column})"
+            if self.__version_column:
+                return f"ReplacingMergeTree({self.__version_column})"
+            return "ReplacingMergeTree()"
         else:
             zoo_path = self._get_zookeeper_path(cluster, table_name)
-            return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}', {self.__version_column})"
+            if self.__version_column:
+                return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}', {self.__version_column})"
+            return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}')"
 
 
 class SummingMergeTree(MergeTree):
