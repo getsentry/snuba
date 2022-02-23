@@ -6,7 +6,6 @@ from enum import Enum
 from random import random
 from typing import (
     List,
-    Mapping,
     MutableMapping,
     MutableSequence,
     NamedTuple,
@@ -54,7 +53,6 @@ class RolloutSelector:
     There are multiple way to configure this rollout:
     First choice: which query should be trusted:
     - check runtime config if the default secondary should be trusted
-    - check settings if the default secondary should be trusted
     - check global rollout if the default secondary should be trusted
     Now we know which query will be trusted. hould we run the second ?
     Check the configs and settings in the same order.
@@ -68,41 +66,24 @@ class RolloutSelector:
         self.__config_prefix = config_prefix
 
     def __is_query_rolled_out(
-        self,
-        referrer: str,
-        config_referrer_prefix: str,
-        settings_referrer: Mapping[str, float],
-        general_rollout_config: str,
-        general_rollout_setting: float,
+        self, referrer: str, config_referrer_prefix: str, general_rollout_config: str,
     ) -> bool:
         rollout_percentage = get_config(
             f"rollout_upgraded_{self.__config_prefix}_{config_referrer_prefix}_{referrer}",
             None,
         )
-        if rollout_percentage is None and referrer in settings_referrer:
-            rollout_percentage = settings_referrer[referrer]
         if rollout_percentage is None:
-            rollout_percentage = get_config(general_rollout_config, None)
-        if rollout_percentage is None:
-            rollout_percentage = general_rollout_setting
+            rollout_percentage = get_config(general_rollout_config, 0.0)
 
-        return random() <= rollout_percentage
+        return random() <= cast(float, rollout_percentage)
 
     def choose(self, referrer: str) -> Choice:
         trust_secondary = self.__is_query_rolled_out(
-            referrer,
-            "trust",
-            settings.ERRORS_UPGRADE_TRUST_SECONDARY,
-            f"rollout_upgraded_{self.__config_prefix}_trust",
-            settings.ERRORS_UPGRADE_TRUST_SECONDARY_GLOBAL,
+            referrer, "trust", f"rollout_upgraded_{self.__config_prefix}_trust",
         )
 
         execute_both = self.__is_query_rolled_out(
-            referrer,
-            "execute",
-            settings.ERRORS_UPGRADE_EXECUTE_BOTH,
-            f"rollout_upgraded_{self.__config_prefix}_execute",
-            settings.ERRORS_UPGRADE_EXECUTE_BOTH_GLOBAL,
+            referrer, "execute", f"rollout_upgraded_{self.__config_prefix}_execute",
         )
 
         primary = (

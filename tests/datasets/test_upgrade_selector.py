@@ -6,12 +6,13 @@ import pytest
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
-from snuba.datasets.entities.events import selector_function
+from snuba.datasets.entities.events import v2_selector_function
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
+from snuba.state import set_config
 
 query = Query(
     QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
@@ -92,15 +93,12 @@ def test_selector_function(
         condition=time_condition,
     )
 
+    set_config("rollout_upgraded_errors_trust", trust_secondary)
+    set_config("rollout_upgraded_errors_execute", exec_both)
+
     previous_time = settings.ERRORS_UPGRADE_BEGINING_OF_TIME
     settings.ERRORS_UPGRADE_BEGINING_OF_TIME = beginning_of_time
-    previous_trust_rollout = settings.ERRORS_UPGRADE_TRUST_SECONDARY_GLOBAL
-    settings.ERRORS_UPGRADE_TRUST_SECONDARY_GLOBAL = trust_secondary
-    previous_exec_both = settings.ERRORS_UPGRADE_EXECUTE_BOTH_GLOBAL
-    settings.ERRORS_UPGRADE_EXECUTE_BOTH_GLOBAL = exec_both
 
-    assert selector_function(query, "test") == expected_value
+    assert v2_selector_function(query, "test") == expected_value
 
     settings.ERRORS_UPGRADE_BEGINING_OF_TIME = previous_time
-    settings.ERRORS_UPGRADE_TRUST_SECONDARY_GLOBAL = previous_trust_rollout
-    settings.ERRORS_UPGRADE_EXECUTE_BOTH_GLOBAL = previous_exec_both

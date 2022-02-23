@@ -149,14 +149,13 @@ class ErrorsV2QueryStorageSelector(QueryStorageSelector):
         return StorageAndMappers(self.__errors_table, self.__mappers)
 
 
-def selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
+def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
     if settings.ERRORS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
         query, ProcessableQuery
     ):
         return ("errors_v1", [])
 
     range = get_time_range(query, "timestamp")
-    print(range)
     if range[0] is None or range[0] < settings.ERRORS_UPGRADE_BEGINING_OF_TIME:
         return ("errors_v1", [])
 
@@ -206,7 +205,7 @@ class BaseEventsEntity(Entity, ABC):
                     "errors_v1": v1_pipeline_builder,
                     "errors_v2": v2_pipeline_builder,
                 },
-                selector_func=selector_function,
+                selector_func=v2_selector_function,
                 callback_func=comparison_callback,
             )
         else:

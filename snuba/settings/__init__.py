@@ -48,6 +48,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions_ro",
             "transactions_v2",
             "errors_v2",
+            "profiles",
         },
         "single_node": True,
     },
@@ -155,7 +156,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental", "profiles"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -187,15 +188,8 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
 
-# This is used to rollout specific referrers during the errors Clickhosue upgrade.
-# This mapping decides when to trust the upgraded version
-ERRORS_UPGRADE_TRUST_SECONDARY: Mapping[str, float] = {}
-ERRORS_UPGRADE_TRUST_SECONDARY_GLOBAL = 0.0
-ERRORS_UPGRADE_EXECUTE_BOTH: Mapping[str, float] = {}
-ERRORS_UPGRADE_EXECUTE_BOTH_GLOBAL = 0.0
-
 # Place the actual time we start ingesting on the new version.
-ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = None
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
