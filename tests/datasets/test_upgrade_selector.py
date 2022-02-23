@@ -6,7 +6,7 @@ import pytest
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
-from snuba.datasets.entities.events import selector_function
+from snuba.datasets.entities.events import v2_selector_function
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -99,6 +99,6 @@ def test_selector_function(
     previous_time = settings.ERRORS_UPGRADE_BEGINING_OF_TIME
     settings.ERRORS_UPGRADE_BEGINING_OF_TIME = beginning_of_time
 
-    assert selector_function(query, "test") == expected_value
+    assert v2_selector_function(query, "test") == expected_value
 
     settings.ERRORS_UPGRADE_BEGINING_OF_TIME = previous_time
