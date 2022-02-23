@@ -175,6 +175,18 @@ TESTS = [
         0.5,
         id="0.5 match reverse order and multiple match per key",
     ),
+    pytest.param(
+        [
+            {"key": "asd", "value1": 0.0, "value2": 0.0},
+            {"key": "asd2", "value1": 0.0, "value2": 0.0},
+        ],
+        [
+            {"key": "asd", "value1": 0.0, "value2": 0.0},
+            {"key": "asd2", "value1": 0.0, "value2": 0.0},
+        ],
+        1.0,
+        id="Match with 0.0",
+    ),
 ]
 
 
