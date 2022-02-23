@@ -64,7 +64,7 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
-    def add_resource_quota(self, quota: ResourceQuota) -> None:
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
         pass
 
 
@@ -132,7 +132,7 @@ class HTTPRequestSettings(RequestSettings):
     def get_resource_quota(self) -> Optional[ResourceQuota]:
         return self.__resource_quota
 
-    def add_resource_quota(self, quota: ResourceQuota) -> None:
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
         self.__resource_quota = quota
 
 
@@ -189,5 +189,5 @@ class SubscriptionRequestSettings(RequestSettings):
     def get_resource_quota(self) -> Optional[ResourceQuota]:
         return None
 
-    def add_resource_quota(self, quota: ResourceQuota) -> None:
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
         pass

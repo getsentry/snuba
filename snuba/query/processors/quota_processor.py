@@ -36,4 +36,4 @@ class ResourceQuotaProcessor(QueryProcessor):
             return
 
         assert isinstance(thread_quota, int)
-        request_settings.add_resource_quota(ResourceQuota(max_threads=thread_quota))
+        request_settings.set_resource_quota(ResourceQuota(max_threads=thread_quota))
