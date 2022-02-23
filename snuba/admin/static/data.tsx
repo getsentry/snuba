@@ -8,7 +8,7 @@ function Placeholder(props: any) {
 }
 
 const NAV_ITEMS = [
-  { id: "overview", display: "Overview", component: Placeholder },
+  { id: "overview", display: "🤿 Overview", component: Placeholder },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
     id: "clickhouse",

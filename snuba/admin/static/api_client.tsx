@@ -20,7 +20,7 @@ interface Client {
     value: ConfigValue,
     description: ConfigDescription
   ) => Promise<Config>;
-  deleteConfig: (key: ConfigKey) => Promise<void>;
+  deleteConfig: (key: ConfigKey, keepDescription: boolean) => Promise<void>;
   editConfig: (
     key: ConfigKey,
     value: ConfigValue,
@@ -63,8 +63,12 @@ function Client() {
         }
       });
     },
-    deleteConfig: (key: ConfigKey) => {
-      const url = baseUrl + "configs/" + encodeURIComponent(key);
+    deleteConfig: (key: ConfigKey, keepDescription: boolean) => {
+      const url =
+        baseUrl +
+        "configs/" +
+        encodeURIComponent(key) +
+        (keepDescription ? "?keepDescription=true" : "");
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",

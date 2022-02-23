@@ -12,8 +12,9 @@ import {
 
 const TYPES = ["string", "int", "float"];
 
-function Space() {
-  return <span style={{ display: "block", margin: 5 }}></span>;
+function Space(props: { margin?: number }) {
+  const margin = typeof props.margin !== "undefined" ? props.margin : 15;
+  return <span style={{ display: "block", margin: margin }}></span>;
 }
 
 function getReadonlyRow(
@@ -58,6 +59,11 @@ function getEditableRow(
         <strong>save changes</strong>
       </a>
       <Space />
+      <label style={{ ...linkStyle, textDecoration: "" }}>
+        <input type="checkbox" id="keepDescription" />
+        keep description
+      </label>
+      <Space margin={2} />
       <a style={{ ...linkStyle, color: "red" }} onClick={() => deleteRow()}>
         delete
       </a>

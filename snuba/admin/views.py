@@ -229,7 +229,9 @@ def config(config_key: str) -> Response:
         old = state.get_uncached_config(config_key)
 
         state.delete_config(config_key, user=user)
-        state.delete_config_description(config_key, user=user)
+
+        if request.args.get("keepDescription") is None:
+            state.delete_config_description(config_key, user=user)
 
         notification_client.notify(
             RuntimeConfigAction.REMOVED,

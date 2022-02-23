@@ -135,16 +135,25 @@ function RuntimeConfig(props: { api: Client }) {
             },
             () => {
               if (window.confirm(`Are you sure you want to delete ${key}?`)) {
-                api.deleteConfig(key).then(() => {
-                  setData((prev) => {
-                    if (prev) {
-                      return prev.filter((config) => config.key !== key);
-                    }
+                api
+                  .deleteConfig(
+                    key,
+                    (
+                      document.getElementById(
+                        "keepDescription"
+                      ) as HTMLInputElement
+                    ).checked
+                  )
+                  .then(() => {
+                    setData((prev) => {
+                      if (prev) {
+                        return prev.filter((config) => config.key !== key);
+                      }
 
-                    return prev;
+                      return prev;
+                    });
+                    resetForm();
                   });
-                  resetForm();
-                });
               }
             },
             () => setCurrentlyEditing(null)
@@ -208,7 +217,7 @@ function RuntimeConfig(props: { api: Client }) {
         <Table
           headerData={["Key", "Value", "Description", "Type", "Actions"]}
           rowData={rowData}
-          columnWidths={[3, 5, 5, 2, 1]}
+          columnWidths={[3, 5, 5, 1, 2]}
         />
         {!addingNew && !currentlyEditing && (
           <a onClick={addNewConfig} style={linkStyle}>
