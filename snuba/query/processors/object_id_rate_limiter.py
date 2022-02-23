@@ -31,6 +31,20 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         request_settings_field: Optional[str] = None,
         default_limit: Optional[int] = DEFAULT_LIMIT,
     ) -> None:
+        """
+        Args:
+            object_column: name of the column that should be extracted from the query to form the rate limit key
+                (e.g. organization_id, project_id)
+            rate_limit_name: name of the rate limit, forms the prefix of the rate link key
+            per_second_name: what the per_second rate limit key will be called,
+            concurrent_name: what the concurrent rate limit key will be called,
+            request_settings_field: if not None, this field in the request settings will be included
+                in the rate limit key. Will throw if this field doesn't exist
+            default_limit: the default rate limit (for concurrent and per-second). If this is set to None,
+                there will be no limit applied to this request UNLESS it is specified in the runtime config.
+                This is to prevent creating too many keys in redis  when it is not needed.
+        """
+
         self.object_column = object_column
         self.rate_limit_name = rate_limit_name
         self.per_second_name = per_second_name
