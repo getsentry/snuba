@@ -189,7 +189,7 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 WRITE_METRICS_AGG_DIRECTLY = False
 
 # Place the actual time we start ingesting on the new version.
-ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = None
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
