@@ -19,6 +19,7 @@ class ReplacementMessageMetadata(NamedTuple):
 
     partition_index: int
     offset: int
+    consumer_group: str
 
 
 class ReplacementMessage(NamedTuple):

@@ -350,7 +350,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         metadata = ReplacementMessageMetadata(
-            partition_index=message.partition.index, offset=message.offset,
+            partition_index=message.partition.index,
+            offset=message.offset,
+            consumer_group=self.__consumer_group,
         )
 
         if self._message_already_processed(metadata):
