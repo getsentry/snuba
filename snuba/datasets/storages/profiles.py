@@ -83,7 +83,7 @@ readable_columns = ColumnSet(
         ("received", DateTime()),
         ("profile", String()),
         ("symbols", String()),
-        ("android_api_level", UInt(32,)),
+        ("android_api_level", UInt(32)),
         ("device_classification", String()),
         ("device_locale", String()),
         ("device_manufacturer", String()),
