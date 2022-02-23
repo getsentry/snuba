@@ -7,11 +7,11 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdEnforcer
 from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.type_converters.uniq_in_select_and_having import (
-    UniqInSelectAndHavingProcessor,
-)
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
+)
+from snuba.query.processors.uniq_in_select_and_having import (
+    UniqInSelectAndHavingProcessor,
 )
 from snuba.utils.streams.topics import Topic
 
@@ -51,7 +51,7 @@ writable_columns = ColumnSet(
 
 processors = [
     UniqInSelectAndHavingProcessor(),
-    UUIDColumnProcessor(set(["transaction_id"])),
+    UUIDColumnProcessor(set(["transaction_id", "trace_id"])),
     TableRateLimit(),
 ]
 
