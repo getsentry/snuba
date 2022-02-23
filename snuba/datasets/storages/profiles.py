@@ -1,4 +1,4 @@
-from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, NamedTuple, String, UInt
+from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.profiles_processor import ProfilesProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -42,7 +42,8 @@ writable_columns = ColumnSet(
         ("platform", String()),
         ("trace_id", UUID()),
         ("transaction_name", String()),
-        ("version", NamedTuple((("name", String()), ("code", String())))),
+        ("version_name", String()),
+        ("version_code", String()),
         ("retention_days", UInt(16)),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
@@ -98,7 +99,8 @@ readable_columns = ColumnSet(
         ("platform", String()),
         ("trace_id", UUID()),
         ("transaction_name", String()),
-        ("version", NamedTuple((("name", String()), ("code", String())))),
+        ("version_name", String()),
+        ("version_code", String()),
     ]
 )
 

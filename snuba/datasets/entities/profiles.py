@@ -1,7 +1,7 @@
 from abc import ABC
 from typing import Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, NamedTuple, String, UInt
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -39,7 +39,8 @@ profile_columns = EntityColumnSet(
         Column("platform", String()),
         Column("trace_id", UUID()),
         Column("transaction_name", String()),
-        Column("version", NamedTuple((("name", String()), ("code", String())))),
+        Column("version_name", String()),
+        Column("version_code", String()),
     ]
 )
 
