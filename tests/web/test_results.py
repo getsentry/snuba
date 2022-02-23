@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Mapping
 
 import pytest
+
 from snuba.reader import Column, Result
 from snuba.web import QueryExtraData, QueryResult, transform_column_names
 
@@ -43,9 +46,9 @@ TEST_CASES = [
             extra=QueryExtraData(stats={}, sql="..."),
         ),
         {
-            "_snuba_event_id": "event_id",
-            "_snuba_duration": "duration",
-            "_snuba_message": "message",
+            "_snuba_event_id": ["event_id"],
+            "_snuba_duration": ["duration"],
+            "_snuba_message": ["message"],
         },
         id="Result without final, complete mapping",
     ),
@@ -93,9 +96,9 @@ TEST_CASES = [
             extra=QueryExtraData(stats={}, sql="..."),
         ),
         {
-            "_snuba_event_id": "event_id",
-            "_snuba_duration": "duration",
-            "_snuba_message": "message",
+            "_snuba_event_id": ["event_id"],
+            "_snuba_duration": ["duration"],
+            "_snuba_message": ["message"],
         },
         id="Result with final, complete mapping",
     ),
@@ -144,7 +147,7 @@ TEST_CASES = [
             ),
             extra=QueryExtraData(stats={}, sql="..."),
         ),
-        {"_snuba_event_id": "event_id"},
+        {"_snuba_event_id": ["event_id"]},
         id="Incomplete mapping",
     ),
 ]
@@ -152,7 +155,7 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("in_result, out_result, mapping", TEST_CASES)
 def test_transformation(
-    in_result: QueryResult, out_result: QueryResult, mapping: Mapping[str, str]
+    in_result: QueryResult, out_result: QueryResult, mapping: Mapping[str, list[str]]
 ) -> None:
     transform_column_names(in_result, mapping)
 
