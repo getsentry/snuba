@@ -4,7 +4,7 @@ from typing import Any, Optional, Sequence
 
 import click
 from arroyo import Topic, configure_metrics
-from arroyo.backends.kafka import KafkaConsumer
+from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
 from arroyo.processing import StreamProcessor
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
@@ -22,6 +22,7 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
+from snuba.utils.streams.topics import Topic as StreamsTopic
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,9 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--dead-letter-topic", help="Dead letter topic to send failed insert messages."
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -92,6 +96,7 @@ def multistorage_consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    dead_letter_topic: Optional[str] = None,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -213,6 +218,15 @@ def multistorage_consumer(
             consumer_configuration, producer=producer, commit_log_topic=commit_log,
         )
 
+    dead_letter_producer: Optional[KafkaProducer] = None
+    dead_letter_queue: Optional[Topic] = None
+    if dead_letter_topic:
+        dead_letter_queue = Topic(dead_letter_topic)
+
+        dead_letter_producer = KafkaProducer(
+            build_kafka_producer_configuration(StreamsTopic(dead_letter_topic))
+        )
+
     metrics = MetricsWrapper(
         environment.metrics,
         "consumer",
@@ -234,6 +248,8 @@ def multistorage_consumer(
             input_block_size=input_block_size,
             output_block_size=output_block_size,
             metrics=metrics,
+            producer=dead_letter_producer,
+            topic=dead_letter_queue,
         ),
     )
 

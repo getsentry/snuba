@@ -7,6 +7,7 @@ from pickle import PickleBuffer
 from typing import (
     Any,
     Callable,
+    List,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -21,6 +22,7 @@ from typing import (
 
 import rapidjson
 from arroyo import Message, Partition, Topic
+from arroyo.backends.abstract import Producer as AbstractProducer
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
@@ -355,6 +357,29 @@ def build_mock_batch_writer(
     return build_writer
 
 
+class DeadLetterStep(ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]):
+    def __init__(self, producer: AbstractProducer, topic: Topic):
+        self.__producer = producer
+        self.__topic = topic
+
+    def poll(self) -> None:
+        pass
+
+    def submit(
+        self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]],
+    ) -> None:
+        self.__producer.produce(self.__topic, message)
+
+    def close(self) -> None:
+        pass
+
+    def terminate(self) -> None:
+        pass
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        pass
+
+
 class MultistorageCollector(
     ProcessingStep[
         Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
@@ -365,11 +390,18 @@ class MultistorageCollector(
         steps: Mapping[
             StorageKey, ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
+        dead_letter_step: Optional[
+            ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]
+        ],
         ignore_errors: Optional[Set[StorageKey]] = None,
     ):
         self.__steps = steps
         self.__closed = False
         self.__ignore_errors = ignore_errors
+        self.__dead_letter_step = dead_letter_step
+        self.__messages: MutableMapping[
+            StorageKey, List[Message[Union[None, BytesInsertBatch, ReplacementBatch]]]
+        ] = {}
 
     def poll(self) -> None:
         for step in self.__steps.values():
@@ -384,15 +416,17 @@ class MultistorageCollector(
         assert not self.__closed
 
         for storage_key, payload in message.payload:
-            self.__steps[storage_key].submit(
-                Message(
-                    message.partition,
-                    message.offset,
-                    payload,
-                    message.timestamp,
-                    message.next_offset,
-                )
+            storage_message = Message(
+                message.partition,
+                message.offset,
+                payload,
+                message.timestamp,
+                message.next_offset,
             )
+            self.__messages[storage_key] = self.__messages.get(storage_key, []) + [
+                storage_message
+            ]
+            self.__steps[storage_key].submit(storage_message)
 
     def close(self) -> None:
         self.__closed = True
@@ -402,6 +436,9 @@ class MultistorageCollector(
                 try:
                     step.close()
                 except Exception as e:
+                    if self.__dead_letter_step:
+                        # TODO: self.__dead_letter_step.submit
+                        pass
                     logger.warning("Error while writing data to clickhouse", exc_info=e)
             else:
                 step.close()
@@ -522,6 +559,8 @@ class MultistorageConsumerProcessingStrategyFactory(
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         metrics: MetricsBackend,
+        producer: Optional[AbstractProducer],
+        topic: Optional[Topic],
     ):
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -541,6 +580,9 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
+
+        self.__producer = producer
+        self.__topic = topic
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
@@ -604,6 +646,11 @@ class MultistorageConsumerProcessingStrategyFactory(
     ) -> ProcessingStep[
         Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
     ]:
+        dead_letter_step: Optional[DeadLetterStep] = None
+        if self.__producer and self.__topic:
+            dead_letter_step = DeadLetterStep(
+                producer=self.__producer, topic=self.__topic
+            )
         return MultistorageCollector(
             {
                 storage.get_storage_key(): self.__build_batch_writer(storage)
@@ -614,6 +661,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 for storage in self.__storages
                 if storage.get_is_write_error_ignorable() is True
             },
+            dead_letter_step=dead_letter_step,
         )
 
     def create(
