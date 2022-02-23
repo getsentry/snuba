@@ -311,8 +311,16 @@ class TestSnQLApi(BaseApiTest):
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
-    def test_record_queries_on_error(self, record_query_mock: Any) -> None:
+    @patch("snuba.web.db_query.execute_query_with_readthrough_caching")
+    def test_record_queries_on_error(
+        self, execute_query_mock: MagicMock, record_query_mock: MagicMock
+    ) -> None:
+        from snuba.clickhouse.errors import ClickhouseError
+
         record_query_mock.reset_mock()
+        execute_query_mock.reset_mock()
+        execute_query_mock.side_effect = ClickhouseError("some error", code=1123)
+
         response = self.post(
             "/events/snql",
             data=json.dumps(
@@ -322,7 +330,6 @@ class TestSnQLApi(BaseApiTest):
                         WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
                         AND timestamp < toDateTime('{self.next_time.isoformat()}')
                         AND project_id IN tuple({self.project_id})
-                        AND tags[a] = 1
                         LIMIT 5""",
                 }
             ),
@@ -330,7 +337,7 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 500
         metadata = record_query_mock.call_args[0][0]
-        assert metadata["query_list"][0]["stats"]["error_code"] == 386
+        assert metadata["query_list"][0]["stats"]["error_code"] == 1123
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
