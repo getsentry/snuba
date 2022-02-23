@@ -208,7 +208,7 @@ function RuntimeConfig(props: { api: Client }) {
         <Table
           headerData={["Key", "Value", "Description", "Type", "Actions"]}
           rowData={rowData}
-          columnWidths={[3, 5, 3, 2, 1]}
+          columnWidths={[3, 5, 5, 2, 1]}
         />
         {!addingNew && !currentlyEditing && (
           <a onClick={addNewConfig} style={linkStyle}>

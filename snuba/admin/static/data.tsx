@@ -9,20 +9,20 @@ function Placeholder(props: any) {
 
 const NAV_ITEMS = [
   { id: "overview", display: "Overview", component: Placeholder },
-  { id: "config", display: "Runtime config", component: RuntimeConfig },
+  { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
     id: "clickhouse",
-    display: "ClickHouse🏚️",
+    display: "🏚️ ClickHouse",
     component: ClickhouseQueries,
   },
   {
     id: "tracing",
-    display: "Tracing 🔎",
+    display: "🔎 Tracing",
     component: TracingQueries,
   },
   {
     id: "auditlog",
-    display: "Audit log",
+    display: "📝 Audit Log",
     component: AuditLog,
   },
 ];
