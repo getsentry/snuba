@@ -3,6 +3,7 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
+import rapidjson
 from arroyo import Topic, configure_metrics
 from arroyo.backends.kafka import KafkaConsumer
 from arroyo.processing import StreamProcessor
@@ -79,6 +80,11 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--stats-collection-frequency-ms",
+    type=click.IntRange(100, 1000),
+    help="The frequency of collecting statistics from librdkafka.",
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -92,6 +98,7 @@ def multistorage_consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    stats_collection_frequency_ms: Optional[int] = None,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -192,6 +199,27 @@ def multistorage_consumer(
         ):
             raise ValueError("storages cannot be located on different Kafka clusters")
 
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "consumer",
+        tags={
+            "group": consumer_group,
+            "storage": "_".join([storage_keys[0].value, "m"]),
+        },
+    )
+    # Collect metrics from librdkafka if we set stats_collection_frequency_ms
+    if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
+
+        def stats_callback(stats_json: str) -> None:
+            stats = rapidjson.loads(stats_json)
+            metrics.gauge("total_queue_size", stats.get("replyq", 0))
+
+        consumer_configuration.update(
+            {
+                "statistics.interval.ms": stats_collection_frequency_ms,
+                "stats_cb": stats_callback,
+            }
+        )
     if commit_log is None:
         consumer = KafkaConsumer(consumer_configuration)
     else:
@@ -212,15 +240,6 @@ def multistorage_consumer(
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration, producer=producer, commit_log_topic=commit_log,
         )
-
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={
-            "group": consumer_group,
-            "storage": "_".join([storage_keys[0].value, "m"]),
-        },
-    )
 
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
