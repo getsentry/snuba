@@ -25,11 +25,10 @@ class ProfilesProcessor(MessageProcessor):
             "device_os_version": message["device_os_version"],
             "duration_ns": message["duration_ns"],
             "environment": message.get("environment"),
-            "error_code": message.get("error_code"),
-            "error_description": message.get("error_description"),
             "platform": message["platform"],
             "trace_id": message["trace_id"],
-            "version": message["version"],
+            "version_name": message["version_name"],
+            "version_code": message["version_code"],
             "retention_days": 30,
         }
         return InsertBatch([processed], None)

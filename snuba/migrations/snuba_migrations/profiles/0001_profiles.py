@@ -25,8 +25,6 @@ columns: List[Column[Modifiers]] = [
     Column("device_os_version", String(Modifiers(low_cardinality=True))),
     Column("duration_ns", UInt(64)),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
-    Column("error_code", String(Modifiers(low_cardinality=True, nullable=True))),
-    Column("error_description", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("platform", String(Modifiers(low_cardinality=True))),
     Column("trace_id", UUID()),
     Column("transaction_name", String(Modifiers(low_cardinality=True))),

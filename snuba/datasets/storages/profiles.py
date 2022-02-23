@@ -1,4 +1,6 @@
-from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, String, UInt
+from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.profiles_processor import ProfilesProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -27,7 +29,7 @@ writable_columns = ColumnSet(
         ("received", DateTime()),
         ("profile", String()),
         ("symbols", String()),
-        ("android_api_level", UInt(32)),
+        ("android_api_level", UInt(32, Modifiers(nullable=True))),
         ("device_classification", String()),
         ("device_locale", String()),
         ("device_manufacturer", String()),
@@ -36,9 +38,7 @@ writable_columns = ColumnSet(
         ("device_os_name", String()),
         ("device_os_version", String()),
         ("duration_ns", UInt(64)),
-        ("environment", String()),
-        ("error_code", String()),
-        ("error_description", String()),
+        ("environment", String(Modifiers(nullable=True))),
         ("platform", String()),
         ("trace_id", UUID()),
         ("transaction_name", String()),
@@ -84,7 +84,7 @@ readable_columns = ColumnSet(
         ("received", DateTime()),
         ("profile", String()),
         ("symbols", String()),
-        ("android_api_level", UInt(32)),
+        ("android_api_level", UInt(32, Modifiers(nullable=True))),
         ("device_classification", String()),
         ("device_locale", String()),
         ("device_manufacturer", String()),
@@ -93,9 +93,7 @@ readable_columns = ColumnSet(
         ("device_os_name", String()),
         ("device_os_version", String()),
         ("duration_ns", UInt(64)),
-        ("environment", String()),
-        ("error_code", String()),
-        ("error_description", String()),
+        ("environment", String(Modifiers(nullable=True))),
         ("platform", String()),
         ("trace_id", UUID()),
         ("transaction_name", String()),

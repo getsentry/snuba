@@ -1,7 +1,9 @@
 from abc import ABC
 from typing import Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
+from snuba.clickhouse.columns import UUID, Column, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -24,7 +26,7 @@ profile_columns = EntityColumnSet(
         Column("received", DateTime()),
         Column("profile", String()),
         Column("symbols", String()),
-        Column("android_api_level", UInt(32)),
+        Column("android_api_level", UInt(32, Modifiers(nullable=True))),
         Column("device_classification", String()),
         Column("device_locale", String()),
         Column("device_manufacturer", String()),
@@ -33,9 +35,7 @@ profile_columns = EntityColumnSet(
         Column("device_os_name", String()),
         Column("device_os_version", String()),
         Column("duration_ns", UInt(64)),
-        Column("environment", String()),
-        Column("error_code", String()),
-        Column("error_description", String()),
+        Column("environment", String(Modifiers(nullable=True))),
         Column("platform", String()),
         Column("trace_id", UUID()),
         Column("transaction_name", String()),
