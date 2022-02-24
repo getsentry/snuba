@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import datetime
 from enum import Enum
@@ -26,6 +27,7 @@ from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "query.similarity")
+logger = logging.getLogger("snuba.upgrade_discrepancies")
 
 
 class Option(Enum):
@@ -146,6 +148,33 @@ def comparison_callback(
         primary_schema,
     )
     metrics.timing("similarity_score", score, tags={"referrer": referrer})
+
+    primary_result_portion = primary_result.result.result["data"][:50]
+    secondary_result_portion = secondary_result.result.result["data"][:50]
+
+    def log(title: str) -> None:
+        logger.warning(
+            title,
+            extra_data={
+                "referrer": referrer,
+                "schema": primary_schema,
+                "primary": primary_result_portion,
+                "secondary": secondary_result_portion,
+            },
+            exc_info=True,
+        )
+
+    if score >= 0.99 and random() < cast(
+        float, get_config("upgrade_log_perfect_match", 0.0)
+    ):
+        # This is just a sanity check to ensure the algorithm makes sense
+        log("Pipeline delegator perfect match",)
+    elif score >= 0.75 and random() < cast(
+        float, get_config("upgrade_log_avg_match", 0.0)
+    ):
+        log("Pipeline delegator average match",)
+    elif random() < cast(float, get_config("upgrade_log_low_similarity", 0.0)):
+        log("Pipeline delegator low similarity",)
 
 
 def calculate_score(
