@@ -155,7 +155,7 @@ def comparison_callback(
     def log(title: str) -> None:
         logger.warning(
             title,
-            extra_data={
+            extra={
                 "referrer": referrer,
                 "schema": primary_schema,
                 "primary": primary_result_portion,
