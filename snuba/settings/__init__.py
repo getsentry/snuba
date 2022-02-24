@@ -1,5 +1,6 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from datetime import datetime
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
 
@@ -46,6 +47,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions",
             "transactions_ro",
             "transactions_v2",
+            "errors_v2",
+            "profiles",
         },
         "single_node": True,
     },
@@ -155,7 +158,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental", "profiles"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -186,6 +189,11 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
+
+# Place the actual time we start ingesting on the new version.
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
+
+MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

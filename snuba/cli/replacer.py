@@ -26,7 +26,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--storage",
     "storage_name",
-    type=click.Choice(["events", "errors"]),
+    type=click.Choice(["events", "errors", "errors_v2"]),
     help="The storage to consume/run replacements for (currently only events supported)",
     required=True,
 )
