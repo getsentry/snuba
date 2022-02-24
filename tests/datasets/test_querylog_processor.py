@@ -62,7 +62,7 @@ def test_simple() -> None:
                 sql_anonymized="select event_id from sentry_dist sample 0.1 prewhere project_id in ($I) limit 50, 100",
                 start_timestamp=datetime.utcnow() - timedelta(days=3),
                 end_timestamp=datetime.utcnow(),
-                stats={"sample": 10},
+                stats={"sample": 10, "error_code": 386},
                 status=QueryStatus.SUCCESS,
                 profile=ClickhouseQueryProfile(
                     time_range=10,
@@ -109,7 +109,7 @@ def test_simple() -> None:
                 "clickhouse_queries.status": ["success"],
                 "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
                 "clickhouse_queries.duration_ms": [0],
-                "clickhouse_queries.stats": ['{"sample": 10}'],
+                "clickhouse_queries.stats": ['{"error_code": 386, "sample": 10}'],
                 "clickhouse_queries.final": [0],
                 "clickhouse_queries.cache_hit": [0],
                 "clickhouse_queries.sample": [10.0],

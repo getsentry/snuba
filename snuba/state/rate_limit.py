@@ -18,6 +18,7 @@ logger = logging.getLogger("snuba.state.rate_limit")
 ORGANIZATION_RATE_LIMIT_NAME = "organization"
 PROJECT_RATE_LIMIT_NAME = "project"
 PROJECT_REFERRER_RATE_LIMIT_NAME = "project_referrer"
+REFERRER_RATE_LIMIT_NAME = "referrer"
 GLOBAL_RATE_LIMIT_NAME = "global"
 TABLE_RATE_LIMIT_NAME = "table"
 
