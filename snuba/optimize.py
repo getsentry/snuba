@@ -19,6 +19,7 @@ def run_optimize(
     database: str,
     before: Optional[datetime] = None,
 ) -> int:
+    start = time.time()
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
@@ -26,6 +27,7 @@ def run_optimize(
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
     optimize_partitions(clickhouse, database, table, parts)
+    metrics.timing("optimized_all_parts", time.time() - start, tags={"table": table})
     return len(parts)
 
 
