@@ -164,15 +164,13 @@ def comparison_callback(
             exc_info=True,
         )
 
-    if score >= 0.99 and random() < cast(
-        float, get_config("upgrade_log_perfect_match", 0.0)
-    ):
+    if score >= 0.99:
         # This is just a sanity check to ensure the algorithm makes sense
-        log("Pipeline delegator perfect match",)
-    elif score >= 0.75 and random() < cast(
-        float, get_config("upgrade_log_avg_match", 0.0)
-    ):
-        log("Pipeline delegator average match",)
+        if random() < cast(float, get_config("upgrade_log_perfect_match", 0.0)):
+            log("Pipeline delegator perfect match",)
+    elif score >= 0.75:
+        if random() < cast(float, get_config("upgrade_log_avg_match", 0.0)):
+            log("Pipeline delegator average match",)
     elif random() < cast(float, get_config("upgrade_log_low_similarity", 0.0)):
         log("Pipeline delegator low similarity",)
 
