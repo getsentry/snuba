@@ -18,6 +18,9 @@ tests: test
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
+backend-typing:
+	mypy snuba --strict --warn-unreachable --config-file mypy.ini
+
 install-python-dependencies:
 	pip install -e .
 	pip install -r requirements-test.txt
