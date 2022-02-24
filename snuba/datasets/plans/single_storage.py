@@ -22,6 +22,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
+from snuba.query.processors.uniq_killswitch import UniqKillswitchProcessor
 from snuba.request.request_settings import RequestSettings
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
@@ -207,6 +208,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             *self.__post_processors,
             MandatoryConditionApplier(),
             MandatoryConditionEnforcer(storage.get_mandatory_condition_checkers()),
+            UniqKillswitchProcessor(),
         ]
 
         return [
