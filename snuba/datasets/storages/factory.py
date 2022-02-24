@@ -7,8 +7,8 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.discover import storage as discover_storage
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-from snuba.datasets.storages.errors_ro import storage as errors_v2_ro_storage
 from snuba.datasets.storages.errors_v2 import storage as errors_v2_storage
+from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.events_ro import storage as events_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
