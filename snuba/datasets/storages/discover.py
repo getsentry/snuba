@@ -33,6 +33,9 @@ from snuba.query.processors.type_converters.hexint_column_processor import (
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
+from snuba.query.processors.uniq_in_select_and_having import (
+    UniqInSelectAndHavingProcessor,
+)
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 columns = ColumnSet(
@@ -81,6 +84,7 @@ storage = ReadableTableStorage(
     storage_set_key=StorageSetKey.DISCOVER,
     schema=schema,
     query_processors=[
+        UniqInSelectAndHavingProcessor(),
         MappingColumnPromoter(
             mapping_specs={
                 "tags": {
