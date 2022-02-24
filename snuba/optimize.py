@@ -1,13 +1,16 @@
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
 
-from snuba import util
+from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.optimize")
+metrics = MetricsWrapper(environment.metrics, "optimize")
 
 
 def run_optimize(
@@ -16,6 +19,7 @@ def run_optimize(
     database: str,
     before: Optional[datetime] = None,
 ) -> int:
+    start = time.time()
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
@@ -23,6 +27,7 @@ def run_optimize(
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
     optimize_partitions(clickhouse, database, table, parts)
+    metrics.timing("optimized_all_parts", time.time() - start, tags={"table": table})
     return len(parts)
 
 
@@ -84,7 +89,9 @@ def get_partitions_to_optimize(
     part_format = schema.get_part_format()
     assert part_format is not None
 
-    parts = [util.decode_part_str(part, part_format) for part, count in active_parts.results]
+    parts = [
+        util.decode_part_str(part, part_format) for part, count in active_parts.results
+    ]
 
     if before:
         parts = [
@@ -112,4 +119,6 @@ def optimize_partitions(
 
         query = (query_template % args).strip()
         logger.info(f"Optimizing partition: {part.name}")
+        start = time.time()
         clickhouse.execute(query)
+        metrics.timing("optimized_part", time.time() - start, tags={"table": table})

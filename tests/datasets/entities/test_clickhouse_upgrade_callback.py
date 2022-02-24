@@ -20,7 +20,7 @@ def test_split_metadata() -> None:
         result={
             "meta": [
                 {"name": "field1", "type": "String"},
-                {"name": "field2", "type": "Datetime"},
+                {"name": "field2", "type": "Datetime('Universal')"},
                 {"name": "field3", "type": "Float64"},
                 {"name": "field4", "type": "Enum"},
             ],
