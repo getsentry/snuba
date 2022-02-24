@@ -17,10 +17,12 @@ from typing import (
     Set,
     Tuple,
     Union,
+    Deque,
     cast,
 )
 
 import rapidjson
+from concurrent.futures import Future
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer as AbstractProducer
 from arroyo.backends.kafka import KafkaPayload
@@ -34,6 +36,7 @@ from arroyo.processing.strategies.streaming import (
     TransformStep,
 )
 from arroyo.types import Position
+from collections import deque
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
@@ -357,27 +360,64 @@ def build_mock_batch_writer(
     return build_writer
 
 
-class DeadLetterStep(ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]):
+class DeadLetterStep(
+    ProcessingStep[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
+):
     def __init__(self, producer: AbstractProducer, topic: Topic):
         self.__producer = producer
         self.__topic = topic
+        self.__futures: Deque[Future] = deque()
+        self.__closed = False
+
+    def __format_payload(
+        self,
+        message: Message[
+            Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+        ],
+    ) -> Optional[KafkaPayload]:
+        kafka_payload = None
+        storage_key, payload = message.payload
+        if isinstance(payload, BytesInsertBatch):
+            rows = [rapidjson.loads(row) for row in payload.rows]
+
+            kafka_payload = KafkaPayload(
+                storage_key.value.encode("utf-8"),
+                rapidjson.dumps(
+                    {"rows": rows, "origin_timestamp": payload.origin_timestamp}
+                ),
+                [],
+            )
+        return kafka_payload
 
     def poll(self) -> None:
         pass
 
     def submit(
-        self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]],
+        self,
+        message: Message[
+            Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+        ],
     ) -> None:
-        self.__producer.produce(self.__topic, message)
+        payload = self.__format_payload(message)
+        if payload:
+            future = self.__producer.produce(self.__topic, payload)
+            self.__futures.append(future)
 
     def close(self) -> None:
-        pass
+        self.__closed = True
 
     def terminate(self) -> None:
-        pass
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
-        pass
+        start = time.time()
+
+        while self.__futures:
+            if not timeout or timeout > time.time() - start:
+                break
+            if self.__futures[0].done():
+                future = self.__futures.popleft()
+                future.result()
 
 
 class MultistorageCollector(
@@ -391,7 +431,9 @@ class MultistorageCollector(
             StorageKey, ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
         dead_letter_step: Optional[
-            ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]]
+            ProcessingStep[
+                Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+            ]
         ],
         ignore_errors: Optional[Set[StorageKey]] = None,
     ):
@@ -400,7 +442,12 @@ class MultistorageCollector(
         self.__ignore_errors = ignore_errors
         self.__dead_letter_step = dead_letter_step
         self.__messages: MutableMapping[
-            StorageKey, List[Message[Union[None, BytesInsertBatch, ReplacementBatch]]]
+            StorageKey,
+            List[
+                Message[
+                    Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+                ]
+            ],
         ] = {}
 
     def poll(self) -> None:
@@ -416,17 +463,26 @@ class MultistorageCollector(
         assert not self.__closed
 
         for storage_key, payload in message.payload:
-            storage_message = Message(
+            writer_message = Message(
                 message.partition,
                 message.offset,
                 payload,
                 message.timestamp,
                 message.next_offset,
             )
+            self.__steps[storage_key].submit(writer_message)
+
+            other_message = Message(
+                message.partition,
+                message.offset,
+                (storage_key, payload),
+                message.timestamp,
+                message.next_offset,
+            )
+
             self.__messages[storage_key] = self.__messages.get(storage_key, []) + [
-                storage_message
+                other_message
             ]
-            self.__steps[storage_key].submit(storage_message)
 
     def close(self) -> None:
         self.__closed = True
@@ -437,7 +493,8 @@ class MultistorageCollector(
                     step.close()
                 except Exception as e:
                     if self.__dead_letter_step:
-                        # TODO: self.__dead_letter_step.submit
+                        for message in self.__messages[storage_key]:
+                            self.__dead_letter_step.submit(message)
                         pass
                     logger.warning("Error while writing data to clickhouse", exc_info=e)
             else:
@@ -448,6 +505,9 @@ class MultistorageCollector(
 
         for step in self.__steps.values():
             step.terminate()
+
+        if self.__dead_letter_step:
+            self.__dead_letter_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
@@ -461,6 +521,9 @@ class MultistorageCollector(
                 timeout_remaining = None
 
             step.join(timeout_remaining)
+
+        if self.__dead_letter_step:
+            self.__dead_letter_step.join(5.0)
 
 
 class MultistorageKafkaPayload(NamedTuple):
