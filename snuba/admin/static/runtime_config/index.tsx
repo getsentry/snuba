@@ -7,6 +7,7 @@ import {
   ConfigValue,
   ConfigType,
   ConfigDescription,
+  ConfigDescriptions,
   RowData,
 } from "./types";
 import { getEditableRow, getReadonlyRow, getNewRow } from "./row_data";
@@ -25,6 +26,9 @@ function RuntimeConfig(props: { api: Client }) {
       }[]
     | null
   >(null);
+
+  // All descriptions from API
+  const [allDescriptions, setDescriptions] = useState<ConfigDescriptions>({});
 
   // Key of existing row being edited (if any)
   const [currentlyEditing, setCurrentlyEditing] = useState<ConfigKey | null>(
@@ -57,10 +61,17 @@ function RuntimeConfig(props: { api: Client }) {
     });
   }
 
+  function fetchDescriptions() {
+    api.getDescriptions().then((res) => {
+      setDescriptions(res);
+    });
+  }
+
   function addNewConfig() {
     setCurrentlyEditing(null);
     setAddingNew(true);
     resetCurrentRowData();
+    fetchDescriptions();
   }
 
   function resetForm() {
@@ -79,6 +90,12 @@ function RuntimeConfig(props: { api: Client }) {
     setCurrentlyEditing(key);
   }
 
+  function updateDescription(newDescription: string) {
+    setCurrentRowData((prev) => {
+      return { ...prev, description: newDescription };
+    });
+  }
+
   if (data) {
     const rowData: RowData[] = data.map((row) => {
       const { key, value, description, type } = row;
@@ -95,11 +112,7 @@ function RuntimeConfig(props: { api: Client }) {
                 return { ...prev, value: newValue };
               });
             },
-            (newDescription) => {
-              setCurrentRowData((prev) => {
-                return { ...prev, description: newDescription };
-              });
-            },
+            updateDescription,
             () => {
               if (
                 window.confirm(
@@ -169,18 +182,19 @@ function RuntimeConfig(props: { api: Client }) {
           currentRowData.key,
           currentRowData.value,
           currentRowData.description,
-          (newKey) =>
+          (newKey) => {
             setCurrentRowData((prev) => {
               return { ...prev, key: newKey };
-            }),
+            });
+            if (newKey in allDescriptions) {
+              updateDescription(allDescriptions[newKey]);
+            }
+          },
           (newValue) =>
             setCurrentRowData((prev) => {
               return { ...prev, value: newValue };
             }),
-          (newDescription) =>
-            setCurrentRowData((prev) => {
-              return { ...prev, description: newDescription };
-            }),
+          updateDescription,
           resetForm,
           () => {
             api

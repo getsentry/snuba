@@ -4,6 +4,7 @@ type ConfigKey = string;
 type ConfigValue = string;
 type ConfigDescription = string;
 type ConfigType = "string" | "int" | "float";
+type ConfigDescriptions = { [key: string]: string };
 
 type Config = {
   key: ConfigKey;
@@ -29,6 +30,7 @@ export {
   ConfigKey,
   ConfigValue,
   ConfigDescription,
+  ConfigDescriptions,
   ConfigType,
   RowData,
   ConfigChange,

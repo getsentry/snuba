@@ -220,6 +220,15 @@ def configs() -> Response:
         )
 
 
+@application.route("/all_config_descriptions", methods=["GET"])
+def all_config_descriptions() -> Response:
+    return Response(
+        json.dumps(state.get_all_config_descriptions()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.route("/configs/<config_key>", methods=["PUT", "DELETE"])
 def config(config_key: str) -> Response:
     if request.method == "DELETE":

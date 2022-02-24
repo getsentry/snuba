@@ -4,6 +4,7 @@ import {
   ConfigValue,
   ConfigChange,
   ConfigDescription,
+  ConfigDescriptions,
 } from "./runtime_config/types";
 
 import {
@@ -26,6 +27,7 @@ interface Client {
     value: ConfigValue,
     description: ConfigDescription
   ) => Promise<Config>;
+  getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
@@ -98,7 +100,10 @@ function Client() {
         }
       });
     },
-
+    getDescriptions: () => {
+      const url = baseUrl + "all_config_descriptions";
+      return fetch(url).then((resp) => resp.json());
+    },
     getAuditlog: () => {
       const url = baseUrl + "config_auditlog";
       return fetch(url).then((resp) => resp.json());
