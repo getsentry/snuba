@@ -724,3 +724,31 @@ class TestSnQLApi(BaseApiTest):
         # assert json.loads(response.data)["error"]["message"] == error_message
 
         assert response.status_code == 500
+
+    def test_uniq_killswitch(self) -> None:
+        def run_query() -> Any:
+            response = self.post(
+                "/events/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (events)
+                        SELECT uniq(project_id) AS uniq_project
+                        WHERE type != 'transaction' AND project_id = {self.project_id}
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        ORDER BY uniq_project ASC
+                        LIMIT 1000""",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                    }
+                ),
+            )
+            return json.loads(response.data)
+
+        # No killswitch
+        assert run_query()["data"] == [{"uniq_project": 1}]
+
+        # Set referrer killswitch
+        state.set_config("uniq_killswitch_referrers", "test")
+        assert run_query()["data"] == [{"uniq_project": 0}]
