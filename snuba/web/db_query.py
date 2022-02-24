@@ -172,6 +172,7 @@ def update_query_metadata_and_stats(
     trace_id: Optional[str],
     status: QueryStatus,
     profile_data: Optional[Mapping[str, Any]] = None,
+    error_code: Optional[int] = None,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -179,6 +180,8 @@ def update_query_metadata_and_stats(
     Also updates stats with any relevant information and returns the updated dict.
     """
     stats.update(query_settings)
+    if error_code is not None:
+        stats["error_code"] = error_code
     sql_anonymized = format_query_anonymized(query).get_sql()
     start, end = get_time_range_estimate(query)
 
@@ -496,8 +499,10 @@ def raw_query(
         if isinstance(cause, RateLimitExceeded):
             stats = update_with_status(QueryStatus.RATE_LIMITED)
         else:
+            error_code = None
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
+                    error_code = cause.code
                     scope.fingerprint = ["{{default}}", str(cause.code)]
                     if scope.span:
                         if cause.code == errors.ErrorCodes.TOO_SLOW:
@@ -514,7 +519,7 @@ def raw_query(
                         sentry_sdk.set_tag("timeout", "cache_timeout")
 
                 logger.exception("Error running query: %s\n%s", sql, cause)
-            stats = update_with_status(QueryStatus.ERROR)
+            stats = update_with_status(QueryStatus.ERROR, error_code=error_code)
         raise QueryException(
             {
                 "stats": stats,
