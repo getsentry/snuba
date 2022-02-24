@@ -40,13 +40,13 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize("input_query, expected_query", test_data)
-def test_kill_uniq_processor(input_query: Query, expected_query: Query) -> None:
+@pytest.mark.parametrize("input_query, transformed_query", test_data)
+def test_kill_uniq_processor(input_query: Query, transformed_query: Query) -> None:
     # Matching referrer
     state.set_config("uniq_killswitch_referrers", "test,test2")
     copy = deepcopy(input_query)
     UniqKillswitchProcessor().process_query(copy, HTTPRequestSettings(referrer="test"))
-    assert copy == expected_query
+    assert copy == transformed_query
     assert copy != input_query
 
     # Non matching referrer
@@ -55,11 +55,11 @@ def test_kill_uniq_processor(input_query: Query, expected_query: Query) -> None:
     UniqKillswitchProcessor().process_query(
         copy, HTTPRequestSettings(referrer="something_else")
     )
-    assert copy != expected_query
+    assert copy != transformed_query
     assert copy == input_query
 
     # Set tables
     state.set_config("uniq_killswitch_tables", "events")
     copy = deepcopy(input_query)
     UniqKillswitchProcessor().process_query(copy, HTTPRequestSettings())
-    assert copy == expected_query
+    assert copy == transformed_query
