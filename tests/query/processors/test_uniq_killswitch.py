@@ -29,7 +29,7 @@ test_data = [
         Query(
             Table("events", ColumnSet([])),
             selected_columns=[
-                SelectedExpression("alias", Literal("alias", 0),),
+                SelectedExpression("alias", Literal("alias", 1),),
                 SelectedExpression(
                     "alias2",
                     FunctionCall("alias2", "count", (Column(None, None, "column2"),)),

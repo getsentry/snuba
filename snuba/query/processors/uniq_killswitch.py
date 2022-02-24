@@ -9,8 +9,22 @@ from snuba.request.request_settings import RequestSettings
 
 class UniqKillswitchProcessor(QueryProcessor):
     """
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    USE ONLY IN CASE OF EMERGENCY
+    THIS PROCESSOR BEING TURNED ON RETURNS INCORRECT
+    RESULTS.
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    Usage:
+        In Runtime config, set the following flags:
+
+        uniq_killswitch_tables=errors_dist,discover_dist,transactions_dist,(etc)
+        uniq_killswitch_referrers=search,tsdb-modelid:4,(etc)
+
     This processor removes uniq() expressions from the query and replaces them with zero.
-    The reason for doing this is because uniq() queries are suspected to be causing ClickHouse to segfault.
+    The reason for doing this is because uniq() queries are suspected to be
+    causing ClickHouse to segfault under very specific consequences we do
+    not understand.
     Since it returns incorrect results, it is only to be used in case of emergency.
 
     Example usage:
@@ -39,8 +53,8 @@ class UniqKillswitchProcessor(QueryProcessor):
 
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
-                if exp.function_name == "uniq":
-                    return Literal(exp.alias, 0)
+                if exp.function_name in ("uniq", "uniqIf"):
+                    return Literal(exp.alias, 1)
 
             return exp
 

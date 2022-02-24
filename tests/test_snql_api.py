@@ -751,4 +751,4 @@ class TestSnQLApi(BaseApiTest):
 
         # Set referrer killswitch
         state.set_config("uniq_killswitch_referrers", "test")
-        assert run_query()["data"] == [{"uniq_project": 0}]
+        assert run_query()["data"] == [{"uniq_project": 1}]
