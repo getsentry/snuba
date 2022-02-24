@@ -40,6 +40,4 @@ def get_storage_info() -> Sequence[Storage]:
             "local_nodes": _get_local_nodes(storage_key),
         }
         for storage_key in sorted(STORAGES, key=lambda storage_key: storage_key.value)
-        # HACK: Transactions_v2 is temporarily not assigned to a cluster
-        if storage_key != StorageKey.TRANSACTIONS_V2
     ]
