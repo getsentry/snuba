@@ -43,6 +43,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
+from snuba.query.processors.uniq_killswitch import UniqKillswitchProcessor
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
@@ -185,6 +186,7 @@ TEST_CASES = [
                     *events_storage.get_query_processors(),
                     MandatoryConditionApplier(),
                     MandatoryConditionEnforcer([]),
+                    UniqKillswitchProcessor(),
                 ],
             ),
             None,
@@ -369,6 +371,7 @@ TEST_CASES = [
                         *events_storage.get_query_processors(),
                         MandatoryConditionApplier(),
                         MandatoryConditionEnforcer([]),
+                        UniqKillswitchProcessor(),
                     ],
                 ),
                 "groups": SubqueryProcessors(
