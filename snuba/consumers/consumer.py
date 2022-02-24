@@ -495,7 +495,6 @@ class MultistorageCollector(
                     if self.__dead_letter_step:
                         for message in self.__messages[storage_key]:
                             self.__dead_letter_step.submit(message)
-                        pass
                     logger.warning("Error while writing data to clickhouse", exc_info=e)
             else:
                 step.close()
