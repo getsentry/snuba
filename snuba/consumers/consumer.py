@@ -363,10 +363,10 @@ def build_mock_batch_writer(
 class DeadLetterStep(
     ProcessingStep[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
 ):
-    def __init__(self, producer: AbstractProducer, topic: Topic):
+    def __init__(self, producer: AbstractProducer[KafkaPayload], topic: Topic):
         self.__producer = producer
         self.__topic = topic
-        self.__futures: Deque[Future] = deque()
+        self.__futures: Deque[Future[Message[KafkaPayload]]] = deque()
         self.__closed = False
 
     def __format_payload(
@@ -621,7 +621,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         metrics: MetricsBackend,
-        producer: Optional[AbstractProducer],
+        producer: Optional[AbstractProducer[KafkaPayload]],
         topic: Optional[Topic],
     ):
         if processes is not None:
