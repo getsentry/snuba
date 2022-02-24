@@ -11,12 +11,10 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.granularity_processor import GranularityProcessor
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
 )
-from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 profile_columns = EntityColumnSet(
     [
@@ -53,22 +51,17 @@ class ProfilesEntity(Entity, ABC):
         super().__init__(
             storages=[writable_storage, readable_storage],
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SingleStorageQueryPlanBuilder(readable_storage,)
+                query_plan_builder=SingleStorageQueryPlanBuilder(readable_storage)
             ),
             abstract_column_set=profile_columns,
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[
-                EntityRequiredColumnValidator(
-                    {"organization_id", "project_id", "transaction_id"}
-                ),
-            ],
+            validators=[],
             required_time_column="received",
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            GranularityProcessor(),
             OrganizationRateLimiterProcessor(org_column="organization_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
         ]
