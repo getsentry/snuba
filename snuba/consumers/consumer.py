@@ -2,11 +2,14 @@ import copy
 import itertools
 import logging
 import time
+from collections import deque
+from concurrent.futures import Future
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
     Any,
     Callable,
+    Deque,
     List,
     Mapping,
     MutableMapping,
@@ -17,12 +20,10 @@ from typing import (
     Set,
     Tuple,
     Union,
-    Deque,
     cast,
 )
 
 import rapidjson
-from concurrent.futures import Future
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer as AbstractProducer
 from arroyo.backends.kafka import KafkaPayload
@@ -36,7 +37,6 @@ from arroyo.processing.strategies.streaming import (
     TransformStep,
 )
 from arroyo.types import Position
-from collections import deque
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
@@ -384,7 +384,7 @@ class DeadLetterStep(
                 storage_key.value.encode("utf-8"),
                 rapidjson.dumps(
                     {"rows": rows, "origin_timestamp": payload.origin_timestamp}
-                ),
+                ).encode("utf-8"),
                 [],
             )
         return kafka_payload
