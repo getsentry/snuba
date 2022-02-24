@@ -18,7 +18,7 @@ class RateLimiterDelegate(RequestSettings):
     The idea is to provide the query pipeline with delegates over the
     components they need to execute it that create separate namespaces.
     Specifically the PipelineDelegator provides a RateLimiterDelegate to
-    the secondary query so that the query pipeline can use a separate
+    to each query pipeline so that the pipeline can use a separate
     rate limiter namespace without knowing about it.
     """
 
