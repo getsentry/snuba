@@ -239,9 +239,9 @@ def split_metadata(result: QueryResult) -> SplitSchema:
     for column in metadata:
         if column["type"] in (
             "String",
-            "Datetime",
+            "Datetime('Universal')",
             "UUID",
-            "Date",
+            "Date('Universal')",
             "LowCardinality(String)",
         ):
             keys.append(column["name"])
