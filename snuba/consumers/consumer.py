@@ -363,6 +363,17 @@ def build_mock_batch_writer(
 class DeadLetterStep(
     ProcessingStep[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
 ):
+    """
+    If a batch failed to be inserted to ClickHouse for some reason, we put those messages
+    into a dead letter topic so that they can be consumed later and tried again.
+
+    This is only possible for the MultiStorageConsumerFactory right now, and it is an
+    optional step for the MultistorageCollector. Additionally, this is only enabled if
+    the storages have `ignore_errors` set to True - which is the case for the errors_v2
+    and transaction_v2 storages.
+
+    """
+
     def __init__(self, producer: AbstractProducer[KafkaPayload], topic: Topic):
         self.__producer = producer
         self.__topic = topic
@@ -374,20 +385,15 @@ class DeadLetterStep(
         message: Message[
             Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
         ],
-    ) -> Optional[KafkaPayload]:
-        kafka_payload = None
+    ) -> List[KafkaPayload]:
+        kafka_payloads: List[KafkaPayload] = []
         storage_key, payload = message.payload
         if isinstance(payload, BytesInsertBatch):
-            rows = [rapidjson.loads(row) for row in payload.rows]
-
-            kafka_payload = KafkaPayload(
-                storage_key.value.encode("utf-8"),
-                rapidjson.dumps(
-                    {"rows": rows, "origin_timestamp": payload.origin_timestamp}
-                ).encode("utf-8"),
-                [],
-            )
-        return kafka_payload
+            for row in payload.rows:
+                kafka_payloads.append(
+                    KafkaPayload(storage_key.value.encode("utf-8"), row, [])
+                )
+        return kafka_payloads
 
     def poll(self) -> None:
         pass
@@ -398,8 +404,8 @@ class DeadLetterStep(
             Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
         ],
     ) -> None:
-        payload = self.__format_payload(message)
-        if payload:
+        payloads = self.__format_payload(message)
+        for payload in payloads:
             future = self.__producer.produce(self.__topic, payload)
             self.__futures.append(future)
 
@@ -417,7 +423,12 @@ class DeadLetterStep(
                 break
             if self.__futures[0].done():
                 future = self.__futures.popleft()
-                future.result()
+                try:
+                    future.result()
+                except Exception:
+                    logger.warning(
+                        "Failed dead letter queue future result", exc_info=True
+                    )
 
 
 class MultistorageCollector(
@@ -472,6 +483,10 @@ class MultistorageCollector(
             )
             self.__steps[storage_key].submit(writer_message)
 
+            # we collect the messages in self.__messages in the off chance
+            # that we get an error submitting a batch and need to forward
+            # these message to the dead letter topic. The payload doesn't
+            # have storage information so we need to keep the storage_key
             other_message = Message(
                 message.partition,
                 message.offset,
@@ -492,7 +507,11 @@ class MultistorageCollector(
                 try:
                     step.close()
                 except Exception as e:
-                    if self.__dead_letter_step:
+                    messages = self.__messages[storage_key]
+                    if self.__dead_letter_step and messages:
+                        logger.info(
+                            f"Submitting {len(messages)} {storage_key.value} messages to dead letter step..."
+                        )
                         for message in self.__messages[storage_key]:
                             self.__dead_letter_step.submit(message)
                     logger.warning("Error while writing data to clickhouse", exc_info=e)
@@ -521,7 +540,9 @@ class MultistorageCollector(
 
             step.join(timeout_remaining)
 
+        self.__messages = {}
         if self.__dead_letter_step:
+            # timeout of 5.0 was set arbitrarily, can be changed
             self.__dead_letter_step.join(5.0)
 
 

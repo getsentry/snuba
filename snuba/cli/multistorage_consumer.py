@@ -255,6 +255,8 @@ def multistorage_consumer(
 
     def handler(signum: int, frame: Any) -> None:
         processor.signal_shutdown()
+        if dead_letter_producer:
+            dead_letter_producer.close()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
