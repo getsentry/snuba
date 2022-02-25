@@ -1,6 +1,6 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Set
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.accessors import get_columns_in_expression
@@ -10,7 +10,10 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.expressions import FunctionCall
+from snuba.query.matchers import FunctionCall as FunctionPattern
+from snuba.query.matchers import String
 from snuba.request.request_settings import RequestSettings
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 ALLOWED_OPERATORS = [
     ConditionFunctions.GT,
@@ -24,6 +27,8 @@ ALLOWED_OPERATORS = [
     ConditionFunctions.IS_NOT_NULL,
     ConditionFunctions.LIKE,
 ]
+
+metrics = MetricsWrapper(environment.metrics, "prewhere")
 
 
 class PrewhereProcessor(QueryProcessor):
@@ -46,12 +51,28 @@ class PrewhereProcessor(QueryProcessor):
         self.__prewhere_candidates = prewhere_candidates
         self.__omit_if_final = omit_if_final
         self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
+        self.__uniq_matcher = FunctionPattern(String("uniq"), None)
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         max_prewhere_conditions: int = (
             self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
         )
         prewhere_keys = self.__prewhere_candidates
+
+        uniq_cols: Set[str] = set()
+        expressions = query.get_all_expressions()
+        for exp in expressions:
+            match = self.__uniq_matcher.match(exp)
+            if match is not None:
+                columns = get_columns_in_expression(exp)
+                for c in columns:
+                    uniq_cols.add(c.column_name)
+
+        for col in uniq_cols:
+            if col in prewhere_keys:
+                metrics.increment("uniq_col_in_prewhere_candidate")
+
+        prewhere_keys = [key for key in prewhere_keys if key not in uniq_cols]
 
         # In case the query is final we cannot simply add any candidate
         # condition to the prewhere.
