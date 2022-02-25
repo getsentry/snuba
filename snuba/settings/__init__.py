@@ -191,7 +191,7 @@ WRITE_METRICS_AGG_DIRECTLY = False
 # Place the actual time we start ingesting on the new version.
 ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
 TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
-    2022, 2, 23, 0, 0, 0
+    2022, 2, 18, 0, 0, 0
 )
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
