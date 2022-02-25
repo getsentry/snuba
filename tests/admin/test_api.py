@@ -4,18 +4,19 @@ from typing import Any
 
 import pytest
 import simplejson as json
+from flask.testing import FlaskClient
 
 from snuba import state
 
 
 @pytest.fixture
-def admin_api() -> Any:
+def admin_api() -> FlaskClient[Any]:
     from snuba.admin.views import application
 
     return application.test_client()
 
 
-def test_get_configs(admin_api: Any) -> None:
+def test_get_configs(admin_api: FlaskClient[Any]) -> None:
     response = admin_api.get("/configs")
     assert response.status_code == 200
     assert json.loads(response.data) == []
@@ -43,7 +44,7 @@ def test_get_configs(admin_api: Any) -> None:
     ]
 
 
-def test_post_configs(admin_api: Any) -> None:
+def test_post_configs(admin_api: FlaskClient[Any]) -> None:
     # int
     response = admin_api.post(
         "/configs",
@@ -97,7 +98,46 @@ def test_post_configs(admin_api: Any) -> None:
     assert response.status_code == 400
 
 
-def get_node_for_table(admin_api: Any, storage_name: str) -> tuple[str, str, int]:
+def test_delete_configs(admin_api: FlaskClient[Any]) -> None:
+    # delete a config and its description
+    state.set_config("delete_this", "1")
+    state.set_config_description("delete_this", "description for this config")
+    assert state.get_uncached_config("delete_this") == 1
+    assert state.get_config_description("delete_this") == "description for this config"
+
+    response = admin_api.delete("/configs/delete_this")
+
+    assert response.status_code == 200
+    assert state.get_uncached_config("delete_this") is None
+    assert state.get_config_description("delete_this") is None
+
+    # delete a config but not description
+    state.set_config("delete_this", "1")
+    state.set_config_description("delete_this", "description for this config")
+    assert state.get_uncached_config("delete_this") == 1
+    assert state.get_config_description("delete_this") == "description for this config"
+
+    response = admin_api.delete("/configs/delete_this?keepDescription=true")
+
+    assert response.status_code == 200
+    assert state.get_uncached_config("delete_this") is None
+    assert state.get_config_description("delete_this") == "description for this config"
+
+
+def test_config_descriptions(admin_api: FlaskClient[Any]) -> None:
+    state.set_config_description("desc_test", "description test")
+    state.set_config_description("another_test", "another description")
+    response = admin_api.get("/all_config_descriptions")
+    assert response.status_code == 200
+    assert json.loads(response.data) == {
+        "desc_test": "description test",
+        "another_test": "another description",
+    }
+
+
+def get_node_for_table(
+    admin_api: FlaskClient[Any], storage_name: str
+) -> tuple[str, str, int]:
     response = admin_api.get("/clickhouse_nodes")
     assert response.status_code == 200, response
     nodes = json.loads(response.data)
@@ -111,7 +151,7 @@ def get_node_for_table(admin_api: Any, storage_name: str) -> tuple[str, str, int
     raise Exception(f"{storage_name} does not have a local node")
 
 
-def test_system_query(admin_api: Any) -> None:
+def test_system_query(admin_api: FlaskClient[Any]) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
         "/run_clickhouse_system_query",
@@ -131,7 +171,7 @@ def test_system_query(admin_api: Any) -> None:
     assert data["rows"] == []
 
 
-def test_query_trace(admin_api: Any) -> None:
+def test_query_trace(admin_api: FlaskClient[Any]) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
@@ -145,7 +185,7 @@ def test_query_trace(admin_api: Any) -> None:
     assert "<Debug> executeQuery" in data["trace_output"]
 
 
-def test_query_trace_bad_query(admin_api: Any) -> None:
+def test_query_trace_bad_query(admin_api: FlaskClient[Any]) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
@@ -160,7 +200,7 @@ def test_query_trace_bad_query(admin_api: Any) -> None:
     assert "clickhouse" == data["error"]["type"]
 
 
-def test_query_trace_invalid_query(admin_api: Any) -> None:
+def test_query_trace_invalid_query(admin_api: FlaskClient[Any]) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
