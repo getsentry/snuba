@@ -135,16 +135,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--consumer-group=cdc_group",
             ],
         ),
-        (
-            "profiles",
-            [
-                "snuba",
-                "consumer",
-                "--auto-offset-reset=latest",
-                "--log-level=debug",
-                "--storage=profiles",
-            ],
-        ),
     ]
 
     if settings.ENABLE_SENTRY_METRICS_DEV:
@@ -225,6 +215,20 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--max-query-workers=1",
                 ],
             )
+        ]
+
+    if settings.ENABLE_DEV_FEATURES:
+        daemons += [
+            (
+                "profiles",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--storage=profiles",
+                ],
+            ),
         ]
 
     manager = Manager()

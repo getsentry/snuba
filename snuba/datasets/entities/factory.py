@@ -39,7 +39,9 @@ def get_entity(name: EntityKey) -> Entity:
     from snuba.datasets.entities.spans import SpansEntity
     from snuba.datasets.entities.transactions import TransactionsEntity
 
-    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
+    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
+        EntityKey.PROFILES: ProfilesEntity
+    }
 
     entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
         EntityKey.DISCOVER: DiscoverEntity,
@@ -57,7 +59,6 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.METRICS_SETS: MetricsSetsEntity,
         EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
         EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
-        EntityKey.PROFILES: ProfilesEntity,
         **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
     }
 
