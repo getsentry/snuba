@@ -59,7 +59,10 @@ class PrewhereProcessor(QueryProcessor):
         uniq_cols: Set[str] = set()
         expressions = query.get_all_expressions()
         for exp in expressions:
-            if isinstance(exp, FunctionCall) and exp.function_name == "uniq":
+            if isinstance(exp, FunctionCall) and exp.function_name in (
+                "uniq",
+                "countIf",
+            ):
                 columns = get_columns_in_expression(exp)
                 for c in columns:
                     uniq_cols.add(c.column_name)
