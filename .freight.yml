@@ -17,6 +17,8 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: errors-replacer
   - image: us.gcr.io/sentryio/snuba:{sha}
+    name: errors-tiger-replacer
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: replacer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-consumer
