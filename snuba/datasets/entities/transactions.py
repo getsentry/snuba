@@ -1,7 +1,8 @@
 from abc import ABC
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 from snuba import settings, state
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -11,12 +12,21 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.clickhouse_upgrade import (
+    Option,
+    RolloutSelector,
+    comparison_callback,
+)
 from snuba.datasets.entity import Entity
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.pipeline.pipeline_delegator import PipelineDelegator
+from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -111,12 +121,49 @@ class TransactionsQueryStorageSelector(QueryStorageSelector):
         return StorageAndMappers(storage, self.__mappers)
 
 
+class TransactionsV2QueryStorageSelector(QueryStorageSelector):
+    def __init__(self, mappers: TranslationMappers) -> None:
+        self.__transactions_table = get_writable_storage(StorageKey.TRANSACTIONS_V2)
+        # TODO: Register TRANSACTIONS_V2_RO and then remove comment
+        # self.__transactions_ro_table = get_storage(StorageKey.TRANSACTIONS_V2)
+        self.__mappers = mappers
+
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> StorageAndMappers:
+        # TODO: Register ERRORS_V2_RO and support the ro storage
+        return StorageAndMappers(self.__transactions_table, self.__mappers)
+
+
+def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
+    if settings.ERRORS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
+        query, ProcessableQuery
+    ):
+        return ("transactions_v1", [])
+
+    range = get_time_range(query, "timestamp")
+    if range[0] is None or range[0] < settings.ERRORS_UPGRADE_BEGINING_OF_TIME:
+        return ("transactions_v1", [])
+
+    mapping = {
+        Option.TRANSACTIONS: "transactions_v1",
+        Option.TRANSACTIONS_V2: "transactions_v2",
+    }
+    choice = RolloutSelector(
+        Option.TRANSACTIONS, Option.TRANSACTIONS_V2, "transactions"
+    ).choose(referrer)
+    if choice.secondary is None:
+        return (mapping[choice.primary], [])
+    else:
+        return (mapping[choice.primary], [mapping[choice.secondary]])
+
+
 class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
 
-        pipeline_builder = SimplePipelineBuilder(
+        v1_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=TransactionsQueryStorageSelector(
                     mappers=transaction_translator
@@ -124,6 +171,25 @@ class BaseTransactionsEntity(Entity, ABC):
                     else transaction_translator.concat(custom_mappers)
                 )
             ),
+        )
+
+        v2_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=TransactionsV2QueryStorageSelector(
+                    mappers=transaction_translator
+                    if custom_mappers is None
+                    else transaction_translator.concat(custom_mappers)
+                )
+            )
+        )
+
+        pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan] = PipelineDelegator(
+            query_pipeline_builders={
+                "transactions_v1": v1_pipeline_builder,
+                "transactions_v2": v2_pipeline_builder,
+            },
+            selector_func=v2_selector_function,
+            callback_func=comparison_callback,
         )
 
         super().__init__(
