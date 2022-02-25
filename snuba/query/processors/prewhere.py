@@ -56,6 +56,9 @@ class PrewhereProcessor(QueryProcessor):
         )
         prewhere_keys = self.__prewhere_candidates
 
+        # We remove the candidates that appear in a countIf or uniqIf because
+        # a query like `countIf(col=x) .. PREWHERE col=x` can make the
+        # Clickhouse server crash.
         uniq_cols: Set[str] = set()
         expressions = query.get_all_expressions()
         for exp in expressions:
