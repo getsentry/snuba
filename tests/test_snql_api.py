@@ -627,6 +627,34 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
+    def test_duplicate_alias_bug(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS count, tags[url] AS url, tags[url] AS http.url
+                    BY tags[url] AS http.url, tags[url] AS url
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    ORDER BY count() AS count DESC
+                    LIMIT 51 OFFSET 0
+                    """,
+                    "dataset": "discover",
+                    "team": "sns",
+                    "feature": "test",
+                }
+            ),
+        )
+        assert response.status_code == 200
+        result = json.loads(response.data)
+        assert len(result["data"]) > 0
+        assert "url" in result["data"][0]
+        assert "http.url" in result["data"][0]
+        assert {"name": "url", "type": "String"} in result["meta"]
+        assert {"name": "http.url", "type": "String"} in result["meta"]
+
     def test_invalid_column(self) -> None:
         response = self.post(
             "/outcomes/snql",
