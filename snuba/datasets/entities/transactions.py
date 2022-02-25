@@ -165,8 +165,7 @@ class BaseTransactionsEntity(Entity, ABC):
 
         v2_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=get_writable_storage(StorageKey.TRANSACTIONS_V2),
-                mappers=mappers,
+                storage=get_storage(StorageKey.TRANSACTIONS_V2), mappers=mappers,
             )
         )
 
