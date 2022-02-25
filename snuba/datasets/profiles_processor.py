@@ -1,8 +1,12 @@
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "profiles.processor")
 
 
 class ProfilesProcessor(MessageProcessor):
@@ -33,6 +37,7 @@ class ProfilesProcessor(MessageProcessor):
                 "version_code": message["version_code"],
                 "retention_days": 30,
             }
-        except KeyError:
+        except KeyError as e:
+            metrics.increment(f"missing_{e.args[0]}")
             return None
         return InsertBatch([processed], None)
