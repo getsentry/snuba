@@ -131,18 +131,18 @@ class TransactionsV2QueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        # TODO: Register ERRORS_V2_RO and support the ro storage
+        # TODO: Register TRANSACTIONS_V2_RO and support the ro storage
         return StorageAndMappers(self.__transactions_table, self.__mappers)
 
 
 def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
-    if settings.ERRORS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
+    if settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
         query, ProcessableQuery
     ):
         return ("transactions_v1", [])
 
     range = get_time_range(query, "timestamp")
-    if range[0] is None or range[0] < settings.ERRORS_UPGRADE_BEGINING_OF_TIME:
+    if range[0] is None or range[0] < settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME:
         return ("transactions_v1", [])
 
     mapping = {
