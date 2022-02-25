@@ -33,6 +33,8 @@ logger = logging.getLogger("snuba.upgrade_discrepancies")
 class Option(Enum):
     ERRORS = 1
     ERRORS_V2 = 2
+    TRANSACTIONS = 3
+    TRANSACTIONS_V2 = 4
 
 
 class Choice(NamedTuple):
