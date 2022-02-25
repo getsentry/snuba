@@ -142,7 +142,7 @@ REPLACEMENT_TYPE = (
     ReplacementType.EXCLUDE_GROUPS
 )  # Arbitrary replacement type, no impact on tests
 
-REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata(0, 0)
+REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata(0, 0, "")
 
 
 @pytest.mark.parametrize(
