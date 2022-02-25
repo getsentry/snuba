@@ -21,35 +21,6 @@ PROFILES_LOCAL_TABLE_NAME = "profiles_local"
 PROFILES_DIST_TABLE_NAME = "profiles_dist"
 
 
-writable_columns = ColumnSet(
-    [
-        ("organization_id", UInt(64)),
-        ("project_id", UInt(64)),
-        ("transaction_id", UUID()),
-        ("received", DateTime()),
-        ("profile", String()),
-        ("symbols", String()),
-        ("android_api_level", UInt(32, Modifiers(nullable=True))),
-        ("device_classification", String()),
-        ("device_locale", String()),
-        ("device_manufacturer", String()),
-        ("device_model", String()),
-        ("device_os_build_number", String()),
-        ("device_os_name", String()),
-        ("device_os_version", String(Modifiers(nullable=True))),
-        ("duration_ns", UInt(64)),
-        ("environment", String(Modifiers(nullable=True))),
-        ("platform", String()),
-        ("trace_id", UUID()),
-        ("transaction_name", String()),
-        ("version_name", String()),
-        ("version_code", String()),
-        ("retention_days", UInt(16)),
-        ("partition", UInt(16)),
-        ("offset", UInt(64)),
-    ]
-)
-
 processors = [
     UniqInSelectAndHavingProcessor(),
     UUIDColumnProcessor(set(["transaction_id", "trace_id"])),
@@ -58,22 +29,6 @@ processors = [
 
 loader = build_kafka_stream_loader_from_settings(
     processor=ProfilesProcessor(), default_topic=Topic.PROFILES,
-)
-
-writable_schema = WritableTableSchema(
-    columns=writable_columns,
-    local_table_name=PROFILES_LOCAL_TABLE_NAME,
-    dist_table_name=PROFILES_DIST_TABLE_NAME,
-    storage_set_key=StorageSetKey.PROFILES,
-)
-
-writable_storage = WritableTableStorage(
-    storage_key=StorageKey.PROFILES,
-    storage_set_key=StorageSetKey.PROFILES,
-    schema=writable_schema,
-    query_processors=processors,
-    mandatory_condition_checkers=[OrgIdEnforcer(), ProjectIdEnforcer()],
-    stream_loader=loader,
 )
 
 readable_columns = ColumnSet(
@@ -114,4 +69,24 @@ readable_storage = ReadableTableStorage(
     storage_set_key=StorageSetKey.PROFILES,
     schema=readable_schema,
     query_processors=processors,
+)
+
+writable_columns = readable_columns + ColumnSet(
+    [("retention_days", UInt(16)), ("partition", UInt(16)), ("offset", UInt(64))]
+)
+
+writable_schema = WritableTableSchema(
+    columns=writable_columns,
+    local_table_name=PROFILES_LOCAL_TABLE_NAME,
+    dist_table_name=PROFILES_DIST_TABLE_NAME,
+    storage_set_key=StorageSetKey.PROFILES,
+)
+
+writable_storage = WritableTableStorage(
+    storage_key=StorageKey.PROFILES,
+    storage_set_key=StorageSetKey.PROFILES,
+    schema=writable_schema,
+    query_processors=processors,
+    mandatory_condition_checkers=[OrgIdEnforcer(), ProjectIdEnforcer()],
+    stream_loader=loader,
 )
