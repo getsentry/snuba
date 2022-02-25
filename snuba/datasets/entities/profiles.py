@@ -15,6 +15,7 @@ from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
 )
+from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 profile_columns = EntityColumnSet(
     [
@@ -56,7 +57,9 @@ class ProfilesEntity(Entity, ABC):
             abstract_column_set=profile_columns,
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[],
+            validators=[
+                EntityRequiredColumnValidator({"organization_id", "project_id"}),
+            ],
             required_time_column="received",
         )
 
