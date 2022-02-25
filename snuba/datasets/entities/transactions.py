@@ -19,7 +19,10 @@ from snuba.datasets.entities.clickhouse_upgrade import (
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import (
+    SelectedStorageQueryPlanBuilder,
+    SingleStorageQueryPlanBuilder,
+)
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -121,20 +124,6 @@ class TransactionsQueryStorageSelector(QueryStorageSelector):
         return StorageAndMappers(storage, self.__mappers)
 
 
-class TransactionsV2QueryStorageSelector(QueryStorageSelector):
-    def __init__(self, mappers: TranslationMappers) -> None:
-        self.__transactions_table = get_writable_storage(StorageKey.TRANSACTIONS_V2)
-        # TODO: Register TRANSACTIONS_V2_RO and then remove comment
-        # self.__transactions_ro_table = get_storage(StorageKey.TRANSACTIONS_V2)
-        self.__mappers = mappers
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> StorageAndMappers:
-        # TODO: Register TRANSACTIONS_V2_RO and support the ro storage
-        return StorageAndMappers(self.__transactions_table, self.__mappers)
-
-
 def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
     if settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
         query, ProcessableQuery
@@ -162,24 +151,22 @@ class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
+        mappers = (
+            transaction_translator
+            if custom_mappers is None
+            else transaction_translator.concat(custom_mappers)
+        )
 
         v1_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=TransactionsQueryStorageSelector(
-                    mappers=transaction_translator
-                    if custom_mappers is None
-                    else transaction_translator.concat(custom_mappers)
-                )
+                selector=TransactionsQueryStorageSelector(mappers=mappers)
             ),
         )
 
         v2_pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=TransactionsV2QueryStorageSelector(
-                    mappers=transaction_translator
-                    if custom_mappers is None
-                    else transaction_translator.concat(custom_mappers)
-                )
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=get_writable_storage(StorageKey.TRANSACTIONS_V2),
+                mappers=mappers,
             )
         )
 
