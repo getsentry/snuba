@@ -10,7 +10,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "profiles.processor")
 
 
-class ProfilesProcessor(MessageProcessor):
+class ProfilesMessageProcessor(MessageProcessor):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -34,6 +34,7 @@ class ProfilesProcessor(MessageProcessor):
                 "environment": message.get("environment"),
                 "platform": message["platform"],
                 "trace_id": message["trace_id"],
+                "transaction_name": message["transaction_name"],
                 "version_name": message["version_name"],
                 "version_code": message["version_code"],
                 "retention_days": 30,

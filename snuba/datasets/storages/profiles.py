@@ -2,7 +2,7 @@ from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.profiles_processor import ProfilesProcessor
+from snuba.datasets.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -28,7 +28,7 @@ processors = [
 ]
 
 loader = build_kafka_stream_loader_from_settings(
-    processor=ProfilesProcessor(), default_topic=Topic.PROFILES,
+    processor=ProfilesMessageProcessor(), default_topic=Topic.PROFILES,
 )
 
 readable_columns = ColumnSet(
