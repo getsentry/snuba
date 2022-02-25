@@ -66,7 +66,10 @@ class PrewhereProcessor(QueryProcessor):
 
         for col in uniq_cols:
             if col in prewhere_keys:
-                metrics.increment("uniq_col_in_prewhere_candidate")
+                metrics.increment(
+                    "uniq_col_in_prewhere_candidate",
+                    tags={"column": col, "referrer": request_settings.referrer},
+                )
 
         prewhere_keys = [key for key in prewhere_keys if key not in uniq_cols]
 
