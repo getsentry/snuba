@@ -10,8 +10,6 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.expressions import FunctionCall
-from snuba.query.matchers import FunctionCall as FunctionPattern
-from snuba.query.matchers import String
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -51,7 +49,6 @@ class PrewhereProcessor(QueryProcessor):
         self.__prewhere_candidates = prewhere_candidates
         self.__omit_if_final = omit_if_final
         self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
-        self.__uniq_matcher = FunctionPattern(String("uniq"), None)
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         max_prewhere_conditions: int = (
@@ -62,8 +59,7 @@ class PrewhereProcessor(QueryProcessor):
         uniq_cols: Set[str] = set()
         expressions = query.get_all_expressions()
         for exp in expressions:
-            match = self.__uniq_matcher.match(exp)
-            if match is not None:
+            if isinstance(exp, FunctionCall) and exp.function_name == "uniq":
                 columns = get_columns_in_expression(exp)
                 for c in columns:
                     uniq_cols.add(c.column_name)
