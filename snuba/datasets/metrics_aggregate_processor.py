@@ -38,6 +38,12 @@ METRICS_DISTRIBUTIONS_TYPE = "d"
 METRICS_COUNTERS_TYPE = "c"
 
 
+def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
+    time_seconds = timestamp.timestamp()
+    out_seconds = interval_seconds * (time_seconds // interval_seconds)
+    return datetime.fromtimestamp(out_seconds)
+
+
 class MetricsAggregateProcessor(MessageProcessor, ABC):
     TEN_SECONDS = 10
     ONE_MINUTE = 60
@@ -52,13 +58,6 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
     @abstractmethod
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
-
-    def timestamp_to_bucket(
-        self, timestamp: datetime, interval_seconds: int
-    ) -> datetime:
-        time_seconds = timestamp.timestamp()
-        out_seconds = interval_seconds * (time_seconds // interval_seconds)
-        return datetime.fromtimestamp(out_seconds)
 
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
@@ -88,7 +87,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
                     "toDateTime",
                     (
                         _literal(
-                            self.timestamp_to_bucket(timestamp, granularity).isoformat()
+                            timestamp_to_bucket(timestamp, granularity).isoformat()
                         ),
                     ),
                 ),
