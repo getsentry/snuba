@@ -105,22 +105,7 @@ class TestMetricsApiCounters(BaseApiTest):
                     events.append(processed)
         write_processed_messages(self.storage, events)
 
-    def test_retrieval_basic(self) -> None:
-        query_str = self.build_query()
-        response = self.app.post(
-            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
-        )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert len(data["data"]) == 1, data
-
-        aggregation = data["data"][0]
-        assert aggregation["org_id"] == self.org_id
-        assert aggregation["project_id"] == self.project_ids[0]
-        assert aggregation["total_seconds"] == self.seconds
-
-    def build_query(
+    def build_simple_query(
         self,
         metric_id: Optional[int] = None,
         org_id: Optional[int] = None,
@@ -152,9 +137,24 @@ class TestMetricsApiCounters(BaseApiTest):
 
         return query_str
 
+    def test_retrieval_basic(self) -> None:
+        query_str = self.build_simple_query()
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+
+        aggregation = data["data"][0]
+        assert aggregation["org_id"] == self.org_id
+        assert aggregation["project_id"] == self.project_ids[0]
+        assert aggregation["total_seconds"] == self.seconds
+
     def test_retrieval_counter_not_present(self) -> None:
         ABSENT_METRIC_ID = 4096
-        query_str = self.build_query(metric_id=ABSENT_METRIC_ID)
+        query_str = self.build_simple_query(metric_id=ABSENT_METRIC_ID)
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
         )
