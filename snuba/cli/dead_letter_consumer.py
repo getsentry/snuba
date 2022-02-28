@@ -12,7 +12,7 @@ from snuba.consumers.dead_letter_consumer import (
     DeadLetterConsumerProcessingStrategyFactory,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--storage",
     "storage_names",
-    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
+    type=click.Choice(["errors_v2", "transactions_v2"]),
     multiple=True,
     required=True,
 )
 @click.option(
-    "--consumer-group", default="snuba-consumers",
+    "--consumer-group", default="snuba-dead-letter-consumers",
 )
 @click.option(
     "--max-batch-size",
