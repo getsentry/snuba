@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import pytest
 import pytz
@@ -106,20 +106,7 @@ class TestMetricsApiCounters(BaseApiTest):
         write_processed_messages(self.storage, events)
 
     def test_retrieval_basic(self) -> None:
-        query_str = """MATCH (metrics_counters)
-                    SELECT sumMerge(value) AS total_seconds BY project_id, org_id
-                    WHERE org_id = {org_id}
-                    AND project_id = 1
-                    AND metric_id = {metric_id}
-                    AND granularity = 60
-                    AND timestamp >= toDateTime('{start_time}')
-                    AND timestamp < toDateTime('{end_time}')
-                    """.format(
-            metric_id=self.metric_id,
-            org_id=self.org_id,
-            start_time=(self.base_time - self.skew).isoformat(),
-            end_time=(self.base_time + self.skew).isoformat(),
-        )
+        query_str = self.build_query()
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
         )
@@ -132,6 +119,49 @@ class TestMetricsApiCounters(BaseApiTest):
         assert aggregation["org_id"] == self.org_id
         assert aggregation["project_id"] == self.project_ids[0]
         assert aggregation["total_seconds"] == self.seconds
+
+    def build_query(
+        self,
+        metric_id: Optional[int] = None,
+        org_id: Optional[int] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+    ) -> str:
+        if not metric_id:
+            metric_id = self.metric_id
+        if not org_id:
+            org_id = self.org_id
+        if not start_time:
+            start_time = (self.base_time - self.skew).isoformat()
+        if not end_time:
+            end_time = (self.base_time + self.skew).isoformat()
+        query_str = """MATCH (metrics_counters)
+                    SELECT sumMerge(value) AS total_seconds BY project_id, org_id
+                    WHERE org_id = {org_id}
+                    AND project_id = 1
+                    AND metric_id = {metric_id}
+                    AND granularity = 60
+                    AND timestamp >= toDateTime('{start_time}')
+                    AND timestamp < toDateTime('{end_time}')
+                    """.format(
+            metric_id=metric_id,
+            org_id=org_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        return query_str
+
+    def test_retrieval_counter_not_present(self) -> None:
+        ABSENT_METRIC_ID = 4096
+        query_str = self.build_query(metric_id=ABSENT_METRIC_ID)
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 0, data
 
 
 class TestMetricsApiSets(BaseApiTest):
