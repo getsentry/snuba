@@ -504,8 +504,8 @@ def test_produce_scheduled_subscription_message() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=1,
-            time_window=timedelta(minutes=1),
-            resolution=timedelta(minutes=1),
+            time_window_sec=60,
+            resolution_sec=60,
             query="MATCH events SELECT count()",
             entity_subscription=EventsSubscription(data_dict={}),
         ),
@@ -516,8 +516,8 @@ def test_produce_scheduled_subscription_message() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=2,
-            time_window=timedelta(minutes=2),
-            resolution=timedelta(minutes=2),
+            time_window_sec=2 * 60,
+            resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
             entity_subscription=EventsSubscription(data_dict={}),
         ),

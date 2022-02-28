@@ -65,8 +65,8 @@ def test_scheduler_consumer() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=1,
-            time_window=timedelta(minutes=1),
-            resolution=timedelta(minutes=1),
+            time_window_sec=60,
+            resolution_sec=60,
             query="MATCH events SELECT count()",
             entity_subscription=EventsSubscription(data_dict={}),
         ),
