@@ -5,15 +5,19 @@ import pickle
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import MutableSequence, Optional
-from unittest.mock import Mock, call
+from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
 from arroyo.types import Position
+from arroyo.utils.clock import TestingClock
 
 from snuba import settings
+from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
@@ -25,11 +29,13 @@ from snuba.consumers.consumer import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.fixtures import get_raw_event, get_raw_transaction
 
 
 def test_streaming_consumer_strategy() -> None:
@@ -204,6 +210,84 @@ def test_multistorage_strategy(
         ):
             strategy.close()
             strategy.join()
+
+
+@patch("snuba.consumers.consumer.InsertBatchWriter.close")
+@patch("snuba.consumers.consumer.DeadLetterStep.submit")
+@pytest.mark.parametrize(
+    "processes, input_block_size, output_block_size",
+    [
+        pytest.param(1, int(32 * 1e6), int(64 * 1e6), id="multiprocessing"),
+        pytest.param(None, None, None, id="no multiprocessing"),
+    ],
+)
+def test_multistorage_strategy_dead_letter_step(
+    mock_submit: MagicMock,
+    mock_close: MagicMock,
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
+) -> None:
+    from snuba.datasets.storages import StorageKey
+
+    clock = TestingClock()
+    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+
+    topic = Topic("test-dlq")
+
+    broker.create_topic(topic, partitions=1)
+
+    producer = broker.get_producer()
+
+    # we want to raise a dummy clickhousewritererror so that we cause
+    # the multistorage collector to use the dead letter step
+    mock_close.side_effect = ClickhouseWriterError("oops", code=500, row=None)
+
+    commit = Mock()
+    storage_keys = [StorageKey.ERRORS_V2, StorageKey.TRANSACTIONS_V2]
+
+    storages = [get_writable_storage(key) for key in storage_keys]
+
+    strategy = MultistorageConsumerProcessingStrategyFactory(
+        storages,
+        10,
+        10,
+        processes,
+        input_block_size,
+        output_block_size,
+        TestingMetricsBackend(),
+        producer,
+        topic,
+    ).create(commit)
+
+    payloads = [
+        KafkaPayload(
+            None,
+            json.dumps((2, "insert", get_raw_event(),)).encode("utf8"),
+            [("transaction_forwarder", "1".encode("utf8"))],
+        ),
+        KafkaPayload(
+            None,
+            json.dumps((2, "insert", get_raw_transaction(),)).encode("utf8"),
+            [("transaction_forwarder", "0".encode("utf8"))],
+        ),
+    ]
+
+    now = datetime.now()
+
+    messages = [
+        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
+        for offset, payload in enumerate(payloads)
+    ]
+
+    for message in messages:
+        strategy.submit(message)
+
+    strategy.close()
+    strategy.join()
+
+    # assert that we submit to the dead letter step for both messages
+    assert len(mock_submit.call_args_list) == 2
 
 
 def test_metrics_writing_e2e() -> None:
