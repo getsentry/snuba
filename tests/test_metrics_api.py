@@ -31,6 +31,16 @@ TAG_4_VALUE_1 = 34
 RETENTION_DAYS = 90
 
 
+def teardown_common() -> None:
+    # Reset rate limits
+    state.delete_config("global_concurrent_limit")
+    state.delete_config("global_per_second_limit")
+    state.delete_config("project_concurrent_limit")
+    state.delete_config("project_concurrent_limit_1")
+    state.delete_config("project_per_second_limit")
+    state.delete_config("date_align_seconds")
+
+
 class TestMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -68,13 +78,7 @@ class TestMetricsApiCounters(BaseApiTest):
         self.generate_counters()
 
     def teardown_method(self, test_method: Any) -> None:
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
+        teardown_common()
 
     def generate_counters(self) -> None:
         events = []
@@ -202,13 +206,7 @@ class TestMetricsApiSets(BaseApiTest):
         self.generate_sets()
 
     def teardown_method(self, test_method: Any) -> None:
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
+        teardown_common()
 
     def generate_sets(self) -> None:
         events = []
@@ -302,13 +300,7 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.generate_uniform_distributions()
 
     def teardown_method(self, test_method: Any) -> None:
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
+        teardown_common()
 
     def generate_uniform_distributions(self) -> None:
         events = []
