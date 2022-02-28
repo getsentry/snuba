@@ -1,4 +1,3 @@
-from datetime import timedelta
 from typing import List, Tuple, cast
 from uuid import UUID
 
@@ -28,8 +27,8 @@ TESTS_CREATE = [
                 "WHERE "
                 "platform IN tuple('a')"
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
@@ -47,8 +46,8 @@ TESTS_CREATE_SESSIONS = [
                 WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
                 OFFSET 0 GRANULARITY 3600"""
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
         ),
         id="Snql subscription",
@@ -66,8 +65,8 @@ TESTS_INVALID = [
                 "WHERE "
                 "platfo IN tuple('a') "
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
@@ -107,8 +106,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    resolution=timedelta(minutes=1),
-                    time_window=timedelta(minutes=10),
+                    time_window_sec=10 * 60,
+                    resolution_sec=60,
                     query="MATCH (events) SELECT cout() AS count WHERE platform IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
@@ -121,8 +120,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    resolution=timedelta(minutes=1),
-                    time_window=timedelta(),
+                    time_window_sec=0,
+                    resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
@@ -139,8 +138,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                         "WHERE "
                         "platform IN tuple('a') "
                     ),
-                    time_window=timedelta(minutes=1),
-                    resolution=timedelta(),
+                    time_window_sec=0,
+                    resolution_sec=60,
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -150,8 +149,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    resolution=timedelta(minutes=1),
-                    time_window=timedelta(hours=48),
+                    time_window_sec=48 * 60 * 60,
+                    resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
@@ -164,8 +163,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    resolution=timedelta(),
-                    time_window=timedelta(minutes=1),
+                    time_window_sec=0,
+                    resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
                     entity_subscription=create_entity_subscription(),
                 ),
@@ -201,8 +200,8 @@ TESTS_CREATE_METRICS = [
                 WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
                 array(6,7)"""
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(
                 EntityKey.METRICS_COUNTERS, 1
             ),
@@ -218,8 +217,8 @@ TESTS_CREATE_METRICS = [
                 WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
                 array(6,7)"""
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
         ),
         EntityKey.METRICS_SETS,
@@ -236,8 +235,8 @@ TESTS_INVALID_METRICS = [
                 """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
                 WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(
                 EntityKey.METRICS_COUNTERS, 1
             ),
@@ -251,8 +250,8 @@ TESTS_INVALID_METRICS = [
                 """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
                 WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(
                 EntityKey.METRICS_COUNTERS, 1
             ),
@@ -266,8 +265,8 @@ TESTS_INVALID_METRICS = [
                 """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
                 WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
         ),
         id="Metrics Sets subscription missing tags[3] condition",
@@ -279,8 +278,8 @@ TESTS_INVALID_METRICS = [
                 """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
                 WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
         ),
         id="Metrics Sets subscription missing project_id condition",
@@ -325,8 +324,8 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         subscription = SubscriptionData(
             project_id=1,
             query="MATCH (events) SELECT count() AS count",
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         )
         identifier = creator.create(subscription, Timer("test"))
