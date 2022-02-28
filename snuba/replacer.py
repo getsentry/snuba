@@ -5,13 +5,14 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import Callable, List, Mapping, Optional, Sequence
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence
 
 import simplejson as json
 from arroyo import Message
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
+from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
@@ -20,7 +21,13 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
-from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
+from snuba.redis import redis_client
+from snuba.replacers.replacer_processor import (
+    Replacement,
+    ReplacementMessage,
+    ReplacementMessageMetadata,
+)
+from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
 
@@ -29,6 +36,8 @@ logger = logging.getLogger("snuba.replacer")
 executor = ThreadPoolExecutor()
 
 NODES_REFRESH_PERIOD = 10
+
+RESET_CHECK_CONFIG = "consumer_groups_to_reset_offset_check"
 
 
 class ShardedConnectionPool(ABC):
@@ -253,7 +262,12 @@ class ShardedExecutor(InsertExecutor):
 
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
-    def __init__(self, storage: WritableTableStorage, metrics: MetricsBackend) -> None:
+    def __init__(
+        self,
+        storage: WritableTableStorage,
+        consumer_group: str,
+        metrics: MetricsBackend,
+    ) -> None:
         self.__storage = storage
 
         self.metrics = metrics
@@ -266,6 +280,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
         self.__sharded_pool = RoundRobinConnectionPool(self.__storage.get_cluster())
         self.__rate_limiter = RateLimiter("replacements")
+
+        self.__last_offset_processed_per_partition: MutableMapping[str, int] = dict()
+        self.__consumer_group = consumer_group
 
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
         """
@@ -332,12 +349,30 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
+        metadata = ReplacementMessageMetadata(
+            partition_index=message.partition.index,
+            offset=message.offset,
+            consumer_group=self.__consumer_group,
+        )
+
+        if self._message_already_processed(metadata):
+            logger.warning(
+                f"Replacer ignored a message, consumer group: {self.__consumer_group}",
+                extra={
+                    "partition": metadata.partition_index,
+                    "offset": metadata.offset,
+                },
+            )
+            if get_config("skip_seen_offsets", False):
+                return None
         seq_message = json.loads(message.payload.value)
-        version = seq_message[0]
+        [version, action_type, data] = seq_message
 
         if version == 2:
             return self.__replacer_processor.process_message(
-                ReplacementMessage(seq_message[1], seq_message[2])
+                ReplacementMessage(
+                    action_type=action_type, data=data, metadata=metadata,
+                )
             )
         else:
             raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
@@ -349,6 +384,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
         for replacement in batch:
+
+            start_time = time.time()
+
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
 
@@ -371,6 +409,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self.__replacer_processor.post_replacement(replacement, count)
 
+            self._check_timing_and_write_to_redis(replacement, start_time)
+
         if need_optimize:
             from snuba.optimize import run_optimize
 
@@ -381,3 +421,85 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             logger.info(
                 "Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host)
             )
+
+    def _message_already_processed(self, metadata: ReplacementMessageMetadata) -> bool:
+        """
+        Figure out whether or not the message was already processed.
+
+        Check if there exists a recorded offset that took too long to execute.
+        If there is, we can conclude whether or not to process the incoming
+        message by comparing the incoming message to the recorded offset.
+        """
+        key = self._build_topic_group_index_key(metadata)
+        self._reset_offset_check(key)
+
+        if key not in self.__last_offset_processed_per_partition:
+            processed_offset = redis_client.get(key)
+            try:
+                self.__last_offset_processed_per_partition[key] = (
+                    -1 if processed_offset is None else int(processed_offset)
+                )
+            except ValueError as e:
+                redis_client.delete(key)
+                logger.warning(
+                    "Unexpected value found for an offset in Redis", exc_info=e,
+                )
+                self.__last_offset_processed_per_partition[key] = -1
+
+        return metadata.offset <= self.__last_offset_processed_per_partition[key]
+
+    def _reset_offset_check(self, key: str) -> None:
+        """
+        We may need to clear the offset the replacer is comparing incoming messages
+        against.
+
+        Eg. The offset is manually reset in Kafka to start processing messages
+        again from an older offset. The replacer will ignore this and just skip
+        messages till it's back to the offset stored in Redis.
+
+        There exists a config which tells us which consumer groups require their
+        replacer(s) reset. Ideally this config is populated with consumer groups
+        temporarily, then cleared once relevant consumers restart.
+        """
+        # expected format is "[consumer_group1,consumer_group2,..]"
+        consumer_groups = (get_config(RESET_CHECK_CONFIG) or "[]")[1:-1].split(",")
+        if self.__consumer_group in consumer_groups:
+            self.__last_offset_processed_per_partition[key] = -1
+            redis_client.delete(key)
+
+    def _check_timing_and_write_to_redis(
+        self, replacement: Replacement, start_time: float
+    ) -> None:
+        """
+        Write the offset just processed to Redis if execution took longer than the threshold.
+        Also store the offset locally to avoid Read calls to Redis.
+
+        If the Consumer dies while the insert query for the message was being executed,
+        the most recently executed offset would be present in Redis.
+        """
+        if (time.time() - start_time) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
+            return
+        message_metadata = replacement.get_message_metadata()
+        key = self._build_topic_group_index_key(message_metadata)
+        redis_client.set(
+            key,
+            message_metadata.offset,
+            ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
+        )
+        self.__last_offset_processed_per_partition[key] = message_metadata.offset
+
+    def _build_topic_group_index_key(
+        self, message_metadata: ReplacementMessageMetadata
+    ) -> str:
+        """
+        Builds a unique key for a message being processed for a specific
+        consumer group and partition.
+        """
+        return ":".join(
+            [
+                "replacement",
+                self.__consumer_group,
+                self.__replacer_processor.get_state().value,
+                str(message_metadata.partition_index),
+            ]
+        )

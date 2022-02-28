@@ -1,7 +1,8 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from datetime import datetime
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
-from snuba.settings.validation import _validate_settings
+from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -46,6 +47,9 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions",
             "transactions_ro",
             "transactions_v2",
+            "errors_v2",
+            "errors_v2_ro",
+            "profiles",
         },
         "single_node": True,
     },
@@ -136,6 +140,8 @@ REPLACER_MAX_MEMORY_USAGE = 10 * (1024 ** 3)  # 10GB
 REPLACER_KEY_TTL = 12 * 60 * 60
 REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
 REPLACER_IMMEDIATE_OPTIMIZE = False
+REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 2 * 60  # 2 minutes in seconds
+REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL = 60 * 60  # 1 hour in seconds
 
 TURBO_SAMPLE_RATE = 0.1
 
@@ -151,7 +157,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental", "profiles"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -182,6 +188,14 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
+
+# Place the actual time we start ingesting on the new version.
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
+TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
+    2022, 2, 18, 0, 0, 0
+)
+
+MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
@@ -222,4 +236,4 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
-_validate_settings(locals())
+validate_settings(locals())

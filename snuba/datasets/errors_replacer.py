@@ -9,7 +9,6 @@ from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from functools import cached_property
 from typing import (
     Any,
@@ -39,7 +38,12 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
-from snuba.replacers.replacer_processor import ReplacementMessage, ReplacerProcessor
+from snuba.replacers.replacer_processor import (
+    ReplacementMessage,
+    ReplacementMessageMetadata,
+    ReplacerProcessor,
+    ReplacerState,
+)
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -51,11 +55,6 @@ In theory this will be needed only during the events to errors migration.
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "errors.replacer")
-
-
-class ReplacerState(Enum):
-    EVENTS = "events"
-    ERRORS = "errors"
 
 
 @dataclass(frozen=True)
@@ -96,6 +95,10 @@ class Replacement(ReplacementBase):
     def get_replacement_type(self) -> ReplacementType:
         raise NotImplementedError()
 
+    @abstractmethod
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        raise NotImplementedError()
+
     def should_write_every_node(self) -> bool:
         project_rollout_setting = get_config("write_node_replacements_projects", "")
         if project_rollout_setting:
@@ -130,6 +133,7 @@ class LegacyReplacement(Replacement):
     query_args: Mapping[str, Any]
     query_time_flags: LegacyQueryTimeFlags
     replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
 
     def get_project_id(self) -> int:
         return self.query_time_flags[1]
@@ -159,6 +163,9 @@ class LegacyReplacement(Replacement):
 
         args = {**self.query_args, "table_name": table_name}
         return self.count_query_template % args
+
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
 
 
 def set_project_exclude_groups(
@@ -478,7 +485,11 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         type_ = message.action_type
 
         if type_ in REPLACEMENT_EVENT_TYPES:
-            metrics.increment("process", 1, tags={"type": type_})
+            metrics.increment(
+                "process",
+                1,
+                tags={"type": type_, "consumer_group": message.metadata.consumer_group},
+            )
 
         if type_ in (
             ReplacementType.START_DELETE_GROUPS,
@@ -525,6 +536,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
         return processed
+
+    def get_state(self) -> ReplacerState:
+        return self.__state_name
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
 
@@ -604,6 +618,7 @@ def _build_event_tombstone_replacement(
         final_query_args,
         query_time_flags,
         replacement_type=message.action_type,
+        replacement_message_metadata=message.metadata,
     )
 
 
@@ -660,6 +675,7 @@ def _build_group_replacement(
         final_query_args,
         query_time_flags,
         replacement_type=message.action_type,
+        replacement_message_metadata=message.metadata,
     )
 
 
@@ -840,6 +856,7 @@ class ExcludeGroupsReplacement(Replacement):
     project_id: int
     group_ids: Sequence[int]
     replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -852,6 +869,7 @@ class ExcludeGroupsReplacement(Replacement):
             project_id=message.data["project_id"],
             group_ids=message.data["group_ids"],
             replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
         )
 
     def get_project_id(self) -> int:
@@ -868,6 +886,9 @@ class ExcludeGroupsReplacement(Replacement):
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         return None
+
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
@@ -928,6 +949,7 @@ class UnmergeGroupsReplacement(Replacement):
     previous_group_id: int
     new_group_id: int
     replacement_type: ReplacementType
+    replacement_message_metadata: ReplacementMessageMetadata
 
     @classmethod
     def parse_message(
@@ -952,6 +974,7 @@ class UnmergeGroupsReplacement(Replacement):
             new_group_id=message.data["new_group_id"],
             all_columns=context.all_columns,
             replacement_type=message.action_type,
+            replacement_message_metadata=message.metadata,
         )
 
     def get_project_id(self) -> int:
@@ -963,9 +986,15 @@ class UnmergeGroupsReplacement(Replacement):
     def get_replacement_type(self) -> ReplacementType:
         return self.replacement_type
 
+    def get_message_metadata(self) -> ReplacementMessageMetadata:
+        return self.replacement_message_metadata
+
     @cached_property
     def _where_clause(self) -> str:
-        if self.state_name == ReplacerState.ERRORS:
+        if (
+            self.state_name == ReplacerState.ERRORS
+            or self.state_name == ReplacerState.ERRORS_V2
+        ):
             hashes = ", ".join(
                 ["'%s'" % str(uuid.UUID(_hashify(h))) for h in self.hashes]
             )
@@ -1011,7 +1040,7 @@ class UnmergeGroupsReplacement(Replacement):
 def _convert_hash(
     hash: str, state_name: ReplacerState, convert_types: bool = False
 ) -> str:
-    if state_name == ReplacerState.ERRORS:
+    if state_name == ReplacerState.ERRORS or state_name == ReplacerState.ERRORS_V2:
         if convert_types:
             return "toUUID('%s')" % str(uuid.UUID(_hashify(hash)))
         else:
@@ -1102,6 +1131,7 @@ def process_unmerge_hierarchical(
         query_args,
         query_time_flags,
         replacement_type=message.action_type,
+        replacement_message_metadata=message.metadata,
     )
 
 
@@ -1198,4 +1228,5 @@ def process_delete_tag(
         query_args,
         query_time_flags,
         replacement_type=message.action_type,
+        replacement_message_metadata=message.metadata,
     )

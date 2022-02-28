@@ -6,7 +6,7 @@ from datetime import timedelta
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
-from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.entity_subscription import ENTITY_KEY_TO_SUBSCRIPTION_MAPPER
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
@@ -49,7 +49,7 @@ timer = Timer("mock-subscriptions")
 for _ in range(parsed.number):
     project_id = random.choice(parsed.project)
 
-    subscription_data = SnQLSubscriptionData(
+    subscription_data = SubscriptionData(
         query=f"MATCH ({entity_key.value}) SELECT count() AS count WHERE project_id = {project_id}",
         project_id=project_id,
         time_window=timedelta(minutes=1),

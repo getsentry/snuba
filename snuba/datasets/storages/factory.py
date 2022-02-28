@@ -7,6 +7,8 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.discover import storage as discover_storage
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
+from snuba.datasets.storages.errors_v2 import storage as errors_v2_storage
+from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.events_ro import storage as events_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
@@ -73,6 +75,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             transactions_storage,
             spans_storage,
             transactions_v2_storage,
+            errors_v2_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
@@ -98,6 +101,7 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
             sessions_hourly_storage,
             org_sessions_hourly_storage,
             transactions_ro_storage,
+            errors_v2_ro_storage,
         ]
     },
     **(DEV_NON_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),

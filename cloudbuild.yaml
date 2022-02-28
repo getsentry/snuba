@@ -103,7 +103,7 @@ images: ['us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
 timeout: 2640s
 options:
   # We need more memory for Webpack builds & e2e self-hosted tests
-  machineType: "N1_HIGHCPU_8"
+  machineType: "E2_HIGHCPU_8"
   env:
     - "CI=1"
     - "SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA"
