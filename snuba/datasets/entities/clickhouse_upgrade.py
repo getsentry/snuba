@@ -33,6 +33,8 @@ logger = logging.getLogger("snuba.upgrade_discrepancies")
 class Option(Enum):
     ERRORS = 1
     ERRORS_V2 = 2
+    TRANSACTIONS = 3
+    TRANSACTIONS_V2 = 4
 
 
 class Choice(NamedTuple):
@@ -147,7 +149,10 @@ def comparison_callback(
         secondary_result.result.result["data"],
         primary_schema,
     )
-    metrics.timing("similarity_score", score, tags={"referrer": referrer})
+    entity = _query.get_from_clause().__class__.__name__
+    metrics.timing(
+        "similarity_score", score, tags={"referrer": referrer, "entity": entity}
+    )
 
     primary_result_portion = primary_result.result.result["data"][:50]
     secondary_result_portion = secondary_result.result.result["data"][:50]
