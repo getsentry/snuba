@@ -125,7 +125,7 @@ class TestMetricsApiCounters(BaseApiTest):
         if not end_time:
             end_time = (self.base_time + self.skew).isoformat()
         query_str = """MATCH (metrics_counters)
-                    SELECT sumMerge(value) AS total_seconds BY project_id, org_id
+                    SELECT sum(value) AS total_seconds BY project_id, org_id
                     WHERE org_id = {org_id}
                     AND project_id = 1
                     AND metric_id = {metric_id}
@@ -234,7 +234,7 @@ class TestMetricsApiSets(BaseApiTest):
 
     def test_sets_basic(self) -> None:
         query_str = """MATCH (metrics_sets)
-                    SELECT uniqCombined64Merge(value) AS unique_values BY project_id, org_id
+                    SELECT uniq(value) AS unique_values BY project_id, org_id
                     WHERE org_id = {org_id}
                     AND project_id = 1
                     AND metric_id = {metric_id}
@@ -327,9 +327,9 @@ class TestMetricsApiDistributions(BaseApiTest):
                     events.append(processed)
         write_processed_messages(self.storage, events)
 
-    def test_dists_basic(self) -> None:
+    def test_dists_percentiles(self) -> None:
         query_str = """MATCH (metrics_distributions)
-                    SELECT quantilesMerge(0.5,0.9,0.95,0.99)(percentiles) AS quants BY project_id, org_id
+                    SELECT quantiles(0.5,0.9,0.95,0.99)(value) AS quants BY project_id, org_id
                     WHERE org_id = {org_id}
                     AND project_id = 1
                     AND metric_id = {metric_id}
@@ -360,3 +360,45 @@ class TestMetricsApiDistributions(BaseApiTest):
             approx(95),
             approx(99),
         ]
+
+    def test_dists_min_max_avg(self) -> None:
+        query_str = """MATCH (metrics_distributions)
+                    SELECT min(value) AS dist_min,
+                        max(value) AS dist_max,
+                        avg(value) AS dist_avg,
+                        sum(value) AS dist_sum,
+                        count(value) AS dist_count
+                    BY project_id, org_id
+                    WHERE org_id = {org_id}
+                    AND project_id = 1
+                    AND metric_id = {metric_id}
+                    AND granularity = 60
+                    AND timestamp >= toDateTime('{start_time}')
+                    AND timestamp < toDateTime('{end_time}')
+                    """.format(
+            metric_id=self.metric_id,
+            org_id=self.org_id,
+            start_time=(self.base_time - self.skew).isoformat(),
+            end_time=(self.base_time + self.skew).isoformat(),
+        )
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+
+        aggregation = data["data"][0]
+
+        assert aggregation["org_id"] == self.org_id
+        assert aggregation["project_id"] == self.project_ids[0]
+        assert aggregation["dist_min"] == self.d_range_min
+        assert aggregation["dist_max"] == approx(self.d_range_max, rel=1)
+        assert aggregation["dist_count"] == self.seconds * (
+            self.d_range_max - self.d_range_min
+        )
+        assert (
+            aggregation["dist_sum"]
+            == sum(range(self.d_range_min, self.d_range_max)) * self.seconds
+        )
