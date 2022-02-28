@@ -485,7 +485,11 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         type_ = message.action_type
 
         if type_ in REPLACEMENT_EVENT_TYPES:
-            metrics.increment("process", 1, tags={"type": type_})
+            metrics.increment(
+                "process",
+                1,
+                tags={"type": type_, "consumer_group": message.metadata.consumer_group},
+            )
 
         if type_ in (
             ReplacementType.START_DELETE_GROUPS,
