@@ -22,6 +22,8 @@ CLUSTERS = [
             "transactions_ro",
             "transactions_v2",
             "errors_v2",
+            "errors_v2_ro",
+            "profiles",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
