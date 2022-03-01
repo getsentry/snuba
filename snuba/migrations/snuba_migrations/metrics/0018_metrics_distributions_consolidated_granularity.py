@@ -11,7 +11,7 @@ from snuba.migrations.snuba_migrations.metrics.templates import (
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Create a materialized view for metrics distributions with a 24h granularity.
+    Create a materialized view for metrics distributions which writes to 10s, 1m, 1h, 1d granularities
 
     The backward migration does *not* delete any data from the destination tables.
     """
