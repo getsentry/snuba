@@ -12,9 +12,6 @@ from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
-from snuba.query.processors.uniq_in_select_and_having import (
-    UniqInSelectAndHavingProcessor,
-)
 from snuba.utils.streams.topics import Topic
 
 PROFILES_LOCAL_TABLE_NAME = "profiles_local"
@@ -22,7 +19,6 @@ PROFILES_DIST_TABLE_NAME = "profiles_dist"
 
 
 processors = [
-    UniqInSelectAndHavingProcessor(),
     UUIDColumnProcessor(set(["transaction_id", "trace_id"])),
     TableRateLimit(),
 ]
