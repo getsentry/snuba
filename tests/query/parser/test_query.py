@@ -138,7 +138,7 @@ test_cases = [
                 SelectedExpression(
                     "format_eventid(event_id)",
                     FunctionCall(
-                        None,
+                        "_snuba_format_eventid(event_id)",
                         "format_eventid",
                         (Column("_snuba_event_id", None, "event_id"),),
                     ),
@@ -207,7 +207,7 @@ test_cases = [
             ),
             groupby=[
                 FunctionCall(
-                    None,
+                    "_snuba_format_eventid(event_id)",
                     "format_eventid",
                     (Column("_snuba_event_id", None, "event_id"),),
                 )
@@ -309,7 +309,7 @@ test_cases = [
                 SelectedExpression(
                     name="foo(tags[test2])",
                     expression=FunctionCall(
-                        None,
+                        "_snuba_foo(tags[test2])",
                         "foo",
                         (
                             SubscriptableReference(
@@ -334,7 +334,7 @@ test_cases = [
             ],
             groupby=[
                 FunctionCall(
-                    None,
+                    "_snuba_foo(tags[test2])",
                     "foo",
                     (
                         SubscriptableReference(
@@ -652,7 +652,7 @@ test_cases = [
                 SelectedExpression(
                     "arrayJoin(exception_stacks)",
                     FunctionCall(
-                        None,
+                        "_snuba_arrayJoin(exception_stacks)",
                         "arrayJoin",
                         (Column("_snuba_exception_stacks", None, "exception_stacks"),),
                     ),
@@ -815,7 +815,7 @@ test_cases = [
                 SelectedExpression(
                     "arrayJoin(exception_stacks.type)",
                     FunctionCall(
-                        None,
+                        "_snuba_arrayJoin(exception_stacks.type)",
                         "arrayJoin",
                         (
                             Column(
@@ -1113,6 +1113,57 @@ test_cases = [
             ],
         ),
         id="Format a query with 2 array join fields in a boolean condition",
+    ),
+    pytest.param(
+        """
+        MATCH (events)
+        SELECT group_id, count(), divide(uniq(tags[url]) AS a+*, 1)
+        BY group_id
+        WHERE {conditions}
+        """.format(
+            conditions=snql_conditions_with_default()
+        ),
+        Query(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", None, "group_id"),
+                ),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", None, "group_id"),
+                ),
+                SelectedExpression(
+                    "count()", FunctionCall("_snuba_count()", "count", tuple())
+                ),
+                SelectedExpression(
+                    "divide(uniq(tags[url]) AS a+*, 1)",
+                    FunctionCall(
+                        "_snuba_divide(uniq(tags[url]) AS a+*, 1)",
+                        "divide",
+                        (
+                            FunctionCall(
+                                "_snuba_a+*",
+                                "uniq",
+                                (
+                                    SubscriptableReference(
+                                        "_snuba_tags[url]",
+                                        Column("_snuba_tags", None, "tags"),
+                                        Literal(None, "url"),
+                                    ),
+                                ),
+                            ),
+                            Literal(None, 1),
+                        ),
+                    ),
+                ),
+            ],
+            groupby=[Column("_snuba_group_id", None, "group_id")],
+            condition=with_required(),
+            limit=1000,
+        ),
+        id="Format a query with expressions without aliases",
     ),
 ]
 

@@ -426,6 +426,14 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
+        # If there are no subscriptions for a tick, immediately commit if marked
+        # `should_commit`
+        if len(encoded_tasks) == 0 and message.payload.should_commit == True:
+            self.__commit(
+                {message.partition: Position(message.offset, message.timestamp)}
+            )
+            return
+
         self.__queue.append(
             message,
             deque(
