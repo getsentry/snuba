@@ -199,6 +199,12 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def __execute_query(
         self, task: ScheduledSubscriptionTask, tick_upper_offset: int
     ) -> Tuple[Request, Result]:
+        # Measure the amount of time that took between this task being
+        # scheduled and it beginning to execute.
+        self.__metrics.timing(
+            "executor.latency", (time.time() - task.timestamp.timestamp()) * 1000
+        )
+
         timer = Timer("query")
 
         with self.__concurrent_gauge:
