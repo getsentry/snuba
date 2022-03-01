@@ -1,13 +1,13 @@
+import logging
 from typing import Any, Mapping, Optional
+from uuid import UUID
 
 from dateutil.parser import parse
 
-from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
-from snuba.utils.metrics.wrapper import MetricsWrapper
 
-metrics = MetricsWrapper(environment.metrics, "profiles.processor")
+logger = logging.getLogger(__name__)
 
 
 class ProfilesMessageProcessor(MessageProcessor):
@@ -18,7 +18,7 @@ class ProfilesMessageProcessor(MessageProcessor):
             processed = {
                 "organization_id": message["organization_id"],
                 "project_id": message["project_id"],
-                "transaction_id": message["transaction_id"],
+                "transaction_id": str(UUID(message["transaction_id"])),
                 "received": parse(message["received"]),
                 "profile": message["profile"],
                 "symbols": message["symbols"],
@@ -33,12 +33,20 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "duration_ns": message["duration_ns"],
                 "environment": message.get("environment"),
                 "platform": message["platform"],
-                "trace_id": message["trace_id"],
+                "trace_id": str(UUID(message["trace_id"])),
                 "transaction_name": message["transaction_name"],
                 "version_name": message["version_name"],
                 "version_code": message["version_code"],
-                "retention_days": 30,
+                "retention_days": message["retention_days"],
             }
+        except ValueError:
+            logger.warning(
+                "Invalid UUID",
+                extra={
+                    "transaction_id": message["transaction_id"],
+                    "trace_id": message["trace_id"],
+                },
+            )
         except KeyError as e:
             logger.warning("Invalid profile data", extra={"missing": e.args[0]})
             return None
