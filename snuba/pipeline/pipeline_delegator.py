@@ -7,9 +7,11 @@ from snuba.pipeline.query_pipeline import (
     QueryPipelineBuilder,
     QueryPlanner,
 )
+from snuba.pipeline.settings_delegator import RateLimiterDelegate
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
+from snuba.state import get_config
 from snuba.utils.threaded_function_delegator import Result, ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
@@ -54,10 +56,12 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         runner: QueryRunner,
         query_pipeline_builders: QueryPipelineBuilders,
         selector_func: SelectorFunc,
+        split_rate_limiter: bool,
         callback_func: Optional[CallbackFunc],
     ):
         self.__request = request
         self.__runner = runner
+        self.__split_rate_limtier = split_rate_limiter
         self.__query_pipeline_builders = query_pipeline_builders
 
         self.__selector_func = lambda query: selector_func(
@@ -76,10 +80,30 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         )
 
     def execute(self) -> QueryResult:
+        def build_delegate_request(request: Request, builder_id: str) -> Request:
+            """
+            Build a new request that contains a RateLimiterDelegate in order
+            to separate the rate limiter namespace and avoid double counting
+            when enforcing the quota.
+            """
+            if not get_config("pipeline_split_rate_limiter", 0):
+                return request
+
+            return Request(
+                id=request.id,
+                body=request.body,
+                query=request.query,
+                snql_anonymized=request.snql_anonymized,
+                settings=RateLimiterDelegate(builder_id, request.settings),
+            )
+
         executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](
             callables={
                 builder_id: builder.build_execution_pipeline(
-                    self.__request, self.__runner
+                    build_delegate_request(self.__request, builder_id)
+                    if self.__split_rate_limtier
+                    else self.__request,
+                    self.__runner,
                 ).execute
                 for builder_id, builder in self.__query_pipeline_builders.items()
             },
@@ -99,11 +123,13 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
         self,
         query_pipeline_builders: QueryPipelineBuilders,
         selector_func: SelectorFunc,
+        split_rate_limiter: bool,
         callback_func: Optional[CallbackFunc] = None,
     ) -> None:
         self.__query_pipeline_builders = query_pipeline_builders
         self.__selector_func = selector_func
         self.__callback_func = callback_func
+        self.__split_rate_limiter = split_rate_limiter
 
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
@@ -113,6 +139,7 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
             runner=runner,
             query_pipeline_builders=self.__query_pipeline_builders,
             selector_func=self.__selector_func,
+            split_rate_limiter=self.__split_rate_limiter,
             callback_func=self.__callback_func,
         )
 
