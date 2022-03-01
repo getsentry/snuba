@@ -38,6 +38,8 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "version_name": message["version_name"],
                 "version_code": message["version_code"],
                 "retention_days": message["retention_days"],
+                "offset": metadata.offset,
+                "partition": metadata.partition,
             }
         except ValueError:
             logger.warning(
