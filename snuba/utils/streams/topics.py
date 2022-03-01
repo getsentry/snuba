@@ -27,6 +27,7 @@ class Topic(Enum):
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
+    REPLAYEVENTS = "snuba-replayevents"
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
 
 
@@ -36,6 +37,7 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
         Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
+        Topic.REPLAYEVENTS: {"message.timestamp.type": "LogAppendTime"},
     }
     if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
         config.update({Topic.SESSIONS: {"message.timestamp.type": "LogAppendTime"}})

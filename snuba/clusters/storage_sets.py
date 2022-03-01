@@ -20,6 +20,7 @@ class StorageSetKey(Enum):
     DISCOVER = "discover"
     EVENTS = "events"
     EVENTS_RO = "events_ro"
+    REPLAYS = "replays"
     METRICS = "metrics"
     MIGRATIONS = "migrations"
     OUTCOMES = "outcomes"

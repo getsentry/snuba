@@ -41,7 +41,7 @@ class OutcomesProcessor(MessageProcessor):
         assert isinstance(value, dict)
         v_uuid = value.get("event_id")
         reason = value.get("reason")
-
+        value["outcome"] = OUTCOME_CLIENT_DISCARD
         # relays let arbitrary outcome reasons through do the topic.  We
         # reject undesired values only in the processor so that we can
         # add new ones without having to update relays through the entire

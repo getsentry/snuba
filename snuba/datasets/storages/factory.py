@@ -30,6 +30,7 @@ from snuba.datasets.storages.profiles import (
     writable_storage as profiles_writable_storage,
 )
 from snuba.datasets.storages.querylog import storage as querylog_storage
+from snuba.datasets.storages.replays import storage as replays_storage
 from snuba.datasets.storages.sessions import (
     materialized_storage as sessions_hourly_storage,
 )
@@ -74,6 +75,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             transactions_v2_storage,
             errors_v2_storage,
             profiles_writable_storage,
+            replays_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
