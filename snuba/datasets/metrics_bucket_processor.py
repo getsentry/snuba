@@ -12,7 +12,7 @@ from snuba.processor import (
 )
 
 DISABLED_MATERIALIZATION_VERSION = 1
-ENABLED_MATERIALIZATION_VERSION = 0
+ENABLED_MATERIALIZATION_VERSION = 2
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
