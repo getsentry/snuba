@@ -275,16 +275,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             float, state.get_config("executor_sample_rate", 0.0)
         )
 
-        # HACK: Just commit offsets and return if we haven't started rollout
-        # yet. This is just a temporary workaround to prevent the lag continuously
-        # growing and dwarfing others on op's Kafka dashboard
-        if self.__commit is not None and executor_sample_rate == 0:
-            self.__commit(
-                {message.partition: Position(message.offset, message.timestamp)}
-            )
-
-            return
-
         subscription_id = str(task.task.subscription.identifier)
         should_execute = (
             subscription_id_to_float(subscription_id) < executor_sample_rate
@@ -305,6 +295,12 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 )
             )
         else:
+            # Just commit offset even if we are skipping execution
+            if self.__commit is not None:
+                self.__commit(
+                    {message.partition: Position(message.offset, message.timestamp)}
+                )
+
             self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
 
     def close(self) -> None:
