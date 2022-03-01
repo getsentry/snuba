@@ -175,6 +175,7 @@ class BaseTransactionsEntity(Entity, ABC):
                 "transactions_v2": v2_pipeline_builder,
             },
             selector_func=v2_selector_function,
+            split_rate_limiter=True,
             callback_func=comparison_callback,
         )
 
