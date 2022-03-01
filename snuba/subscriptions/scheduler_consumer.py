@@ -15,13 +15,15 @@ from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.redis import redis_client
 from snuba.subscriptions.data import PartitionId
-from snuba.subscriptions.scheduler_load_testing import LoadTestingSubscriptionScheduler
+from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
     ProduceScheduledSubscriptionMessage,
     ProvideCommitStrategy,
     TickBuffer,
 )
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
@@ -195,7 +197,6 @@ class SchedulerBuilder:
         schedule_ttl: int,
         delay_seconds: Optional[int],
         metrics: MetricsBackend,
-        load_factor: int,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
@@ -229,7 +230,6 @@ class SchedulerBuilder:
         self.__schedule_ttl = schedule_ttl
         self.__delay_seconds = delay_seconds
         self.__metrics = metrics
-        self.__load_factor = load_factor
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
@@ -247,7 +247,6 @@ class SchedulerBuilder:
             self.__producer,
             self.__scheduled_topic_spec,
             self.__metrics,
-            self.__load_factor,
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
@@ -278,7 +277,6 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
-        load_factor: int,
     ) -> None:
         self.__mode = mode
         self.__partitions = partitions
@@ -291,12 +289,14 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         )
 
         self.__schedulers = {
-            index: LoadTestingSubscriptionScheduler(
-                PartitionId(index),
+            index: SubscriptionScheduler(
+                entity_key,
+                RedisSubscriptionDataStore(
+                    redis_client, entity_key, PartitionId(index)
+                ),
+                partition_id=PartitionId(index),
                 cache_ttl=timedelta(seconds=schedule_ttl),
                 metrics=self.__metrics,
-                entity_key=entity_key,
-                load_factor=load_factor,
             )
             for index in range(self.__partitions)
         }

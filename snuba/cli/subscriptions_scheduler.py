@@ -7,7 +7,7 @@ import click
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
-from snuba import environment, settings
+from snuba import environment
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
@@ -48,12 +48,6 @@ logger = logging.getLogger(__name__)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
-@click.option(
-    "--load-factor",
-    type=int,
-    default=settings.SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR,
-    help="Temporary option to simulate additional load. To be removed after testing.",
-)
 def subscriptions_scheduler(
     *,
     entity_name: str,
@@ -63,7 +57,6 @@ def subscriptions_scheduler(
     schedule_ttl: int,
     log_level: Optional[str],
     delay_seconds: Optional[int],
-    load_factor: int,
 ) -> None:
     """
     The subscriptions scheduler's job is to schedule subscriptions for a single entity.
@@ -138,8 +131,6 @@ def subscriptions_scheduler(
         schedule_ttl,
         delay_seconds,
         metrics,
-        # TODO: Just for testing, should be removed before the scheduler is actually used
-        load_factor,
     )
 
     processor = builder.build_consumer()
