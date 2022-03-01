@@ -67,7 +67,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
@@ -87,7 +89,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
@@ -107,7 +111,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
@@ -127,7 +133,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
                 SelectedExpression("d", Column("_snuba_d", None, "d")),
@@ -156,7 +164,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
@@ -176,7 +186,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
@@ -195,7 +207,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
                 SelectedExpression(
@@ -221,12 +235,14 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression(
                     "3* foo(c) AS foo",
                     FunctionCall(
-                        None,
+                        "_snuba_3* foo(c) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
@@ -256,12 +272,14 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression(
                     "3*foo(c) AS foo",
                     FunctionCall(
-                        None,
+                        "_snuba_3*foo(c) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
@@ -362,12 +380,14 @@ test_cases = [
                 SelectedExpression("d", Column("_snuba_d", None, "d")),
                 SelectedExpression(
                     "2+7",
-                    FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
+                    FunctionCall(
+                        "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
+                    ),
                 ),
                 SelectedExpression(
                     "(2*(4-5)+3)",
                     FunctionCall(
-                        None,
+                        "_snuba_(2*(4-5)+3)",
                         "plus",
                         (
                             FunctionCall(
@@ -395,7 +415,9 @@ test_cases = [
             condition=required_condition,
             groupby=[
                 Column("_snuba_d", None, "d"),
-                FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
+                FunctionCall(
+                    "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
+                ),
             ],
             order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
             limit=1000,
@@ -413,12 +435,14 @@ test_cases = [
                 SelectedExpression("d", Column("_snuba_d", None, "d")),
                 SelectedExpression(
                     "2+7",
-                    FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
+                    FunctionCall(
+                        "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
+                    ),
                 ),
                 SelectedExpression(
                     "(2*(4-5)+3)",
                     FunctionCall(
-                        None,
+                        "_snuba_(2*(4-5)+3)",
                         "plus",
                         (
                             FunctionCall(
@@ -448,7 +472,9 @@ test_cases = [
             condition=required_condition,
             groupby=[
                 Column("_snuba_d", None, "d"),
-                FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
+                FunctionCall(
+                    "_snuba_2+7", "plus", (Literal(None, 2), Literal(None, 7))
+                ),
             ],
             order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
             limit=1000,
@@ -472,7 +498,7 @@ test_cases = [
                 SelectedExpression(
                     "3*foo(c) AS foo",
                     FunctionCall(
-                        None,
+                        "_snuba_3*foo(c) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
@@ -681,12 +707,14 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression(
                     "3*foo(c) AS foo",
                     FunctionCall(
-                        None,
+                        "_snuba_3*foo(c) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
@@ -715,12 +743,14 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression(
                     "3*foo(c) AS foo",
                     FunctionCall(
-                        None,
+                        "_snuba_3*foo(c) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),
@@ -846,7 +876,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
             ],
@@ -930,7 +962,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("t.c", Column("_snuba_t.c", "t", "c")),
             ],
@@ -1033,7 +1067,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
             ],
@@ -1172,7 +1208,9 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("e.a", Column("_snuba_e.a", "e", "a")),
                 SelectedExpression("t.b", Column("_snuba_t.b", "t", "b")),
@@ -1379,12 +1417,14 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression(
                     "3*foo(c) AS foo",
                     FunctionCall(
-                        None,
+                        "_snuba_3*foo(c) AS foo",
                         "multiply",
                         (
                             Literal(None, 3),

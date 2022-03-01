@@ -20,7 +20,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
         (
             "MATCH Entity(events) "
-            "SELECT minus(-1337, -1337), c, d, e "
+            "SELECT (minus(-1337, -1337) AS `4-5`), c, d, e "
             "WHERE equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "
@@ -81,7 +81,7 @@ test_cases = [
         WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         (
             "MATCH Entity(events) "
-            "SELECT minus(-1337, -1337), multiply(-1337, (foo(c) AS foo)), c "
+            "SELECT (minus(-1337, -1337) AS `4-5`), (multiply(-1337, (foo(c) AS foo)) AS `3*foo(c) AS foo`), c "
             "WHERE equals((equals(arrayExists(a, '$S', '$S'), -1337) "
             "OR equals(arrayAll(b, '$S', tuple('$S', '$S')), -1337)), -1337) "
             "AND equals(project_id, -1337) "
@@ -103,7 +103,7 @@ test_cases = [
             "LEFT e, Entity(events) "
             "TYPE JoinType.INNER RIGHT ga, Entity(groupassignee)\n ON e.event_id ga.group_id "
             "TYPE JoinType.INNER RIGHT t, Entity(transactions)\n ON e.event_id t.event_id "
-            "SELECT minus(-1337, -1337), ga.c "
+            "SELECT (minus(-1337, -1337) AS `4-5`), ga.c "
             "WHERE equals(e.project_id, -1337) "
             "AND greaterOrEquals(e.timestamp, toDateTime('$S')) "
             "AND less(e.timestamp, toDateTime('$S')) "
