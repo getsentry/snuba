@@ -33,6 +33,9 @@ class ProfileEvent:
     transaction_name: str
     version_name: str
     version_code: str
+    retention_days: int
+    offset: int
+    partition: int
 
     def serialize(self) -> Mapping[str, Any]:
         return asdict(self)
@@ -40,12 +43,16 @@ class ProfileEvent:
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         result = asdict(self)
         result["received"] = parse(self.received)
-        result["retention_days"] = 30
+        result["offset"] = meta.offset
+        result["partition"] = meta.partition
         return result
 
 
 class TestProfilesProcessor:
     def test_missing_symbols(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=1, partition=0, timestamp=datetime(1970, 1, 1)
+        )
         message = ProfileEvent(
             organization_id=123456789,
             project_id=987654321,
@@ -68,16 +75,19 @@ class TestProfilesProcessor:
             transaction_name="lets-get-ready-to-party",
             version_name="v42.0.0",
             version_code="1337",
+            retention_days=30,
+            partition=meta.partition,
+            offset=meta.offset,
         )
         payload = message.serialize()
         del payload["symbols"]
-        meta = KafkaMessageMetadata(
-            offset=1, partition=0, timestamp=datetime(1970, 1, 1)
-        )
         processor = ProfilesMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
     def test_process_message(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
         message = ProfileEvent(
             organization_id=123456789,
             project_id=987654321,
@@ -100,9 +110,9 @@ class TestProfilesProcessor:
             transaction_name="lets-get-ready-to-party",
             version_name="v42.0.0",
             version_code="1337",
-        )
-        meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+            retention_days=30,
+            partition=meta.partition,
+            offset=meta.offset,
         )
         assert ProfilesMessageProcessor().process_message(
             message.serialize(), meta
