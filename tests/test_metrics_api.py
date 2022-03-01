@@ -258,9 +258,9 @@ class TestMetricsApiSets(BaseApiTest):
                     WHERE org_id = {org_id}
                     AND project_id = 1
                     AND metric_id = {metric_id}
-                    AND granularity = 60
                     AND timestamp >= toDateTime('{start_time}')
                     AND timestamp < toDateTime('{end_time}')
+                    GRANULARITY 60
                     """.format(
             metric_id=self.metric_id,
             org_id=self.org_id,
@@ -353,9 +353,9 @@ class TestMetricsApiDistributions(BaseApiTest):
                     WHERE org_id = {org_id}
                     AND project_id = 1
                     AND metric_id = {metric_id}
-                    AND granularity = 60
                     AND timestamp >= toDateTime('{start_time}')
                     AND timestamp < toDateTime('{end_time}')
+                    GRANULARITY 60
                     """.format(
             metric_id=self.metric_id,
             org_id=self.org_id,
@@ -392,9 +392,9 @@ class TestMetricsApiDistributions(BaseApiTest):
                     WHERE org_id = {org_id}
                     AND project_id = 1
                     AND metric_id = {metric_id}
-                    AND granularity = 60
                     AND timestamp >= toDateTime('{start_time}')
                     AND timestamp < toDateTime('{end_time}')
+                    GRANULARITY 60
                     """.format(
             metric_id=self.metric_id,
             org_id=self.org_id,
