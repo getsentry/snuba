@@ -37,6 +37,7 @@ from snuba.query.processors.object_id_rate_limiter import (
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
@@ -209,6 +210,7 @@ class BaseEventsEntity(Entity, ABC):
                     "errors_v2": v2_pipeline_builder,
                 },
                 selector_func=v2_selector_function,
+                split_rate_limiter=True,
                 callback_func=comparison_callback,
             )
         else:
@@ -261,6 +263,7 @@ class BaseEventsEntity(Entity, ABC):
             ReferrerRateLimiterProcessor(),
             ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
+            ResourceQuotaProcessor("project_id"),
         ]
 
 
