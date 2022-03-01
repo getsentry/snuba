@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable, Optional, Type
 
 import pytest
@@ -42,8 +42,8 @@ def build_snql_subscription_data(
 
     return SubscriptionData(
         project_id=5,
-        time_window=timedelta(minutes=500),
-        resolution=timedelta(minutes=1),
+        time_window_sec=500 * 60,
+        resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
         entity_subscription=create_entity_subscription(entity_key, organization),
     )
@@ -95,8 +95,8 @@ def test_encode_snql(
     payload = codec.encode(subscription)
     data = json.loads(payload.decode("utf-8"))
     assert data["project_id"] == subscription.project_id
-    assert data["time_window"] == int(subscription.time_window.total_seconds())
-    assert data["resolution"] == int(subscription.resolution.total_seconds())
+    assert data["time_window"] == subscription.time_window_sec
+    assert data["resolution"] == subscription.resolution_sec
     assert data["query"] == subscription.query
     assert_entity_subscription_on_subscription_class(
         organization, subscription, entity_key
@@ -113,8 +113,8 @@ def test_decode_snql(
     subscription = builder(entity_key, organization)
     data = {
         "project_id": subscription.project_id,
-        "time_window": int(subscription.time_window.total_seconds()),
-        "resolution": int(subscription.resolution.total_seconds()),
+        "time_window": subscription.time_window_sec,
+        "resolution": subscription.resolution_sec,
         "query": subscription.query,
     }
     if organization:
@@ -132,8 +132,8 @@ def test_subscription_task_result_encoder() -> None:
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=entity_subscription,
     )
 
@@ -192,8 +192,8 @@ def test_sessions_subscription_task_result_encoder() -> None:
             OFFSET 0 GRANULARITY 3600
             """
         ),
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=entity_subscription,
     )
 
@@ -271,8 +271,8 @@ def test_metrics_subscription_task_result_encoder(
             WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(1,2)
             """
         ),
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=entity_subscription,
     )
 
@@ -325,8 +325,8 @@ def test_subscription_task_encoder() -> None:
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH events SELECT count()",
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=EventsSubscription(data_dict={}),
     )
 
