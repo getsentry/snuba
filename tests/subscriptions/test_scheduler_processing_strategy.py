@@ -32,7 +32,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
-from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.backends.metrics import TestingMetricsBackend
 
 
 def test_tick_buffer_immediate() -> None:
@@ -136,7 +136,6 @@ def test_tick_buffer_wait_slowest() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(message_1_0)]
-    assert Timing("partition_lag_ms", 6000.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
     metrics_backend.calls = []
@@ -162,7 +161,6 @@ def test_tick_buffer_wait_slowest() -> None:
         mock.call(message_0_0),
         mock.call(message_1_1),
     ]
-    assert Timing("partition_lag_ms", 5000.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
     metrics_backend.calls = []
@@ -190,7 +188,6 @@ def test_tick_buffer_wait_slowest() -> None:
         mock.call(message_0_1),
         mock.call(message_1_2),
     ]
-    assert Timing("partition_lag_ms", 0.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
     metrics_backend.calls = []
