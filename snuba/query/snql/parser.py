@@ -714,6 +714,8 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             return exp
 
         alias = exp.alias or node.text.strip()
+        if not isinstance(exp, Column) and exp.alias is None:
+            exp = replace(exp, alias=alias)
         return SelectedExpression(alias, exp)
 
     def visit_select_columns(
@@ -1305,11 +1307,6 @@ def validate_entities_with_query(
                 f"validation failed for entity {query.get_from_clause().key.value}: {e}",
                 should_report=e.should_report,
             )
-        except InvalidExpressionException as e:
-            raise ParsingException(
-                f"validation failed for entity {query.get_from_clause().key.value}: {e}",
-                should_report=e.should_report,
-            )
     else:
         from_clause = query.get_from_clause()
         if isinstance(from_clause, JoinClause):
@@ -1321,11 +1318,6 @@ def validate_entities_with_query(
                     for v in entity.get_validators():
                         v.validate(query, alias)
                 except InvalidQueryException as e:
-                    raise ParsingException(
-                        f"validation failed for entity {node.data_source.key.value}: {e}",
-                        should_report=e.should_report,
-                    )
-                except InvalidExpressionException as e:
                     raise ParsingException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
                         should_report=e.should_report,

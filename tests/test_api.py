@@ -1941,10 +1941,9 @@ class TestApi(SimpleAPITest):
         )
 
         val = (
-            "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"arraySlice(hierarchical_hashes, 0, 2)) FROM {errors_table_name} PREWHERE"
+            "SELECT (arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`) FROM {errors_table_name} PREWHERE"
         )
-
         assert result["sql"].startswith(val)
 
     def test_backslashes_in_query(self) -> None:
@@ -1994,10 +1993,9 @@ class TestApi(SimpleAPITest):
         )
 
         val = (
-            "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM {errors_table_name} PREWHERE"
+            "SELECT (arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`) FROM {errors_table_name} PREWHERE"
         )
-
         assert result["sql"].startswith(val)
 
     def test_test_endpoints(self) -> None:
