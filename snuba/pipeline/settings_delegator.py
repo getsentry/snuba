@@ -1,6 +1,7 @@
-from typing import Sequence
+from typing import Optional, Sequence
 
 from snuba.request.request_settings import RequestSettings
+from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
 
 
@@ -68,3 +69,9 @@ class RateLimiterDelegate(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         self.__rate_limit_params.append(self.__append_prefix(rate_limit_param))
+
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        return self.__delegate.get_resource_quota()
+
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
+        self.__delegate.set_resource_quota(quota)
