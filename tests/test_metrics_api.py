@@ -12,6 +12,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     METRICS_COUNTERS_TYPE,
     METRICS_DISTRIBUTIONS_TYPE,
     METRICS_SET_TYPE,
+    timestamp_to_bucket,
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -73,7 +74,7 @@ class TestMetricsApiCounters(BaseApiTest):
 
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
-        ) - timedelta(minutes=self.seconds)
+        )
         self.storage = get_writable_storage(StorageKey.METRICS_COUNTERS_BUCKETS)
         self.generate_counters()
 
@@ -115,6 +116,7 @@ class TestMetricsApiCounters(BaseApiTest):
         org_id: Optional[int] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
+        granularity: Optional[int] = None,
     ) -> str:
         if not metric_id:
             metric_id = self.metric_id
@@ -124,20 +126,17 @@ class TestMetricsApiCounters(BaseApiTest):
             start_time = (self.base_time - self.skew).isoformat()
         if not end_time:
             end_time = (self.base_time + self.skew).isoformat()
-        query_str = """MATCH (metrics_counters)
+        if not granularity:
+            granularity = 60
+        query_str = f"""MATCH (metrics_counters)
                     SELECT sum(value) AS total_seconds BY project_id, org_id
                     WHERE org_id = {org_id}
                     AND project_id = 1
                     AND metric_id = {metric_id}
-                    AND granularity = 60
                     AND timestamp >= toDateTime('{start_time}')
                     AND timestamp < toDateTime('{end_time}')
-                    """.format(
-            metric_id=metric_id,
-            org_id=org_id,
-            start_time=start_time,
-            end_time=end_time,
-        )
+                    GRANULARITY {granularity}
+                    """
 
         return query_str
 
@@ -166,6 +165,27 @@ class TestMetricsApiCounters(BaseApiTest):
 
         assert response.status_code == 200
         assert len(data["data"]) == 0, data
+
+    def test_retrieval_single_hour_at_hour_granularity(self) -> None:
+        query_str = self.build_simple_query(
+            start_time=timestamp_to_bucket(self.base_time, 3600).isoformat(),
+            end_time=(
+                timestamp_to_bucket(self.base_time, 3600) + timedelta(hours=1)
+            ).isoformat(),
+            granularity=3600,
+        )
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+
+        aggregation = data["data"][0]
+        assert aggregation["org_id"] == self.org_id
+        assert aggregation["project_id"] == self.project_ids[0]
+        # we're limiting scope to an hour, and we increment the count once/sec
+        assert aggregation["total_seconds"] == 3600
 
 
 class TestMetricsApiSets(BaseApiTest):

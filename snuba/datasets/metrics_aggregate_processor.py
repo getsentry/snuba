@@ -41,7 +41,7 @@ METRICS_COUNTERS_TYPE = "c"
 def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
     time_seconds = timestamp.timestamp()
     out_seconds = interval_seconds * (time_seconds // interval_seconds)
-    return datetime.fromtimestamp(out_seconds)
+    return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
 
 
 class MetricsAggregateProcessor(MessageProcessor, ABC):
