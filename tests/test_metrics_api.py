@@ -381,7 +381,7 @@ class TestMetricsApiDistributions(BaseApiTest):
             approx(99),
         ]
 
-    def test_dists_min_max_avg(self) -> None:
+    def test_dists_min_max_avg_one_day_granularity(self) -> None:
         query_str = """MATCH (metrics_distributions)
                     SELECT min(value) AS dist_min,
                         max(value) AS dist_max,
@@ -394,11 +394,11 @@ class TestMetricsApiDistributions(BaseApiTest):
                     AND metric_id = {metric_id}
                     AND timestamp >= toDateTime('{start_time}')
                     AND timestamp < toDateTime('{end_time}')
-                    GRANULARITY 60
+                    GRANULARITY 86400
                     """.format(
             metric_id=self.metric_id,
             org_id=self.org_id,
-            start_time=(self.base_time - self.skew).isoformat(),
+            start_time=timestamp_to_bucket(self.base_time, 86400).isoformat(),
             end_time=(self.base_time + self.skew).isoformat(),
         )
         response = self.app.post(
