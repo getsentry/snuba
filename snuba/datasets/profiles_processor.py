@@ -40,6 +40,6 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "retention_days": 30,
             }
         except KeyError as e:
-            metrics.increment(f"missing_{e.args[0]}")
+            logger.warning("Invalid profile data", extra={"missing": e.args[0]})
             return None
         return InsertBatch([processed], None)
