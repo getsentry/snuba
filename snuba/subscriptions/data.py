@@ -75,8 +75,8 @@ class SubscriptionData:
     """
 
     project_id: int
-    resolution: timedelta
-    time_window: timedelta
+    resolution_sec: int
+    time_window_sec: int
     entity_subscription: EntitySubscription
     query: str
 
@@ -106,7 +106,7 @@ class SubscriptionData:
             binary_condition(
                 ConditionFunctions.GTE,
                 Column(None, None, required_timestamp_column),
-                Literal(None, (timestamp - self.time_window)),
+                Literal(None, (timestamp - timedelta(seconds=self.time_window_sec))),
             ),
             binary_condition(
                 ConditionFunctions.LT,
@@ -128,22 +128,19 @@ class SubscriptionData:
         query.set_ast_condition(new_condition)
 
     def validate(self) -> None:
-        if self.time_window < timedelta(minutes=1):
+        if self.time_window_sec < 60:
             raise InvalidSubscriptionError(
                 "Time window must be greater than or equal to 1 minute"
             )
-        elif self.time_window > timedelta(hours=24):
+        elif self.time_window_sec > 60 * 60 * 24:
             raise InvalidSubscriptionError(
                 "Time window must be less than or equal to 24 hours"
             )
 
-        if self.resolution < timedelta(minutes=1):
+        if self.resolution_sec < 60:
             raise InvalidSubscriptionError(
                 "Resolution must be greater than or equal to 1 minute"
             )
-
-        if self.resolution.microseconds > 0:
-            raise InvalidSubscriptionError("Resolution does not support microseconds")
 
     def build_request(
         self,
@@ -181,8 +178,9 @@ class SubscriptionData:
 
         return SubscriptionData(
             project_id=data["project_id"],
-            time_window=timedelta(seconds=data["time_window"]),
-            resolution=timedelta(seconds=data["resolution"]),
+            # Always cast to int in case any old subscriptions are stored as float
+            time_window_sec=int(data["time_window"]),
+            resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity_subscription=entity_subscription,
         )
@@ -190,8 +188,8 @@ class SubscriptionData:
     def to_dict(self) -> Mapping[str, Any]:
         return {
             "project_id": self.project_id,
-            "time_window": int(self.time_window.total_seconds()),
-            "resolution": int(self.resolution.total_seconds()),
+            "time_window": self.time_window_sec,
+            "resolution": self.resolution_sec,
             "query": self.query,
             **self.entity_subscription.to_dict(),
         }
