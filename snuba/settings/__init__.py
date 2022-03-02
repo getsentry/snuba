@@ -180,9 +180,6 @@ ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", Fa
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
-# Temporary setting for subscription scheduler test
-SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 10
-
 TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
 # Used for migrating to/from writing metrics directly to aggregate tables

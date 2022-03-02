@@ -81,7 +81,6 @@ def test_scheduler_consumer() -> None:
         60 * 5,
         None,
         metrics_backend,
-        1,
     )
     scheduler = builder.build_consumer()
     time.sleep(2)
