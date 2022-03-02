@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import replace
 from functools import partial
@@ -249,7 +251,7 @@ def _run_and_apply_column_names(
         concurrent_queries_gauge,
     )
 
-    alias_name_mapping: MutableMapping[str, str] = {}
+    alias_name_mapping: MutableMapping[str, list[str]] = {}
     for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias
         name = select_col.name
@@ -262,21 +264,12 @@ def _run_and_apply_column_names(
                 },
                 exc_info=True,
             )
-        elif alias in alias_name_mapping and alias_name_mapping[alias] != name:
-            logger.warning(
-                "Duplicated alias definition in select clause",
-                extra={
-                    "alias": alias,
-                    "column_name": name,
-                    "existing_name": alias_name_mapping[alias],
-                },
-                exc_info=True,
-            )
+        elif alias in alias_name_mapping and name not in alias_name_mapping[alias]:
+            alias_name_mapping[alias].append(name)
         else:
-            alias_name_mapping[alias] = name
+            alias_name_mapping[alias] = [name]
 
     transform_column_names(result, alias_name_mapping)
-
     return result
 
 

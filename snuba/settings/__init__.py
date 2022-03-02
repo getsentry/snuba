@@ -1,5 +1,6 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from datetime import datetime
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
 
@@ -47,6 +48,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions_ro",
             "transactions_v2",
             "errors_v2",
+            "errors_v2_ro",
             "profiles",
         },
         "single_node": True,
@@ -178,9 +180,6 @@ ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", Fa
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
-# Temporary setting for subscription scheduler test
-SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 5
-
 TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
 # Used for migrating to/from writing metrics directly to aggregate tables
@@ -189,6 +188,14 @@ WRITE_METRICS_AGG_DIRECTLY = False
 
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
+
+# Place the actual time we start ingesting on the new version.
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
+TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
+    2022, 2, 18, 0, 0, 0
+)
+
+MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

@@ -309,6 +309,36 @@ class TestSnQLApi(BaseApiTest):
             assert metadata["request"]["referrer"] == "test"
             assert len(metadata["query_list"]) == expected_query_count
 
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.state.record_query")
+    @patch("snuba.web.db_query.execute_query_with_readthrough_caching")
+    def test_record_queries_on_error(
+        self, execute_query_mock: MagicMock, record_query_mock: MagicMock
+    ) -> None:
+        from snuba.clickhouse.errors import ClickhouseError
+
+        record_query_mock.reset_mock()
+        execute_query_mock.reset_mock()
+        execute_query_mock.side_effect = ClickhouseError("some error", code=1123)
+
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                        SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
+                        WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN tuple({self.project_id})
+                        LIMIT 5""",
+                }
+            ),
+        )
+
+        assert response.status_code == 500
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["query_list"][0]["stats"]["error_code"] == 1123
+
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
         from rediscluster.utils import ClusterDownError
@@ -596,6 +626,66 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
+    def test_missing_alias_bug(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT group_id, count(), divide(uniq(tags[url]) AS a+*, 1)
+                    BY group_id
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id = {self.project_id}
+                    ORDER BY count() DESC
+                    LIMIT 3
+                    """,
+                    "dataset": "events",
+                    "team": "sns",
+                    "feature": "test",
+                    "debug": True,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        result = json.loads(response.data)
+        assert len(result["data"]) > 0
+        assert "count()" in result["data"][0]
+        assert "divide(uniq(tags[url]) AS a+*, 1)" in result["data"][0]
+        assert {"name": "count()", "type": "UInt64"} in result["meta"]
+        assert {
+            "name": "divide(uniq(tags[url]) AS a+*, 1)",
+            "type": "Float64",
+        } in result["meta"]
+
+    def test_duplicate_alias_bug(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS count, tags[url] AS url, tags[url] AS http.url
+                    BY tags[url] AS http.url, tags[url] AS url
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    ORDER BY count() AS count DESC
+                    LIMIT 51 OFFSET 0
+                    """,
+                    "dataset": "discover",
+                    "team": "sns",
+                    "feature": "test",
+                }
+            ),
+        )
+        assert response.status_code == 200
+        result = json.loads(response.data)
+        assert len(result["data"]) > 0
+        assert "url" in result["data"][0]
+        assert "http.url" in result["data"][0]
+        assert {"name": "url", "type": "String"} in result["meta"]
+        assert {"name": "http.url", "type": "String"} in result["meta"]
 
     def test_invalid_column(self) -> None:
         response = self.post(
