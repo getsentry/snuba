@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, TypedDict
+from typing import Sequence, TypedDict
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -156,7 +156,7 @@ def get_forward_migrations_local(
     mv_name: str,
     aggregation_col_schema: Sequence[Column[Modifiers]],
     aggregation_states: str,
-    granularity: Optional[int],
+    granularity: int,
 ) -> Sequence[operations.SqlOperation]:
     aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
     return [
@@ -214,35 +214,45 @@ def get_forward_view_migration_local(
     mv_name: str,
     aggregation_col_schema: Sequence[Column[Modifiers]],
     aggregation_states: str,
-    granularity: Optional[int],
+    granularity: int,
+) -> operations.SqlOperation:
+    aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
+    assert granularity is not None
+
+    return operations.CreateMaterializedView(
+        storage_set=StorageSetKey.METRICS,
+        view_name=mv_name,
+        destination_table_name=table_name,
+        columns=aggregated_cols,
+        query=MATVIEW_STATEMENT
+        % {
+            "raw_table_name": source_table_name,
+            "aggregation_states": aggregation_states,
+            "granularity": granularity,
+        },
+    )
+
+
+def get_forward_view_migration_local_consolidated(
+    source_table_name: str,
+    table_name: str,
+    mv_name: str,
+    aggregation_col_schema: Sequence[Column[Modifiers]],
+    aggregation_states: str,
 ) -> operations.SqlOperation:
     aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
 
-    if granularity:
-        return operations.CreateMaterializedView(
-            storage_set=StorageSetKey.METRICS,
-            view_name=mv_name,
-            destination_table_name=table_name,
-            columns=aggregated_cols,
-            query=MATVIEW_STATEMENT
-            % {
-                "raw_table_name": source_table_name,
-                "aggregation_states": aggregation_states,
-                "granularity": granularity,
-            },
-        )
-    else:
-        return operations.CreateMaterializedView(
-            storage_set=StorageSetKey.METRICS,
-            view_name=mv_name,
-            destination_table_name=table_name,
-            columns=aggregated_cols,
-            query=MATVIEW_STATEMENT_CONSOLIDATED
-            % {
-                "raw_table_name": source_table_name,
-                "aggregation_states": aggregation_states,
-            },
-        )
+    return operations.CreateMaterializedView(
+        storage_set=StorageSetKey.METRICS,
+        view_name=mv_name,
+        destination_table_name=table_name,
+        columns=aggregated_cols,
+        query=MATVIEW_STATEMENT_CONSOLIDATED
+        % {
+            "raw_table_name": source_table_name,
+            "aggregation_states": aggregation_states,
+        },
+    )
 
 
 def get_forward_migrations_dist(
@@ -277,14 +287,15 @@ def get_reverse_table_migration(table_name: str) -> Sequence[operations.SqlOpera
     ]
 
 
-def get_mv_name(metric_type: str, granularity: Optional[int]) -> str:
-    if not granularity:
-        return f"metrics_{metric_type}_consolidated_mv_local"
-
+def get_mv_name(metric_type: str, granularity: int) -> str:
     if granularity == ORIGINAL_GRANULARITY:
         return f"metrics_{metric_type}_mv_local"
 
     return f"metrics_{metric_type}_mv_{granularity}s_local"
+
+
+def get_consolidated_mv_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_consolidated_mv_local"
 
 
 class MigrationArgs(TypedDict):
@@ -293,10 +304,12 @@ class MigrationArgs(TypedDict):
     mv_name: str
     aggregation_col_schema: Sequence[Column[Modifiers]]
     aggregation_states: str
-    granularity: Optional[int]
+    granularity: int
 
 
-def get_migration_args_for_sets(granularity: Optional[int]) -> MigrationArgs:
+def get_migration_args_for_sets(
+    granularity: int = ORIGINAL_GRANULARITY,
+) -> MigrationArgs:
     return {
         "source_table_name": "metrics_buckets_local",
         "table_name": "metrics_sets_local",
@@ -309,7 +322,9 @@ def get_migration_args_for_sets(granularity: Optional[int]) -> MigrationArgs:
     }
 
 
-def get_migration_args_for_counters(granularity: Optional[int]) -> MigrationArgs:
+def get_migration_args_for_counters(
+    granularity: int = ORIGINAL_GRANULARITY,
+) -> MigrationArgs:
     return {
         "source_table_name": "metrics_counters_buckets_local",
         "table_name": "metrics_counters_local",
@@ -322,7 +337,9 @@ def get_migration_args_for_counters(granularity: Optional[int]) -> MigrationArgs
     }
 
 
-def get_migration_args_for_distributions(granularity: Optional[int]) -> MigrationArgs:
+def get_migration_args_for_distributions(
+    granularity: int = ORIGINAL_GRANULARITY,
+) -> MigrationArgs:
     return {
         "source_table_name": "metrics_distributions_buckets_local",
         "table_name": "metrics_distributions_local",

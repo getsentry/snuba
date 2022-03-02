@@ -14,7 +14,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return get_forward_migrations_local(**get_migration_args_for_counters(60))
+        return get_forward_migrations_local(**get_migration_args_for_counters())
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [

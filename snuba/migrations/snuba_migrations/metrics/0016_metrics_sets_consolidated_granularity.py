@@ -1,11 +1,11 @@
 from typing import Sequence
 
+from snuba.clickhouse.columns import AggregateFunction, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.snuba_migrations.metrics.templates import (
-    get_forward_view_migration_local,
-    get_migration_args_for_sets,
-    get_mv_name,
+    get_consolidated_mv_name,
+    get_forward_view_migration_local_consolidated,
 )
 
 
@@ -20,8 +20,14 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return (
-            get_forward_view_migration_local(
-                **get_migration_args_for_sets(granularity=None)
+            get_forward_view_migration_local_consolidated(
+                source_table_name="metrics_buckets_local",
+                table_name="metrics_sets_local",
+                mv_name=get_consolidated_mv_name("sets"),
+                aggregation_col_schema=[
+                    Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+                ],
+                aggregation_states="uniqCombined64State(arrayJoin(set_values)) as value",
             ),
         )
 
@@ -29,7 +35,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.METRICS,
-                table_name=get_mv_name("sets", granularity=None),
+                table_name=get_consolidated_mv_name("sets"),
             )
         ]
 

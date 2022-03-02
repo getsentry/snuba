@@ -3,9 +3,9 @@ from typing import Sequence
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.snuba_migrations.metrics.templates import (
-    get_forward_view_migration_local,
-    get_migration_args_for_distributions,
-    get_mv_name,
+    COL_SCHEMA_DISTRIBUTIONS,
+    get_consolidated_mv_name,
+    get_forward_view_migration_local_consolidated,
 )
 
 
@@ -20,8 +20,19 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return (
-            get_forward_view_migration_local(
-                **get_migration_args_for_distributions(granularity=None)
+            get_forward_view_migration_local_consolidated(
+                source_table_name="metrics_distributions_buckets_local",
+                table_name="metrics_distributions_local",
+                mv_name=get_consolidated_mv_name("distributions"),
+                aggregation_col_schema=COL_SCHEMA_DISTRIBUTIONS,
+                aggregation_states=(
+                    "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99)((arrayJoin(values) AS values_rows)) as percentiles, "
+                    "minState(values_rows) as min, "
+                    "maxState(values_rows) as max, "
+                    "avgState(values_rows) as avg, "
+                    "sumState(values_rows) as sum, "
+                    "countState(values_rows) as count"
+                ),
             ),
         )
 
@@ -29,7 +40,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.METRICS,
-                table_name=get_mv_name("distributions", granularity=None),
+                table_name=get_consolidated_mv_name("distributions"),
             )
         ]
 
