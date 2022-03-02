@@ -1,5 +1,6 @@
 import logging
 import signal
+from contextlib import closing
 from typing import Any, Optional, Sequence
 
 import click
@@ -282,10 +283,11 @@ def multistorage_consumer(
 
     def handler(signum: int, frame: Any) -> None:
         processor.signal_shutdown()
-        if dead_letter_producer:
-            dead_letter_producer.close()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
-
-    processor.run()
+    if dead_letter_producer:
+        with closing(dead_letter_producer):
+            processor.run()
+    else:
+        processor.run()

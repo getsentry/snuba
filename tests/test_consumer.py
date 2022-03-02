@@ -213,7 +213,6 @@ def test_multistorage_strategy(
 
 
 @patch("snuba.consumers.consumer.InsertBatchWriter.close")
-@patch("snuba.consumers.consumer.DeadLetterStep.submit")
 @pytest.mark.parametrize(
     "processes, input_block_size, output_block_size",
     [
@@ -222,7 +221,6 @@ def test_multistorage_strategy(
     ],
 )
 def test_multistorage_strategy_dead_letter_step(
-    mock_submit: MagicMock,
     mock_close: MagicMock,
     processes: Optional[int],
     input_block_size: Optional[int],
@@ -264,12 +262,12 @@ def test_multistorage_strategy_dead_letter_step(
         KafkaPayload(
             None,
             json.dumps((2, "insert", get_raw_event(),)).encode("utf8"),
-            [("transaction_forwarder", "1".encode("utf8"))],
+            [("transaction_forwarder", "0".encode("utf8"))],
         ),
         KafkaPayload(
             None,
             json.dumps((2, "insert", get_raw_transaction(),)).encode("utf8"),
-            [("transaction_forwarder", "0".encode("utf8"))],
+            [("transaction_forwarder", "1".encode("utf8"))],
         ),
     ]
 
@@ -287,7 +285,14 @@ def test_multistorage_strategy_dead_letter_step(
     strategy.join()
 
     # assert that we submit to the dead letter step for both messages
-    assert len(mock_submit.call_args_list) == 2
+    error_message = broker.consume(Partition(topic, 0), 0)
+    transaction_message = broker.consume(Partition(topic, 0), 1)
+    assert error_message and transaction_message
+
+    assert error_message.payload.key == StorageKey.ERRORS_V2.value.encode("utf-8")
+    assert transaction_message.payload.key == StorageKey.TRANSACTIONS_V2.value.encode(
+        "utf-8"
+    )
 
 
 def test_metrics_writing_e2e() -> None:

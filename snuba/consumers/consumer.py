@@ -2,7 +2,7 @@ import copy
 import itertools
 import logging
 import time
-from collections import deque
+from collections import defaultdict, deque
 from concurrent.futures import Future
 from datetime import datetime
 from pickle import PickleBuffer
@@ -406,8 +406,7 @@ class DeadLetterStep(
     ) -> None:
         payloads = self.__format_payload(message)
         for payload in payloads:
-            future = self.__producer.produce(self.__topic, payload)
-            self.__futures.append(future)
+            self.__futures.append(self.__producer.produce(self.__topic, payload))
 
     def close(self) -> None:
         self.__closed = True
@@ -459,7 +458,7 @@ class MultistorageCollector(
                     Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
                 ]
             ],
-        ] = {}
+        ] = defaultdict(list)
 
     def poll(self) -> None:
         for step in self.__steps.values():
@@ -495,9 +494,7 @@ class MultistorageCollector(
                 message.next_offset,
             )
 
-            self.__messages[storage_key] = self.__messages.get(storage_key, []) + [
-                other_message
-            ]
+            self.__messages[storage_key].append(other_message)
 
     def close(self) -> None:
         self.__closed = True
