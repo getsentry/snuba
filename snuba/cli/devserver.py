@@ -153,7 +153,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
                     "--consumer-group=metrics_group",
-                    "--dead-letter-topic=snuba-dead-letter-inserts",
                 ],
             ),
         ]
