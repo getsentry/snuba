@@ -12,7 +12,6 @@ from snuba.processor import (
 )
 
 DISABLED_MATERIALIZATION_VERSION = 1
-ENABLED_MATERIALIZATION_VERSION = 0
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -48,7 +47,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         mat_version = (
             DISABLED_MATERIALIZATION_VERSION
             if settings.WRITE_METRICS_AGG_DIRECTLY
-            else ENABLED_MATERIALIZATION_VERSION
+            else settings.ENABLED_MATERIALIZATION_VERSION
         )
 
         processed = {
