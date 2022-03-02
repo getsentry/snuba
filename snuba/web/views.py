@@ -445,7 +445,7 @@ def dataset_query(
             tags = {"dataset": get_dataset_name(dataset)}
             metrics.increment("post.shutdown.query", tags=tags)
             diff = time.time() - (shutdown_time() or 0.0)  # this should never be None
-            metrics.gauge("post.shutdown.query.delay", diff, tags=tags)
+            metrics.timing("post.shutdown.query.delay", diff, tags=tags)
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPRequestSettings)
