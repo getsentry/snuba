@@ -374,9 +374,15 @@ class DeadLetterStep(
 
     """
 
-    def __init__(self, producer: AbstractProducer[KafkaPayload], topic: Topic):
+    def __init__(
+        self,
+        producer: AbstractProducer[KafkaPayload],
+        topic: Topic,
+        metrics: MetricsBackend,
+    ):
         self.__producer = producer
         self.__topic = topic
+        self.__metrics = metrics
         self.__futures: Deque[Future[Message[KafkaPayload]]] = deque()
         self.__closed = False
 
@@ -404,9 +410,20 @@ class DeadLetterStep(
             Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
         ],
     ) -> None:
+        submit_start = time.time()
         payloads = self.__format_payload(message)
+
+        produce_start = time.time()
         for payload in payloads:
             self.__futures.append(self.__producer.produce(self.__topic, payload))
+        submit_end = time.time()
+
+        submit_duration_ms = (submit_end - submit_start) * 1000.0
+        produce_duration_ms = (submit_end - produce_start) * 1000.0
+        self.__metrics.timing("dead_letter_step.submit_duration_ms", submit_duration_ms)
+        self.__metrics.timing(
+            "dead_letter_step.produce_duration_ms", produce_duration_ms
+        )
 
     def close(self) -> None:
         self.__closed = True
@@ -419,12 +436,18 @@ class DeadLetterStep(
 
         while self.__futures:
             if not timeout or timeout > time.time() - start:
+                self.__metrics.increment(
+                    "dead_letter_step.join_error", tags={"reason": "timeout"}
+                )
                 break
             if self.__futures[0].done():
                 future = self.__futures.popleft()
                 try:
                     future.result()
                 except Exception:
+                    self.__metrics.increment(
+                        "dead_letter_step.join_error", tags={"reason": "exception"}
+                    )
                     logger.warning(
                         "Failed dead letter queue future result", exc_info=True
                     )
@@ -729,7 +752,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         dead_letter_step: Optional[DeadLetterStep] = None
         if self.__producer and self.__topic:
             dead_letter_step = DeadLetterStep(
-                producer=self.__producer, topic=self.__topic
+                producer=self.__producer, topic=self.__topic, metrics=self.__metrics,
             )
         return MultistorageCollector(
             {
