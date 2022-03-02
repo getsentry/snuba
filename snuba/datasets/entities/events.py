@@ -161,7 +161,6 @@ class BaseEventsEntity(Entity, ABC):
     """
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        # if settings.ERRORS_ROLLOUT_ALL:
         v1_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=ErrorsQueryStorageSelector(
