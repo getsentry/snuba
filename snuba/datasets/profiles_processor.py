@@ -12,12 +12,17 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "profiles.processor")
 
+RETENTION_DAYS_ALLOWED = frozenset([30, 90])
+
 
 class ProfilesMessageProcessor(MessageProcessor):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         try:
+            retention_days = message["retention_days"]
+            if retention_days not in RETENTION_DAYS_ALLOWED:
+                retention_days = 30
             processed = {
                 "organization_id": message["organization_id"],
                 "project_id": message["project_id"],
@@ -40,7 +45,7 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "transaction_name": message["transaction_name"],
                 "version_name": message["version_name"],
                 "version_code": message["version_code"],
-                "retention_days": message["retention_days"],
+                "retention_days": retention_days,
                 "offset": metadata.offset,
                 "partition": metadata.partition,
             }
