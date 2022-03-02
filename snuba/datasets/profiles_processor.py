@@ -4,10 +4,13 @@ from uuid import UUID
 
 from dateutil.parser import parse
 
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
+metrics = MetricsWrapper(environment.metrics, "profiles.processor")
 
 
 class ProfilesMessageProcessor(MessageProcessor):
@@ -49,7 +52,7 @@ class ProfilesMessageProcessor(MessageProcessor):
                     "trace_id": message["trace_id"],
                 },
             )
-        except KeyError as e:
-            logger.warning("Invalid profile data", extra={"missing": e.args[0]})
+        except KeyError:
+            metrics.increment("missing_field")
             return None
         return InsertBatch([processed], None)
