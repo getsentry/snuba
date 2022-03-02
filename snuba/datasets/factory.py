@@ -8,7 +8,7 @@ from snuba.utils.serializable_exception import SerializableException
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 
-DEV_DATASET_NAMES: Set[str] = set("profiles")
+DEV_DATASET_NAMES: Set[str] = set()
 
 DATASET_NAMES: Set[str] = {
     "discover",
@@ -20,6 +20,7 @@ DATASET_NAMES: Set[str] = {
     "outcomes_raw",
     "sessions",
     "transactions",
+    "profiles",
     *(DEV_DATASET_NAMES if settings.ENABLE_DEV_FEATURES else set()),
 }
 

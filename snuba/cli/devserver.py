@@ -217,7 +217,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             )
         ]
 
-    if settings.ENABLE_DEV_FEATURES:
+    if settings.ENABLE_PROFILES_CONSUMER:
         daemons += [
             (
                 "profiles",

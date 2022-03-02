@@ -20,7 +20,7 @@ ADMIN_AUTH_PROVIDER = "NOOP"
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS: Set[str] = set()
+DISABLED_DATASETS: Set[str] = set({"profiles"})
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -186,6 +186,9 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
+
+# Enable profiles ingestion
+ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

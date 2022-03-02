@@ -55,9 +55,7 @@ CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {
     **(DEV_CDC_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
 }
 
-DEV_WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
-    profiles_writable_storage.get_storage_key(): profiles_writable_storage
-}
+DEV_WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {}
 
 METRICS_WRITEABLE_STORAGES = {
     metrics_counters_buckets.get_storage_key(): metrics_counters_buckets,
@@ -83,14 +81,13 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             spans_storage,
             transactions_v2_storage,
             errors_v2_storage,
+            profiles_writable_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
 }
 
-DEV_NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
-    profiles_readable_storage.get_storage_key(): profiles_readable_storage
-}
+DEV_NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {}
 
 METRICS_NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
     metrics_counters_storage.get_storage_key(): metrics_counters_storage,
@@ -110,6 +107,7 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
             sessions_hourly_storage,
             org_sessions_hourly_storage,
             transactions_ro_storage,
+            profiles_readable_storage,
         ]
     },
     **(DEV_NON_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
