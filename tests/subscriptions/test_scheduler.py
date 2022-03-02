@@ -33,8 +33,8 @@ class TestSubscriptionScheduler:
             SubscriptionData(
                 project_id=1,
                 query="MATCH (events) SELECT count() AS count",
-                time_window=timedelta(minutes=1),
-                resolution=resolution,
+                time_window_sec=60,
+                resolution_sec=int(resolution.total_seconds()),
                 entity_subscription=create_entity_subscription(),
             ),
         )

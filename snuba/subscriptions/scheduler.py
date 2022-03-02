@@ -63,7 +63,7 @@ class ImmediateTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        resolution = int(subscription.data.resolution.total_seconds())
+        resolution = subscription.data.resolution_sec
         if timestamp % resolution == 0:
             self.__count += 1
             return ScheduledSubscriptionTask(
@@ -110,7 +110,7 @@ class JitteredTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        resolution = int(subscription.data.resolution.total_seconds())
+        resolution = subscription.data.resolution_sec
 
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
             if timestamp % resolution == 0:
@@ -199,7 +199,7 @@ class TaskBuilderModeState:
         ):
             return general_mode
 
-        resolution = int(subscription.data.resolution.total_seconds())
+        resolution = subscription.data.resolution_sec
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
             return self.get_final_mode(general_mode)
 

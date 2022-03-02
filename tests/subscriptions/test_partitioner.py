@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 import pytest
 
 from snuba import settings
@@ -15,8 +13,8 @@ TESTS = [
         SubscriptionData(
             project_id=123,
             query="MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         ),
         id="Legacy subscription",
@@ -30,8 +28,8 @@ TESTS = [
                 "WHERE "
                 "platform IN tuple('a') "
             ),
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+            time_window_sec=10 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",

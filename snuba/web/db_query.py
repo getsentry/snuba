@@ -282,12 +282,17 @@ def execute_query_with_rate_limits(
             PROJECT_RATE_LIMIT_NAME
         )
 
+        thread_quota = request_settings.get_resource_quota()
         if (
-            "max_threads" in query_settings
+            ("max_threads" in query_settings or thread_quota is not None)
             and project_rate_limit_stats is not None
             and project_rate_limit_stats.concurrent > 1
         ):
-            maxt = query_settings["max_threads"]
+            maxt = (
+                query_settings["max_threads"]
+                if thread_quota is None
+                else thread_quota.max_threads
+            )
             query_settings["max_threads"] = max(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )

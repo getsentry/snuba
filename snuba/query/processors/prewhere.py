@@ -56,10 +56,15 @@ class PrewhereProcessor(QueryProcessor):
         )
         prewhere_keys = self.__prewhere_candidates
 
+        # We remove the candidates that appear in a uniq or -If aggregations
+        # because a query like `countIf(col=x) .. PREWHERE col=x` can make
+        # the Clickhouse server crash.
         uniq_cols: Set[str] = set()
         expressions = query.get_all_expressions()
         for exp in expressions:
-            if isinstance(exp, FunctionCall) and exp.function_name == "uniq":
+            if isinstance(exp, FunctionCall) and (
+                exp.function_name == "uniq" or exp.function_name.endswith("If")
+            ):
                 columns = get_columns_in_expression(exp)
                 for c in columns:
                     uniq_cols.add(c.column_name)

@@ -37,6 +37,7 @@ from snuba.query.processors.object_id_rate_limiter import (
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
@@ -138,15 +139,18 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
 class ErrorsV2QueryStorageSelector(QueryStorageSelector):
     def __init__(self, mappers: TranslationMappers) -> None:
         self.__errors_table = get_writable_storage(StorageKey.ERRORS_V2)
-        # TODO: Register ERRORS_V2_RO and then remove comment
-        # self.__errors_ro_table = get_storage(StorageKey.ERRORS_RO)
+        self.__errors_ro_table = get_storage(StorageKey.ERRORS_V2_RO)
         self.__mappers = mappers
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        # TODO: Register ERRORS_V2_RO and support the ro storage
-        return StorageAndMappers(self.__errors_table, self.__mappers)
+        use_readonly_storage = not request_settings.get_consistent()
+
+        storage = (
+            self.__errors_ro_table if use_readonly_storage else self.__errors_table
+        )
+        return StorageAndMappers(storage, self.__mappers)
 
 
 def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
@@ -206,6 +210,7 @@ class BaseEventsEntity(Entity, ABC):
                     "errors_v2": v2_pipeline_builder,
                 },
                 selector_func=v2_selector_function,
+                split_rate_limiter=True,
                 callback_func=comparison_callback,
             )
         else:
@@ -258,6 +263,7 @@ class BaseEventsEntity(Entity, ABC):
             ReferrerRateLimiterProcessor(),
             ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
+            ResourceQuotaProcessor("project_id"),
         ]
 
 

@@ -123,6 +123,15 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
             if partition_timestamp > fastest.payload.timestamps.lower:
                 fastest = partition_message
 
+            # Record the lag between the fastest and slowest partition
+            self.__metrics.timing(
+                "partition_lag_ms",
+                (
+                    fastest.payload.timestamps.lower - slowest.payload.timestamps.lower
+                ).total_seconds()
+                * 1000,
+            )
+
         if (
             self.__offset_high_watermark is None
             or slowest.offset > self.__offset_high_watermark
@@ -267,12 +276,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
 
             for partition_index in earliest_ts_partitions:
                 self.__next_step.submit(self.__buffers[partition_index].popleft())
-
-            # Record the lag between the fastest and slowest partition if we got to this point
-            self.__metrics.timing(
-                "partition_lag_ms",
-                (self.__latest_ts - earliest_ts).total_seconds() * 1000,
-            )
 
     def close(self) -> None:
         self.__closed = True
@@ -422,6 +425,14 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
 
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+
+        # If there are no subscriptions for a tick, immediately commit if marked
+        # `should_commit`
+        if len(encoded_tasks) == 0 and message.payload.should_commit == True:
+            self.__commit(
+                {message.partition: Position(message.offset, message.timestamp)}
+            )
+            return
 
         self.__queue.append(
             message,
