@@ -541,32 +541,16 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         return self.__state_name
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
-
-        # Backward compatibility with the old keys already in Redis, we will let double write
-        # the old key structure and the new one for a while then we can get rid of the old one.
-        compatibility_double_write = self.__state_name == ReplacerState.EVENTS
-
         project_id = replacement.get_project_id()
         query_time_flags = replacement.get_query_time_flags()
 
         if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
             if isinstance(query_time_flags, NeedsFinal):
-                if compatibility_double_write:
-                    set_project_needs_final(
-                        project_id, None, replacement.get_replacement_type()
-                    )
                 set_project_needs_final(
                     project_id, self.__state_name, replacement.get_replacement_type()
                 )
 
             elif isinstance(query_time_flags, ExcludeGroups):
-                if compatibility_double_write:
-                    set_project_exclude_groups(
-                        project_id,
-                        query_time_flags.group_ids,
-                        None,
-                        replacement.get_replacement_type(),
-                    )
                 set_project_exclude_groups(
                     project_id,
                     query_time_flags.group_ids,
@@ -699,17 +683,8 @@ def _build_event_set_filter(
     from_condition = get_timestamp_condition("from_timestamp", ">=")
     to_condition = get_timestamp_condition("to_timestamp", "<=")
 
-    if state_name == ReplacerState.EVENTS:
-        event_id_lhs = "cityHash64(toString(event_id))"
-        event_id_list = ", ".join(
-            [
-                f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
-                for event_id in event_ids
-            ]
-        )
-    else:
-        event_id_lhs = "event_id"
-        event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
+    event_id_lhs = "event_id"
+    event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
 
     prewhere = [f"{event_id_lhs} IN (%(event_ids)s)"]
     where = ["project_id = %(project_id)s", "NOT deleted"]
@@ -802,14 +777,6 @@ def process_tombstone_events(
         return None
 
     old_primary_hash = message.data.get("old_primary_hash")
-
-    if old_primary_hash and state_name == ReplacerState.EVENTS:
-        # old_primary_hash flag means the event is only tombstoned
-        # because it will be reinserted with a changed primary_hash. Since
-        # primary_hash is part of the sortkey/primarykey in the ERRORS table,
-        # we need to tombstone the old event. In the old EVENTS table we do
-        # not.
-        return None
 
     event_set_filter = _build_event_set_filter(message.data, state_name)
     if event_set_filter is None:
