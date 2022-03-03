@@ -31,8 +31,7 @@ def build_section(data: Any, action: str) -> Any:
         "accessory": {
             "type": "button",
             "text": {"type": "plain_text", "text": "Audit Log"},
-            # todo: should link to our audit log
-            # "url": "https://google.com",
+            "url": "https://snuba-admin.getsentry.net/#auditlog",
         },
     }
 
