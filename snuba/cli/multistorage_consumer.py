@@ -82,7 +82,7 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level")
 @click.option(
     "--stats-collection-frequency-ms",
-    type=click.IntRange(100, 1000),
+    type=click.IntRange(100, 2000),
     help="The frequency of collecting statistics from librdkafka.",
 )
 def multistorage_consumer(
@@ -212,7 +212,7 @@ def multistorage_consumer(
 
         def stats_callback(stats_json: str) -> None:
             stats = rapidjson.loads(stats_json)
-            metrics.gauge("total_queue_size", stats.get("replyq", 0))
+            metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
         consumer_configuration.update(
             {
