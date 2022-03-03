@@ -128,15 +128,20 @@ COLUMNS = [
 
 
 def backfill_errors(logger: logging.Logger) -> None:
-    events_storage = get_writable_storage(StorageKey.EVENTS)
     errors_storage = get_writable_storage(StorageKey.ERRORS)
-
-    cluster = events_storage.get_cluster()
+    cluster = errors_storage.get_cluster()
     database_name = cluster.get_database()
 
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    events_table_name = events_storage.get_table_writer().get_schema().get_table_name()
+    events_local_table_name = "sentry_local"
+    events_dist_table_name = "sentry_dist"
+    events_table_name = (
+        events_local_table_name
+        if errors_storage.get_cluster().is_single_node()
+        else events_dist_table_name
+    )
+
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
     try:

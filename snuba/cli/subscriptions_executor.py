@@ -55,9 +55,15 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option("--log-level", help="Logging level to use.")
 # This option allows us to reroute the produced subscription results to a different
 # topic temporarily while we are testing and running the old and new subscription
-# pipeline concurrently. Should be removed once we are done testing.
+# pipeline concurrently. It is currently (temporarily) required to reduce the chance
+# of inadvertently writing to the actual result topics while we are still validating
+# results and running the old subscriptions pipeline. Eventaully we can just get it
+# from stream_loader.get_subscription_result_topic_spec()
 @click.option(
-    "--override-result-topic", type=str, help="Override the result topic for testing"
+    "--override-result-topic",
+    type=str,
+    required=True,
+    help="Override the result topic for testing",
 )
 def subscriptions_executor(
     *,
@@ -67,7 +73,7 @@ def subscriptions_executor(
     max_concurrent_queries: int,
     auto_offset_reset: str,
     log_level: Optional[str],
-    override_result_topic: Optional[str],
+    override_result_topic: str,
 ) -> None:
     """
     The subscription's executor consumes scheduled subscriptions from the scheduled
@@ -86,11 +92,6 @@ def subscriptions_executor(
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
-
-    # TODO: Hardcoded for testing so we have no chance of accidentally writing to the real
-    # result topic. This should eventually come from stream_loader.get_result_topic_spec()
-    if override_result_topic is None:
-        override_result_topic = "snuba-subscription-result-test"
 
     # Just get the result topic configuration from the first entity. Later we
     # check they all have the same result topic anyway before building the consumer.

@@ -13,23 +13,6 @@ from tests.helpers import write_processed_messages
 
 test_data = [
     pytest.param(
-        StorageKey.EVENTS,
-        lambda dt: InsertBatch(
-            [
-                {
-                    "event_id": uuid.uuid4().hex,
-                    "project_id": 1,
-                    "group_id": 1,
-                    "deleted": 0,
-                    "timestamp": dt,
-                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                }
-            ],
-            None,
-        ),
-        id="events",
-    ),
-    pytest.param(
         StorageKey.ERRORS,
         lambda dt: InsertBatch(
             [
