@@ -23,6 +23,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
 from snuba.snapshots import SnapshotId
+from snuba.state import get_config
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
@@ -47,7 +48,6 @@ class KafkaParameters:
     auto_offset_reset: str
     queued_max_messages_kbytes: int
     queued_min_messages: int
-    stats_collection_frequency_ms: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -133,14 +133,7 @@ class ConsumerBuilder:
             else:
                 self.commit_log_topic = None
 
-        if kafka_params.stats_collection_frequency_ms is not None:
-            self.stats_collection_frequency_ms = (
-                kafka_params.stats_collection_frequency_ms
-            )
-            assert stats_callback is not None
-            self.stats_callback = stats_callback
-        else:
-            self.stats_collection_frequency_ms = 0
+        self.stats_callback = stats_callback
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
@@ -189,10 +182,13 @@ class ConsumerBuilder:
             queued_min_messages=self.queued_min_messages,
         )
 
-        if self.stats_collection_frequency_ms > 0:
+        stats_collection_frequency_ms = get_config(
+            f"stats_collection_freq_ms_{self.group_id}", 0
+        )
+        if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
             configuration.update(
                 {
-                    "statistics.interval.ms": self.stats_collection_frequency_ms,
+                    "statistics.interval.ms": stats_collection_frequency_ms,
                     "stats_cb": self.stats_callback,
                 }
             )

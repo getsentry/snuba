@@ -14,6 +14,7 @@ from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFacto
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
+from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -80,11 +81,6 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int,
 )
 @click.option("--log-level")
-@click.option(
-    "--stats-collection-frequency-ms",
-    type=click.IntRange(100, 2000),
-    help="The frequency of collecting statistics from librdkafka.",
-)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -98,7 +94,6 @@ def multistorage_consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
-    stats_collection_frequency_ms: Optional[int] = None,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -207,7 +202,11 @@ def multistorage_consumer(
             "storage": "_".join([storage_keys[0].value, "m"]),
         },
     )
-    # Collect metrics from librdkafka if we set stats_collection_frequency_ms
+    # Collect metrics from librdkafka if we have stats_collection_freq_ms set
+    # for the consumer group
+    stats_collection_frequency_ms = get_config(
+        f"stats_collection_freq_ms_{consumer_group}", 0
+    )
     if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
 
         def stats_callback(stats_json: str) -> None:
