@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Mapping, Optional
 from uuid import UUID
 
@@ -9,7 +8,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "profiles.processor")
 
 RETENTION_DAYS_ALLOWED = frozenset([30, 90])
@@ -50,13 +48,7 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "partition": metadata.partition,
             }
         except ValueError:
-            logger.warning(
-                "Invalid UUID",
-                extra={
-                    "transaction_id": message["transaction_id"],
-                    "trace_id": message["trace_id"],
-                },
-            )
+            metrics.increment("invalid_uuid")
         except KeyError:
             metrics.increment("missing_field")
             return None
