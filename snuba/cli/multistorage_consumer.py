@@ -3,6 +3,7 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
+import rapidjson
 from arroyo import Topic, configure_metrics
 from arroyo.backends.kafka import KafkaConsumer
 from arroyo.processing import StreamProcessor
@@ -13,6 +14,7 @@ from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFacto
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
+from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -192,6 +194,31 @@ def multistorage_consumer(
         ):
             raise ValueError("storages cannot be located on different Kafka clusters")
 
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "consumer",
+        tags={
+            "group": consumer_group,
+            "storage": "_".join([storage_keys[0].value, "m"]),
+        },
+    )
+    # Collect metrics from librdkafka if we have stats_collection_freq_ms set
+    # for the consumer group
+    stats_collection_frequency_ms = get_config(
+        f"stats_collection_freq_ms_{consumer_group}", 0
+    )
+    if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
+
+        def stats_callback(stats_json: str) -> None:
+            stats = rapidjson.loads(stats_json)
+            metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
+
+        consumer_configuration.update(
+            {
+                "statistics.interval.ms": stats_collection_frequency_ms,
+                "stats_cb": stats_callback,
+            }
+        )
     if commit_log is None:
         consumer = KafkaConsumer(consumer_configuration)
     else:
@@ -212,15 +239,6 @@ def multistorage_consumer(
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration, producer=producer, commit_log_topic=commit_log,
         )
-
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={
-            "group": consumer_group,
-            "storage": "_".join([storage_keys[0].value, "m"]),
-        },
-    )
 
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
