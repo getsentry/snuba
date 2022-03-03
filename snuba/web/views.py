@@ -2,6 +2,7 @@ import functools
 import itertools
 import logging
 import os
+import random
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -12,6 +13,7 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
+    Optional,
     Sequence,
     Set,
     Text,
@@ -74,7 +76,16 @@ logger = logging.getLogger("snuba.api")
 # Flask wants a Dict, not a Mapping
 RespTuple = Tuple[Text, int, Dict[Any, Any]]
 
+
+def shutdown_time() -> Optional[float]:
+    try:
+        return os.stat("/tmp/snuba.down").st_mtime
+    except OSError:
+        return None
+
+
 try:
+    IS_SHUTTING_DOWN = False
     import uwsgi
 except ImportError:
 
@@ -85,10 +96,15 @@ except ImportError:
 else:
 
     def check_down_file_exists() -> bool:
+        global IS_SHUTTING_DOWN
         try:
-            m_time = os.stat("/tmp/snuba.down").st_mtime
+            m_time = shutdown_time()
+            if m_time is None:
+                return False
+
             start_time: float = uwsgi.started_on
-            return m_time > start_time
+            IS_SHUTTING_DOWN = m_time > start_time
+            return IS_SHUTTING_DOWN
         except OSError:
             return False
 
@@ -418,6 +434,18 @@ def dataset_query(
 ) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
+
+    # Try to detect if new requests are being sent to the api
+    # after the shutdown command has been issued, and if so
+    # how long after. I don't want to do a disk check for
+    # every query, so randomly sample until the shutdown file
+    # is detected, and then log everything
+    if IS_SHUTTING_DOWN or random.random() < 0.05:
+        if IS_SHUTTING_DOWN or check_down_file_exists():
+            tags = {"dataset": get_dataset_name(dataset)}
+            metrics.increment("post.shutdown.query", tags=tags)
+            diff = time.time() - (shutdown_time() or 0.0)  # this should never be None
+            metrics.timing("post.shutdown.query.delay", diff, tags=tags)
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPRequestSettings)
