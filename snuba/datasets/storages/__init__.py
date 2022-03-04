@@ -1,4 +1,5 @@
 from enum import Enum
+from functools import lru_cache
 
 
 class StorageKey(Enum):
@@ -31,3 +32,20 @@ class StorageKey(Enum):
     TRANSACTIONS_V2 = "transactions_v2"
     ERRORS_V2 = "errors_v2"
     ERRORS_V2_RO = "errors_v2_ro"
+
+
+EQUIVALENT_WRITE_STORAGES = frozenset(
+    {
+        frozenset({StorageKey.TRANSACTIONS, StorageKey.TRANSACTIONS_V2}),
+        frozenset({StorageKey.EVENTS, StorageKey.ERRORS, StorageKey.ERRORS_V2}),
+    }
+)
+
+
+@lru_cache(100)
+def is_equivalent_write(this: StorageKey, other: StorageKey) -> bool:
+    for group in EQUIVALENT_WRITE_STORAGES:
+        if {this, other}.issubset(group):
+            return True
+
+    return False

@@ -37,7 +37,7 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages import StorageKey, is_equivalent_write
 from snuba.datasets.table_storage import TableWriter
 from snuba.environment import setup_sentry
 from snuba.processor import (
@@ -462,11 +462,23 @@ def process_message_multistorage(
         message.offset, message.partition.index, message.timestamp
     )
 
-    results: MutableSequence[
-        Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
-    ] = []
+    intermediate_results: MutableMapping[
+        StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]
+    ] = {}
 
     for index, storage_key in enumerate(message.payload.storage_keys):
+        # Optimization to avoid processing messages multiple times if the bytes
+        # written on some storages are the same.
+        skip_processing = False
+        for other_storage, insert_batch in intermediate_results.items():
+            if is_equivalent_write(storage_key, other_storage):
+                intermediate_results[storage_key] = copy.copy(insert_batch)
+                skip_processing = True
+                break
+
+        if skip_processing:
+            continue
+
         # The `process_message` api of individual storage processors could modify the content of the payload
         # in some cases. For example, they can remove redundant data from the payload to decrease size of
         # storage on clickhouse. Hence, we need to make copies of the payload and send the copies to the api.
@@ -485,29 +497,19 @@ def process_message_multistorage(
         )
         if isinstance(result, AggregateInsertBatch):
             values_row_encoder = get_values_row_encoder(storage_key)
-            results.append(
-                (
-                    storage_key,
-                    BytesInsertBatch(
-                        [values_row_encoder.encode(row) for row in result.rows],
-                        result.origin_timestamp,
-                    ),
-                )
+            intermediate_results[storage_key] = BytesInsertBatch(
+                [values_row_encoder.encode(row) for row in result.rows],
+                result.origin_timestamp,
             )
         elif isinstance(result, InsertBatch):
-            results.append(
-                (
-                    storage_key,
-                    BytesInsertBatch(
-                        [json_row_encoder.encode(row) for row in result.rows],
-                        result.origin_timestamp,
-                    ),
-                )
+            intermediate_results[storage_key] = BytesInsertBatch(
+                [json_row_encoder.encode(row) for row in result.rows],
+                result.origin_timestamp,
             )
         else:
-            results.append((storage_key, result))
+            intermediate_results[storage_key] = result
 
-    return results
+    return tuple(intermediate_results.items())
 
 
 class MultistorageConsumerProcessingStrategyFactory(
