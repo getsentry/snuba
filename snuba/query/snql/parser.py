@@ -165,17 +165,18 @@ snql_grammar = Grammar(
     param_expression      = low_pri_arithmetic / quoted_literal / identifier
     parameters_list       = parameter* (param_expression)
     parameter             = (lambda / param_expression) space* comma space*
-    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space+ "AS" space+ alias_literal)?
+    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space+ "AS" space+ (quoted_alias_literal / alias_literal))?
     lambda                = open_paren space* identifier (comma space* identifier)* space* close_paren space* arrow space* function_call
 
-    aliased_tag_column    = tag_column space+ "AS" space+ alias_literal
-    aliased_subscriptable = subscriptable space+ "AS" space+ alias_literal
-    aliased_column_name   = column_name space+ "AS" space+ alias_literal
+    aliased_tag_column    = tag_column space+ "AS" space+ (quoted_alias_literal / alias_literal)
+    aliased_subscriptable = subscriptable space+ "AS" space+ (quoted_alias_literal / alias_literal)
+    aliased_column_name   = column_name space+ "AS" space+ (quoted_alias_literal / alias_literal)
 
     simple_term           = quoted_literal / numeric_literal / null_literal / boolean_literal / column_name
     quoted_literal        = ~r"(?<!\\)'(?:(?<!\\)(?:\\{2})*\\'|[^'])*(?<!\\)(?:\\{2})*'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:\-]*"
     alias_literal         = ~r"[a-zA-Z0-9_\.\+\*\/:\-\[\]]*"
+    quoted_alias_literal  = backtick ~r"[a-zA-Z0-9_\.\+\*\/:\-\[\]\(\)]*" backtick
     numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
     integer_literal       = ~r"-?[0-9]+"
     boolean_literal       = true_literal / false_literal
@@ -221,6 +222,21 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
+
+    @staticmethod
+    def __extract_alias_from_match(alias: Union[Node, List[Node]]) -> str:
+        extracted_alias: str
+        if isinstance(alias, list):
+            # Validate that we are parsing an expression that is
+            # 'quoted_aliased_literal' -> "backtick alias backtick"
+            assert (
+                len(alias) == 3
+                and alias[0].expr_name == alias[2].expr_name == "backtick"
+            )
+            extracted_alias = alias[1].text
+        else:
+            extracted_alias = alias.text
+        return extracted_alias
 
     def visit_query_exp(
         self, node: Node, visited_children: Iterable[Any]
@@ -796,7 +812,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             alias = None
         else:
             _, _, _, alias = alias
-            alias = alias.text
+            alias = self.__extract_alias_from_match(alias)
 
         param_list1 = tuple(params1)
         if isinstance(params2, Node) and params2.text == "":
@@ -817,19 +833,19 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
-        return SelectedExpression(alias.text, column)
+        return SelectedExpression(self.__extract_alias_from_match(alias), column)
 
     def visit_aliased_subscriptable(
         self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
-        return SelectedExpression(alias.text, column)
+        return SelectedExpression(self.__extract_alias_from_match(alias), column)
 
     def visit_aliased_column_name(
         self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
-        return SelectedExpression(alias.text, column)
+        return SelectedExpression(self.__extract_alias_from_match(alias), column)
 
     def visit_identifier(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
