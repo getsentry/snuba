@@ -229,10 +229,11 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         if isinstance(alias, list):
             # Validate that we are parsing an expression that is
             # 'quoted_aliased_literal' -> "backtick alias backtick"
-            assert (
+            if not (
                 len(alias) == 3
                 and alias[0].expr_name == alias[2].expr_name == "backtick"
-            )
+            ):
+                raise ParsingException(f"Error parsing quoted alias: {alias}")
             extracted_alias = alias[1].text
         else:
             extracted_alias = alias.text
