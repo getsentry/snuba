@@ -1,4 +1,3 @@
-from datetime import timedelta
 from typing import Sequence
 from uuid import uuid1
 
@@ -16,14 +15,14 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
             SubscriptionData(
                 project_id=self.project_id,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
-                time_window=timedelta(minutes=500),
-                resolution=timedelta(minutes=1),
+                time_window_sec=500 * 60,
+                resolution_sec=60,
                 entity_subscription=create_entity_subscription(),
             ),
             SubscriptionData(
                 project_id=self.project_id,
-                time_window=timedelta(minutes=500),
-                resolution=timedelta(minutes=1),
+                time_window_sec=500 * 60,
+                resolution_sec=60,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 entity_subscription=create_entity_subscription(),
             ),

@@ -62,7 +62,6 @@ class TestReplacer:
 
         self.project_id = 1
         self.event = get_raw_event()
-        settings.ERRORS_ROLLOUT_ALL = True
 
     def teardown_method(self) -> None:
         importlib.reload(settings)

@@ -1546,18 +1546,6 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
-    @pytest.mark.xfail
-    def test_row_stats(self) -> None:
-        query = {
-            "project": 1,
-            "selected_columns": ["platform"],
-        }
-        result = json.loads(self.post(json.dumps(query)).data)
-
-        assert "rows_read" in result["stats"]
-        assert "bytes_read" in result["stats"]
-        assert result["stats"]["bytes_read"] > 0
-
     def test_static_page_renders(self) -> None:
         response = self.app.get("/config")
         assert response.status_code == 200
@@ -1941,10 +1929,9 @@ class TestApi(SimpleAPITest):
         )
 
         val = (
-            "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"arraySlice(hierarchical_hashes, 0, 2)) FROM {errors_table_name} PREWHERE"
+            "SELECT (arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`) FROM {errors_table_name} PREWHERE"
         )
-
         assert result["sql"].startswith(val)
 
     def test_backslashes_in_query(self) -> None:
@@ -1994,10 +1981,9 @@ class TestApi(SimpleAPITest):
         )
 
         val = (
-            "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM {errors_table_name} PREWHERE"
+            "SELECT (arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`) FROM {errors_table_name} PREWHERE"
         )
-
         assert result["sql"].startswith(val)
 
     def test_test_endpoints(self) -> None:

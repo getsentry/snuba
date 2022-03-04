@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from typing import Any, Mapping, NamedTuple
 
 from mypy_extensions import TypedDict
 
-from snuba.reader import Column, Result, transform_rows
+from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -30,17 +32,26 @@ class QueryResult(NamedTuple):
     extra: QueryExtraData
 
 
-def transform_column_names(result: QueryResult, mapping: Mapping[str, str]) -> None:
+def transform_column_names(
+    result: QueryResult, mapping: Mapping[str, list[str]]
+) -> None:
     """
     Replaces the column names in a ResultSet object in place.
     """
 
-    transform_rows(
-        result.result,
-        lambda row: {mapping.get(key, key): value for key, value in row.items()},
-    )
+    def transformer(row: Row) -> Row:
+        new_row: Row = {}
+        for key, value in row.items():
+            column_names = mapping.get(key, [key])
+            for c in column_names:
+                new_row[c] = value
+        return new_row
 
-    result.result["meta"] = [
-        Column(name=mapping.get(c["name"], c["name"]), type=c["type"])
-        for c in result.result["meta"]
-    ]
+    transform_rows(result.result, transformer)
+
+    new_meta = []
+    for c in result.result["meta"]:
+        names = mapping.get(c["name"], [c["name"]])
+        for n in names:
+            new_meta.append(Column(name=n, type=c["type"]))
+    result.result["meta"] = new_meta

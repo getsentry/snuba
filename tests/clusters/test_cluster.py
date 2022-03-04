@@ -87,12 +87,12 @@ def teardown_function() -> None:
 def test_clusters() -> None:
     importlib.reload(cluster)
     assert (
-        get_storage(StorageKey("events")).get_cluster()
-        == get_storage(StorageKey("errors")).get_cluster()
+        get_storage(StorageKey("errors")).get_cluster()
+        == get_storage(StorageKey("errors_ro")).get_cluster()
     )
 
     assert (
-        get_storage(StorageKey("events")).get_cluster()
+        get_storage(StorageKey("errors")).get_cluster()
         != get_storage(StorageKey("transactions")).get_cluster()
     )
 
@@ -124,7 +124,7 @@ def test_get_local_nodes() -> None:
             [("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)]
         )
 
-        local_cluster = get_storage(StorageKey("events")).get_cluster()
+        local_cluster = get_storage(StorageKey("errors")).get_cluster()
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
         assert local_cluster.get_local_nodes()[0].port == 9000

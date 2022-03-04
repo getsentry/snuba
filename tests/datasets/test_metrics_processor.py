@@ -14,6 +14,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     _array_literal,
     _call,
     _literal,
+    timestamp_to_bucket,
 )
 from snuba.datasets.metrics_bucket_processor import (
     CounterMetricsProcessor,
@@ -43,7 +44,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "set_values": [324234, 345345, 456456, 567567],
-                "materialization_version": 0,
+                "materialization_version": 2,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -74,7 +75,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "value": 123.123,
-                "materialization_version": 0,
+                "materialization_version": 2,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -105,7 +106,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "values": [324.12, 345.23, 4564.56, 567567],
-                "materialization_version": 0,
+                "materialization_version": 2,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -293,18 +294,16 @@ def test_time_bucketing() -> None:
     base_timestamp = 1644349789
     base_datetime = datetime.fromtimestamp(base_timestamp)
 
-    metrics_agg_processor = SetsAggregateProcessor()
-
-    ten_s_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 10)
+    ten_s_bucket = timestamp_to_bucket(base_datetime, 10)
     assert ten_s_bucket.timestamp() == 1644349780
 
-    one_min_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 60)
+    one_min_bucket = timestamp_to_bucket(base_datetime, 60)
     assert one_min_bucket.timestamp() == 1644349740
 
-    one_hour_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 3600)
+    one_hour_bucket = timestamp_to_bucket(base_datetime, 3600)
     assert one_hour_bucket.timestamp() == 1644346800
 
-    one_day_bucket = metrics_agg_processor.timestamp_to_bucket(base_datetime, 86400)
+    one_day_bucket = timestamp_to_bucket(base_datetime, 86400)
     assert one_day_bucket.timestamp() == 1644278400
 
 
@@ -328,10 +327,9 @@ def test_metrics_aggregate_processor(
     )
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
-    with patch.object(
-        MetricsAggregateProcessor,
-        "timestamp_to_bucket",
-        lambda _, __, ___: MOCK_TIME_BUCKET,
+    with patch(
+        "snuba.datasets.metrics_aggregate_processor.timestamp_to_bucket",
+        lambda _, __: MOCK_TIME_BUCKET,
     ):
         assert (
             SetsAggregateProcessor().process_message(message, meta)

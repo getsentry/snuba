@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Type, Union
 
 import pytest
@@ -24,8 +24,8 @@ TESTS = [
                 "WHERE "
                 "platform IN tuple('a') "
             ),
-            time_window=timedelta(minutes=500),
-            resolution=timedelta(minutes=1),
+            time_window_sec=500 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         ),
         None,
@@ -40,8 +40,8 @@ TESTS = [
                 "WHERE "
                 "platform IN tuple('a') "
             ),
-            time_window=timedelta(minutes=500),
-            resolution=timedelta(minutes=1),
+            time_window_sec=500 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         ),
         InvalidQueryException,
@@ -56,8 +56,8 @@ TESTS = [
                 "WHERE platform IN tuple('a') "
                 "AND project_id IN tuple(1) "
             ),
-            time_window=timedelta(minutes=500),
-            resolution=timedelta(minutes=1),
+            time_window_sec=500 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(),
         ),
         InvalidQueryException,
@@ -79,8 +79,8 @@ TESTS_OVER_SESSIONS = [
                 OFFSET 0 GRANULARITY 3600
                 """
             ),
-            time_window=timedelta(minutes=120),
-            resolution=timedelta(minutes=1),
+            time_window_sec=120 * 60,
+            resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
         ),
         InvalidQueryException,

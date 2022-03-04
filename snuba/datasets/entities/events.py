@@ -37,6 +37,7 @@ from snuba.query.processors.object_id_rate_limiter import (
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
@@ -95,26 +96,6 @@ errors_translators = TranslationMappers(
 )
 
 
-class EventsQueryStorageSelector(QueryStorageSelector):
-    def __init__(self, mappers: TranslationMappers) -> None:
-        self.__events_table = get_writable_storage(StorageKey.EVENTS)
-        self.__events_ro_table = get_storage(StorageKey.EVENTS_RO)
-        self.__mappers = mappers
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> StorageAndMappers:
-        use_readonly_storage = (
-            state.get_config("enable_events_readonly_table", False)
-            and not request_settings.get_consistent()
-        )
-
-        storage = (
-            self.__events_ro_table if use_readonly_storage else self.__events_table
-        )
-        return StorageAndMappers(storage, self.__mappers)
-
-
 class ErrorsQueryStorageSelector(QueryStorageSelector):
     def __init__(self, mappers: TranslationMappers) -> None:
         self.__errors_table = get_writable_storage(StorageKey.ERRORS)
@@ -138,15 +119,18 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
 class ErrorsV2QueryStorageSelector(QueryStorageSelector):
     def __init__(self, mappers: TranslationMappers) -> None:
         self.__errors_table = get_writable_storage(StorageKey.ERRORS_V2)
-        # TODO: Register ERRORS_V2_RO and then remove comment
-        # self.__errors_ro_table = get_storage(StorageKey.ERRORS_RO)
+        self.__errors_ro_table = get_storage(StorageKey.ERRORS_V2_RO)
         self.__mappers = mappers
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        # TODO: Register ERRORS_V2_RO and support the ro storage
-        return StorageAndMappers(self.__errors_table, self.__mappers)
+        use_readonly_storage = not request_settings.get_consistent()
+
+        storage = (
+            self.__errors_ro_table if use_readonly_storage else self.__errors_table
+        )
+        return StorageAndMappers(storage, self.__mappers)
 
 
 def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
@@ -177,48 +161,35 @@ class BaseEventsEntity(Entity, ABC):
     """
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        if settings.ERRORS_ROLLOUT_ALL:
-            v1_pipeline_builder = SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=ErrorsQueryStorageSelector(
-                        mappers=errors_translators
-                        if custom_mappers is None
-                        else errors_translators.concat(custom_mappers)
-                    )
+        v1_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=ErrorsQueryStorageSelector(
+                    mappers=errors_translators
+                    if custom_mappers is None
+                    else errors_translators.concat(custom_mappers)
                 )
             )
-            v2_pipeline_builder = SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=ErrorsV2QueryStorageSelector(
-                        mappers=errors_translators
-                        if custom_mappers is None
-                        else errors_translators.concat(custom_mappers)
-                    )
+        )
+        v2_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=ErrorsV2QueryStorageSelector(
+                    mappers=errors_translators
+                    if custom_mappers is None
+                    else errors_translators.concat(custom_mappers)
                 )
             )
+        )
 
-            events_storage = get_writable_storage(StorageKey.ERRORS)
-            pipeline_builder: QueryPipelineBuilder[
-                ClickhouseQueryPlan
-            ] = PipelineDelegator(
-                query_pipeline_builders={
-                    "errors_v1": v1_pipeline_builder,
-                    "errors_v2": v2_pipeline_builder,
-                },
-                selector_func=v2_selector_function,
-                callback_func=comparison_callback,
-            )
-        else:
-            events_storage = get_writable_storage(StorageKey.EVENTS)
-            pipeline_builder = SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=EventsQueryStorageSelector(
-                        mappers=event_translator
-                        if custom_mappers is None
-                        else event_translator.concat(custom_mappers)
-                    )
-                ),
-            )
+        events_storage = get_writable_storage(StorageKey.ERRORS)
+        pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan] = PipelineDelegator(
+            query_pipeline_builders={
+                "errors_v1": v1_pipeline_builder,
+                "errors_v2": v2_pipeline_builder,
+            },
+            selector_func=v2_selector_function,
+            split_rate_limiter=True,
+            callback_func=comparison_callback,
+        )
 
         # TODO: entity data model is using ClickHouse columns/schema, should be corrected
         schema = events_storage.get_table_writer().get_schema()
@@ -258,6 +229,7 @@ class BaseEventsEntity(Entity, ABC):
             ReferrerRateLimiterProcessor(),
             ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
+            ResourceQuotaProcessor("project_id"),
         ]
 
 

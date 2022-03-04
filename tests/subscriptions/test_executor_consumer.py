@@ -125,8 +125,8 @@ def test_executor_consumer() -> None:
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count()",
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=EventsSubscription(data_dict={}),
     )
 
@@ -200,8 +200,8 @@ def generate_message(
                         subscription_identifier,
                         SubscriptionData(
                             project_id=1,
-                            time_window=timedelta(minutes=1),
-                            resolution=timedelta(minutes=1),
+                            time_window_sec=60,
+                            resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
                             entity_subscription=entity_subscription,
                         ),
@@ -316,8 +316,8 @@ def test_produce_result() -> None:
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=EventsSubscription(data_dict={}),
     )
 
