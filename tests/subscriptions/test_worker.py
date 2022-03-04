@@ -323,20 +323,36 @@ def test_subscription_worker_consistent() -> None:
         timestamps=Interval(now - (frequency * evaluations), now),
     )
 
-    worker.process_message(Message(Partition(Topic("events"), 0), 0, tick, now))
-
-    time.sleep(0.1)
-
-    assert (
-        len(
-            [
-                m
-                for m in metrics.calls
-                if isinstance(m, Increment) and m.name == "consistent"
-            ]
-        )
-        == 1
+    futures = worker.process_message(
+        Message(Partition(Topic("events"), 0), 0, tick, now)
     )
+
+    # Wait for future to be done
+    assert futures is not None
+    fut = futures[0]
+    fut.future.result()
+
+    retries = 3
+
+    while True:
+        retries -= 1
+        time.sleep(0.1)
+
+        try:
+            assert (
+                len(
+                    [
+                        m
+                        for m in metrics.calls
+                        if isinstance(m, Increment) and m.name == "consistent"
+                    ]
+                )
+                == 1
+            )
+            break
+        except AssertionError:
+            if retries == 0:
+                raise
 
 
 def test_handle_differences() -> None:
