@@ -21,6 +21,7 @@ from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
+    DeadLetterStep,
     InsertBatchWriter,
     MultistorageConsumerProcessingStrategyFactory,
     ProcessedMessageBatchWriter,
@@ -293,6 +294,52 @@ def test_multistorage_strategy_dead_letter_step(
     assert transaction_message.payload.key == StorageKey.TRANSACTIONS_V2.value.encode(
         "utf-8"
     )
+
+
+def test_dead_letter_step() -> None:
+    from snuba.datasets.storages import StorageKey
+
+    clock = TestingClock()
+    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+
+    topic = Topic("test-dlq")
+
+    broker.create_topic(topic, partitions=1)
+
+    producer = broker.get_producer()
+
+    dead_letter_step = DeadLetterStep(
+        producer=producer, topic=topic, metrics=TestingMetricsBackend()
+    )
+    storage_key = StorageKey.ERRORS_V2
+
+    # We only produce to dead letter topic if the payload is an insert
+    # so payload of `None` shouldn't produce any futures
+    none_message = Message(
+        Partition(Topic("topic"), 0), 0, (storage_key, None), datetime.now(), 1,
+    )
+    dead_letter_step.submit(none_message)
+    assert not dead_letter_step._DeadLetterStep__futures
+
+    # We only produce to dead letter topic if the payload is an insert
+    # so we should see futures with BytesInsertBatch payloads
+    insert_payload = BytesInsertBatch(rows=[b""], origin_timestamp=None)
+    insert_message = Message(
+        Partition(Topic("topic"), 0),
+        1,
+        (storage_key, insert_payload),
+        datetime.now(),
+        2,
+    )
+    dead_letter_step.submit(insert_message)
+    assert len(dead_letter_step._DeadLetterStep__futures) == 1
+
+    # dead letter join must be called with a timeout because the close()
+    # step of the previous strategy is what calls the submit() of the
+    # dead letter step.
+    dead_letter_step.close()
+    dead_letter_step.join(5.0)
+    assert not dead_letter_step._DeadLetterStep__futures
 
 
 def test_metrics_writing_e2e() -> None:

@@ -435,7 +435,7 @@ class DeadLetterStep(
         start = time.time()
 
         while self.__futures:
-            if not timeout or timeout > time.time() - start:
+            if not timeout or timeout < time.time() - start:
                 self.__metrics.increment(
                     "dead_letter_step.join_error", tags={"reason": "timeout"}
                 )
