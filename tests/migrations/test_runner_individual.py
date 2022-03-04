@@ -1,4 +1,3 @@
-import uuid
 from typing import Any, Dict, Optional, Sequence
 
 from snuba.clickhouse.http import JSONRowEncoder
@@ -13,8 +12,7 @@ from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper
-from tests.fixtures import get_raw_event, get_raw_transaction
-from tests.helpers import write_unprocessed_events
+from tests.fixtures import get_raw_transaction
 
 
 def _drop_all_tables() -> None:
@@ -252,59 +250,4 @@ def perform_select_query(
 def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
     return int(
         perform_select_query(["count()"], table_name, None, None, connection)[0][0]
-    )
-
-
-def test_backfill_errors() -> None:
-
-    backfill_migration_id = "0014_backfill_errors"
-    runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
-
-    run_prior_migrations(MigrationGroup.EVENTS, backfill_migration_id, runner)
-
-    errors_storage = get_writable_storage(StorageKey.ERRORS)
-    clickhouse = errors_storage.get_cluster().get_query_connection(
-        ClickhouseClientSettings.QUERY
-    )
-    errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
-
-    raw_events = []
-    for i in range(10):
-        event = get_raw_event()
-        raw_events.append(event)
-
-    events_storage = get_writable_storage(StorageKey.EVENTS)
-
-    write_unprocessed_events(events_storage, raw_events)
-
-    assert get_count_from_storage(errors_table_name, clickhouse) == 0
-
-    # Run 0014_backfill_errors
-    runner.run_migration(
-        MigrationKey(MigrationGroup.EVENTS, backfill_migration_id), force=True
-    )
-
-    assert get_count_from_storage(errors_table_name, clickhouse) == 10
-
-    outcome = perform_select_query(
-        ["contexts.key", "contexts.value"], errors_table_name, None, str(1), clickhouse
-    )
-
-    class UUIDVerifier:
-        def __eq__(self, some_str):
-            uuid.UUID(some_str)
-            return True
-
-    assert outcome[0] == (
-        [
-            "device.model_id",
-            "geo.city",
-            "geo.country_code",
-            "geo.region",
-            "os.kernel_version",
-            "trace.span_id",
-            "trace.trace_id",
-        ],
-        ["Galaxy", "San Francisco", "US", "CA", "1.1.1", "deadbeef", UUIDVerifier()],
     )
