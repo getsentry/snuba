@@ -255,15 +255,6 @@ def multistorage_consumer(
             build_kafka_producer_configuration(StreamsTopic(dead_letter_topic))
         )
 
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={
-            "group": consumer_group,
-            "storage": "_".join([storage_keys[0].value, "m"]),
-        },
-    )
-
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
         consumer,
