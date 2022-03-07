@@ -252,6 +252,7 @@ def test_multistorage_strategy_dead_letter_step(
         storages,
         10,
         10,
+        False,
         processes,
         input_block_size,
         output_block_size,
