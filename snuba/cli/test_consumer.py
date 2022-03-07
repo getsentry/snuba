@@ -146,11 +146,11 @@ def test_consumer(
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         metrics=metrics,
+        parallel_collect=parallel_collect,
         profile_path=profile_path,
         mock_parameters=MockParameters(
             avg_write_latency=avg_latency_ms, std_deviation=latency_std_deviation_ms,
         ),
-        parallel_collect=parallel_collect,
     )
 
     consumer = consumer_builder.build_base_consumer()

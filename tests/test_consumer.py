@@ -161,8 +161,8 @@ def test_multistorage_strategy(
         storages,
         10,
         10,
-        processes,
         False,
+        processes,
         input_block_size,
         output_block_size,
         TestingMetricsBackend(),
@@ -238,7 +238,7 @@ def test_metrics_writing_e2e() -> None:
     ]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages, 10, 10, None, None, None, TestingMetricsBackend(),
+        storages, 10, 10, False, None, None, None, TestingMetricsBackend(),
     ).create(commit)
 
     payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
