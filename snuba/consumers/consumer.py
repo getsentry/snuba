@@ -37,7 +37,7 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey, is_equivalent_write
+from snuba.datasets.storages import StorageKey, are_writes_identical
 from snuba.datasets.table_storage import TableWriter
 from snuba.environment import setup_sentry
 from snuba.processor import (
@@ -462,16 +462,88 @@ def process_message_multistorage(
         message.offset, message.partition.index, message.timestamp
     )
 
+    results: MutableSequence[
+        Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+    ] = []
+
+    for index, storage_key in enumerate(message.payload.storage_keys):
+        # The `process_message` api of individual storage processors could modify the content of the payload
+        # in some cases. For example, they can remove redundant data from the payload to decrease size of
+        # storage on clickhouse. Hence, we need to make copies of the payload and send the copies to the api.
+        # The last storage will use the original payload to avoid unnecessary copying.
+        storage_message = (
+            copy.deepcopy(value)
+            if (index < len(message.payload.storage_keys) - 1)
+            else value
+        )
+        result = (
+            get_writable_storage(storage_key)
+            .get_table_writer()
+            .get_stream_loader()
+            .get_processor()
+            .process_message(storage_message, metadata)
+        )
+        if isinstance(result, AggregateInsertBatch):
+            values_row_encoder = get_values_row_encoder(storage_key)
+            results.append(
+                (
+                    storage_key,
+                    BytesInsertBatch(
+                        [values_row_encoder.encode(row) for row in result.rows],
+                        result.origin_timestamp,
+                    ),
+                )
+            )
+        elif isinstance(result, InsertBatch):
+            results.append(
+                (
+                    storage_key,
+                    BytesInsertBatch(
+                        [json_row_encoder.encode(row) for row in result.rows],
+                        result.origin_timestamp,
+                    ),
+                )
+            )
+        else:
+            results.append((storage_key, result))
+
+    return results
+
+
+def process_message_multistorage_identical_storages(
+    message: Message[MultistorageKafkaPayload],
+) -> Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]:
+    """
+    This method is similar to process_message_multistorage except for a minor difference.
+    It performs an optimization where it avoids processing a message multiple times if the
+    it finds that the storages on which data needs to be written are identical. This is a
+    performance optimization since we remove the message processing time completely for all
+    identical storages like errors and errors_v2.
+
+    It is possible that the storage keys in the message could be a mix of identical and
+    non-identical storages. This method takes into account that scenario as well.
+
+    The reason why this method has been created rather than modifying the existing
+    process_message_multistorage is to avoid doing a check for every message in cases
+    where there are no identical storages like metrics.
+    """
+    # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
+    # is itself removed.
+    from snuba.datasets.storages.factory import get_writable_storage
+
+    value = rapidjson.loads(message.payload.payload.value)
+    metadata = KafkaMessageMetadata(
+        message.offset, message.partition.index, message.timestamp
+    )
+
     intermediate_results: MutableMapping[
         StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]
     ] = {}
 
     for index, storage_key in enumerate(message.payload.storage_keys):
-        # Optimization to avoid processing messages multiple times if the bytes
-        # written on some storages are the same.
         skip_processing = False
         for other_storage, insert_batch in intermediate_results.items():
-            if is_equivalent_write(storage_key, other_storage):
+            if are_writes_identical(storage_key, other_storage):
                 intermediate_results[storage_key] = copy.copy(insert_batch)
                 skip_processing = True
                 break
@@ -509,7 +581,7 @@ def process_message_multistorage(
         else:
             intermediate_results[storage_key] = result
 
-    return tuple(intermediate_results.items())
+    return list(intermediate_results.items())
 
 
 class MultistorageConsumerProcessingStrategyFactory(
@@ -543,6 +615,15 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
+        self.__process_message_fn = process_message_multistorage
+        for storage1, storage2 in itertools.combinations(self.__storages, 2):
+            if are_writes_identical(
+                storage1.get_storage_key(), storage2.get_storage_key()
+            ):
+                self.__process_message_fn = (
+                    process_message_multistorage_identical_storages
+                )
+                break
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
@@ -635,12 +716,12 @@ class MultistorageConsumerProcessingStrategyFactory(
         strategy: ProcessingStrategy[MultistorageKafkaPayload]
 
         if self.__processes is None:
-            strategy = TransformStep(process_message_multistorage, collect)
+            strategy = TransformStep(self.__process_message_fn, collect)
         else:
             assert self.__input_block_size is not None
             assert self.__output_block_size is not None
             strategy = ParallelTransformStep(
-                process_message_multistorage,
+                self.__process_message_fn,
                 collect,
                 self.__processes,
                 self.__max_batch_size,

@@ -8,6 +8,7 @@ from arroyo.backends.kafka import KafkaPayload
 from snuba.consumers.consumer import (
     MultistorageKafkaPayload,
     process_message_multistorage,
+    process_message_multistorage_identical_storages,
 )
 from snuba.datasets.storages import StorageKey
 from tests.fixtures import get_raw_event, get_raw_transaction
@@ -68,10 +69,23 @@ test_data = [
 
 
 @pytest.mark.parametrize("message, expected", test_data)
-def test_process_multistorage(
+def test_process_multistorage_equivalent_write(
     message: Message[MultistorageKafkaPayload], expected: bool
 ) -> None:
-    results = process_message_multistorage(message)
+    results = process_message_multistorage_identical_storages(message)
     assert len(results) == 2
 
     assert (results[0][1] == results[1][1]) is expected
+
+
+@pytest.mark.parametrize("message, ignored", test_data)
+def test_process_multistorage_variants_return_same_result(
+    message: Message[MultistorageKafkaPayload], ignored: bool
+) -> None:
+    result1 = process_message_multistorage(message)
+    assert len(result1) == 2
+
+    result2 = process_message_multistorage_identical_storages(message)
+    assert len(result2) == 2
+
+    assert result1 == result2
