@@ -120,7 +120,6 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    stats_collection_frequency_ms: Optional[int],
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
 ) -> None:
@@ -139,7 +138,7 @@ def consumer(
 
     def stats_callback(stats_json: str) -> None:
         stats = rapidjson.loads(stats_json)
-        metrics.gauge("total_queue_size", stats.get("replyq", 0))
+        metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
@@ -152,7 +151,6 @@ def consumer(
             auto_offset_reset=auto_offset_reset,
             queued_max_messages_kbytes=queued_max_messages_kbytes,
             queued_min_messages=queued_min_messages,
-            stats_collection_frequency_ms=stats_collection_frequency_ms,
         ),
         processing_params=ProcessingParameters(
             processes=processes,

@@ -8,7 +8,6 @@ from snuba import settings
 class Topic(Enum):
     EVENTS = "events"
     EVENT_REPLACEMENTS = "event-replacements"
-    EVENT_REPLACEMENTS_LEGACY = "event-replacements-legacy"
     COMMIT_LOG = "snuba-commit-log"
     CDC = "cdc"
     METRICS = "snuba-metrics"
@@ -25,6 +24,7 @@ class Topic(Enum):
     SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     QUERYLOG = "snuba-queries"
+    DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
