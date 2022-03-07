@@ -98,6 +98,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=click.IntRange(100, 1000),
     help="The frequency of collecting statistics from librdkafka.",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -113,6 +116,7 @@ def consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     stateful_consumer: bool,
+    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
@@ -160,6 +164,7 @@ def consumer(
         metrics=metrics,
         profile_path=profile_path,
         stats_callback=stats_callback,
+        parallel_collect=parallel_collect,
     )
 
     if stateful_consumer:

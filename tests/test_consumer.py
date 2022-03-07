@@ -162,6 +162,7 @@ def test_multistorage_strategy(
         10,
         10,
         processes,
+        False,
         input_block_size,
         output_block_size,
         TestingMetricsBackend(),

@@ -28,6 +28,7 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
+    ParallelCollectStep,
     ParallelTransformStep,
     TransformStep,
 )
@@ -518,6 +519,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         storages: Sequence[WritableTableStorage],
         max_batch_size: int,
         max_batch_time: float,
+        parallel_collect: bool,
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
@@ -541,6 +543,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
+        self.__parallel_collect = parallel_collect
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
@@ -623,11 +626,20 @@ class MultistorageConsumerProcessingStrategyFactory(
         # 2. Filter out any messages that do not apply to any storage.
         # 3. Transform the messages using the selected storages.
         # 4. Route the messages to the collector for each storage.
-        collect = CollectStep(
-            self.__build_collector,
-            commit,
-            self.__max_batch_size,
-            self.__max_batch_time,
+        collect = (
+            ParallelCollectStep(
+                self.__build_collector,
+                commit,
+                self.__max_batch_size,
+                self.__max_batch_time,
+            )
+            if self.__parallel_collect
+            else CollectStep(
+                self.__build_collector,
+                commit,
+                self.__max_batch_size,
+                self.__max_batch_time,
+            )
         )
 
         strategy: ProcessingStrategy[MultistorageKafkaPayload]

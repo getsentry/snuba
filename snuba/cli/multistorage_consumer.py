@@ -79,6 +79,9 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -88,6 +91,7 @@ def multistorage_consumer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
+    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
@@ -234,6 +238,7 @@ def multistorage_consumer(
             input_block_size=input_block_size,
             output_block_size=output_block_size,
             metrics=metrics,
+            parallel_collect=parallel_collect,
         ),
     )
 

@@ -90,6 +90,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Std deviation to be applied to the latency",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 def test_consumer(
     *,
     commit_log_topic: Optional[str],
@@ -105,6 +108,7 @@ def test_consumer(
     output_block_size: Optional[int],
     avg_latency_ms: int,
     latency_std_deviation_ms: int,
+    parallel_collect: bool,
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
 ) -> None:
@@ -146,6 +150,7 @@ def test_consumer(
         mock_parameters=MockParameters(
             avg_write_latency=avg_latency_ms, std_deviation=latency_std_deviation_ms,
         ),
+        parallel_collect=parallel_collect,
     )
 
     consumer = consumer_builder.build_base_consumer()
