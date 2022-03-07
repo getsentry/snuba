@@ -43,6 +43,7 @@ from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey, are_writes_identical
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.table_storage import TableWriter
 from snuba.environment import setup_sentry
 from snuba.processor import (
@@ -590,13 +591,35 @@ def process_message(
         return result
 
 
+def process_message_multistorage_work(
+    metadata: KafkaMessageMetadata, storage_key: StorageKey, storage_message: Any
+) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+    result = (
+        get_writable_storage(storage_key)
+        .get_table_writer()
+        .get_stream_loader()
+        .get_processor()
+        .process_message(storage_message, metadata)
+    )
+
+    if isinstance(result, AggregateInsertBatch):
+        values_row_encoder = get_values_row_encoder(storage_key)
+        return BytesInsertBatch(
+            [values_row_encoder.encode(row) for row in result.rows],
+            result.origin_timestamp,
+        )
+    elif isinstance(result, InsertBatch):
+        return BytesInsertBatch(
+            [json_row_encoder.encode(row) for row in result.rows],
+            result.origin_timestamp,
+        )
+    else:
+        return result
+
+
 def process_message_multistorage(
     message: Message[MultistorageKafkaPayload],
 ) -> Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]:
-    # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
-    # is itself removed.
-    from snuba.datasets.storages.factory import get_writable_storage
-
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
         message.offset, message.partition.index, message.timestamp
@@ -616,36 +639,11 @@ def process_message_multistorage(
             if (index < len(message.payload.storage_keys) - 1)
             else value
         )
-        result = (
-            get_writable_storage(storage_key)
-            .get_table_writer()
-            .get_stream_loader()
-            .get_processor()
-            .process_message(storage_message, metadata)
+
+        result = process_message_multistorage_work(
+            metadata=metadata, storage_key=storage_key, storage_message=storage_message
         )
-        if isinstance(result, AggregateInsertBatch):
-            values_row_encoder = get_values_row_encoder(storage_key)
-            results.append(
-                (
-                    storage_key,
-                    BytesInsertBatch(
-                        [values_row_encoder.encode(row) for row in result.rows],
-                        result.origin_timestamp,
-                    ),
-                )
-            )
-        elif isinstance(result, InsertBatch):
-            results.append(
-                (
-                    storage_key,
-                    BytesInsertBatch(
-                        [json_row_encoder.encode(row) for row in result.rows],
-                        result.origin_timestamp,
-                    ),
-                )
-            )
-        else:
-            results.append((storage_key, result))
+        results.append((storage_key, result))
 
     return results
 
@@ -667,10 +665,6 @@ def process_message_multistorage_identical_storages(
     process_message_multistorage is to avoid doing a check for every message in cases
     where there are no identical storages like metrics.
     """
-    # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
-    # is itself removed.
-    from snuba.datasets.storages.factory import get_writable_storage
-
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
         message.offset, message.partition.index, message.timestamp
@@ -682,8 +676,8 @@ def process_message_multistorage_identical_storages(
 
     for index, storage_key in enumerate(message.payload.storage_keys):
         skip_processing = False
-        for other_storage, insert_batch in intermediate_results.items():
-            if are_writes_identical(storage_key, other_storage):
+        for other_storage_key, insert_batch in intermediate_results.items():
+            if are_writes_identical(storage_key, other_storage_key):
                 intermediate_results[storage_key] = copy.copy(insert_batch)
                 skip_processing = True
                 break
@@ -700,26 +694,11 @@ def process_message_multistorage_identical_storages(
             if (index < len(message.payload.storage_keys) - 1)
             else value
         )
-        result = (
-            get_writable_storage(storage_key)
-            .get_table_writer()
-            .get_stream_loader()
-            .get_processor()
-            .process_message(storage_message, metadata)
+
+        result = process_message_multistorage_work(
+            metadata=metadata, storage_key=storage_key, storage_message=storage_message
         )
-        if isinstance(result, AggregateInsertBatch):
-            values_row_encoder = get_values_row_encoder(storage_key)
-            intermediate_results[storage_key] = BytesInsertBatch(
-                [values_row_encoder.encode(row) for row in result.rows],
-                result.origin_timestamp,
-            )
-        elif isinstance(result, InsertBatch):
-            intermediate_results[storage_key] = BytesInsertBatch(
-                [json_row_encoder.encode(row) for row in result.rows],
-                result.origin_timestamp,
-            )
-        else:
-            intermediate_results[storage_key] = result
+        intermediate_results[storage_key] = result
 
     return list(intermediate_results.items())
 
@@ -757,6 +736,9 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
+        self.__producer = producer
+        self.__topic = topic
+
         self.__process_message_fn = process_message_multistorage
         for storage1, storage2 in itertools.combinations(self.__storages, 2):
             if are_writes_identical(
@@ -766,9 +748,6 @@ class MultistorageConsumerProcessingStrategyFactory(
                     process_message_multistorage_identical_storages
                 )
                 break
-
-        self.__producer = producer
-        self.__topic = topic
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]

@@ -34,7 +34,7 @@ class StorageKey(Enum):
     ERRORS_V2_RO = "errors_v2_ro"
 
 
-EQUIVALENT_WRITE_STORAGES = frozenset(
+IDENTICAL_STORAGES = frozenset(
     {
         frozenset({StorageKey.TRANSACTIONS, StorageKey.TRANSACTIONS_V2}),
         frozenset({StorageKey.ERRORS, StorageKey.ERRORS_V2}),
@@ -44,7 +44,7 @@ EQUIVALENT_WRITE_STORAGES = frozenset(
 
 @lru_cache(20)
 def are_writes_identical(this: StorageKey, other: StorageKey) -> bool:
-    for group in EQUIVALENT_WRITE_STORAGES:
+    for group in IDENTICAL_STORAGES:
         if {this, other}.issubset(group):
             return True
 
