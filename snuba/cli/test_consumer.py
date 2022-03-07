@@ -65,6 +65,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--processes", type=int,
@@ -89,9 +92,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     default=10,
     type=int,
     help="Std deviation to be applied to the latency",
-)
-@click.option(
-    "--parallel-collect", is_flag=True, default=False,
 )
 def test_consumer(
     *,

@@ -74,6 +74,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--stateful-consumer",
@@ -92,9 +95,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
-)
-@click.option(
-    "--parallel-collect", is_flag=True, default=False,
 )
 def consumer(
     *,

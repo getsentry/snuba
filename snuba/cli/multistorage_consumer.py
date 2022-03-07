@@ -75,6 +75,9 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 @click.option("--processes", type=int)
 @click.option(
     "--input-block-size", type=int,
@@ -85,9 +88,6 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level")
 @click.option(
     "--dead-letter-topic", help="Dead letter topic to send failed insert messages."
-)
-@click.option(
-    "--parallel-collect", is_flag=True, default=False,
 )
 def multistorage_consumer(
     storage_names: Sequence[str],
