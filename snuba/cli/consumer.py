@@ -94,11 +94,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
 @click.option(
-    "--stats-collection-frequency-ms",
-    type=click.IntRange(100, 1000),
-    help="The frequency of collecting statistics from librdkafka.",
-)
-@click.option(
     "--parallel-collect", is_flag=True, default=False,
 )
 def consumer(
