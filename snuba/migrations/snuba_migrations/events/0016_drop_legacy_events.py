@@ -11,10 +11,11 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-# Copied from 0001_events_initial
+# List from 0001_events_initial hierachical hashes columns
 columns: List[Column[Modifiers]] = [
     Column("event_id", FixedString(32)),
     Column("project_id", UInt(64)),
@@ -25,6 +26,7 @@ columns: List[Column[Modifiers]] = [
     Column("platform", String(Modifiers(nullable=True))),
     Column("message", String(Modifiers(nullable=True))),
     Column("primary_hash", FixedString(32, Modifiers(nullable=True))),
+    Column("hierarchical_hashes", Array(FixedString(32))),
     Column("received", DateTime(Modifiers(nullable=True))),
     Column("search_message", String(Modifiers(nullable=True))),
     Column("title", String(Modifiers(nullable=True))),
@@ -144,6 +146,15 @@ class Migration(migration.ClickhouseNodeMigration):
                     partition_by="(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))",
                     sample_by=sample_expr,
                 ),
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.EVENTS,
+                table_name="sentry_local",
+                column=Column(
+                    "_tags_hash_map",
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
+                ),
+                after="_tags_flattened",
             ),
         ]
 
