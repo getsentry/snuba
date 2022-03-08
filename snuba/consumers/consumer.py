@@ -591,7 +591,7 @@ def process_message(
         return result
 
 
-def process_message_multistorage_work(
+def _process_message_multistorage_work(
     metadata: KafkaMessageMetadata, storage_key: StorageKey, storage_message: Any
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
     result = (
@@ -639,8 +639,7 @@ def process_message_multistorage(
             if (index < len(message.payload.storage_keys) - 1)
             else value
         )
-
-        result = process_message_multistorage_work(
+        result = _process_message_multistorage_work(
             metadata=metadata, storage_key=storage_key, storage_message=storage_message
         )
         results.append((storage_key, result))
@@ -675,16 +674,6 @@ def process_message_multistorage_identical_storages(
     ] = {}
 
     for index, storage_key in enumerate(message.payload.storage_keys):
-        skip_processing = False
-        for other_storage_key, insert_batch in intermediate_results.items():
-            if are_writes_identical(storage_key, other_storage_key):
-                intermediate_results[storage_key] = copy.copy(insert_batch)
-                skip_processing = True
-                break
-
-        if skip_processing:
-            continue
-
         # The `process_message` api of individual storage processors could modify the content of the payload
         # in some cases. For example, they can remove redundant data from the payload to decrease size of
         # storage on clickhouse. Hence, we need to make copies of the payload and send the copies to the api.
@@ -694,10 +683,19 @@ def process_message_multistorage_identical_storages(
             if (index < len(message.payload.storage_keys) - 1)
             else value
         )
+        result = None
+        for other_storage_key, insert_batch in intermediate_results.items():
+            if are_writes_identical(storage_key, other_storage_key):
+                result = insert_batch
+                break
 
-        result = process_message_multistorage_work(
-            metadata=metadata, storage_key=storage_key, storage_message=storage_message
-        )
+        if result is None:
+            result = _process_message_multistorage_work(
+                metadata=metadata,
+                storage_key=storage_key,
+                storage_message=storage_message,
+            )
+
         intermediate_results[storage_key] = result
 
     return list(intermediate_results.items())
@@ -740,14 +738,11 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__topic = topic
 
         self.__process_message_fn = process_message_multistorage
-        for storage1, storage2 in itertools.combinations(self.__storages, 2):
-            if are_writes_identical(
-                storage1.get_storage_key(), storage2.get_storage_key()
-            ):
-                self.__process_message_fn = (
-                    process_message_multistorage_identical_storages
-                )
-                break
+        if any(
+            are_writes_identical(storage1.get_storage_key(), storage2.get_storage_key())
+            for storage1, storage2 in itertools.combinations(self.__storages, 2)
+        ):
+            self.__process_message_fn = process_message_multistorage_identical_storages
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
