@@ -222,6 +222,20 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             )
         ]
 
+    if settings.ENABLE_PROFILES_CONSUMER:
+        daemons += [
+            (
+                "profiles",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--storage=profiles",
+                ],
+            ),
+        ]
+
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(

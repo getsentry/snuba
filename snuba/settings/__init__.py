@@ -21,7 +21,7 @@ ADMIN_AUTH_PROVIDER = "NOOP"
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS: Set[str] = set()
+DISABLED_DATASETS: Set[str] = set({"profiles"})
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -184,6 +184,9 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
 ENABLED_MATERIALIZATION_VERSION = 2
+
+# Enable profiles ingestion
+ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
 # Place the actual time we start ingesting on the new version.
 ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
