@@ -4,6 +4,7 @@ import calendar
 import uuid
 from datetime import datetime, timedelta, timezone
 from hashlib import md5
+from typing import Tuple
 
 from snuba import settings
 from snuba.datasets.events_processor_base import InsertEvent
@@ -259,3 +260,25 @@ def get_raw_transaction(span_id: str | None = None) -> InsertEvent:
             ],
         },
     }
+
+
+def get_raw_error_message() -> Tuple[int, str, InsertEvent]:
+    """
+    Get an error message which can be passed to the processors.
+    """
+    return (
+        2,
+        "insert",
+        get_raw_event(),
+    )
+
+
+def get_raw_transaction_message() -> Tuple[int, str, InsertEvent]:
+    """
+    Get a transaction message which can be passed to the processors.
+    """
+    return (
+        2,
+        "insert",
+        get_raw_transaction(),
+    )

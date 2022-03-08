@@ -1,3 +1,4 @@
+import copy
 import logging
 import numbers
 import uuid
@@ -206,8 +207,8 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_contexts_and_user(
         self, processed: MutableMapping[str, Any], event_dict: EventDict,
     ) -> None:
-        contexts: MutableMapping[str, Any] = _as_dict_safe(
-            event_dict["data"].get("contexts", None)
+        contexts: MutableMapping[str, Any] = copy.deepcopy(
+            _as_dict_safe(event_dict["data"].get("contexts", None))
         )
         user_dict = (
             event_dict["data"].get(

@@ -1,4 +1,3 @@
-import copy
 import itertools
 import logging
 import time
@@ -607,21 +606,12 @@ def process_message_multistorage(
     ] = []
 
     for index, storage_key in enumerate(message.payload.storage_keys):
-        # The `process_message` api of individual storage processors could modify the content of the payload
-        # in some cases. For example, they can remove redundant data from the payload to decrease size of
-        # storage on clickhouse. Hence, we need to make copies of the payload and send the copies to the api.
-        # The last storage will use the original payload to avoid unnecessary copying.
-        storage_message = (
-            copy.deepcopy(value)
-            if (index < len(message.payload.storage_keys) - 1)
-            else value
-        )
         result = (
             get_writable_storage(storage_key)
             .get_table_writer()
             .get_stream_loader()
             .get_processor()
-            .process_message(storage_message, metadata)
+            .process_message(value, metadata)
         )
         if isinstance(result, AggregateInsertBatch):
             values_row_encoder = get_values_row_encoder(storage_key)
