@@ -30,4 +30,5 @@ class StorageKey(Enum):
     TRANSACTIONS_RO = "transactions_ro"
     TRANSACTIONS_V2 = "transactions_v2"
     ERRORS_V2 = "errors_v2"
+    PROFILES = "profiles"
     ERRORS_V2_RO = "errors_v2_ro"

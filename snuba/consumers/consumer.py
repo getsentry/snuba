@@ -2,11 +2,15 @@ import copy
 import itertools
 import logging
 import time
+from collections import defaultdict, deque
+from concurrent.futures import Future
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
     Any,
     Callable,
+    Deque,
+    List,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -21,6 +25,7 @@ from typing import (
 
 import rapidjson
 from arroyo import Message, Partition, Topic
+from arroyo.backends.abstract import Producer as AbstractProducer
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
@@ -28,6 +33,7 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
+    ParallelCollectStep,
     ParallelTransformStep,
     TransformStep,
 )
@@ -355,6 +361,99 @@ def build_mock_batch_writer(
     return build_writer
 
 
+class DeadLetterStep(
+    ProcessingStep[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
+):
+    """
+    If a batch failed to be inserted to ClickHouse for some reason, we put those messages
+    into a dead letter topic so that they can be consumed later and tried again.
+
+    This is only possible for the MultiStorageConsumerFactory right now, and it is an
+    optional step for the MultistorageCollector. Additionally, this is only enabled if
+    the storages have `ignore_errors` set to True - which is the case for the errors_v2
+    and transaction_v2 storages.
+
+    """
+
+    def __init__(
+        self,
+        producer: AbstractProducer[KafkaPayload],
+        topic: Topic,
+        metrics: MetricsBackend,
+    ):
+        self.__producer = producer
+        self.__topic = topic
+        self.__metrics = metrics
+        self.__futures: Deque[Future[Message[KafkaPayload]]] = deque()
+        self.__closed = False
+
+    def __format_payload(
+        self,
+        message: Message[
+            Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+        ],
+    ) -> List[KafkaPayload]:
+        kafka_payloads: List[KafkaPayload] = []
+        storage_key, payload = message.payload
+        if isinstance(payload, BytesInsertBatch):
+            for row in payload.rows:
+                kafka_payloads.append(
+                    KafkaPayload(storage_key.value.encode("utf-8"), row, [])
+                )
+        return kafka_payloads
+
+    def poll(self) -> None:
+        pass
+
+    def submit(
+        self,
+        message: Message[
+            Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+        ],
+    ) -> None:
+        submit_start = time.time()
+        payloads = self.__format_payload(message)
+
+        produce_start = time.time()
+        for payload in payloads:
+            self.__futures.append(self.__producer.produce(self.__topic, payload))
+        submit_end = time.time()
+
+        submit_duration_ms = (submit_end - submit_start) * 1000.0
+        produce_duration_ms = (submit_end - produce_start) * 1000.0
+        self.__metrics.timing("dead_letter_step.submit_duration_ms", submit_duration_ms)
+        self.__metrics.timing(
+            "dead_letter_step.produce_duration_ms", produce_duration_ms
+        )
+
+    def close(self) -> None:
+        self.__closed = True
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        start = time.time()
+
+        while self.__futures:
+            if not timeout or timeout < time.time() - start:
+                self.__metrics.increment(
+                    "dead_letter_step.join_error", tags={"reason": "timeout"}
+                )
+                break
+            if self.__futures[0].done():
+                future = self.__futures.popleft()
+                try:
+                    future.result()
+                except Exception:
+                    self.__metrics.increment(
+                        "dead_letter_step.join_error", tags={"reason": "exception"}
+                    )
+                    logger.warning(
+                        "Failed dead letter queue future result", exc_info=True
+                    )
+
+
 class MultistorageCollector(
     ProcessingStep[
         Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
@@ -365,11 +464,25 @@ class MultistorageCollector(
         steps: Mapping[
             StorageKey, ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
+        dead_letter_step: Optional[
+            ProcessingStep[
+                Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+            ]
+        ],
         ignore_errors: Optional[Set[StorageKey]] = None,
     ):
         self.__steps = steps
         self.__closed = False
         self.__ignore_errors = ignore_errors
+        self.__dead_letter_step = dead_letter_step
+        self.__messages: MutableMapping[
+            StorageKey,
+            List[
+                Message[
+                    Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+                ]
+            ],
+        ] = defaultdict(list)
 
     def poll(self) -> None:
         for step in self.__steps.values():
@@ -384,15 +497,28 @@ class MultistorageCollector(
         assert not self.__closed
 
         for storage_key, payload in message.payload:
-            self.__steps[storage_key].submit(
-                Message(
-                    message.partition,
-                    message.offset,
-                    payload,
-                    message.timestamp,
-                    message.next_offset,
-                )
+            writer_message = Message(
+                message.partition,
+                message.offset,
+                payload,
+                message.timestamp,
+                message.next_offset,
             )
+            self.__steps[storage_key].submit(writer_message)
+
+            # we collect the messages in self.__messages in the off chance
+            # that we get an error submitting a batch and need to forward
+            # these message to the dead letter topic. The payload doesn't
+            # have storage information so we need to keep the storage_key
+            other_message = Message(
+                message.partition,
+                message.offset,
+                (storage_key, payload),
+                message.timestamp,
+                message.next_offset,
+            )
+
+            self.__messages[storage_key].append(other_message)
 
     def close(self) -> None:
         self.__closed = True
@@ -402,6 +528,13 @@ class MultistorageCollector(
                 try:
                     step.close()
                 except Exception as e:
+                    messages = self.__messages[storage_key]
+                    if self.__dead_letter_step and messages:
+                        logger.info(
+                            f"Submitting {len(messages)} {storage_key.value} messages to dead letter step..."
+                        )
+                        for message in self.__messages[storage_key]:
+                            self.__dead_letter_step.submit(message)
                     logger.warning("Error while writing data to clickhouse", exc_info=e)
             else:
                 step.close()
@@ -411,6 +544,9 @@ class MultistorageCollector(
 
         for step in self.__steps.values():
             step.terminate()
+
+        if self.__dead_letter_step:
+            self.__dead_letter_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
@@ -424,6 +560,11 @@ class MultistorageCollector(
                 timeout_remaining = None
 
             step.join(timeout_remaining)
+
+        self.__messages = {}
+        if self.__dead_letter_step:
+            # timeout of 5.0 was set arbitrarily, can be changed
+            self.__dead_letter_step.join(5.0)
 
 
 class MultistorageKafkaPayload(NamedTuple):
@@ -518,10 +659,13 @@ class MultistorageConsumerProcessingStrategyFactory(
         storages: Sequence[WritableTableStorage],
         max_batch_size: int,
         max_batch_time: float,
+        parallel_collect: bool,
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         metrics: MetricsBackend,
+        producer: Optional[AbstractProducer[KafkaPayload]],
+        topic: Optional[Topic],
     ):
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -541,6 +685,10 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
+        self.__parallel_collect = parallel_collect
+
+        self.__producer = producer
+        self.__topic = topic
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
@@ -604,6 +752,11 @@ class MultistorageConsumerProcessingStrategyFactory(
     ) -> ProcessingStep[
         Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
     ]:
+        dead_letter_step: Optional[DeadLetterStep] = None
+        if self.__producer and self.__topic:
+            dead_letter_step = DeadLetterStep(
+                producer=self.__producer, topic=self.__topic, metrics=self.__metrics,
+            )
         return MultistorageCollector(
             {
                 storage.get_storage_key(): self.__build_batch_writer(storage)
@@ -614,6 +767,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 for storage in self.__storages
                 if storage.get_is_write_error_ignorable() is True
             },
+            dead_letter_step=dead_letter_step,
         )
 
     def create(
@@ -623,11 +777,20 @@ class MultistorageConsumerProcessingStrategyFactory(
         # 2. Filter out any messages that do not apply to any storage.
         # 3. Transform the messages using the selected storages.
         # 4. Route the messages to the collector for each storage.
-        collect = CollectStep(
-            self.__build_collector,
-            commit,
-            self.__max_batch_size,
-            self.__max_batch_time,
+        collect = (
+            ParallelCollectStep(
+                self.__build_collector,
+                commit,
+                self.__max_batch_size,
+                self.__max_batch_time,
+            )
+            if self.__parallel_collect
+            else CollectStep(
+                self.__build_collector,
+                commit,
+                self.__max_batch_size,
+                self.__max_batch_time,
+            )
         )
 
         strategy: ProcessingStrategy[MultistorageKafkaPayload]
