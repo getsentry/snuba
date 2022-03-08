@@ -30,13 +30,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.RunSql(
-                storage_set=StorageSetKey.METRICS,
-                statement=(f"ALTER TABLE {table_name} REMOVE TTL"),
-            )
-            for table_name in self.table_names
-        ]
+        return []
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
