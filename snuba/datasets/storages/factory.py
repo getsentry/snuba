@@ -26,9 +26,6 @@ from snuba.datasets.storages.outcomes import (
 )
 from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw_storage
 from snuba.datasets.storages.profiles import (
-    readable_storage as profiles_readable_storage,
-)
-from snuba.datasets.storages.profiles import (
     writable_storage as profiles_writable_storage,
 )
 from snuba.datasets.storages.querylog import storage as querylog_storage
@@ -104,7 +101,7 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
             sessions_hourly_storage,
             org_sessions_hourly_storage,
             transactions_ro_storage,
-            profiles_readable_storage,
+            profiles_writable_storage,
             errors_v2_ro_storage,
         ]
     },

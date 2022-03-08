@@ -3,8 +3,8 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.profiles_processor import ProfilesMessageProcessor
-from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
-from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
+from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdEnforcer
@@ -51,20 +51,6 @@ readable_columns = ColumnSet(
         ("version_name", String()),
         ("version_code", String()),
     ]
-)
-
-readable_schema = TableSchema(
-    columns=readable_columns,
-    local_table_name=PROFILES_LOCAL_TABLE_NAME,
-    dist_table_name=PROFILES_DIST_TABLE_NAME,
-    storage_set_key=StorageSetKey.PROFILES,
-)
-
-readable_storage = ReadableTableStorage(
-    storage_key=StorageKey.PROFILES,
-    storage_set_key=StorageSetKey.PROFILES,
-    schema=readable_schema,
-    query_processors=processors,
 )
 
 writable_columns = readable_columns + ColumnSet(
