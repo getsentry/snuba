@@ -65,7 +65,7 @@ def test_reconnect(FakeClient: Client) -> None:
 
 
 def test_capture_trace() -> None:
-    storage = get_storage(StorageKey.EVENTS)
+    storage = get_storage(StorageKey.ERRORS)
     clickhouse = storage.get_cluster().get_query_connection(
         ClickhouseClientSettings.QUERY
     )
