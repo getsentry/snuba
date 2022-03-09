@@ -412,6 +412,12 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
     def submit(self, message: Message[CommittableTick]) -> None:
         assert not self.__closed
 
+        # TODO: This metric is temporary for debugging
+        self.__metrics.increment(
+            "ProduceScheduledSubscriptionMessage.submit",
+            tags={"committable": str(message.payload.should_commit)},
+        )
+
         # If queue is full, raise MessageRejected to tell the stream
         # processor to pause consuming
         if len(self.__queue) >= self.__max_buffer_size:

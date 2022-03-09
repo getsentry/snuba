@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, cast
+from typing import Any, List, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 from flask import Flask, Response, g, jsonify, make_response, request
@@ -205,6 +205,11 @@ def configs() -> Response:
 
     else:
         descriptions = state.get_all_config_descriptions()
+
+        raw_configs: Sequence[Tuple[str, Any]] = state.get_raw_configs().items()
+
+        sorted_configs = sorted(raw_configs, key=lambda c: c[0])
+
         config_data = [
             {
                 "key": k,
@@ -212,7 +217,7 @@ def configs() -> Response:
                 "description": str(descriptions.get(k)) if k in descriptions else None,
                 "type": get_config_type_from_value(v),
             }
-            for (k, v) in state.get_raw_configs().items()
+            for (k, v) in sorted_configs
         ]
 
         return Response(
