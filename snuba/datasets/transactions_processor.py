@@ -362,7 +362,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         )
         for context in skipped_contexts:
             if context in sanitized_context:
-                del contexts[context]
+                del sanitized_context[context]
 
         return sanitized_context
 
