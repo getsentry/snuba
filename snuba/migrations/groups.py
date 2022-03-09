@@ -181,6 +181,7 @@ class MetricsLoader(DirectoryLoader):
             "0017_metrics_counters_consolidated_granularity",
             "0018_metrics_distributions_consolidated_granularity",
             "0019_aggregate_tables_add_ttl",
+            "0020_polymorphic_buckets_table",
         ]
 
 
