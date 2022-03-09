@@ -207,8 +207,8 @@ class TransactionsMessageProcessor(MessageProcessor):
     def _process_contexts_and_user(
         self, processed: MutableMapping[str, Any], event_dict: EventDict,
     ) -> None:
-        contexts: MutableMapping[str, Any] = copy.deepcopy(
-            _as_dict_safe(event_dict["data"].get("contexts", None))
+        contexts: MutableMapping[str, Any] = _as_dict_safe(
+            event_dict["data"].get("contexts", None)
         )
         user_dict = (
             event_dict["data"].get(
@@ -228,14 +228,9 @@ class TransactionsMessageProcessor(MessageProcessor):
             if context in contexts:
                 del contexts[context]
 
-        transaction_ctx = contexts.get("trace", {})
-        # We store trace_id and span_id as promoted columns and on the query level
-        # we make sure that all queries on contexts[trace.trace_id/span_id] use those promoted
-        # columns instead. So we don't need to store them in the contexts array as well
-        transaction_ctx.pop("trace_id", None)
-        transaction_ctx.pop("span_id", None)
+        sanitized_contexts = self._sanitize_contexts(processed, event_dict)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
-            contexts
+            sanitized_contexts
         )
 
         user_data: MutableMapping[str, Any] = {}
@@ -332,10 +327,44 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["spans.exclusive_time"].append(0)
             processed["spans.exclusive_time_32"].append(exclusive_time)
 
+    def _sanitize_contexts(
+        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+    ) -> MutableMapping[str, Any]:
+        """
+        Contexts can store a lot of data. We don't want to store all the data in
+        the database. This api removes elements from contexts which are not required
+        to be stored. It does that by creating a deepcopy of the contexts and working
+        with the deepcopy so that the contexts in the original message are not
+        mutated. It returns the new modified context object which can be used to fill
+        in the processed object.
+        """
+        contexts: MutableMapping[str, Any] = _as_dict_safe(
+            event_dict["data"].get("contexts", None)
+        )
+        if not contexts:
+            return {}
+
+        sanitized_context = copy.deepcopy(contexts)
+        # We store trace_id and span_id as promoted columns and on the query level
+        # we make sure that all queries on contexts[trace.trace_id/span_id] use those promoted
+        # columns instead. So we don't need to store them in the contexts array as well
+        transaction_ctx = sanitized_context.get("trace", {})
+        transaction_ctx.pop("trace_id", None)
+        transaction_ctx.pop("span_id", None)
+
         # The hash and exclusive_time is being stored in the spans columns
         # so there is no need to store it again in the context array.
-        trace_context.pop("hash", None)
-        trace_context.pop("exclusive_time", None)
+        transaction_ctx.pop("hash", None)
+        transaction_ctx.pop("exclusive_time", None)
+
+        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
+            processed["project_id"], set()
+        )
+        for context in skipped_contexts:
+            if context in sanitized_context:
+                del contexts[context]
+
+        return sanitized_context
 
     def process_message(
         self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
