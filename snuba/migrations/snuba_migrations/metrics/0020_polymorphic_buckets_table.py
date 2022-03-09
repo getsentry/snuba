@@ -40,7 +40,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=self.column_list,
                 engine=table_engines.MergeTree(
                     storage_set=StorageSetKey.METRICS,
-                    order_by="(org_id, project_id, metric_id, tags, timestamp)",
+                    order_by="(project_id, metric_id, tags.key, tags.value, timestamp)",
                     partition_by="toStartOfDay(timestamp)",
                     ttl="timestamp + toIntervalDay(7)",
                 ),
