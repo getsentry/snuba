@@ -82,6 +82,11 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
         should_commit = self.__should_commit(message)
 
+        # TODO: Temporary metric for debugging
+        self.__metrics.increment(
+            "ProvideCommitStrategy.submit", tags={"should_commit": str(should_commit)}
+        )
+
         self.__next_step.submit(
             Message(
                 message.partition,
@@ -136,6 +141,8 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
             self.__offset_high_watermark is None
             or slowest.offset > self.__offset_high_watermark
         ):
+            # TODO: Temporary metric for debugging
+            self.__metrics.increment("update_offset_high_watermark")
             self.__offset_high_watermark = slowest.offset
 
     def close(self) -> None:
@@ -411,6 +418,12 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
     def submit(self, message: Message[CommittableTick]) -> None:
         assert not self.__closed
+
+        # TODO: This metric is temporary for debugging
+        self.__metrics.increment(
+            "ProduceScheduledSubscriptionMessage.submit",
+            tags={"committable": str(message.payload.should_commit)},
+        )
 
         # If queue is full, raise MessageRejected to tell the stream
         # processor to pause consuming
