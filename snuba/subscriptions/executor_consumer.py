@@ -20,7 +20,7 @@ from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import get_dataset, get_dataset_name
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
 from snuba.request import Request
@@ -271,8 +271,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         # We need to sample queries to ClickHouse while this is being rolled out
         # as we don't want to duplicate every subscription query
+        dataset_name = get_dataset_name(self.__dataset)
         executor_sample_rate = cast(
-            float, state.get_config("executor_sample_rate", 0.0)
+            float, state.get_config(f"executor_sample_rate_{dataset_name}", 0.0)
         )
 
         # HACK: Just commit offsets and return if we haven't started rollout
