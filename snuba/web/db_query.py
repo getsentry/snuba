@@ -71,9 +71,13 @@ class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
         return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
 
 
-cache: Cache[Result] = RedisCache(
-    redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
-)
+DEFAULT_CACHE_PARTITION_ID = "default"
+
+cache_partitions: MutableMapping[str, Cache[Result]] = {
+    DEFAULT_CACHE_PARTITION_ID: RedisCache(
+        redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
+    )
+}
 
 logger = logging.getLogger("snuba.query")
 
@@ -336,6 +340,24 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
     return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
 
+def _get_cache_partition(partition_id: Optional[str]) -> Cache[Result]:
+    enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
+    if not enable_cache_partitioning:
+        return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
+
+    if partition_id is not None and partition_id not in cache_partitions:
+        cache_partitions[partition_id] = RedisCache(
+            redis_client,
+            f"snuba-query-cache:{partition_id}:",
+            ResultCacheCodec(),
+            ThreadPoolExecutor(),
+        )
+
+    return cache_partitions[
+        partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
+    ]
+
+
 @with_span(op="db")
 def execute_query_with_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
@@ -374,7 +396,10 @@ def execute_query_with_caching(
     with sentry_sdk.start_span(description="execute", op="db") as span:
         if use_cache:
             key = get_query_cache_key(formatted_query)
-            result = cache.get(key)
+            partition_id = reader.get_cache_partition_id()
+            cache_partition = _get_cache_partition(partition_id)
+
+            result = cache_partition.get(key)
             timer.mark("cache_get")
             stats["cache_hit"] = result is not None
             if result is not None:
@@ -383,7 +408,7 @@ def execute_query_with_caching(
 
             span.set_tag("cache", "miss")
             result = execute()
-            cache.set(key, result)
+            cache_partition.set(key, result)
             timer.mark("cache_set")
             return result
         else:
@@ -421,7 +446,9 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    return cache.get_readthrough(
+    partition_id = reader.get_cache_partition_id()
+    cache_partition = _get_cache_partition(partition_id)
+    return cache_partition.get_readthrough(
         query_id,
         partial(
             execute_query_with_rate_limits,
