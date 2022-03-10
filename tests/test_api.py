@@ -1546,18 +1546,6 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
-    @pytest.mark.xfail
-    def test_row_stats(self) -> None:
-        query = {
-            "project": 1,
-            "selected_columns": ["platform"],
-        }
-        result = json.loads(self.post(json.dumps(query)).data)
-
-        assert "rows_read" in result["stats"]
-        assert "bytes_read" in result["stats"]
-        assert result["stats"]["bytes_read"] > 0
-
     def test_static_page_renders(self) -> None:
         response = self.app.get("/config")
         assert response.status_code == 200

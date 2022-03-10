@@ -21,22 +21,15 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.RunSql(
                 storage_set=StorageSetKey.METRICS,
                 statement=(
-                    f"ALTER TABLE {table_name} "
-                    "MODIFY TTL "
-                    "if(isNull(retention_days), timestamp + toIntervalDay(90), timestamp + toIntervalDay(retention_days))"
+                    f"ALTER TABLE {table_name} MODIFY TTL "
+                    "timestamp + toIntervalDay(retention_days)"
                 ),
             )
             for table_name in self.table_names
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.RunSql(
-                storage_set=StorageSetKey.METRICS,
-                statement=(f"ALTER TABLE {table_name} REMOVE TTL"),
-            )
-            for table_name in self.table_names
-        ]
+        return []
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []

@@ -74,6 +74,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--stateful-consumer",
@@ -93,11 +96,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
-@click.option(
-    "--stats-collection-frequency-ms",
-    type=click.IntRange(100, 1000),
-    help="The frequency of collecting statistics from librdkafka.",
-)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -113,10 +111,10 @@ def consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     stateful_consumer: bool,
+    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    stats_collection_frequency_ms: Optional[int],
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
 ) -> None:
@@ -135,7 +133,7 @@ def consumer(
 
     def stats_callback(stats_json: str) -> None:
         stats = rapidjson.loads(stats_json)
-        metrics.gauge("total_queue_size", stats.get("replyq", 0))
+        metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
@@ -148,7 +146,6 @@ def consumer(
             auto_offset_reset=auto_offset_reset,
             queued_max_messages_kbytes=queued_max_messages_kbytes,
             queued_min_messages=queued_min_messages,
-            stats_collection_frequency_ms=stats_collection_frequency_ms,
         ),
         processing_params=ProcessingParameters(
             processes=processes,
@@ -160,6 +157,7 @@ def consumer(
         metrics=metrics,
         profile_path=profile_path,
         stats_callback=stats_callback,
+        parallel_collect=parallel_collect,
     )
 
     if stateful_consumer:

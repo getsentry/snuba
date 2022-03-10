@@ -159,39 +159,44 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         if settings.ENABLE_METRICS_SUBSCRIPTIONS:
             daemons += [
                 (
-                    "subscriptions-consumer-metrics-counters",
+                    "subscriptions-scheduler-metrics-counters",
                     [
                         "snuba",
-                        "subscriptions",
+                        "subscriptions-scheduler",
+                        "--entity=metrics_counters",
+                        "--consumer-group=snuba-metrics-subscriptions-scheduler",
+                        "--followed-consumer-group=metrics_group",
                         "--auto-offset-reset=latest",
                         "--log-level=debug",
-                        "--max-batch-size=1",
-                        "--consumer-group=snuba-metrics-subscriptions-consumers",
-                        "--dataset=metrics",
-                        "--entity=metrics_counters",
-                        "--commit-log-topic=snuba-metrics-commit-log",
-                        "--commit-log-group=metrics_group",
                         "--delay-seconds=1",
                         "--schedule-ttl=10",
-                        "--max-query-workers=1",
                     ],
                 ),
                 (
-                    "subscriptions-consumer-metrics-sets",
+                    "subscriptions-scheduler-metrics-sets",
                     [
                         "snuba",
-                        "subscriptions",
+                        "subscriptions-scheduler",
+                        "--entity=metrics_sets",
+                        "--consumer-group=snuba-metrics-subscriptions-scheduler",
+                        "--followed-consumer-group=metrics_group",
                         "--auto-offset-reset=latest",
                         "--log-level=debug",
-                        "--max-batch-size=1",
-                        "--consumer-group=snuba-metrics-subscriptions-consumers",
-                        "--dataset=metrics",
-                        "--entity=metrics_sets",
-                        "--commit-log-topic=snuba-metrics-commit-log",
-                        "--commit-log-group=metrics_group",
                         "--delay-seconds=1",
                         "--schedule-ttl=10",
-                        "--max-query-workers=1",
+                    ],
+                ),
+                (
+                    "subscriptions-executor-metrics",
+                    [
+                        "snuba",
+                        "subscriptions-executor",
+                        "--dataset=metrics",
+                        "--entity=metrics_counters",
+                        "--entity=metrics_sets",
+                        "--consumer-group=snuba-metrics-subscription-executor",
+                        "--auto-offset-reset=latest",
+                        "--override-result-topic=metrics-subscription-results",
                     ],
                 ),
             ]
@@ -215,6 +220,20 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--max-query-workers=1",
                 ],
             )
+        ]
+
+    if settings.ENABLE_PROFILES_CONSUMER:
+        daemons += [
+            (
+                "profiles",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--storage=profiles",
+                ],
+            ),
         ]
 
     manager = Manager()
