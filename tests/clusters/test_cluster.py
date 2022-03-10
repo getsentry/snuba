@@ -74,6 +74,7 @@ FULL_CONFIG = [
         "single_node": False,
         "cluster_name": "clickhouse_hosts",
         "distributed_cluster_name": "dist_hosts",
+        "cache_partition_id": "host_2_cache",
     },
 ]
 
@@ -95,6 +96,17 @@ def test_clusters() -> None:
         get_storage(StorageKey("errors")).get_cluster()
         != get_storage(StorageKey("transactions")).get_cluster()
     )
+
+
+@patch("snuba.settings.CLUSTERS", FULL_CONFIG)
+def test_cache_partition() -> None:
+    get_storage(
+        StorageKey("transactions")
+    ).get_cluster().get_reader().get_cache_partition_id() == "host_2_cache"
+
+    get_storage(
+        StorageKey("errors")
+    ).get_cluster().get_reader().get_cache_partition_id() is None
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)

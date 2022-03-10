@@ -117,6 +117,9 @@ def build_result_transformer(
 
 
 class Reader(ABC):
+    def __init__(self, cache_partition_id: Optional[str]) -> None:
+        self.__cache_partition_id = cache_partition_id
+
     @abstractmethod
     def execute(
         self,
@@ -128,3 +131,15 @@ class Reader(ABC):
     ) -> Result:
         """Execute a query."""
         raise NotImplementedError
+
+    def get_cache_partition_id(self) -> Optional[str]:
+        """
+        Return the cache partition if there is one.
+
+        TODO: If we double down on having the cache at Clickhouse query level
+        we should move the entire caching infrastructure either here or in
+        the cluster.
+        If we, instead, move the cache towards the logical level, all this
+        should go away.
+        """
+        return self.__cache_partition_id
