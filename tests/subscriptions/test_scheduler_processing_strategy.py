@@ -2,7 +2,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime, timedelta
-from typing import Sequence
+from typing import Optional, Sequence
 from unittest import mock
 
 import pytest
@@ -220,12 +220,12 @@ def test_tick_buffer_wait_slowest() -> None:
 
 
 def make_message_for_next_step(
-    message: Message[Tick], should_commit: bool
+    message: Message[Tick], offset_to_commit: Optional[int]
 ) -> Message[CommittableTick]:
     return Message(
         message.partition,
         message.offset,
-        CommittableTick(message.payload, should_commit),
+        CommittableTick(message.payload, offset_to_commit),
         message.timestamp,
         message.next_offset,
     )
@@ -256,12 +256,12 @@ def test_provide_commit_strategy() -> None:
 
     strategy.submit(message_0_0)
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_0_0, False))
+        mock.call(make_message_for_next_step(message_0_0, None))
     ]
 
     next_step.reset_mock()
 
-    # Partition 1, don't commit since timestamp is higher than partition 0
+    # Offset 2 on partition 1, now we can safely commit offset 1
     message_1_0 = Message(
         partition,
         2,
@@ -279,12 +279,12 @@ def test_provide_commit_strategy() -> None:
     strategy.submit(message_1_0)
 
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_1_0, False))
+        mock.call(make_message_for_next_step(message_1_0, 1))
     ]
 
     next_step.reset_mock()
 
-    # Partition 1, another higher timestamp
+    # Another message on partition 1, can't commit since partition 0 is still on offset 1
     message_1_1 = Message(
         partition,
         3,
@@ -302,12 +302,13 @@ def test_provide_commit_strategy() -> None:
     strategy.submit(message_1_1)
 
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_1_1, False))
+        mock.call(make_message_for_next_step(message_1_1, None))
     ]
 
     next_step.reset_mock()
 
-    # Partition 0, earlier timestamp so commit=True
+    # A message on partition 0, now we can commit offset 3 since partition 1 is
+    # still up to 3.
     message_0_1 = Message(
         partition,
         4,
@@ -325,7 +326,7 @@ def test_provide_commit_strategy() -> None:
     strategy.submit(message_0_1)
 
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_0_1, True))
+        mock.call(make_message_for_next_step(message_0_1, 3))
     ]
 
 
@@ -401,16 +402,14 @@ def test_tick_buffer_with_commit_strategy() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_1_0, False)),
+        mock.call(make_message_for_next_step(message_1_0, None)),
     ]
 
     next_step.reset_mock()
 
     # Another message in partition 1, now two more messages submitted
-    # message_0_0 should be commited since all prior messages in the
-    # commit log have been submitted (i.e. have a lower timestamp)
-    # message_1_1 cannot be commited because message_0_1 is not submitted
-    # yet (i.e. has a higher timestamp)
+    # (message_0_0 and message_1_1). We can only safely commit the offset
+    # of message_0_0 (4) when we are submitting it.
     message_1_1 = Message(
         commit_log_partition,
         7,
@@ -428,8 +427,8 @@ def test_tick_buffer_with_commit_strategy() -> None:
 
     assert next_step.submit.call_count == 2
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_0_0, True)),
-        mock.call(make_message_for_next_step(message_1_1, False)),
+        mock.call(make_message_for_next_step(message_0_0, 4)),
+        mock.call(make_message_for_next_step(message_1_1, None)),
     ]
 
 
@@ -452,7 +451,7 @@ def test_scheduled_subscription_queue() -> None:
                 offsets=Interval(1, 3),
                 timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
             ),
-            True,
+            1,
         ),
         epoch,
         2,
@@ -464,15 +463,15 @@ def test_scheduled_subscription_queue() -> None:
 
     assert len(queue) == 2
     assert queue.peek() == TickSubscription(
-        tick_message, futures[0], should_commit=False
+        tick_message, futures[0], offset_to_commit=None
     )
     assert queue.popleft() == TickSubscription(
-        tick_message, futures[0], should_commit=False
+        tick_message, futures[0], offset_to_commit=None
     )
     assert len(queue) == 1
 
     assert queue.popleft() == TickSubscription(
-        tick_message, futures[1], should_commit=True
+        tick_message, futures[1], offset_to_commit=1
     )
     assert len(queue) == 0
 
