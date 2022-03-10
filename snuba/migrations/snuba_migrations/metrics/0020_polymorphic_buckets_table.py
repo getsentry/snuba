@@ -17,6 +17,7 @@ class Migration(migration.ClickhouseNodeMigration):
     dist_table_name = "metrics_buckets_consolidated_dist"
 
     column_list: Sequence[Column[Modifiers]] = [
+        Column("use_case_id", String(Modifiers(low_cardinality=True))),
         Column("org_id", UInt(64)),
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
@@ -40,8 +41,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=self.column_list,
                 engine=table_engines.MergeTree(
                     storage_set=StorageSetKey.METRICS,
-                    order_by="(project_id, metric_id, tags.key, tags.value, timestamp)",
-                    partition_by="toStartOfDay(timestamp)",
+                    order_by="(metric_type, org_id, project_id, metric_id, timestamp)",
+                    partition_by="(use_case_id, toStartOfDay(timestamp))",
                     ttl="timestamp + toIntervalDay(7)",
                 ),
             )
