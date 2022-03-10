@@ -82,6 +82,11 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
         should_commit = self.__should_commit(message)
 
+        # TODO: Temporary metric for debugging
+        self.__metrics.increment(
+            "ProvideCommitStrategy.submit", tags={"should_commit": str(should_commit)}
+        )
+
         self.__next_step.submit(
             Message(
                 message.partition,
@@ -123,19 +128,21 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
             if partition_timestamp > fastest.payload.timestamps.lower:
                 fastest = partition_message
 
-            # Record the lag between the fastest and slowest partition
-            self.__metrics.timing(
-                "partition_lag_ms",
-                (
-                    fastest.payload.timestamps.lower - slowest.payload.timestamps.lower
-                ).total_seconds()
-                * 1000,
-            )
+        # Record the lag between the fastest and slowest partition
+        self.__metrics.timing(
+            "partition_lag_ms",
+            (
+                fastest.payload.timestamps.lower - slowest.payload.timestamps.lower
+            ).total_seconds()
+            * 1000,
+        )
 
         if (
             self.__offset_high_watermark is None
             or slowest.offset > self.__offset_high_watermark
         ):
+            # TODO: Temporary metric for debugging
+            self.__metrics.increment("update_offset_high_watermark")
             self.__offset_high_watermark = slowest.offset
 
     def close(self) -> None:
