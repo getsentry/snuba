@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import logging
 import re
-from typing import Any, Iterable, Mapping, Sequence, Tuple
+from typing import Any, Iterable, Mapping, Sequence
 
 from clickhouse_driver import Client
 from parsimonious.grammar import Grammar
@@ -109,12 +111,12 @@ class Visitor(NodeVisitor):  # type: ignore
 
     def visit_enum_pairs(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Sequence[Tuple[str, int]]:
+    ) -> Sequence[tuple[str, int]]:
         return [c[0] for c in visited_children]
 
     def visit_enum_pair(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Tuple[str, int]:
+    ) -> tuple[str, int]:
         (_quot, enum_str, _quot, _sp, _eq, _sp, enum_val) = visited_children
         return (enum_str, enum_val)
 
@@ -152,7 +154,7 @@ class Visitor(NodeVisitor):  # type: ignore
     def visit_lowcardinality(
         self,
         node: Node,
-        visited_children: Tuple[
+        visited_children: tuple[
             Any, Any, Any, ColumnType[MigrationModifiers], Any, Any
         ],
     ) -> ColumnType[MigrationModifiers]:
@@ -162,7 +164,7 @@ class Visitor(NodeVisitor):  # type: ignore
     def visit_nullable(
         self,
         node: Node,
-        visited_children: Tuple[
+        visited_children: tuple[
             Any, Any, Any, ColumnType[MigrationModifiers], Any, Any
         ],
     ) -> ColumnType[MigrationModifiers]:

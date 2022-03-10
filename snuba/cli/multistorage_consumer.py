@@ -75,6 +75,9 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=False,
+)
 @click.option("--processes", type=int)
 @click.option(
     "--input-block-size", type=int,
@@ -95,6 +98,7 @@ def multistorage_consumer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
+    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
@@ -263,6 +267,7 @@ def multistorage_consumer(
             [*storages.values()],
             max_batch_size,
             max_batch_time_ms / 1000.0,
+            parallel_collect=parallel_collect,
             processes=processes,
             input_block_size=input_block_size,
             output_block_size=output_block_size,

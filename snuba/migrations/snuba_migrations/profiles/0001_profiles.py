@@ -1,6 +1,6 @@
 from typing import List, Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, NamedTuple, String, UInt
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -20,17 +20,18 @@ columns: List[Column[Modifiers]] = [
     Column("device_locale", String(Modifiers(low_cardinality=True))),
     Column("device_manufacturer", String(Modifiers(low_cardinality=True))),
     Column("device_model", String(Modifiers(low_cardinality=True))),
-    Column("device_os_build_number", String(Modifiers(low_cardinality=True))),
+    Column(
+        "device_os_build_number", String(Modifiers(low_cardinality=True, nullable=True))
+    ),
     Column("device_os_name", String(Modifiers(low_cardinality=True))),
     Column("device_os_version", String(Modifiers(low_cardinality=True))),
     Column("duration_ns", UInt(64)),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
-    Column("error_code", String(Modifiers(low_cardinality=True, nullable=True))),
-    Column("error_description", String(Modifiers(low_cardinality=True, nullable=True))),
     Column("platform", String(Modifiers(low_cardinality=True))),
     Column("trace_id", UUID()),
     Column("transaction_name", String(Modifiers(low_cardinality=True))),
-    Column("version", NamedTuple((("name", String()), ("code", String())))),
+    Column("version_name", String()),
+    Column("version_code", String()),
     # internal data
     Column("retention_days", UInt(16)),
     Column("partition", UInt(16)),
