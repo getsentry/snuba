@@ -180,6 +180,7 @@ class MetricsLoader(DirectoryLoader):
             "0016_metrics_sets_consolidated_granularity",
             "0017_metrics_counters_consolidated_granularity",
             "0018_metrics_distributions_consolidated_granularity",
+            "0019_aggregate_tables_add_ttl",
         ]
 
 
