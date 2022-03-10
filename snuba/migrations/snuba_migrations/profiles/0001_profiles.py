@@ -14,7 +14,6 @@ columns: List[Column[Modifiers]] = [
     Column("received", DateTime()),
     # profiling data
     Column("profile", String(Modifiers(codecs=["LZ4HC(9)"]))),
-    Column("symbols", String(Modifiers(codecs=["LZ4HC(9)"]))),
     # filtering data
     Column("android_api_level", UInt(32, Modifiers(nullable=True))),
     Column("device_classification", String(Modifiers(low_cardinality=True))),

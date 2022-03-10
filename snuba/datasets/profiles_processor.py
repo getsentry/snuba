@@ -28,7 +28,6 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "profile_id": str(UUID(message["profile_id"])),
                 "received": parse(message["received"]),
                 "profile": message["profile"],
-                "symbols": message["symbols"],
                 "android_api_level": message.get("android_api_level"),
                 "device_classification": message["device_classification"],
                 "device_locale": message["device_locale"],

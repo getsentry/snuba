@@ -35,7 +35,6 @@ readable_columns = ColumnSet(
         ("profile_id", UUID()),
         ("received", DateTime()),
         ("profile", String()),
-        ("symbols", String()),
         ("android_api_level", UInt(32, Modifiers(nullable=True))),
         ("device_classification", String()),
         ("device_locale", String()),
