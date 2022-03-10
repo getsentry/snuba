@@ -23,6 +23,7 @@ profile_columns = EntityColumnSet(
         Column("organization_id", UInt(64)),
         Column("project_id", UInt(64)),
         Column("transaction_id", UUID()),
+        Column("profile_id", UUID()),
         Column("received", DateTime()),
         Column("profile", String()),
         Column("symbols", String()),

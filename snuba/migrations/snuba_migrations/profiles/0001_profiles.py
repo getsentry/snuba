@@ -10,6 +10,7 @@ columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("transaction_id", UUID()),
+    Column("profile_id", UUID()),
     Column("received", DateTime()),
     # profiling data
     Column("profile", String(Modifiers(codecs=["LZ4HC(9)"]))),
@@ -49,9 +50,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="profiles_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(organization_id, project_id, toStartOfDay(received), cityHash64(transaction_id))",
+                    order_by="(organization_id, project_id, toStartOfDay(received), cityHash64(profile_id))",
                     partition_by="(retention_days, toMonday(received))",
-                    sample_by="cityHash64(transaction_id)",
+                    sample_by="cityHash64(profile_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=StorageSetKey.PROFILES,
                     ttl="received + toIntervalDay(retention_days)",
@@ -74,7 +75,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="profiles_local",
-                    sharding_key="cityHash64(transaction_id)",
+                    sharding_key="cityHash64(profile_id)",
                 ),
             )
         ]

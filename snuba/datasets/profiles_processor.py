@@ -25,6 +25,7 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "organization_id": message["organization_id"],
                 "project_id": message["project_id"],
                 "transaction_id": str(UUID(message["transaction_id"])),
+                "profile_id": str(UUID(message["profile_id"])),
                 "received": parse(message["received"]),
                 "profile": message["profile"],
                 "symbols": message["symbols"],
