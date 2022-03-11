@@ -13,8 +13,8 @@ class Migration(migration.ClickhouseNodeMigration):
     """
 
     blocking = False
-    local_table_name = "metrics_buckets_consolidated"
-    dist_table_name = "metrics_buckets_consolidated_dist"
+    local_table_name = "metrics_raw_local"
+    dist_table_name = "metrics_raw_dist"
 
     column_list: Sequence[Column[Modifiers]] = [
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
