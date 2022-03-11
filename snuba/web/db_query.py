@@ -4,6 +4,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
+from threading import Lock
 from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
 import rapidjson
@@ -78,6 +79,10 @@ cache_partitions: MutableMapping[str, Cache[Result]] = {
         redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
     )
 }
+# This lock prevents us from initializing the cache twice. The cache is initialized
+# with a thread pool. In case of race condition we could create the threads twice which
+# is a waste.
+cache_partitions_lock = Lock()
 
 logger = logging.getLogger("snuba.query")
 
@@ -346,12 +351,17 @@ def _get_cache_partition(partition_id: Optional[str]) -> Cache[Result]:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
 
     if partition_id is not None and partition_id not in cache_partitions:
-        cache_partitions[partition_id] = RedisCache(
-            redis_client,
-            f"snuba-query-cache:{partition_id}:",
-            ResultCacheCodec(),
-            ThreadPoolExecutor(),
-        )
+        with cache_partitions_lock:
+            # This condition was checked before as this lock should be acquired only
+            # during the first query. So, for the vast majority of queries, the overhead
+            # of acquiring the lock is not needed.
+            if partition_id not in cache_partitions:
+                cache_partitions[partition_id] = RedisCache(
+                    redis_client,
+                    f"snuba-query-cache:{partition_id}:",
+                    ResultCacheCodec(),
+                    ThreadPoolExecutor(),
+                )
 
     return cache_partitions[
         partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
@@ -448,6 +458,9 @@ def execute_query_with_readthrough_caching(
 
     partition_id = reader.get_cache_partition_id()
     cache_partition = _get_cache_partition(partition_id)
+    metrics.increment(
+        "cache_partition_loaded", tags={"partition_id": partition_id or "default"}
+    )
     return cache_partition.get_readthrough(
         query_id,
         partial(
