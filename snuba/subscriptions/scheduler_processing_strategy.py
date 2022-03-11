@@ -128,14 +128,14 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
             if partition_timestamp > fastest.payload.timestamps.lower:
                 fastest = partition_message
 
-            # Record the lag between the fastest and slowest partition
-            self.__metrics.timing(
-                "partition_lag_ms",
-                (
-                    fastest.payload.timestamps.lower - slowest.payload.timestamps.lower
-                ).total_seconds()
-                * 1000,
-            )
+        # Record the lag between the fastest and slowest partition
+        self.__metrics.timing(
+            "partition_lag_ms",
+            (
+                fastest.payload.timestamps.lower - slowest.payload.timestamps.lower
+            ).total_seconds()
+            * 1000,
+        )
 
         if (
             self.__offset_high_watermark is None
