@@ -3,8 +3,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
-from dateutil.parser import parse
-
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.profiles_processor import ProfilesMessageProcessor
 from snuba.processor import InsertBatch
@@ -15,9 +13,9 @@ class ProfileEvent:
     organization_id: int
     project_id: int
     transaction_id: str
-    received: str
+    received: int
     profile: str
-    symbols: Optional[str]
+    profile_id: str
     android_api_level: Optional[int]
     device_classification: str
     device_locale: str
@@ -42,7 +40,7 @@ class ProfileEvent:
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         result = asdict(self)
-        result["received"] = parse(self.received)
+        result["received"] = datetime.utcfromtimestamp(self.received)
         result["offset"] = meta.offset
         result["partition"] = meta.partition
         return result
@@ -57,9 +55,9 @@ class TestProfilesProcessor:
             organization_id=123456789,
             project_id=987654321,
             transaction_id=str(uuid.uuid4()),
-            received=datetime.utcnow().isoformat(),
+            received=datetime.utcnow().timestamp(),
             profile="someprofile",
-            symbols=None,
+            profile_id=str(uuid.uuid4()),
             android_api_level=None,
             device_classification="high",
             device_locale="fr_FR",
@@ -80,7 +78,7 @@ class TestProfilesProcessor:
             offset=meta.offset,
         )
         payload = message.serialize()
-        del payload["symbols"]
+        del payload["profile_id"]
         processor = ProfilesMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
@@ -92,9 +90,9 @@ class TestProfilesProcessor:
             organization_id=123456789,
             project_id=987654321,
             transaction_id=str(uuid.uuid4()),
-            received=datetime.utcnow().isoformat(),
+            received=datetime.utcnow().timestamp(),
             profile="someprofile",
-            symbols="somesymbols",
+            profile_id=str(uuid.uuid4()),
             android_api_level=None,
             device_classification="high",
             device_locale="fr_FR",
