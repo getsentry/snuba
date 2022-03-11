@@ -110,10 +110,11 @@ def test_clusters() -> None:
 def test_disabled_cluster() -> None:
     importlib.reload(cluster)
 
-    with pytest.raises(AssertionError):
-        cluster.get_cluster(StorageSetKey.OUTCOMES)
-    with patch("snuba.settings.ENABLE_DEV_FEATURES", True):
-        cluster.get_cluster(StorageSetKey.OUTCOMES)
+    cluster.get_cluster(StorageSetKey.OUTCOMES)
+
+    with patch("snuba.settings.ENABLE_DEV_FEATURES", False):
+        with pytest.raises(AssertionError):
+            cluster.get_cluster(StorageSetKey.OUTCOMES)
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
