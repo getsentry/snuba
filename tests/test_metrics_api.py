@@ -75,7 +75,7 @@ class TestMetricsApiCounters(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         )
-        self.storage = get_writable_storage(StorageKey.METRICS_COUNTERS_BUCKETS)
+        self.storage = get_writable_storage(StorageKey.METRICS_POLYMORPHIC_BUCKET)
         self.generate_counters()
 
     def teardown_method(self, test_method: Any) -> None:
@@ -221,7 +221,7 @@ class TestMetricsApiSets(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.seconds)
-        self.storage = get_writable_storage(StorageKey.METRICS_BUCKETS)
+        self.storage = get_writable_storage(StorageKey.METRICS_POLYMORPHIC_BUCKET)
         self.unique_set_values = 100
         self.generate_sets()
 
@@ -316,7 +316,7 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.seconds)
-        self.storage = get_writable_storage(StorageKey.METRICS_DISTRIBUTIONS_BUCKETS)
+        self.storage = get_writable_storage(StorageKey.METRICS_POLYMORPHIC_BUCKET)
         self.generate_uniform_distributions()
 
     def teardown_method(self, test_method: Any) -> None:
