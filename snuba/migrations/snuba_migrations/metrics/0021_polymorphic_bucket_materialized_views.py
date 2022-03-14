@@ -28,7 +28,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 mv_name=get_polymorphic_mv_name("distributions"),
                 aggregation_col_schema=COL_SCHEMA_DISTRIBUTIONS,
                 aggregation_states=(
-                    "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99)((arrayJoin(values) AS values_rows)) as percentiles, "
+                    "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99)((arrayJoin(distribution_values) AS values_rows)) as percentiles, "
                     "minState(values_rows) as min, "
                     "maxState(values_rows) as max, "
                     "avgState(values_rows) as avg, "
@@ -48,13 +48,13 @@ class Migration(migration.ClickhouseNodeMigration):
                 metric_type="set",
             ),
             get_forward_view_migration_polymorphic_table(
-                source_table_name="metrics_counters_buckets_local",
+                source_table_name=self.raw_table_name,
                 table_name="metrics_counters_local",
                 mv_name=get_polymorphic_mv_name("counters"),
                 aggregation_col_schema=[
                     Column("value", AggregateFunction("sum", [Float(64)])),
                 ],
-                aggregation_states="sumState(value) as value",
+                aggregation_states="sumState(count_value) as value",
                 metric_type="counter",
             ),
         ]
