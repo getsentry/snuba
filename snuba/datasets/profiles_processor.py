@@ -1,7 +1,6 @@
+from datetime import datetime
 from typing import Any, Mapping, Optional
 from uuid import UUID
-
-from dateutil.parser import parse
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
@@ -25,9 +24,9 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "organization_id": message["organization_id"],
                 "project_id": message["project_id"],
                 "transaction_id": str(UUID(message["transaction_id"])),
-                "received": parse(message["received"]),
+                "profile_id": str(UUID(message["profile_id"])),
+                "received": datetime.utcfromtimestamp(message["received"]),
                 "profile": message["profile"],
-                "symbols": message["symbols"],
                 "android_api_level": message.get("android_api_level"),
                 "device_classification": message["device_classification"],
                 "device_locale": message["device_locale"],

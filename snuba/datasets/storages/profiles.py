@@ -19,7 +19,7 @@ PROFILES_DIST_TABLE_NAME = "profiles_dist"
 
 
 processors = [
-    UUIDColumnProcessor(set(["transaction_id", "trace_id"])),
+    UUIDColumnProcessor(set(["profile_id", "transaction_id", "trace_id"])),
     TableRateLimit(),
 ]
 
@@ -32,9 +32,9 @@ readable_columns = ColumnSet(
         ("organization_id", UInt(64)),
         ("project_id", UInt(64)),
         ("transaction_id", UUID()),
+        ("profile_id", UUID()),
         ("received", DateTime()),
         ("profile", String()),
-        ("symbols", String()),
         ("android_api_level", UInt(32, Modifiers(nullable=True))),
         ("device_classification", String()),
         ("device_locale", String()),
