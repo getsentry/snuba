@@ -126,7 +126,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             assert isinstance(
                 value, (int, float)
             ), "Illegal value for counter value. Int/Float expected {value}"
-            return {"metric_type": "counter", "counter_value": value}
+            return {"metric_type": "counter", "count_value": value}
         else:  # METRICS_DISTRIBUTIONS_TYPE
             values = message["value"]
             for v in values:

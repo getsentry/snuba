@@ -53,7 +53,16 @@ polymorphic_bucket = WritableTableStorage(
     storage_key=StorageKey.METRICS_POLYMORPHIC_BUCKET,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
-        columns=ColumnSet([Column("use_case_id", String())]),
+        columns=ColumnSet(
+            [
+                Column("use_case_id", String()),
+                *PRE_VALUE_COLUMNS,
+                Column("count_value", Float(64)),
+                Column("set_values", Array(UInt(64))),
+                Column("distribution_values", Array(Float(64))),
+                *POST_VALUE_COLUMNS,
+            ]
+        ),
         local_table_name="metrics_raw_local",
         dist_table_name="metrics_raw_dist",
         storage_set_key=StorageSetKey.METRICS,
