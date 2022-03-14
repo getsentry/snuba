@@ -298,7 +298,7 @@ function TracingQueries(props: { api: Client }) {
     <div>
       <form>
         <h2>Construct a query</h2>
-        <a href="https://www.notion.so/sentry/Clickhouse-Death-Queries-d3873ff2f55e4b50b515926ba533f794">WARNING! BEFORE RUNNING QUERIES, READ THIS FIRST</a>
+        <a href="https://www.notion.so/sentry/Clickhouse-Death-Queries-d3873ff2f55e4b50b515926ba533f794">🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS FIRST 🛑</a>
         <div>
           <TextArea value={query.sql || ""} onChange={updateQuerySql} />
         </div>
