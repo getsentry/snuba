@@ -161,7 +161,7 @@ SELECT
     retention_days,
     %(aggregation_states)s
 FROM %(raw_table_name)s
-WHERE materialization_version = 2
+WHERE materialization_version = 3
   AND metric_type = '%(metric_type)s'
 GROUP BY
     org_id,
