@@ -19,6 +19,7 @@ class StorageKey(Enum):
     METRICS_DISTRIBUTIONS = "metrics_distributions"
     METRICS_DISTRIBUTIONS_BUCKETS = "metrics_distributions_buckets"
     METRICS_SETS = "metrics_sets"
+    METRICS_POLYMORPHIC_BUCKET = "metrics_raw"
     OUTCOMES_RAW = "outcomes_raw"
     OUTCOMES_HOURLY = "outcomes_hourly"
     QUERYLOG = "querylog"
