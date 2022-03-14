@@ -2,7 +2,7 @@ Clickhouse Queries Of Death
 ===========================
 
 
-The following queries have been shown to segfault clickhouse on 20.7 (which is what snuba is running). Do not run these queries in the tracing tool, unless you really want to take clickhouse down.
+The following queries have been shown to segfault clickhouse on 20.7 (which is the minimum Clickhouse version of Snuba). Do not run these queries in the tracing tool, unless you really want to take clickhouse down.
 
 countif(”DOOM”)
 ---------------
