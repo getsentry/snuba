@@ -23,6 +23,8 @@ from snuba.datasets.metrics_bucket_processor import (
 )
 from snuba.processor import AggregateInsertBatch, InsertBatch
 
+MATERIALIZATION_VERSION = 3
+
 TEST_CASES_BUCKETS = [
     pytest.param(
         {
@@ -44,7 +46,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "set_values": [324234, 345345, 456456, 567567],
-                "materialization_version": 2,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -75,7 +77,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "value": 123.123,
-                "materialization_version": 2,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -106,7 +108,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "values": [324.12, 345.23, 4564.56, 567567],
-                "materialization_version": 2,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
