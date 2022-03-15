@@ -13,6 +13,7 @@ USE_RESULT_CACHE = True
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
+ENABLE_DEV_FEATURES = True
 
 # Sometimes we want the raw structure of an expression
 # rather than the pretty formatted one. If you're debugging
