@@ -132,7 +132,8 @@ class Reader(ABC):
         """Execute a query."""
         raise NotImplementedError
 
-    def get_cache_partition_id(self) -> Optional[str]:
+    @property
+    def cache_partition_id(self) -> Optional[str]:
         """
         Return the cache partition if there is one.
 

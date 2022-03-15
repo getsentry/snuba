@@ -102,11 +102,11 @@ def test_clusters() -> None:
 def test_cache_partition() -> None:
     get_storage(
         StorageKey("transactions")
-    ).get_cluster().get_reader().get_cache_partition_id() == "host_2_cache"
+    ).get_cluster().get_reader().cache_partition_id == "host_2_cache"
 
     get_storage(
         StorageKey("errors")
-    ).get_cluster().get_reader().get_cache_partition_id() is None
+    ).get_cluster().get_reader().cache_partition_id is None
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)

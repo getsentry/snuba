@@ -406,7 +406,7 @@ def execute_query_with_caching(
     with sentry_sdk.start_span(description="execute", op="db") as span:
         if use_cache:
             key = get_query_cache_key(formatted_query)
-            partition_id = reader.get_cache_partition_id()
+            partition_id = reader.cache_partition_id
             cache_partition = _get_cache_partition(partition_id)
 
             result = cache_partition.get(key)
@@ -456,7 +456,7 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    partition_id = reader.get_cache_partition_id()
+    partition_id = reader.cache_partition_id
     cache_partition = _get_cache_partition(partition_id)
     metrics.increment(
         "cache_partition_loaded", tags={"partition_id": partition_id or "default"}
