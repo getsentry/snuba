@@ -49,10 +49,22 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
     Each time a tick message is received by this strategy we need to figure out
     if we can advance the offset that is committed. The offset that is considered
-    safe to commit is based on the partition with the earliest offset that we have
-    already seen. It's marked `offset_to_commit` and submitted with the tick
-    to the next step.
+    safe to commit is the latest offset that has been seen on every partition.
+    It's marked `offset_to_commit` and submitted with the tick to the next step.
     """
+
+    # If we receive the following messages:
+
+    #     Tick message:                           A         B         C         D
+    #     Partition (in main topic)               0         1         1         0
+    #     Message offset (commit log topic):      0         1         2         3
+
+    # - At "A" we don't commit an offset as we don't have any offset for partition 1 yet
+    #   (in this scenario there are only 2 partitions)
+    # - At "B" we can commit offset 0 as that is the latest offset that has been reached on
+    #   both of our 2 partitions
+    # - At "C" we can't commit any offset since partition 1 still hasn't advanced from 0
+    # - At "D" we can commit offset 2
 
     def __init__(
         self,
