@@ -122,7 +122,7 @@ def test_reverse_migration() -> None:
             MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True
         )
     assert (
-        len(connection.execute("SHOW TABLES LIKE 'sentry_local'").results) == 1
+        len(connection.execute("SHOW TABLES LIKE 'errors_local'").results) == 1
     ), "Table still exists"
 
 
@@ -155,7 +155,9 @@ def test_reverse_all() -> None:
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert connection.execute("SHOW TABLES").results == [], "All tables should be deleted"
+    assert (
+        connection.execute("SHOW TABLES").results == []
+    ), "All tables should be deleted"
 
 
 def get_total_migration_count() -> int:
