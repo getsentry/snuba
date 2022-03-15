@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
+from enum import Enum
 from typing import Any, Mapping, Optional
 
 from snuba import settings
@@ -107,6 +108,12 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
         return {"values": values}
 
 
+class OutputType(Enum):
+    SET = "set"
+    COUNTER = "counter"
+    DIST = "distribution"
+
+
 class PolymorphicMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] in {
@@ -120,17 +127,17 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             values = message["value"]
             for v in values:
                 assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
-            return {"metric_type": "set", "set_values": values}
+            return {"metric_type": OutputType.SET.value, "set_values": values}
         elif message["type"] == METRICS_COUNTERS_TYPE:
             value = message["value"]
             assert isinstance(
                 value, (int, float)
             ), "Illegal value for counter value. Int/Float expected {value}"
-            return {"metric_type": "counter", "count_value": value}
+            return {"metric_type": OutputType.COUNTER.value, "count_value": value}
         else:  # METRICS_DISTRIBUTIONS_TYPE
             values = message["value"]
             for v in values:
                 assert isinstance(
                     v, (int, float)
                 ), "Illegal value in set. Int expected: {v}"
-            return {"metric_type": "distribution", "distribution_values": values}
+            return {"metric_type": OutputType.DIST.value, "distribution_values": values}
