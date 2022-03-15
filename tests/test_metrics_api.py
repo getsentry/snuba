@@ -8,14 +8,14 @@ from pytest import approx
 
 from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.metrics_aggregate_processor import (
     METRICS_COUNTERS_TYPE,
     METRICS_DISTRIBUTIONS_TYPE,
     METRICS_SET_TYPE,
     timestamp_to_bucket,
 )
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
@@ -75,7 +75,7 @@ class TestMetricsApiCounters(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         )
-        self.storage = get_writable_storage(StorageKey.METRICS_COUNTERS_BUCKETS)
+        self.storage = get_entity(EntityKey.METRICS_SETS).get_writable_storage()
         self.generate_counters()
 
     def teardown_method(self, test_method: Any) -> None:
@@ -221,7 +221,7 @@ class TestMetricsApiSets(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.seconds)
-        self.storage = get_writable_storage(StorageKey.METRICS_BUCKETS)
+        self.storage = get_entity(EntityKey.METRICS_SETS).get_writable_storage()
         self.unique_set_values = 100
         self.generate_sets()
 
@@ -316,7 +316,9 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.seconds)
-        self.storage = get_writable_storage(StorageKey.METRICS_DISTRIBUTIONS_BUCKETS)
+        self.storage = get_entity(
+            EntityKey.METRICS_DISTRIBUTIONS
+        ).get_writable_storage()
         self.generate_uniform_distributions()
 
     def teardown_method(self, test_method: Any) -> None:

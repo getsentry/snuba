@@ -126,7 +126,7 @@ class MetricsEntity(Entity, ABC):
 class MetricsSetsEntity(MetricsEntity):
     def __init__(self) -> None:
         super().__init__(
-            writable_storage_key=StorageKey.METRICS_BUCKETS,
+            writable_storage_key=StorageKey.METRICS_POLYMORPHIC_BUCKET,
             readable_storage_key=StorageKey.METRICS_SETS,
             value_schema=[
                 Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
@@ -143,7 +143,7 @@ class MetricsSetsEntity(MetricsEntity):
 class MetricsCountersEntity(MetricsEntity):
     def __init__(self) -> None:
         super().__init__(
-            writable_storage_key=StorageKey.METRICS_COUNTERS_BUCKETS,
+            writable_storage_key=StorageKey.METRICS_POLYMORPHIC_BUCKET,
             readable_storage_key=StorageKey.METRICS_COUNTERS,
             value_schema=[Column("value", AggregateFunction("sum", [Float(64)]))],
             mappers=TranslationMappers(
@@ -252,7 +252,7 @@ class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
 class MetricsDistributionsEntity(MetricsEntity):
     def __init__(self) -> None:
         super().__init__(
-            writable_storage_key=StorageKey.METRICS_DISTRIBUTIONS_BUCKETS,
+            writable_storage_key=StorageKey.METRICS_POLYMORPHIC_BUCKET,
             readable_storage_key=StorageKey.METRICS_DISTRIBUTIONS,
             value_schema=[
                 Column(
