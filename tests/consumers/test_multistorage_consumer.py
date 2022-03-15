@@ -69,13 +69,13 @@ test_data = [
 
 
 @pytest.mark.parametrize("message, expected", test_data)
-def test_process_multistorage_equivalent_write(
+def test_process_multistorage_identical_write_returns_same_result_object(
     message: Message[MultistorageKafkaPayload], expected: bool
 ) -> None:
     results = process_message_multistorage_identical_storages(message)
     assert len(results) == 2
 
-    assert (results[0][1] == results[1][1]) is expected
+    assert (id(results[0][1]) == id(results[1][1])) is expected
 
 
 @pytest.mark.parametrize("message, ignored", test_data)
