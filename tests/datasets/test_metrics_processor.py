@@ -19,22 +19,50 @@ from snuba.datasets.metrics_aggregate_processor import (
 from snuba.datasets.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
+    PolymorphicMetricsProcessor,
     SetsMetricsProcessor,
 )
 from snuba.processor import AggregateInsertBatch, InsertBatch
 
+MATERIALIZATION_VERSION = 2
+
+SET_MESSAGE_SHARED = {
+    "org_id": 1,
+    "project_id": 2,
+    "metric_id": 1232341,
+    "type": "s",
+    "timestamp": 1619225296,
+    "tags": {"10": 11, "20": 22, "30": 33},
+    "value": [324234, 345345, 456456, 567567],
+    "retention_days": 30,
+}
+
+COUNTER_MESSAGE_SHARED = {
+    "org_id": 1,
+    "project_id": 2,
+    "metric_id": 1232341,
+    "type": "c",
+    "timestamp": 1619225296,
+    "tags": {"10": 11, "20": 22, "30": 33},
+    "value": 123.123,
+    "retention_days": 30,
+}
+
+DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
+DIST_MESSAGE_SHARED = {
+    "org_id": 1,
+    "project_id": 2,
+    "metric_id": 1232341,
+    "type": "d",
+    "timestamp": 1619225296,
+    "tags": {"10": 11, "20": 22, "30": 33},
+    "value": DIST_VALUES,
+    "retention_days": 30,
+}
+
 TEST_CASES_BUCKETS = [
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "s",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324234, 345345, 456456, 567567],
-            "retention_days": 30,
-        },
+        SET_MESSAGE_SHARED,
         [
             {
                 "org_id": 1,
@@ -44,7 +72,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "set_values": [324234, 345345, 456456, 567567],
-                "materialization_version": 2,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -55,16 +83,7 @@ TEST_CASES_BUCKETS = [
         id="Simple set with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "c",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": 123.123,
-            "retention_days": 30,
-        },
+        COUNTER_MESSAGE_SHARED,
         None,
         [
             {
@@ -75,7 +94,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "value": 123.123,
-                "materialization_version": 2,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -85,16 +104,7 @@ TEST_CASES_BUCKETS = [
         id="Simple counter with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "d",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324.12, 345.23, 4564.56, 567567],
-            "retention_days": 30,
-        },
+        DIST_MESSAGE_SHARED,
         None,
         None,
         [
@@ -106,7 +116,7 @@ TEST_CASES_BUCKETS = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "values": [324.12, 345.23, 4564.56, 567567],
-                "materialization_version": 2,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -156,19 +166,9 @@ def test_metrics_processor(
 
 
 MOCK_TIME_BUCKET = datetime(2021, 4, 24, 0, 0, 0)
-DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
 TEST_CASES_AGGREGATES = [
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "s",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324234, 345345, 456456, 567567],
-            "retention_days": 30,
-        },
+        SET_MESSAGE_SHARED,
         [
             {
                 "org_id": _literal(1),
@@ -196,16 +196,7 @@ TEST_CASES_AGGREGATES = [
         id="Simple set with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "c",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": 123.123,
-            "retention_days": 30,
-        },
+        COUNTER_MESSAGE_SHARED,
         None,
         [
             {
@@ -229,16 +220,7 @@ TEST_CASES_AGGREGATES = [
         id="Simple counter with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "d",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": DIST_VALUES,
-            "retention_days": 30,
-        },
+        DIST_MESSAGE_SHARED,
         None,
         None,
         [
@@ -357,3 +339,90 @@ def test_metrics_aggregate_processor(
         )
 
         settings.WRITE_METRICS_AGG_DIRECTLY = False
+
+
+TEST_CASES_POLYMORPHIC = [
+    pytest.param(
+        SET_MESSAGE_SHARED,
+        [
+            {
+                "org_id": 1,
+                "project_id": 2,
+                "metric_id": 1232341,
+                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "tags.key": [10, 20, 30],
+                "tags.value": [11, 22, 33],
+                "metric_type": "set",
+                "set_values": [324234, 345345, 456456, 567567],
+                "materialization_version": MATERIALIZATION_VERSION,
+                "retention_days": 30,
+                "partition": 1,
+                "offset": 100,
+            }
+        ],
+    ),
+    pytest.param(
+        COUNTER_MESSAGE_SHARED,
+        [
+            {
+                "org_id": 1,
+                "project_id": 2,
+                "metric_id": 1232341,
+                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "tags.key": [10, 20, 30],
+                "tags.value": [11, 22, 33],
+                "metric_type": "counter",
+                "count_value": 123.123,
+                "materialization_version": MATERIALIZATION_VERSION,
+                "retention_days": 30,
+                "partition": 1,
+                "offset": 100,
+            }
+        ],
+    ),
+    pytest.param(
+        DIST_MESSAGE_SHARED,
+        [
+            {
+                "org_id": 1,
+                "project_id": 2,
+                "metric_id": 1232341,
+                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "tags.key": [10, 20, 30],
+                "tags.value": [11, 22, 33],
+                "metric_type": "distribution",
+                "distribution_values": [324.12, 345.23, 4564.56, 567567],
+                "materialization_version": MATERIALIZATION_VERSION,
+                "retention_days": 30,
+                "partition": 1,
+                "offset": 100,
+            }
+        ],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "message, expected_output", TEST_CASES_POLYMORPHIC,
+)
+def test_metrics_polymorphic_processor(
+    message: Mapping[str, Any], expected_output: Optional[Sequence[Mapping[str, Any]]],
+) -> None:
+    settings.DISABLED_DATASETS = set()
+
+    meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
+    # test_time_bucketing tests the bucket function, parameterizing the output times here
+    # would require repeating the code in the class we're testing
+    with patch(
+        "snuba.datasets.metrics_aggregate_processor.timestamp_to_bucket",
+        lambda _, __: MOCK_TIME_BUCKET,
+    ):
+        expected_polymorphic_result = (
+            AggregateInsertBatch(expected_output, None)
+            if expected_output is not None
+            else None
+        )
+        assert (
+            PolymorphicMetricsProcessor().process_message(message, meta)
+            == expected_polymorphic_result
+        )
