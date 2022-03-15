@@ -47,10 +47,11 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
     guarantees that all subscriptions are scheduled at least once and we do
     not miss any even if the scheduler restarts and loses its state.
 
-    A tick can be safely committed only if its lower timestamp has also been
-    reached on every other partition. If that condition is not met, the message
-    is still submitted to the next step with a `should_commit` value of false
-    indicating that it's offset is not to be commited.
+    Each time a tick message is received by this strategy we need to figure out
+    if we can advance the offset that is committed. The offset that is considered
+    safe to commit is based on the partition with the earliest offset that we have
+    already seen. It's marked `offset_to_commit` and submitted with the tick
+    to the next step.
     """
 
     def __init__(
@@ -459,8 +460,8 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
-        # If there are no subscriptions for a tick, immediately commit if marked
-        # `should_commit`
+        # If there are no subscriptions for a tick, immediately commit if an offset
+        # to commit is provided.
         if len(encoded_tasks) == 0 and message.payload.offset_to_commit is not None:
             self.__commit(
                 {
