@@ -24,7 +24,7 @@ from snuba.datasets.metrics_bucket_processor import (
 )
 from snuba.processor import AggregateInsertBatch, InsertBatch
 
-MATERIALIZATION_VERSION = 3
+MATERIALIZATION_VERSION = 2
 
 SET_MESSAGE_SHARED = {
     "org_id": 1,
@@ -354,7 +354,7 @@ TEST_CASES_POLYMORPHIC = [
                 "tags.value": [11, 22, 33],
                 "metric_type": "set",
                 "set_values": [324234, 345345, 456456, 567567],
-                "materialization_version": 3,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -373,7 +373,7 @@ TEST_CASES_POLYMORPHIC = [
                 "tags.value": [11, 22, 33],
                 "metric_type": "counter",
                 "count_value": 123.123,
-                "materialization_version": 3,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
@@ -392,7 +392,7 @@ TEST_CASES_POLYMORPHIC = [
                 "tags.value": [11, 22, 33],
                 "metric_type": "distribution",
                 "distribution_values": [324.12, 345.23, 4564.56, 567567],
-                "materialization_version": 3,
+                "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "partition": 1,
                 "offset": 100,
