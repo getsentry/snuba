@@ -213,10 +213,12 @@ def multistorage_consumer(
         },
     )
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
-    # for the consumer group
+    # for the consumer group, or use the default.
     stats_collection_frequency_ms = get_config(
-        f"stats_collection_freq_ms_{consumer_group}", 0
+        f"stats_collection_freq_ms_{consumer_group}",
+        get_config("stats_collection_freq_ms", 0),
     )
+
     if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
 
         def stats_callback(stats_json: str) -> None:

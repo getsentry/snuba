@@ -185,8 +185,10 @@ class ConsumerBuilder:
         )
 
         stats_collection_frequency_ms = get_config(
-            f"stats_collection_freq_ms_{self.group_id}", 0
+            f"stats_collection_freq_ms_{self.group_id}",
+            get_config("stats_collection_freq_ms", 0),
         )
+
         if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
             configuration.update(
                 {
