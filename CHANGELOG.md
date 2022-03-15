@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.3.0
+
+### Various fixes & improvements
+
+- feat(metrics) - create materialized views for polymorphic input tables (#2507) by @onewland
+- Move clickhouse queries of death to public docs (#2509) by @volokluev
+- feat(metrics) - create polymorphic bucket table (#2504) by @onewland
+- feat(subscriptions): Deploy metrics subscriptions executor with Freight (#2501) by @lynnagara
+- fix(admin): Exclude profiles from Snuba admin (#2503) by @lynnagara
+- feat(profiling): Add and remove some fields (#2498) by @phacops
+- chore(arroyo): Update version to record metrics (#2499) by @nikhars
+- config(metrics) - add TTL to metrics tables (#2483) by @onewland
+- feat: Add a default value for stats_collection_freq_ms (#2495) by @lynnagara
+- ref: Update snuba-sdk version (#2485) by @evanh
+- fix(subscriptions): Fix recording partition lag (#2497) by @lynnagara
+- feat: Add metrics to help debug ProvideCommitStrategy (#2496) by @lynnagara
+- fix(consumers): Remove deepcopy from multi storage consumers (#2491) by @nikhars
+- feat(admin): Sort configs alphabetically (#2490) by @lynnagara
+- feat(subscriptions): Add a metric for debugging (#2492) by @lynnagara
+- feat: Deploy new metrics schedulers with Freight (#2486) by @lynnagara
+- feat(subscriptions): Set executor sample rate by dataset (#2487) by @lynnagara
+- perf(consumers): allow parallel collect option consumers (#2488) by @nikhars
+- feat(profiling): Read and write data from and to Snuba (#2435) by @phacops
+- feat(dead-letter-queue): Add dead letter queue for failed inserts (#2437) by @MeredithAnya
+- test: Attempt to fix flaky test (#2482) by @lynnagara
+- feat(runtime config): Add support for descriptions for configs (#2432) by @rahul-kumar-saini
+- feat(alias): Add alias type that is wrapped with backticks (#2480) by @ahmedetefy
+- feat(devserver): Metrics subscriptions uses new pipeline (#2479) by @lynnagara
+
+_Plus 124 more_
+
 ## 22.1.0
 
 ### Various fixes & improvements
