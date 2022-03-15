@@ -25,18 +25,43 @@ from snuba.processor import AggregateInsertBatch, InsertBatch
 
 MATERIALIZATION_VERSION = 3
 
+SET_MESSAGE_SHARED = {
+    "org_id": 1,
+    "project_id": 2,
+    "metric_id": 1232341,
+    "type": "s",
+    "timestamp": 1619225296,
+    "tags": {"10": 11, "20": 22, "30": 33},
+    "value": [324234, 345345, 456456, 567567],
+    "retention_days": 30,
+}
+
+COUNTER_MESSAGE_SHARED = {
+    "org_id": 1,
+    "project_id": 2,
+    "metric_id": 1232341,
+    "type": "c",
+    "timestamp": 1619225296,
+    "tags": {"10": 11, "20": 22, "30": 33},
+    "value": 123.123,
+    "retention_days": 30,
+}
+
+DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
+DIST_MESSAGE_SHARED = {
+    "org_id": 1,
+    "project_id": 2,
+    "metric_id": 1232341,
+    "type": "d",
+    "timestamp": 1619225296,
+    "tags": {"10": 11, "20": 22, "30": 33},
+    "value": DIST_VALUES,
+    "retention_days": 30,
+}
+
 TEST_CASES_BUCKETS = [
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "s",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324234, 345345, 456456, 567567],
-            "retention_days": 30,
-        },
+        SET_MESSAGE_SHARED,
         [
             {
                 "org_id": 1,
@@ -57,16 +82,7 @@ TEST_CASES_BUCKETS = [
         id="Simple set with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "c",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": 123.123,
-            "retention_days": 30,
-        },
+        COUNTER_MESSAGE_SHARED,
         None,
         [
             {
@@ -87,16 +103,7 @@ TEST_CASES_BUCKETS = [
         id="Simple counter with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "d",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324.12, 345.23, 4564.56, 567567],
-            "retention_days": 30,
-        },
+        DIST_MESSAGE_SHARED,
         None,
         None,
         [
@@ -158,19 +165,9 @@ def test_metrics_processor(
 
 
 MOCK_TIME_BUCKET = datetime(2021, 4, 24, 0, 0, 0)
-DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
 TEST_CASES_AGGREGATES = [
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "s",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324234, 345345, 456456, 567567],
-            "retention_days": 30,
-        },
+        SET_MESSAGE_SHARED,
         [
             {
                 "org_id": _literal(1),
@@ -198,16 +195,7 @@ TEST_CASES_AGGREGATES = [
         id="Simple set with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "c",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": 123.123,
-            "retention_days": 30,
-        },
+        COUNTER_MESSAGE_SHARED,
         None,
         [
             {
@@ -231,16 +219,7 @@ TEST_CASES_AGGREGATES = [
         id="Simple counter with valid content",
     ),
     pytest.param(
-        {
-            "org_id": 1,
-            "project_id": 2,
-            "metric_id": 1232341,
-            "type": "d",
-            "timestamp": 1619225296,
-            "tags": {"10": 11, "20": 22, "30": 33},
-            "value": DIST_VALUES,
-            "retention_days": 30,
-        },
+        DIST_MESSAGE_SHARED,
         None,
         None,
         [
