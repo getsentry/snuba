@@ -330,7 +330,93 @@ def test_provide_commit_strategy() -> None:
     ]
 
 
-def test_tick_buffer_with_commit_strategy() -> None:
+def test_tick_buffer_with_commit_strategy_partition() -> None:
+    epoch = datetime(1970, 1, 1)
+    now = datetime.now()
+
+    metrics_backend = TestingMetricsBackend()
+
+    next_step = mock.Mock()
+
+    strategy = TickBuffer(
+        SchedulingWatermarkMode.PARTITION,
+        2,
+        10,
+        ProvideCommitStrategy(2, next_step, metrics_backend),
+        metrics_backend,
+    )
+
+    topic = Topic("messages")
+    commit_log_partition = Partition(topic, 0)
+
+    # First message in partition 0
+    # It is submitted for scheduling straight away because we're in partition mode
+    # but we cannot commit yet because we need an offset for partition 1 before we can do that
+    message_0_0 = Message(
+        commit_log_partition,
+        4,
+        Tick(
+            0,
+            offsets=Interval(1, 2),
+            timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+        ),
+        now,
+        5,
+    )
+    strategy.submit(message_0_0)
+
+    assert next_step.submit.call_count == 1
+    assert next_step.submit.call_args_list == [
+        mock.call(make_message_for_next_step(message_0_0, None)),
+    ]
+    next_step.reset_mock()
+
+    # Message in partition 1 - submitted for scheduling immediately. Now we can commit offset 4
+    message_1_0 = Message(
+        commit_log_partition,
+        5,
+        Tick(
+            1,
+            offsets=Interval(3, 6),
+            timestamps=Interval(
+                epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+            ),
+        ),
+        now,
+        6,
+    )
+    strategy.submit(message_1_0)
+
+    assert next_step.submit.call_count == 1
+    assert next_step.submit.call_args_list == [
+        mock.call(make_message_for_next_step(message_1_0, 4)),
+    ]
+    next_step.reset_mock()
+
+    # Another message in partition 0. The timestamp is earlier than message_1_0 but it doesn't matter
+    # We still submit immediately and the offset moves to 5
+    message_0_1 = Message(
+        commit_log_partition,
+        6,
+        Tick(
+            0,
+            offsets=Interval(2, 3),
+            timestamps=Interval(
+                epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+            ),
+        ),
+        now,
+        7,
+    )
+    strategy.submit(message_0_1)
+
+    assert next_step.submit.call_count == 1
+    assert next_step.submit.call_args_list == [
+        mock.call(make_message_for_next_step(message_0_1, 5)),
+    ]
+
+
+def test_tick_buffer_with_commit_strategy_global() -> None:
     epoch = datetime(1970, 1, 1)
     now = datetime.now()
 
