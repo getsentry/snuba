@@ -50,7 +50,7 @@ POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
 ]
 
 polymorphic_bucket = WritableTableStorage(
-    storage_key=StorageKey.METRICS_POLYMORPHIC_BUCKET,
+    storage_key=StorageKey.METRICS_RAW,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
         columns=ColumnSet(
