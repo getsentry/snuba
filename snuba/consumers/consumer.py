@@ -109,33 +109,35 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
         max_latency: Optional[float] = None
         latency_sum = 0.0
         max_end_to_end_latency: Optional[float] = None
+        end_to_end_latency_sum = 0.0
         for message in self.__messages:
             latency = write_finish - message.timestamp.timestamp()
             latency_sum += latency
             if max_latency is None or latency > max_latency:
                 max_latency = latency
-            self.__metrics.timing("latency_ms", latency * 1000)
             if message.payload.origin_timestamp is not None:
                 end_to_end_latency = (
                     write_finish - message.payload.origin_timestamp.timestamp()
                 )
+                end_to_end_latency_sum += end_to_end_latency
                 if (
                     max_end_to_end_latency is None
                     or end_to_end_latency > max_end_to_end_latency
                 ):
                     max_end_to_end_latency = end_to_end_latency
-                self.__metrics.timing(
-                    "end_to_end_latency_ms", end_to_end_latency * 1000,
-                )
 
         if max_latency is not None:
             self.__metrics.timing("max_latency_ms", max_latency * 1000)
             self.__metrics.timing(
-                "avg_latency_ms", (latency_sum / len(self.__messages)) * 1000
+                "latency_ms", (latency_sum / len(self.__messages)) * 1000
             )
         if max_end_to_end_latency is not None:
             self.__metrics.timing(
                 "max_end_to_end_latency_ms", max_end_to_end_latency * 1000
+            )
+            self.__metrics.timing(
+                "end_to_end_latency_ms",
+                (end_to_end_latency_sum / len(self.__messages)) * 1000,
             )
 
         self.__metrics.timing("batch_write_ms", (write_finish - write_start) * 1000)
