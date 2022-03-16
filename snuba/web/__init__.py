@@ -29,7 +29,10 @@ class QueryException(SerializableException):
 
 class QueryTooLongException(SerializableException):
     """
-    Exception thrown when a query is too long for ClickHouse
+    Exception thrown when a query string is too long for ClickHouse.
+
+    There is a limit for the maximum size of a query (in bytes)
+    ClickHouse will process, this limit is defined in Snuba settings.
     """
 
 
