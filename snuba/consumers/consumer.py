@@ -138,7 +138,7 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
                 "max_end_to_end_latency_ms", max_end_to_end_latency * 1000
             )
 
-        self.__metrics.timing("batch_write_ms", write_finish - write_start)
+        self.__metrics.timing("batch_write_ms", (write_finish - write_start) * 1000)
         rows = sum(len(message.payload.rows) for message in self.__messages)
         self.__metrics.increment("batch_write_msgs", rows)
 
