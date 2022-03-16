@@ -49,8 +49,9 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
     Each time a tick message is received by this strategy we need to figure out
     if we can advance the offset that is committed. The offset that is considered
-    safe to commit is the latest offset that has been seen on every partition.
-    It's marked `offset_to_commit` and submitted with the tick to the next step.
+    safe to commit is the latest offset that has been reached or exceeded on every
+    partition. It's marked `offset_to_commit` and submitted with the tick to the
+    next step.
     """
 
     # If we receive the following messages:
