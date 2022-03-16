@@ -74,6 +74,9 @@ class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
 
 DEFAULT_CACHE_PARTITION_ID = "default"
 
+# We are not initializing all the cache partitions here and instead relying on lazy
+# initialization because this module only learn of cache partitions ids from the
+# reader when running a query.
 cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
         redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
@@ -345,11 +348,12 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
     return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
 
-def _get_cache_partition(partition_id: Optional[str]) -> Cache[Result]:
+def _get_cache_partition(reader: Reader) -> Cache[Result]:
     enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
     if not enable_cache_partitioning:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
 
+    partition_id = reader.cache_partition_id
     if partition_id is not None and partition_id not in cache_partitions:
         with cache_partitions_lock:
             # This condition was checked before as this lock should be acquired only
@@ -406,8 +410,7 @@ def execute_query_with_caching(
     with sentry_sdk.start_span(description="execute", op="db") as span:
         if use_cache:
             key = get_query_cache_key(formatted_query)
-            partition_id = reader.cache_partition_id
-            cache_partition = _get_cache_partition(partition_id)
+            cache_partition = _get_cache_partition(reader)
 
             result = cache_partition.get(key)
             timer.mark("cache_get")
@@ -456,10 +459,10 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    partition_id = reader.cache_partition_id
-    cache_partition = _get_cache_partition(partition_id)
+    cache_partition = _get_cache_partition(reader)
     metrics.increment(
-        "cache_partition_loaded", tags={"partition_id": partition_id or "default"}
+        "cache_partition_loaded",
+        tags={"partition_id": reader.cache_partition_id or "default"},
     )
     return cache_partition.get_readthrough(
         query_id,
