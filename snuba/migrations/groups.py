@@ -98,6 +98,7 @@ class EventsLoader(DirectoryLoader):
             "0013_errors_add_hierarchical_hashes",
             "0014_backfill_errors",
             "0015_truncate_events",
+            "0016_drop_legacy_events",
         ]
 
 
