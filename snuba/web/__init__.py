@@ -27,6 +27,12 @@ class QueryException(SerializableException):
         self.extra = extra
 
 
+class QueryTooLongException(SerializableException):
+    """
+    Exception thrown when a query is too long for ClickHouse
+    """
+
+
 class QueryResult(NamedTuple):
     result: Result
     extra: QueryExtraData
