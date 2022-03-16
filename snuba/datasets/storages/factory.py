@@ -19,6 +19,9 @@ from snuba.datasets.storages.metrics import (
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
 )
+from snuba.datasets.storages.metrics import (
+    polymorphic_bucket as metrics_polymorphic_storage,
+)
 from snuba.datasets.storages.metrics import sets_buckets as metrics_sets_buckets
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
 from snuba.datasets.storages.outcomes import (
@@ -60,6 +63,7 @@ METRICS_WRITEABLE_STORAGES = {
     metrics_distributions_storage.get_storage_key(): metrics_distributions_storage,
     metrics_sets_storage.get_storage_key(): metrics_sets_storage,
     metrics_counters_storage.get_storage_key(): metrics_counters_storage,
+    metrics_polymorphic_storage.get_storage_key(): metrics_polymorphic_storage,
 }
 
 WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
