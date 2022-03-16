@@ -9,6 +9,7 @@ from snuba.clickhouse.columns import (
     Float,
     Nested,
     SchemaModifiers,
+    String,
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
@@ -20,6 +21,7 @@ from snuba.datasets.metrics_aggregate_processor import (
 from snuba.datasets.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
+    PolymorphicMetricsProcessor,
     SetsMetricsProcessor,
 )
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
@@ -46,6 +48,35 @@ POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
 ]
+
+polymorphic_bucket = WritableTableStorage(
+    storage_key=StorageKey.METRICS_RAW,
+    storage_set_key=StorageSetKey.METRICS,
+    schema=WritableTableSchema(
+        columns=ColumnSet(
+            [
+                Column("use_case_id", String()),
+                *PRE_VALUE_COLUMNS,
+                Column("count_value", Float(64)),
+                Column("set_values", Array(UInt(64))),
+                Column("distribution_values", Array(Float(64))),
+                *POST_VALUE_COLUMNS,
+            ]
+        ),
+        local_table_name="metrics_raw_local",
+        dist_table_name="metrics_raw_dist",
+        storage_set_key=StorageSetKey.METRICS,
+    ),
+    query_processors=[],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        processor=PolymorphicMetricsProcessor(),
+        default_topic=Topic.METRICS,
+        commit_log_topic=Topic.METRICS_COMMIT_LOG,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
+    ),
+)
 
 sets_buckets = WritableTableStorage(
     storage_key=StorageKey.METRICS_BUCKETS,
