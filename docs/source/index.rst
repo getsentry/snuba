@@ -14,3 +14,4 @@ Contents:
    language/snql
    migrations/modes
    contributing/environment
+   clickhouse/death_queries
