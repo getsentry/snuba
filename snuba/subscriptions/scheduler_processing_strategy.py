@@ -113,7 +113,7 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
             )
         )
         if should_commit:
-            self.__offset_low_watermark = message.offset
+            self.__offset_low_watermark = self.__offset_high_watermark
 
     def __should_commit(self, message: Message[Tick]) -> bool:
         if self.__offset_high_watermark is None:
