@@ -204,6 +204,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         # The cluster name and distributed cluster name only apply if single_node is set to False
         cluster_name: Optional[str] = None,
         distributed_cluster_name: Optional[str] = None,
+        cache_partition_id: Optional[str] = None,
     ):
         super().__init__(storage_sets)
         self.__query_node = ClickhouseNode(host, port)
@@ -216,6 +217,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader] = None
         self.__connection_cache = connection_cache
+        self.__cache_partition_id = cache_partition_id
 
     def __str__(self) -> str:
         return str(self.__query_node)
@@ -250,7 +252,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_reader(self) -> Reader:
         if not self.__reader:
             self.__reader = NativeDriverReader(
-                self.get_query_connection(ClickhouseClientSettings.QUERY)
+                cache_partition_id=self.__cache_partition_id,
+                client=self.get_query_connection(ClickhouseClientSettings.QUERY),
             )
         return self.__reader
 
@@ -341,6 +344,7 @@ CLUSTERS = [
         distributed_cluster_name=cluster["distributed_cluster_name"]
         if "distributed_cluster_name" in cluster
         else None,
+        cache_partition_id=cluster.get("cache_partition_id"),
     )
     for cluster in settings.CLUSTERS
 ]
