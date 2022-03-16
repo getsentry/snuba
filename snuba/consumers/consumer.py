@@ -106,17 +106,39 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
         )
         write_finish = time.time()
 
+        max_latency: Optional[float] = None
+        latency_sum = 0.0
+        max_end_to_end_latency: Optional[float] = None
         for message in self.__messages:
-            self.__metrics.timing(
-                "latency_ms", (write_finish - message.timestamp.timestamp()) * 1000
-            )
+            latency = write_finish - message.timestamp.timestamp()
+            latency_sum += latency
+            if max_latency is None or latency > max_latency:
+                max_latency = latency
+            self.__metrics.timing("latency_ms", latency * 1000)
             if message.payload.origin_timestamp is not None:
-                self.__metrics.timing(
-                    "end_to_end_latency_ms",
-                    (write_finish - message.payload.origin_timestamp.timestamp())
-                    * 1000,
+                end_to_end_latency = (
+                    write_finish - message.payload.origin_timestamp.timestamp()
                 )
-        self.__metrics.timing("batch_write_ms", write_finish - write_start)
+                if (
+                    max_end_to_end_latency is None
+                    or end_to_end_latency > max_end_to_end_latency
+                ):
+                    max_end_to_end_latency = end_to_end_latency
+                self.__metrics.timing(
+                    "end_to_end_latency_ms", end_to_end_latency * 1000,
+                )
+
+        if max_latency is not None:
+            self.__metrics.timing("max_latency_ms", max_latency * 1000)
+            self.__metrics.timing(
+                "avg_latency_ms", (latency_sum / len(self.__messages)) * 1000
+            )
+        if max_end_to_end_latency is not None:
+            self.__metrics.timing(
+                "max_end_to_end_latency_ms", max_end_to_end_latency * 1000
+            )
+
+        self.__metrics.timing("batch_write_ms", (write_finish - write_start) * 1000)
         rows = sum(len(message.payload.rows) for message in self.__messages)
         self.__metrics.increment("batch_write_msgs", rows)
 
