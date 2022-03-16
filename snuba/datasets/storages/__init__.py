@@ -1,5 +1,4 @@
 from enum import Enum
-from functools import lru_cache
 
 
 class StorageKey(Enum):
@@ -34,20 +33,3 @@ class StorageKey(Enum):
     ERRORS_V2 = "errors_v2"
     PROFILES = "profiles"
     ERRORS_V2_RO = "errors_v2_ro"
-
-
-IDENTICAL_STORAGES = frozenset(
-    {
-        frozenset({StorageKey.TRANSACTIONS, StorageKey.TRANSACTIONS_V2}),
-        frozenset({StorageKey.ERRORS, StorageKey.ERRORS_V2}),
-    }
-)
-
-
-@lru_cache(20)
-def are_writes_identical(this: StorageKey, other: StorageKey) -> bool:
-    for group in IDENTICAL_STORAGES:
-        if {this, other}.issubset(group):
-            return True
-
-    return False
