@@ -351,6 +351,10 @@ def get_polymorphic_mv_name(metric_type: str) -> str:
     return f"metrics_{metric_type}_polymorphic_mv_local"
 
 
+def get_polymorphic_mv_v2_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_polymorphic_mv_v2_local"
+
+
 class MigrationArgs(TypedDict):
     source_table_name: str
     table_name: str
