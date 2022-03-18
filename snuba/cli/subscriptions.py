@@ -220,7 +220,7 @@ def subscriptions(
     )
     metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
-    with closing(consumer), executor, closing(producer):
+    with executor, closing(producer):
         batching_consumer = StreamProcessor(
             consumer,
             (
