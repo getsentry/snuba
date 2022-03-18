@@ -184,6 +184,7 @@ class MetricsLoader(DirectoryLoader):
             "0019_aggregate_tables_add_ttl",
             "0020_polymorphic_buckets_table",
             "0021_polymorphic_bucket_materialized_views",
+            "0022_metrics_distributions_add_histogram",
         ]
 
 

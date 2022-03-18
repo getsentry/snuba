@@ -160,6 +160,31 @@ TEST_CASES = [
         ),
         id="Test that a column other than value is not transformed",
     ),
+    pytest.param(
+        "metrics_distributions",
+        "histogram(250)(value)",
+        EntityKey.METRICS_DISTRIBUTIONS,
+        CurriedFunctionCall(
+            "_snuba_histogram(250)(value)",
+            FunctionCall(None, "histogramMerge", (Literal(None, 250),)),
+            (Column(None, None, "histogram_buckets"),),
+        ),
+        id="Test distribution histogram",
+    ),
+    pytest.param(
+        "metrics_distributions",
+        "histogramIf(250)(value, cond())",
+        EntityKey.METRICS_DISTRIBUTIONS,
+        CurriedFunctionCall(
+            "_snuba_histogramIf(250)(value, cond())",
+            FunctionCall(None, "histogramMergeIf", (Literal(None, 250),)),
+            (
+                Column(None, None, "histogram_buckets"),
+                FunctionCall(None, "cond", tuple()),
+            ),
+        ),
+        id="Test distribution histogram",
+    ),
 ]
 
 
