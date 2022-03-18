@@ -154,7 +154,8 @@ GROUP BY
     retention_days
 """
 
-# Version 3+
+# materialization_version here must be at least 3. Older versions were not
+# using the polymorphic table.
 MATVIEW_STATEMENT_POLYMORPHIC_TABLE = """
 SELECT
     org_id,
