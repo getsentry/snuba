@@ -1345,6 +1345,25 @@ class TestApi(SimpleAPITest):
         )
         assert result["data"][0] == {"environment": "prød", "count": 90}
 
+    def test_query_too_long(self) -> None:
+        long_string = "A" * 270000
+        response = self.post(
+            json.dumps(
+                {
+                    "from_date": self.base_time.isoformat(),
+                    "project": [1],
+                    "conditions": [["platform", "NOT IN", [long_string]]],
+                    "selected_columns": ["project_id"],
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert data["error"]["type"] == "query-too-long"
+        assert response.status_code == 400
+
     def test_query_timing(self) -> None:
         result = json.loads(
             self.post(

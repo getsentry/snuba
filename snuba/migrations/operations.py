@@ -135,7 +135,7 @@ class AddColumn(SqlOperation):
         storage_set: StorageSetKey,
         table_name: str,
         column: Column[MigrationModifiers],
-        after: Optional[str],
+        after: Optional[str] = None,
     ):
         super().__init__(storage_set)
         self.__table_name = table_name

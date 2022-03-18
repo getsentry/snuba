@@ -64,7 +64,7 @@ from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDe
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.web import QueryException
+from snuba.web import QueryException, QueryTooLongException
 from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
@@ -476,6 +476,9 @@ def dataset_query(
                 "message": str(cause),
                 "code": cause.code,
             }
+        elif isinstance(cause, QueryTooLongException):
+            status = 400
+            details = {"type": "query-too-long", "message": str(cause)}
         elif isinstance(cause, Exception):
             details = {
                 "type": "unknown",
