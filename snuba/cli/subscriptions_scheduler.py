@@ -83,9 +83,10 @@ def subscriptions_scheduler(
     timestamp is written to storage.
 
     - The second processing step provides the strategy for committing offsets. Ticks are
-    only marked as `should_commit` if every partition has already reached the timestamp
-    of the tick. Only the commit log offset of the slowest partition (on the main topic)
-    will get committed. This guarantees at least once scheduling of subscriptions.
+    marked with an `offset_to_commit` if processing that tick allows the committed
+    offset to be advanced. Only the earliest commit log offset that as already been seen
+    by the strategy will get committed. This guarantees at least once scheduling of
+    subscriptions.
 
     - The third processing step checks the subscription store to determine which
     subscriptions need to be scheduled for each tick. Each scheduled subscription task
