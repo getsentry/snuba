@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 
 class CommittableTick(NamedTuple):
     tick: Tick
-    should_commit: bool
+    # Offset that we can safely committed once the tick is processed.
+    # Not necessarily the same as the tick's offset.
+    offset_to_commit: Optional[int]
 
 
 class ProvideCommitStrategy(ProcessingStrategy[Tick]):
@@ -45,11 +47,25 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
     guarantees that all subscriptions are scheduled at least once and we do
     not miss any even if the scheduler restarts and loses its state.
 
-    A tick can be safely committed only if its lower timestamp has also been
-    reached on every other partition. If that condition is not met, the message
-    is still submitted to the next step with a `should_commit` value of false
-    indicating that it's offset is not to be commited.
+    Each time a tick message is received by this strategy we need to figure out
+    if we can advance the offset that is committed. The offset that is considered
+    safe to commit is the latest offset that has been reached or exceeded on every
+    partition. It's marked `offset_to_commit` and submitted with the tick to the
+    next step.
     """
+
+    # If we receive the following messages:
+
+    #     Tick message:                           A         B         C         D
+    #     Partition (in main topic)               0         1         1         0
+    #     Message offset (commit log topic):      0         1         2         3
+
+    # - At "A" we don't commit an offset as we don't have any offset for partition 1 yet
+    #   (in this scenario there are only 2 partitions)
+    # - At "B" we can commit offset 0 as that is the latest offset that has been reached on
+    #   both of our 2 partitions
+    # - At "C" we can't commit any offset since partition 1 still hasn't advanced from 0
+    # - At "D" we can commit offset 2
 
     def __init__(
         self,
@@ -81,32 +97,33 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         self.__update_offset_high_watermark(message)
 
         should_commit = self.__should_commit(message)
+        offset_to_commit = self.__offset_high_watermark if should_commit else None
 
         # TODO: Temporary metric for debugging
         self.__metrics.increment(
-            "ProvideCommitStrategy.submit", tags={"should_commit": str(should_commit)}
+            "ProvideCommitStrategy.submit", tags={"should_commit": str(should_commit)},
         )
 
         self.__next_step.submit(
             Message(
                 message.partition,
                 message.offset,
-                CommittableTick(message.payload, should_commit),
+                CommittableTick(message.payload, offset_to_commit),
                 message.timestamp,
                 message.next_offset,
             )
         )
         if should_commit:
-            self.__offset_low_watermark = message.offset
+            self.__offset_low_watermark = self.__offset_high_watermark
 
     def __should_commit(self, message: Message[Tick]) -> bool:
-        return (
-            self.__offset_low_watermark is None
-            or message.offset > self.__offset_low_watermark
-        ) and (
-            self.__offset_high_watermark is not None
-            and message.offset <= self.__offset_high_watermark
-        )
+        if self.__offset_high_watermark is None:
+            return False
+
+        if self.__offset_low_watermark is None:
+            return True
+
+        return self.__offset_high_watermark > self.__offset_low_watermark
 
     def __update_offset_high_watermark(self, message: Message[Tick]) -> None:
         assert message.partition.index == 0, "Commit log cannot be partitioned"
@@ -114,36 +131,42 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         assert tick_partition is not None
         self.__latest_messages_by_partition[tick_partition] = message
 
-        slowest = message
-        fastest = message
+        # Keep track of the slowest/fastest partition based on the tick's lower timestamp.
+        # This is only used for recording the partition lag metric.
+        slowest = message.payload.timestamps.lower
+        fastest = message.payload.timestamps.lower
+
+        # Keep track of the earliest partition based on its offset in the commit log topic.
+        # This is used to determine the offset that we can safely commit.
+        earliest = message.offset
+
         for partition_message in self.__latest_messages_by_partition.values():
             if partition_message is None:
                 return
 
             partition_timestamp = partition_message.payload.timestamps.lower
 
-            if partition_timestamp < slowest.payload.timestamps.lower:
-                slowest = partition_message
+            if partition_timestamp < slowest:
+                slowest = partition_timestamp
 
-            if partition_timestamp > fastest.payload.timestamps.lower:
-                fastest = partition_message
+            if partition_timestamp > fastest:
+                fastest = partition_timestamp
+
+            if partition_message.offset < earliest:
+                earliest = partition_message.offset
 
         # Record the lag between the fastest and slowest partition
         self.__metrics.timing(
-            "partition_lag_ms",
-            (
-                fastest.payload.timestamps.lower - slowest.payload.timestamps.lower
-            ).total_seconds()
-            * 1000,
+            "partition_lag_ms", (fastest - slowest).total_seconds() * 1000,
         )
 
         if (
             self.__offset_high_watermark is None
-            or slowest.offset > self.__offset_high_watermark
+            or earliest > self.__offset_high_watermark
         ):
             # TODO: Temporary metric for debugging
             self.__metrics.increment("update_offset_high_watermark")
-            self.__offset_high_watermark = slowest.offset
+            self.__offset_high_watermark = earliest
 
     def close(self) -> None:
         self.__closed = True
@@ -299,7 +322,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 class TickSubscription(NamedTuple):
     tick_message: Message[CommittableTick]
     subscription_future: Future[Message[KafkaPayload]]
-    should_commit: bool
+    offset_to_commit: Optional[int]
 
 
 class ScheduledSubscriptionQueue:
@@ -323,7 +346,12 @@ class ScheduledSubscriptionQueue:
     def peek(self) -> Optional[TickSubscription]:
         if self.__queues:
             tick, futures = self.__queues[0]
-            return TickSubscription(tick, futures[0], len(futures) == 1)
+
+            is_last = len(futures) == 1
+
+            offset_to_commit = tick.payload.offset_to_commit if is_last else None
+
+            return TickSubscription(tick, futures[0], offset_to_commit)
         return None
 
     def popleft(self) -> TickSubscription:
@@ -336,9 +364,11 @@ class ScheduledSubscriptionQueue:
             if is_empty:
                 self.__queues.popleft()
 
-            should_commit = is_empty and tick_message.payload.should_commit == True
+            offset_to_commit = (
+                tick_message.payload.offset_to_commit if is_empty else None
+            )
 
-            return TickSubscription(tick_message, subscription_future, should_commit)
+            return TickSubscription(tick_message, subscription_future, offset_to_commit)
 
         raise IndexError()
 
@@ -406,11 +436,11 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
             self.__queue.popleft()
 
-            if tick_subscription.should_commit:
+            if tick_subscription.offset_to_commit:
                 self.__commit(
                     {
                         tick_subscription.tick_message.partition: Position(
-                            tick_subscription.tick_message.offset,
+                            tick_subscription.offset_to_commit,
                             tick_subscription.tick_message.timestamp,
                         )
                     }
@@ -422,7 +452,11 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # TODO: This metric is temporary for debugging
         self.__metrics.increment(
             "ProduceScheduledSubscriptionMessage.submit",
-            tags={"committable": str(message.payload.should_commit)},
+            tags={
+                "committable": "False"
+                if message.payload.offset_to_commit is None
+                else "True"
+            },
         )
 
         # If queue is full, raise MessageRejected to tell the stream
@@ -439,11 +473,15 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
-        # If there are no subscriptions for a tick, immediately commit if marked
-        # `should_commit`
-        if len(encoded_tasks) == 0 and message.payload.should_commit == True:
+        # If there are no subscriptions for a tick, immediately commit if an offset
+        # to commit is provided.
+        if len(encoded_tasks) == 0 and message.payload.offset_to_commit is not None:
             self.__commit(
-                {message.partition: Position(message.offset, message.timestamp)}
+                {
+                    message.partition: Position(
+                        message.payload.offset_to_commit, message.timestamp
+                    )
+                }
             )
             return
 
@@ -477,11 +515,11 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
             tick_subscription.subscription_future.result(remaining)
 
-            if tick_subscription.should_commit:
+            if tick_subscription.offset_to_commit is not None:
                 self.__commit(
                     {
                         tick_subscription.tick_message.partition: Position(
-                            tick_subscription.tick_message.offset,
+                            tick_subscription.offset_to_commit,
                             tick_subscription.tick_message.timestamp,
                         )
                     }
