@@ -4,7 +4,6 @@ import logging
 import time
 from collections import deque
 from concurrent.futures import Future
-from datetime import datetime
 from typing import (
     Callable,
     Deque,
@@ -203,7 +202,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
         partitions: int,
         max_ticks_buffered_per_partition: Optional[int],
         next_step: ProcessingStrategy[Tick],
-        metrics: MetricsBackend,
     ) -> None:
         if mode == SchedulingWatermarkMode.GLOBAL:
             assert max_ticks_buffered_per_partition is not None
@@ -212,15 +210,10 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__partitions = partitions
         self.__max_ticks_buffered_per_partition = max_ticks_buffered_per_partition
         self.__next_step = next_step
-        self.__metrics = metrics
 
         self.__buffers: Mapping[int, Deque[Message[Tick]]] = {
             index: deque() for index in range(self.__partitions)
         }
-
-        # Stores the latest timestamp we received for any partition. This is
-        # just for recording the partition lag.
-        self.__latest_ts: Optional[datetime] = None
 
         self.__closed = False
 
@@ -233,7 +226,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
         # If the scheduler mode is immediate or there is only one partition
         # or max_ticks_buffered_per_partition is set to 0,
         # immediately submit message to the next step.
-        # We don't keep any latest_ts values as it is not relevant.
         if (
             self.__mode == SchedulingWatermarkMode.PARTITION
             or self.__partitions == 1
@@ -241,13 +233,6 @@ class TickBuffer(ProcessingStrategy[Tick]):
         ):
             self.__next_step.submit(message)
             return
-
-        # Update the latest_ts for metrics
-        if (
-            self.__latest_ts is None
-            or message.payload.timestamps.upper > self.__latest_ts
-        ):
-            self.__latest_ts = message.payload.timestamps.upper
 
         tick_partition = message.payload.partition
         assert tick_partition is not None

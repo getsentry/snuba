@@ -38,13 +38,9 @@ from tests.backends.metrics import TestingMetricsBackend
 def test_tick_buffer_immediate() -> None:
     epoch = datetime(1970, 1, 1)
 
-    metrics_backend = TestingMetricsBackend()
-
     next_step = mock.Mock()
 
-    strategy = TickBuffer(
-        SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics_backend
-    )
+    strategy = TickBuffer(SchedulingWatermarkMode.PARTITION, 2, None, next_step)
 
     topic = Topic("messages")
     partition = Partition(topic, 0)
@@ -65,21 +61,16 @@ def test_tick_buffer_immediate() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args == mock.call(message)
-    assert metrics_backend.calls == []
 
 
 def test_tick_buffer_wait_slowest() -> None:
     epoch = datetime(1970, 1, 1)
     now = datetime.now()
 
-    metrics_backend = TestingMetricsBackend()
-
     next_step = mock.Mock()
 
     # Create strategy with 2 partitions
-    strategy = TickBuffer(
-        SchedulingWatermarkMode.GLOBAL, 2, 10, next_step, metrics_backend,
-    )
+    strategy = TickBuffer(SchedulingWatermarkMode.GLOBAL, 2, 10, next_step,)
 
     topic = Topic("messages")
     commit_log_partition = Partition(topic, 0)
@@ -99,7 +90,6 @@ def test_tick_buffer_wait_slowest() -> None:
     strategy.submit(message_0_0)
 
     assert next_step.submit.call_count == 0
-    assert metrics_backend.calls == []
 
     # Another message in partition 0, do not submit to next step
     message_0_1 = Message(
@@ -118,7 +108,6 @@ def test_tick_buffer_wait_slowest() -> None:
     strategy.submit(message_0_1)
 
     assert next_step.submit.call_count == 0
-    assert metrics_backend.calls == []
 
     # Message in partition 1 has the lowest timestamp so we submit to the next step
     message_1_0 = Message(
@@ -138,7 +127,6 @@ def test_tick_buffer_wait_slowest() -> None:
     assert next_step.submit.call_args_list == [mock.call(message_1_0)]
 
     next_step.reset_mock()
-    metrics_backend.calls = []
     # Message in partition 1 has the same timestamp as the earliest message
     # in partition 0. Both should be submitted to the next step.
     message_1_1 = Message(
@@ -163,7 +151,6 @@ def test_tick_buffer_wait_slowest() -> None:
     ]
 
     next_step.reset_mock()
-    metrics_backend.calls = []
 
     # Submit another message to partition 1 with the same timestamp as
     # in partition 0. Two more messages should be submitted and the
@@ -190,7 +177,6 @@ def test_tick_buffer_wait_slowest() -> None:
     ]
 
     next_step.reset_mock()
-    metrics_backend.calls = []
 
     # Submit 11 more messages to partition 0. Since we hit
     # `max_ticks_buffered_per_partition`, the first message (but
@@ -216,7 +202,6 @@ def test_tick_buffer_wait_slowest() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(messages[0])]
-    assert metrics_backend.calls == []
 
 
 def make_message_for_next_step(
@@ -343,7 +328,6 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
         2,
         10,
         ProvideCommitStrategy(2, next_step, metrics_backend),
-        metrics_backend,
     )
 
     topic = Topic("messages")
@@ -429,7 +413,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
         2,
         10,
         ProvideCommitStrategy(2, next_step, metrics_backend),
-        metrics_backend,
     )
 
     topic = Topic("messages")
