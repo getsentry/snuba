@@ -22,9 +22,6 @@ ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
 DISABLED_DATASETS: Set[str] = set()
-# Allows us to have datasets enabled on Snuba but excluded from the
-# heathcheck in case they are not ready for production or we are
-# performing maintenance on them.
 SKIP_HEALTH_CHECK_DATASETS: Set[str] = set()
 
 # Clickhouse Options
