@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.snuba_migrations.metrics.templates import (
     COL_SCHEMA_DISTRIBUTIONS_V4,
     get_forward_view_migration_polymorphic_table,
-    get_polymorphic_mv_name,
+    get_versioned_polymorphic_mv_name,
 )
 
 
@@ -50,7 +50,7 @@ class Migration(migration.ClickhouseNodeMigration):
             get_forward_view_migration_polymorphic_table(
                 source_table_name=self.raw_table_name,
                 table_name="metrics_distributions_local",
-                mv_name=get_polymorphic_mv_name(
+                mv_name=get_versioned_polymorphic_mv_name(
                     "distributions", materialization_version=4
                 ),
                 aggregation_col_schema=COL_SCHEMA_DISTRIBUTIONS_V4,
@@ -73,7 +73,7 @@ class Migration(migration.ClickhouseNodeMigration):
             *self.__backward_migrations("metrics_distributions_local"),
             operations.DropTable(
                 storage_set=StorageSetKey.METRICS,
-                table_name=get_polymorphic_mv_name(
+                table_name=get_versioned_polymorphic_mv_name(
                     "distributions", materialization_version=4
                 ),
             ),

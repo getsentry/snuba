@@ -357,7 +357,13 @@ def get_consolidated_mv_name(metric_type: str) -> str:
     return f"metrics_{metric_type}_consolidated_mv_local"
 
 
-def get_polymorphic_mv_name(metric_type: str, materialization_version: int) -> str:
+def get_polymorphic_mv_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_polymorphic_mv_local"
+
+
+def get_versioned_polymorphic_mv_name(
+    metric_type: str, materialization_version: int
+) -> str:
     assert materialization_version >= 3
     materialization_version_str = (
         "" if materialization_version == 3 else f"_v{materialization_version}"
