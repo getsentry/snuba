@@ -27,10 +27,6 @@ class RateLimiterDelegate(RequestSettings):
         self.referrer = delegate.referrer
         self.__delegate = delegate
         self.__prefix = prefix
-        self.__rate_limit_params = [
-            self.__append_prefix(rate_limiter)
-            for rate_limiter in delegate.get_rate_limit_params()
-        ]
 
     def __append_prefix(self, rate_limiter: RateLimitParameters) -> RateLimitParameters:
         return RateLimitParameters(
@@ -65,10 +61,12 @@ class RateLimiterDelegate(RequestSettings):
         return self.__delegate.get_feature()
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
-        return self.__rate_limit_params
+        return [
+            self.__append_prefix(r) for r in self.__delegate.get_rate_limit_params()
+        ]
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
-        self.__rate_limit_params.append(self.__append_prefix(rate_limit_param))
+        self.__delegate.add_rate_limit(rate_limit_param)
 
     def get_resource_quota(self) -> Optional[ResourceQuota]:
         return self.__delegate.get_resource_quota()
