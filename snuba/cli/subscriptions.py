@@ -220,7 +220,7 @@ def subscriptions(
     )
     metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
-    with closing(consumer), executor, closing(producer):
+    with executor, closing(producer):
         batching_consumer = StreamProcessor(
             consumer,
             (
@@ -260,6 +260,10 @@ def subscriptions(
         )
 
         def handler(signum: int, frame: Optional[Any]) -> None:
+            # TODO: Temporary code for debugging the shutdown sequence of the subscriptions
+            # consumer without updating arroyo or affecting other consumers.
+            logging.getLogger().setLevel(logging.DEBUG)
+
             batching_consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
