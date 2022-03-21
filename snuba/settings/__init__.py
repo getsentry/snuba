@@ -62,6 +62,7 @@ DOGSTATSD_PORT = None
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
+    "subscriptions.executor.latency": 0.1,
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
@@ -183,7 +184,7 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
-ENABLED_MATERIALIZATION_VERSION = 2
+ENABLED_MATERIALIZATION_VERSION = 3
 
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
