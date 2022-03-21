@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Optional
 
 import click
@@ -80,7 +81,11 @@ def optimize(
         )
 
     if not ignore_cutoff:
-        last_midnight = datetime.now().replace(
+        # Adding 10 minutes to the current time before finding the midnight time
+        # to ensure this keeps working even if the system clock of the host that
+        # starts the pod is slightly ahead of the system clock of the host running
+        # the job. This prevents us from getting the wrong midnight.
+        last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         cutoff: Optional[datetime] = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
