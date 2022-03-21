@@ -34,7 +34,8 @@ POST_VALUES_BUCKETS_COLUMNS: Sequence[Column[Modifiers]] = [
     Column("offset", UInt(64)),
 ]
 
-COL_SCHEMA_DISTRIBUTIONS_V3: Sequence[Column[Modifiers]] = [
+# Version 3
+COL_SCHEMA_DISTRIBUTIONS: Sequence[Column[Modifiers]] = [
     Column(
         "percentiles",
         AggregateFunction("quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]),
@@ -47,7 +48,7 @@ COL_SCHEMA_DISTRIBUTIONS_V3: Sequence[Column[Modifiers]] = [
 ]
 
 COL_SCHEMA_DISTRIBUTIONS_V4: Sequence[Column[Modifiers]] = [
-    *COL_SCHEMA_DISTRIBUTIONS_V3,
+    *COL_SCHEMA_DISTRIBUTIONS,
     Column("histogram", AggregateFunction("histogram(250)", [Float(64)])),
 ]
 
@@ -410,7 +411,7 @@ def get_migration_args_for_distributions(
         "source_table_name": "metrics_distributions_buckets_local",
         "table_name": "metrics_distributions_local",
         "mv_name": get_mv_name("distributions", granularity),
-        "aggregation_col_schema": COL_SCHEMA_DISTRIBUTIONS_V3,
+        "aggregation_col_schema": COL_SCHEMA_DISTRIBUTIONS,
         "aggregation_states": (
             "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99)((arrayJoin(values) AS values_rows)) as percentiles, "
             "minState(values_rows) as min, "
