@@ -46,7 +46,7 @@ from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
     get_dataset_name,
-    get_enabled_dataset_names,
+    get_online_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.exceptions import InvalidQueryException
@@ -114,7 +114,7 @@ def check_clickhouse() -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+        datasets = [get_dataset(name) for name in get_online_dataset_names()]
         entities = itertools.chain(
             *[dataset.get_all_entities() for dataset in datasets]
         )

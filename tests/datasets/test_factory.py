@@ -1,10 +1,12 @@
 import pytest
 
+from snuba import settings
 from snuba.clusters.cluster import get_cluster
 from snuba.datasets.factory import (
     get_dataset,
     get_dataset_name,
     get_enabled_dataset_names,
+    get_online_dataset_names,
 )
 
 
@@ -27,3 +29,12 @@ def test_dataset_load(dataset_name: str) -> None:
     for entity in dataset.get_all_entities():
         for storage in entity.get_all_storages():
             get_cluster(storage.get_storage_set_key())
+
+
+def test_skip_healthcheck() -> None:
+    prev_set = settings.SKIP_HEALTH_CHECK_DATASETS
+    settings.SKIP_HEALTH_CHECK_DATASETS = {"profiles"}
+    assert "profiles" in get_enabled_dataset_names()
+    assert "profiles" not in get_online_dataset_names()
+
+    settings.SKIP_HEALTH_CHECK_DATASETS = prev_set

@@ -82,3 +82,16 @@ def get_dataset_name(dataset: Dataset) -> str:
 
 def get_enabled_dataset_names() -> Sequence[str]:
     return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]
+
+
+def get_online_dataset_names() -> Sequence[str]:
+    """
+    Allows us to have datasets enabled on Snuba but excluded from the
+    heathcheck in case they are not ready for production or we are
+    performing maintenance on them.
+    """
+    return [
+        name
+        for name in get_enabled_dataset_names()
+        if name not in settings.SKIP_HEALTH_CHECK_DATASETS
+    ]
