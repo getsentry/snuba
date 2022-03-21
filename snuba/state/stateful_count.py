@@ -11,7 +11,7 @@ from arroyo.types import TPayload
 from snuba.redis import redis_client
 
 
-class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):  # type: ignore
+class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):
     """
     An extension of the CountInvalidMessagePolicy which is able to save and load
     the state of counted hits in Redis
