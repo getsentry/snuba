@@ -2,6 +2,7 @@ from typing import Optional
 
 import click
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -23,12 +24,19 @@ from snuba.environment import setup_logging, setup_sentry
     help="The storage to target",
     required=True,
 )
+@click.option(
+    "--ignore-cutoff",
+    help="Ignore the time cutoff that prevents this job to run over the instance of the following day.",
+    is_flag=True,
+    required=False,
+)
 @click.option("--log-level", help="Logging level to use.")
 def optimize(
     *,
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     storage_name: str,
+    ignore_cutoff: Optional[bool] = False,
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
@@ -71,5 +79,17 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    num_dropped = run_optimize(connection, storage, database, before=today)
+    if not ignore_cutoff:
+        last_midnight = datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        cutoff: Optional[datetime] = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        logger.info("Cutoff time: %s", str(cutoff))
+    else:
+        cutoff = None
+        logger.info("Ignoring cutoff time. This job has no timeout.")
+
+    num_dropped = run_optimize(
+        connection, storage, database, before=today, cutoff_time=cutoff
+    )
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

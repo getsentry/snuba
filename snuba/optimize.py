@@ -8,9 +8,18 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger("snuba.optimize")
 metrics = MetricsWrapper(environment.metrics, "optimize")
+
+
+class JobTimeoutException(SerializableException):
+    """
+    Signals that the job is past the cutoff time
+    """
+
+    pass
 
 
 def run_optimize(
@@ -18,6 +27,7 @@ def run_optimize(
     storage: ReadableTableStorage,
     database: str,
     before: Optional[datetime] = None,
+    cutoff_time: Optional[datetime] = None,
 ) -> int:
     start = time.time()
     schema = storage.get_schema()
@@ -26,7 +36,7 @@ def run_optimize(
     database = storage.get_cluster().get_database()
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    optimize_partitions(clickhouse, database, table, parts)
+    optimize_partitions(clickhouse, database, table, parts, cutoff_time)
     metrics.timing("optimized_all_parts", time.time() - start, tags={"table": table})
     return len(parts)
 
@@ -102,7 +112,11 @@ def get_partitions_to_optimize(
 
 
 def optimize_partitions(
-    clickhouse: ClickhousePool, database: str, table: str, parts: Sequence[util.Part],
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    parts: Sequence[util.Part],
+    cutoff_time: Optional[datetime] = None,
 ) -> None:
 
     query_template = """\
@@ -111,6 +125,11 @@ def optimize_partitions(
     """
 
     for part in parts:
+        if cutoff_time is not None and datetime.now() > cutoff_time:
+            raise JobTimeoutException(
+                "Optimize job is running past the cutoff time. Abandoning."
+            )
+
         args = {
             "database": database,
             "table": table,
