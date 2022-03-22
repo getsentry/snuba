@@ -4,8 +4,8 @@ from snuba.clickhouse.columns import AggregateFunction, Column, Float
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.snuba_migrations.metrics.templates import (
-    COL_SCHEMA_DISTRIBUTIONS_V4,
-    get_forward_view_migration_polymorphic_table,
+    COL_SCHEMA_DISTRIBUTIONS_V2,
+    get_forward_view_migration_polymorphic_table_v2,
     get_polymorphic_mv_v3_name,
 )
 
@@ -47,11 +47,11 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             *self.__forward_migrations("metrics_distributions_local"),
-            get_forward_view_migration_polymorphic_table(
+            get_forward_view_migration_polymorphic_table_v2(
                 source_table_name=self.raw_table_name,
                 table_name="metrics_distributions_local",
                 mv_name=get_polymorphic_mv_v3_name("distributions"),
-                aggregation_col_schema=COL_SCHEMA_DISTRIBUTIONS_V4,
+                aggregation_col_schema=COL_SCHEMA_DISTRIBUTIONS_V2,
                 aggregation_states=(
                     "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99)((arrayJoin(distribution_values) AS values_rows)) as percentiles, "
                     "minState(values_rows) as min, "
@@ -62,7 +62,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     "histogramState(250)(values_rows) as histogram_buckets"
                 ),
                 metric_type="distribution",
-                materialization_version=4,
             ),
         ]
 

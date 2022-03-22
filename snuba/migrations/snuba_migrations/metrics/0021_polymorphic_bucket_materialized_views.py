@@ -36,7 +36,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     "countState(values_rows) as count"
                 ),
                 metric_type="distribution",
-                materialization_version=3,
             ),
             get_forward_view_migration_polymorphic_table(
                 source_table_name=self.raw_table_name,
@@ -47,7 +46,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 ],
                 aggregation_states="uniqCombined64State(arrayJoin(set_values)) as value",
                 metric_type="set",
-                materialization_version=3,
             ),
             get_forward_view_migration_polymorphic_table(
                 source_table_name=self.raw_table_name,
@@ -58,7 +56,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 ],
                 aggregation_states="sumState(count_value) as value",
                 metric_type="counter",
-                materialization_version=3,
             ),
         ]
 
