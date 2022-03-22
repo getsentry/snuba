@@ -27,6 +27,7 @@ def run_optimize(
     storage: ReadableTableStorage,
     database: str,
     before: Optional[datetime] = None,
+    ignore_cutoff: bool = False,
 ) -> int:
     start = time.time()
     schema = storage.get_schema()
@@ -35,7 +36,7 @@ def run_optimize(
     database = storage.get_cluster().get_database()
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    optimize_partitions(clickhouse, database, table, parts)
+    optimize_partitions(clickhouse, database, table, parts, ignore_cutoff)
     metrics.timing("optimized_all_parts", time.time() - start, tags={"table": table})
     return len(parts)
 
@@ -111,7 +112,11 @@ def get_partitions_to_optimize(
 
 
 def optimize_partitions(
-    clickhouse: ClickhousePool, database: str, table: str, parts: Sequence[util.Part],
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    parts: Sequence[util.Part],
+    ignore_cutoff: bool,
 ) -> None:
 
     query_template = """\
@@ -126,11 +131,17 @@ def optimize_partitions(
     last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
-    cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
-    logger.info("Cutoff time: %s", str(cutoff_time))
+    if not ignore_cutoff:
+        cutoff_time: Optional[
+            datetime
+        ] = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        logger.info("Cutoff time: %s", str(cutoff_time))
+    else:
+        cutoff_time = None
+        logger.info("Ignoring cutoff time")
 
     for part in parts:
-        if datetime.now() > cutoff_time:
+        if cutoff_time is not None and datetime.now() > cutoff_time:
             raise JobTimeoutException(
                 "Optimize job is running past the cutoff time. Abandoning."
             )
