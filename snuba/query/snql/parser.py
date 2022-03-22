@@ -1289,7 +1289,9 @@ def _align_max_days_date_align(
     )
     to_date = to_date - timedelta(seconds=(to_date - to_date.min).seconds % date_align)
     if from_date > to_date:
-        raise ParsingException(f"invalid time conditions on entity {key.value}")
+        raise ParsingException(
+            f"invalid time conditions on entity {key.value}", should_report=False
+        )
 
     if max_days is not None and (to_date - from_date).days > max_days:
         from_date = to_date - timedelta(days=max_days)
