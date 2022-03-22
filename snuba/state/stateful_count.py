@@ -1,6 +1,5 @@
-from threading import Thread
 from time import time
-from typing import Any, Sequence, Tuple
+from typing import Sequence, Tuple
 
 from arroyo.processing.strategies.dead_letter_queue import CountInvalidMessagePolicy
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
@@ -27,7 +26,7 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):
         Asynchronously updates Redis hash with a new hit while
         the base Policy handles the invalid message
         """
-        Thread(target=self._add_to_redis).start()
+        self._add_to_redis()
         super().handle_invalid_message(e)
 
     def _add_to_redis(self) -> None:
@@ -40,12 +39,12 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):
         p.hkeys(self.__name)
         self._prune(now, p.execute()[1])
 
-    def _prune(self, now: int, timestamps: Sequence[Any]) -> None:
+    def _prune(self, now: int, timestamps: Sequence[bytes]) -> None:
         """
         Removes old timestamps from the Redis hash
         """
-        oldest_time = str(now - self.__seconds).encode("utf-8")
-        old_timestamps = [k for k in timestamps if k < oldest_time]
+        oldest_time = now - self.__seconds
+        old_timestamps = [k for k in timestamps if int(k) < oldest_time]
         if old_timestamps:
             redis_client.hdel(self.__name, *old_timestamps)
 
