@@ -361,6 +361,10 @@ def get_polymorphic_mv_name(metric_type: str) -> str:
     return f"metrics_{metric_type}_polymorphic_mv_local"
 
 
+def get_polymorphic_mv_v2_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_polymorphic_mv_v2_local"
+
+
 def get_versioned_polymorphic_mv_name(
     metric_type: str, materialization_version: int
 ) -> str:
