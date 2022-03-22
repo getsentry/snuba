@@ -410,3 +410,20 @@ class TestSDKSnQLApi(BaseApiTest):
         assert metric_calls[0].value > 0
         assert metric_calls[0].tags["team"] == "sns"
         assert metric_calls[0].tags["feature"] == "test"
+
+    def test_invalid_time_conditions(self) -> None:
+        query = (
+            Query("events", Entity("events"))
+            .set_select([Function("count", [], "count")])
+            .set_where(
+                [
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.next_time),
+                    Condition(Column("timestamp"), Op.LT, self.base_time),
+                ]
+            )
+        )
+
+        response = self.post("/events/snql", data=query.snuba())
+        resp = json.loads(response.data)
+        assert response.status_code == 400, resp
