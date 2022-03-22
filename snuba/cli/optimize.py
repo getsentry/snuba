@@ -29,7 +29,6 @@ def optimize(
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     storage_name: str,
-    ignore_cutoff: Optional[bool] = False,
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
