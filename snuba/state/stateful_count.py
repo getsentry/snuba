@@ -16,8 +16,8 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):
     the state of counted hits in Redis
     """
 
-    def __init__(self, redis_hash_name: str, limit: int, seconds: int = 60) -> None:
-        self.__name = redis_hash_name
+    def __init__(self, consumer_group_name: str, limit: int, seconds: int = 60) -> None:
+        self.__name = f"dlq:{consumer_group_name}"
         self.__seconds = seconds
         super().__init__(limit, seconds, self._load_state())
 
