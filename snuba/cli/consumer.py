@@ -75,7 +75,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option(
-    "--parallel-collect", is_flag=True, default=False,
+    "--parallel-collect", is_flag=True, default=True,
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
