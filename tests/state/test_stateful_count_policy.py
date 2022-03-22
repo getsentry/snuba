@@ -35,7 +35,7 @@ class TestStatefulCountPolicy:
         policy.handle_invalid_message(INVALID_MESSAGE_EXCEPTION)
         # waiting for thread
         time.sleep(0.1)
-        assert redis_client.hgetall(NAME) == {str(now).encode("UTF-8"): b"1"}
+        assert redis_client.hgetall(NAME) == {str(now).encode("utf-8"): b"1"}
 
     def test_past_limit(
         self, policy: StatefulCountInvalidMessagePolicy[KafkaPayload],

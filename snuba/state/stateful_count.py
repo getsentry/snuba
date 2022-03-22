@@ -44,7 +44,7 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):
         """
         Removes old timestamps from the Redis hash
         """
-        oldest_time = str(now - self.__seconds).encode("UTF-8")
+        oldest_time = str(now - self.__seconds).encode("utf-8")
         old_timestamps = [k for k in timestamps if k < oldest_time]
         if old_timestamps:
             redis_client.hdel(self.__name, *old_timestamps)
