@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
@@ -197,6 +197,8 @@ TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
 )
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
+
+OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
