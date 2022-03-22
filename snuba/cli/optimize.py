@@ -1,9 +1,7 @@
-from datetime import timedelta
 from typing import Optional
 
 import click
 
-from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -24,12 +22,6 @@ from snuba.environment import setup_logging, setup_sentry
     type=click.Choice(["errors", "errors_v2"]),
     help="The storage to target",
     required=True,
-)
-@click.option(
-    "--ignore-cutoff",
-    help="Ignore the time cutoff that prevents this job to run over the instance of the following day.",
-    is_flag=True,
-    required=False,
 )
 @click.option("--log-level", help="Logging level to use.")
 def optimize(
@@ -80,21 +72,5 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    if not ignore_cutoff:
-        # Adding 10 minutes to the current time before finding the midnight time
-        # to ensure this keeps working even if the system clock of the host that
-        # starts the pod is slightly ahead of the system clock of the host running
-        # the job. This prevents us from getting the wrong midnight.
-        last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        cutoff: Optional[datetime] = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
-        logger.info("Cutoff time: %s", str(cutoff))
-    else:
-        cutoff = None
-        logger.info("Ignoring cutoff time. This job has no timeout.")
-
-    num_dropped = run_optimize(
-        connection, storage, database, before=today, cutoff_time=cutoff
-    )
+    num_dropped = run_optimize(connection, storage, database, before=today)
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

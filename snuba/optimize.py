@@ -3,7 +3,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
 
-from snuba import environment, util
+from snuba import environment, settings, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
@@ -27,7 +27,6 @@ def run_optimize(
     storage: ReadableTableStorage,
     database: str,
     before: Optional[datetime] = None,
-    cutoff_time: Optional[datetime] = None,
 ) -> int:
     start = time.time()
     schema = storage.get_schema()
@@ -36,7 +35,7 @@ def run_optimize(
     database = storage.get_cluster().get_database()
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    optimize_partitions(clickhouse, database, table, parts, cutoff_time)
+    optimize_partitions(clickhouse, database, table, parts)
     metrics.timing("optimized_all_parts", time.time() - start, tags={"table": table})
     return len(parts)
 
@@ -112,11 +111,7 @@ def get_partitions_to_optimize(
 
 
 def optimize_partitions(
-    clickhouse: ClickhousePool,
-    database: str,
-    table: str,
-    parts: Sequence[util.Part],
-    cutoff_time: Optional[datetime] = None,
+    clickhouse: ClickhousePool, database: str, table: str, parts: Sequence[util.Part],
 ) -> None:
 
     query_template = """\
@@ -124,8 +119,18 @@ def optimize_partitions(
         PARTITION %(partition)s FINAL
     """
 
+    # Adding 10 minutes to the current time before finding the midnight time
+    # to ensure this keeps working even if the system clock of the host that
+    # starts the pod is slightly ahead of the system clock of the host running
+    # the job. This prevents us from getting the wrong midnight.
+    last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+    logger.info("Cutoff time: %s", str(cutoff_time))
+
     for part in parts:
-        if cutoff_time is not None and datetime.now() > cutoff_time:
+        if datetime.now() > cutoff_time:
             raise JobTimeoutException(
                 "Optimize job is running past the cutoff time. Abandoning."
             )
