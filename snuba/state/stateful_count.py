@@ -1,16 +1,16 @@
 from time import time
 from typing import Sequence, Tuple
 
+from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.dead_letter_queue import CountInvalidMessagePolicy
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     InvalidMessage,
 )
-from arroyo.types import TPayload
 
 from snuba.redis import redis_client
 
 
-class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):
+class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[KafkaPayload]):
     """
     An extension of the CountInvalidMessagePolicy which is able to save and load
     the state of counted hits in Redis
@@ -22,10 +22,6 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy[TPayload]):
         super().__init__(limit, seconds, self._load_state())
 
     def handle_invalid_message(self, e: InvalidMessage) -> None:
-        """
-        Asynchronously updates Redis hash with a new hit while
-        the base Policy handles the invalid message
-        """
         self._add_to_redis()
         super().handle_invalid_message(e)
 
