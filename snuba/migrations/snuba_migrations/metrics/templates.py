@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, TypedDict
+from typing import Sequence, TypedDict
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -395,7 +395,7 @@ def get_forward_view_migration_polymorphic_table_v3(
     aggregation_states: str,
     metric_type: str,
     target_mat_version: int,
-    appended_where_clause: Optional[str] = None,
+    appended_where_clause: str,
 ) -> operations.SqlOperation:
     aggregated_cols = [
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
