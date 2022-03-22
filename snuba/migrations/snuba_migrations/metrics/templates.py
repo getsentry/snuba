@@ -222,6 +222,7 @@ WHERE materialization_version = %(target_mat_version)d
   AND metric_type = '%(metric_type)s'
   %(appended_where_clause)s
 GROUP BY
+    use_case_id,
     org_id,
     project_id,
     metric_id,
