@@ -4,9 +4,7 @@ from time import time
 import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka.consumer import KafkaPayload
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
-    InvalidMessage,
-)
+from arroyo.processing.strategies.dead_letter_queue import InvalidMessage
 
 from snuba.redis import redis_client
 from snuba.state.stateful_count import StatefulCountInvalidMessagePolicy
