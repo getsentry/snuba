@@ -231,7 +231,7 @@ class ResultStore:
             elif next_new_ts is None:
                 next_ts = next_orig_ts
             else:
-                next_ts = min([next_orig_ts, next_orig_ts])
+                next_ts = min([next_orig_ts, next_new_ts])
 
             # Nothing else to remove
             if next_ts is None:
