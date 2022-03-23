@@ -30,7 +30,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=self.aggregated_cols,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=StorageSetKey.METRICS,
-                    order_by="(use_case_id, org_id, project_id, metric_id, granularity, timestamp, tags.key, tags.value)",
+                    order_by="(use_case_id, org_id, project_id, metric_id, granularity, timestamp, tags.key, tags.value, retention_days)",
                     primary_key="(use_case_id, org_id, project_id, metric_id, granularity, timestamp)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": self.granularity},
