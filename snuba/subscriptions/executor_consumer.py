@@ -5,7 +5,16 @@ import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import lru_cache
-from typing import Callable, Deque, Mapping, Optional, Sequence, Tuple, cast
+from typing import (
+    Callable,
+    Deque,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    cast,
+)
 from zlib import crc32
 
 from arroyo import Message, Partition, Topic
@@ -40,6 +49,8 @@ from snuba.utils.streams.configuration_builder import build_kafka_consumer_confi
 from snuba.web.query import parse_and_run_query
 
 logger = logging.getLogger(__name__)
+
+COMMIT_FREQUENCY_SEC = 1
 
 
 def build_executor_consumer(
@@ -363,6 +374,10 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
         self.__producer = producer
         self.__result_topic = Topic(result_topic)
         self.__commit = commit
+        self.__commit_data: MutableMapping[Partition, Position] = {}
+
+        # Time we last called commit
+        self.__last_committed: Optional[float] = None
 
         self.__encoder = SubscriptionTaskResultEncoder()
 
@@ -373,6 +388,22 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
         self.__max_buffer_size = 10000
         self.__closed = False
 
+    def __throttled_commit(self, force: bool = False) -> None:
+        # Commits all offsets and resets self.__commit_data at most
+        # every COMMIT_FREQUENCY_SEC. If force=True is passed, the
+        # commit frequency is ignored and we immediately commit.
+
+        now = time.time()
+
+        if (
+            self.__last_committed is None
+            or self.__last_committed + COMMIT_FREQUENCY_SEC < now
+            or force is True
+        ):
+            self.__commit(self.__commit_data)
+            self.__last_committed = now
+            self.__commit_data = {}
+
     def poll(self) -> None:
         while self.__queue:
             message, future = self.__queue[0]
@@ -381,9 +412,11 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
                 break
 
             self.__queue.popleft()
-            self.__commit(
-                {message.partition: Position(message.offset, message.timestamp)}
+
+            self.__commit_data[message.partition] = Position(
+                message.offset, message.timestamp
             )
+            self.__throttled_commit()
 
     def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         assert not self.__closed
@@ -404,6 +437,10 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
+
+        # Commit all pending offsets
+        self.__throttled_commit(force=True)
+
         while self.__queue:
             remaining = timeout - (time.time() - start) if timeout is not None else None
             if remaining is not None and remaining <= 0:
