@@ -416,7 +416,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__commit_data[message.partition] = Position(
                 message.offset, message.timestamp
             )
-            self.__throttled_commit()
+        self.__throttled_commit()
 
     def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         assert not self.__closed
