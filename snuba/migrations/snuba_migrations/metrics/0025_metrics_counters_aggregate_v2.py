@@ -13,7 +13,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     table_name = "metrics_counters_v2_local"
     dist_table_name = "metrics_counters_v2_dist"
-    granularity = "1024"
+    granularity = "2048"
     aggregated_cols: Sequence[Column[Modifiers]] = [
         # This is a common column for aggregate tables going forward
         # but doesn't exist in the old templates so we include it here
@@ -23,7 +23,6 @@ class Migration(migration.ClickhouseNodeMigration):
     ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.METRICS,
@@ -31,9 +30,11 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=self.aggregated_cols,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=StorageSetKey.METRICS,
-                    order_by="(org_id, project_id, metric_id, granularity, timestamp, tags.key, tags.value)",
+                    order_by="(org_id, project_id, metric_id, granularity, timestamp, use_case_id, tags.key, tags.value)",
+                    primary_key="(org_id, project_id, metric_id, granularity, timestamp)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": self.granularity},
+                    ttl="timestamp + toIntervalDay(retention_days)",
                 ),
             ),
             operations.AddColumn(
