@@ -22,7 +22,7 @@ from snuba.web import QueryResult
 
 def test() -> None:
     cv = threading.Condition()
-    query_result = QueryResult({}, {"stats": {}, "sql": ""})
+    query_result = QueryResult({}, {"stats": {}, "sql": "", "experiments": {}})
 
     def callback_func(
         primary: Optional[Tuple[str, QueryResult]], other: List[Tuple[str, QueryResult]]

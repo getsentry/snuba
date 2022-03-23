@@ -2,23 +2,29 @@ from typing import Set, Union
 
 import pytest
 
-from snuba.clickhouse.columns import UUID, ColumnSet, UInt
+from snuba.clickhouse.columns import UUID, UInt
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
+from snuba.utils.schemas import Column as EntityColumn
 from snuba.web.query import ProjectsFinder
 
-ERRORS_SCHEMA = ColumnSet(
-    [("event_id", UUID()), ("project_id", UInt(32)), ("group_id", UInt(32))]
+EVENTS_SCHEMA = EntityColumnSet(
+    [
+        EntityColumn("event_id", UUID()),
+        EntityColumn("project_id", UInt(32)),
+        EntityColumn("group_id", UInt(32)),
+    ]
 )
 
 
 SIMPLE_QUERY = Query(
-    Entity(EntityKey.EVENTS, ERRORS_SCHEMA),
+    Entity(EntityKey.EVENTS, EVENTS_SCHEMA),
     selected_columns=[
         SelectedExpression("alias", Column("_snuba_project", None, "project_id"),)
     ],

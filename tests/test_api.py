@@ -2233,13 +2233,16 @@ class TestCreateSubscriptionApi(BaseApiTest):
         partition = subscription_id.split("/", 1)[0]
         assert (
             len(
-                RedisSubscriptionDataStore(redis_client, entity_key, partition,).all()
-                # type: ignore
+                list(
+                    RedisSubscriptionDataStore(
+                        redis_client, entity_key, partition,
+                    ).all()
+                )
             )
             == 1
         )
 
-    def test_invalid_dataset_and_entity_combination(self):
+    def test_invalid_dataset_and_entity_combination(self) -> None:
         expected_uuid = uuid.uuid1()
         entity_key = EntityKey.METRICS_COUNTERS
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
@@ -2341,7 +2344,11 @@ class TestDeleteSubscriptionApi(BaseApiTest):
 
         assert (
             len(
-                RedisSubscriptionDataStore(redis_client, entity_key, partition,).all()  # type: ignore
+                list(
+                    RedisSubscriptionDataStore(
+                        redis_client, entity_key, partition,
+                    ).all()
+                )
             )
             == 1
         )

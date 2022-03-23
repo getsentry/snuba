@@ -1,7 +1,6 @@
 import importlib
 from datetime import datetime, timedelta
-from functools import partial
-from typing import MutableMapping
+from typing import Any, Mapping, MutableMapping, Sequence
 
 import pytz
 import simplejson as json
@@ -14,7 +13,7 @@ from snuba.datasets import errors_replacer
 from snuba.datasets.errors_replacer import ProjectsQueryFlags
 from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import ReplacerState
@@ -27,14 +26,13 @@ CONSUMER_GROUP = "consumer_group"
 
 
 class TestReplacer:
-    def setup_method(self):
+    def setup_method(self) -> None:
         from snuba.web.views import application
 
         assert application.testing is True
 
         self.app = application.test_client()
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
-        self.storage = get_storage(StorageKey.ERRORS)
+        self.storage = get_writable_storage(StorageKey.ERRORS)
 
         self.replacer = replacer.ReplacerWorker(
             self.storage, CONSUMER_GROUP, DummyMetricsBackend(strict=True),
@@ -43,7 +41,7 @@ class TestReplacer:
         self.project_id = 1
         self.event = get_raw_event()
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         importlib.reload(settings)
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
@@ -54,13 +52,13 @@ class TestReplacer:
             datetime.now(),
         )
 
-    def _clear_redis_and_force_merge(self):
+    def _clear_redis_and_force_merge(self) -> None:
         redis_client.flushdb()
         cluster = self.storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         run_optimize(clickhouse, self.storage, cluster.get_database())
 
-    def _issue_count(self, project_id: int):
+    def _issue_count(self, project_id: int) -> Sequence[Mapping[str, Any]]:
         clickhouse = self.storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.QUERY
         )
@@ -116,6 +114,7 @@ class TestReplacer:
         )
 
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
@@ -129,7 +128,7 @@ class TestReplacer:
 
         project_id = self.project_id
 
-        def _issue_count(total=False):
+        def _issue_count(total: bool = False) -> Sequence[Mapping[str, Any]]:
             clickhouse = self.storage.get_cluster().get_query_connection(
                 ClickhouseClientSettings.QUERY
             )
@@ -181,6 +180,7 @@ class TestReplacer:
         )
 
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         assert _issue_count() == []

@@ -28,6 +28,7 @@ def test_transform_column_names() -> None:
     (which are supposed to be internal).
     """
     events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+    assert events_storage is not None
 
     event_id = uuid.uuid4().hex
 
