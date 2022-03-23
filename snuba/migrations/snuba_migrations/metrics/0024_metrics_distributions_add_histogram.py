@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import AggregateFunction, Column, Float
+from snuba.clickhouse.columns import AggregateFunction, Column, Float, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.snuba_migrations.metrics.templates import (
@@ -64,15 +64,42 @@ class Migration(migration.ClickhouseNodeMigration):
                 metric_type="distribution",
                 materialization_version=4,
             ),
+            # No changes in those MV's schema. We just need to recreate the
+            # same exact MV as in 0023 for the new materialization_version
+            get_forward_view_migration_polymorphic_table_v2(
+                source_table_name=self.raw_table_name,
+                table_name="metrics_sets_local",
+                mv_name=get_polymorphic_mv_v3_name("sets"),
+                aggregation_col_schema=[
+                    Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+                ],
+                aggregation_states="uniqCombined64State(arrayJoin(set_values)) as value",
+                metric_type="set",
+                materialization_version=4,
+            ),
+            get_forward_view_migration_polymorphic_table_v2(
+                source_table_name=self.raw_table_name,
+                table_name="metrics_counters_local",
+                mv_name=get_polymorphic_mv_v3_name("counters"),
+                aggregation_col_schema=[
+                    Column("value", AggregateFunction("sum", [Float(64)])),
+                ],
+                aggregation_states="sumState(count_value) as value",
+                metric_type="counter",
+                materialization_version=4,
+            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             *self.__backward_migrations("metrics_distributions_local"),
-            operations.DropTable(
-                storage_set=StorageSetKey.METRICS,
-                table_name=get_polymorphic_mv_v3_name("distributions"),
-            ),
+            *[
+                operations.DropTable(
+                    storage_set=StorageSetKey.METRICS,
+                    table_name=get_polymorphic_mv_v3_name(mv_type),
+                )
+                for mv_type in ["sets", "counters", "distributions"]
+            ],
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
