@@ -22,9 +22,9 @@ from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.pipeline.concurrent_pipeline import IdenticalEntityPipelineBuilder
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
@@ -139,8 +139,11 @@ def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
     ):
         return ("errors_v1", [])
 
-    range = get_time_range(query, "timestamp")
-    if range[0] is None or range[0] < settings.ERRORS_UPGRADE_BEGINING_OF_TIME:
+    time_range = get_time_range(query, "timestamp")
+    if (
+        time_range[0] is None
+        or time_range[0] < settings.ERRORS_UPGRADE_BEGINING_OF_TIME
+    ):
         return ("errors_v1", [])
 
     mapping = {
@@ -161,7 +164,7 @@ class BaseEventsEntity(Entity, ABC):
     """
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        v1_pipeline_builder = SimplePipelineBuilder(
+        v1_pipeline_builder = IdenticalEntityPipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=ErrorsQueryStorageSelector(
                     mappers=errors_translators
@@ -170,7 +173,7 @@ class BaseEventsEntity(Entity, ABC):
                 )
             )
         )
-        v2_pipeline_builder = SimplePipelineBuilder(
+        v2_pipeline_builder = IdenticalEntityPipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=ErrorsV2QueryStorageSelector(
                     mappers=errors_translators

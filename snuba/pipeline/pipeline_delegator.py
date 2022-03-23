@@ -2,6 +2,7 @@ from functools import partial
 from typing import Callable, List, Mapping, Optional, Tuple
 
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, QueryRunner
+from snuba.pipeline.processors import execute_entity_processors
 from snuba.pipeline.query_pipeline import (
     QueryExecutionPipeline,
     QueryPipelineBuilder,
@@ -111,6 +112,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             callback_func=self.__callback_func,
         )
         assert isinstance(self.__request.query, LogicalQuery)
+        execute_entity_processors(self.__request.query, self.__request.settings)
         return executor.execute(self.__request.query)
 
 

@@ -26,9 +26,9 @@ from snuba.datasets.plans.single_storage import (
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.pipeline.concurrent_pipeline import IdenticalEntityPipelineBuilder
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -130,8 +130,11 @@ def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
     ):
         return ("transactions_v1", [])
 
-    range = get_time_range(query, "timestamp")
-    if range[0] is None or range[0] < settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME:
+    time_range = get_time_range(query, "timestamp")
+    if (
+        time_range[0] is None
+        or time_range[0] < settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME
+    ):
         return ("transactions_v1", [])
 
     mapping = {
@@ -157,13 +160,13 @@ class BaseTransactionsEntity(Entity, ABC):
             else transaction_translator.concat(custom_mappers)
         )
 
-        v1_pipeline_builder = SimplePipelineBuilder(
+        v1_pipeline_builder = IdenticalEntityPipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=TransactionsQueryStorageSelector(mappers=mappers)
             ),
         )
 
-        v2_pipeline_builder = SimplePipelineBuilder(
+        v2_pipeline_builder = IdenticalEntityPipelineBuilder(
             query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=get_storage(StorageKey.TRANSACTIONS_V2), mappers=mappers,
             )
