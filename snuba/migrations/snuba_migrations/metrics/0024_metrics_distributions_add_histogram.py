@@ -16,7 +16,7 @@ class Migration(migration.ClickhouseNodeMigration):
     """
 
     blocking = False
-    raw_table_name = "metrics_raw_local"
+    raw_table_name = "metrics_raw_v2_local"
 
     def __forward_migrations(
         self, table_name: str
@@ -62,6 +62,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     "histogramState(250)(values_rows) as histogram_buckets"
                 ),
                 metric_type="distribution",
+                materialization_version=4,
             ),
         ]
 

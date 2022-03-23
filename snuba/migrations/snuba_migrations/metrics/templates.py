@@ -191,7 +191,7 @@ SELECT
     retention_days,
     %(aggregation_states)s
 FROM %(raw_table_name)s
-WHERE materialization_version = 4
+WHERE materialization_version = %(materialization_version)s
   AND metric_type = '%(metric_type)s'
 GROUP BY
     org_id,
@@ -341,6 +341,7 @@ def get_forward_view_migration_polymorphic_table_v2(
     aggregation_col_schema: Sequence[Column[Modifiers]],
     aggregation_states: str,
     metric_type: str,
+    materialization_version: int,
 ) -> operations.SqlOperation:
     aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
 
@@ -354,6 +355,7 @@ def get_forward_view_migration_polymorphic_table_v2(
             "metric_type": metric_type,
             "raw_table_name": source_table_name,
             "aggregation_states": aggregation_states,
+            "materialization_version": materialization_version,
         },
     )
 
