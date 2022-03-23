@@ -187,6 +187,7 @@ class MetricsLoader(DirectoryLoader):
             "0021_polymorphic_bucket_materialized_views",
             "0022_repartition_polymorphic_table",
             "0023_polymorphic_repartitioned_bucket_matview",
+            "0024_metrics_distributions_add_histogram",
         ]
 
 
