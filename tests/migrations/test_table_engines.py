@@ -60,6 +60,20 @@ merge_test_cases = [
         id="Replicated merge tree with partition, sample, ttl clauses",
     ),
     pytest.param(
+        table_engines.ReplacingMergeTree(
+            storage_set=StorageSetKey.EVENTS,
+            version_column="timestamp",
+            primary_key="timestamp",
+            order_by="timestamp",
+            partition_by="(toMonday(timestamp))",
+            sample_by="id",
+            ttl="timestamp + INTERVAL 1 MONTH",
+        ),
+        "ReplacingMergeTree(timestamp) PRIMARY KEY timestamp ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+        "ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/default/test_table', '{replica}', timestamp) PRIMARY KEY timestamp ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+        id="Replicated merge tree with primary key, partition, sample, ttl clauses",
+    ),
+    pytest.param(
         table_engines.MergeTree(
             storage_set=StorageSetKey.EVENTS, order_by="timestamp", unsharded=True
         ),

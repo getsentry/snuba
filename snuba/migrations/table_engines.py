@@ -58,7 +58,7 @@ class MergeTree(TableEngine):
         if self.__primary_key:
             primary_key_sql = f" PRIMARY KEY {self.__primary_key}"
 
-        sql = f"{self._get_engine_type(cluster, table_name)} {primary_key_sql} ORDER BY {self.__order_by}"
+        sql = f"{self._get_engine_type(cluster, table_name)}{primary_key_sql} ORDER BY {self.__order_by}"
 
         if self.__partition_by:
             sql += f" PARTITION BY {self.__partition_by}"
