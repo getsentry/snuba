@@ -122,7 +122,7 @@ class TestOptimize:
             )
         ] == [(a_month_earlier_monday, 90)]
 
-        optimize.optimize_partitions(clickhouse, database, table, parts)
+        optimize.optimize_partitions(clickhouse, database, table, parts, True)
 
         # all parts should be optimized
         parts = optimize.get_partitions_to_optimize(
