@@ -397,7 +397,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
         if (
             self.__last_committed is None
-            or self.__last_committed + COMMIT_FREQUENCY_SEC < now
+            or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
             or force is True
         ):
             self.__commit(self.__commit_data)

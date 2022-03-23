@@ -361,6 +361,10 @@ def test_produce_result() -> None:
     strategy.poll()
     assert commit.call_count == 1
 
+    # Commit count immediately increases once we call join()
+    strategy.join()
+    assert commit.call_count == 2
+
 
 def test_execute_and_produce_result() -> None:
     state.set_config("executor_sample_rate_events", 1.0)
