@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union, cast
 
 import pytest
 import pytz
@@ -16,6 +16,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     METRICS_SET_TYPE,
     timestamp_to_bucket,
 )
+from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
@@ -75,7 +76,10 @@ class TestMetricsApiCounters(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         )
-        self.storage = get_entity(EntityKey.METRICS_SETS).get_writable_storage()
+        self.storage = cast(
+            WritableTableStorage,
+            get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
+        )
         self.generate_counters()
 
     def teardown_method(self, test_method: Any) -> None:
@@ -221,7 +225,10 @@ class TestMetricsApiSets(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.seconds)
-        self.storage = get_entity(EntityKey.METRICS_SETS).get_writable_storage()
+        self.storage = cast(
+            WritableTableStorage,
+            get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
+        )
         self.unique_set_values = 100
         self.generate_sets()
 
@@ -316,9 +323,10 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.seconds)
-        self.storage = get_entity(
-            EntityKey.METRICS_DISTRIBUTIONS
-        ).get_writable_storage()
+        self.storage = cast(
+            WritableTableStorage,
+            get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
+        )
         self.generate_uniform_distributions()
 
     def teardown_method(self, test_method: Any) -> None:

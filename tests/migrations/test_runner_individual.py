@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional, Sequence
+from __future__ import annotations
+
+from typing import Any, Dict, Optional, Sequence, cast
 
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool
@@ -10,6 +12,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.processor import InsertBatch
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper
 from tests.fixtures import get_raw_transaction
@@ -55,8 +58,7 @@ def test_transactions_compatibility() -> None:
             None,
             connection,
         )
-
-        return sampling_key
+        return cast(str, sampling_key)
 
     # Create old style table without sampling expression and insert data
     connection.execute(
@@ -114,7 +116,7 @@ def generate_transactions() -> None:
 
     table_writer = get_writable_storage(StorageKey.TRANSACTIONS).get_table_writer()
 
-    rows = []
+    rows: list[Any] = []
 
     for i in range(5):
         raw_transaction = get_raw_transaction(f"{i}" * 16)
@@ -130,6 +132,7 @@ def generate_transactions() -> None:
                 KafkaMessageMetadata(0, 0, datetime.utcnow()),
             )
         )
+        assert isinstance(processed, InsertBatch)
         rows.extend(processed.rows)
 
     BatchWriterEncoderWrapper(

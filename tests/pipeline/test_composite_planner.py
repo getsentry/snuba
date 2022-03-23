@@ -12,6 +12,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.composite import (
@@ -66,14 +67,15 @@ groups_ent = Entity(
     EntityKey.GROUPEDMESSAGES, get_entity(EntityKey.GROUPEDMESSAGES).get_data_model()
 )
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
+groups_schema = groups_storage.get_schema()
+assert isinstance(groups_schema, TableSchema)
+
 groups_table = Table(
-    groups_storage.get_schema().get_table_name(),
-    groups_storage.get_schema().get_columns(),
+    groups_schema.get_table_name(),
+    groups_schema.get_columns(),
     final=False,
     sampling_rate=None,
-    mandatory_conditions=groups_storage.get_schema()
-    .get_data_source()
-    .get_mandatory_conditions(),
+    mandatory_conditions=groups_schema.get_data_source().get_mandatory_conditions(),
 )
 
 TEST_CASES = [
@@ -524,6 +526,6 @@ def test_composite_planner(
     ) -> QueryResult:
         report = query.equals(processed_query)
         assert report[0], f"Mismatch: {report[1]}"
-        return QueryResult({"data": []}, {},)
+        return QueryResult({"data": []}, {"stats": {}, "sql": "", "experiments": {}},)
 
     CompositeExecutionPipeline(logical_query, HTTPRequestSettings(), runner).execute()

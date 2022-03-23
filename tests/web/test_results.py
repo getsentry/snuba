@@ -29,7 +29,7 @@ TEST_CASES = [
                     },
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         QueryResult(
             result=Result(
@@ -43,7 +43,7 @@ TEST_CASES = [
                     {"event_id": "sdf", "duration": 321, "message": "msg2"},
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         {
             "_snuba_event_id": ["event_id"],
@@ -78,7 +78,7 @@ TEST_CASES = [
                     "_snuba_message": "",
                 },
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         QueryResult(
             result=Result(
@@ -93,7 +93,7 @@ TEST_CASES = [
                 ],
                 totals={"event_id": "", "duration": 223, "message": ""},
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         {
             "_snuba_event_id": ["event_id"],
@@ -123,7 +123,7 @@ TEST_CASES = [
                     },
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         QueryResult(
             result=Result(
@@ -145,7 +145,7 @@ TEST_CASES = [
                     },
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         {"_snuba_event_id": ["event_id"]},
         id="Incomplete mapping",
