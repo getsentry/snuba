@@ -37,6 +37,7 @@ class MergeTree(TableEngine):
         self,
         storage_set: StorageSetKey,
         order_by: str,
+        primary_key: Optional[str] = None,
         partition_by: Optional[str] = None,
         sample_by: Optional[str] = None,
         ttl: Optional[str] = None,
@@ -45,6 +46,7 @@ class MergeTree(TableEngine):
     ) -> None:
         self._storage_set_value = storage_set.value
         self.__order_by = order_by
+        self.__primary_key = primary_key
         self.__partition_by = partition_by
         self.__sample_by = sample_by
         self.__ttl = ttl
@@ -52,7 +54,11 @@ class MergeTree(TableEngine):
         self._unsharded = unsharded
 
     def get_sql(self, cluster: ClickhouseCluster, table_name: str) -> str:
-        sql = f"{self._get_engine_type(cluster, table_name)} ORDER BY {self.__order_by}"
+        primary_key_sql = ""
+        if self.__primary_key:
+            primary_key_sql = f" PRIMARY KEY {self.__primary_key}"
+
+        sql = f"{self._get_engine_type(cluster, table_name)}{primary_key_sql} ORDER BY {self.__order_by}"
 
         if self.__partition_by:
             sql += f" PARTITION BY {self.__partition_by}"
@@ -94,6 +100,7 @@ class ReplacingMergeTree(MergeTree):
         self,
         storage_set: StorageSetKey,
         order_by: str,
+        primary_key: Optional[str] = None,
         version_column: Optional[str] = None,
         partition_by: Optional[str] = None,
         sample_by: Optional[str] = None,
@@ -102,7 +109,14 @@ class ReplacingMergeTree(MergeTree):
         unsharded: bool = False,
     ) -> None:
         super().__init__(
-            storage_set, order_by, partition_by, sample_by, ttl, settings, unsharded
+            storage_set=storage_set,
+            order_by=order_by,
+            primary_key=primary_key,
+            partition_by=partition_by,
+            sample_by=sample_by,
+            ttl=ttl,
+            settings=settings,
+            unsharded=unsharded,
         )
         self.__version_column = version_column
 
