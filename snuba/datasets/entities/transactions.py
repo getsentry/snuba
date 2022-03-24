@@ -28,7 +28,10 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
-from snuba.pipeline.simple_pipeline import SkippedLogicalEntityProcessorPipelineBuilder
+from snuba.pipeline.simple_pipeline import (
+    SimplePipelineBuilder,
+    SkippedLogicalEntityProcessorPipelineBuilder,
+)
 from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -172,11 +175,18 @@ class BaseTransactionsEntity(Entity, ABC):
             )
         )
 
+        composite_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=TransactionsQueryStorageSelector(mappers=mappers)
+            ),
+        )
+
         pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan] = PipelineDelegator(
             query_pipeline_builders={
                 "transactions_v1": v1_pipeline_builder,
                 "transactions_v2": v2_pipeline_builder,
             },
+            composite_pipeline_builder=composite_pipeline_builder,
             selector_func=v2_selector_function,
             split_rate_limiter=True,
             callback_func=comparison_callback,

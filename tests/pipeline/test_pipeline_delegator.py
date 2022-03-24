@@ -58,11 +58,18 @@ def test() -> None:
         ),
     )
 
+    composite_pipeline_builder = SimplePipelineBuilder(
+        query_plan_builder=SingleStorageQueryPlanBuilder(
+            storage=get_storage(StorageKey.ERRORS)
+        ),
+    )
+
     delegator = PipelineDelegator(
         query_pipeline_builders={
             "errors": errors_pipeline,
             "errors_ro": errors_ro_pipeline,
         },
+        composite_pipeline_builder=composite_pipeline_builder,
         selector_func=lambda query, referrer: ("errors", ["errors_ro"]),
         split_rate_limiter=True,
         callback_func=mock_callback,

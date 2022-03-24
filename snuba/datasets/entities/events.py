@@ -24,7 +24,10 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
-from snuba.pipeline.simple_pipeline import SkippedLogicalEntityProcessorPipelineBuilder
+from snuba.pipeline.simple_pipeline import (
+    SimplePipelineBuilder,
+    SkippedLogicalEntityProcessorPipelineBuilder,
+)
 from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
@@ -182,6 +185,15 @@ class BaseEventsEntity(Entity, ABC):
                 )
             )
         )
+        composite_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=ErrorsQueryStorageSelector(
+                    mappers=errors_translators
+                    if custom_mappers is None
+                    else errors_translators.concat(custom_mappers)
+                )
+            )
+        )
 
         events_storage = get_writable_storage(StorageKey.ERRORS)
         pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan] = PipelineDelegator(
@@ -189,6 +201,7 @@ class BaseEventsEntity(Entity, ABC):
                 "errors_v1": v1_pipeline_builder,
                 "errors_v2": v2_pipeline_builder,
             },
+            composite_pipeline_builder=composite_pipeline_builder,
             selector_func=v2_selector_function,
             split_rate_limiter=True,
             callback_func=comparison_callback,

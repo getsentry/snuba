@@ -121,11 +121,13 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def __init__(
         self,
         query_pipeline_builders: QueryPipelineBuilders,
+        composite_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         selector_func: SelectorFunc,
         split_rate_limiter: bool,
         callback_func: Optional[CallbackFunc] = None,
     ) -> None:
         self.__query_pipeline_builders = query_pipeline_builders
+        self.__composite_pipeline_builder = composite_pipeline_builder
         self.__selector_func = selector_func
         self.__callback_func = callback_func
         self.__split_rate_limiter = split_rate_limiter
@@ -145,8 +147,4 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def build_planner(
         self, query: LogicalQuery, settings: RequestSettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
-        # For composite queries, we just build the primary pipeline / query plan;
-        # running multiple concurrent composite queries is not currently supported.
-        primary_builder_id, _others = self.__selector_func(query, "")
-        query_pipeline_builder = self.__query_pipeline_builders[primary_builder_id]
-        return query_pipeline_builder.build_planner(query, settings)
+        return self.__composite_pipeline_builder.build_planner(query, settings)
