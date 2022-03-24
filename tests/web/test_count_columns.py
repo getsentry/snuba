@@ -1,8 +1,10 @@
 from typing import Optional, Set, Union
 
 import pytest
+
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -16,7 +18,6 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.web.db_query import ReferencedColumnsCounter
-from snuba.web.query import TablesCollector
 
 ERRORS_SCHEMA = ColumnSet(
     [

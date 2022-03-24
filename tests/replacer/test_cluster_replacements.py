@@ -1,6 +1,15 @@
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Callable, Generator, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    List,
+    Mapping,
+    MutableMapping,
+    Sequence,
+    Tuple,
+)
 
 import pytest
 
@@ -152,7 +161,7 @@ def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_projects: str,
     expected_queries: Mapping[str, Sequence[str]],
-    request,
+    request: Any,
 ) -> None:
     """
     Test the execution of replacement queries on both storage nodes and
