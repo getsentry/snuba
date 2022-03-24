@@ -24,7 +24,7 @@ from snuba.datasets.metrics_bucket_processor import (
 )
 from snuba.processor import AggregateInsertBatch, InsertBatch
 
-MATERIALIZATION_VERSION = 3
+MATERIALIZATION_VERSION = 4
 
 SET_MESSAGE_SHARED = {
     "org_id": 1,
