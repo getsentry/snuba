@@ -4,7 +4,7 @@ import calendar
 import uuid
 from datetime import datetime, timedelta, timezone
 from hashlib import md5
-from typing import Tuple
+from typing import Any, Mapping, Tuple
 
 from snuba import settings
 from snuba.datasets.events_processor_base import InsertEvent
@@ -176,7 +176,7 @@ def get_raw_event() -> InsertEvent:
     }
 
 
-def get_raw_transaction(span_id: str | None = None) -> InsertEvent:
+def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
     now = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0, tzinfo=timezone.utc
     )
@@ -283,7 +283,7 @@ def get_raw_error_message() -> Tuple[int, str, InsertEvent]:
     )
 
 
-def get_raw_transaction_message() -> Tuple[int, str, InsertEvent]:
+def get_raw_transaction_message() -> Tuple[int, str, Mapping[str, Any]]:
     """
     Get a transaction message which can be passed to the processors.
     """
