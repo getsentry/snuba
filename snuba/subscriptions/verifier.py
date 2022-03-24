@@ -1,5 +1,6 @@
 import json
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -160,8 +161,8 @@ class ResultStore:
     def __init__(self, threshold_sec: int, metrics: MetricsBackend) -> None:
         # Maps timestamp to the count of messages received within each second
         self.__stores: Mapping[ResultTopic, MutableMapping[int, int]] = {
-            ResultTopic.ORIGINAL: {},
-            ResultTopic.NEW: {},
+            ResultTopic.ORIGINAL: defaultdict(int),
+            ResultTopic.NEW: defaultdict(int),
         }
 
         # The last timestamp we recorded metrics for
@@ -198,9 +199,6 @@ class ResultStore:
 
         # Increment counters
         store = self.__stores[topic]
-
-        if item.timestamp not in store:
-            store[item.timestamp] = 0
         store[item.timestamp] += 1
 
         # Record metrics and advance the low watermark
