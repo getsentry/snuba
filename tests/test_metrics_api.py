@@ -78,7 +78,7 @@ class TestMetricsApiCounters(BaseApiTest):
         )
         self.storage = cast(
             WritableTableStorage,
-            get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
+            get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
         )
         self.generate_counters()
 
