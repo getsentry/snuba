@@ -190,6 +190,7 @@ class MetricsLoader(DirectoryLoader):
             "0024_metrics_distributions_add_histogram",
             "0025_metrics_counters_aggregate_v2",
             "0026_metrics_counters_v2_writing_matview",
+            "0027_fix_migration_0026",
         ]
 
 
