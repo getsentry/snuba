@@ -11,8 +11,8 @@ from snuba.utils.schemas import AggregateFunction, Column, Float
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Creates materialized view for all metrics types which writes to 10s, 1m, 1h, 1d granularities
-    The backward migration does *not* delete any data from the destination tables.
+    Migration 0026 reused a materialized view name and then failed silently because
+    of a CREATE ... IF NOT EXISTS clause
     """
 
     blocking = False
