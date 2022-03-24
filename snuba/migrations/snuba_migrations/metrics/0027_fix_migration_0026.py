@@ -32,7 +32,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 aggregation_states="sumState(count_value) as value",
                 metric_type="counter",
                 target_mat_version=4,
-                appended_where_clause="AND timestamp > toDateTime('2022-03-24 16:00:00')",
+                appended_where_clause="AND 1=1",
             )
         ]
 
