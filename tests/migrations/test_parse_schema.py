@@ -1,8 +1,12 @@
+from typing import Tuple
+
 import pytest
+
 from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
     Array,
+    ColumnType,
     Date,
     DateTime,
     Enum,
@@ -91,7 +95,10 @@ test_data = [
 
 
 @pytest.mark.parametrize("input, expected_output", test_data)
-def test_parse_column(input, expected_output):
+def test_parse_column(
+    input: Tuple[str, str, str, str],
+    expected_output: Tuple[Tuple[str, str, str, str, str], ColumnType[Modifiers]],
+) -> None:
     (input_name, input_type, default_expr, codec_expr) = input
     assert (
         _get_column(input_name, input_type, default_expr, codec_expr) == expected_output
