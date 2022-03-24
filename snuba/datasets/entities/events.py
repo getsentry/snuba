@@ -22,9 +22,9 @@ from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.pipeline.concurrent_pipeline import IdenticalEntityPipelineBuilder
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
+from snuba.pipeline.simple_pipeline import SkippedLogicalEntityProcessorPipelineBuilder
 from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
@@ -164,7 +164,7 @@ class BaseEventsEntity(Entity, ABC):
     """
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        v1_pipeline_builder = IdenticalEntityPipelineBuilder(
+        v1_pipeline_builder = SkippedLogicalEntityProcessorPipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=ErrorsQueryStorageSelector(
                     mappers=errors_translators
@@ -173,7 +173,7 @@ class BaseEventsEntity(Entity, ABC):
                 )
             )
         )
-        v2_pipeline_builder = IdenticalEntityPipelineBuilder(
+        v2_pipeline_builder = SkippedLogicalEntityProcessorPipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=ErrorsV2QueryStorageSelector(
                     mappers=errors_translators

@@ -26,9 +26,9 @@ from snuba.datasets.plans.single_storage import (
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.pipeline.concurrent_pipeline import IdenticalEntityPipelineBuilder
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
+from snuba.pipeline.simple_pipeline import SkippedLogicalEntityProcessorPipelineBuilder
 from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -160,13 +160,13 @@ class BaseTransactionsEntity(Entity, ABC):
             else transaction_translator.concat(custom_mappers)
         )
 
-        v1_pipeline_builder = IdenticalEntityPipelineBuilder(
+        v1_pipeline_builder = SkippedLogicalEntityProcessorPipelineBuilder(
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=TransactionsQueryStorageSelector(mappers=mappers)
             ),
         )
 
-        v2_pipeline_builder = IdenticalEntityPipelineBuilder(
+        v2_pipeline_builder = SkippedLogicalEntityProcessorPipelineBuilder(
             query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=get_storage(StorageKey.TRANSACTIONS_V2), mappers=mappers,
             )

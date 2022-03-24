@@ -5,14 +5,11 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
     QueryRunner,
 )
-from snuba.pipeline.processors import (
-    execute_entity_processors,
-    execute_plan_processors,
-)
+from snuba.pipeline.processors import execute_entity_processors, execute_plan_processors
 from snuba.pipeline.query_pipeline import (
-    QueryPlanner,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
+    QueryPlanner,
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
@@ -54,13 +51,59 @@ class EntityQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
         )
 
 
+class ClickhouseEntityQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
+    """
+    This query planner is similar to the EntityQueryPlanner class above.
+    Except that it does not run the entity processors on the logical query.
+
+    You may ask why do we need to have this. The reason is to avoid race conditions.
+
+    When can race conditions happen?
+    Good question. Race condition can happen when 2 threads modify the same object
+    and the object is not protected by a lock.
+
+    When can race conditions happen during query execution?
+    During pipeline delegation. Pipeline delegator delegates execution of a query to
+    a threadpool and the thread which is delegating also runs the query.
+    So what's the problem with that? The problem is that both threads get the
+    same logical query object. The workaround is to run the entity processors on the
+    logical query only on one of the threads. This class does not run the logical
+    entity processors to avoid race condition.
+
+    Why don't we just pass a copy of the query object to pipeline delegator?
+    To avoid impact on performance of query execution time. Deep copying large query
+    objects would be expensive.
+    """
+
+    def __init__(
+        self,
+        query: LogicalQuery,
+        settings: RequestSettings,
+        query_plan_builder: ClickhouseQueryPlanBuilder,
+    ) -> None:
+        self.__query = query
+        self.__settings = settings
+        self.__query_plan_builder = query_plan_builder
+
+    def build_best_plan(self) -> ClickhouseQueryPlan:
+        return self.__query_plan_builder.build_best_plan(self.__query, self.__settings)
+
+    def build_and_rank_plans(self) -> Sequence[ClickhouseQueryPlan]:
+        return self.__query_plan_builder.build_and_rank_plans(
+            self.__query, self.__settings
+        )
+
+
 class SimpleExecutionPipeline(QueryExecutionPipeline):
     """
     Executes a simple (single entity) query.
     """
 
     def __init__(
-        self, request: Request, runner: QueryRunner, query_planner: EntityQueryPlanner,
+        self,
+        request: Request,
+        runner: QueryRunner,
+        query_planner: QueryPlanner[ClickhouseQueryPlan],
     ):
         self.__request = request
         self.__runner = runner
@@ -78,7 +121,7 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
 
 class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
-        self.__query_plan_builder = query_plan_builder
+        self._query_plan_builder = query_plan_builder
 
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
@@ -90,5 +133,18 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
 
     def build_planner(
         self, query: LogicalQuery, settings: RequestSettings,
-    ) -> EntityQueryPlanner:
-        return EntityQueryPlanner(query, settings, self.__query_plan_builder)
+    ) -> QueryPlanner[ClickhouseQueryPlan]:
+        return EntityQueryPlanner(query, settings, self._query_plan_builder)
+
+
+class SkippedLogicalEntityProcessorPipelineBuilder(SimplePipelineBuilder):
+    """
+    This Pipeline builder is similar to SimplePipelineBuilder except that it returns
+    the ClickhouseEntityQueryPlanner in build_planner which skips running the logical
+    query entity processors.
+    """
+
+    def build_planner(
+        self, query: LogicalQuery, settings: RequestSettings,
+    ) -> ClickhouseEntityQueryPlanner:
+        return ClickhouseEntityQueryPlanner(query, settings, self._query_plan_builder)
