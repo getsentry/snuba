@@ -1,3 +1,4 @@
+from dataclasses import replace
 from functools import partial
 from typing import Callable, List, Mapping, Optional, Tuple
 
@@ -90,12 +91,8 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             if not get_config("pipeline_split_rate_limiter", 0):
                 return request
 
-            return Request(
-                id=request.id,
-                body=request.body,
-                query=request.query,
-                snql_anonymized=request.snql_anonymized,
-                settings=RateLimiterDelegate(builder_id, request.settings),
+            return replace(
+                request, settings=RateLimiterDelegate(builder_id, request.settings)
             )
 
         executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](
