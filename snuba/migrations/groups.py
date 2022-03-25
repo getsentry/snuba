@@ -191,6 +191,8 @@ class MetricsLoader(DirectoryLoader):
             "0025_metrics_counters_aggregate_v2",
             "0026_metrics_counters_v2_writing_matview",
             "0027_fix_migration_0026",
+            "0028_metrics_sets_aggregate_v2",
+            "0029_metrics_distributions_aggregate_v2",
         ]
 
 
