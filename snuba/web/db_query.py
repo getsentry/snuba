@@ -408,10 +408,10 @@ def execute_query_with_caching(
     )
 
     with sentry_sdk.start_span(description="execute", op="db") as span:
+        key = get_query_cache_key(formatted_query)
+        query_settings["query_id"] = key
         if use_cache:
-            key = get_query_cache_key(formatted_query)
             cache_partition = _get_cache_partition(reader)
-
             result = cache_partition.get(key)
             timer.mark("cache_get")
             stats["cache_hit"] = result is not None
