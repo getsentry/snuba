@@ -10,7 +10,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         name: Checkout master for diffing
-        ref: master
+        with:
+          ref: master
       - uses: actions/checkout@v3
         name: Checkout HEAD of code that may have migration changes
       - uses: actions/setup-python@v3
