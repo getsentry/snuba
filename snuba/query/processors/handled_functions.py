@@ -27,7 +27,7 @@ class HandledFunctionsProcessor(QueryProcessor):
     The implementation of these functions is too complex for clients to provide so
     these wrappers are required.
 
-    - The `isHandled` function searches an array field for null or 1.
+    - The `isHandled` function checks the entire array field is null or 1.
     - The `notHandled` function searches an array field for 0, null
       values will be excluded from the result.
 
@@ -55,7 +55,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                     self.validate_parameters(exp, query.get_from_clause())
                     return FunctionCall(
                         exp.alias,
-                        "arrayExists",
+                        "arrayAll",
                         (
                             Lambda(
                                 None,
@@ -66,13 +66,13 @@ class HandledFunctionsProcessor(QueryProcessor):
                                         None, "isNull", (Argument(None, "x"),)
                                     ),
                                     binary_condition(
-                                        ConditionFunctions.EQ,
+                                        ConditionFunctions.NEQ,
                                         FunctionCall(
                                             None,
                                             "assumeNotNull",
                                             (Argument(None, "x"),),
                                         ),
-                                        Literal(None, 1),
+                                        Literal(None, 0),
                                     ),
                                 ),
                             ),
