@@ -170,7 +170,7 @@ def test_result_store() -> None:
     # Now we can record the now + 3 metrics
     store.increment(ResultTopic.ORIGINAL, get_result_data(now + 5))
     assert len(metrics.calls) == 1
-    assert Increment("result_count_diff", -1, None) in metrics.calls
+    assert Increment("result_count_diff", 1, None) in metrics.calls
     metrics.calls = []
 
     # We get a message in the new topic
