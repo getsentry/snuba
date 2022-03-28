@@ -1,0 +1,37 @@
+from typing import Sequence
+
+# from snuba.clickhouse.columns import Column, Float
+from snuba.migrations import migration, operations
+
+class Migration(migration.ClickhouseNodeMigration):
+    """
+    {{description}}
+    """
+    blocking = False
+
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
+        return [
+            # operations.CreateTable()
+            # operations.AddColumn()
+        ]
+
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
+        return [
+            # operations.DropTable()
+            # operations.RemoveColumn()
+        ]
+
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
+        return [
+            #operations.CreateTable(
+            #   ...,
+            #   engine=table_engines.Distributed(
+            #        local_table_name=local_table_name, sharding_key=None,
+            #    ),
+            #),
+        ]
+
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+        return [
+            #operations.DropTable(),
+        ]

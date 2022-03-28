@@ -8,6 +8,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.errors import MigrationError
+from snuba.migrations.generation import generate
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
@@ -18,6 +19,21 @@ LOG_LEVELS = ["critical", "error", "warning", "info", "debug", "notset"]
 @click.group()
 def migrations() -> None:
     pass
+
+
+@migrations.command()
+@click.option("--group", required=True, help="Migration group")
+@click.option("--description", required=True, help="Description for the filename")
+def create(group: str, description: str) -> None:
+    """
+    Create a new migration
+    """
+    migration_group = MigrationGroup(group)
+    generate_result = generate(migration_group, description)
+    print(f"generated migration {generate_result.filename}")
+    print(
+        f"add {generate_result.groups_entry} to snuba/migrations/groups.py when ready"
+    )
 
 
 @migrations.command()
