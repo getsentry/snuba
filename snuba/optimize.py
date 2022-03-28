@@ -1,13 +1,25 @@
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
 
-from snuba import util
+from snuba import environment, settings, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger("snuba.optimize")
+metrics = MetricsWrapper(environment.metrics, "optimize")
+
+
+class JobTimeoutException(SerializableException):
+    """
+    Signals that the job is past the cutoff time
+    """
+
+    pass
 
 
 def run_optimize(
@@ -15,14 +27,17 @@ def run_optimize(
     storage: ReadableTableStorage,
     database: str,
     before: Optional[datetime] = None,
+    ignore_cutoff: bool = False,
 ) -> int:
+    start = time.time()
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    optimize_partitions(clickhouse, database, table, parts)
+    optimize_partitions(clickhouse, database, table, parts, ignore_cutoff)
+    metrics.timing("optimized_all_parts", time.time() - start, tags={"table": table})
     return len(parts)
 
 
@@ -84,7 +99,9 @@ def get_partitions_to_optimize(
     part_format = schema.get_part_format()
     assert part_format is not None
 
-    parts = [util.decode_part_str(part, part_format) for part, count in active_parts.results]
+    parts = [
+        util.decode_part_str(part, part_format) for part, count in active_parts.results
+    ]
 
     if before:
         parts = [
@@ -95,7 +112,11 @@ def get_partitions_to_optimize(
 
 
 def optimize_partitions(
-    clickhouse: ClickhousePool, database: str, table: str, parts: Sequence[util.Part],
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    parts: Sequence[util.Part],
+    ignore_cutoff: bool,
 ) -> None:
 
     query_template = """\
@@ -103,7 +124,28 @@ def optimize_partitions(
         PARTITION %(partition)s FINAL
     """
 
+    # Adding 10 minutes to the current time before finding the midnight time
+    # to ensure this keeps working even if the system clock of the host that
+    # starts the pod is slightly ahead of the system clock of the host running
+    # the job. This prevents us from getting the wrong midnight.
+    last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    if not ignore_cutoff:
+        cutoff_time: Optional[
+            datetime
+        ] = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        logger.info("Cutoff time: %s", str(cutoff_time))
+    else:
+        cutoff_time = None
+        logger.info("Ignoring cutoff time")
+
     for part in parts:
+        if cutoff_time is not None and datetime.now() > cutoff_time:
+            raise JobTimeoutException(
+                "Optimize job is running past the cutoff time. Abandoning."
+            )
+
         args = {
             "database": database,
             "table": table,
@@ -112,4 +154,6 @@ def optimize_partitions(
 
         query = (query_template % args).strip()
         logger.info(f"Optimizing partition: {part.name}")
+        start = time.time()
         clickhouse.execute(query)
+        metrics.timing("optimized_part", time.time() - start, tags={"table": table})

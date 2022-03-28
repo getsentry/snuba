@@ -3,6 +3,8 @@ import {
   ConfigKey,
   ConfigValue,
   ConfigChange,
+  ConfigDescription,
+  ConfigDescriptions,
 } from "./runtime_config/types";
 
 import {
@@ -14,9 +16,18 @@ import { TracingRequest, TracingResult } from "./tracing/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
-  createNewConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
-  deleteConfig: (key: ConfigKey) => Promise<void>;
-  editConfig: (key: ConfigKey, value: ConfigValue) => Promise<Config>;
+  createNewConfig: (
+    key: ConfigKey,
+    value: ConfigValue,
+    description: ConfigDescription
+  ) => Promise<Config>;
+  deleteConfig: (key: ConfigKey, keepDescription: boolean) => Promise<void>;
+  editConfig: (
+    key: ConfigKey,
+    value: ConfigValue,
+    description: ConfigDescription
+  ) => Promise<Config>;
+  getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
@@ -31,9 +42,13 @@ function Client() {
       const url = baseUrl + "configs";
       return fetch(url).then((resp) => resp.json());
     },
-    createNewConfig: (key: ConfigKey, value: ConfigValue) => {
+    createNewConfig: (
+      key: ConfigKey,
+      value: ConfigValue,
+      description: ConfigDescription
+    ) => {
       const url = baseUrl + "configs";
-      const params = { key, value };
+      const params = { key, value, description };
 
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
@@ -50,8 +65,12 @@ function Client() {
         }
       });
     },
-    deleteConfig: (key: ConfigKey) => {
-      const url = baseUrl + "configs/" + encodeURIComponent(key);
+    deleteConfig: (key: ConfigKey, keepDescription: boolean) => {
+      const url =
+        baseUrl +
+        "configs/" +
+        encodeURIComponent(key) +
+        (keepDescription ? "?keepDescription=true" : "");
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
@@ -63,12 +82,16 @@ function Client() {
         }
       });
     },
-    editConfig: (key: ConfigKey, value: ConfigValue) => {
+    editConfig: (
+      key: ConfigKey,
+      value: ConfigValue,
+      description: ConfigDescription
+    ) => {
       const url = baseUrl + "configs/" + encodeURIComponent(key);
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "PUT",
-        body: JSON.stringify({ value }),
+        body: JSON.stringify({ value, description }),
       }).then((res) => {
         if (res.ok) {
           return Promise.resolve(res.json());
@@ -77,7 +100,10 @@ function Client() {
         }
       });
     },
-
+    getDescriptions: () => {
+      const url = baseUrl + "all_config_descriptions";
+      return fetch(url).then((resp) => resp.json());
+    },
     getAuditlog: () => {
       const url = baseUrl + "config_auditlog";
       return fetch(url).then((resp) => resp.json());

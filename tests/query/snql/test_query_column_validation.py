@@ -116,7 +116,9 @@ time_validation_tests = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                    FunctionCall(
+                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                    ),
                 ),
                 SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
             ],

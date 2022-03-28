@@ -21,7 +21,6 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
     topic_names = {
         "events",
         "event-replacements",
-        "event-replacements-legacy",
         "snuba-commit-log",
         "snuba-sessions-commit-log",
         "snuba-metrics-commit-log",
@@ -38,6 +37,8 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "transactions-subscription-results",
         "sessions-subscription-results",
         "metrics-subscription-results",
+        "snuba-dead-letter-inserts",
+        "processed-profiles",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():

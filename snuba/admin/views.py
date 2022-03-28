@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, cast
+from typing import Any, List, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 from flask import Flask, Response, g, jsonify, make_response, request
@@ -158,7 +158,7 @@ def configs() -> Response:
     if request.method == "POST":
         data = json.loads(request.data)
         try:
-            key, value = data["key"], data["value"]
+            key, value, desc = data["key"], data["value"], data["description"]
 
             assert isinstance(key, str), "Invalid key"
             assert isinstance(value, str), "Invalid value"
@@ -181,15 +181,19 @@ def configs() -> Response:
 
         user = request.headers.get(USER_HEADER_KEY)
 
-        state.set_config(
-            key, value, user=user,
-        )
+        state.set_config(key, value, user=user)
+        state.set_config_description(key, desc, user=user)
 
         evaluated_value = state.get_uncached_config(key)
         assert evaluated_value is not None
         evaluated_type = get_config_type_from_value(evaluated_value)
 
-        config = {"key": key, "value": str(evaluated_value), "type": evaluated_type}
+        config = {
+            "key": key,
+            "value": str(evaluated_value),
+            "description": state.get_config_description(key),
+            "type": evaluated_type,
+        }
 
         notification_client.notify(
             RuntimeConfigAction.ADDED,
@@ -200,19 +204,34 @@ def configs() -> Response:
         return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
     else:
+        descriptions = state.get_all_config_descriptions()
+
+        raw_configs: Sequence[Tuple[str, Any]] = state.get_raw_configs().items()
+
+        sorted_configs = sorted(raw_configs, key=lambda c: c[0])
 
         config_data = [
             {
                 "key": k,
                 "value": str(v) if v is not None else None,
+                "description": str(descriptions.get(k)) if k in descriptions else None,
                 "type": get_config_type_from_value(v),
             }
-            for (k, v) in state.get_raw_configs().items()
+            for (k, v) in sorted_configs
         ]
 
         return Response(
             json.dumps(config_data), 200, {"Content-Type": "application/json"},
         )
+
+
+@application.route("/all_config_descriptions", methods=["GET"])
+def all_config_descriptions() -> Response:
+    return Response(
+        json.dumps(state.get_all_config_descriptions()),
+        200,
+        {"Content-Type": "application/json"},
+    )
 
 
 @application.route("/configs/<config_key>", methods=["PUT", "DELETE"])
@@ -224,6 +243,9 @@ def config(config_key: str) -> Response:
         old = state.get_uncached_config(config_key)
 
         state.delete_config(config_key, user=user)
+
+        if request.args.get("keepDescription") is None:
+            state.delete_config_description(config_key, user=user)
 
         notification_client.notify(
             RuntimeConfigAction.REMOVED,
@@ -246,6 +268,7 @@ def config(config_key: str) -> Response:
 
         try:
             new_value = data["value"]
+            new_desc = data["description"]
 
             assert isinstance(config_key, str), "Invalid key"
             assert isinstance(new_value, str), "Invalid value"
@@ -254,6 +277,7 @@ def config(config_key: str) -> Response:
             state.set_config(
                 config_key, new_value, user=user,
             )
+            state.set_config_description(config_key, new_desc, user=user)
 
         except (KeyError, AssertionError) as exc:
             return Response(
@@ -283,6 +307,7 @@ def config(config_key: str) -> Response:
         config = {
             "key": config_key,
             "value": str(evaluated_value),
+            "description": state.get_config_description(config_key),
             "type": evaluated_type,
         }
 

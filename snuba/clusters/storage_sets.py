@@ -29,17 +29,21 @@ class StorageSetKey(Enum):
     TRANSACTIONS_RO = "transactions_ro"
     TRANSACTIONS_V2 = "transactions_v2"
     ERRORS_V2 = "errors_v2"
+    ERRORS_V2_RO = "errors_v2_ro"
     PROFILES = "profiles"
 
 
 # Storage sets enabled only when development features are enabled.
-DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset({})
+DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 
 # Storage sets in a group share the same query and distributed nodes but
 # do not have the same local node cluster configuration.
 # Joins can be performed across storage sets in the same group.
 JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
-    {frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC})}
+    {
+        frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC}),
+        frozenset({StorageSetKey.ERRORS_V2, StorageSetKey.ERRORS_V2_RO}),
+    }
 )
 
 

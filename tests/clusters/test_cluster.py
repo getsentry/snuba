@@ -74,6 +74,7 @@ FULL_CONFIG = [
         "single_node": False,
         "cluster_name": "clickhouse_hosts",
         "distributed_cluster_name": "dist_hosts",
+        "cache_partition_id": "host_2_cache",
     },
 ]
 
@@ -87,14 +88,25 @@ def teardown_function() -> None:
 def test_clusters() -> None:
     importlib.reload(cluster)
     assert (
-        get_storage(StorageKey("events")).get_cluster()
-        == get_storage(StorageKey("errors")).get_cluster()
+        get_storage(StorageKey("errors")).get_cluster()
+        == get_storage(StorageKey("errors_ro")).get_cluster()
     )
 
     assert (
-        get_storage(StorageKey("events")).get_cluster()
+        get_storage(StorageKey("errors")).get_cluster()
         != get_storage(StorageKey("transactions")).get_cluster()
     )
+
+
+@patch("snuba.settings.CLUSTERS", FULL_CONFIG)
+def test_cache_partition() -> None:
+    get_storage(
+        StorageKey("transactions")
+    ).get_cluster().get_reader().cache_partition_id == "host_2_cache"
+
+    get_storage(
+        StorageKey("errors")
+    ).get_cluster().get_reader().cache_partition_id is None
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
@@ -110,10 +122,11 @@ def test_clusters() -> None:
 def test_disabled_cluster() -> None:
     importlib.reload(cluster)
 
-    with pytest.raises(AssertionError):
-        cluster.get_cluster(StorageSetKey.OUTCOMES)
-    with patch("snuba.settings.ENABLE_DEV_FEATURES", True):
-        cluster.get_cluster(StorageSetKey.OUTCOMES)
+    cluster.get_cluster(StorageSetKey.OUTCOMES)
+
+    with patch("snuba.settings.ENABLE_DEV_FEATURES", False):
+        with pytest.raises(AssertionError):
+            cluster.get_cluster(StorageSetKey.OUTCOMES)
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
@@ -124,7 +137,7 @@ def test_get_local_nodes() -> None:
             [("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)]
         )
 
-        local_cluster = get_storage(StorageKey("events")).get_cluster()
+        local_cluster = get_storage(StorageKey("errors")).get_cluster()
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
         assert local_cluster.get_local_nodes()[0].port == 9000

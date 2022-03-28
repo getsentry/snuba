@@ -62,7 +62,6 @@ class TestReplacer:
 
         self.project_id = 1
         self.event = get_raw_event()
-        settings.ERRORS_ROLLOUT_ALL = True
 
     def teardown_method(self) -> None:
         importlib.reload(settings)
@@ -79,7 +78,9 @@ class TestReplacer:
         redis_client.flushdb()
         cluster = self.storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
-        run_optimize(clickhouse, self.storage, cluster.get_database())
+        run_optimize(
+            clickhouse, self.storage, cluster.get_database(), ignore_cutoff=True
+        )
 
     def _issue_count(self, project_id: int, group_id: Optional[int] = None) -> Any:
         args = {

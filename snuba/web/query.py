@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import replace
 from functools import partial
@@ -37,6 +39,7 @@ from snuba.web import (
     QueryException,
     QueryExtraData,
     QueryResult,
+    QueryTooLongException,
     transform_column_names,
 )
 from snuba.web.db_query import raw_query
@@ -249,7 +252,7 @@ def _run_and_apply_column_names(
         concurrent_queries_gauge,
     )
 
-    alias_name_mapping: MutableMapping[str, str] = {}
+    alias_name_mapping: MutableMapping[str, list[str]] = {}
     for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias
         name = select_col.name
@@ -262,21 +265,12 @@ def _run_and_apply_column_names(
                 },
                 exc_info=True,
             )
-        elif alias in alias_name_mapping and alias_name_mapping[alias] != name:
-            logger.warning(
-                "Duplicated alias definition in select clause",
-                extra={
-                    "alias": alias,
-                    "column_name": name,
-                    "existing_name": alias_name_mapping[alias],
-                },
-                exc_info=True,
-            )
+        elif alias in alias_name_mapping and name not in alias_name_mapping[alias]:
+            alias_name_mapping[alias].append(name)
         else:
-            alias_name_mapping[alias] = name
+            alias_name_mapping[alias] = [name]
 
     transform_column_names(result, alias_name_mapping)
-
     return result
 
 
@@ -301,13 +295,10 @@ def _format_storage_query_and_run(
         _apply_turbo_sampling_if_needed(clickhouse_query, request_settings)
 
         formatted_query = format_query(clickhouse_query)
+        query_size_bytes = len(formatted_query.get_sql().encode("utf-8"))
         span.set_data("query", formatted_query.structured())
-        span.set_data(
-            "query_size_bytes", _string_size_in_bytes(formatted_query.get_sql())
-        )
-        sentry_sdk.set_tag(
-            "query_size_group", get_query_size_group(formatted_query.get_sql())
-        )
+        span.set_data("query_size_bytes", query_size_bytes)
+        sentry_sdk.set_tag("query_size_group", get_query_size_group(query_size_bytes))
         metrics.increment("execute")
 
     timer.mark("prepare_query")
@@ -318,6 +309,19 @@ def _format_storage_query_and_run(
         "referrer": referrer,
         "sample": visitor.get_sample_rate(),
     }
+
+    if query_size_bytes > MAX_QUERY_SIZE_BYTES:
+        raise QueryException(
+            extra=QueryExtraData(
+                stats=stats,
+                sql=formatted_query.get_sql(),
+                experiments=clickhouse_query.get_experiments(),
+            )
+        ) from QueryTooLongException(
+            f"After processing, query is {query_size_bytes} bytes, "
+            "which is too long for ClickHouse to process. "
+            f"Max size is {MAX_QUERY_SIZE_BYTES} bytes."
+        )
 
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
         span.set_tag("table", table_names)
@@ -342,29 +346,23 @@ def _format_storage_query_and_run(
             return execute()
 
 
-def get_query_size_group(formatted_query: str) -> str:
+def get_query_size_group(query_size_bytes: int) -> str:
     """
-    Given a formatted query string (or any string technically),
-    returns a string representing the size of the query in 10%
-    grouped increments of the Maximum Query Size as defined in Snuba settings.
+    Given the size of a query string in bytes, returns a string
+    representing the size of the query in 10% grouped increments
+    of the Maximum Query Size as defined in Snuba settings.
 
     Eg. If the query size is 40-49% of the max query size, this function
     returns ">=40%".
 
-    All sizes are computed in Bytes.
+    Eg. If the query size is equal to the max query size, this function
+    returns "100%".
     """
-    query_size_in_bytes = _string_size_in_bytes(formatted_query)
-    if query_size_in_bytes >= MAX_QUERY_SIZE_BYTES:
-        query_size_group = 100
+    if query_size_bytes == MAX_QUERY_SIZE_BYTES:
+        return "100%"
     else:
-        query_size_group = (
-            int(floor(query_size_in_bytes / MAX_QUERY_SIZE_BYTES * 10)) * 10
-        )
-    return f">={query_size_group}%"
-
-
-def _string_size_in_bytes(s: str) -> int:
-    return len(s.encode("utf-8"))
+        query_size_group = int(floor(query_size_bytes / MAX_QUERY_SIZE_BYTES * 10)) * 10
+        return f">={query_size_group}%"
 
 
 def _apply_turbo_sampling_if_needed(

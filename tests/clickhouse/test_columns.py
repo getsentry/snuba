@@ -1,10 +1,13 @@
 from copy import deepcopy
+from typing import cast
 
 import pytest
+
 from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
     Array,
+    Column,
     ColumnType,
     Date,
     DateTime,
@@ -78,14 +81,23 @@ TEST_CASES = [
             Modifier(nullable=True),
         ),
         Nested([("key", String()), ("val", String())]),
-        Nested([("key", String()), ("val", String())], Modifier(nullable=True)),
+        cast(
+            Column[Modifier],
+            Nested([("key", String()), ("val", String())], Modifier(nullable=True)),
+        ),
         "Nullable(Nested(key String, val Nullable(String)))",
         id="nested",
     ),
     pytest.param(
-        AggregateFunction("uniqIf", [UInt(8), UInt(32)], Modifier(nullable=True)),
+        cast(
+            Column[Modifier],
+            AggregateFunction("uniqIf", [UInt(8), UInt(32)], Modifier(nullable=True)),
+        ),
         AggregateFunction("uniqIf", [UInt(8), UInt(32)]),
-        AggregateFunction("uniqIf", [UInt(8)], Modifier(nullable=True)),
+        cast(
+            Column[Modifier],
+            AggregateFunction("uniqIf", [UInt(8)], Modifier(nullable=True)),
+        ),
         "Nullable(AggregateFunction(uniqIf, UInt8, UInt32))",
         id="aggregated",
     ),
@@ -101,9 +113,9 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("col_type, raw_type, different_type, for_schema", TEST_CASES)
 def test_methods(
-    col_type: ColumnType,
-    raw_type: ColumnType,
-    different_type: ColumnType,
+    col_type: ColumnType[Modifier],
+    raw_type: ColumnType[Modifier],
+    different_type: ColumnType[Modifier],
     for_schema: str,
 ) -> None:
     assert col_type == deepcopy(col_type)

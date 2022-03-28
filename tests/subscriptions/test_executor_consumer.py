@@ -56,7 +56,7 @@ def test_executor_consumer() -> None:
     End to end integration test
     """
 
-    state.set_config("executor_sample_rate", 1.0)
+    state.set_config("executor_sample_rate_events", 1.0)
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS])
@@ -125,8 +125,8 @@ def test_executor_consumer() -> None:
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count()",
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=EventsSubscription(data_dict={}),
     )
 
@@ -200,8 +200,8 @@ def generate_message(
                         subscription_identifier,
                         SubscriptionData(
                             project_id=1,
-                            time_window=timedelta(minutes=1),
-                            resolution=timedelta(minutes=1),
+                            time_window_sec=60,
+                            resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
                             entity_subscription=entity_subscription,
                         ),
@@ -216,7 +216,7 @@ def generate_message(
 
 
 def test_execute_query_strategy() -> None:
-    state.set_config("executor_sample_rate", 1.0)
+    state.set_config("executor_sample_rate_events", 1.0)
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
@@ -250,7 +250,7 @@ def test_execute_query_strategy() -> None:
 
 
 def test_too_many_concurrent_queries() -> None:
-    state.set_config("executor_sample_rate", 1.0)
+    state.set_config("executor_sample_rate_events", 1.0)
     state.set_config("executor_queue_size_factor", 1)
     dataset = get_dataset("events")
     entity_names = ["events"]
@@ -274,7 +274,7 @@ def test_too_many_concurrent_queries() -> None:
 
 def test_skip_execution_for_entity() -> None:
     # Skips execution if the entity name is not on the list
-    state.set_config("executor_sample_rate", 1.0)
+    state.set_config("executor_sample_rate_metrics", 1.0)
     dataset = get_dataset("metrics")
     entity_names = ["metrics_sets"]
     executor = ThreadPoolExecutor()
@@ -316,8 +316,8 @@ def test_produce_result() -> None:
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=EventsSubscription(data_dict={}),
     )
 
@@ -356,9 +356,18 @@ def test_produce_result() -> None:
     strategy.poll()
     assert commit.call_count == 1
 
+    # Commit is throttled so if we immediately submit another message, the commit count will not change
+    strategy.submit(message)
+    strategy.poll()
+    assert commit.call_count == 1
+
+    # Commit count immediately increases once we call join()
+    strategy.join()
+    assert commit.call_count == 2
+
 
 def test_execute_and_produce_result() -> None:
-    state.set_config("executor_sample_rate", 1.0)
+    state.set_config("executor_sample_rate_events", 1.0)
     dataset = get_dataset("events")
     entity_names = ["events"]
     executor = ThreadPoolExecutor()

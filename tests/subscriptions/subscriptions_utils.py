@@ -27,8 +27,8 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
         SubscriptionIdentifier(PartitionId(1), UUIDS[sequence]),
         SubscriptionData(
             project_id=1,
-            time_window=timedelta(minutes=5),
-            resolution=resolution,
+            time_window_sec=int(timedelta(minutes=5).total_seconds()),
+            resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
             entity_subscription=entity_subscription,
         ),

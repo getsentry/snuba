@@ -27,7 +27,9 @@ TEST_CASES = [
         "uniq(value)",
         EntityKey.METRICS_SETS,
         FunctionCall(
-            None, "uniqCombined64Merge", (Column("_snuba_value", None, "value"),),
+            "_snuba_uniq(value)",
+            "uniqCombined64Merge",
+            (Column("_snuba_value", None, "value"),),
         ),
         id="Test sets entity",
     ),
@@ -35,7 +37,9 @@ TEST_CASES = [
         "metrics_counters",
         "sum(value)",
         EntityKey.METRICS_COUNTERS,
-        FunctionCall(None, "sumMerge", (Column("_snuba_value", None, "value"),),),
+        FunctionCall(
+            "_snuba_sum(value)", "sumMerge", (Column("_snuba_value", None, "value"),),
+        ),
         id="Test counters entity",
     ),
     pytest.param(
@@ -43,7 +47,7 @@ TEST_CASES = [
         "sumIf(value, cond())",
         EntityKey.METRICS_COUNTERS,
         FunctionCall(
-            None,
+            "_snuba_sumIf(value, cond())",
             "sumMergeIf",
             (
                 Column("_snuba_value", None, "value"),
@@ -56,7 +60,7 @@ TEST_CASES = [
         "metrics_distributions",
         "max(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
-        FunctionCall(None, "maxMerge", (Column(None, None, "max"),),),
+        FunctionCall("_snuba_max(value)", "maxMerge", (Column(None, None, "max"),),),
         id="Test distribution max",
     ),
     pytest.param(
@@ -64,7 +68,7 @@ TEST_CASES = [
         "maxIf(value, cond())",
         EntityKey.METRICS_DISTRIBUTIONS,
         FunctionCall(
-            None,
+            "_snuba_maxIf(value, cond())",
             "maxMergeIf",
             (Column(None, None, "max"), FunctionCall(None, "cond", tuple()),),
         ),
@@ -74,7 +78,7 @@ TEST_CASES = [
         "metrics_distributions",
         "min(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
-        FunctionCall(None, "minMerge", (Column(None, None, "min"),),),
+        FunctionCall("_snuba_min(value)", "minMerge", (Column(None, None, "min"),),),
         id="Test distribution min",
     ),
     pytest.param(
@@ -82,7 +86,7 @@ TEST_CASES = [
         "minIf(value, cond())",
         EntityKey.METRICS_DISTRIBUTIONS,
         FunctionCall(
-            None,
+            "_snuba_minIf(value, cond())",
             "minMergeIf",
             (Column(None, None, "min"), FunctionCall(None, "cond", tuple()),),
         ),
@@ -92,7 +96,7 @@ TEST_CASES = [
         "metrics_distributions",
         "avg(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
-        FunctionCall(None, "avgMerge", (Column(None, None, "avg"),),),
+        FunctionCall("_snuba_avg(value)", "avgMerge", (Column(None, None, "avg"),),),
         id="Test distribution avg",
     ),
     pytest.param(
@@ -100,7 +104,7 @@ TEST_CASES = [
         "avgIf(value, cond())",
         EntityKey.METRICS_DISTRIBUTIONS,
         FunctionCall(
-            None,
+            "_snuba_avgIf(value, cond())",
             "avgMergeIf",
             (Column(None, None, "avg"), FunctionCall(None, "cond", tuple()),),
         ),
@@ -110,7 +114,9 @@ TEST_CASES = [
         "metrics_distributions",
         "count(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
-        FunctionCall(None, "countMerge", (Column(None, None, "count"),),),
+        FunctionCall(
+            "_snuba_count(value)", "countMerge", (Column(None, None, "count"),),
+        ),
         id="Test distribution count",
     ),
     pytest.param(
@@ -118,7 +124,7 @@ TEST_CASES = [
         "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
         CurriedFunctionCall(
-            None,
+            "_snuba_quantiles(0.5, 0.75, 0.9, 0.95, 0.99)(value)",
             FunctionCall(
                 None,
                 "quantilesMerge",
@@ -133,7 +139,7 @@ TEST_CASES = [
         "quantilesIf(0.5, 0.75, 0.9, 0.95, 0.99)(value, cond())",
         EntityKey.METRICS_DISTRIBUTIONS,
         CurriedFunctionCall(
-            None,
+            "_snuba_quantilesIf(0.5, 0.75, 0.9, 0.95, 0.99)(value, cond())",
             FunctionCall(
                 None,
                 "quantilesMergeIf",
@@ -148,9 +154,36 @@ TEST_CASES = [
         "avg(something_else)",
         EntityKey.METRICS_DISTRIBUTIONS,
         FunctionCall(
-            None, "avg", (Column("_snuba_something_else", None, "something_else"),),
+            "_snuba_avg(something_else)",
+            "avg",
+            (Column("_snuba_something_else", None, "something_else"),),
         ),
         id="Test that a column other than value is not transformed",
+    ),
+    pytest.param(
+        "metrics_distributions",
+        "histogram(250)(value)",
+        EntityKey.METRICS_DISTRIBUTIONS,
+        CurriedFunctionCall(
+            "_snuba_histogram(250)(value)",
+            FunctionCall(None, "histogramMerge", (Literal(None, 250),)),
+            (Column(None, None, "histogram_buckets"),),
+        ),
+        id="Test distribution histogram",
+    ),
+    pytest.param(
+        "metrics_distributions",
+        "histogramIf(250)(value, cond())",
+        EntityKey.METRICS_DISTRIBUTIONS,
+        CurriedFunctionCall(
+            "_snuba_histogramIf(250)(value, cond())",
+            FunctionCall(None, "histogramMergeIf", (Literal(None, 250),)),
+            (
+                Column(None, None, "histogram_buckets"),
+                FunctionCall(None, "cond", tuple()),
+            ),
+        ),
+        id="Test distribution histogram",
     ),
 ]
 

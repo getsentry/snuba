@@ -7,7 +7,6 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 
 
 class ReplacerState(Enum):
-    EVENTS = "events"
     ERRORS = "errors"
     ERRORS_V2 = "errors_v2"
 
@@ -19,6 +18,7 @@ class ReplacementMessageMetadata(NamedTuple):
 
     partition_index: int
     offset: int
+    consumer_group: str
 
 
 class ReplacementMessage(NamedTuple):

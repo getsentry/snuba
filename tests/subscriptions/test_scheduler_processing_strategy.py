@@ -2,7 +2,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime, timedelta
-from typing import Sequence
+from typing import Optional, Sequence
 from unittest import mock
 
 import pytest
@@ -32,19 +32,15 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
-from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.backends.metrics import TestingMetricsBackend
 
 
 def test_tick_buffer_immediate() -> None:
     epoch = datetime(1970, 1, 1)
 
-    metrics_backend = TestingMetricsBackend()
-
     next_step = mock.Mock()
 
-    strategy = TickBuffer(
-        SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics_backend
-    )
+    strategy = TickBuffer(SchedulingWatermarkMode.PARTITION, 2, None, next_step)
 
     topic = Topic("messages")
     partition = Partition(topic, 0)
@@ -65,21 +61,16 @@ def test_tick_buffer_immediate() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args == mock.call(message)
-    assert metrics_backend.calls == []
 
 
 def test_tick_buffer_wait_slowest() -> None:
     epoch = datetime(1970, 1, 1)
     now = datetime.now()
 
-    metrics_backend = TestingMetricsBackend()
-
     next_step = mock.Mock()
 
     # Create strategy with 2 partitions
-    strategy = TickBuffer(
-        SchedulingWatermarkMode.GLOBAL, 2, 10, next_step, metrics_backend,
-    )
+    strategy = TickBuffer(SchedulingWatermarkMode.GLOBAL, 2, 10, next_step,)
 
     topic = Topic("messages")
     commit_log_partition = Partition(topic, 0)
@@ -99,7 +90,6 @@ def test_tick_buffer_wait_slowest() -> None:
     strategy.submit(message_0_0)
 
     assert next_step.submit.call_count == 0
-    assert metrics_backend.calls == []
 
     # Another message in partition 0, do not submit to next step
     message_0_1 = Message(
@@ -118,7 +108,6 @@ def test_tick_buffer_wait_slowest() -> None:
     strategy.submit(message_0_1)
 
     assert next_step.submit.call_count == 0
-    assert metrics_backend.calls == []
 
     # Message in partition 1 has the lowest timestamp so we submit to the next step
     message_1_0 = Message(
@@ -136,10 +125,8 @@ def test_tick_buffer_wait_slowest() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(message_1_0)]
-    assert Timing("partition_lag_ms", 6000.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
-    metrics_backend.calls = []
     # Message in partition 1 has the same timestamp as the earliest message
     # in partition 0. Both should be submitted to the next step.
     message_1_1 = Message(
@@ -162,10 +149,8 @@ def test_tick_buffer_wait_slowest() -> None:
         mock.call(message_0_0),
         mock.call(message_1_1),
     ]
-    assert Timing("partition_lag_ms", 5000.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
-    metrics_backend.calls = []
 
     # Submit another message to partition 1 with the same timestamp as
     # in partition 0. Two more messages should be submitted and the
@@ -190,10 +175,8 @@ def test_tick_buffer_wait_slowest() -> None:
         mock.call(message_0_1),
         mock.call(message_1_2),
     ]
-    assert Timing("partition_lag_ms", 0.0, None) in metrics_backend.calls
 
     next_step.reset_mock()
-    metrics_backend.calls = []
 
     # Submit 11 more messages to partition 0. Since we hit
     # `max_ticks_buffered_per_partition`, the first message (but
@@ -219,16 +202,15 @@ def test_tick_buffer_wait_slowest() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [mock.call(messages[0])]
-    assert metrics_backend.calls == []
 
 
 def make_message_for_next_step(
-    message: Message[Tick], should_commit: bool
+    message: Message[Tick], offset_to_commit: Optional[int]
 ) -> Message[CommittableTick]:
     return Message(
         message.partition,
         message.offset,
-        CommittableTick(message.payload, should_commit),
+        CommittableTick(message.payload, offset_to_commit),
         message.timestamp,
         message.next_offset,
     )
@@ -259,12 +241,12 @@ def test_provide_commit_strategy() -> None:
 
     strategy.submit(message_0_0)
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_0_0, False))
+        mock.call(make_message_for_next_step(message_0_0, None))
     ]
 
     next_step.reset_mock()
 
-    # Partition 1, don't commit since timestamp is higher than partition 0
+    # Offset 2 on partition 1, now we can safely commit offset 1
     message_1_0 = Message(
         partition,
         2,
@@ -282,12 +264,12 @@ def test_provide_commit_strategy() -> None:
     strategy.submit(message_1_0)
 
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_1_0, False))
+        mock.call(make_message_for_next_step(message_1_0, 1))
     ]
 
     next_step.reset_mock()
 
-    # Partition 1, another higher timestamp
+    # Another message on partition 1, can't commit since partition 0 is still on offset 1
     message_1_1 = Message(
         partition,
         3,
@@ -305,12 +287,13 @@ def test_provide_commit_strategy() -> None:
     strategy.submit(message_1_1)
 
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_1_1, False))
+        mock.call(make_message_for_next_step(message_1_1, None))
     ]
 
     next_step.reset_mock()
 
-    # Partition 0, earlier timestamp so commit=True
+    # A message on partition 0, now we can commit offset 3 since partition 1 is
+    # still up to 3.
     message_0_1 = Message(
         partition,
         4,
@@ -328,11 +311,96 @@ def test_provide_commit_strategy() -> None:
     strategy.submit(message_0_1)
 
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_0_1, True))
+        mock.call(make_message_for_next_step(message_0_1, 3))
     ]
 
 
-def test_tick_buffer_with_commit_strategy() -> None:
+def test_tick_buffer_with_commit_strategy_partition() -> None:
+    epoch = datetime(1970, 1, 1)
+    now = datetime.now()
+
+    metrics_backend = TestingMetricsBackend()
+
+    next_step = mock.Mock()
+
+    strategy = TickBuffer(
+        SchedulingWatermarkMode.PARTITION,
+        2,
+        10,
+        ProvideCommitStrategy(2, next_step, metrics_backend),
+    )
+
+    topic = Topic("messages")
+    commit_log_partition = Partition(topic, 0)
+
+    # First message in partition 0
+    # It is submitted for scheduling straight away because we're in partition mode
+    # but we cannot commit yet because we need an offset for partition 1 before we can do that
+    message_0_0 = Message(
+        commit_log_partition,
+        4,
+        Tick(
+            0,
+            offsets=Interval(1, 2),
+            timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
+        ),
+        now,
+        5,
+    )
+    strategy.submit(message_0_0)
+
+    assert next_step.submit.call_count == 1
+    assert next_step.submit.call_args_list == [
+        mock.call(make_message_for_next_step(message_0_0, None)),
+    ]
+    next_step.reset_mock()
+
+    # Message in partition 1 - submitted for scheduling immediately. Now we can commit offset 4
+    message_1_0 = Message(
+        commit_log_partition,
+        5,
+        Tick(
+            1,
+            offsets=Interval(3, 6),
+            timestamps=Interval(
+                epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+            ),
+        ),
+        now,
+        6,
+    )
+    strategy.submit(message_1_0)
+
+    assert next_step.submit.call_count == 1
+    assert next_step.submit.call_args_list == [
+        mock.call(make_message_for_next_step(message_1_0, 4)),
+    ]
+    next_step.reset_mock()
+
+    # Another message in partition 0. The timestamp is earlier than message_1_0 but it doesn't matter
+    # We still submit immediately and the offset moves to 5
+    message_0_1 = Message(
+        commit_log_partition,
+        6,
+        Tick(
+            0,
+            offsets=Interval(2, 3),
+            timestamps=Interval(
+                epoch + timedelta(seconds=4), epoch + timedelta(seconds=6)
+            ),
+        ),
+        now,
+        7,
+    )
+    strategy.submit(message_0_1)
+
+    assert next_step.submit.call_count == 1
+    assert next_step.submit.call_args_list == [
+        mock.call(make_message_for_next_step(message_0_1, 5)),
+    ]
+
+
+def test_tick_buffer_with_commit_strategy_global() -> None:
     epoch = datetime(1970, 1, 1)
     now = datetime.now()
 
@@ -345,7 +413,6 @@ def test_tick_buffer_with_commit_strategy() -> None:
         2,
         10,
         ProvideCommitStrategy(2, next_step, metrics_backend),
-        metrics_backend,
     )
 
     topic = Topic("messages")
@@ -404,16 +471,14 @@ def test_tick_buffer_with_commit_strategy() -> None:
 
     assert next_step.submit.call_count == 1
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_1_0, False)),
+        mock.call(make_message_for_next_step(message_1_0, None)),
     ]
 
     next_step.reset_mock()
 
     # Another message in partition 1, now two more messages submitted
-    # message_0_0 should be commited since all prior messages in the
-    # commit log have been submitted (i.e. have a lower timestamp)
-    # message_1_1 cannot be commited because message_0_1 is not submitted
-    # yet (i.e. has a higher timestamp)
+    # (message_0_0 and message_1_1). We can only safely commit the offset
+    # of message_0_0 (4) when we are submitting it.
     message_1_1 = Message(
         commit_log_partition,
         7,
@@ -431,8 +496,8 @@ def test_tick_buffer_with_commit_strategy() -> None:
 
     assert next_step.submit.call_count == 2
     assert next_step.submit.call_args_list == [
-        mock.call(make_message_for_next_step(message_0_0, True)),
-        mock.call(make_message_for_next_step(message_1_1, False)),
+        mock.call(make_message_for_next_step(message_0_0, 4)),
+        mock.call(make_message_for_next_step(message_1_1, None)),
     ]
 
 
@@ -455,7 +520,7 @@ def test_scheduled_subscription_queue() -> None:
                 offsets=Interval(1, 3),
                 timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
             ),
-            True,
+            1,
         ),
         epoch,
         2,
@@ -467,15 +532,15 @@ def test_scheduled_subscription_queue() -> None:
 
     assert len(queue) == 2
     assert queue.peek() == TickSubscription(
-        tick_message, futures[0], should_commit=False
+        tick_message, futures[0], offset_to_commit=None
     )
     assert queue.popleft() == TickSubscription(
-        tick_message, futures[0], should_commit=False
+        tick_message, futures[0], offset_to_commit=None
     )
     assert len(queue) == 1
 
     assert queue.popleft() == TickSubscription(
-        tick_message, futures[1], should_commit=True
+        tick_message, futures[1], offset_to_commit=1
     )
     assert len(queue) == 0
 
@@ -504,8 +569,8 @@ def test_produce_scheduled_subscription_message() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=1,
-            time_window=timedelta(minutes=1),
-            resolution=timedelta(minutes=1),
+            time_window_sec=60,
+            resolution_sec=60,
             query="MATCH events SELECT count()",
             entity_subscription=EventsSubscription(data_dict={}),
         ),
@@ -516,8 +581,8 @@ def test_produce_scheduled_subscription_message() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=2,
-            time_window=timedelta(minutes=2),
-            resolution=timedelta(minutes=2),
+            time_window_sec=2 * 60,
+            resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
             entity_subscription=EventsSubscription(data_dict={}),
         ),

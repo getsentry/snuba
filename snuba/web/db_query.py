@@ -4,6 +4,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
+from threading import Lock
 from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
 import rapidjson
@@ -71,9 +72,20 @@ class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
         return cast(str, rapidjson.dumps(value.to_dict())).encode("utf-8")
 
 
-cache: Cache[Result] = RedisCache(
-    redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
-)
+DEFAULT_CACHE_PARTITION_ID = "default"
+
+# We are not initializing all the cache partitions here and instead relying on lazy
+# initialization because this module only learn of cache partitions ids from the
+# reader when running a query.
+cache_partitions: MutableMapping[str, Cache[Result]] = {
+    DEFAULT_CACHE_PARTITION_ID: RedisCache(
+        redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
+    )
+}
+# This lock prevents us from initializing the cache twice. The cache is initialized
+# with a thread pool. In case of race condition we could create the threads twice which
+# is a waste.
+cache_partitions_lock = Lock()
 
 logger = logging.getLogger("snuba.query")
 
@@ -282,12 +294,17 @@ def execute_query_with_rate_limits(
             PROJECT_RATE_LIMIT_NAME
         )
 
+        thread_quota = request_settings.get_resource_quota()
         if (
-            "max_threads" in query_settings
+            ("max_threads" in query_settings or thread_quota is not None)
             and project_rate_limit_stats is not None
             and project_rate_limit_stats.concurrent > 1
         ):
-            maxt = query_settings["max_threads"]
+            maxt = (
+                query_settings["max_threads"]
+                if thread_quota is None
+                else thread_quota.max_threads
+            )
             query_settings["max_threads"] = max(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
@@ -331,6 +348,30 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
     return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
 
+def _get_cache_partition(reader: Reader) -> Cache[Result]:
+    enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
+    if not enable_cache_partitioning:
+        return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
+
+    partition_id = reader.cache_partition_id
+    if partition_id is not None and partition_id not in cache_partitions:
+        with cache_partitions_lock:
+            # This condition was checked before as this lock should be acquired only
+            # during the first query. So, for the vast majority of queries, the overhead
+            # of acquiring the lock is not needed.
+            if partition_id not in cache_partitions:
+                cache_partitions[partition_id] = RedisCache(
+                    redis_client,
+                    f"snuba-query-cache:{partition_id}:",
+                    ResultCacheCodec(),
+                    ThreadPoolExecutor(),
+                )
+
+    return cache_partitions[
+        partition_id if partition_id is not None else DEFAULT_CACHE_PARTITION_ID
+    ]
+
+
 @with_span(op="db")
 def execute_query_with_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
@@ -369,7 +410,9 @@ def execute_query_with_caching(
     with sentry_sdk.start_span(description="execute", op="db") as span:
         if use_cache:
             key = get_query_cache_key(formatted_query)
-            result = cache.get(key)
+            cache_partition = _get_cache_partition(reader)
+
+            result = cache_partition.get(key)
             timer.mark("cache_get")
             stats["cache_hit"] = result is not None
             if result is not None:
@@ -378,7 +421,7 @@ def execute_query_with_caching(
 
             span.set_tag("cache", "miss")
             result = execute()
-            cache.set(key, result)
+            cache_partition.set(key, result)
             timer.mark("cache_set")
             return result
         else:
@@ -416,7 +459,12 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("cache_status", span_tag)
 
-    return cache.get_readthrough(
+    cache_partition = _get_cache_partition(reader)
+    metrics.increment(
+        "cache_partition_loaded",
+        tags={"partition_id": reader.cache_partition_id or "default"},
+    )
+    return cache_partition.get_readthrough(
         query_id,
         partial(
             execute_query_with_rate_limits,
