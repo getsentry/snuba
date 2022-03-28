@@ -20,6 +20,7 @@ from snuba.admin.runtime_config import (
     get_config_type_from_value,
 )
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.datasets.factory import get_enabled_dataset_names
 
 logger = logging.getLogger(__name__)
 
@@ -345,4 +346,13 @@ def config_changes() -> Response:
 def clickhouse_nodes() -> Response:
     return Response(
         json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"}
+    )
+
+
+@application.route("/snuba_datasets")
+def snuba_datasets() -> Response:
+    return Response(
+        json.dumps(
+            get_enabled_dataset_names(), 200, {"Content-Type": "application/json"}
+        )
     )

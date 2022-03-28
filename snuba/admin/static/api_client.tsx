@@ -30,6 +30,8 @@ interface Client {
   getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
+  executeSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
 }
@@ -119,6 +121,22 @@ function Client() {
             return res.filter((storage: any) => storage.local_nodes.length > 0);
           })
       );
+    },
+
+    getSnubaDatasetNames: () => {
+      const url = baseUrl + "snuba_datasets";
+      return fetch(url).then((resp) => resp.json());
+    },
+
+    executeSnQLQuery: (query: SnQLRequest) => {
+      const url = baseUrl + query.dataset + "/snql";
+      query.debug = true;
+      query.dry_run = true;
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => resp.json());
     },
 
     executeSystemQuery: (query: QueryRequest) => {
