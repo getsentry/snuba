@@ -19,4 +19,4 @@ jobs:
           make install-python-dependencies
       - name: Run the migration script
         run: |
-          python scripts/ddl_changes.py
+          python scripts/ddl-changes.py
