@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, Mapping
 
 import pytest
 
@@ -8,6 +8,7 @@ from snuba import optimize, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.optimize import _get_metrics_tags
 from snuba.processor import InsertBatch
 from tests.helpers import write_processed_messages
 
@@ -129,3 +130,19 @@ class TestOptimize:
             clickhouse, storage, database, table
         )
         assert parts == []
+
+    @pytest.mark.parametrize(
+        "table,host,expected",
+        [
+            ("errors_local", None, {"table": "errors_local"},),
+            (
+                "errors_local",
+                "some-hostname.domain.com",
+                {"table": "errors_local", "host": "some-hostname.domain.com"},
+            ),
+        ],
+    )
+    def test_metrics_tags(
+        self, table: str, host: str, expected: Mapping[str, str]
+    ) -> None:
+        assert _get_metrics_tags(table, host) == expected
