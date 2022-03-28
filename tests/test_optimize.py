@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, Mapping
 
 import pytest
 
@@ -142,5 +142,7 @@ class TestOptimize:
             ),
         ],
     )
-    def test_metrics_tags(self, table, host, expected):
+    def test_metrics_tags(
+        self, table: str, host: str, expected: Mapping[str, str]
+    ) -> None:
         assert _get_metrics_tags(table, host) == expected
