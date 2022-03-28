@@ -8,9 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v2
-        name: Checkout code
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+        name: Checkout master for diffing
+        ref: master
+      - uses: actions/checkout@v3
+        name: Checkout HEAD of code that may have migration changes
+      - uses: actions/setup-python@v3
         with:
           python-version: 3.8
       - name: Install dependencies

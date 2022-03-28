@@ -11,7 +11,7 @@ def _main() -> None:
     runs `snuba migrations run -dry-run with the proper parameters`, for a CI action
     """
     diff_result = subprocess.run(
-        ["git", "diff", "--name-status", "master", "--", "snuba/migrations"],
+        ["git", "diff", "--name-status", "origin/master", "--", "snuba/migrations"],
         stdout=subprocess.PIPE,
         text=True,
     )
