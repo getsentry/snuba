@@ -1,7 +1,7 @@
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba import environment, settings, util
 from snuba.clickhouse.native import ClickhousePool
@@ -22,12 +22,21 @@ class JobTimeoutException(SerializableException):
     pass
 
 
+def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
+    return (
+        {"table": table, "host": clickhouse_host}
+        if clickhouse_host
+        else {"table": table}
+    )
+
+
 def run_optimize(
     clickhouse: ClickhousePool,
     storage: ReadableTableStorage,
     database: str,
     before: Optional[datetime] = None,
     ignore_cutoff: bool = False,
+    clickhouse_host: Optional[str] = None,
 ) -> int:
     start = time.time()
     schema = storage.get_schema()
@@ -36,8 +45,14 @@ def run_optimize(
     database = storage.get_cluster().get_database()
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    optimize_partitions(clickhouse, database, table, parts, ignore_cutoff)
-    metrics.timing("optimized_all_parts", time.time() - start, tags={"table": table})
+    optimize_partitions(
+        clickhouse, database, table, parts, ignore_cutoff, clickhouse_host
+    )
+    metrics.timing(
+        "optimized_all_parts",
+        time.time() - start,
+        tags=_get_metrics_tags(table, clickhouse_host),
+    )
     return len(parts)
 
 
@@ -117,6 +132,7 @@ def optimize_partitions(
     table: str,
     parts: Sequence[util.Part],
     ignore_cutoff: bool,
+    clickhouse_host: Optional[str] = None,
 ) -> None:
 
     query_template = """\
@@ -156,4 +172,8 @@ def optimize_partitions(
         logger.info(f"Optimizing partition: {part.name}")
         start = time.time()
         clickhouse.execute(query)
-        metrics.timing("optimized_part", time.time() - start, tags={"table": table})
+        metrics.timing(
+            "optimized_part",
+            time.time() - start,
+            tags=_get_metrics_tags(table, clickhouse_host),
+        )
