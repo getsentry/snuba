@@ -27,9 +27,14 @@ class HandledFunctionsProcessor(QueryProcessor):
     The implementation of these functions is too complex for clients to provide so
     these wrappers are required.
 
+    An event is considered unhandled if at least one of its stacktraces are
+    unhandled, regardless if the stacktraces are handled or null. And the inverse
+    should hold true for whether an event is considered handled, that all of its
+    stacktraces are either handled or null.
+
     - The `isHandled` function checks the entire array field is null or 1.
-    - The `notHandled` function searches an array field for 0, null
-      values will be excluded from the result.
+    - The `notHandled` function searches an array field for at least one occurance of
+      0
 
     Both functions return 1 or 0 if a row matches.
     """
