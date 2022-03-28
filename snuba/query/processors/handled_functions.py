@@ -33,7 +33,7 @@ class HandledFunctionsProcessor(QueryProcessor):
     its stacktraces are either handled or null.
 
     - The `isHandled` function checks the entire array field is null or 1.
-    - The `notHandled` function searches an array field for at least one occurance of
+    - The `notHandled` function searches an array field for at least one occurrence of
       0
 
     Both functions return 1 or 0 if a row matches.
