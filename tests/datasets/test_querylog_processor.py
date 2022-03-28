@@ -2,6 +2,7 @@ import uuid
 from copy import deepcopy
 from datetime import datetime, timedelta
 
+from snuba.attribution import get_app_id
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -41,6 +42,7 @@ def test_simple() -> None:
         uuid.UUID("a" * 32).hex,
         request_body,
         query,
+        get_app_id("default"),
         "",
         HTTPRequestSettings(referrer="search"),
     )
@@ -80,6 +82,7 @@ def test_simple() -> None:
         ],
         projects={2},
         snql_anonymized=request.snql_anonymized,
+        entity=EntityKey.EVENTS.value,
     ).to_dict()
 
     processor = (
@@ -149,6 +152,7 @@ def test_missing_fields() -> None:
         uuid.UUID("a" * 32).hex,
         request_body,
         query,
+        get_app_id("default"),
         "",
         HTTPRequestSettings(referrer="search"),
     )
@@ -188,6 +192,7 @@ def test_missing_fields() -> None:
         ],
         projects={2},
         snql_anonymized=request.snql_anonymized,
+        entity=EntityKey.EVENTS.value,
     ).to_dict()
 
     messages = []
