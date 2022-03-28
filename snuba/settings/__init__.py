@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
@@ -184,7 +184,7 @@ TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
-ENABLED_MATERIALIZATION_VERSION = 3
+ENABLED_MATERIALIZATION_VERSION = 4
 
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
@@ -196,6 +196,8 @@ TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
 )
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
+
+OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

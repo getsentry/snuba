@@ -185,6 +185,14 @@ class MetricsLoader(DirectoryLoader):
             "0019_aggregate_tables_add_ttl",
             "0020_polymorphic_buckets_table",
             "0021_polymorphic_bucket_materialized_views",
+            "0022_repartition_polymorphic_table",
+            "0023_polymorphic_repartitioned_bucket_matview",
+            "0024_metrics_distributions_add_histogram",
+            "0025_metrics_counters_aggregate_v2",
+            "0026_metrics_counters_v2_writing_matview",
+            "0027_fix_migration_0026",
+            "0028_metrics_sets_aggregate_v2",
+            "0029_metrics_distributions_aggregate_v2",
         ]
 
 

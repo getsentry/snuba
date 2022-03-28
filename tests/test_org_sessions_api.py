@@ -5,10 +5,12 @@ from uuid import uuid4
 
 import pytz
 import simplejson as json
+from snuba_sdk.column import Column
 from snuba_sdk.conditions import Condition, Op
+from snuba_sdk.entity import Entity
 from snuba_sdk.expressions import Granularity
 from snuba_sdk.orderby import Direction, OrderBy
-from snuba_sdk.query import Column, Entity, Query
+from snuba_sdk.query import Query
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -41,7 +43,7 @@ class TestOrgSessionsApi(BaseApiTest):
         self.generate_session_events(self.org_id, self.project_id)
         self.generate_session_events(self.org_id, self.project_id2)
 
-    def generate_session_events(self, org_id, project_id: int) -> None:
+    def generate_session_events(self, org_id: int, project_id: int) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)

@@ -266,6 +266,10 @@ class MetricsDistributionsEntity(MetricsEntity):
                 Column("avg", AggregateFunction("avg", [Float(64)])),
                 Column("sum", AggregateFunction("sum", [Float(64)])),
                 Column("count", AggregateFunction("count", [Float(64)])),
+                Column(
+                    "histogram_buckets",
+                    AggregateFunction("histogram(250)", [Float(64)]),
+                ),
             ],
             mappers=TranslationMappers(
                 functions=[
@@ -288,6 +292,12 @@ class MetricsDistributionsEntity(MetricsEntity):
                     ),
                     AggregateCurriedFunctionMapper(
                         "value", "quantilesIf", "quantilesMergeIf", "percentiles"
+                    ),
+                    AggregateCurriedFunctionMapper(
+                        "value", "histogram", "histogramMerge", "histogram_buckets"
+                    ),
+                    AggregateCurriedFunctionMapper(
+                        "value", "histogramIf", "histogramMergeIf", "histogram_buckets"
                     ),
                 ],
             ),

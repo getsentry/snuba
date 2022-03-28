@@ -814,3 +814,31 @@ class TestSnQLApi(BaseApiTest):
         # assert json.loads(response.data)["error"]["message"] == error_message
 
         assert response.status_code == 500
+
+    def test_wrap_log_fn_with_ifnotfinite(self) -> None:
+        """
+        Test that wrapping the log function in ifNotFinite clickhouse function returns a 200 response
+        """
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (events SAMPLE 1.0)
+                    SELECT multiply(toUInt64(max(timestamp)), 1000) AS last_seen,
+                    count() AS times_seen,
+                    toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority,
+                    uniq(group_id) AS total
+                    BY group_id
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                    "dataset": "events",
+                    "team": "sns",
+                    "feature": "test",
+                }
+            ),
+        )
+
+        assert response.status_code == 200

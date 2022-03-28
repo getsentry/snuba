@@ -63,8 +63,8 @@ polymorphic_bucket = WritableTableStorage(
                 *POST_VALUE_COLUMNS,
             ]
         ),
-        local_table_name="metrics_raw_local",
-        dist_table_name="metrics_raw_dist",
+        local_table_name="metrics_raw_v2_local",
+        dist_table_name="metrics_raw_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
     ),
     query_processors=[],
@@ -185,8 +185,8 @@ counters_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_COUNTERS,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
-        local_table_name="metrics_counters_local",
-        dist_table_name="metrics_counters_dist",
+        local_table_name="metrics_counters_v2_local",
+        dist_table_name="metrics_counters_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
         columns=ColumnSet(
             [
