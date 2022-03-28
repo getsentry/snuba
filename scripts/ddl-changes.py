@@ -11,14 +11,14 @@ def _main() -> None:
     runs `snuba migrations run -dry-run with the proper parameters`, for a CI action
     """
     diff_result = subprocess.run(
-        ["git", "diff", "--name-status", "master", "snuba/migrations"],
+        ["git", "diff", "--name-status", "master", "--", "snuba/migrations"],
         stdout=subprocess.PIPE,
         text=True,
     )
     if diff_result.returncode != 0:
         raise ExecError(diff_result.stdout)
     else:
-        for line in diff_result.stdout:
+        for line in diff_result.stdout.splitlines():
             (modification_type, filename) = line.split()
             print(modification_type)
             print(filename)
