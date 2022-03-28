@@ -654,7 +654,7 @@ class TestSnQLApi(BaseApiTest):
         assert metric_calls[0].tags["referrer"] == "test"
         assert metric_calls[0].tags["dataset"] == "events"
         assert metric_calls[0].tags["entity"] == "events"
-        assert metric_calls[0].tags["table"] == "errors_local"
+        assert metric_calls[0].tags["table"].startswith("errors")
 
     def test_invalid_app_id_attribution(self) -> None:
         state.set_config("use_attribution", 1)
