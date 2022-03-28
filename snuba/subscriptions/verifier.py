@@ -237,7 +237,7 @@ class ResultStore:
 
             orig_count = self.__stores[ResultTopic.ORIGINAL].pop(next_ts, 0)
             new_count = self.__stores[ResultTopic.NEW].pop(next_ts, 0)
-            self.__metrics.increment("result_count_diff", new_count - orig_count)
+            self.__metrics.increment("result_count_diff", abs(new_count - orig_count))
 
 
 class CountResults(ProcessingStrategy[SubscriptionResultData]):
