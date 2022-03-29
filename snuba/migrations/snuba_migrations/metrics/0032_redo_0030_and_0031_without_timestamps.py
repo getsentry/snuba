@@ -7,11 +7,12 @@ from snuba.migrations.snuba_migrations.metrics.templates import (
     get_forward_view_migration_polymorphic_table_v3,
     get_polymorphic_mv_variant_name,
 )
+from snuba.utils.schemas import AggregateFunction, Column, UInt
 
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Add a materialized view for writing to the v2 version of the metrics_distributions aggregate table
+    Re-creates materialized views of 0030 and 0031 without timestamps for easier operations
     """
 
     blocking = False
@@ -21,6 +22,12 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
+            operations.DropTable(
+                storage_set=StorageSetKey.METRICS,
+                table_name=get_polymorphic_mv_variant_name(
+                    "distributions", self.mv_version
+                ),
+            ),
             get_forward_view_migration_polymorphic_table_v3(
                 source_table_name=self.raw_table_name,
                 table_name=self.table_name,
@@ -39,19 +46,28 @@ class Migration(migration.ClickhouseNodeMigration):
                 ),
                 metric_type="distribution",
                 target_mat_version=4,
-                appended_where_clause="AND timestamp >= toDateTime('2022-03-29 00:00:00')",
-            )
+                appended_where_clause="AND 1=1",
+            ),
+            operations.DropTable(
+                storage_set=StorageSetKey.METRICS,
+                table_name=get_polymorphic_mv_variant_name("sets", self.mv_version),
+            ),
+            get_forward_view_migration_polymorphic_table_v3(
+                source_table_name=self.raw_table_name,
+                table_name=self.table_name,
+                aggregation_col_schema=[
+                    Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+                ],
+                aggregation_states="uniqCombined64State(arrayJoin(set_values)) as value",
+                mv_name=get_polymorphic_mv_variant_name("sets", self.mv_version),
+                metric_type="set",
+                target_mat_version=4,
+                appended_where_clause="AND 1=1",
+            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.METRICS,
-                table_name=get_polymorphic_mv_variant_name(
-                    "distributions", self.mv_version
-                ),
-            )
-        ]
+        return []
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
