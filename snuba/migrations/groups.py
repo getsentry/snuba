@@ -193,6 +193,8 @@ class MetricsLoader(DirectoryLoader):
             "0027_fix_migration_0026",
             "0028_metrics_sets_aggregate_v2",
             "0029_metrics_distributions_aggregate_v2",
+            "0030_metrics_distributions_v2_writing_mv",
+            "0031_metrics_sets_v2_writing_mv",
         ]
 
 
