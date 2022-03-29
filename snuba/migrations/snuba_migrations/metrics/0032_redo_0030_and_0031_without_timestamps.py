@@ -16,7 +16,8 @@ class Migration(migration.ClickhouseNodeMigration):
     """
 
     blocking = False
-    table_name = "metrics_distributions_v2_local"
+    dist_table_name = "metrics_distributions_v2_local"
+    sets_table_name = "metrics_sets_v2_local"
     raw_table_name = "metrics_raw_v2_local"
     mv_version = 4
 
@@ -30,7 +31,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             get_forward_view_migration_polymorphic_table_v3(
                 source_table_name=self.raw_table_name,
-                table_name=self.table_name,
+                table_name=self.dist_table_name,
                 aggregation_col_schema=COL_SCHEMA_DISTRIBUTIONS_V2,
                 mv_name=get_polymorphic_mv_variant_name(
                     "distributions", self.mv_version
@@ -54,7 +55,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             get_forward_view_migration_polymorphic_table_v3(
                 source_table_name=self.raw_table_name,
-                table_name=self.table_name,
+                table_name=self.sets_table_name,
                 aggregation_col_schema=[
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
                 ],
