@@ -17,14 +17,11 @@ from snuba.consumers.consumer import (
     build_mock_batch_writer,
     process_message,
 )
-from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
-from snuba.snapshots import SnapshotId
 from snuba.state import get_config
-from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -266,17 +263,3 @@ class ConsumerBuilder:
         Builds the consumer.
         """
         return self.__build_consumer(self.__build_streaming_strategy_factory())
-
-    def build_snapshot_aware_consumer(
-        self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> StreamProcessor[KafkaPayload]:
-        """
-        Builds the consumer with a processor that is able to handle snapshots.
-        """
-        return self.__build_consumer(
-            self.__build_streaming_strategy_factory(
-                lambda processor: SnapshotProcessor(
-                    processor, snapshot_id, transaction_data
-                )
-            )
-        )
