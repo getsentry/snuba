@@ -5,8 +5,6 @@ type ClickhouseSQL = string;
 type SnQLRequest = {
   dataset: string;
   query: string;
-  debug: boolean;
-  dry_run: boolean;
 };
 
 type SnQLResult = {

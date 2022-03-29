@@ -12,7 +12,7 @@ import { copyText, TextArea } from "../common/utils";
 
 function SnQLTracing(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [query, setQuery] = useState<SnQLQueryState>({});
+  const [snql_query, setQuery] = useState<SnQLQueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );
@@ -26,21 +26,21 @@ function SnQLTracing(props: { api: Client }) {
 
   function selectDataset(dataset: string) {
     console.log("setting " + dataset);
-    console.log(query);
+    console.log(snql_query);
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
-        storage: dataset,
+        dataset,
       };
     });
   }
 
-  function updateQuerySql(sql: string) {
+  function updateQuerySql(query: string) {
     console.log(query);
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
-        sql,
+        query,
       };
     });
   }
@@ -51,10 +51,10 @@ function SnQLTracing(props: { api: Client }) {
     }
     setIsExecuting(true);
     props.api
-      .executeSnQLQuery(query as SnQLRequest)
+      .executeSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
         const query_result = {
-          input_query: query.query,
+          input_query: snql_query.query,
           sql: result.sql,
         };
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
@@ -73,12 +73,12 @@ function SnQLTracing(props: { api: Client }) {
       <form>
         <h2>Construct a SnQL Query</h2>
         <div>
-          <TextArea value={query.query || ""} onChange={updateQuerySql} />
+          <TextArea value={snql_query.query || ""} onChange={updateQuerySql} />
         </div>
         <div style={executeActionsStyle}>
           <div>
             <select
-              value={query.dataset || ""}
+              value={snql_query.dataset || ""}
               onChange={(evt) => selectDataset(evt.target.value)}
               style={selectStyle}
             >
@@ -96,7 +96,11 @@ function SnQLTracing(props: { api: Client }) {
             <button
               onClick={(_) => executeQuery()}
               style={executeButtonStyle}
-              disabled={isExecuting || !query.dataset || !query.query}
+              disabled={
+                isExecuting ||
+                snql_query.dataset == undefined ||
+                snql_query.query == undefined
+              }
             >
               Execute query
             </button>
@@ -116,7 +120,7 @@ function SnQLTracing(props: { api: Client }) {
               >
                 Copy to clipboard
               </button>
-              {/* {tablePopulator(queryResult)} */ queryResult.sql}
+              {queryResult.sql}
             </div>,
           ])}
           columnWidths={[1, 5]}

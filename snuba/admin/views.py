@@ -356,3 +356,15 @@ def snuba_datasets() -> Response:
             get_enabled_dataset_names(), 200, {"Content-Type": "application/json"}
         )
     )
+
+
+@application.route("/snql_to_sql", methods=["POST"])
+def snql_to_sql() -> Response:
+    data = json.loads(request.data)
+    _, _ = data["dataset"], data["query"]
+
+    sql = ""
+
+    res = {"sql": sql}
+
+    return Response(json.dumps(res), 200, {"Content-Type": "application/json"})

@@ -129,9 +129,7 @@ function Client() {
     },
 
     executeSnQLQuery: (query: SnQLRequest) => {
-      const url = baseUrl + query.dataset + "/snql";
-      query.debug = true;
-      query.dry_run = true;
+      const url = baseUrl + "snql_to_sql";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
