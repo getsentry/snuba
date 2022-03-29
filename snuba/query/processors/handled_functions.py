@@ -27,9 +27,14 @@ class HandledFunctionsProcessor(QueryProcessor):
     The implementation of these functions is too complex for clients to provide so
     these wrappers are required.
 
-    - The `isHandled` function searches an array field for null or 1.
-    - The `notHandled` function searches an array field for 0, null
-      values will be excluded from the result.
+    An event is considered unhandled if at least one of its stacktraces are
+    unhandled, regardless if the remaining stacktraces are handled or null. And the
+    inverse should hold true for whether an event is considered handled, that all of
+    its stacktraces are either handled or null.
+
+    - The `isHandled` function checks the entire array field is null or 1.
+    - The `notHandled` function searches an array field for at least one occurrence of
+      0
 
     Both functions return 1 or 0 if a row matches.
     """
@@ -55,7 +60,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                     self.validate_parameters(exp, query.get_from_clause())
                     return FunctionCall(
                         exp.alias,
-                        "arrayExists",
+                        "arrayAll",
                         (
                             Lambda(
                                 None,
@@ -66,13 +71,13 @@ class HandledFunctionsProcessor(QueryProcessor):
                                         None, "isNull", (Argument(None, "x"),)
                                     ),
                                     binary_condition(
-                                        ConditionFunctions.EQ,
+                                        ConditionFunctions.NEQ,
                                         FunctionCall(
                                             None,
                                             "assumeNotNull",
                                             (Argument(None, "x"),),
                                         ),
-                                        Literal(None, 1),
+                                        Literal(None, 0),
                                     ),
                                 ),
                             ),

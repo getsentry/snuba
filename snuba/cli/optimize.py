@@ -71,5 +71,7 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    num_dropped = run_optimize(connection, storage, database, before=today)
+    num_dropped = run_optimize(
+        connection, storage, database, before=today, clickhouse_host=clickhouse_host
+    )
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
