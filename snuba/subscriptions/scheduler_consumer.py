@@ -128,7 +128,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
                     previous_message.orig_message_ts, commit.orig_message_ts
                 )
             except InvalidRangeError:
-                logger.warning(
+                logger.info(
                     "Could not construct valid time interval between %r and %r!",
                     previous_message,
                     MessageDetails(commit.offset, commit.orig_message_ts),
