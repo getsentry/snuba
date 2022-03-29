@@ -39,7 +39,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 ),
                 metric_type="distribution",
                 target_mat_version=4,
-                appended_where_clause="AND timestamp >= toDateTime('2022-03-22 00:00:00')",
+                appended_where_clause="AND 1=1",
             )
         ]
 
