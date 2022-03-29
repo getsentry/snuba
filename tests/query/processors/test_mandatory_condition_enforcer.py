@@ -1,7 +1,7 @@
 from datetime import datetime
-from snuba.query.dsl import literals_array
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
@@ -11,6 +11,7 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.data_source.simple import Table
+from snuba.query.dsl import literals_array
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.conditions_enforcer import (
     MandatoryConditionEnforcer,
@@ -34,6 +35,7 @@ test_data = [
             ),
         ),
         True,
+        OrgIdEnforcer(),
         id="Valid query. Both mandatory columns are there",
     ),
     pytest.param(
@@ -53,6 +55,7 @@ test_data = [
             ),
         ),
         True,
+        OrgIdEnforcer(),
         id="Valid query. Both mandatory columns are there (in array)",
     ),
     pytest.param(
@@ -72,6 +75,7 @@ test_data = [
             ),
         ),
         False,
+        OrgIdEnforcer(),
         id="Invalid query. Only one mandatory column",
     ),
     pytest.param(
@@ -89,6 +93,7 @@ test_data = [
             ),
         ),
         False,
+        OrgIdEnforcer(),
         id="Invalid query. Both mandatory conditions are missing",
     ),
     pytest.param(
@@ -106,16 +111,53 @@ test_data = [
             ),
         ),
         False,
+        OrgIdEnforcer(),
         id="Invalid query. Or condition",
+    ),
+    pytest.param(
+        Query(
+            Table("errors", ColumnSet([])),
+            selected_columns=[],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                in_condition(Column(None, None, "project_id"), [Literal(None, 123)]),
+                binary_condition(
+                    "equals", Column(None, None, "organization_id"), Literal(None, 1)
+                ),
+            ),
+        ),
+        True,
+        OrgIdEnforcer("organization_id"),
+        id="Valid query. Both mandatory columns are there",
+    ),
+    pytest.param(
+        Query(
+            Table("errors", ColumnSet([])),
+            selected_columns=[],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                in_condition(Column(None, None, "project_id"), [Literal(None, 123)]),
+                binary_condition(
+                    "equals",
+                    Column(None, None, "bad_organization_id"),
+                    Literal(None, 1),
+                ),
+            ),
+        ),
+        False,
+        OrgIdEnforcer("organization_id"),
+        id="Valid query. Only one mandatory column",
     ),
 ]
 
 
-@pytest.mark.parametrize("query, valid", test_data)
-def test_condition_enforcer(query: Query, valid: bool) -> None:
+@pytest.mark.parametrize("query, valid, org_id_enforcer", test_data)
+def test_condition_enforcer(
+    query: Query, valid: bool, org_id_enforcer: OrgIdEnforcer
+) -> None:
     set_config("mandatory_condition_enforce", 1)
     request_settings = HTTPRequestSettings(consistent=True)
-    processor = MandatoryConditionEnforcer([OrgIdEnforcer(), ProjectIdEnforcer()])
+    processor = MandatoryConditionEnforcer([org_id_enforcer, ProjectIdEnforcer()])
     if valid:
         processor.process_query(query, request_settings)
     else:
