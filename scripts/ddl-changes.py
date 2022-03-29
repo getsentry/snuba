@@ -1,8 +1,8 @@
 import subprocess
 from shutil import ExecError
 
-# from sys import stdin
-# import snuba.cli.migrations
+from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.runner import MigrationKey, Runner
 
 
 def _main() -> None:
@@ -20,8 +20,16 @@ def _main() -> None:
     else:
         for line in diff_result.stdout.splitlines():
             (modification_type, filename) = line.split()
+            runner = Runner()
+            migration_group = MigrationGroup("metrics")
+            migration_key = MigrationKey(
+                migration_group, "0020_polymorphic_buckets_table"
+            )
+
+            runner.run_migration(migration_key, dry_run=True)
             print(modification_type)
             print(filename)
+            exit(0)
 
 
 if __name__ == "__main__":
