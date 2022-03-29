@@ -8,8 +8,8 @@ class TestCli(object):
         """
         Check that the consumer daemon runs until it is killed
         """
-        proc = subprocess.Popen(["snuba", "consumer", "--storage", "events"])
-        time.sleep(1)
+        proc = subprocess.Popen(["snuba", "consumer", "--storage", "errors"])
+        time.sleep(3)
         proc.poll()
         assert proc.returncode is None  # still running
 
