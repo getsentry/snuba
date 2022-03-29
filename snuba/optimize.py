@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Mapping, Optional, Sequence
@@ -36,6 +37,7 @@ def run_optimize(
     database: str,
     before: Optional[datetime] = None,
     ignore_cutoff: bool = False,
+    parallel: bool = False,
     clickhouse_host: Optional[str] = None,
 ) -> int:
     start = time.time()
@@ -45,8 +47,8 @@ def run_optimize(
     database = storage.get_cluster().get_database()
 
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    optimize_partitions(
-        clickhouse, database, table, parts, ignore_cutoff, clickhouse_host
+    optimize_partition_runner(
+        clickhouse, database, table, parts, ignore_cutoff, parallel, clickhouse_host
     )
     metrics.timing(
         "optimized_all_parts",
@@ -126,6 +128,54 @@ def get_partitions_to_optimize(
     return parts
 
 
+def _subdivide_parts(parts: Sequence[util.Part]) -> Sequence[Sequence[util.Part]]:
+    """
+    Subdivide a list of parts into 2 lists of parts so that optimize query can be executed
+    on different parts list by different threads.
+    """
+
+    sorted_parts = sorted(parts, key=lambda part: part.date, reverse=True)
+
+    list1 = [
+        sorted_parts[index] for index in range(len(sorted_parts)) if index % 2 == 0
+    ]
+    list2 = [
+        sorted_parts[index] for index in range(len(sorted_parts)) if index % 2 == 1
+    ]
+    return [list1, list2]
+
+
+def optimize_partition_runner(
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    parts: Sequence[util.Part],
+    ignore_cutoff: bool,
+    parallel: bool,
+    clickhouse_host: Optional[str] = None,
+) -> None:
+    if not parallel:
+        optimize_partitions(
+            clickhouse, database, table, parts, ignore_cutoff, clickhouse_host
+        )
+    else:
+        parts1, parts2 = _subdivide_parts(parts)
+        thread1 = threading.Thread(
+            target=optimize_partitions,
+            args=(clickhouse, database, table, parts1, ignore_cutoff, clickhouse_host),
+        )
+        thread2 = threading.Thread(
+            target=optimize_partitions,
+            args=(clickhouse, database, table, parts2, ignore_cutoff, clickhouse_host),
+        )
+
+        thread1.start()
+        thread2.start()
+
+        thread1.join()
+        thread2.join()
+
+
 def optimize_partitions(
     clickhouse: ClickhousePool,
     database: str,
@@ -134,7 +184,6 @@ def optimize_partitions(
     ignore_cutoff: bool,
     clickhouse_host: Optional[str] = None,
 ) -> None:
-
     query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
         PARTITION %(partition)s FINAL
