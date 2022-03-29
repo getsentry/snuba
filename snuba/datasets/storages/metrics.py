@@ -31,6 +31,7 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
@@ -174,7 +175,7 @@ sets_storage = WritableTableStorage(
             ]
         ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         SetsAggregateProcessor(), default_topic=Topic.METRICS,
     ),
@@ -195,7 +196,7 @@ counters_storage = WritableTableStorage(
             ]
         ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         CounterAggregateProcessor(), default_topic=Topic.METRICS,
     ),
@@ -227,7 +228,7 @@ distributions_storage = WritableTableStorage(
             ]
         ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         DistributionsAggregateProcessor(), default_topic=Topic.METRICS,
     ),

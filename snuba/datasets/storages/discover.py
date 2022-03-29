@@ -27,6 +27,7 @@ from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.null_column_caster import NullColumnCaster
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
@@ -109,6 +110,7 @@ storage = ReadableTableStorage(
             ]
         ),
         NullColumnCaster([transactions_storage, error_storage]),
+        TableRateLimit(),
     ],
     query_splitters=[
         ColumnSplitQueryStrategy(
