@@ -20,7 +20,9 @@ from snuba.admin.runtime_config import (
     get_config_type_from_value,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.datasets.factory import get_enabled_dataset_names
+from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
+from snuba.utils.metrics.timer import Timer
+from snuba.web.views import dataset_query
 
 logger = logging.getLogger(__name__)
 
@@ -360,11 +362,9 @@ def snuba_datasets() -> Response:
 
 @application.route("/snql_to_sql", methods=["POST"])
 def snql_to_sql() -> Response:
-    data = json.loads(request.data)
-    _, _ = data["dataset"], data["query"]
 
-    sql = ""
-
-    res = {"sql": sql}
-
-    return Response(json.dumps(res), 200, {"Content-Type": "application/json"})
+    body = json.loads(request.data)
+    body["debug"] = True
+    body["dry_run"] = True
+    dataset = get_dataset(body.pop("dataset"))
+    return dataset_query(dataset, body, Timer("admin"))
