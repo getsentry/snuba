@@ -1,3 +1,4 @@
+import re
 import subprocess
 from shutil import ExecError
 
@@ -19,17 +20,30 @@ def _main() -> None:
         raise ExecError(diff_result.stdout)
     else:
         for line in diff_result.stdout.splitlines():
-            (modification_type, filename) = line.split()
-            runner = Runner()
-            migration_group = MigrationGroup("metrics")
-            migration_key = MigrationKey(
-                migration_group, "0020_polymorphic_buckets_table"
+            # example git diff output:
+            # A     snuba/migrations/snuba_migrations/metrics/0030_metrics_distributions_v2_writing_mv.py
+            regex = (
+                r"(?P<modification_type>[AMD])\t"
+                r"snuba/migrations/snuba_migrations/(?P<migration_group>[a-z]+)/(?P<migration_id>[0-9a-z_]+)\.py"
             )
 
-            runner.run_migration(migration_key, dry_run=True)
-            print(modification_type)
-            print(filename)
-            exit(0)
+            matches = re.match(regex, line)
+            if matches:
+                re_groups = matches.groupdict()
+
+                (modification_type, migration_group, migration_id) = (
+                    re_groups["modification_type"],
+                    MigrationGroup(re_groups["migration_group"]),
+                    re_groups["migration_id"],
+                )
+                # Don't try to dry-run deleted files
+                if modification_type in {"M", "A"}:
+                    runner = Runner()
+                    migration_key = MigrationKey(migration_group, migration_id)
+                    print(f"running {migration_key}")
+                    runner.run_migration(migration_key, dry_run=True)
+            else:
+                print(f"ignoring line from git-diff: {line}")
 
 
 if __name__ == "__main__":
