@@ -146,7 +146,7 @@ test_data = [
         ),
         False,
         OrgIdEnforcer("organization_id"),
-        id="Valid query. Only one mandatory column",
+        id="Invalid query. Only one mandatory column",
     ),
 ]
 
