@@ -322,7 +322,7 @@ class TestMetricsApiDistributions(BaseApiTest):
 
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
-        ) - timedelta(seconds=self.seconds)
+        ) - timedelta(minutes=self.seconds)
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
@@ -409,9 +409,7 @@ class TestMetricsApiDistributions(BaseApiTest):
             metric_id=self.metric_id,
             org_id=self.org_id,
             start_time=timestamp_to_bucket(self.base_time, 86400).isoformat(),
-            end_time=(
-                timestamp_to_bucket(self.base_time + timedelta(days=2), 86400)
-            ).isoformat(),
+            end_time=(self.base_time + self.skew).isoformat(),
         )
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
