@@ -51,7 +51,7 @@ class EntityQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
         )
 
 
-class ClickhouseEntityQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
+class DuplicatedQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
     """
     This query planner is similar to the EntityQueryPlanner class above.
     Except that it does not run the entity processors on the logical query.
@@ -140,11 +140,11 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
 class SkippedLogicalEntityProcessorPipelineBuilder(SimplePipelineBuilder):
     """
     This Pipeline builder is similar to SimplePipelineBuilder except that it returns
-    the ClickhouseEntityQueryPlanner in build_planner which skips running the logical
+    the DuplicatedQueryPlanner in build_planner which skips running the logical
     query entity processors.
     """
 
     def build_planner(
         self, query: LogicalQuery, settings: RequestSettings,
-    ) -> ClickhouseEntityQueryPlanner:
-        return ClickhouseEntityQueryPlanner(query, settings, self._query_plan_builder)
+    ) -> DuplicatedQueryPlanner:
+        return DuplicatedQueryPlanner(query, settings, self._query_plan_builder)
