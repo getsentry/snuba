@@ -27,7 +27,7 @@ jobs:
         run: |
           SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py > ddl-changes.txt
       - name: Post comment
-        run: gh pr comment $PR_NUMBER --body-file ddl-changes.txt
+        run: if [ -s ddl-changes.txt ]; then gh pr comment $PR_NUMBER --body-file ddl-changes.txt; fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.number }}
