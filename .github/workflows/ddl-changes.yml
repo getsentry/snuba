@@ -25,4 +25,9 @@ jobs:
           make install-python-dependencies
       - name: Run the migration script
         run: |
-          SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
+          SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py > ddl-changes.txt
+      - name: Post comment
+        run: gh pr comment $PR_NUMBER --body "DDL changes are as follows:"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.number }}
