@@ -47,7 +47,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 ),
                 metric_type="distribution",
                 target_mat_version=4,
-                appended_where_clause="AND 1=1",
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.METRICS,
@@ -63,7 +62,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 mv_name=get_polymorphic_mv_variant_name("sets", self.mv_version),
                 metric_type="set",
                 target_mat_version=4,
-                appended_where_clause="AND 1=1",
             ),
         ]
 
