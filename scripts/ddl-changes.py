@@ -20,7 +20,11 @@ def _main() -> None:
     if diff_result.returncode != 0:
         raise ExecError(diff_result.stdout)
     else:
-        for line in diff_result.stdout.splitlines():
+        lines = diff_result.stdout.splitlines()
+        if len(lines) > 0:
+            print("## Migration changes in this PR")
+            print()
+        for line in lines:
             # example git diff output:
             # A     snuba/migrations/snuba_migrations/metrics/0030_metrics_distributions_v2_writing_mv.py
             regex = (
@@ -41,12 +45,12 @@ def _main() -> None:
                 if modification_type in {"M", "A"}:
                     runner = Runner()
                     migration_key = MigrationKey(migration_group, migration_id)
-                    print(f"running ({migration_key}):")
+                    print(f"### {migration_group.value} : {migration_id}")
                     print("```sql")
                     runner.run_migration(migration_key, dry_run=True)
                     print("```")
             else:
-                # print to stderr so we don't comment this on the PR
+                # output to stderr doesn't get added to the comment
                 print(f"ignoring line from git-diff: {line}", file=stderr)
 
 
