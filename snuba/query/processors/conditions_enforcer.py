@@ -56,11 +56,14 @@ class ProjectIdEnforcer(ConditionChecker):
 
 
 class OrgIdEnforcer(ConditionChecker):
+    def __init__(self, field_name: str = "org_id") -> None:
+        self.field_name = field_name
+
     def get_id(self) -> str:
-        return "org_id"
+        return self.field_name
 
     def check(self, expression: Expression) -> bool:
-        return _check_expression(EQ_CONDITION_PATTERN, expression, "org_id")
+        return _check_expression(EQ_CONDITION_PATTERN, expression, self.field_name)
 
 
 class MandatoryConditionEnforcer(QueryProcessor):
