@@ -11,6 +11,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
+    ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
@@ -71,5 +72,6 @@ class OutcomesEntity(Entity):
         return [
             BasicFunctionsProcessor(),
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
+            ReferrerRateLimiterProcessor(),
             OrganizationRateLimiterProcessor(org_column="org_id"),
         ]
