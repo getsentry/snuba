@@ -1,6 +1,7 @@
 import re
 import subprocess
 from shutil import ExecError
+from sys import stderr
 
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
@@ -40,10 +41,13 @@ def _main() -> None:
                 if modification_type in {"M", "A"}:
                     runner = Runner()
                     migration_key = MigrationKey(migration_group, migration_id)
-                    print(f"running {migration_key}")
+                    print(f"running ({migration_key}):")
+                    print("```sql")
                     runner.run_migration(migration_key, dry_run=True)
+                    print("```")
             else:
-                print(f"ignoring line from git-diff: {line}")
+                # print to stderr so we don't comment this on the PR
+                print(f"ignoring line from git-diff: {line}", file=stderr)
 
 
 if __name__ == "__main__":
