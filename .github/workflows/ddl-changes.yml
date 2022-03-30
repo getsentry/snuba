@@ -1,0 +1,36 @@
+name: ddl-changes
+on:
+  pull_request:
+
+jobs:
+  post_changes:
+    name: Post new DDL changes from migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout master for diffing
+        with:
+          ref: master
+      - uses: actions/checkout@v3
+        name: Checkout HEAD of code that may have migration changes
+        with:
+          clean: false
+      - uses: actions/setup-python@v3
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install-python-dependencies
+      - name: Run the migration script
+        run: |
+          SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
+      - name: Generate SQL for migration
+        uses: getsentry/action-migrations@v1.0.8
+        env:
+          SNUBA_SETTINGS: test_distributed
+        with:
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          migration: "./snuba/migrations/groups.py"
+          cmd: python scripts/ddl-changes.py
