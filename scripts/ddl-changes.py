@@ -22,7 +22,7 @@ def _main() -> None:
     else:
         lines = diff_result.stdout.splitlines()
         if len(lines) > 0:
-            print("## Migration changes in this PR")
+            print("-- start migrations")
             print()
         for line in lines:
             # example git diff output:
@@ -45,10 +45,9 @@ def _main() -> None:
                 if modification_type in {"M", "A"}:
                     runner = Runner()
                     migration_key = MigrationKey(migration_group, migration_id)
-                    print(f"### {migration_group.value} : {migration_id}")
-                    print("```sql")
+                    print(f"-- migration {migration_group.value} : {migration_id}")
                     runner.run_migration(migration_key, dry_run=True)
-                    print("```")
+                    print(f"-- end migration {migration_group.value} : {migration_id}")
             else:
                 # output to stderr doesn't get added to the comment
                 print(f"ignoring line from git-diff: {line}", file=stderr)

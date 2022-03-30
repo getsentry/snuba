@@ -26,11 +26,6 @@ jobs:
       - name: Run the migration script
         run: |
           SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
-      # - name: Post comment
-      #   run: if [ -s ddl-changes.txt ]; then gh pr comment $PR_NUMBER --body-file ddl-changes.txt; fi
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     PR_NUMBER: ${{ github.event.number }}
       - name: Generate SQL for migration
         uses: getsentry/action-migrations@v1.0.8
         env:
