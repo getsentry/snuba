@@ -29,7 +29,7 @@ test_data = [
             ],
             None,
         ),
-        False,
+        1,
         id="errors non-parallel",
     ),
     pytest.param(
@@ -47,7 +47,7 @@ test_data = [
             ],
             None,
         ),
-        True,
+        2,
         id="errors parallel",
     ),
     pytest.param(
@@ -64,7 +64,7 @@ test_data = [
             ],
             None,
         ),
-        False,
+        1,
         id="transactions non-parallel",
     ),
     pytest.param(
@@ -81,7 +81,7 @@ test_data = [
             ],
             None,
         ),
-        True,
+        2,
         id="transactions parallel",
     ),
 ]
@@ -95,7 +95,7 @@ class TestOptimize:
         self,
         storage_key: StorageKey,
         create_event_row_for_date: Callable[[datetime], InsertBatch],
-        parallel: bool,
+        parallel: int,
     ) -> None:
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()
@@ -189,10 +189,11 @@ class TestOptimize:
         assert _get_metrics_tags(table, host) == expected
 
     @pytest.mark.parametrize(
-        "parts,expected",
+        "parts,subdivisions,expected",
         [
             pytest.param(
                 [Part("1", datetime(2022, 3, 28), 90)],
+                2,
                 [[Part("1", datetime(2022, 3, 28), 90)], []],
                 id="one part",
             ),
@@ -201,6 +202,7 @@ class TestOptimize:
                     Part("1", datetime(2022, 3, 28), 90),
                     Part("2", datetime(2022, 3, 21), 90),
                 ],
+                2,
                 [
                     [Part("1", datetime(2022, 3, 28), 90)],
                     [Part("2", datetime(2022, 3, 21), 90)],
@@ -212,8 +214,25 @@ class TestOptimize:
                     Part("1", datetime(2022, 3, 28), 90),
                     Part("2", datetime(2022, 3, 21), 90),
                     Part("3", datetime(2022, 3, 28), 30),
+                ],
+                2,
+                [
+                    [
+                        Part("1", datetime(2022, 3, 28), 90),
+                        Part("2", datetime(2022, 3, 21), 90),
+                    ],
+                    [Part("3", datetime(2022, 3, 28), 30)],
+                ],
+                id="three parts",
+            ),
+            pytest.param(
+                [
+                    Part("1", datetime(2022, 3, 28), 90),
+                    Part("2", datetime(2022, 3, 21), 90),
+                    Part("3", datetime(2022, 3, 28), 30),
                     Part("4", datetime(2022, 3, 21), 30),
                 ],
+                2,
                 [
                     [
                         Part("1", datetime(2022, 3, 28), 90),
@@ -233,23 +252,31 @@ class TestOptimize:
                     Part("3", datetime(2022, 3, 28), 30),
                     Part("4", datetime(2022, 3, 21), 30),
                     Part("5", datetime(2022, 3, 14), 90),
+                    Part("6", datetime(2022, 3, 7), 90),
                 ],
+                3,
                 [
                     [
                         Part("1", datetime(2022, 3, 28), 90),
-                        Part("2", datetime(2022, 3, 21), 90),
-                        Part("5", datetime(2022, 3, 14), 90),
+                        Part("4", datetime(2022, 3, 21), 30),
                     ],
                     [
                         Part("3", datetime(2022, 3, 28), 30),
-                        Part("4", datetime(2022, 3, 21), 30),
+                        Part("5", datetime(2022, 3, 14), 90),
+                    ],
+                    [
+                        Part("2", datetime(2022, 3, 21), 90),
+                        Part("6", datetime(2022, 3, 7), 90),
                     ],
                 ],
-                id="five parts",
+                id="six parts",
             ),
         ],
     )
     def test_subdivide_parts(
-        self, parts: Sequence[util.Part], expected: Sequence[Sequence[util.Part]]
+        self,
+        parts: Sequence[util.Part],
+        subdivisions: int,
+        expected: Sequence[Sequence[util.Part]],
     ) -> None:
-        assert _subdivide_parts(parts) == expected
+        assert _subdivide_parts(parts, subdivisions) == expected

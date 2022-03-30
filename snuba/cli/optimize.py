@@ -25,14 +25,17 @@ from snuba.environment import setup_logging, setup_sentry
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
-    "--parallel", default=False, is_flag=True, help="Run 2 optimizations concurrently"
+    "--parallel",
+    type=click.IntRange(1, 2),
+    default=1,
+    help="Run parallel optimizations",
 )
 def optimize(
     *,
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     storage_name: str,
-    parallel: bool = False,
+    parallel: int,
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime

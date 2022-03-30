@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, MutableSequence, Optional, Sequence
 
 from snuba import environment, settings, util
 from snuba.clickhouse.native import ClickhousePool
@@ -37,7 +37,7 @@ def run_optimize(
     database: str,
     before: Optional[datetime] = None,
     ignore_cutoff: bool = False,
-    parallel: bool = False,
+    parallel: int = 1,
     clickhouse_host: Optional[str] = None,
 ) -> int:
     start = time.time()
@@ -128,21 +128,21 @@ def get_partitions_to_optimize(
     return parts
 
 
-def _subdivide_parts(parts: Sequence[util.Part]) -> Sequence[Sequence[util.Part]]:
+def _subdivide_parts(
+    parts: Sequence[util.Part], number_of_subdivisions: int
+) -> Sequence[Sequence[util.Part]]:
     """
-    Subdivide a list of parts into 2 lists of parts so that optimize query can be executed
+    Subdivide a list of parts into number_of_subdivisions lists of parts so that optimize can be executed
     on different parts list by different threads.
     """
 
     sorted_parts = sorted(parts, key=lambda part: part.date, reverse=True)
+    output: MutableSequence[Sequence[util.Part]] = []
 
-    list1 = [
-        sorted_parts[index] for index in range(len(sorted_parts)) if index % 2 == 0
-    ]
-    list2 = [
-        sorted_parts[index] for index in range(len(sorted_parts)) if index % 2 == 1
-    ]
-    return [list1, list2]
+    for i in range(number_of_subdivisions):
+        output.append(sorted_parts[i::number_of_subdivisions])
+
+    return output
 
 
 def optimize_partition_runner(
@@ -151,29 +151,35 @@ def optimize_partition_runner(
     table: str,
     parts: Sequence[util.Part],
     ignore_cutoff: bool,
-    parallel: bool,
+    parallel: int,
     clickhouse_host: Optional[str] = None,
 ) -> None:
-    if not parallel:
+    if parallel <= 1:
         optimize_partitions(
             clickhouse, database, table, parts, ignore_cutoff, clickhouse_host
         )
     else:
-        parts1, parts2 = _subdivide_parts(parts)
-        thread1 = threading.Thread(
-            target=optimize_partitions,
-            args=(clickhouse, database, table, parts1, ignore_cutoff, clickhouse_host),
-        )
-        thread2 = threading.Thread(
-            target=optimize_partitions,
-            args=(clickhouse, database, table, parts2, ignore_cutoff, clickhouse_host),
-        )
+        divided_parts = _subdivide_parts(parts, parallel)
+        threads: MutableSequence[threading.Thread] = []
+        for i in range(0, parallel):
+            threads.append(
+                threading.Thread(
+                    target=optimize_partitions,
+                    args=(
+                        clickhouse,
+                        database,
+                        table,
+                        divided_parts[i],
+                        ignore_cutoff,
+                        clickhouse_host,
+                    ),
+                )
+            )
 
-        thread1.start()
-        thread2.start()
+            threads[i].start()
 
-        thread1.join()
-        thread2.join()
+        for i in range(0, parallel):
+            threads[i].join()
 
 
 def optimize_partitions(
