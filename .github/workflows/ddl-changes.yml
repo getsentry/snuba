@@ -29,8 +29,6 @@ jobs:
       - name: Generate SQL for migration
         uses: getsentry/action-migrations@v1.0.8
         env:
-          SENTRY_LOG_LEVEL: ERROR
-          PGPASSWORD: postgres
           SNUBA_SETTINGS: test_distributed
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
