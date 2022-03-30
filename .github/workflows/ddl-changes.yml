@@ -1,4 +1,4 @@
-name: ci
+name: ddl-changes
 on:
   pull_request:
 
