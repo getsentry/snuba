@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Optional, Union
 
+from snuba import settings
+
 
 def build_blocks(data: Any, action: str, timestamp: str, user: str) -> List[Any]:
     return [build_section(data, action), build_context(user, timestamp, action)]
@@ -28,20 +30,19 @@ def build_section(data: Any, action: str) -> Any:
     return {
         "type": "section",
         "text": {"type": "mrkdwn", "text": text},
-        "accessory": {
-            "type": "button",
-            "text": {"type": "plain_text", "text": "Audit Log"},
-            "url": "https://snuba-admin.getsentry.net/#auditlog",
-        },
     }
 
 
 def build_context(
     user: str, timestamp: str, action: str
 ) -> Dict[str, Union[str, List[Dict[str, str]]]]:
+    url = f"{settings.ADMIN_URL}/#auditlog"
     return {
         "type": "context",
         "elements": [
-            {"type": "mrkdwn", "text": f"{action} at *{timestamp}* by *<{user}>*"}
+            {
+                "type": "mrkdwn",
+                "text": f"{action} at *<{url}|{timestamp}>* by *<{user}>*",
+            }
         ],
     }

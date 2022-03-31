@@ -15,6 +15,7 @@ PORT = 1218
 
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
+ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
 
