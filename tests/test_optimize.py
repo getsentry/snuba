@@ -8,7 +8,11 @@ from snuba import optimize, settings, util
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.optimize import _get_metrics_tags, _subdivide_parts
+from snuba.optimize import (
+    OptimizedPartitionTracker,
+    _get_metrics_tags,
+    _subdivide_parts,
+)
 from snuba.processor import InsertBatch
 from snuba.util import Part
 from tests.helpers import write_processed_messages
@@ -163,7 +167,7 @@ class TestOptimize:
         ] == [(a_month_earlier_monday, 90)]
 
         optimize.optimize_partition_runner(
-            clickhouse, database, table, parts, True, parallel
+            clickhouse, database, table, parts, True, parallel, None
         )
 
         # all parts should be optimized
@@ -280,3 +284,18 @@ class TestOptimize:
         expected: Sequence[Sequence[util.Part]],
     ) -> None:
         assert _subdivide_parts(parts, subdivisions) == expected
+
+
+def test_optimized_partition_tracker() -> None:
+    checker = OptimizedPartitionTracker(host="some-hostname.domain.com")
+
+    assert checker.get_completed_partitions() is None
+
+    checker.update_completed_partitions("Partition 1")
+    assert checker.get_completed_partitions() == ["Partition 1"]
+
+    checker.update_completed_partitions("Partition 2")
+    assert checker.get_completed_partitions() == ["Partition 1", "Partition 2"]
+
+    checker.remove_all_partitions()
+    assert checker.get_completed_partitions() is None

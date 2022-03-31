@@ -1,7 +1,9 @@
+from datetime import timedelta
 from typing import Optional
 
 import click
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -78,12 +80,23 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
 
+    # Adding 10 minutes to the current time before finding the midnight time
+    # to ensure this keeps working even if the system clock of the host that
+    # starts the pod is slightly ahead of the system clock of the host running
+    # the job. This prevents us from getting the wrong midnight.
+    last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+    logger.info("Cutoff time: %s", str(cutoff_time))
+
     num_dropped = run_optimize(
-        connection,
-        storage,
-        database,
+        clickhouse=connection,
+        storage=storage,
+        database=database,
         before=today,
         parallel=parallel,
+        cutoff_time=cutoff_time,
         clickhouse_host=clickhouse_host,
     )
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

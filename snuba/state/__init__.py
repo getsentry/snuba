@@ -43,6 +43,7 @@ config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
 config_changes_list_limit = 25
 queries_list = "snuba-queries"
+optimize_prefix = "snuba-optimize:"
 
 # Rate Limiting and Deduplication
 

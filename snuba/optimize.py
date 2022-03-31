@@ -8,6 +8,7 @@ from snuba import environment, settings, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
+from snuba.state import rds
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -23,6 +24,35 @@ class JobTimeoutException(SerializableException):
     pass
 
 
+class OptimizedPartitionTracker:
+    def __init__(self, host: str):
+        self.__host = host
+        self.__bucket = f"optimize_prefix.{self.__host}"
+        self.__key_expire_time = (
+            datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        )
+
+    def get_completed_partitions(self) -> Optional[Sequence[str]]:
+        completed_partitions = rds.smembers(self.__bucket)
+        if not completed_partitions:
+            return None
+
+        partitions_list: MutableSequence[str] = []
+        for partition in completed_partitions:
+            assert isinstance(partition, bytes)
+            partitions_list.append(partition.decode("utf-8"))
+
+        return partitions_list
+
+    def update_completed_partitions(self, part_name: str) -> None:
+        rds.sadd(self.__bucket, part_name.encode("utf-8"))
+        rds.expireat(self.__bucket, self.__key_expire_time)
+
+    def remove_all_partitions(self) -> None:
+        rds.delete(self.__bucket)
+
+
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
     return (
         {"table": table, "host": clickhouse_host}
@@ -36,8 +66,8 @@ def run_optimize(
     storage: ReadableTableStorage,
     database: str,
     before: Optional[datetime] = None,
-    ignore_cutoff: bool = False,
     parallel: int = 1,
+    cutoff_time: Optional[datetime] = None,
     clickhouse_host: Optional[str] = None,
 ) -> int:
     start = time.time()
@@ -45,17 +75,36 @@ def run_optimize(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
-
-    parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    optimize_partition_runner(
-        clickhouse, database, table, parts, ignore_cutoff, parallel, clickhouse_host
+    partition_tracker = (
+        OptimizedPartitionTracker(clickhouse_host) if clickhouse_host else None
     )
+    parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
+
+    if partition_tracker:
+        completed_partitions = partition_tracker.get_completed_partitions()
+        parts = remove_partitions_already_completed(parts, completed_partitions)
+
+    optimize_partition_runner(
+        clickhouse, database, table, parts, parallel, cutoff_time, None, clickhouse_host
+    )
+    if partition_tracker:
+        partition_tracker.remove_all_partitions()
     metrics.timing(
         "optimized_all_parts",
         time.time() - start,
         tags=_get_metrics_tags(table, clickhouse_host),
     )
     return len(parts)
+
+
+def remove_partitions_already_completed(
+    parts: Sequence[util.Part], completed_partitions: Optional[Sequence[str]]
+) -> Sequence[util.Part]:
+    return (
+        [part for part in parts if part.name in set(completed_partitions)]
+        if completed_partitions
+        else parts
+    )
 
 
 def get_partitions_to_optimize(
@@ -150,15 +199,39 @@ def optimize_partition_runner(
     database: str,
     table: str,
     parts: Sequence[util.Part],
-    ignore_cutoff: bool,
     parallel: int,
+    cutoff_time: Optional[datetime],
+    optimize_partition_tracker: Optional[OptimizedPartitionTracker],
     clickhouse_host: Optional[str] = None,
 ) -> None:
+    """
+    The runner provides a mechanism for running the optimize_partitions call.
+
+    For non-parallel mode, it simply calls the optimize_partitions method.
+
+    For parallel mode, it subdivides the parts into number of threads which are needed to be run.
+    It also provides a different cutoff_time to avoid multiple executions of optimize_partitions
+    during peak traffic time.
+    """
     if parallel <= 1:
         optimize_partitions(
-            clickhouse, database, table, parts, ignore_cutoff, clickhouse_host
+            clickhouse=clickhouse,
+            database=database,
+            table=table,
+            parts=parts,
+            cutoff_time=cutoff_time,
+            optimize_partition_tracker=optimize_partition_tracker,
+            clickhouse_host=clickhouse_host,
         )
     else:
+        # Compute threaded cutoff_time
+        last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        threaded_cutoff_time = (
+            last_midnight + settings.PARALLEL_OPTIMIZE_JOB_CUTOFF_TIME
+        )
+
         divided_parts = _subdivide_parts(parts, parallel)
         threads: MutableSequence[threading.Thread] = []
         for i in range(0, parallel):
@@ -170,7 +243,8 @@ def optimize_partition_runner(
                         database,
                         table,
                         divided_parts[i],
-                        ignore_cutoff,
+                        threaded_cutoff_time,
+                        optimize_partition_tracker,
                         clickhouse_host,
                     ),
                 )
@@ -178,8 +252,31 @@ def optimize_partition_runner(
 
             threads[i].start()
 
+        # Wait for all threads to finish. Any thread can raise JobTimeoutException. Its an indication that not all
+        # parts could be optimized.
         for i in range(0, parallel):
-            threads[i].join()
+            try:
+                threads[i].join()
+            except JobTimeoutException:
+                pass
+
+        if not optimize_partition_tracker:
+            return
+
+        # Find out parts which haven't been optimized.
+        remaining_parts = remove_partitions_already_completed(
+            parts, optimize_partition_tracker.get_completed_partitions()
+        )
+        # Call optimize_partitions with the original cutoff_time
+        optimize_partitions(
+            clickhouse=clickhouse,
+            database=database,
+            table=table,
+            parts=remaining_parts,
+            cutoff_time=cutoff_time,
+            optimize_partition_tracker=optimize_partition_tracker,
+            clickhouse_host=clickhouse_host,
+        )
 
 
 def optimize_partitions(
@@ -187,29 +284,14 @@ def optimize_partitions(
     database: str,
     table: str,
     parts: Sequence[util.Part],
-    ignore_cutoff: bool,
+    cutoff_time: Optional[datetime],
+    optimize_partition_tracker: Optional[OptimizedPartitionTracker],
     clickhouse_host: Optional[str] = None,
 ) -> None:
     query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
         PARTITION %(partition)s FINAL
     """
-
-    # Adding 10 minutes to the current time before finding the midnight time
-    # to ensure this keeps working even if the system clock of the host that
-    # starts the pod is slightly ahead of the system clock of the host running
-    # the job. This prevents us from getting the wrong midnight.
-    last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    if not ignore_cutoff:
-        cutoff_time: Optional[
-            datetime
-        ] = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
-        logger.info("Cutoff time: %s", str(cutoff_time))
-    else:
-        cutoff_time = None
-        logger.info("Ignoring cutoff time")
 
     for part in parts:
         if cutoff_time is not None and datetime.now() > cutoff_time:
@@ -227,6 +309,8 @@ def optimize_partitions(
         logger.info(f"Optimizing partition: {part.name}")
         start = time.time()
         clickhouse.execute(query)
+        if optimize_partition_tracker:
+            optimize_partition_tracker.update_completed_partitions(part.name)
         metrics.timing(
             "optimized_part",
             time.time() - start,
