@@ -11,6 +11,7 @@ import {
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
+  PredefinedQuery,
 } from "./clickhouse_queries/types";
 import { TracingRequest, TracingResult } from "./tracing/types";
 
@@ -30,6 +31,7 @@ interface Client {
   getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
 }
@@ -120,7 +122,10 @@ function Client() {
           })
       );
     },
-
+    getPredefinedQueryOptions: () => {
+      const url = baseUrl + "clickhouse_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
     executeSystemQuery: (query: QueryRequest) => {
       const url = baseUrl + "run_clickhouse_system_query";
       return fetch(url, {
