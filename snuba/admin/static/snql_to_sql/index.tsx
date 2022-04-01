@@ -25,6 +25,15 @@ function SnQLToSQL(props: { api: Client }) {
     });
   }, []);
 
+  function selectDataset(dataset: string) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        dataset,
+      };
+    });
+  }
+
   function updateQuerySql(query: string) {
     setQuery((prevQuery) => {
       return {
@@ -39,7 +48,6 @@ function SnQLToSQL(props: { api: Client }) {
       window.alert("A query is already running");
     }
     setIsExecuting(true);
-    snql_query.dataset = datasets[0]; // dataset doesn't matter for conversion
     props.api
       .executeSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
@@ -67,10 +75,30 @@ function SnQLToSQL(props: { api: Client }) {
         </div>
         <div style={executeActionsStyle}>
           <div>
+            <select
+              value={snql_query.dataset || ""}
+              onChange={(evt) => selectDataset(evt.target.value)}
+              style={selectStyle}
+            >
+              <option disabled value="">
+                Select a dataset
+              </option>
+              {datasets.map((dataset) => (
+                <option key={dataset} value={dataset}>
+                  {dataset}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <button
               onClick={(_) => executeQuery()}
               style={executeButtonStyle}
-              disabled={isExecuting || snql_query.query == undefined}
+              disabled={
+                isExecuting ||
+                snql_query.dataset == undefined ||
+                snql_query.query == undefined
+              }
             >
               Execute query
             </button>
