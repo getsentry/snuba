@@ -9,6 +9,7 @@ from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.environment import setup_logging, setup_sentry
+from snuba.optimize_tracker import RedisOptimizedPartitionTracker
 
 
 @click.command()
@@ -90,6 +91,12 @@ def optimize(
     cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
     logger.info("Cutoff time: %s", str(cutoff_time))
 
+    optimize_partition_tracker = (
+        RedisOptimizedPartitionTracker(clickhouse_host, cutoff_time)
+        if clickhouse_host
+        else None
+    )
+
     num_dropped = run_optimize(
         clickhouse=connection,
         storage=storage,
@@ -98,5 +105,6 @@ def optimize(
         parallel=parallel,
         cutoff_time=cutoff_time,
         clickhouse_host=clickhouse_host,
+        optimize_partition_tracker=optimize_partition_tracker,
     )
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

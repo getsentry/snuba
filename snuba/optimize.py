@@ -8,7 +8,7 @@ from snuba import environment, settings, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.state import rds
+from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -22,35 +22,6 @@ class JobTimeoutException(SerializableException):
     """
 
     pass
-
-
-class OptimizedPartitionTracker:
-    def __init__(self, host: str):
-        self.__host = host
-        self.__bucket = f"optimize_prefix.{self.__host}"
-        self.__key_expire_time = (
-            datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            + settings.OPTIMIZE_JOB_CUTOFF_TIME
-        )
-
-    def get_completed_partitions(self) -> Optional[Sequence[str]]:
-        completed_partitions = rds.smembers(self.__bucket)
-        if not completed_partitions:
-            return None
-
-        partitions_list: MutableSequence[str] = []
-        for partition in completed_partitions:
-            assert isinstance(partition, bytes)
-            partitions_list.append(partition.decode("utf-8"))
-
-        return partitions_list
-
-    def update_completed_partitions(self, part_name: str) -> None:
-        rds.sadd(self.__bucket, part_name.encode("utf-8"))
-        rds.expireat(self.__bucket, self.__key_expire_time)
-
-    def remove_all_partitions(self) -> None:
-        rds.delete(self.__bucket)
 
 
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
@@ -69,42 +40,46 @@ def run_optimize(
     parallel: int = 1,
     cutoff_time: Optional[datetime] = None,
     clickhouse_host: Optional[str] = None,
+    optimize_partition_tracker: Optional[OptimizedPartitionTracker] = None,
 ) -> int:
     start = time.time()
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
-    partition_tracker = (
-        OptimizedPartitionTracker(clickhouse_host) if clickhouse_host else None
-    )
     parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
 
-    if partition_tracker:
-        completed_partitions = partition_tracker.get_completed_partitions()
-        parts = remove_partitions_already_completed(parts, completed_partitions)
+    if optimize_partition_tracker:
+        completed_partitions = optimize_partition_tracker.get_completed_partitions()
+        parts = (
+            [part for part in parts if part.name not in completed_partitions]
+            if completed_partitions
+            else parts
+        )
+
+    if not len(parts):
+        logger.info("No partitions to optimize")
+        return 0
 
     optimize_partition_runner(
-        clickhouse, database, table, parts, parallel, cutoff_time, None, clickhouse_host
+        clickhouse=clickhouse,
+        database=database,
+        table=table,
+        parts=parts,
+        parallel=parallel,
+        cutoff_time=cutoff_time,
+        optimize_partition_tracker=optimize_partition_tracker,
+        clickhouse_host=clickhouse_host,
     )
-    if partition_tracker:
-        partition_tracker.remove_all_partitions()
+
+    if optimize_partition_tracker:
+        optimize_partition_tracker.remove_all_partitions()
     metrics.timing(
         "optimized_all_parts",
         time.time() - start,
         tags=_get_metrics_tags(table, clickhouse_host),
     )
     return len(parts)
-
-
-def remove_partitions_already_completed(
-    parts: Sequence[util.Part], completed_partitions: Optional[Sequence[str]]
-) -> Sequence[util.Part]:
-    return (
-        [part for part in parts if part.name in set(completed_partitions)]
-        if completed_partitions
-        else parts
-    )
 
 
 def get_partitions_to_optimize(
@@ -194,6 +169,90 @@ def _subdivide_parts(
     return output
 
 
+def concurrent_optimize_partition_runner(
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    parts: Sequence[util.Part],
+    parallel: int,
+    cutoff_time: Optional[datetime],
+    optimize_partition_tracker: Optional[OptimizedPartitionTracker],
+    clickhouse_host: Optional[str] = None,
+) -> None:
+    """
+    Run optimize job concurrently using multiple threads.
+
+    It subdivides the partitions into number of threads which are needed to be run. Each thread then runs the optimize
+    job on the list of partitions assigned to it.
+
+    The threads are provides a different cutoff_time than what is provided when calling this function. This is to avoid
+    multiple executions of optimize_partitions during peak traffic time.
+
+    If the threads are unable to process all partitions before cutoff_time is reached, the optimize job is run
+    serially until the original cutoff_time provided in the function call.
+    """
+    threaded_cutoff_time: Optional[datetime] = None
+    if cutoff_time:
+        # Compute threaded cutoff_time
+        last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        threaded_cutoff_time = (
+            last_midnight + settings.PARALLEL_OPTIMIZE_JOB_CUTOFF_TIME
+        )
+        logger.info(f"Threaded cutoff time: {threaded_cutoff_time}")
+
+    divided_parts = _subdivide_parts(parts, parallel)
+    threads: MutableSequence[threading.Thread] = []
+    for i in range(0, parallel):
+        threads.append(
+            threading.Thread(
+                target=optimize_partitions,
+                args=(
+                    clickhouse,
+                    database,
+                    table,
+                    divided_parts[i],
+                    threaded_cutoff_time,
+                    optimize_partition_tracker,
+                    clickhouse_host,
+                ),
+            )
+        )
+
+        threads[i].start()
+
+    # Wait for all threads to finish. Any thread can raise JobTimeoutException. Its an indication that not all
+    # partitions could be optimized in the given amount of threaded_cutoff_time.
+    for i in range(0, parallel):
+        try:
+            threads[i].join()
+        except JobTimeoutException:
+            pass
+
+    if not optimize_partition_tracker:
+        return
+
+    # Find out partitions which couldn't be optimized because of threaded cutoff time.
+    partitions = optimize_partition_tracker.get_completed_partitions()
+    remaining_parts = (
+        [part for part in parts if part.name not in partitions] if partitions else parts
+    )
+
+    if len(remaining_parts):
+        # Call optimize_partitions with the original cutoff_time now since running optimizations
+        # serially is allowed for a larger duration.
+        optimize_partitions(
+            clickhouse=clickhouse,
+            database=database,
+            table=table,
+            parts=remaining_parts,
+            cutoff_time=cutoff_time,
+            optimize_partition_tracker=optimize_partition_tracker,
+            clickhouse_host=clickhouse_host,
+        )
+
+
 def optimize_partition_runner(
     clickhouse: ClickhousePool,
     database: str,
@@ -205,13 +264,8 @@ def optimize_partition_runner(
     clickhouse_host: Optional[str] = None,
 ) -> None:
     """
-    The runner provides a mechanism for running the optimize_partitions call.
-
-    For non-parallel mode, it simply calls the optimize_partitions method.
-
-    For parallel mode, it subdivides the parts into number of threads which are needed to be run.
-    It also provides a different cutoff_time to avoid multiple executions of optimize_partitions
-    during peak traffic time.
+    Optimize partition runner decides whether to run the threaded version of
+    optimization or the non-threaded version.
     """
     if parallel <= 1:
         optimize_partitions(
@@ -224,55 +278,12 @@ def optimize_partition_runner(
             clickhouse_host=clickhouse_host,
         )
     else:
-        # Compute threaded cutoff_time
-        last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        threaded_cutoff_time = (
-            last_midnight + settings.PARALLEL_OPTIMIZE_JOB_CUTOFF_TIME
-        )
-
-        divided_parts = _subdivide_parts(parts, parallel)
-        threads: MutableSequence[threading.Thread] = []
-        for i in range(0, parallel):
-            threads.append(
-                threading.Thread(
-                    target=optimize_partitions,
-                    args=(
-                        clickhouse,
-                        database,
-                        table,
-                        divided_parts[i],
-                        threaded_cutoff_time,
-                        optimize_partition_tracker,
-                        clickhouse_host,
-                    ),
-                )
-            )
-
-            threads[i].start()
-
-        # Wait for all threads to finish. Any thread can raise JobTimeoutException. Its an indication that not all
-        # parts could be optimized.
-        for i in range(0, parallel):
-            try:
-                threads[i].join()
-            except JobTimeoutException:
-                pass
-
-        if not optimize_partition_tracker:
-            return
-
-        # Find out parts which haven't been optimized.
-        remaining_parts = remove_partitions_already_completed(
-            parts, optimize_partition_tracker.get_completed_partitions()
-        )
-        # Call optimize_partitions with the original cutoff_time
-        optimize_partitions(
+        concurrent_optimize_partition_runner(
             clickhouse=clickhouse,
             database=database,
             table=table,
-            parts=remaining_parts,
+            parts=parts,
+            parallel=parallel,
             cutoff_time=cutoff_time,
             optimize_partition_tracker=optimize_partition_tracker,
             clickhouse_host=clickhouse_host,
@@ -308,9 +319,13 @@ def optimize_partitions(
         query = (query_template % args).strip()
         logger.info(f"Optimizing partition: {part.name}")
         start = time.time()
-        clickhouse.execute(query)
+
+        # Update tracker before running clickhouse.execute since its possible that the connection can get
+        # disconnected while the server is still executing the optimization. In that case we don't want to
+        # run optimization on the same partition twice.
         if optimize_partition_tracker:
             optimize_partition_tracker.update_completed_partitions(part.name)
+        clickhouse.execute(query)
         metrics.timing(
             "optimized_part",
             time.time() - start,

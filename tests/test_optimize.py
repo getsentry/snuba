@@ -9,10 +9,12 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import (
-    OptimizedPartitionTracker,
+    JobTimeoutException,
     _get_metrics_tags,
     _subdivide_parts,
+    optimize_partition_runner,
 )
+from snuba.optimize_tracker import InMemoryPartitionTracker
 from snuba.processor import InsertBatch
 from snuba.util import Part
 from tests.helpers import write_processed_messages
@@ -167,7 +169,13 @@ class TestOptimize:
         ] == [(a_month_earlier_monday, 90)]
 
         optimize.optimize_partition_runner(
-            clickhouse, database, table, parts, True, parallel, None
+            clickhouse=clickhouse,
+            database=database,
+            table=table,
+            parts=parts,
+            parallel=parallel,
+            cutoff_time=None,
+            optimize_partition_tracker=None,
         )
 
         # all parts should be optimized
@@ -286,16 +294,24 @@ class TestOptimize:
         assert _subdivide_parts(parts, subdivisions) == expected
 
 
-def test_optimized_partition_tracker() -> None:
-    checker = OptimizedPartitionTracker(host="some-hostname.domain.com")
+def test_optimize_runner_raises_exception_with_cutoff_time() -> None:
+    """
+    Tests that a JobTimeoutException is raised when a cutoff time is reached.
+    """
+    storage = get_writable_storage(StorageKey.ERRORS)
+    cluster = storage.get_cluster()
+    clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+    table = storage.get_table_writer().get_schema().get_local_table_name()
+    database = cluster.get_database()
 
-    assert checker.get_completed_partitions() is None
-
-    checker.update_completed_partitions("Partition 1")
-    assert checker.get_completed_partitions() == ["Partition 1"]
-
-    checker.update_completed_partitions("Partition 2")
-    assert checker.get_completed_partitions() == ["Partition 1", "Partition 2"]
-
-    checker.remove_all_partitions()
-    assert checker.get_completed_partitions() is None
+    parts = [util.Part("1", datetime.now(), 90)]
+    with pytest.raises(JobTimeoutException):
+        optimize_partition_runner(
+            clickhouse=clickhouse_pool,
+            database=database,
+            table=table,
+            parts=parts,
+            parallel=2,
+            cutoff_time=datetime.now(),
+            optimize_partition_tracker=InMemoryPartitionTracker(),
+        )
