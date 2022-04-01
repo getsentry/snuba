@@ -28,4 +28,10 @@ type QueryResult = {
   error?: string;
 };
 
-export { ClickhouseNodeData, QueryRequest, QueryResult };
+type PredefinedQuery = {
+  name: string;
+  sql: string;
+  description: string;
+};
+
+export { ClickhouseNodeData, QueryRequest, QueryResult, PredefinedQuery };
