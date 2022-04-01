@@ -138,7 +138,7 @@ function SnQLTracing(props: { api: Client }) {
               >
                 Copy to clipboard
               </button>
-              {queryResult.sql}
+              {tablePopulator(queryResult.tracing_result)}
             </div>,
           ])}
           columnWidths={[1, 1, 5]}
