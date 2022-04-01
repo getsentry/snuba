@@ -30,12 +30,10 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.streaming import (
-    CollectStep,
-    FilterStep,
-    ParallelCollectStep,
-    ParallelTransformStep,
-    TransformStep,
+from arroyo.processing.strategies.streaming import FilterStep, TransformStep
+from arroyo.processing.strategies.streaming.factory import (
+    ConsumerStrategyFactory,
+    StreamMessageFilter,
 )
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
@@ -46,7 +44,6 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey, are_writes_identical
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.table_storage import TableWriter
-from snuba.environment import setup_sentry
 from snuba.processor import (
     AggregateInsertBatch,
     InsertBatch,
@@ -597,6 +594,11 @@ class MultistorageKafkaPayload(NamedTuple):
     payload: KafkaPayload
 
 
+MultistorageProcessedMessage = Sequence[
+    Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+]
+
+
 def process_message(
     processor: MessageProcessor, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
@@ -644,7 +646,7 @@ def _process_message_multistorage_work(
 
 def process_message_multistorage(
     message: Message[MultistorageKafkaPayload],
-) -> Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]:
+) -> MultistorageProcessedMessage:
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
         message.offset, message.partition.index, message.timestamp
@@ -665,7 +667,7 @@ def process_message_multistorage(
 
 def process_message_multistorage_identical_storages(
     message: Message[MultistorageKafkaPayload],
-) -> Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]:
+) -> MultistorageProcessedMessage:
     """
     This method is similar to process_message_multistorage except for a minor difference.
     It performs an optimization where it avoids processing a message multiple times if the
@@ -766,9 +768,7 @@ def build_collector(
     storages: Sequence[WritableTableStorage],
     topic: Optional[Topic],
     producer: Optional[ConfluentKafkaProducer] = None,
-) -> ProcessingStep[
-    Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
-]:
+) -> ProcessingStep[MultistorageProcessedMessage]:
     dead_letter_step: Optional[DeadLetterStep] = None
     if producer and topic:
         dead_letter_step = DeadLetterStep(
@@ -788,6 +788,11 @@ def build_collector(
     )
 
 
+class MultiStorageStreamFilter(StreamMessageFilter[MultistorageKafkaPayload]):
+    def should_drop(self, message: Message[MultistorageKafkaPayload]) -> bool:
+        return not has_destination_storages(message)
+
+
 class MultistorageConsumerProcessingStrategyFactory(
     ProcessingStrategyFactory[KafkaPayload]
 ):
@@ -803,6 +808,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         metrics: MetricsBackend,
         producer: Optional[AbstractProducer[KafkaPayload]],
         topic: Optional[Topic],
+        initialize_parallel_transform: Optional[Callable[[], None]] = None,
     ):
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -816,13 +822,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             ), "output block size cannot be used without processes"
 
         self.__storages = storages
-        self.__max_batch_size = max_batch_size
-        self.__max_batch_time = max_batch_time
-        self.__processes = processes
-        self.__input_block_size = input_block_size
-        self.__output_block_size = output_block_size
         self.__metrics = metrics
-        self.__parallel_collect = parallel_collect
         self.__producer = producer
         self.__topic = topic
 
@@ -833,60 +833,29 @@ class MultistorageConsumerProcessingStrategyFactory(
         ):
             self.__process_message_fn = process_message_multistorage_identical_storages
 
+        self.__inner_factory = ConsumerStrategyFactory(
+            prefilter=MultiStorageStreamFilter(),
+            process_message=self.__process_message_fn,
+            collector=partial(
+                build_collector,
+                self.__metrics,
+                self.__storages,
+                self.__topic,
+                self.__producer,
+            ),
+            max_batch_size=max_batch_size,
+            max_batch_time=max_batch_time,
+            processes=processes,
+            input_block_size=input_block_size,
+            output_block_size=output_block_size,
+            initialize_parallel_transform=initialize_parallel_transform,
+            parallel_collect=parallel_collect,
+        )
+
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
-        # 1. Identify the storages that should be used for the input message.
-        # 2. Filter out any messages that do not apply to any storage.
-        # 3. Transform the messages using the selected storages.
-        # 4. Route the messages to the collector for each storage.
-        collect = (
-            ParallelCollectStep(
-                partial(
-                    build_collector,
-                    self.__metrics,
-                    self.__storages,
-                    self.__topic,
-                    self.__producer,
-                ),
-                commit,
-                self.__max_batch_size,
-                self.__max_batch_time,
-            )
-            if self.__parallel_collect
-            else CollectStep(
-                partial(
-                    build_collector,
-                    self.__metrics,
-                    self.__storages,
-                    self.__topic,
-                    self.__producer,
-                ),
-                commit,
-                self.__max_batch_size,
-                self.__max_batch_time,
-            )
-        )
-
-        strategy: ProcessingStrategy[MultistorageKafkaPayload]
-
-        if self.__processes is None:
-            strategy = TransformStep(self.__process_message_fn, collect)
-        else:
-            assert self.__input_block_size is not None
-            assert self.__output_block_size is not None
-            strategy = ParallelTransformStep(
-                self.__process_message_fn,
-                collect,
-                self.__processes,
-                self.__max_batch_size,
-                self.__max_batch_time,
-                self.__input_block_size,
-                self.__output_block_size,
-                initializer=setup_sentry,
-            )
-
         return TransformStep(
             partial(find_destination_storages, self.__storages),
-            FilterStep(has_destination_storages, strategy),
+            FilterStep(has_destination_storages, self.__inner_factory.create(commit)),
         )
