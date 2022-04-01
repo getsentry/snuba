@@ -362,9 +362,6 @@ def snuba_datasets() -> Response:
 
 @application.route("/snql_to_sql", methods=["POST"])
 def snql_to_sql() -> Response:
-
     body = json.loads(request.data)
-    body["debug"] = True
-    body["dry_run"] = True
     dataset = get_dataset(body.pop("dataset"))
     return dataset_query(dataset, body, Timer("admin"))

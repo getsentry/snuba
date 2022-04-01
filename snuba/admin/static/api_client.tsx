@@ -11,6 +11,7 @@ import {
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
+  PredefinedQuery,
 } from "./clickhouse_queries/types";
 import { TracingRequest, TracingResult } from "./tracing/types";
 import {
@@ -37,6 +38,7 @@ interface Client {
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
+  getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
 }
@@ -142,6 +144,10 @@ function Client() {
       }).then((resp) => resp.json());
     },
 
+    getPredefinedQueryOptions: () => {
+      const url = baseUrl + "clickhouse_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
     executeSystemQuery: (query: QueryRequest) => {
       const url = baseUrl + "run_clickhouse_system_query";
       return fetch(url, {

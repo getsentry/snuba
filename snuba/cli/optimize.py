@@ -24,11 +24,18 @@ from snuba.environment import setup_logging, setup_sentry
     required=True,
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--parallel",
+    type=click.IntRange(1, 2),
+    default=1,
+    help="Run parallel optimizations",
+)
 def optimize(
     *,
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     storage_name: str,
+    parallel: int,
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
@@ -71,5 +78,12 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    num_dropped = run_optimize(connection, storage, database, before=today)
+    num_dropped = run_optimize(
+        connection,
+        storage,
+        database,
+        before=today,
+        parallel=parallel,
+        clickhouse_host=clickhouse_host,
+    )
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
