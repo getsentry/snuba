@@ -20,6 +20,7 @@ from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -185,16 +186,13 @@ def _run_query_pipeline(
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
     if request.settings.get_dry_run():
-        storage = "<multiple>"
+        storage_name = "<multiple>"
         if isinstance(request.query, LogicalQuery):
             entity = get_entity(request.query.get_from_clause().key)
-            storage = (
-                entity.get_query_pipeline_builder()
-                .build_planner(request.query, request.settings)
-                .build_and_rank_plans()[0]
-                .storage_set_key
-            ).value
-        query_runner = partial(_dry_run_query_runner, storage)
+            storage = entity.get_all_storages()[0]
+            assert isinstance(storage, ReadableTableStorage)
+            storage_name = storage.get_storage_key().value
+        query_runner = partial(_dry_run_query_runner, storage_name)
     else:
         query_runner = partial(
             _run_and_apply_column_names,
@@ -205,7 +203,6 @@ def _run_query_pipeline(
             concurrent_queries_gauge,
         )
 
-    dataset.get_query_pipeline_builder().build_execution_pipeline(request, query_runner)
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
@@ -214,7 +211,7 @@ def _run_query_pipeline(
 
 
 def _dry_run_query_runner(
-    storage: str,
+    storage_name: str,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
@@ -229,7 +226,7 @@ def _dry_run_query_runner(
         {
             "stats": {
                 "clickhouse_table": _get_clickhouse_tables(clickhouse_query, visitor),
-                "storage": storage,
+                "storage": storage_name,
             },
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
