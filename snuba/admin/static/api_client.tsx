@@ -13,12 +13,12 @@ import {
   QueryResult,
   PredefinedQuery,
 } from "./clickhouse_queries/types";
-import { TracingRequest, TracingResult } from "./tracing/types";
+import { TracingRequest, TracingResult } from "./tracing/clickhouse/types";
 import {
   SnQLRequest,
   SnQLResult,
   SnubaDatasetName,
-} from "./tracing/snql_tracing/types";
+} from "./tracing/snql/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;

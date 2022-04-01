@@ -1,8 +1,8 @@
 import RuntimeConfig from "./runtime_config";
 import AuditLog from "./runtime_config/auditlog";
 import ClickhouseQueries from "./clickhouse_queries";
-import TracingQueries from "./tracing";
-import SnQLTracing from "./tracing/snql_tracing";
+import TracingQueries from "./tracing/clickhouse";
+import SnQLTracing from "./tracing/snql";
 import SnQLToSQL from "./snql_to_sql";
 
 function Placeholder(props: any) {

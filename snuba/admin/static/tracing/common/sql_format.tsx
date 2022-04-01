@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { SnQLRequest } from "../snql_tracing/types";
-import { LogLine, TracingRequest, TracingResult } from "../types";
-import { parseLogLine } from "../util";
+import { SnQLRequest } from "../snql/types";
+import { LogLine, TracingRequest, TracingResult } from "../clickhouse/types";
+import { parseLogLine } from "../clickhouse/util";
 import { collapsibleStyle } from "./styles";
 
 type QueryState = Partial<TracingRequest>;
