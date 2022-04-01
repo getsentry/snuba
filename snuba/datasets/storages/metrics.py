@@ -165,8 +165,8 @@ sets_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_SETS,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
-        local_table_name="metrics_sets_local",
-        dist_table_name="metrics_sets_dist",
+        local_table_name="metrics_sets_v2_local",
+        dist_table_name="metrics_sets_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
         columns=ColumnSet(
             [
