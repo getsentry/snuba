@@ -3,6 +3,7 @@ import AuditLog from "./runtime_config/auditlog";
 import ClickhouseQueries from "./clickhouse_queries";
 import TracingQueries from "./tracing";
 import SnQLTracing from "./tracing/snql_tracing";
+import SnQLToSQL from "./snql_to_sql";
 
 function Placeholder(props: any) {
   return null;
@@ -12,8 +13,13 @@ const NAV_ITEMS = [
   { id: "overview", display: "🤿 Overview", component: Placeholder },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
+    id: "snql-to-sql",
+    display: "🌐 SnQL to SQL",
+    component: SnQLToSQL,
+  },
+  {
     id: "clickhouse",
-    display: "🏚️ ClickHouse",
+    display: "🏚️ System Queries",
     component: ClickhouseQueries,
   },
   {
