@@ -9,6 +9,7 @@ import {
   executeButtonStyle,
 } from "../common/styles";
 import { copyText, TextArea } from "../common/utils";
+import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./types";
 
 function SnQLTracing(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
@@ -25,8 +26,6 @@ function SnQLTracing(props: { api: Client }) {
   }, []);
 
   function selectDataset(dataset: string) {
-    console.log("setting " + dataset);
-    console.log(snql_query);
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
@@ -36,7 +35,6 @@ function SnQLTracing(props: { api: Client }) {
   }
 
   function updateQuerySql(query: string) {
-    console.log(query);
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
@@ -53,11 +51,30 @@ function SnQLTracing(props: { api: Client }) {
     props.api
       .executeSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
-        const query_result = {
-          input_query: snql_query.query,
-          sql: result.sql,
-        };
-        setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
+        props.api
+          .executeTracingQuery({
+            storage: result.stats.storage,
+            sql: result.sql,
+          })
+          .then((tracing_result) => {
+            const query_result = {
+              input_query: snql_query.query,
+              tracing_result: tracing_result,
+              sql: result.sql,
+              stats: result.stats,
+            };
+            setQueryResultHistory((prevHistory) => [
+              query_result,
+              ...prevHistory,
+            ]);
+          })
+          .catch((err) => {
+            console.log("ERROR", err);
+            window.alert("An error occurred: " + err.error.message);
+          })
+          .finally(() => {
+            setIsExecuting(false);
+          });
       })
       .catch((err) => {
         console.log("ERROR", err);
@@ -110,9 +127,10 @@ function SnQLTracing(props: { api: Client }) {
       <div>
         <h2>Query results</h2>
         <Table
-          headerData={["Query", "Response"]}
+          headerData={["SnQL", "Generated SQL", "Response"]}
           rowData={queryResultHistory.map((queryResult) => [
             <span>{queryResult.input_query}</span>,
+            <span>{queryResult.sql}</span>,
             <div>
               <button
                 style={executeButtonStyle}
@@ -123,7 +141,7 @@ function SnQLTracing(props: { api: Client }) {
               {queryResult.sql}
             </div>,
           ])}
-          columnWidths={[1, 5]}
+          columnWidths={[1, 1, 5]}
         />
       </div>
     </div>

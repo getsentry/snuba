@@ -185,7 +185,16 @@ def _run_query_pipeline(
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
     if request.settings.get_dry_run():
-        query_runner = _dry_run_query_runner
+        storage = "<multiple>"
+        if isinstance(request.query, LogicalQuery):
+            entity = get_entity(request.query.get_from_clause().key)
+            storage = (
+                entity.get_query_pipeline_builder()
+                .build_planner(request.query, request.settings)
+                .build_and_rank_plans()[0]
+                .storage_set_key
+            ).value
+        query_runner = partial(_dry_run_query_runner, storage)
     else:
         query_runner = partial(
             _run_and_apply_column_names,
@@ -196,6 +205,7 @@ def _run_query_pipeline(
             concurrent_queries_gauge,
         )
 
+    dataset.get_query_pipeline_builder().build_execution_pipeline(request, query_runner)
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
@@ -204,6 +214,7 @@ def _run_query_pipeline(
 
 
 def _dry_run_query_runner(
+    storage: str,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
@@ -212,10 +223,14 @@ def _dry_run_query_runner(
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
+    visitor = TablesCollector()
     return QueryResult(
         {"data": [], "meta": []},
         {
-            "stats": {},
+            "stats": {
+                "clickhouse_table": _get_clickhouse_tables(clickhouse_query, visitor),
+                "storage": storage,
+            },
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
         },
@@ -287,10 +302,8 @@ def _format_storage_query_and_run(
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
-    from_clause = clickhouse_query.get_from_clause()
     visitor = TablesCollector()
-    visitor.visit(from_clause)
-    table_names = ",".join(sorted(visitor.get_tables()))
+    table_names = _get_clickhouse_tables(clickhouse_query, visitor)
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         _apply_turbo_sampling_if_needed(clickhouse_query, request_settings)
 
@@ -344,6 +357,14 @@ def _format_storage_query_and_run(
                 return execute()
         else:
             return execute()
+
+
+def _get_clickhouse_tables(
+    clickhouse_query: Union[Query, CompositeQuery[Table]], visitor: TablesCollector
+) -> str:
+    from_clause = clickhouse_query.get_from_clause()
+    visitor.visit(from_clause)
+    return ",".join(sorted(visitor.get_tables()))
 
 
 def get_query_size_group(query_size_bytes: int) -> str:

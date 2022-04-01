@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { SnQLRequest } from "../snql_tracing/types";
 import { LogLine, TracingRequest, TracingResult } from "../types";
 import { parseLogLine } from "../util";
 import { collapsibleStyle } from "./styles";
