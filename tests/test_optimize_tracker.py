@@ -10,11 +10,11 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize
 from snuba.optimize_tracker import (
-    InMemoryPartitionTracker,
     OptimizedPartitionTracker,
     RedisOptimizedPartitionTracker,
 )
 from snuba.processor import InsertBatch
+from snuba.redis import redis_client
 from tests.helpers import write_processed_messages
 
 
@@ -23,12 +23,12 @@ from tests.helpers import write_processed_messages
     [
         pytest.param(
             RedisOptimizedPartitionTracker(
+                redis_client,
                 host="some-hostname.domain.com",
                 expire_time=(datetime.now() + timedelta(minutes=3)),
             ),
             id="redis",
         ),
-        pytest.param(InMemoryPartitionTracker(), id="in_memory"),
     ],
 )
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
@@ -70,7 +70,7 @@ def test_run_optimize_with_partition_tracker() -> None:
     table = storage.get_table_writer().get_schema().get_local_table_name()
     database = cluster.get_database()
     optimize_partition_tracker = RedisOptimizedPartitionTracker(
-        "localhost", expire_time=(datetime.now() + timedelta(minutes=3))
+        redis_client, "localhost", expire_time=(datetime.now() + timedelta(minutes=3))
     )
 
     # Write some messages to the database

@@ -14,8 +14,9 @@ from snuba.optimize import (
     _subdivide_parts,
     optimize_partition_runner,
 )
-from snuba.optimize_tracker import InMemoryPartitionTracker
+from snuba.optimize_tracker import RedisOptimizedPartitionTracker
 from snuba.processor import InsertBatch
+from snuba.redis import redis_client
 from snuba.util import Part
 from tests.helpers import write_processed_messages
 
@@ -313,5 +314,7 @@ def test_optimize_runner_raises_exception_with_cutoff_time() -> None:
             parts=parts,
             parallel=2,
             cutoff_time=datetime.now(),
-            optimize_partition_tracker=InMemoryPartitionTracker(),
+            optimize_partition_tracker=RedisOptimizedPartitionTracker(
+                redis_client, "some-hostname.domain.com", datetime.now()
+            ),
         )

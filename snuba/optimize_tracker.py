@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional, Set
 
-from snuba import state
-from snuba.state import rds
+from snuba.redis import RedisClientType
+
+OPTIMIZE_PREFIX = "snuba-optimize"
 
 
 class OptimizedPartitionTracker(ABC):
@@ -33,36 +34,21 @@ class OptimizedPartitionTracker(ABC):
         raise NotImplementedError
 
 
-class InMemoryPartitionTracker(OptimizedPartitionTracker):
-    """
-    Tracks progress of partitions that have completed optimization using in memory data storage.
-    """
-
-    def __init__(self) -> None:
-        self.__tracker: Set[str] = set()
-
-    def get_completed_partitions(self) -> Optional[Set[str]]:
-        return self.__tracker if len(self.__tracker) > 0 else None
-
-    def update_completed_partitions(self, part_name: str) -> None:
-        self.__tracker.add(part_name)
-
-    def remove_all_partitions(self) -> None:
-        self.__tracker.clear()
-
-
 class RedisOptimizedPartitionTracker(OptimizedPartitionTracker):
     """
     This class keeps track of partitions which have already been optimized by keeping state of
     optimized partitions in redis.
     """
 
-    def __init__(self, host: str, expire_time: datetime) -> None:
-        self.__bucket = f"{state.optimize_prefix}{host}"
+    def __init__(
+        self, redis_client: RedisClientType, host: str, expire_time: datetime
+    ) -> None:
+        self.__redis_client = redis_client
+        self.__bucket = f"{OPTIMIZE_PREFIX}:{host}"
         self.__key_expire_time = expire_time
 
     def get_completed_partitions(self) -> Optional[Set[str]]:
-        completed_partitions = rds.smembers(self.__bucket)
+        completed_partitions = self.__redis_client.smembers(self.__bucket)
         if not completed_partitions:
             return None
 
@@ -74,8 +60,10 @@ class RedisOptimizedPartitionTracker(OptimizedPartitionTracker):
         return partitions_set
 
     def update_completed_partitions(self, part_name: str) -> None:
-        rds.sadd(self.__bucket, part_name.encode("utf-8"))
-        rds.expireat(self.__bucket, self.__key_expire_time)
+        pipe = self.__redis_client.pipeline()
+        pipe.sadd(self.__bucket, part_name.encode("utf-8"))
+        pipe.expireat(self.__bucket, self.__key_expire_time)
+        pipe.execute()
 
     def remove_all_partitions(self) -> None:
-        rds.delete(self.__bucket)
+        self.__redis_client.delete(self.__bucket)
