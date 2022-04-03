@@ -156,6 +156,7 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         parallel_collect=parallel_collect,
+        cooperative_rebalancing=cooperative_rebalancing,
     )
 
     consumer = consumer_builder.build_base_consumer()
