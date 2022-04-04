@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,6 +21,8 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 
 logger = logging.getLogger(__name__)
+
+COMMIT_FREQUENCY_SEC = 1
 
 
 @dataclass(frozen=True)
@@ -257,8 +260,26 @@ class CountResults(ProcessingStrategy[SubscriptionResultData]):
         self.__orig_result_topic = orig_result_topic
         self.__new_result_topic = new_result_topic
         self.__commit = commit
+        self.__commit_data: MutableMapping[Partition, Position] = {}
+        self.__last_committed: Optional[float] = None
 
         self.__store = ResultStore(threshold_sec, metrics)
+
+    def __throttled_commit(self, force: bool = False) -> None:
+        # Commits all offsets and resets self.__commit_data at most
+        # every COMMIT_FREQUENCY_SEC. If force=True is passed, the
+        # commit frequency is ignored and we immediately commit.
+
+        now = time.time()
+
+        if (
+            self.__last_committed is None
+            or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
+            or force is True
+        ):
+            self.__commit(self.__commit_data)
+            self.__last_committed = now
+            self.__commit_data = {}
 
     def poll(self) -> None:
         pass
@@ -274,8 +295,10 @@ class CountResults(ProcessingStrategy[SubscriptionResultData]):
 
         self.__store.increment(store_key, message.payload)
 
-        # Immediately commit offsets
-        self.__commit({message.partition: Position(message.offset, message.timestamp)})
+        self.__commit_data[message.partition] = Position(
+            message.offset, message.timestamp
+        )
+        self.__throttled_commit()
 
     def close(self) -> None:
         self.__closed = True
@@ -284,7 +307,7 @@ class CountResults(ProcessingStrategy[SubscriptionResultData]):
         self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
-        pass
+        self.__throttled_commit(force=True)
 
 
 class VerifierProcessingFactory(ProcessingStrategyFactory[SubscriptionResultData]):
