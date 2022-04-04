@@ -197,6 +197,7 @@ class MetricsLoader(DirectoryLoader):
             "0031_metrics_sets_v2_writing_mv",
             "0032_redo_0030_and_0031_without_timestamps",
             "0033_metrics_cleanup_old_views",
+            "0034_metrics_cleanup_old_tables",
         ]
 
 
