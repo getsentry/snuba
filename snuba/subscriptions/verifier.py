@@ -264,6 +264,7 @@ class CountResults(ProcessingStrategy[SubscriptionResultData]):
         self.__last_committed: Optional[float] = None
 
         self.__store = ResultStore(threshold_sec, metrics)
+        self.__closed = False
 
     def __throttled_commit(self, force: bool = False) -> None:
         # Commits all offsets and resets self.__commit_data at most
