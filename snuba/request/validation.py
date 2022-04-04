@@ -8,6 +8,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Protocol, Tuple, Type
 import sentry_sdk
 
 from snuba import state
+from snuba.attribution import get_app_id
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.query.composite import CompositeQuery
@@ -93,6 +94,8 @@ def build_request(
                     referrer=referrer, consistent=_consistent_override(True, referrer),
                 )
 
+            app_id = get_app_id(settings_obj.get_app_id())
+
             query, snql_anonymized = parser(
                 request_parts, settings_obj, dataset, custom_processing
             )
@@ -113,6 +116,7 @@ def build_request(
                 # to be careful with the change.
                 request_parts.query,
                 query,
+                app_id,
                 snql_anonymized,
                 settings_obj,
             )

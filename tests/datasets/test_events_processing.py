@@ -1,3 +1,4 @@
+from snuba.attribution import get_app_id
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
@@ -29,6 +30,7 @@ def test_events_processing() -> None:
         id="",
         body=query_body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
         settings=HTTPRequestSettings(referrer=""),
     )

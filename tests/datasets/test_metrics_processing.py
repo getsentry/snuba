@@ -4,6 +4,7 @@ from typing import Union
 import pytest
 
 from snuba import settings
+from snuba.attribution import get_app_id
 from snuba.clickhouse.query import Expression, Query
 from snuba.clusters import cluster
 from snuba.datasets import factory
@@ -223,6 +224,7 @@ def test_metrics_processing(
         id="",
         body=query_body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized="",
         settings=HTTPRequestSettings(referrer=""),
     )
