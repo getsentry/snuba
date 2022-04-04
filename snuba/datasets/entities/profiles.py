@@ -14,8 +14,10 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
+    ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 profile_columns = EntityColumnSet(
@@ -66,6 +68,8 @@ class ProfilesEntity(Entity, ABC):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             OrganizationRateLimiterProcessor(org_column="organization_id"),
-            ProjectRateLimiterProcessor(project_column="project_id"),
             ReferrerRateLimiterProcessor(),
+            ProjectReferrerRateLimiter("project_id"),
+            ProjectRateLimiterProcessor(project_column="project_id"),
+            ResourceQuotaProcessor("project_id"),
         ]

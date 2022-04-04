@@ -416,7 +416,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             num_dropped = run_optimize(
-                clickhouse_read, self.__storage, self.__database_name, before=today,
+                clickhouse_read, self.__storage, self.__database_name, before=today
             )
             logger.info(
                 "Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host)

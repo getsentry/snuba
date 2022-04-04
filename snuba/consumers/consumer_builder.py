@@ -17,14 +17,11 @@ from snuba.consumers.consumer import (
     build_mock_batch_writer,
     process_message,
 )
-from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
-from snuba.snapshots import SnapshotId
 from snuba.state import get_config
-from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -83,6 +80,7 @@ class ConsumerBuilder:
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
         mock_parameters: Optional[MockParameters] = None,
+        cooperative_rebalancing: bool = False,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -153,6 +151,7 @@ class ConsumerBuilder:
         self.__profile_path = profile_path
         self.__mock_parameters = mock_parameters
         self.__parallel_collect = parallel_collect
+        self.__cooperative_rebalancing = cooperative_rebalancing
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -183,6 +182,9 @@ class ConsumerBuilder:
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
+
+        if self.__cooperative_rebalancing is True:
+            configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
         stats_collection_frequency_ms = get_config(
             f"stats_collection_freq_ms_{self.group_id}",
@@ -266,17 +268,3 @@ class ConsumerBuilder:
         Builds the consumer.
         """
         return self.__build_consumer(self.__build_streaming_strategy_factory())
-
-    def build_snapshot_aware_consumer(
-        self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> StreamProcessor[KafkaPayload]:
-        """
-        Builds the consumer with a processor that is able to handle snapshots.
-        """
-        return self.__build_consumer(
-            self.__build_streaming_strategy_factory(
-                lambda processor: SnapshotProcessor(
-                    processor, snapshot_id, transaction_data
-                )
-            )
-        )

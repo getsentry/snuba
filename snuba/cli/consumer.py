@@ -12,9 +12,8 @@ from snuba.consumers.consumer_builder import (
     ProcessingParameters,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_cdc_storage
+from snuba.datasets.storages.factory import WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
-from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
@@ -28,7 +27,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--commit-log-topic",
     help="Topic for committed offsets to be written to, triggering post-processing task(s)",
 )
-@click.option("--control-topic", help="Topic used to control the snapshot")
 @click.option(
     "--consumer-group",
     default="snuba-consumers",
@@ -79,12 +77,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
-    "--stateful-consumer",
-    default=False,
-    type=bool,
-    help="Runs a stateful consumer (that manages snapshots) instead of a basic one.",
-)
-@click.option(
     "--processes", type=int,
 )
 @click.option(
@@ -96,12 +88,18 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
+# TODO: For testing alternate rebalancing strategies. To be eventually removed.
+@click.option(
+    "--cooperative-rebalancing",
+    is_flag=True,
+    default=False,
+    help="Use cooperative-sticky partition assignment strategy",
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
     replacements_topic: Optional[str],
     commit_log_topic: Optional[str],
-    control_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
     storage_name: str,
@@ -110,13 +108,13 @@ def consumer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    stateful_consumer: bool,
     parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
+    cooperative_rebalancing: bool = False,
 ) -> None:
 
     setup_logging(log_level)
@@ -158,34 +156,15 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         parallel_collect=parallel_collect,
+        cooperative_rebalancing=cooperative_rebalancing,
     )
 
-    if stateful_consumer:
-        storage = get_cdc_storage(storage_key)
-        assert (
-            storage is not None
-        ), "Only CDC storages have a control topic thus are supported."
-        context = ConsumerStateMachine(
-            consumer_builder=consumer_builder,
-            topic=control_topic or storage.get_default_control_topic(),
-            group_id=consumer_group,
-            storage=storage,
-        )
+    consumer = consumer_builder.build_base_consumer()
 
-        def handler(signum: int, frame: Any) -> None:
-            context.signal_shutdown()
+    def handler(signum: int, frame: Any) -> None:
+        consumer.signal_shutdown()
 
-        signal.signal(signal.SIGINT, handler)
-        signal.signal(signal.SIGTERM, handler)
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
 
-        context.run()
-    else:
-        consumer = consumer_builder.build_base_consumer()
-
-        def handler(signum: int, frame: Any) -> None:
-            consumer.signal_shutdown()
-
-        signal.signal(signal.SIGINT, handler)
-        signal.signal(signal.SIGTERM, handler)
-
-        consumer.run()
+    consumer.run()

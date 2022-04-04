@@ -65,6 +65,13 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     required=True,
     help="Override the result topic for testing",
 )
+# TODO: For testing alternate rebalancing strategies. To be eventually removed.
+@click.option(
+    "--cooperative-rebalancing",
+    is_flag=True,
+    default=False,
+    help="Use cooperative-sticky partition assignment strategy",
+)
 def subscriptions_executor(
     *,
     dataset_name: str,
@@ -74,6 +81,7 @@ def subscriptions_executor(
     auto_offset_reset: str,
     log_level: Optional[str],
     override_result_topic: str,
+    cooperative_rebalancing: bool,
 ) -> None:
     """
     The subscription's executor consumes scheduled subscriptions from the scheduled
@@ -121,6 +129,7 @@ def subscriptions_executor(
         metrics,
         executor,
         override_result_topic,
+        cooperative_rebalancing,
     )
 
     def handler(signum: int, frame: Any) -> None:
