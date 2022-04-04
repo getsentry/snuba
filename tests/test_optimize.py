@@ -315,6 +315,10 @@ def test_optimize_runner_raises_exception_with_cutoff_time() -> None:
             parallel=2,
             cutoff_time=datetime.now(),
             optimize_partition_tracker=RedisOptimizedPartitionTracker(
-                redis_client, "some-hostname.domain.com", datetime.now()
+                redis_client=redis_client,
+                host="some-hostname.domain.com",
+                database=database,
+                table=table,
+                expire_time=datetime.now(),
             ),
         )

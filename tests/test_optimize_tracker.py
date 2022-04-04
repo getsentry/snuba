@@ -23,8 +23,10 @@ from tests.helpers import write_processed_messages
     [
         pytest.param(
             RedisOptimizedPartitionTracker(
-                redis_client,
+                redis_client=redis_client,
                 host="some-hostname.domain.com",
+                database="some-database",
+                table="some-table",
                 expire_time=(datetime.now() + timedelta(minutes=3)),
             ),
             id="redis",
@@ -70,7 +72,11 @@ def test_run_optimize_with_partition_tracker() -> None:
     table = storage.get_table_writer().get_schema().get_local_table_name()
     database = cluster.get_database()
     optimize_partition_tracker = RedisOptimizedPartitionTracker(
-        redis_client, "localhost", expire_time=(datetime.now() + timedelta(minutes=3))
+        redis_client=redis_client,
+        host="localhost",
+        database=database,
+        table=table,
+        expire_time=(datetime.now() + timedelta(minutes=3)),
     )
 
     # Write some messages to the database
@@ -108,7 +114,8 @@ def test_run_optimize_with_partition_tracker() -> None:
     )
     assert num_optimized == 0
 
-    # Fix the optimized partition tracker and run_optimize again. Now we should optimize all the partitions.
+    # Fix the optimized partition tracker and run_optimize again.
+    # Now we should optimize all the partitions.
     optimize_partition_tracker.remove_all_partitions()
     num_optimized = run_optimize(
         clickhouse=clickhouse_pool,

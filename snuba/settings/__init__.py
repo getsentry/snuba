@@ -198,11 +198,16 @@ TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
-# Cutoff time from UTC 00:00:00 to stop running optimize jobs to avoid spilling over to the next day.
+# Cutoff time from UTC 00:00:00 to stop running optimize jobs to
+# avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 
-# Cutoff time from UTC 00:00:00 to stop running optimize jobs in parallel to avoid running in parallel
-# when peak traffic starts.
+# Start time from UTC 00:00:00 after which we are allowed to run optimize
+# jobs in parallel.
+PARALLEL_JOB_START_TIME = timedelta(hours=3)
+
+# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
+# parallel to avoid running in parallel when peak traffic starts.
 PARALLEL_OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=11)
 
 

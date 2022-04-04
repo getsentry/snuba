@@ -74,6 +74,7 @@ def run_optimize(
 
     if optimize_partition_tracker:
         optimize_partition_tracker.remove_all_partitions()
+
     metrics.timing(
         "optimized_all_parts",
         time.time() - start,
@@ -156,8 +157,9 @@ def _subdivide_parts(
     parts: Sequence[util.Part], number_of_subdivisions: int
 ) -> Sequence[Sequence[util.Part]]:
     """
-    Subdivide a list of parts into number_of_subdivisions lists of parts so that optimize can be executed
-    on different parts list by different threads.
+    Subdivide a list of parts into number_of_subdivisions lists of parts
+    so that optimize can be executed on different parts list by different
+    threads.
     """
 
     sorted_parts = sorted(parts, key=lambda part: part.date, reverse=True)
@@ -182,14 +184,17 @@ def concurrent_optimize_partition_runner(
     """
     Run optimize job concurrently using multiple threads.
 
-    It subdivides the partitions into number of threads which are needed to be run. Each thread then runs the optimize
-    job on the list of partitions assigned to it.
+    It subdivides the partitions into number of threads which are needed
+    to be run. Each thread then runs the optimize job on the list of
+    partitions assigned to it.
 
-    The threads are provides a different cutoff_time than what is provided when calling this function. This is to avoid
-    multiple executions of optimize_partitions during peak traffic time.
+    The threads are provides a different cutoff_time than what is
+    provided when calling this function. This is to avoid multiple
+    executions of optimize_partitions during peak traffic time.
 
-    If the threads are unable to process all partitions before cutoff_time is reached, the optimize job is run
-    serially until the original cutoff_time provided in the function call.
+    If the threads are unable to process all partitions before
+    cutoff_time is reached, the optimize job is run serially until the
+    original cutoff_time provided in the function call.
     """
     threaded_cutoff_time: Optional[datetime] = None
     if cutoff_time:
@@ -222,8 +227,9 @@ def concurrent_optimize_partition_runner(
 
         threads[i].start()
 
-    # Wait for all threads to finish. Any thread can raise JobTimeoutException. Its an indication that not all
-    # partitions could be optimized in the given amount of threaded_cutoff_time.
+    # Wait for all threads to finish. Any thread can raise
+    # JobTimeoutException. Its an indication that not all partitions
+    # could be optimized in the given amount of threaded_cutoff_time.
     for i in range(0, parallel):
         try:
             threads[i].join()
@@ -233,15 +239,16 @@ def concurrent_optimize_partition_runner(
     if not optimize_partition_tracker:
         return
 
-    # Find out partitions which couldn't be optimized because of threaded cutoff time.
+    # Find out partitions which couldn't be optimized because of threaded
+    # cutoff time.
     partitions = optimize_partition_tracker.get_completed_partitions()
     remaining_parts = (
         [part for part in parts if part.name not in partitions] if partitions else parts
     )
 
     if len(remaining_parts):
-        # Call optimize_partitions with the original cutoff_time now since running optimizations
-        # serially is allowed for a larger duration.
+        # Call optimize_partitions with the original cutoff_time now since
+        # running optimizations serially is allowed for a larger duration.
         optimize_partitions(
             clickhouse=clickhouse,
             database=database,
@@ -264,8 +271,8 @@ def optimize_partition_runner(
     clickhouse_host: Optional[str] = None,
 ) -> None:
     """
-    Optimize partition runner decides whether to run the threaded version of
-    optimization or the non-threaded version.
+    Optimize partition runner decides whether to run the threaded
+    version of optimization or the non-threaded version.
     """
     if parallel <= 1:
         optimize_partitions(
@@ -277,17 +284,43 @@ def optimize_partition_runner(
             optimize_partition_tracker=optimize_partition_tracker,
             clickhouse_host=clickhouse_host,
         )
-    else:
-        concurrent_optimize_partition_runner(
+        return
+
+    # Phase 1: Cannot run parallel optimization until PARALLEL_JOB_START_TIME
+    # is reached.
+    try:
+        non_parallel_cutoff_time: Optional[datetime] = None
+        if cutoff_time:
+            # Compute non parallel cutoff_time
+            last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            non_parallel_cutoff_time = last_midnight + settings.PARALLEL_JOB_START_TIME
+            logger.info(f"Non parallel cutoff time: {non_parallel_cutoff_time}")
+
+        optimize_partitions(
             clickhouse=clickhouse,
             database=database,
             table=table,
             parts=parts,
-            parallel=parallel,
-            cutoff_time=cutoff_time,
+            cutoff_time=non_parallel_cutoff_time,
             optimize_partition_tracker=optimize_partition_tracker,
             clickhouse_host=clickhouse_host,
         )
+    except JobTimeoutException:
+        # TODO
+        pass
+
+    concurrent_optimize_partition_runner(
+        clickhouse=clickhouse,
+        database=database,
+        table=table,
+        parts=parts,
+        parallel=parallel,
+        cutoff_time=cutoff_time,
+        optimize_partition_tracker=optimize_partition_tracker,
+        clickhouse_host=clickhouse_host,
+    )
 
 
 def optimize_partitions(
@@ -320,8 +353,9 @@ def optimize_partitions(
         logger.info(f"Optimizing partition: {part.name}")
         start = time.time()
 
-        # Update tracker before running clickhouse.execute since its possible that the connection can get
-        # disconnected while the server is still executing the optimization. In that case we don't want to
+        # Update tracker before running clickhouse.execute since its possible
+        # that the connection can get disconnected while the server is still
+        # executing the optimization. In that case we don't want to
         # run optimization on the same partition twice.
         if optimize_partition_tracker:
             optimize_partition_tracker.update_completed_partitions(part.name)

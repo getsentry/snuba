@@ -5,6 +5,7 @@ import click
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -92,8 +93,17 @@ def optimize(
     cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
     logger.info("Cutoff time: %s", str(cutoff_time))
 
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+    table = schema.get_local_table_name()
     optimize_partition_tracker = (
-        RedisOptimizedPartitionTracker(redis_client, clickhouse_host, cutoff_time)
+        RedisOptimizedPartitionTracker(
+            redis_client=redis_client,
+            host=clickhouse_host,
+            database=database,
+            table=table,
+            expire_time=cutoff_time,
+        )
         if clickhouse_host
         else None
     )
