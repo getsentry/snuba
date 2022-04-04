@@ -1,1 +1,1 @@
-snuba-sdk==0.1.4
+snuba-sdk==0.1.5
