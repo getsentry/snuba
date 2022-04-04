@@ -1,5 +1,5 @@
 from typing import Sequence, Tuple
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -37,7 +37,7 @@ test_cases = [
 @patch("time.sleep")
 @pytest.mark.parametrize("trials", test_cases)
 def test_rate_limiter(
-    mock_sleep, trials: Sequence[Tuple[str, float, RateLimitResult, int]]
+    mock_sleep: Mock, trials: Sequence[Tuple[str, float, RateLimitResult, int]]
 ) -> None:
     rate_limiter = RateLimiter("bucket", 3.0)
     for bucket, time_resp, expected_result, expected_quota in trials:

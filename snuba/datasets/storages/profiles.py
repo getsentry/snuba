@@ -69,6 +69,9 @@ writable_storage = WritableTableStorage(
     storage_set_key=StorageSetKey.PROFILES,
     schema=writable_schema,
     query_processors=processors,
-    mandatory_condition_checkers=[OrgIdEnforcer(), ProjectIdEnforcer()],
+    mandatory_condition_checkers=[
+        OrgIdEnforcer("organization_id"),
+        ProjectIdEnforcer(),
+    ],
     stream_loader=loader,
 )

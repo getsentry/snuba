@@ -1,9 +1,9 @@
 import os
+from typing import Sequence
 
-from snuba.clickhouse.columns import Column
-from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String, UInt
+from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import (
     AddColumn,
     AddIndex,
@@ -22,7 +22,7 @@ from snuba.migrations.table_engines import ReplacingMergeTree
 
 def test_create_table() -> None:
     database = os.environ.get("CLICKHOUSE_DATABASE", "default")
-    columns = [
+    columns: Sequence[Column[Modifiers]] = [
         Column("id", String()),
         Column("name", String(Modifiers(nullable=True))),
         Column("version", UInt(64)),

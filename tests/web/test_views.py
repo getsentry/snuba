@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import pytest
 
@@ -24,7 +25,7 @@ invalid_query_exception_test_cases = [
     "exception, expected_log_level", invalid_query_exception_test_cases
 )
 def test_handle_invalid_query(
-    caplog, exception: InvalidQueryException, expected_log_level: str
+    caplog: Any, exception: InvalidQueryException, expected_log_level: str
 ) -> None:
     with caplog.at_level(logging.INFO):
         caplog.clear()

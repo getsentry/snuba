@@ -42,7 +42,10 @@ from snuba.query.processors.granularity_processor import GranularityProcessor
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
+    ProjectReferrerRateLimiter,
+    ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
@@ -117,8 +120,11 @@ class MetricsEntity(Entity, ABC):
         return [
             GranularityProcessor(),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
+            ReferrerRateLimiterProcessor(),
             OrganizationRateLimiterProcessor(org_column="org_id"),
+            ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
+            ResourceQuotaProcessor("project_id"),
             TagsTypeTransformer(),
         ]
 

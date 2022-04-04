@@ -48,6 +48,7 @@ class ProfilesMessageProcessor(MessageProcessor):
             }
         except ValueError:
             metrics.increment("invalid_uuid")
+            return None
         except KeyError:
             metrics.increment("missing_field")
             return None

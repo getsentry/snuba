@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import MutableSequence, Sequence
+from typing import Any, Mapping, MutableSequence, Sequence, Union
 
-from snuba.consumers.types import KafkaMessageMetadata
 from snuba.clickhouse.http import JSONRowEncoder
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storage import WritableStorage
 from snuba.processor import InsertBatch, ProcessedMessage
@@ -27,7 +27,7 @@ def write_processed_messages(
 
 
 def write_unprocessed_events(
-    storage: WritableStorage, events: Sequence[InsertEvent]
+    storage: WritableStorage, events: Sequence[Union[InsertEvent, Mapping[str, Any]]]
 ) -> None:
 
     processor = storage.get_table_writer().get_stream_loader().get_processor()

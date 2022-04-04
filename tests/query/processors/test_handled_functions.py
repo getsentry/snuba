@@ -37,7 +37,7 @@ def test_handled_processor() -> None:
                 "result",
                 FunctionCall(
                     "result",
-                    "arrayExists",
+                    "arrayAll",
                     (
                         Lambda(
                             None,
@@ -46,11 +46,11 @@ def test_handled_processor() -> None:
                                 BooleanFunctions.OR,
                                 FunctionCall(None, "isNull", (Argument(None, "x"),)),
                                 binary_condition(
-                                    ConditionFunctions.EQ,
+                                    ConditionFunctions.NEQ,
                                     FunctionCall(
                                         None, "assumeNotNull", (Argument(None, "x"),)
                                     ),
-                                    Literal(None, 1),
+                                    Literal(None, 0),
                                 ),
                             ),
                         ),
@@ -71,7 +71,7 @@ def test_handled_processor() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(arrayExists((x -> (isNull(x) OR equals(assumeNotNull(x), 1))), exception_stacks.mechanism_handled) AS result)"
+        "(arrayAll((x -> (isNull(x) OR notEquals(assumeNotNull(x), 0))), exception_stacks.mechanism_handled) AS result)"
     )
 
 

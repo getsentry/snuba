@@ -188,6 +188,14 @@ class MetricsLoader(DirectoryLoader):
             "0022_repartition_polymorphic_table",
             "0023_polymorphic_repartitioned_bucket_matview",
             "0024_metrics_distributions_add_histogram",
+            "0025_metrics_counters_aggregate_v2",
+            "0026_metrics_counters_v2_writing_matview",
+            "0027_fix_migration_0026",
+            "0028_metrics_sets_aggregate_v2",
+            "0029_metrics_distributions_aggregate_v2",
+            "0030_metrics_distributions_v2_writing_mv",
+            "0031_metrics_sets_v2_writing_mv",
+            "0032_redo_0030_and_0031_without_timestamps",
         ]
 
 
