@@ -88,6 +88,13 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
+# TODO: For testing alternate rebalancing strategies. To be eventually removed.
+@click.option(
+    "--cooperative-rebalancing",
+    is_flag=True,
+    default=False,
+    help="Use cooperative-sticky partition assignment strategy",
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -107,6 +114,7 @@ def consumer(
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
+    cooperative_rebalancing: bool = False,
 ) -> None:
 
     setup_logging(log_level)
@@ -148,6 +156,7 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         parallel_collect=parallel_collect,
+        cooperative_rebalancing=cooperative_rebalancing,
     )
 
     consumer = consumer_builder.build_base_consumer()

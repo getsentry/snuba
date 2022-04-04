@@ -89,6 +89,13 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--dead-letter-topic", help="Dead letter topic to send failed insert messages."
 )
+# TODO: For testing alternate rebalancing strategies. To be eventually removed.
+@click.option(
+    "--cooperative-rebalancing",
+    is_flag=True,
+    default=False,
+    help="Use cooperative-sticky partition assignment strategy",
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -104,6 +111,7 @@ def multistorage_consumer(
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
     dead_letter_topic: Optional[str] = None,
+    cooperative_rebalancing: bool = False,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -189,6 +197,9 @@ def multistorage_consumer(
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
     )
+
+    if cooperative_rebalancing is True:
+        consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
     for storage_key in storage_keys[1:]:
         if (
