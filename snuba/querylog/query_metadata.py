@@ -101,6 +101,7 @@ class SnubaQueryMetadata:
     start_timestamp: Optional[datetime]
     end_timestamp: Optional[datetime]
     dataset: str
+    entity: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
     projects: Set[int]
@@ -116,8 +117,10 @@ class SnubaQueryMetadata:
                 "referrer": self.request.referrer,
                 "team": self.request.settings.get_team(),
                 "feature": self.request.settings.get_feature(),
+                "app_id": self.request.app_id.key,
             },
             "dataset": self.dataset,
+            "entity": self.entity,
             "start_timestamp": start,
             "end_timestamp": end,
             "query_list": [q.to_dict() for q in self.query_list],

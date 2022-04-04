@@ -14,6 +14,7 @@ from arroyo.backends.abstract import Producer
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
 from snuba import state
+from snuba.attribution import get_app_id
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
@@ -99,6 +100,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=True
@@ -120,6 +122,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=False

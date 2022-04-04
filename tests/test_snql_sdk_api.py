@@ -404,12 +404,11 @@ class TestSDKSnQLApi(BaseApiTest):
         response = self.post("/events/snql", data=query.snuba())
         resp = json.loads(response.data)
         assert response.status_code == 200, resp
-        metric_calls = get_recorded_metric_calls("increment", "api.snuba.attribution")
+        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
         assert metric_calls is not None
         assert len(metric_calls) == 1
         assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["team"] == "sns"
-        assert metric_calls[0].tags["feature"] == "test"
+        assert metric_calls[0].tags["app_id"] == "default"
 
     def test_invalid_time_conditions(self) -> None:
         query = (
