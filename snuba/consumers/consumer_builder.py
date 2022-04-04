@@ -80,6 +80,7 @@ class ConsumerBuilder:
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
         mock_parameters: Optional[MockParameters] = None,
+        cooperative_rebalancing: bool = False,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -150,6 +151,7 @@ class ConsumerBuilder:
         self.__profile_path = profile_path
         self.__mock_parameters = mock_parameters
         self.__parallel_collect = parallel_collect
+        self.__cooperative_rebalancing = cooperative_rebalancing
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -180,6 +182,9 @@ class ConsumerBuilder:
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
+
+        if self.__cooperative_rebalancing is True:
+            configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
         stats_collection_frequency_ms = get_config(
             f"stats_collection_freq_ms_{self.group_id}",
