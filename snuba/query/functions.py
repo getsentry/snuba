@@ -149,6 +149,9 @@ REGULAR_FUNCTIONS = {
     "toStartOfHour",
     "toStartOfYear",
     "toUnixTimestamp",
+    "date_add",
+    "date_sub",
+    "now",
     # conditionals
     "if",
     "multiIf",
@@ -183,6 +186,8 @@ REGULAR_FUNCTIONS = {
     "greatest",
     # table functions
     "arrayJoin",
+    # string functions
+    "concat",
 }
 
 # Custom function names that are not in ClickHouse but need to be validated
