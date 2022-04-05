@@ -16,7 +16,6 @@ from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
 from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
-from snuba import settings
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -346,35 +345,28 @@ def test_dead_letter_step() -> None:
 
 def test_metrics_writing_e2e() -> None:
     from snuba.datasets.storages.metrics import (
-        counters_storage,
         distributions_storage,
-        sets_storage,
+        polymorphic_bucket,
     )
 
-    settings.WRITE_METRICS_AGG_DIRECTLY = True
-
-    dist_message = """
+    dist_message = json.dumps(
         {
-            "org_id":1,
-            "project_id":2,
-            "name":"sentry.transactions.transaction.duration",
-            "unit":"ms",
-            "type":"d",
-            "value":[24.0,80.0,119.0,146.0,182.0],
-            "timestamp":1641418510,
-            "tags":{"6":91,"9":134,"4":117,"5":7},
-            "metric_id":8,
-            "retention_days":90
+            "org_id": 1,
+            "project_id": 2,
+            "name": "sentry.transactions.transaction.duration",
+            "unit": "ms",
+            "type": "d",
+            "value": [24.0, 80.0, 119.0, 146.0, 182.0],
+            "timestamp": datetime.now().timestamp(),
+            "tags": {"6": 91, "9": 134, "4": 117, "5": 7},
+            "metric_id": 8,
+            "retention_days": 90,
         }
-    """
+    )
 
     commit = Mock()
 
-    storages = [
-        distributions_storage,
-        sets_storage,
-        counters_storage,
-    ]
+    storages = [polymorphic_bucket]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
         storages, 10, 10, False, None, None, None, TestingMetricsBackend(), None, None
@@ -401,5 +393,3 @@ def test_metrics_writing_e2e() -> None:
         ):
             strategy.close()
             strategy.join()
-
-    settings.WRITE_METRICS_AGG_DIRECTLY = False
