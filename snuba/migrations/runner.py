@@ -154,6 +154,7 @@ class Runner:
                     raise MigrationError("Requires force to run blocking migrations")
 
         for migration_key in pending_migrations:
+            print(f"running {migration_key}")
             self._run_migration_impl(migration_key, force=force)
 
     def run_migration(
