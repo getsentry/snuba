@@ -149,8 +149,8 @@ REGULAR_FUNCTIONS = {
     "toStartOfHour",
     "toStartOfYear",
     "toUnixTimestamp",
-    "date_add",
-    "date_sub",
+    "timestamp_add",
+    "timestamp_sub",
     "now",
     # conditionals
     "if",
