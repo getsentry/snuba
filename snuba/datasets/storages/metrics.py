@@ -1,5 +1,7 @@
 from typing import Sequence
 
+from arroyo.processing.strategies.dead_letter_queue import IgnoreInvalidMessagePolicy
+
 from snuba.clickhouse.columns import (
     AggregateFunction,
     Array,
@@ -76,6 +78,7 @@ polymorphic_bucket = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
+        dead_letter_queue_policy=IgnoreInvalidMessagePolicy(),
     ),
 )
 
@@ -102,6 +105,7 @@ sets_buckets = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
+        dead_letter_queue_policy=IgnoreInvalidMessagePolicy(),
     ),
 )
 
@@ -124,6 +128,7 @@ counters_buckets = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
+        dead_letter_queue_policy=IgnoreInvalidMessagePolicy(),
     ),
 )
 
@@ -144,7 +149,9 @@ distributions_buckets = WritableTableStorage(
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=DistributionsMetricsProcessor(), default_topic=Topic.METRICS,
+        processor=DistributionsMetricsProcessor(),
+        default_topic=Topic.METRICS,
+        dead_letter_queue_policy=IgnoreInvalidMessagePolicy(),
     ),
 )
 
@@ -177,7 +184,9 @@ sets_storage = WritableTableStorage(
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        SetsAggregateProcessor(), default_topic=Topic.METRICS,
+        SetsAggregateProcessor(),
+        default_topic=Topic.METRICS,
+        dead_letter_queue_policy=IgnoreInvalidMessagePolicy(),
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -198,7 +207,9 @@ counters_storage = WritableTableStorage(
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        CounterAggregateProcessor(), default_topic=Topic.METRICS,
+        CounterAggregateProcessor(),
+        default_topic=Topic.METRICS,
+        dead_letter_queue_policy=IgnoreInvalidMessagePolicy(),
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -230,7 +241,9 @@ distributions_storage = WritableTableStorage(
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        DistributionsAggregateProcessor(), default_topic=Topic.METRICS,
+        DistributionsAggregateProcessor(),
+        default_topic=Topic.METRICS,
+        dead_letter_queue_policy=IgnoreInvalidMessagePolicy(),
     ),
     write_format=WriteFormat.VALUES,
 )
