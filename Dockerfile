@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.8.12
+ARG PYTHON_VERSION=3.8.13
 FROM python:${PYTHON_VERSION}-slim-bullseye AS application
 
 # these are required all the way through, and removing them will cause bad things
