@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Sequence, Set
 
+from snuba import environment
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import Query
 from snuba.query.conditions import (
@@ -14,6 +15,10 @@ from snuba.query.conditions import (
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import Column
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "validation")
+
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +111,9 @@ class EntityContainsColumnsValidator(QueryValidator):
                 raise InvalidQueryException(error_message)
             elif self.validation_mode == ColumnValidationMode.WARN:
                 logger.warning(error_message, exc_info=True)
+                metrics.increment(
+                    "missing.columns", tags={"missing": ", ".join(missing)}
+                )
 
 
 class NoTimeBasedConditionValidator(QueryValidator):
