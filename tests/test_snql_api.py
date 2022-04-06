@@ -746,29 +746,6 @@ class TestSnQLApi(BaseApiTest):
         assert {"name": "url", "type": "String"} in result["meta"]
         assert {"name": "http.url", "type": "String"} in result["meta"]
 
-    @pytest.mark.xfail(reason="column validators are in warn only mode")
-    def test_invalid_column_handling(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (sessions)
-                    SELECT if(greater(users,0),divide(users_crashed,users),null) AS `_crash_rate_alert_aggregate`, identity(users) AS `_total_count`
-                    WHERE org_id = {self.org_id}
-                    AND not_exists = 2
-                    AND project_id IN tuple({self.project_id}) AND
-                    ifNull(tags[package], '') = 'some tag'
-                    AND environment = 'production'
-                    AND started >= toDateTime('{self.base_time.isoformat()}')
-                    AND started < toDateTime('{self.next_time.isoformat()}')
-                    LIMIT 1""",
-                    "dataset": "sessions",
-                    "parent_api": "/api/0/projects/{organization_slug}/{project_slug}/alert-rules/{alert_rule_id}/",
-                }
-            ),
-        )
-        assert response.status_code == 200
-
     def test_invalid_column(self) -> None:
         response = self.post(
             "/outcomes/snql",
