@@ -33,7 +33,7 @@ class Entity(Describable, ABC):
         writable_storage: Optional[WritableTableStorage],
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
-        validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
+        validate_data_model: ColumnValidationMode = ColumnValidationMode.WARN,
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
