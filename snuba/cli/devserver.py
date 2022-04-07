@@ -143,11 +143,11 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "metrics-consumer",
                 [
                     "snuba",
-                    "multistorage-consumer",
+                    "consumer",
                     "--storage=metrics_raw",
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
-                    "--consumer-group=metrics_group",
+                    "--consumer-group=snuba-metrics-consumers",
                 ],
             ),
         ]
