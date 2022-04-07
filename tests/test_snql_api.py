@@ -746,24 +746,104 @@ class TestSnQLApi(BaseApiTest):
         assert {"name": "url", "type": "String"} in result["meta"]
         assert {"name": "http.url", "type": "String"} in result["meta"]
 
-    def test_invalid_column(self) -> None:
-        response = self.post(
-            "/outcomes/snql",
-            data=json.dumps(
-                {
-                    "query": """
-                MATCH (outcomes)
-                SELECT fake_column
-                WHERE
-                    timestamp >= toDateTime('2021-08-18T18:34:04') AND
-                    timestamp < toDateTime('2021-09-01T18:34:04') AND
-                    org_id = 1 AND
-                    project_id IN tuple(5433960)
-                LIMIT 1 OFFSET 0
-                """
-                }
+    @pytest.mark.parametrize(
+        "dataset, query",
+        [
+            # pytest.param(
+            #     "outcomes",
+            #     """
+            #     MATCH (outcomes)
+            #     SELECT fake_column
+            #     WHERE
+            #         timestamp >= toDateTime('2021-08-18T18:34:04') AND
+            #         timestamp < toDateTime('2021-09-01T18:34:04') AND
+            #         org_id = 1 AND
+            #         project_id IN tuple(5433960)
+            #     LIMIT 1 OFFSET 0
+            #     """,
+            # ),
+            pytest.param(
+                "outcomes_raw",
+                """MATCH (outcomes_raw)
+                SELECT count() AS `aggregate`
+                BY project_id, time
+                WHERE org_id = 1
+                AND timestamp >= toDateTime('2022-04-06T15:58:30')
+                AND timestamp < toDateTime('2022-04-06T16:58:50')
+                AND outcome = 1
+                AND category IN tuple(0, 1, 3)
+                AND project_id IN tuple(1)
+                ORDER BY time DESC, project_id ASC
+                LIMIT 362 GRANULARITY 10""",
             ),
-        )
+            # pytest.param(
+            #     "events",
+            #     """MATCH (events)
+            #     SELECT uniq(tags[sentry:user]) AS `aggregate`
+            #     BY group_id
+            #     WHERE timestamp >= toDateTime('2022-04-06T17:02:40')
+            #     AND timestamp < toDateTime('2022-04-06T17:03:50')
+            #     AND project_id IN tuple(1)
+            #     AND type != 'transaction'
+            #     AND group_id IN tuple(1234567890)
+            #     ORDER BY group_id ASC
+            #     LIMIT 7 GRANULARITY 10""",
+            # ),
+            # pytest.param(
+            #     "discover",
+            #     """MATCH (discover)
+            #     SELECT type AS `event.type`, coalesce(email, username, user_id, ip_address) AS `user.display`, transform(project_id, array(1), array('something'), '') AS `project`, title, timestamp, event_id AS `id`, transform(project_id, array(1), array('native-app'), '') AS `project.name`
+            #     WHERE notHandled() = 1
+            #     AND timestamp >= toDateTime('2022-04-06T16:30:00')
+            #     AND timestamp < toDateTime('2022-04-06T18:30:59')
+            #     AND project_id IN array(1)
+            #     AND environment = 'production'
+            #     ORDER BY timestamp DESC
+            #     LIMIT 51 OFFSET 0""",
+            # ),
+            # pytest.param(
+            #     "metrics",
+            #     """
+            #     MATCH (metrics_distributions)
+            #     SELECT quantiles(0.5, 0.90)(value) AS `quantiles`
+            #     BY bucketed_time
+            #     WHERE org_id = 1
+            #     AND project_id = 1
+            #     AND timestamp >= toDateTime('2022-03-24T00:00:00')
+            #     AND timestamp < toDateTime('2022-04-06T16:52:40')
+            #     AND tags[2] = 123 AND metric_id = 321 AND tags[3] = 10
+            #     GRANULARITY 86400
+            #     """,
+            # ),
+            # pytest.param(
+            #     "events",
+            #     """
+            #     MATCH (events)
+            #     SELECT tags[level], transaction, contexts[trace.span_id] AS `trace.span`, coalesce(group_id, 0) AS `issue.id`, event_id AS `id`, timestamp, transform(project_id, array(113893), array('mmmm-production'), '') AS `project`, project_id AS `project.id`, title
+            #     WHERE contexts[trace.trace_id] = '58df0e65446e4e6a961ca3ed67ae03cb'
+            #     AND timestamp >= toDateTime('2022-04-06T00:06:17.237000')
+            #     AND timestamp < toDateTime('2022-04-07T00:06:17.237000')
+            #     AND project_id IN array(1)
+            #     ORDER BY event_id ASC
+            #     LIMIT 100 OFFSET 0
+            #     """,
+            # ),
+            # pytest.param(
+            #     "discover",
+            #     """MATCH (discover)
+            #     SELECT transaction, project_id AS `project.id`, quantile(0.75)(span_op_breakdowns[ops.db]) AS `p75_spans_db`, divide(count(), divide(1209600.0, 60)) AS `epm` BY transaction, project_id AS `project.id`
+            #     WHERE duration < 900000.0 AND type = 'transaction'
+            #     AND timestamp >= toDateTime('2022-03-23T16:51:17')
+            #     AND timestamp < toDateTime('2022-04-06T16:51:17')
+            #     AND project_id IN array(1)
+            #     HAVING divide(count(), divide(1209600.0, 60)) AS `epm` > 0.01
+            #     AND quantile(0.75)(span_op_breakdowns[ops.db]) AS `p75_spans_db` > 0.0
+            #     ORDER BY quantile(0.75)(span_op_breakdowns[ops.db]) AS `p75_spans_db` DESC""",
+            # ),
+        ],
+    )
+    def test_various_valid_columns(self, dataset: str, query: str) -> None:
+        response = self.post(f"/{dataset}/snql", data=json.dumps({"query": query}))
         # TODO: when validation mode is ERROR this should be:
         # assert response.status_code == 400
         # assert (
@@ -772,7 +852,7 @@ class TestSnQLApi(BaseApiTest):
         # )
 
         # For now it's 500 since it's just a clickhouse error
-        assert response.status_code == 500
+        assert response.status_code == 200
 
     def test_valid_columns_composite_query(self) -> None:
         response = self.post(

@@ -92,6 +92,8 @@ class EntityContainsColumnsValidator(QueryValidator):
 
         query_columns = query.get_all_ast_referenced_columns()
 
+        print("COLUMN SET", self.entity_data_model)
+
         missing = set()
         for column in query_columns:
             if (
