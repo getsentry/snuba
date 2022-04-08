@@ -1,8 +1,7 @@
 import RuntimeConfig from "./runtime_config";
 import AuditLog from "./runtime_config/auditlog";
 import ClickhouseQueries from "./clickhouse_queries";
-import TracingQueries from "./tracing/clickhouse";
-import SnQLTracing from "./tracing/snql";
+import TracingQueries from "./tracing";
 import SnQLToSQL from "./snql_to_sql";
 
 function Placeholder(props: any) {
@@ -26,11 +25,6 @@ const NAV_ITEMS = [
     id: "tracing",
     display: "🔎 ClickHouse Tracing",
     component: TracingQueries,
-  },
-  {
-    id: "snql-tracing",
-    display: "🔍 SnQL Tracing",
-    component: SnQLTracing,
   },
   {
     id: "auditlog",

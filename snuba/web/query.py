@@ -4,7 +4,7 @@ import logging
 from dataclasses import replace
 from functools import partial
 from math import floor
-from typing import MutableMapping, Optional, Set, Union
+from typing import MutableMapping, Optional, Sequence, Set, Union
 
 import sentry_sdk
 
@@ -186,13 +186,13 @@ def _run_query_pipeline(
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
     if request.settings.get_dry_run():
-        storage_name = "<multiple>"
+        storage_names = []
         if isinstance(request.query, LogicalQuery):
             entity = get_entity(request.query.get_from_clause().key)
-            storage = entity.get_all_storages()[0]
-            assert isinstance(storage, ReadableTableStorage)
-            storage_name = storage.get_storage_key().value
-        query_runner = partial(_dry_run_query_runner, storage_name)
+            for storage in entity.get_all_storages():
+                assert isinstance(storage, ReadableTableStorage)
+                storage_names.append(storage.get_storage_key().value)
+        query_runner = partial(_dry_run_query_runner, storage_names)
     else:
         query_runner = partial(
             _run_and_apply_column_names,
@@ -211,7 +211,7 @@ def _run_query_pipeline(
 
 
 def _dry_run_query_runner(
-    storage_name: str,
+    storage_names: Sequence[str],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
@@ -220,14 +220,10 @@ def _dry_run_query_runner(
         formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
-    visitor = TablesCollector()
     return QueryResult(
         {"data": [], "meta": []},
         {
-            "stats": {
-                "clickhouse_table": _get_clickhouse_tables(clickhouse_query, visitor),
-                "storage": storage_name,
-            },
+            "stats": {"storage_names": storage_names},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
         },

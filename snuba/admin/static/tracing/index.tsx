@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import Client from "../../api_client";
-import { Table } from "../../table";
+import Client from "../api_client";
+import { Table } from "../table";
 import { LogLine, TracingRequest, TracingResult } from "./types";
 import { parseLogLine } from "./util";
 
