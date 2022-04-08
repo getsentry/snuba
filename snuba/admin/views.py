@@ -20,7 +20,11 @@ from snuba.admin.runtime_config import (
     get_config_type_from_value,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
+from snuba.datasets.factory import (
+    InvalidDatasetError,
+    get_dataset,
+    get_enabled_dataset_names,
+)
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -366,15 +370,18 @@ def snql_to_sql() -> Response:
     body = json.loads(request.data)
     body["debug"] = True
     body["dry_run"] = True
-    dataset = get_dataset(body.pop("dataset"))
     try:
+        dataset = get_dataset(body.pop("dataset"))
         return dataset_query(dataset, body, Timer("admin"))
     except InvalidQueryException as exception:
         return Response(
-            json.dumps(
-                {"error": {"type": "invalid_query", "message": str(exception)}},
-                indent=4,
-            ),
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except InvalidDatasetError as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
             400,
             {"Content-Type": "application/json"},
         )
