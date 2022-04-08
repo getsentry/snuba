@@ -137,7 +137,16 @@ function Client() {
         headers: { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify(query),
-      }).then((resp) => resp.json());
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error.message || "Could not convert SnQL";
+            throw new Error(errMsg);
+          });
+        }
+      });
     },
 
     getPredefinedQueryOptions: () => {

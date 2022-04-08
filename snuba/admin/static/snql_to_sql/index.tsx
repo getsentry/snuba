@@ -59,7 +59,7 @@ function SnQLToSQL(props: { api: Client }) {
       })
       .catch((err) => {
         console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
+        window.alert("An error occurred: " + err.message);
       })
       .finally(() => {
         setIsExecuting(false);
