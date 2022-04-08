@@ -287,8 +287,8 @@ def _format_storage_query_and_run(
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
-    visitor = TablesCollector()
     from_clause = clickhouse_query.get_from_clause()
+    visitor = TablesCollector()
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:

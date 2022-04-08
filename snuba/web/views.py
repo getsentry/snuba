@@ -451,7 +451,7 @@ def dataset_query(
         schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
-        body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer,
+        body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer
     )
 
     try:
