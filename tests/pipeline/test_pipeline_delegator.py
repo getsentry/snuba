@@ -2,6 +2,7 @@ import threading
 from typing import List, MutableSequence, Optional, Tuple, Union
 from unittest.mock import ANY, Mock, call
 
+from snuba.attribution import get_app_id
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -88,7 +89,8 @@ def test() -> None:
     with cv:
         request_settings = HTTPRequestSettings(referrer="ref")
         delegator.build_execution_pipeline(
-            Request("", query_body, query, "", request_settings), query_runner,
+            Request("", query_body, query, get_app_id("default"), "", request_settings),
+            query_runner,
         ).execute()
         cv.wait(timeout=5)
 
