@@ -4,7 +4,10 @@ import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 
-from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.message_filters import (
+    KafkaHeaderFilter,
+    KafkaHeaderFilterWithBypass,
+)
 
 test_data = [
     pytest.param(
@@ -50,3 +53,20 @@ def test_kafka_filter_header_should_drop(
     expected_result: bool,
 ) -> None:
     assert header_filter.should_drop(message) == expected_result
+
+
+def test_kafka_filter_header_with_bypass() -> None:
+    header_filter = KafkaHeaderFilterWithBypass("should_drop", "1", 5)
+    message = Message(
+        Partition(Topic("random"), 1),
+        1,
+        KafkaPayload(b"key", b"value", [("should_drop", b"1")]),
+        datetime.now(),
+    )
+
+    for _ in range(3):
+        assert header_filter.should_drop(message) is True
+        assert header_filter.should_drop(message) is True
+        assert header_filter.should_drop(message) is True
+        assert header_filter.should_drop(message) is True
+        assert header_filter.should_drop(message) is False
