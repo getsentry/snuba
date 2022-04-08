@@ -4,7 +4,7 @@ import logging
 from dataclasses import replace
 from functools import partial
 from math import floor
-from typing import MutableMapping, Optional, Sequence, Set, Union
+from typing import MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 
@@ -20,7 +20,6 @@ from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
-from snuba.datasets.storage import ReadableTableStorage
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -186,13 +185,7 @@ def _run_query_pipeline(
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
     if request.settings.get_dry_run():
-        storage_names = []
-        if isinstance(request.query, LogicalQuery):
-            entity = get_entity(request.query.get_from_clause().key)
-            for storage in entity.get_all_storages():
-                assert isinstance(storage, ReadableTableStorage)
-                storage_names.append(storage.get_storage_key().value)
-        query_runner = partial(_dry_run_query_runner, storage_names)
+        query_runner = _dry_run_query_runner
     else:
         query_runner = partial(
             _run_and_apply_column_names,
@@ -211,7 +204,6 @@ def _run_query_pipeline(
 
 
 def _dry_run_query_runner(
-    storage_names: Sequence[str],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
@@ -223,7 +215,7 @@ def _dry_run_query_runner(
     return QueryResult(
         {"data": [], "meta": []},
         {
-            "stats": {"storage_names": storage_names},
+            "stats": {},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
         },
@@ -296,7 +288,9 @@ def _format_storage_query_and_run(
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
     visitor = TablesCollector()
-    table_names = _get_clickhouse_tables(clickhouse_query, visitor)
+    from_clause = clickhouse_query.get_from_clause()
+    visitor.visit(from_clause)
+    table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         _apply_turbo_sampling_if_needed(clickhouse_query, request_settings)
 
@@ -350,14 +344,6 @@ def _format_storage_query_and_run(
                 return execute()
         else:
             return execute()
-
-
-def _get_clickhouse_tables(
-    clickhouse_query: Union[Query, CompositeQuery[Table]], visitor: TablesCollector
-) -> str:
-    from_clause = clickhouse_query.get_from_clause()
-    visitor.visit(from_clause)
-    return ",".join(sorted(visitor.get_tables()))
 
 
 def get_query_size_group(query_size_bytes: int) -> str:

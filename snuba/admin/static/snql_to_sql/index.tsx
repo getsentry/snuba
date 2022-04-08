@@ -43,13 +43,13 @@ function SnQLToSQL(props: { api: Client }) {
     });
   }
 
-  function executeQuery() {
+  function convertQuery() {
     if (isExecuting) {
       window.alert("A query is already running");
     }
     setIsExecuting(true);
     props.api
-      .executeSnQLQuery(snql_query as SnQLRequest)
+      .convertSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
         const query_result = {
           input_query: snql_query.query,
@@ -92,7 +92,7 @@ function SnQLToSQL(props: { api: Client }) {
           </div>
           <div>
             <button
-              onClick={(_) => executeQuery()}
+              onClick={(_) => convertQuery()}
               style={executeButtonStyle}
               disabled={
                 isExecuting ||
@@ -100,7 +100,7 @@ function SnQLToSQL(props: { api: Client }) {
                 snql_query.query == undefined
               }
             >
-              Execute query
+              Convert Query
             </button>
           </div>
         </div>

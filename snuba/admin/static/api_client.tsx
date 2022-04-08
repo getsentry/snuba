@@ -13,12 +13,8 @@ import {
   QueryResult,
   PredefinedQuery,
 } from "./clickhouse_queries/types";
-import { TracingRequest, TracingResult } from "./tracing/clickhouse/types";
-import {
-  SnQLRequest,
-  SnQLResult,
-  SnubaDatasetName,
-} from "./tracing/snql/types";
+import { TracingRequest, TracingResult } from "./tracing/types";
+import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -37,7 +33,7 @@ interface Client {
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
-  executeSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
+  convertSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
@@ -135,7 +131,7 @@ function Client() {
       return fetch(url).then((resp) => resp.json());
     },
 
-    executeSnQLQuery: (query: SnQLRequest) => {
+    convertSnQLQuery: (query: SnQLRequest) => {
       const url = baseUrl + "snql_to_sql";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },

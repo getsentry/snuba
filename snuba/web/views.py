@@ -450,9 +450,18 @@ def dataset_query(
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPRequestSettings)
 
-    request = build_request(
-        body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer
-    )
+    try:
+        request = build_request(
+            body,
+            parse_snql_query,
+            HTTPRequestSettings,
+            schema,
+            dataset,
+            timer,
+            referrer,
+        )
+    except InvalidQueryException as exception:
+        return handle_invalid_query(exception)
 
     try:
         result = parse_and_run_query(dataset, request, timer)
