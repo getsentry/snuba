@@ -84,7 +84,7 @@ function QueryDisplay(props: {
   return (
     <div>
       <form>
-        <h2>Construct a query</h2>
+        <h2>Construct a ClickHouse System Query</h2>
         <div style={queryDescription}>{props.predefinedQuery?.description}</div>
         <div>
           <TextArea value={query.sql || ""} onChange={updateQuerySql} />
