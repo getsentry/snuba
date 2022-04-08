@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Mapping
 
 import pytest
+
 from snuba.reader import Column, Result
 from snuba.web import QueryExtraData, QueryResult, transform_column_names
 
@@ -26,7 +29,7 @@ TEST_CASES = [
                     },
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         QueryResult(
             result=Result(
@@ -40,12 +43,12 @@ TEST_CASES = [
                     {"event_id": "sdf", "duration": 321, "message": "msg2"},
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         {
-            "_snuba_event_id": "event_id",
-            "_snuba_duration": "duration",
-            "_snuba_message": "message",
+            "_snuba_event_id": ["event_id"],
+            "_snuba_duration": ["duration"],
+            "_snuba_message": ["message"],
         },
         id="Result without final, complete mapping",
     ),
@@ -75,7 +78,7 @@ TEST_CASES = [
                     "_snuba_message": "",
                 },
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         QueryResult(
             result=Result(
@@ -90,12 +93,12 @@ TEST_CASES = [
                 ],
                 totals={"event_id": "", "duration": 223, "message": ""},
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         {
-            "_snuba_event_id": "event_id",
-            "_snuba_duration": "duration",
-            "_snuba_message": "message",
+            "_snuba_event_id": ["event_id"],
+            "_snuba_duration": ["duration"],
+            "_snuba_message": ["message"],
         },
         id="Result with final, complete mapping",
     ),
@@ -120,7 +123,7 @@ TEST_CASES = [
                     },
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
         QueryResult(
             result=Result(
@@ -142,9 +145,9 @@ TEST_CASES = [
                     },
                 ],
             ),
-            extra=QueryExtraData(stats={}, sql="..."),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
         ),
-        {"_snuba_event_id": "event_id"},
+        {"_snuba_event_id": ["event_id"]},
         id="Incomplete mapping",
     ),
 ]
@@ -152,7 +155,7 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("in_result, out_result, mapping", TEST_CASES)
 def test_transformation(
-    in_result: QueryResult, out_result: QueryResult, mapping: Mapping[str, str]
+    in_result: QueryResult, out_result: QueryResult, mapping: Mapping[str, list[str]]
 ) -> None:
     transform_column_names(in_result, mapping)
 

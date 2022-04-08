@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
@@ -164,6 +165,33 @@ test_data = [
                         (Column(None, None, "column1"),),
                     ),
                 )
+            ],
+        ),
+    ),
+    (
+        Query(
+            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "alias",
+                    FunctionCall("alias", "log", (Column(None, None, "column1"),)),
+                ),
+            ],
+        ),
+        Query(
+            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "alias",
+                    FunctionCall(
+                        "alias",
+                        "ifNotFinite",
+                        (
+                            FunctionCall(None, "log", (Column(None, None, "column1"),)),
+                            Literal(None, 0),
+                        ),
+                    ),
+                ),
             ],
         ),
     ),

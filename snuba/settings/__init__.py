@@ -1,7 +1,8 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from datetime import datetime, timedelta
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
-from snuba.settings.validation import _validate_settings
+from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -14,6 +15,7 @@ PORT = 1218
 
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
+ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
 
@@ -46,6 +48,9 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "transactions",
             "transactions_ro",
             "transactions_v2",
+            "errors_v2",
+            "errors_v2_ro",
+            "profiles",
         },
         "single_node": True,
     },
@@ -58,6 +63,7 @@ DOGSTATSD_PORT = None
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
+    "subscriptions.executor.latency": 0.1,
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
@@ -136,6 +142,8 @@ REPLACER_MAX_MEMORY_USAGE = 10 * (1024 ** 3)  # 10GB
 REPLACER_KEY_TTL = 12 * 60 * 60
 REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
 REPLACER_IMMEDIATE_OPTIMIZE = False
+REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 2 * 60  # 2 minutes in seconds
+REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL = 60 * 60  # 1 hour in seconds
 
 TURBO_SAMPLE_RATE = 0.1
 
@@ -144,14 +152,12 @@ PRETTY_FORMAT_EXPRESSIONS = True
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
-ERRORS_ROLLOUT_ALL: bool = True
-
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental", "profiles"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -174,14 +180,25 @@ ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", Fa
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
 
-# Temporary setting for subscription scheduler test
-SUBSCRIPTIONS_SCHEDULER_LOAD_FACTOR = 5
-
 TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS: Set[str] = set()
 
 # Used for migrating to/from writing metrics directly to aggregate tables
 # rather than using materialized views
 WRITE_METRICS_AGG_DIRECTLY = False
+ENABLED_MATERIALIZATION_VERSION = 4
+
+# Enable profiles ingestion
+ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
+
+# Place the actual time we start ingesting on the new version.
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
+TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
+    2022, 2, 18, 0, 0, 0
+)
+
+MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
+
+OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
@@ -222,4 +239,4 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
-_validate_settings(locals())
+validate_settings(locals())

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence, Tuple, Union
+from typing import Sequence, Union
 
 from snuba.utils.schemas import UUID, AggregateFunction, Any, Array, Column
 from snuba.utils.schemas import ColumnSet as BaseColumnSet
@@ -69,7 +69,7 @@ class ColumnSet(BaseColumnSet):
     def __init__(
         self,
         columns: Sequence[
-            Union[Column[SchemaModifiers], Tuple[str, ColumnType[SchemaModifiers]]]
+            Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]
         ],
     ) -> None:
         for column in columns:
@@ -82,7 +82,7 @@ class ColumnSet(BaseColumnSet):
 
     def __add__(
         self,
-        other: Union[ColumnSet, Sequence[Tuple[str, ColumnType[SchemaModifiers]]]],
+        other: Union[ColumnSet, Sequence[tuple[str, ColumnType[SchemaModifiers]]]],
     ) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])

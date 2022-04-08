@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Sequence, Set, Union
 
-from snuba import settings
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -27,16 +26,12 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
+from snuba.datasets.entities.events import BaseEventsEntity
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import (
-    SelectedStorageQueryPlanBuilder,
-    SingleStorageQueryPlanBuilder,
-)
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
@@ -53,7 +48,12 @@ from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
+from snuba.query.processors.object_id_rate_limiter import (
+    ProjectRateLimiterProcessor,
+    ProjectReferrerRateLimiter,
+    ReferrerRateLimiterProcessor,
+)
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
@@ -330,39 +330,6 @@ class DiscoverEntity(Entity):
         self.__events_columns = EVENTS_COLUMNS
         self.__transactions_columns = TRANSACTIONS_COLUMNS
 
-        events_storage = get_storage(StorageKey.EVENTS)
-
-        events_pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=EventsQueryStorageSelector(
-                    mappers=events_translation_mappers.concat(
-                        transaction_translation_mappers
-                    )
-                    .concat(null_function_translation_mappers)
-                    .concat(
-                        TranslationMappers(
-                            # XXX: Remove once we are using errors
-                            columns=[
-                                ColumnToMapping(
-                                    None, "release", None, "tags", "sentry:release"
-                                ),
-                                ColumnToMapping(
-                                    None, "dist", None, "tags", "sentry:dist"
-                                ),
-                                ColumnToMapping(
-                                    None, "user", None, "tags", "sentry:user"
-                                ),
-                            ],
-                            subscriptables=[
-                                SubscriptableMapper(None, "tags", None, "tags"),
-                                SubscriptableMapper(None, "contexts", None, "contexts"),
-                            ],
-                        )
-                    )
-                )
-            ),
-        )
-
         discover_storage = get_storage(StorageKey.DISCOVER)
         discover_storage_plan_builder = SingleStorageQueryPlanBuilder(
             storage=discover_storage,
@@ -437,17 +404,9 @@ class DiscoverEntity(Entity):
             query_plan_builder=discover_storage_plan_builder
         )
 
-        pipeline_builder: Union[PipelineDelegator, SimplePipelineBuilder]
-        if settings.ERRORS_ROLLOUT_ALL:
-            storage = discover_storage
-            pipeline_builder = discover_pipeline_builder
-        else:
-            storage = events_storage
-            pipeline_builder = events_pipeline_builder
-
         super().__init__(
-            storages=[storage],
-            query_pipeline_builder=pipeline_builder,
+            storages=[discover_storage],
+            query_pipeline_builder=discover_pipeline_builder,
             abstract_column_set=(
                 self.__common_columns
                 + self.__events_columns
@@ -464,7 +423,10 @@ class DiscoverEntity(Entity):
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
+            ReferrerRateLimiterProcessor(),
+            ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
+            ResourceQuotaProcessor("project_id"),
         ]
 
 

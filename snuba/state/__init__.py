@@ -38,6 +38,7 @@ rds = redis_client
 ratelimit_prefix = "snuba-ratelimit:"
 query_lock_prefix = "snuba-query-lock:"
 config_hash = "snuba-config"
+config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
 config_changes_list_limit = 25
@@ -115,7 +116,7 @@ def get_typed_value(value: Any) -> Any:
 
 
 def set_config(
-    key: str, value: Optional[Any], user: Optional[str] = None, force: bool = False
+    key: str, value: Optional[Any], user: Optional[str] = None, force: bool = False,
 ) -> None:
     value = get_typed_value(value)
     enc_value = "{}".format(value).encode("utf-8") if value is not None else None
@@ -131,14 +132,16 @@ def set_config(
                 raise MismatchedTypeException(key, type(original_value), type(value))
 
         change_record = (time.time(), user, enc_original_value, enc_value)
+        p = rds.pipeline()
         if value is None:
-            rds.hdel(config_hash, key)
-            rds.hdel(config_history_hash, key)
+            p.hdel(config_hash, key)
+            p.hdel(config_history_hash, key)
         else:
-            rds.hset(config_hash, key, enc_value)
-            rds.hset(config_history_hash, key, json.dumps(change_record))
-        rds.lpush(config_changes_list, json.dumps((key, change_record)))
-        rds.ltrim(config_changes_list, 0, config_changes_list_limit)
+            p.hset(config_hash, key, enc_value)
+            p.hset(config_history_hash, key, json.dumps(change_record))
+        p.lpush(config_changes_list, json.dumps((key, change_record)))
+        p.ltrim(config_changes_list, 0, config_changes_list_limit)
+        p.execute()
         logger.info(f"Successfully changed option {key} to {value}")
     except MismatchedTypeException as exc:
         logger.exception(
@@ -186,7 +189,7 @@ def get_raw_configs() -> Mapping[str, Optional[Any]]:
 
 
 def delete_config(key: str, user: Optional[Any] = None) -> None:
-    return set_config(key, None, user=user)
+    set_config(key, None, user=user)
 
 
 def get_uncached_config(key: str) -> Optional[Any]:
@@ -210,6 +213,65 @@ def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]
         (key, ts, user, get_typed_value(before), get_typed_value(after))
         for [key, [ts, user, before, after]] in changes
     ]
+
+
+# Config descriptions for runtime config UI
+
+
+def set_config_description(
+    key: str, description: Optional[str] = None, user: Optional[str] = None
+) -> None:
+    enc_desc = (
+        "{}".format(description).encode("utf-8") if description is not None else None
+    )
+
+    try:
+        enc_original_desc = rds.hget(config_description_hash, key)
+
+        if (
+            enc_original_desc is not None
+            and description is not None
+            and enc_original_desc.decode("utf-8") == description
+        ):
+            return
+
+        if description is None:
+            rds.hdel(config_description_hash, key)
+            logger.info(f"Successfully deleted config description for {key}")
+        else:
+            rds.hset(config_description_hash, key, enc_desc)
+            logger.info(
+                f"Successfully changed config description for {key} to '{description}'"
+            )
+
+    except Exception as e:
+        logger.exception(e)
+
+
+def get_config_description(key: str) -> Optional[str]:
+    try:
+        enc_desc = rds.hget(config_description_hash, key)
+        return enc_desc.decode("utf-8") if enc_desc is not None else None
+    except Exception as e:
+        logger.exception(e)
+        return None
+
+
+def get_all_config_descriptions() -> Mapping[str, Optional[str]]:
+    try:
+        all_descriptions = rds.hgetall(config_description_hash)
+        return {
+            k.decode("utf-8"): d.decode("utf-8")
+            for k, d in all_descriptions.items()
+            if d is not None
+        }
+    except Exception as e:
+        logger.exception(e)
+        return {}
+
+
+def delete_config_description(key: str, user: Optional[str] = None) -> None:
+    set_config_description(key, None, user=user)
 
 
 # Query Recording

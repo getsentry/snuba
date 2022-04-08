@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
+from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
 
 
@@ -51,11 +52,23 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
+    def get_app_id(self) -> str:
+        pass
+
+    @abstractmethod
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         pass
 
     @abstractmethod
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass
+
+    @abstractmethod
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        pass
+
+    @abstractmethod
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
         pass
 
 
@@ -77,6 +90,7 @@ class HTTPRequestSettings(RequestSettings):
         legacy: bool = False,
         team: str = "<unknown>",
         feature: str = "<unknown>",
+        app_id: str = "default",
     ) -> None:
         super().__init__(referrer=referrer)
         self.__turbo = turbo
@@ -87,7 +101,9 @@ class HTTPRequestSettings(RequestSettings):
         self.__legacy = legacy
         self.__team = team
         self.__feature = feature
+        self.__app_id = app_id
         self.__rate_limit_params: List[RateLimitParameters] = []
+        self.__resource_quota: Optional[ResourceQuota] = None
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -110,6 +126,9 @@ class HTTPRequestSettings(RequestSettings):
     def get_team(self) -> str:
         return self.__team
 
+    def get_app_id(self) -> str:
+        return self.__app_id
+
     def get_feature(self) -> str:
         return self.__feature
 
@@ -118,6 +137,12 @@ class HTTPRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         self.__rate_limit_params.append(rate_limit_param)
+
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        return self.__resource_quota
+
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
+        self.__resource_quota = quota
 
 
 class SubscriptionRequestSettings(RequestSettings):
@@ -133,12 +158,14 @@ class SubscriptionRequestSettings(RequestSettings):
         parent_api: str = "subscription",
         team: str = "workflow",
         feature: str = "subscription",
+        app_id: str = "default",
     ) -> None:
         super().__init__(referrer=referrer)
         self.__consistent = consistent
         self.__parent_api = parent_api
         self.__team = team
         self.__feature = feature
+        self.__app_id = app_id
 
     def get_turbo(self) -> bool:
         return False
@@ -161,6 +188,9 @@ class SubscriptionRequestSettings(RequestSettings):
     def get_team(self) -> str:
         return self.__team
 
+    def get_app_id(self) -> str:
+        return self.__app_id
+
     def get_feature(self) -> str:
         return self.__feature
 
@@ -168,4 +198,10 @@ class SubscriptionRequestSettings(RequestSettings):
         return []
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass
+
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        return None
+
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
         pass

@@ -1345,6 +1345,25 @@ class TestApi(SimpleAPITest):
         )
         assert result["data"][0] == {"environment": "prød", "count": 90}
 
+    def test_query_too_long(self) -> None:
+        long_string = "A" * 270000
+        response = self.post(
+            json.dumps(
+                {
+                    "from_date": self.base_time.isoformat(),
+                    "project": [1],
+                    "conditions": [["platform", "NOT IN", [long_string]]],
+                    "selected_columns": ["project_id"],
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert data["error"]["type"] == "query-too-long"
+        assert response.status_code == 400
+
     def test_query_timing(self) -> None:
         result = json.loads(
             self.post(
@@ -1545,18 +1564,6 @@ class TestApi(SimpleAPITest):
         }
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
-
-    @pytest.mark.xfail
-    def test_row_stats(self) -> None:
-        query = {
-            "project": 1,
-            "selected_columns": ["platform"],
-        }
-        result = json.loads(self.post(json.dumps(query)).data)
-
-        assert "rows_read" in result["stats"]
-        assert "bytes_read" in result["stats"]
-        assert result["stats"]["bytes_read"] > 0
 
     def test_static_page_renders(self) -> None:
         response = self.app.get("/config")
@@ -1941,10 +1948,9 @@ class TestApi(SimpleAPITest):
         )
 
         val = (
-            "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"arraySlice(hierarchical_hashes, 0, 2)) FROM {errors_table_name} PREWHERE"
+            "SELECT (arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`) FROM {errors_table_name} PREWHERE"
         )
-
         assert result["sql"].startswith(val)
 
     def test_backslashes_in_query(self) -> None:
@@ -1994,10 +2000,9 @@ class TestApi(SimpleAPITest):
         )
 
         val = (
-            "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM {errors_table_name} PREWHERE"
+            "SELECT (arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`) FROM {errors_table_name} PREWHERE"
         )
-
         assert result["sql"].startswith(val)
 
     def test_test_endpoints(self) -> None:
@@ -2228,13 +2233,16 @@ class TestCreateSubscriptionApi(BaseApiTest):
         partition = subscription_id.split("/", 1)[0]
         assert (
             len(
-                RedisSubscriptionDataStore(redis_client, entity_key, partition,).all()
-                # type: ignore
+                list(
+                    RedisSubscriptionDataStore(
+                        redis_client, entity_key, partition,
+                    ).all()
+                )
             )
             == 1
         )
 
-    def test_invalid_dataset_and_entity_combination(self):
+    def test_invalid_dataset_and_entity_combination(self) -> None:
         expected_uuid = uuid.uuid1()
         entity_key = EntityKey.METRICS_COUNTERS
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
@@ -2336,7 +2344,11 @@ class TestDeleteSubscriptionApi(BaseApiTest):
 
         assert (
             len(
-                RedisSubscriptionDataStore(redis_client, entity_key, partition,).all()  # type: ignore
+                list(
+                    RedisSubscriptionDataStore(
+                        redis_client, entity_key, partition,
+                    ).all()
+                )
             )
             == 1
         )

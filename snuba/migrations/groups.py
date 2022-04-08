@@ -17,6 +17,7 @@ class MigrationGroup(Enum):
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
     SPANS_EXPERIMENTAL = "spans_experimental"
+    PROFILES = "profiles"
 
 
 # Migration groups are mandatory by default, unless they are on this list
@@ -25,6 +26,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
     MigrationGroup.SPANS_EXPERIMENTAL,
+    MigrationGroup.PROFILES,
 }
 
 
@@ -96,6 +98,7 @@ class EventsLoader(DirectoryLoader):
             "0013_errors_add_hierarchical_hashes",
             "0014_backfill_errors",
             "0015_truncate_events",
+            "0016_drop_legacy_events",
         ]
 
 
@@ -118,6 +121,7 @@ class TransactionsLoader(DirectoryLoader):
             "0011_transactions_add_span_op_breakdowns",
             "0012_transactions_add_spans",
             "0013_transactions_reduce_spans_exclusive_time",
+            "0014_transactions_remove_flattened_columns",
         ]
 
 
@@ -175,6 +179,25 @@ class MetricsLoader(DirectoryLoader):
             "0013_metrics_sets_granularity_1d",
             "0014_metrics_counters_granularity_1d",
             "0015_metrics_distributions_granularity_1d",
+            "0016_metrics_sets_consolidated_granularity",
+            "0017_metrics_counters_consolidated_granularity",
+            "0018_metrics_distributions_consolidated_granularity",
+            "0019_aggregate_tables_add_ttl",
+            "0020_polymorphic_buckets_table",
+            "0021_polymorphic_bucket_materialized_views",
+            "0022_repartition_polymorphic_table",
+            "0023_polymorphic_repartitioned_bucket_matview",
+            "0024_metrics_distributions_add_histogram",
+            "0025_metrics_counters_aggregate_v2",
+            "0026_metrics_counters_v2_writing_matview",
+            "0027_fix_migration_0026",
+            "0028_metrics_sets_aggregate_v2",
+            "0029_metrics_distributions_aggregate_v2",
+            "0030_metrics_distributions_v2_writing_mv",
+            "0031_metrics_sets_v2_writing_mv",
+            "0032_redo_0030_and_0031_without_timestamps",
+            "0033_metrics_cleanup_old_views",
+            "0034_metrics_cleanup_old_tables",
         ]
 
 
@@ -202,6 +225,14 @@ class SpansExperimentalLoader(DirectoryLoader):
         return ["0001_spans_experimental"]
 
 
+class ProfilesLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.profiles")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_profiles"]
+
+
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
@@ -212,6 +243,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
     MigrationGroup.SPANS_EXPERIMENTAL: SpansExperimentalLoader(),
+    MigrationGroup.PROFILES: ProfilesLoader(),
 }
 
 

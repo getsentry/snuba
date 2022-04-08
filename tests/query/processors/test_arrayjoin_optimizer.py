@@ -5,6 +5,7 @@ from typing import Any, MutableMapping, Optional, Sequence
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
+from snuba.attribution import get_app_id
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -389,6 +390,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
         id="a",
         body=body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
         settings=HTTPRequestSettings(referrer="r"),
     )

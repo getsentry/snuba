@@ -1,10 +1,12 @@
 import logging
 import signal
+from contextlib import closing
 from typing import Any, Optional, Sequence
 
 import click
+import rapidjson
 from arroyo import Topic, configure_metrics
-from arroyo.backends.kafka import KafkaConsumer
+from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
 from arroyo.processing import StreamProcessor
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
@@ -13,6 +15,7 @@ from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFacto
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
+from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -22,6 +25,7 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
+from snuba.utils.streams.topics import Topic as StreamsTopic
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +75,9 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
+@click.option(
+    "--parallel-collect", is_flag=True, default=True,
+)
 @click.option("--processes", type=int)
 @click.option(
     "--input-block-size", type=int,
@@ -79,6 +86,16 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--dead-letter-topic", help="Dead letter topic to send failed insert messages."
+)
+# TODO: For testing alternate rebalancing strategies. To be eventually removed.
+@click.option(
+    "--cooperative-rebalancing",
+    is_flag=True,
+    default=False,
+    help="Use cooperative-sticky partition assignment strategy",
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -88,10 +105,13 @@ def multistorage_consumer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
+    parallel_collect: bool,
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    dead_letter_topic: Optional[str] = None,
+    cooperative_rebalancing: bool = False,
 ) -> None:
 
     DEFAULT_BLOCK_SIZE = int(32 * 1e6)
@@ -178,6 +198,9 @@ def multistorage_consumer(
         queued_min_messages=queued_min_messages,
     )
 
+    if cooperative_rebalancing is True:
+        consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
+
     for storage_key in storage_keys[1:]:
         if (
             build_kafka_consumer_configuration(
@@ -192,6 +215,33 @@ def multistorage_consumer(
         ):
             raise ValueError("storages cannot be located on different Kafka clusters")
 
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "consumer",
+        tags={
+            "group": consumer_group,
+            "storage": "_".join([storage_keys[0].value, "m"]),
+        },
+    )
+    # Collect metrics from librdkafka if we have stats_collection_freq_ms set
+    # for the consumer group, or use the default.
+    stats_collection_frequency_ms = get_config(
+        f"stats_collection_freq_ms_{consumer_group}",
+        get_config("stats_collection_freq_ms", 0),
+    )
+
+    if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
+
+        def stats_callback(stats_json: str) -> None:
+            stats = rapidjson.loads(stats_json)
+            metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
+
+        consumer_configuration.update(
+            {
+                "statistics.interval.ms": stats_collection_frequency_ms,
+                "stats_cb": stats_callback,
+            }
+        )
     if commit_log is None:
         consumer = KafkaConsumer(consumer_configuration)
     else:
@@ -213,14 +263,14 @@ def multistorage_consumer(
             consumer_configuration, producer=producer, commit_log_topic=commit_log,
         )
 
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={
-            "group": consumer_group,
-            "storage": "_".join([storage_keys[0].value, "m"]),
-        },
-    )
+    dead_letter_producer: Optional[KafkaProducer] = None
+    dead_letter_queue: Optional[Topic] = None
+    if dead_letter_topic:
+        dead_letter_queue = Topic(dead_letter_topic)
+
+        dead_letter_producer = KafkaProducer(
+            build_kafka_producer_configuration(StreamsTopic(dead_letter_topic))
+        )
 
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
@@ -230,10 +280,13 @@ def multistorage_consumer(
             [*storages.values()],
             max_batch_size,
             max_batch_time_ms / 1000.0,
+            parallel_collect=parallel_collect,
             processes=processes,
             input_block_size=input_block_size,
             output_block_size=output_block_size,
             metrics=metrics,
+            producer=dead_letter_producer,
+            topic=dead_letter_queue,
         ),
     )
 
@@ -242,5 +295,8 @@ def multistorage_consumer(
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
-
-    processor.run()
+    if dead_letter_producer:
+        with closing(dead_letter_producer):
+            processor.run()
+    else:
+        processor.run()

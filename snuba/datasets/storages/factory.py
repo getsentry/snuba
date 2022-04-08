@@ -7,24 +7,25 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.discover import storage as discover_storage
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-from snuba.datasets.storages.events import storage as events_storage
-from snuba.datasets.storages.events_ro import storage as events_ro_storage
+from snuba.datasets.storages.errors_v2 import storage as errors_v2_storage
+from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
-from snuba.datasets.storages.metrics import counters_buckets as metrics_counters_buckets
 from snuba.datasets.storages.metrics import counters_storage as metrics_counters_storage
-from snuba.datasets.storages.metrics import (
-    distributions_buckets as metrics_distributions_buckets,
-)
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
 )
-from snuba.datasets.storages.metrics import sets_buckets as metrics_sets_buckets
+from snuba.datasets.storages.metrics import (
+    polymorphic_bucket as metrics_polymorphic_storage,
+)
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
 from snuba.datasets.storages.outcomes import (
     materialized_storage as outcomes_hourly_storage,
 )
 from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw_storage
+from snuba.datasets.storages.profiles import (
+    writable_storage as profiles_writable_storage,
+)
 from snuba.datasets.storages.querylog import storage as querylog_storage
 from snuba.datasets.storages.sessions import (
     materialized_storage as sessions_hourly_storage,
@@ -51,12 +52,10 @@ CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {
 DEV_WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {}
 
 METRICS_WRITEABLE_STORAGES = {
-    metrics_counters_buckets.get_storage_key(): metrics_counters_buckets,
-    metrics_distributions_buckets.get_storage_key(): metrics_distributions_buckets,
-    metrics_sets_buckets.get_storage_key(): metrics_sets_buckets,
     metrics_distributions_storage.get_storage_key(): metrics_distributions_storage,
     metrics_sets_storage.get_storage_key(): metrics_sets_storage,
     metrics_counters_storage.get_storage_key(): metrics_counters_storage,
+    metrics_polymorphic_storage.get_storage_key(): metrics_polymorphic_storage,
 }
 
 WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
@@ -66,13 +65,14 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
         storage.get_storage_key(): storage
         for storage in [
             errors_storage,
-            events_storage,
             outcomes_raw_storage,
             querylog_storage,
             sessions_raw_storage,
             transactions_storage,
             spans_storage,
             transactions_v2_storage,
+            errors_v2_storage,
+            profiles_writable_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
@@ -93,11 +93,12 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
         for storage in [
             discover_storage,
             errors_ro_storage,
-            events_ro_storage,
             outcomes_hourly_storage,
             sessions_hourly_storage,
             org_sessions_hourly_storage,
             transactions_ro_storage,
+            profiles_writable_storage,
+            errors_v2_ro_storage,
         ]
     },
     **(DEV_NON_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),

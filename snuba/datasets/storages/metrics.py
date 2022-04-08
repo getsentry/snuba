@@ -9,6 +9,7 @@ from snuba.clickhouse.columns import (
     Float,
     Nested,
     SchemaModifiers,
+    String,
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
@@ -17,11 +18,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     DistributionsAggregateProcessor,
     SetsAggregateProcessor,
 )
-from snuba.datasets.metrics_bucket_processor import (
-    CounterMetricsProcessor,
-    DistributionsMetricsProcessor,
-    SetsMetricsProcessor,
-)
+from snuba.datasets.metrics_bucket_processor import PolymorphicMetricsProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -29,6 +26,7 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
@@ -47,24 +45,27 @@ POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
     Column("offset", UInt(64)),
 ]
 
-sets_buckets = WritableTableStorage(
-    storage_key=StorageKey.METRICS_BUCKETS,
+polymorphic_bucket = WritableTableStorage(
+    storage_key=StorageKey.METRICS_RAW,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
         columns=ColumnSet(
             [
+                Column("use_case_id", String()),
                 *PRE_VALUE_COLUMNS,
+                Column("count_value", Float(64)),
                 Column("set_values", Array(UInt(64))),
+                Column("distribution_values", Array(Float(64))),
                 *POST_VALUE_COLUMNS,
             ]
         ),
-        local_table_name="metrics_buckets_local",
-        dist_table_name="metrics_buckets_dist",
+        local_table_name="metrics_raw_v2_local",
+        dist_table_name="metrics_raw_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=SetsMetricsProcessor(),
+        processor=PolymorphicMetricsProcessor(),
         default_topic=Topic.METRICS,
         commit_log_topic=Topic.METRICS_COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
@@ -72,50 +73,6 @@ sets_buckets = WritableTableStorage(
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
     ),
 )
-
-counters_buckets = WritableTableStorage(
-    storage_key=StorageKey.METRICS_COUNTERS_BUCKETS,
-    storage_set_key=StorageSetKey.METRICS,
-    schema=WritableTableSchema(
-        columns=ColumnSet(
-            [*PRE_VALUE_COLUMNS, Column("value", Float(64)), *POST_VALUE_COLUMNS]
-        ),
-        local_table_name="metrics_counters_buckets_local",
-        dist_table_name="metrics_counters_buckets_dist",
-        storage_set_key=StorageSetKey.METRICS,
-    ),
-    query_processors=[],
-    stream_loader=build_kafka_stream_loader_from_settings(
-        processor=CounterMetricsProcessor(),
-        default_topic=Topic.METRICS,
-        commit_log_topic=Topic.METRICS_COMMIT_LOG,
-        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
-        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
-        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
-    ),
-)
-
-distributions_buckets = WritableTableStorage(
-    storage_key=StorageKey.METRICS_DISTRIBUTIONS_BUCKETS,
-    storage_set_key=StorageSetKey.METRICS,
-    schema=WritableTableSchema(
-        columns=ColumnSet(
-            [
-                *PRE_VALUE_COLUMNS,
-                Column("values", Array(Float(64))),
-                *POST_VALUE_COLUMNS,
-            ]
-        ),
-        local_table_name="metrics_distributions_buckets_local",
-        dist_table_name="metrics_distributions_buckets_dist",
-        storage_set_key=StorageSetKey.METRICS,
-    ),
-    query_processors=[],
-    stream_loader=build_kafka_stream_loader_from_settings(
-        processor=DistributionsMetricsProcessor(), default_topic=Topic.METRICS,
-    ),
-)
-
 
 aggregated_columns = [
     Column("org_id", UInt(64)),
@@ -133,8 +90,8 @@ sets_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_SETS,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
-        local_table_name="metrics_sets_local",
-        dist_table_name="metrics_sets_dist",
+        local_table_name="metrics_sets_v2_local",
+        dist_table_name="metrics_sets_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
         columns=ColumnSet(
             [
@@ -143,7 +100,7 @@ sets_storage = WritableTableStorage(
             ]
         ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         SetsAggregateProcessor(), default_topic=Topic.METRICS,
     ),
@@ -154,8 +111,8 @@ counters_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_COUNTERS,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
-        local_table_name="metrics_counters_local",
-        dist_table_name="metrics_counters_dist",
+        local_table_name="metrics_counters_v2_local",
+        dist_table_name="metrics_counters_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
         columns=ColumnSet(
             [
@@ -164,7 +121,7 @@ counters_storage = WritableTableStorage(
             ]
         ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         CounterAggregateProcessor(), default_topic=Topic.METRICS,
     ),
@@ -176,8 +133,8 @@ distributions_storage = WritableTableStorage(
     storage_key=StorageKey.METRICS_DISTRIBUTIONS,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
-        local_table_name="metrics_distributions_local",
-        dist_table_name="metrics_distributions_dist",
+        local_table_name="metrics_distributions_v2_local",
+        dist_table_name="metrics_distributions_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
         columns=ColumnSet(
             [
@@ -196,7 +153,7 @@ distributions_storage = WritableTableStorage(
             ]
         ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags")],
+    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         DistributionsAggregateProcessor(), default_topic=Topic.METRICS,
     ),

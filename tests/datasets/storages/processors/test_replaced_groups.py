@@ -7,7 +7,6 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.errors_replacer import (
-    ReplacerState,
     set_project_exclude_groups,
     set_project_needs_final,
 )
@@ -19,6 +18,7 @@ from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.redis import redis_client
+from snuba.replacers.replacer_processor import ReplacerState
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -129,12 +129,12 @@ def test_with_turbo(query: ClickhouseQuery) -> None:
 def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> None:
     set_project_needs_final(
         2,
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
     PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.EVENTS
+        "project_id", ReplacerState.ERRORS
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_condition() == build_in("project_id", [2])
@@ -155,12 +155,12 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
     PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.EVENTS
+        "project_id", ReplacerState.ERRORS
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_condition() == build_and(
@@ -186,12 +186,12 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
     PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.EVENTS
+        "project_id", ReplacerState.ERRORS
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_condition() == build_in("project_id", [2])
@@ -203,7 +203,7 @@ def test_query_overlaps_replacements_processor(
     query_with_timestamp: ClickhouseQuery,
     query_with_future_timestamp: ClickhouseQuery,
 ) -> None:
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     # replacement time unknown, default to "overlaps" but no groups to exclude so shouldn't be final
     enforcer._set_query_final(query_with_timestamp, True)
@@ -215,7 +215,7 @@ def test_query_overlaps_replacements_processor(
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
     enforcer._set_query_final(query_with_timestamp, False)
@@ -238,12 +238,12 @@ def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> 
     Query is looking for a group that has not been replaced, but the project itself
     has replacements.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [105, 106, 107],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -262,12 +262,12 @@ def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) ->
     Query is looking for a group that has been replaced, and there are too many
     groups to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -289,12 +289,12 @@ def test_single_not_too_many_exclude(
     Query is looking for a group that has been replaced, and there are not too many
     groups to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -316,12 +316,12 @@ def test_multiple_disjoint_replaced(
     Query is looking for multiple groups and there are replaced groups, but these
     sets of group ids are disjoint. (No queried groups have been replaced)
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [110, 120, 130],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -342,12 +342,12 @@ def test_multiple_fewer_exclude_than_queried(
     Query is looking for multiple groups and there are replaced groups, but there
     are fewer excluded groups than queried groups.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [101],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -369,12 +369,12 @@ def test_multiple_too_many_excludes(
     Query is looking for multiple groups and there are too many groups to exclude, but
     there are fewer groups queried for than replaced.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -397,12 +397,12 @@ def test_multiple_not_too_many_excludes(
     Query is looking for multiple groups and there are not too many groups to exclude, but
     there are fewer groups queried for than replaced.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -421,12 +421,12 @@ def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and not too many to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
@@ -444,12 +444,12 @@ def test_no_groups_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and too many to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.EVENTS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
 
     set_project_exclude_groups(
         2,
         [100, 101, 102],
-        ReplacerState.EVENTS,
+        ReplacerState.ERRORS,
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 

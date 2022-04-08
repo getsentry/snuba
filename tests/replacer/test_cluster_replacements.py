@@ -1,6 +1,15 @@
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Callable, Generator, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    List,
+    Mapping,
+    MutableMapping,
+    Sequence,
+    Tuple,
+)
 
 import pytest
 
@@ -18,6 +27,7 @@ from snuba.replacer import (
     RoundRobinConnectionPool,
     ShardedExecutor,
 )
+from snuba.replacers.replacer_processor import ReplacementMessageMetadata
 from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -141,6 +151,8 @@ REPLACEMENT_TYPE = (
     ReplacementType.EXCLUDE_GROUPS
 )  # Arbitrary replacement type, no impact on tests
 
+REPLACEMENT_MESSAGE_METADATA = ReplacementMessageMetadata(0, 0, "")
+
 
 @pytest.mark.parametrize(
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
@@ -149,7 +161,7 @@ def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_projects: str,
     expected_queries: Mapping[str, Sequence[str]],
-    request,
+    request: Any,
 ) -> None:
     """
     Test the execution of replacement queries on both storage nodes and
@@ -160,7 +172,9 @@ def test_write_each_node(
     test_cluster = override_func(True)
 
     replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+        get_writable_storage(StorageKey.ERRORS),
+        "consumer_group",
+        DummyMetricsBackend(),
     )
 
     replacer.flush_batch(
@@ -171,6 +185,7 @@ def test_write_each_node(
                 FINAL_QUERY_TEMPLATE,
                 (NEEDS_FINAL, 1),
                 REPLACEMENT_TYPE,
+                REPLACEMENT_MESSAGE_METADATA,
             )
         ]
     )
@@ -190,7 +205,9 @@ def test_failing_query(
     override_cluster(False)
 
     replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+        get_writable_storage(StorageKey.ERRORS),
+        "consumer_group",
+        DummyMetricsBackend(),
     )
 
     with pytest.raises(ServerExplodedException):
@@ -202,6 +219,7 @@ def test_failing_query(
                     FINAL_QUERY_TEMPLATE,
                     (NEEDS_FINAL, 1),
                     REPLACEMENT_TYPE,
+                    REPLACEMENT_MESSAGE_METADATA,
                 )
             ]
         )
@@ -218,7 +236,9 @@ def test_load_balancing(
     cluster = override_cluster(True)
 
     replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+        get_writable_storage(StorageKey.ERRORS),
+        "consumer_group",
+        DummyMetricsBackend(),
     )
     replacement = LegacyReplacement(
         COUNT_QUERY_TEMPLATE,
@@ -226,6 +246,7 @@ def test_load_balancing(
         FINAL_QUERY_TEMPLATE,
         (NEEDS_FINAL, 1),
         REPLACEMENT_TYPE,
+        REPLACEMENT_MESSAGE_METADATA,
     )
     replacer.flush_batch([replacement, replacement])
 
@@ -385,6 +406,7 @@ def test_local_executor(
             FINAL_QUERY_TEMPLATE,
             (NEEDS_FINAL, 1),
             REPLACEMENT_TYPE,
+            REPLACEMENT_MESSAGE_METADATA,
         ),
         records_count=1,
     )

@@ -25,7 +25,6 @@ from snuba.query.matchers import (
 )
 from snuba.subscriptions.data import (
     PartitionId,
-    SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
@@ -71,14 +70,14 @@ class Datetime(Pattern[datetime]):
 
 
 SUBSCRIPTION_FIXTURES = [
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=1,
         query=("MATCH (events) SELECT count() AS count"),
-        time_window=timedelta(minutes=60),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60 * 60,
+        resolution_sec=60,
         entity_subscription=create_entity_subscription(),
     ),
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=123,
         query=(
             """MATCH (sessions) SELECT if(greater(sessions,0),
@@ -87,30 +86,30 @@ SUBSCRIPTION_FIXTURES = [
                 WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
                 OFFSET 0 GRANULARITY 3600"""
         ),
-        time_window=timedelta(minutes=10),
-        resolution=timedelta(minutes=1),
+        time_window_sec=10 * 60,
+        resolution_sec=60,
         entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
     ),
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=123,
         query=(
             """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
                 WHERE org_id = 1 AND project_id IN array(1) AND tags[3] IN array(3,4,
                 5) AND metric_id=7"""
         ),
-        time_window=timedelta(minutes=10),
-        resolution=timedelta(minutes=1),
+        time_window_sec=10 * 60,
+        resolution_sec=60,
         entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS, 1),
     ),
-    SnQLSubscriptionData(
+    SubscriptionData(
         project_id=123,
         query=(
             """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
                 WHERE org_id = 1 AND project_id IN array(1) AND tags[3] IN array(3,4,
                 5) AND metric_id=7"""
         ),
-        time_window=timedelta(minutes=10),
-        resolution=timedelta(minutes=1),
+        time_window_sec=10 * 60,
+        resolution_sec=60,
         entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
     ),
 ]
@@ -251,7 +250,11 @@ def test_subscription_worker(
             String(ConditionFunctions.GTE),
             (
                 Column(None, String(timestamp_field)),
-                Literal(Datetime(timestamp - subscription.data.time_window)),
+                Literal(
+                    Datetime(
+                        timestamp - timedelta(seconds=subscription.data.time_window_sec)
+                    )
+                ),
             ),
         )
         to_pattern = FunctionCall(
@@ -320,20 +323,36 @@ def test_subscription_worker_consistent() -> None:
         timestamps=Interval(now - (frequency * evaluations), now),
     )
 
-    worker.process_message(Message(Partition(Topic("events"), 0), 0, tick, now))
-
-    time.sleep(0.1)
-
-    assert (
-        len(
-            [
-                m
-                for m in metrics.calls
-                if isinstance(m, Increment) and m.name == "consistent"
-            ]
-        )
-        == 1
+    futures = worker.process_message(
+        Message(Partition(Topic("events"), 0), 0, tick, now)
     )
+
+    # Wait for future to be done
+    assert futures is not None
+    fut = futures[0]
+    fut.future.result()
+
+    retries = 3
+
+    while True:
+        retries -= 1
+        time.sleep(0.1)
+
+        try:
+            assert (
+                len(
+                    [
+                        m
+                        for m in metrics.calls
+                        if isinstance(m, Increment) and m.name == "consistent"
+                    ]
+                )
+                == 1
+            )
+            break
+        except AssertionError:
+            if retries == 0:
+                raise
 
 
 def test_handle_differences() -> None:

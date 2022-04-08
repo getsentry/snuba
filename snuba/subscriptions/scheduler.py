@@ -63,7 +63,7 @@ class ImmediateTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        resolution = int(subscription.data.resolution.total_seconds())
+        resolution = subscription.data.resolution_sec
         if timestamp % resolution == 0:
             self.__count += 1
             return ScheduledSubscriptionTask(
@@ -110,7 +110,7 @@ class JitteredTaskBuilder(TaskBuilder):
     ) -> Optional[ScheduledSubscriptionTask]:
         subscription = subscription_with_metadata.subscription
 
-        resolution = int(subscription.data.resolution.total_seconds())
+        resolution = subscription.data.resolution_sec
 
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
             if timestamp % resolution == 0:
@@ -199,7 +199,7 @@ class TaskBuilderModeState:
         ):
             return general_mode
 
-        resolution = int(subscription.data.resolution.total_seconds())
+        resolution = subscription.data.resolution_sec
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
             return self.get_final_mode(general_mode)
 
@@ -348,18 +348,10 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()
-        start_get_subscriptions = datetime.now()
 
         interval = tick.timestamps
 
         subscriptions = self.__get_subscriptions()
-
-        self.__metrics.timing(
-            "getting_subscriptions",
-            (datetime.now() - start_get_subscriptions).total_seconds() * 1000.0,
-        )
-
-        start_get_task = datetime.now()
 
         for timestamp in range(
             math.ceil(interval.lower.timestamp()),
@@ -375,18 +367,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
                 if task is not None:
                     yield task
 
-        self.__metrics.timing(
-            "getting_tasks", (datetime.now() - start_get_task).total_seconds() * 1000.0
-        )
-
-        start_reset_metrics = datetime.now()
-
         metrics = self.__builder.reset_metrics()
         if any(metric for metric in metrics if metric[1] > 0):
             for metric in metrics:
                 self.__metrics.increment(metric[0], metric[1], tags=metric[2])
-
-        self.__metrics.timing(
-            "updating_metrics",
-            (datetime.now() - start_reset_metrics).total_seconds() * 1000,
-        )

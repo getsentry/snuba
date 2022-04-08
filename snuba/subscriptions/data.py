@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractclassmethod, abstractmethod
+from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -68,63 +68,16 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
-# This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
-class _SubscriptionData:
-    project_id: int
-    resolution: timedelta
-    time_window: timedelta
-    entity_subscription: EntitySubscription
-
-
-class SubscriptionData(ABC, _SubscriptionData):
+class SubscriptionData:
     """
     Represents the state of a subscription.
     """
 
-    def __post_init__(self) -> None:
-        if self.time_window < timedelta(minutes=1):
-            raise InvalidSubscriptionError(
-                "Time window must be greater than or equal to 1 minute"
-            )
-        elif self.time_window > timedelta(hours=24):
-            raise InvalidSubscriptionError(
-                "Time window must be less than or equal to 24 hours"
-            )
-
-        if self.resolution < timedelta(minutes=1):
-            raise InvalidSubscriptionError(
-                "Resolution must be greater than or equal to 1 minute"
-            )
-
-        if self.resolution.microseconds > 0:
-            raise InvalidSubscriptionError("Resolution does not support microseconds")
-
-    @abstractmethod
-    def build_request(
-        self,
-        dataset: Dataset,
-        timestamp: datetime,
-        offset: Optional[int],
-        timer: Timer,
-        metrics: Optional[MetricsBackend] = None,
-        referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
-        raise NotImplementedError
-
-    @abstractclassmethod
-    def from_dict(
-        cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
-        raise NotImplementedError
-
-    @abstractmethod
-    def to_dict(self) -> Mapping[str, Any]:
-        raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class SnQLSubscriptionData(SubscriptionData):
+    project_id: int
+    resolution_sec: int
+    time_window_sec: int
+    entity_subscription: EntitySubscription
     query: str
 
     def add_conditions(
@@ -153,7 +106,7 @@ class SnQLSubscriptionData(SubscriptionData):
             binary_condition(
                 ConditionFunctions.GTE,
                 Column(None, None, required_timestamp_column),
-                Literal(None, (timestamp - self.time_window)),
+                Literal(None, (timestamp - timedelta(seconds=self.time_window_sec))),
             ),
             binary_condition(
                 ConditionFunctions.LT,
@@ -174,10 +127,20 @@ class SnQLSubscriptionData(SubscriptionData):
 
         query.set_ast_condition(new_condition)
 
-    def validate_subscription(
-        self, query: Union[CompositeQuery[Entity], Query]
-    ) -> None:
-        self.entity_subscription.validate_query(query)
+    def validate(self) -> None:
+        if self.time_window_sec < 60:
+            raise InvalidSubscriptionError(
+                "Time window must be greater than or equal to 1 minute"
+            )
+        elif self.time_window_sec > 60 * 60 * 24:
+            raise InvalidSubscriptionError(
+                "Time window must be less than or equal to 24 hours"
+            )
+
+        if self.resolution_sec < 60:
+            raise InvalidSubscriptionError(
+                "Resolution must be greater than or equal to 1 minute"
+            )
 
     def build_request(
         self,
@@ -199,7 +162,7 @@ class SnQLSubscriptionData(SubscriptionData):
             timer,
             referrer,
             [
-                self.validate_subscription,
+                self.entity_subscription.validate_query,
                 partial(self.add_conditions, timestamp, offset),
             ],
         )
@@ -208,15 +171,16 @@ class SnQLSubscriptionData(SubscriptionData):
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SnQLSubscriptionData:
+    ) -> SubscriptionData:
         entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
             data_dict=data
         )
 
-        return SnQLSubscriptionData(
+        return SubscriptionData(
             project_id=data["project_id"],
-            time_window=timedelta(seconds=data["time_window"]),
-            resolution=timedelta(seconds=data["resolution"]),
+            # Always cast to int in case any old subscriptions are stored as float
+            time_window_sec=int(data["time_window"]),
+            resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity_subscription=entity_subscription,
         )
@@ -224,8 +188,8 @@ class SnQLSubscriptionData(SubscriptionData):
     def to_dict(self) -> Mapping[str, Any]:
         return {
             "project_id": self.project_id,
-            "time_window": int(self.time_window.total_seconds()),
-            "resolution": int(self.resolution.total_seconds()),
+            "time_window": self.time_window_sec,
+            "resolution": self.resolution_sec,
             "query": self.query,
             **self.entity_subscription.to_dict(),
         }

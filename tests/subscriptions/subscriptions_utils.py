@@ -5,8 +5,8 @@ from uuid import UUID
 from snuba.datasets.entities import EntityKey
 from snuba.subscriptions.data import (
     PartitionId,
-    SnQLSubscriptionData,
     Subscription,
+    SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.entity_subscription import (
@@ -25,10 +25,10 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
     entity_subscription = EventsSubscription(data_dict={})
     return Subscription(
         SubscriptionIdentifier(PartitionId(1), UUIDS[sequence]),
-        SnQLSubscriptionData(
+        SubscriptionData(
             project_id=1,
-            time_window=timedelta(minutes=5),
-            resolution=resolution,
+            time_window_sec=int(timedelta(minutes=5).total_seconds()),
+            resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
             entity_subscription=entity_subscription,
         ),

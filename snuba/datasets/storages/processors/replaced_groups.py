@@ -10,9 +10,10 @@ from snuba.clickhouse.query_dsl.accessors import (
     get_object_ids_in_query_ast,
     get_time_range,
 )
-from snuba.datasets.errors_replacer import ProjectsQueryFlags, ReplacerState
+from snuba.datasets.errors_replacer import ProjectsQueryFlags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.replacers.replacer_processor import ReplacerState
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -20,7 +21,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 FINAL_METRIC = "final"
-AVOID_FINAL_METRIC = "avoid_final"
 
 
 class PostReplacementConsistencyEnforcer(QueryProcessor):
@@ -56,20 +56,21 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             list(project_ids), self.__replacer_state_name
         )
 
-        tags = self._initialize_tags(request_settings, flags)
-
         query_overlaps_replacement = self._query_overlaps_replacements(
             query, flags.latest_replacement_time
         )
 
-        metric_name = FINAL_METRIC if query_overlaps_replacement else AVOID_FINAL_METRIC
+        if not query_overlaps_replacement:
+            self._set_query_final(query, False)
+            return
 
+        tags = self._initialize_tags(request_settings, flags)
         set_final = False
 
         if flags.needs_final:
             tags["cause"] = "final_flag"
             metrics.increment(
-                name=metric_name, tags=tags,
+                name=FINAL_METRIC, tags=tags,
             )
             set_final = True
         elif flags.group_ids_to_exclude:
@@ -85,10 +86,10 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if len(groups_to_exclude) > max_group_ids_exclude:
                 tags["cause"] = "max_groups"
                 metrics.increment(
-                    name=metric_name, tags=tags,
+                    name=FINAL_METRIC, tags=tags,
                 )
                 set_final = True
-            elif query_overlaps_replacement and groups_to_exclude:
+            elif groups_to_exclude:
                 query.add_condition_to_ast(
                     not_in_condition(
                         FunctionCall(
@@ -100,17 +101,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     )
                 )
 
-            if (
-                len(flags.group_ids_to_exclude) > max_group_ids_exclude
-                and not set_final
-            ):
-                # Avoided what would have caused the query to be final
-                tags["cause"] = "avoided_max_groups"
-                metrics.increment(
-                    name=AVOID_FINAL_METRIC, tags=tags,
-                )
-
-        self._set_query_final(query, set_final and query_overlaps_replacement)
+        self._set_query_final(query, set_final)
 
     def _initialize_tags(
         self, request_settings: RequestSettings, flags: ProjectsQueryFlags

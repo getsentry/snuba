@@ -13,6 +13,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.utils.schemas import String
 
 #: The granularity used for the initial materialized views.
 #: This might differ from snuba.datasets.metrics.DEFAULT_GRANULARITY at
@@ -44,6 +45,11 @@ COL_SCHEMA_DISTRIBUTIONS: Sequence[Column[Modifiers]] = [
     Column("avg", AggregateFunction("avg", [Float(64)])),
     Column("sum", AggregateFunction("sum", [Float(64)])),
     Column("count", AggregateFunction("count", [Float(64)])),
+]
+
+COL_SCHEMA_DISTRIBUTIONS_V2: Sequence[Column[Modifiers]] = [
+    *COL_SCHEMA_DISTRIBUTIONS,
+    Column("histogram", AggregateFunction("histogram(250)", [Float(64)])),
 ]
 
 
@@ -125,6 +131,108 @@ GROUP BY
     retention_days
 """
 
+MATVIEW_STATEMENT_CONSOLIDATED = """
+SELECT
+    org_id,
+    project_id,
+    metric_id,
+    arrayJoin([10,60,3600,86400]) as granularity,
+    tags.key,
+    tags.value,
+    toDateTime(granularity * intDiv(toUnixTimestamp(timestamp), granularity)) as timestamp,
+    retention_days,
+    %(aggregation_states)s
+FROM %(raw_table_name)s
+WHERE materialization_version = 2
+GROUP BY
+    org_id,
+    project_id,
+    metric_id,
+    tags.key,
+    tags.value,
+    timestamp,
+    granularity,
+    retention_days
+"""
+
+MATVIEW_STATEMENT_POLYMORPHIC_TABLE = """
+SELECT
+    org_id,
+    project_id,
+    metric_id,
+    arrayJoin([10,60,3600,86400]) as granularity,
+    tags.key,
+    tags.value,
+    toDateTime(granularity * intDiv(toUnixTimestamp(timestamp), granularity)) as timestamp,
+    retention_days,
+    %(aggregation_states)s
+FROM %(raw_table_name)s
+WHERE materialization_version = 3
+  AND metric_type = '%(metric_type)s'
+GROUP BY
+    org_id,
+    project_id,
+    metric_id,
+    tags.key,
+    tags.value,
+    timestamp,
+    granularity,
+    retention_days
+"""
+
+MATVIEW_STATEMENT_POLYMORPHIC_TABLE_V2 = """
+SELECT
+    org_id,
+    project_id,
+    metric_id,
+    arrayJoin([10,60,3600,86400]) as granularity,
+    tags.key,
+    tags.value,
+    toDateTime(granularity * intDiv(toUnixTimestamp(timestamp), granularity)) as timestamp,
+    retention_days,
+    %(aggregation_states)s
+FROM %(raw_table_name)s
+WHERE materialization_version = %(materialization_version)s
+  AND metric_type = '%(metric_type)s'
+GROUP BY
+    org_id,
+    project_id,
+    metric_id,
+    tags.key,
+    tags.value,
+    timestamp,
+    granularity,
+    retention_days
+"""
+
+MATVIEW_STATEMENT_POLYMORPHIC_TABLE_V3 = """
+SELECT
+    use_case_id,
+    org_id,
+    project_id,
+    metric_id,
+    arrayJoin([10,60,3600,86400]) as granularity,
+    tags.key,
+    tags.value,
+    toDateTime(granularity * intDiv(toUnixTimestamp(timestamp), granularity)) as timestamp,
+    retention_days,
+    %(aggregation_states)s
+FROM %(raw_table_name)s
+WHERE materialization_version = %(target_mat_version)d
+  AND metric_type = '%(metric_type)s'
+  %(appended_where_clause)s
+GROUP BY
+    use_case_id,
+    org_id,
+    project_id,
+    metric_id,
+    tags.key,
+    tags.value,
+    timestamp,
+    granularity,
+    retention_days
+"""
+
 
 def get_forward_migrations_local(
     source_table_name: str,
@@ -193,6 +301,8 @@ def get_forward_view_migration_local(
     granularity: int,
 ) -> operations.SqlOperation:
     aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
+    assert granularity is not None
+
     return operations.CreateMaterializedView(
         storage_set=StorageSetKey.METRICS,
         view_name=mv_name,
@@ -203,6 +313,111 @@ def get_forward_view_migration_local(
             "raw_table_name": source_table_name,
             "aggregation_states": aggregation_states,
             "granularity": granularity,
+        },
+    )
+
+
+def get_forward_view_migration_local_consolidated(
+    source_table_name: str,
+    table_name: str,
+    mv_name: str,
+    aggregation_col_schema: Sequence[Column[Modifiers]],
+    aggregation_states: str,
+) -> operations.SqlOperation:
+    aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
+
+    return operations.CreateMaterializedView(
+        storage_set=StorageSetKey.METRICS,
+        view_name=mv_name,
+        destination_table_name=table_name,
+        columns=aggregated_cols,
+        query=MATVIEW_STATEMENT_CONSOLIDATED
+        % {
+            "raw_table_name": source_table_name,
+            "aggregation_states": aggregation_states,
+        },
+    )
+
+
+def get_forward_view_migration_polymorphic_table(
+    source_table_name: str,
+    table_name: str,
+    mv_name: str,
+    aggregation_col_schema: Sequence[Column[Modifiers]],
+    aggregation_states: str,
+    metric_type: str,
+) -> operations.SqlOperation:
+    aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
+
+    return operations.CreateMaterializedView(
+        storage_set=StorageSetKey.METRICS,
+        view_name=mv_name,
+        destination_table_name=table_name,
+        columns=aggregated_cols,
+        query=MATVIEW_STATEMENT_POLYMORPHIC_TABLE
+        % {
+            "metric_type": metric_type,
+            "raw_table_name": source_table_name,
+            "aggregation_states": aggregation_states,
+        },
+    )
+
+
+def get_forward_view_migration_polymorphic_table_v2(
+    source_table_name: str,
+    table_name: str,
+    mv_name: str,
+    aggregation_col_schema: Sequence[Column[Modifiers]],
+    aggregation_states: str,
+    metric_type: str,
+    materialization_version: int,
+) -> operations.SqlOperation:
+    aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
+
+    return operations.CreateMaterializedView(
+        storage_set=StorageSetKey.METRICS,
+        view_name=mv_name,
+        destination_table_name=table_name,
+        columns=aggregated_cols,
+        query=MATVIEW_STATEMENT_POLYMORPHIC_TABLE_V2
+        % {
+            "metric_type": metric_type,
+            "raw_table_name": source_table_name,
+            "aggregation_states": aggregation_states,
+            "materialization_version": materialization_version,
+        },
+    )
+
+
+def get_forward_view_migration_polymorphic_table_v3(
+    source_table_name: str,
+    table_name: str,
+    mv_name: str,
+    aggregation_col_schema: Sequence[Column[Modifiers]],
+    aggregation_states: str,
+    metric_type: str,
+    target_mat_version: int,
+    appended_where_clause: str = "",
+) -> operations.SqlOperation:
+    aggregated_cols = [
+        Column("use_case_id", String(Modifiers(low_cardinality=True))),
+        *COMMON_AGGR_COLUMNS,
+        *aggregation_col_schema,
+    ]
+
+    return operations.CreateMaterializedView(
+        storage_set=StorageSetKey.METRICS,
+        view_name=mv_name,
+        destination_table_name=table_name,
+        columns=aggregated_cols,
+        query=MATVIEW_STATEMENT_POLYMORPHIC_TABLE_V3
+        % {
+            "metric_type": metric_type,
+            "raw_table_name": source_table_name,
+            "aggregation_states": aggregation_states,
+            "target_mat_version": target_mat_version,
+            "appended_where_clause": appended_where_clause,
+            "materialization_version": target_mat_version,
         },
     )
 
@@ -244,6 +459,26 @@ def get_mv_name(metric_type: str, granularity: int) -> str:
         return f"metrics_{metric_type}_mv_local"
 
     return f"metrics_{metric_type}_mv_{granularity}s_local"
+
+
+def get_consolidated_mv_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_consolidated_mv_local"
+
+
+def get_polymorphic_mv_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_polymorphic_mv_local"
+
+
+def get_polymorphic_mv_v2_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_polymorphic_mv_v2_local"
+
+
+def get_polymorphic_mv_v3_name(metric_type: str) -> str:
+    return f"metrics_{metric_type}_polymorphic_mv_v3_local"
+
+
+def get_polymorphic_mv_variant_name(metric_type: str, version: int) -> str:
+    return f"metrics_{metric_type}_polymorphic_mv_v{version}_local"
 
 
 class MigrationArgs(TypedDict):

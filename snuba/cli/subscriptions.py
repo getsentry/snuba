@@ -109,6 +109,13 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
 @click.option("--min-tick-interval-ms", type=click.IntRange(1, 1000))
+# TODO: For testing alternate rebalancing strategies. To be eventually removed.
+@click.option(
+    "--cooperative-rebalancing",
+    is_flag=True,
+    default=False,
+    help="Use cooperative-sticky partition assignment strategy",
+)
 def subscriptions(
     *,
     dataset_name: str,
@@ -130,6 +137,7 @@ def subscriptions(
     log_level: Optional[str],
     delay_seconds: Optional[int],
     min_tick_interval_ms: Optional[int],
+    cooperative_rebalancing: bool,
 ) -> None:
     """Evaluates subscribed queries for a dataset."""
 
@@ -165,18 +173,21 @@ def subscriptions(
 
     configure_metrics(StreamMetricsAdapter(metrics))
 
+    consumer_configuration = build_kafka_consumer_configuration(
+        loader.get_default_topic_spec().topic,
+        consumer_group,
+        auto_offset_reset=auto_offset_reset,
+        bootstrap_servers=bootstrap_servers,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
+    )
+
+    if cooperative_rebalancing is True:
+        consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
+
     consumer = TickConsumer(
         SynchronizedConsumer(
-            KafkaConsumer(
-                build_kafka_consumer_configuration(
-                    loader.get_default_topic_spec().topic,
-                    consumer_group,
-                    auto_offset_reset=auto_offset_reset,
-                    bootstrap_servers=bootstrap_servers,
-                    queued_max_messages_kbytes=queued_max_messages_kbytes,
-                    queued_min_messages=queued_min_messages,
-                ),
-            ),
+            KafkaConsumer(consumer_configuration),
             KafkaConsumer(
                 build_kafka_consumer_configuration(
                     commit_log_topic_spec.topic,
@@ -220,7 +231,7 @@ def subscriptions(
     )
     metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
-    with closing(consumer), executor, closing(producer):
+    with executor, closing(producer):
         batching_consumer = StreamProcessor(
             consumer,
             (
@@ -260,6 +271,10 @@ def subscriptions(
         )
 
         def handler(signum: int, frame: Optional[Any]) -> None:
+            # TODO: Temporary code for debugging the shutdown sequence of the subscriptions
+            # consumer without updating arroyo or affecting other consumers.
+            logging.getLogger().setLevel(logging.DEBUG)
+
             batching_consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)

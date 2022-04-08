@@ -17,6 +17,8 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: errors-replacer
   - image: us.gcr.io/sentryio/snuba:{sha}
+    name: errors-tiger-replacer
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: replacer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-consumer
@@ -40,6 +42,12 @@ steps:
     name: transactions-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: sessions-subscriptions-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: metrics-counters-subscriptions-scheduler
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: metrics-sets-subscriptions-scheduler
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: metrics-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: cdc-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}

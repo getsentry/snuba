@@ -1,9 +1,8 @@
-from datetime import timedelta
 from typing import Sequence
 from uuid import uuid1
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData, SubscriptionData
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
@@ -13,17 +12,17 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
     def subscription(self) -> Sequence[SubscriptionData]:
         return [
-            SnQLSubscriptionData(
+            SubscriptionData(
                 project_id=self.project_id,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
-                time_window=timedelta(minutes=500),
-                resolution=timedelta(minutes=1),
+                time_window_sec=500 * 60,
+                resolution_sec=60,
                 entity_subscription=create_entity_subscription(),
             ),
-            SnQLSubscriptionData(
+            SubscriptionData(
                 project_id=self.project_id,
-                time_window=timedelta(minutes=500),
-                resolution=timedelta(minutes=1),
+                time_window_sec=500 * 60,
+                resolution_sec=60,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 entity_subscription=create_entity_subscription(),
             ),

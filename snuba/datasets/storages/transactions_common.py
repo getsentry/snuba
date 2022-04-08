@@ -68,10 +68,8 @@ columns = ColumnSet(
         ("http_method", String(Modifiers(nullable=True))),
         ("http_referer", String(Modifiers(nullable=True))),
         ("tags", Nested([("key", String()), ("value", String())])),
-        ("_tags_flattened", String()),
         ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
         ("contexts", Nested([("key", String()), ("value", String())])),
-        ("_contexts_flattened", String()),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
         ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
         (

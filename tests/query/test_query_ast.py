@@ -236,6 +236,37 @@ def test_initial_parsing() -> None:
     assert isinstance(query.get_groupby(), list)
 
 
+def test_alias_regex_allows_parentheses() -> None:
+    body = (
+        "MATCH (metrics_counters) SELECT sumIf(value, equals(metric_id, 0)) "
+        "AS `sum(sentry.sessions.session)`, metric_id AS `metric.id`, measurements["
+        "lcp.elementSize] AS `good_lcp_stuff` BY tags[44] AS `session.status`"
+    )
+    query = parse_snql_query_initial(body)
+    expressions = query.get_selected_columns()
+    assert len(expressions) == 4
+    assert sorted([expr.name for expr in expressions]) == [
+        "good_lcp_stuff",
+        "metric.id",
+        "session.status",
+        "sum(sentry.sessions.session)",
+    ]
+
+
+def test_alias_regex_allows_for_mri_format() -> None:
+    body = (
+        "MATCH (metrics_counters) SELECT sumIf(value, equals(metric_id, 0)) "
+        "AS `c:sessions/session@none` BY tags[44] AS `session.status`"
+    )
+    query = parse_snql_query_initial(body)
+    expressions = query.get_selected_columns()
+    assert len(expressions) == 2
+    assert sorted([expr.name for expr in expressions]) == [
+        "c:sessions/session@none",
+        "session.status",
+    ]
+
+
 VALIDATION_TESTS = [
     pytest.param(
         {

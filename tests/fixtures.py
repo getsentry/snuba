@@ -4,6 +4,7 @@ import calendar
 import uuid
 from datetime import datetime, timedelta, timezone
 from hashlib import md5
+from typing import Any, Mapping, Tuple
 
 from snuba import settings
 from snuba.datasets.events_processor_base import InsertEvent
@@ -76,7 +77,11 @@ def get_raw_event() -> InsertEvent:
             },
             "contexts": {
                 "device": {"online": True, "charging": True, "model_id": "Galaxy"},
-                "os": {"kernel_version": "1.1.1"},
+                "os": {
+                    "kernel_version": "1.1.1",
+                    "name": "android",
+                    "version": "1.1.1",
+                },
                 "trace": {"trace_id": trace_id, "span_id": span_id},
             },
             "sentry.interfaces.Exception": {
@@ -171,7 +176,7 @@ def get_raw_event() -> InsertEvent:
     }
 
 
-def get_raw_transaction(span_id: str | None = None) -> InsertEvent:
+def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
     now = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0, tzinfo=timezone.utc
     )
@@ -211,7 +216,13 @@ def get_raw_transaction(span_id: str | None = None) -> InsertEvent:
                 "geo": {"city": "San Francisco", "region": "CA", "country_code": "US"},
             },
             "contexts": {
-                "trace": {"trace_id": trace_id.hex, "span_id": span_id, "op": "http"},
+                "trace": {
+                    "trace_id": trace_id.hex,
+                    "span_id": span_id,
+                    "op": "http",
+                    "hash": "05029609156d8133",
+                    "exclusive_time": 1.2,
+                },
                 "device": {"online": True, "charging": True, "model_id": "Galaxy"},
             },
             "measurements": {
@@ -259,3 +270,25 @@ def get_raw_transaction(span_id: str | None = None) -> InsertEvent:
             ],
         },
     }
+
+
+def get_raw_error_message() -> Tuple[int, str, InsertEvent]:
+    """
+    Get an error message which can be passed to the processors.
+    """
+    return (
+        2,
+        "insert",
+        get_raw_event(),
+    )
+
+
+def get_raw_transaction_message() -> Tuple[int, str, Mapping[str, Any]]:
+    """
+    Get a transaction message which can be passed to the processors.
+    """
+    return (
+        2,
+        "insert",
+        get_raw_transaction(),
+    )

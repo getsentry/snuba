@@ -51,7 +51,7 @@ def test_scheduler_consumer() -> None:
     mock_scheduler_producer = mock.Mock()
 
     from snuba.redis import redis_client
-    from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+    from snuba.subscriptions.data import PartitionId, SubscriptionData
     from snuba.subscriptions.entity_subscription import EventsSubscription
     from snuba.subscriptions.store import RedisSubscriptionDataStore
 
@@ -63,10 +63,10 @@ def test_scheduler_consumer() -> None:
     )
     store.create(
         uuid.uuid4(),
-        SnQLSubscriptionData(
+        SubscriptionData(
             project_id=1,
-            time_window=timedelta(minutes=1),
-            resolution=timedelta(minutes=1),
+            time_window_sec=60,
+            resolution_sec=60,
             query="MATCH events SELECT count()",
             entity_subscription=EventsSubscription(data_dict={}),
         ),
@@ -81,7 +81,6 @@ def test_scheduler_consumer() -> None:
         60 * 5,
         None,
         metrics_backend,
-        1,
     )
     scheduler = builder.build_consumer()
     time.sleep(2)

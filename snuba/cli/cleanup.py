@@ -24,7 +24,7 @@ from snuba.environment import setup_logging, setup_sentry
 @click.option(
     "--storage",
     "storage_name",
-    type=click.Choice(["events", "errors", "transactions"]),
+    type=click.Choice(["errors", "transactions", "errors_v2", "transactions_v2"]),
     help="The storage to target",
     required=True,
 )
