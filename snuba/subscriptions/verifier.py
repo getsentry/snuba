@@ -1,10 +1,11 @@
 import json
 import logging
 import time
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from functools import cached_property
+from hashlib import md5
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
 from arroyo import Message, Partition, Topic
@@ -32,6 +33,22 @@ class SubscriptionResultData:
     result: Result
     timestamp: int
     entity_name: str
+
+    @cached_property
+    def identifier(self) -> str:
+        return f"{self.entity_name}:{self.subscription_id}:{self.timestamp}"
+
+    @cached_property
+    def result_checksum(self) -> str:
+        return md5(
+            json.dumps(
+                {
+                    "data": self.result["data"],
+                    "meta": self.result["meta"],
+                    "totals": self.result["totals"],
+                }
+            ).encode("utf-8")
+        ).hexdigest()
 
 
 class SubscriptionResultDecoder(Decoder[KafkaPayload, SubscriptionResultData]):
@@ -162,10 +179,13 @@ class ResultStore:
     """
 
     def __init__(self, threshold_sec: int, metrics: MetricsBackend) -> None:
-        # Maps timestamp to the count of messages received within each second
-        self.__stores: Mapping[ResultTopic, MutableMapping[int, int]] = {
-            ResultTopic.ORIGINAL: defaultdict(int),
-            ResultTopic.NEW: defaultdict(int),
+        # For each result topic, stores all the subscription IDs and their
+        # result checksums for each second.
+        self.__stores: Mapping[
+            ResultTopic, MutableMapping[int, MutableMapping[str, str]]
+        ] = {
+            ResultTopic.ORIGINAL: {},
+            ResultTopic.NEW: {},
         }
 
         # The last timestamp we recorded metrics for
@@ -202,7 +222,10 @@ class ResultStore:
 
         # Increment counters
         store = self.__stores[topic]
-        store[item.timestamp] += 1
+
+        if item.timestamp not in store:
+            store[item.timestamp] = {}
+        store[item.timestamp][item.identifier] = item.result_checksum
 
         # Record metrics and advance the low watermark
         low_watermark = self.__timestamp_high_watermark - self.__threshold_sec
@@ -238,9 +261,42 @@ class ResultStore:
             if next_ts is None:
                 return
 
-            orig_count = self.__stores[ResultTopic.ORIGINAL].pop(next_ts, 0)
-            new_count = self.__stores[ResultTopic.NEW].pop(next_ts, 0)
-            self.__metrics.increment("result_count_diff", abs(new_count - orig_count))
+            orig_results = self.__stores[ResultTopic.ORIGINAL].pop(next_ts, {})
+            new_results = self.__stores[ResultTopic.NEW].pop(next_ts, {})
+
+            orig_subscription_ids = set(orig_results.keys())
+            new_subscription_ids = set(new_results.keys())
+
+            intersection_ids = new_subscription_ids.intersection(orig_subscription_ids)
+
+            METRIC_OUTCOME_NAME = "subscription_result_outcomes"
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME,
+                len(orig_subscription_ids - intersection_ids),
+                tags={"outcome": "missing_from_new"},
+            )
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME,
+                len(new_subscription_ids - intersection_ids),
+                tags={"outcome": "missing_from_orig"},
+            )
+
+            matching_results = 0
+
+            for id in intersection_ids:
+                if orig_results[id] == new_results[id]:
+                    matching_results += 1
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME, matching_results, {"outcome": "same_result"},
+            )
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME,
+                len(intersection_ids) - matching_results,
+                {"outcome": "different_result"},
+            )
 
 
 class CountResults(ProcessingStrategy[SubscriptionResultData]):
