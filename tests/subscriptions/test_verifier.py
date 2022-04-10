@@ -217,4 +217,4 @@ def test_result_store() -> None:
     # Stale message
     store.increment(ResultTopic.ORIGINAL, get_result_data(now))
     assert len(metrics.calls) == 1
-    assert Increment("stale_message", 1, None) in metrics.calls
+    assert Increment("stale_message", 1, {"topic": "original"}) in metrics.calls

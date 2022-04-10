@@ -217,7 +217,7 @@ class ResultStore:
                 self.__timestamp_high_watermark
                 >= self.__timestamp_low_watermark + self.__threshold_sec
             ):
-                self.__metrics.increment("stale_message")
+                self.__metrics.increment("stale_message", tags={"topic": topic.value})
             return
 
         # Increment counters
