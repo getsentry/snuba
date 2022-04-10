@@ -45,7 +45,7 @@ class SubscriptionResultData:
                 {
                     "data": self.result["data"],
                     "meta": self.result["meta"],
-                    "totals": self.result["totals"],
+                    "totals": self.result.get("totals"),
                 }
             ).encode("utf-8")
         ).hexdigest()
