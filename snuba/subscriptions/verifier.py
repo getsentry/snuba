@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from functools import cached_property
 from hashlib import md5
-from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence, Set, cast
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer
@@ -49,6 +49,13 @@ class SubscriptionResultData:
                 }
             ).encode("utf-8")
         ).hexdigest()
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.result_checksum
+            == cast(SubscriptionResultData, other).result_checksum
+        )
 
 
 class SubscriptionResultDecoder(Decoder[KafkaPayload, SubscriptionResultData]):
@@ -182,7 +189,8 @@ class ResultStore:
         # For each result topic, stores all the subscription IDs and their
         # result checksums for each second.
         self.__stores: Mapping[
-            ResultTopic, MutableMapping[int, MutableMapping[str, str]]
+            ResultTopic,
+            MutableMapping[int, MutableMapping[str, SubscriptionResultData]],
         ] = {
             ResultTopic.ORIGINAL: {},
             ResultTopic.NEW: {},
@@ -225,7 +233,7 @@ class ResultStore:
 
         if item.timestamp not in store:
             store[item.timestamp] = {}
-        store[item.timestamp][item.identifier] = item.result_checksum
+        store[item.timestamp][item.identifier] = item
 
         # Record metrics and advance the low watermark
         low_watermark = self.__timestamp_high_watermark - self.__threshold_sec
@@ -282,19 +290,19 @@ class ResultStore:
                 tags={"outcome": "missing_from_orig"},
             )
 
-            matching_results = 0
+            matching_results: Set[str] = set()
 
             for id in intersection_ids:
                 if orig_results[id] == new_results[id]:
-                    matching_results += 1
+                    matching_results.add(id)
 
             self.__metrics.increment(
-                METRIC_OUTCOME_NAME, matching_results, {"outcome": "same_result"},
+                METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
             )
 
             self.__metrics.increment(
                 METRIC_OUTCOME_NAME,
-                len(intersection_ids) - matching_results,
+                len(intersection_ids) - len(matching_results),
                 {"outcome": "different_result"},
             )
 
