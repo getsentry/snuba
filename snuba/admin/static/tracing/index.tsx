@@ -297,8 +297,10 @@ function TracingQueries(props: { api: Client }) {
   return (
     <div>
       <form>
-        <h2>Construct a query</h2>
-        <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑</a>
+        <h2>Construct a ClickHouse Query</h2>
+        <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
+          🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
+        </a>
         <div>
           <TextArea value={query.sql || ""} onChange={updateQuerySql} />
         </div>
