@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import cached_property
-from hashlib import md5
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence, Set, cast
 
 from arroyo import Message, Partition, Topic
@@ -38,24 +37,18 @@ class SubscriptionResultData:
     def identifier(self) -> str:
         return f"{self.entity_name}:{self.subscription_id}:{self.timestamp}"
 
-    @cached_property
-    def result_checksum(self) -> str:
-        return md5(
-            json.dumps(
-                {
-                    "data": self.result["data"],
-                    "meta": self.result["meta"],
-                    "totals": self.result.get("totals"),
-                }
-            ).encode("utf-8")
-        ).hexdigest()
-
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.result_checksum
-            == cast(SubscriptionResultData, other).result_checksum
+            and self.to_dict() == cast(SubscriptionResultData, other).to_dict()
         )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            "data": self.result["data"],
+            "meta": self.result["meta"],
+            "totals": self.result.get("totals"),
+        }
 
 
 class SubscriptionResultDecoder(Decoder[KafkaPayload, SubscriptionResultData]):
@@ -296,15 +289,27 @@ class ResultStore:
                 if orig_results[id] == new_results[id]:
                     matching_results.add(id)
 
+            non_matching_results = intersection_ids - matching_results
+
             self.__metrics.increment(
                 METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
             )
 
             self.__metrics.increment(
                 METRIC_OUTCOME_NAME,
-                len(intersection_ids) - len(matching_results),
+                len(non_matching_results),
                 {"outcome": "different_result"},
             )
+
+            for id in non_matching_results:
+                logger.warning(
+                    "Encountered non matching subscription result",
+                    extra={
+                        "subscription_id": id,
+                        "original": orig_results[id].to_dict(),
+                        "new": new_results[id].to_dict(),
+                    },
+                )
 
 
 class CountResults(ProcessingStrategy[SubscriptionResultData]):
