@@ -40,7 +40,10 @@ from snuba.query.processors.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
-from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityRequiredColumnValidator,
+)
 from snuba.request.request_settings import RequestSettings, SubscriptionRequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -270,6 +273,7 @@ class SessionsEntity(Entity):
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             required_time_column="started",
+            validate_data_model=ColumnValidationMode.WARN,
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
