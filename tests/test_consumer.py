@@ -213,6 +213,9 @@ def test_multistorage_strategy(
             strategy.join()
 
 
+@pytest.mark.skip(
+    reason="Writes to errors_v2 and transactions_v2 are no longer ignoring writes"
+)
 @patch("snuba.consumers.consumer.InsertBatchWriter.close")
 @pytest.mark.parametrize(
     "processes, input_block_size, output_block_size",
