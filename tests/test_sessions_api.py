@@ -69,7 +69,7 @@ class BaseSessionsMockTest:
         ).write([json.dumps(session).encode("utf-8") for session in sessions])
 
 
-class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
+class TestLegacySessionsApi(BaseSessionsMockTest, BaseApiTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
         return "sessions"
@@ -281,6 +281,136 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
             "type": "invalid_query",
             "message": "Minute-resolution queries are restricted to a 7-hour time window.",
         }
+
+
+class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
+    def post(self, url: str, data: str) -> Any:
+        return self.app.post(url, data=data, headers={"referer": "test"})
+
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
+        super().setup_method(test_method)
+        self.skew = timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(minutes=180)
+        self.next_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0
+        ) + timedelta(minutes=180)
+        self.storage = get_writable_storage(StorageKey.SESSIONS_RAW)
+
+    @pytest.fixture(scope="class")
+    def get_project_id(self, request: object) -> Callable[[], int]:
+        id_iter = itertools.count()
+        next(id_iter)  # skip 0
+        return lambda: next(id_iter)
+
+    def generate_session_events(self, project_id: int) -> None:
+        processor = self.storage.get_table_writer().get_stream_loader().get_processor()
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        template = {
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+            "duration": None,
+            "environment": "production",
+            "org_id": 1,
+            "project_id": project_id,
+            "release": "sentry-test@1.0.0",
+            "retention_days": settings.DEFAULT_RETENTION_DAYS,
+            "seq": 0,
+            "errors": 0,
+            "received": datetime.utcnow().timestamp(),
+            "started": self.started.timestamp(),
+        }
+        events = [
+            processor.process_message(
+                {
+                    **template,
+                    "status": "exited",
+                    "duration": 1947.49,
+                    "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                    "started": (self.started + timedelta(minutes=13)).timestamp(),
+                },
+                meta,
+            ),
+            processor.process_message(
+                {**template, "status": "exited", "quantity": 5}, meta,
+            ),
+            processor.process_message(
+                {**template, "status": "errored", "errors": 1, "quantity": 2}, meta,
+            ),
+            processor.process_message(
+                {
+                    **template,
+                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                    "status": "errored",
+                    "errors": 1,
+                    "quantity": 2,
+                    "started": (self.started + timedelta(minutes=24)).timestamp(),
+                },
+                meta,
+            ),
+        ]
+        filtered = [e for e in events if e]
+        write_processed_messages(self.storage, filtered)
+
+    def test_sessions_bucketed_time_columns(
+        self, get_project_id: Callable[[], int]
+    ) -> None:
+        project_id = get_project_id()
+        self.generate_session_events(project_id)
+        response = self.post(
+            "/sessions/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (sessions)
+                    SELECT bucketed_started, users_errored, users_crashed, users, users_abnormal
+                    BY bucketed_started
+                    WHERE org_id = 1
+                    AND started >= toDateTime('{self.base_time.isoformat()}')
+                    AND started < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({project_id})
+                    AND project_id IN tuple({project_id})
+                    LIMIT 5000
+                    GRANULARITY 86400
+                """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        result = json.loads(response.data)
+        assert len(result["data"]) > 0
+        assert "bucketed_started" in result["data"][0]
+
+    def test_sessions_bucketed_time_columns_no_granularity(
+        self, get_project_id: Callable[[], int]
+    ) -> None:
+        project_id = get_project_id()
+        self.generate_session_events(project_id)
+        response = self.post(
+            "/sessions/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (sessions)
+                    SELECT bucketed_started, users_errored, users_crashed, users, users_abnormal
+                    BY bucketed_started
+                    WHERE org_id = 1
+                    AND started >= toDateTime('{self.base_time.isoformat()}')
+                    AND started < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({project_id})
+                    AND project_id IN tuple({project_id})
+                    LIMIT 5000
+                """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        result = json.loads(response.data)
+        assert len(result["data"]) > 0
+        assert "bucketed_started" in result["data"][0]
 
 
 class TestCreateSubscriptionApi(BaseApiTest):
