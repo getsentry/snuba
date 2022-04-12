@@ -103,6 +103,7 @@ class MetricsEntity(Entity, ABC):
                     Column("project_id", UInt(64)),
                     Column("metric_id", UInt(64)),
                     Column("timestamp", DateTime()),
+                    Column("bucketed_time", DateTime()),
                     Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
                     *value_schema,
                 ]

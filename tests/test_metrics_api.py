@@ -434,3 +434,34 @@ class TestMetricsApiDistributions(BaseApiTest):
             aggregation["dist_sum"]
             == sum(range(self.d_range_min, self.d_range_max)) * self.seconds
         )
+
+    def test_bucketed_time(self) -> None:
+        query_str = """MATCH (metrics_distributions)
+                    SELECT bucketed_time, quantiles(0.5,0.9,0.95,0.99)(value) AS quants BY bucketed_time
+                    WHERE org_id = {org_id}
+                    AND project_id = 1
+                    AND metric_id = {metric_id}
+                    AND timestamp >= toDateTime('{start_time}')
+                    AND timestamp < toDateTime('{end_time}')
+                    GRANULARITY 3600
+                    """.format(
+            metric_id=self.metric_id,
+            org_id=self.org_id,
+            start_time=(self.base_time - self.skew).isoformat(),
+            end_time=(self.base_time + self.skew).isoformat(),
+        )
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 3, data
+
+        aggregation = data["data"][0]
+        assert aggregation["quants"] == [
+            approx(50, rel=1),
+            approx(89),
+            approx(94),
+            approx(99),
+        ]
