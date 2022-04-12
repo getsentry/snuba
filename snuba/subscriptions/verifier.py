@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import cached_property
-from hashlib import md5
-from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence, Set, cast
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer
@@ -38,17 +37,18 @@ class SubscriptionResultData:
     def identifier(self) -> str:
         return f"{self.entity_name}:{self.subscription_id}:{self.timestamp}"
 
-    @cached_property
-    def result_checksum(self) -> str:
-        return md5(
-            json.dumps(
-                {
-                    "data": self.result["data"],
-                    "meta": self.result["meta"],
-                    "totals": self.result.get("totals"),
-                }
-            ).encode("utf-8")
-        ).hexdigest()
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.to_dict() == cast(SubscriptionResultData, other).to_dict()
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            "data": self.result["data"],
+            "meta": self.result["meta"],
+            "totals": self.result.get("totals"),
+        }
 
 
 class SubscriptionResultDecoder(Decoder[KafkaPayload, SubscriptionResultData]):
@@ -182,7 +182,8 @@ class ResultStore:
         # For each result topic, stores all the subscription IDs and their
         # result checksums for each second.
         self.__stores: Mapping[
-            ResultTopic, MutableMapping[int, MutableMapping[str, str]]
+            ResultTopic,
+            MutableMapping[int, MutableMapping[str, SubscriptionResultData]],
         ] = {
             ResultTopic.ORIGINAL: {},
             ResultTopic.NEW: {},
@@ -225,7 +226,7 @@ class ResultStore:
 
         if item.timestamp not in store:
             store[item.timestamp] = {}
-        store[item.timestamp][item.identifier] = item.result_checksum
+        store[item.timestamp][item.identifier] = item
 
         # Record metrics and advance the low watermark
         low_watermark = self.__timestamp_high_watermark - self.__threshold_sec
@@ -282,21 +283,34 @@ class ResultStore:
                 tags={"outcome": "missing_from_orig"},
             )
 
-            matching_results = 0
+            matching_results: Set[str] = set()
 
             for id in intersection_ids:
                 if orig_results[id] == new_results[id]:
-                    matching_results += 1
+                    matching_results.add(id)
+
+            non_matching_results = intersection_ids - matching_results
 
             self.__metrics.increment(
-                METRIC_OUTCOME_NAME, matching_results, {"outcome": "same_result"},
+                METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
             )
 
             self.__metrics.increment(
                 METRIC_OUTCOME_NAME,
-                len(intersection_ids) - matching_results,
+                len(non_matching_results),
                 {"outcome": "different_result"},
             )
+
+            # Log up to 100 subscription results per second
+            for id in list(non_matching_results)[:100]:
+                logger.warning(
+                    "Encountered non matching subscription result",
+                    extra={
+                        "subscription_id": id,
+                        "original": orig_results[id].to_dict(),
+                        "new": new_results[id].to_dict(),
+                    },
+                )
 
 
 class CountResults(ProcessingStrategy[SubscriptionResultData]):
