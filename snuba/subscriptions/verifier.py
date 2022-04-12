@@ -301,7 +301,8 @@ class ResultStore:
                 {"outcome": "different_result"},
             )
 
-            for id in non_matching_results:
+            # Log up to 100 subscription results per second
+            for id in list(non_matching_results)[:100]:
                 logger.warning(
                     "Encountered non matching subscription result",
                     extra={
