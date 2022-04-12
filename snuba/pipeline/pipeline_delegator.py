@@ -93,6 +93,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
                 id=request.id,
                 body=request.body,
                 query=request.query,
+                app_id=request.app_id,
                 snql_anonymized=request.snql_anonymized,
                 settings=RateLimiterDelegate(builder_id, request.settings),
             )

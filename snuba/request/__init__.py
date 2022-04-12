@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Union
 
+from snuba.attribution import AppID
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
@@ -14,6 +15,7 @@ class Request:
     id: str
     body: Mapping[str, Any]
     query: Union[Query, CompositeQuery[Entity]]
+    app_id: AppID
     snql_anonymized: str
     settings: RequestSettings  # settings provided by the request
 

@@ -64,6 +64,7 @@ def build_executor_consumer(
     executor: ThreadPoolExecutor,
     # TODO: Should be removed once testing is done
     override_result_topic: str,
+    cooperative_rebalancing: bool = False,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
@@ -106,14 +107,15 @@ def build_executor_consumer(
             result_topic_spec,
         ), "All entities must have same scheduled and result topics"
 
+    consumer_configuration = build_kafka_consumer_configuration(
+        scheduled_topic_spec.topic, consumer_group, auto_offset_reset=auto_offset_reset,
+    )
+
+    if cooperative_rebalancing is True:
+        consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
+
     return StreamProcessor(
-        KafkaConsumer(
-            build_kafka_consumer_configuration(
-                scheduled_topic_spec.topic,
-                consumer_group,
-                auto_offset_reset=auto_offset_reset,
-            ),
-        ),
+        KafkaConsumer(consumer_configuration),
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
             executor,

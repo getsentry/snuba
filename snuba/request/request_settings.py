@@ -52,6 +52,10 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
+    def get_app_id(self) -> str:
+        pass
+
+    @abstractmethod
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         pass
 
@@ -86,6 +90,7 @@ class HTTPRequestSettings(RequestSettings):
         legacy: bool = False,
         team: str = "<unknown>",
         feature: str = "<unknown>",
+        app_id: str = "default",
     ) -> None:
         super().__init__(referrer=referrer)
         self.__turbo = turbo
@@ -96,6 +101,7 @@ class HTTPRequestSettings(RequestSettings):
         self.__legacy = legacy
         self.__team = team
         self.__feature = feature
+        self.__app_id = app_id
         self.__rate_limit_params: List[RateLimitParameters] = []
         self.__resource_quota: Optional[ResourceQuota] = None
 
@@ -119,6 +125,9 @@ class HTTPRequestSettings(RequestSettings):
 
     def get_team(self) -> str:
         return self.__team
+
+    def get_app_id(self) -> str:
+        return self.__app_id
 
     def get_feature(self) -> str:
         return self.__feature
@@ -149,12 +158,14 @@ class SubscriptionRequestSettings(RequestSettings):
         parent_api: str = "subscription",
         team: str = "workflow",
         feature: str = "subscription",
+        app_id: str = "default",
     ) -> None:
         super().__init__(referrer=referrer)
         self.__consistent = consistent
         self.__parent_api = parent_api
         self.__team = team
         self.__feature = feature
+        self.__app_id = app_id
 
     def get_turbo(self) -> bool:
         return False
@@ -176,6 +187,9 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def get_team(self) -> str:
         return self.__team
+
+    def get_app_id(self) -> str:
+        return self.__app_id
 
     def get_feature(self) -> str:
         return self.__feature

@@ -4,6 +4,7 @@ from typing import Any, MutableMapping
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
+from snuba.attribution import get_app_id
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.sessions import raw_schema, read_schema
@@ -39,6 +40,7 @@ def test_sessions_processing() -> None:
         id="",
         body=query_body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
         settings=HTTPRequestSettings(referrer=""),
     )
@@ -198,6 +200,7 @@ def test_select_storage(
         id="",
         body=query_body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
         settings=subscription_settings(referrer=""),
     )
