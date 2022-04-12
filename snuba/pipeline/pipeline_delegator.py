@@ -1,3 +1,5 @@
+import copy
+from dataclasses import replace
 from functools import partial
 from typing import Callable, List, Mapping, Optional, Tuple
 
@@ -89,12 +91,9 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             if not get_config("pipeline_split_rate_limiter", 0):
                 return request
 
-            return Request(
-                id=request.id,
-                body=request.body,
-                query=request.query,
-                app_id=request.app_id,
-                snql_anonymized=request.snql_anonymized,
+            return replace(
+                request,
+                query=copy.deepcopy(request.query),
                 settings=RateLimiterDelegate(builder_id, request.settings),
             )
 
