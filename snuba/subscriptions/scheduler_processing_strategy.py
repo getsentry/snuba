@@ -4,6 +4,7 @@ import logging
 import time
 from collections import deque
 from concurrent.futures import Future
+from datetime import datetime
 from typing import (
     Callable,
     Deque,
@@ -383,6 +384,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         commit: Callable[[Mapping[Partition, Position]], None],
+        stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
     ) -> None:
         self.__schedulers = schedulers
@@ -390,6 +392,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         self.__producer = producer
         self.__scheduled_topic = Topic(scheduled_topic_spec.topic_name)
         self.__commit = commit
+        self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__closed = False
 
@@ -437,9 +440,16 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         tick = message.payload.tick
         assert tick.partition is not None
 
-        tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
+        if (
+            self.__stale_threshold_seconds is not None
+            and time.time() - datetime.timestamp(tick.timestamps.upper)
+            > self.__stale_threshold_seconds
+        ):
+            encoded_tasks = []
+        else:
+            tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
 
-        encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+            encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
         # If there are no subscriptions for a tick, immediately commit if an offset
         # to commit is provided.
