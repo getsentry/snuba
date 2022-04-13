@@ -48,6 +48,7 @@ class SubscriptionResultData:
             "data": self.result["data"],
             "meta": self.result["meta"],
             "totals": self.result.get("totals"),
+            "request": self.request,
         }
 
 
