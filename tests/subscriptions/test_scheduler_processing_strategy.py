@@ -605,6 +605,7 @@ def test_produce_scheduled_subscription_message() -> None:
         producer,
         KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
         commit,
+        None,
         metrics_backend,
     )
 
@@ -650,6 +651,121 @@ def test_produce_scheduled_subscription_message() -> None:
     strategy.poll()
     assert commit.call_count == 1
     assert commit.call_args == mock.call({partition: Position(message.offset, epoch)})
+
+    # Close the strategy
+    strategy.close()
+    strategy.join()
+
+
+def test_produce_stale_message() -> None:
+    stale_threshold_seconds = 60
+    now = datetime.now().replace(second=0, microsecond=0)
+    # epoch = datetime(1970, 1, 1)
+    metrics_backend = TestingMetricsBackend()
+    partition_index = 0
+    entity_key = EntityKey.EVENTS
+    topic = Topic("scheduled-subscriptions-events")
+    partition = Partition(topic, partition_index)
+
+    clock = TestingClock()
+    broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
+    broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
+    broker.create_topic(topic, partitions=1)
+    producer = broker.get_producer()
+
+    store = RedisSubscriptionDataStore(
+        redis_client, entity_key, PartitionId(partition_index)
+    )
+
+    # Create subscription
+    store.create(
+        uuid.uuid4(),
+        SubscriptionData(
+            project_id=1,
+            time_window_sec=60,
+            resolution_sec=60,
+            query="MATCH events SELECT count()",
+            entity_subscription=EventsSubscription(data_dict={}),
+        ),
+    )
+
+    schedulers = {
+        partition_index: SubscriptionScheduler(
+            entity_key,
+            store,
+            PartitionId(partition_index),
+            cache_ttl=timedelta(seconds=300),
+            metrics=metrics_backend,
+        )
+    }
+
+    commit = mock.Mock()
+
+    strategy = ProduceScheduledSubscriptionMessage(
+        schedulers,
+        producer,
+        KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
+        commit,
+        stale_threshold_seconds,
+        metrics_backend,
+    )
+
+    # Produce a stale message
+    stale_message = Message(
+        partition,
+        1,
+        CommittableTick(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(
+                    now - timedelta(minutes=3), now - timedelta(minutes=2)
+                ),
+            ),
+            True,
+        ),
+        now,
+        2,
+    )
+
+    strategy.submit(stale_message)
+
+    # Nothing got scheduled
+    assert broker_storage.consume(partition, 0) is None
+
+    # Offset gets committed
+    assert commit.call_count == 1
+    assert commit.call_args == mock.call(
+        {partition: Position(stale_message.offset, now)}
+    )
+
+    # Produce a non stale message
+    non_stale_message = Message(
+        partition,
+        1,
+        CommittableTick(
+            Tick(
+                0,
+                offsets=Interval(3, 4),
+                timestamps=Interval(now - timedelta(minutes=1), now),
+            ),
+            True,
+        ),
+        now,
+        3,
+    )
+
+    strategy.submit(non_stale_message)
+
+    # Non stale message gets produced
+    assert broker_storage.consume(partition, 0) is not None
+
+    # Offset gets committed on poll
+    strategy.poll()
+    assert commit.call_count == 2
+    assert commit.call_args == mock.call(
+        {partition: Position(non_stale_message.offset, now)}
+    )
 
     # Close the strategy
     strategy.close()
