@@ -114,6 +114,7 @@ def test_executor_consumer() -> None:
         auto_offset_reset,
         TestingMetricsBackend(),
         ThreadPoolExecutor(2),
+        None,
         override_result_topic=scheduled_result_topic_spec.topic.value,
     )
     for i in range(1, 5):
@@ -225,7 +226,13 @@ def test_execute_query_strategy() -> None:
     next_step = mock.Mock()
 
     strategy = ExecuteQuery(
-        dataset, entity_names, executor, max_concurrent_queries, metrics, next_step
+        dataset,
+        entity_names,
+        executor,
+        max_concurrent_queries,
+        None,
+        metrics,
+        next_step,
     )
 
     make_message = generate_message(EntityKey.EVENTS)
@@ -258,7 +265,9 @@ def test_too_many_concurrent_queries() -> None:
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, entity_names, executor, 4, metrics, next_step)
+    strategy = ExecuteQuery(
+        dataset, entity_names, executor, 4, None, metrics, next_step
+    )
 
     make_message = generate_message(EntityKey.EVENTS)
 
@@ -281,7 +290,9 @@ def test_skip_execution_for_entity() -> None:
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, entity_names, executor, 4, metrics, next_step)
+    strategy = ExecuteQuery(
+        dataset, entity_names, executor, 4, None, metrics, next_step
+    )
 
     metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
     strategy.submit(metrics_sets_message)
@@ -390,6 +401,7 @@ def test_execute_and_produce_result() -> None:
         entity_names,
         executor,
         max_concurrent_queries,
+        None,
         metrics,
         ProduceResult(producer, result_topic.name, commit),
     )
@@ -411,3 +423,47 @@ def test_execute_and_produce_result() -> None:
     assert produced_message is not None
     assert produced_message.payload.key == str(subscription_identifier).encode("utf-8")
     assert commit.call_count == 1
+
+
+def test_skip_stale_message() -> None:
+    state.set_config("executor_sample_rate_events", 1.0)
+    dataset = get_dataset("events")
+    entity_names = ["events"]
+    executor = ThreadPoolExecutor()
+    max_concurrent_queries = 2
+    metrics = TestingMetricsBackend()
+
+    scheduled_topic = Topic("scheduled-subscriptions-events")
+    result_topic = Topic("events-subscriptions-results")
+    clock = TestingClock()
+    broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
+    broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
+    broker.create_topic(scheduled_topic, partitions=1)
+    broker.create_topic(result_topic, partitions=1)
+    producer = broker.get_producer()
+
+    commit = mock.Mock()
+
+    stale_threshold_seconds = 60
+
+    strategy = ExecuteQuery(
+        dataset,
+        entity_names,
+        executor,
+        max_concurrent_queries,
+        stale_threshold_seconds,
+        metrics,
+        ProduceResult(producer, result_topic.name, commit),
+    )
+
+    subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
+
+    make_message = generate_message(EntityKey.EVENTS, subscription_identifier)
+    message = next(make_message)
+    strategy.submit(message)
+
+    # No message will be produced, or offsets committed
+    strategy.poll()
+    assert broker_storage.consume(Partition(result_topic, 0), 0) is None
+    assert commit.call_count == 1
+    assert commit.call_args[0][0] == {}

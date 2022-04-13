@@ -53,6 +53,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Kafka consumer auto offset reset.",
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--stale-threshold-seconds",
+    type=int,
+    help="Skip execution if timestamp is beyond this threshold compared to the system time",
+)
 # This option allows us to reroute the produced subscription results to a different
 # topic temporarily while we are testing and running the old and new subscription
 # pipeline concurrently. It is currently (temporarily) required to reduce the chance
@@ -80,6 +85,7 @@ def subscriptions_executor(
     max_concurrent_queries: int,
     auto_offset_reset: str,
     log_level: Optional[str],
+    stale_threshold_seconds: Optional[int],
     override_result_topic: str,
     cooperative_rebalancing: bool,
 ) -> None:
@@ -128,6 +134,7 @@ def subscriptions_executor(
         auto_offset_reset,
         metrics,
         executor,
+        stale_threshold_seconds,
         override_result_topic,
         cooperative_rebalancing,
     )
