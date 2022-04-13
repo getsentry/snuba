@@ -196,6 +196,7 @@ class SchedulerBuilder:
         auto_offset_reset: str,
         schedule_ttl: int,
         delay_seconds: Optional[int],
+        stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
@@ -229,6 +230,7 @@ class SchedulerBuilder:
         self.__auto_offset_reset = auto_offset_reset
         self.__schedule_ttl = schedule_ttl
         self.__delay_seconds = delay_seconds
+        self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
 
     def build_consumer(self) -> StreamProcessor[Tick]:
@@ -243,6 +245,7 @@ class SchedulerBuilder:
             self.__entity_key,
             self.__mode,
             self.__schedule_ttl,
+            self.__stale_threshold_seconds,
             self.__partitions,
             self.__producer,
             self.__scheduled_topic_spec,
@@ -273,12 +276,14 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         entity_key: EntityKey,
         mode: SchedulingWatermarkMode,
         schedule_ttl: int,
+        stale_threshold_seconds: Optional[int],
         partitions: int,
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
     ) -> None:
         self.__mode = mode
+        self.__stale_threshold_seconds = stale_threshold_seconds
         self.__partitions = partitions
         self.__producer = producer
         self.__scheduled_topic_spec = scheduled_topic_spec
@@ -309,6 +314,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             self.__producer,
             self.__scheduled_topic_spec,
             commit,
+            self.__stale_threshold_seconds,
             self.__metrics,
         )
 
