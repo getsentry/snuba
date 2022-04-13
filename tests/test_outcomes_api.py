@@ -363,7 +363,7 @@ class TestOutcomesAPI(BaseApiTest):
     def test_virtual_time_column(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_outcomes(
-            org_id=1,
+            org_id=2,
             project_id=project_id,
             num_outcomes=5,
             outcome=0,
@@ -371,7 +371,7 @@ class TestOutcomesAPI(BaseApiTest):
             category=DataCategory.ERROR,
         )
         self.generate_outcomes(
-            org_id=1,
+            org_id=2,
             project_id=project_id,
             num_outcomes=5,
             outcome=0,
@@ -379,7 +379,7 @@ class TestOutcomesAPI(BaseApiTest):
             category=DataCategory.TRANSACTION,
         )
         self.generate_outcomes(
-            org_id=1,
+            org_id=2,
             project_id=project_id,
             num_outcomes=10,
             outcome=0,
@@ -387,7 +387,7 @@ class TestOutcomesAPI(BaseApiTest):
             category=None,
         )
         self.generate_outcomes(
-            org_id=1,
+            org_id=2,
             project_id=project_id,
             num_outcomes=1,
             outcome=1,
@@ -401,7 +401,7 @@ class TestOutcomesAPI(BaseApiTest):
                 {
                     "query": f"""MATCH (outcomes )
                     SELECT sum(times_seen) AS aggregate BY time
-                    WHERE org_id = 1
+                    WHERE org_id = 2
                     AND project_id IN tuple({project_id})
                     AND outcome = 0
                     AND timestamp >= toDateTime('{self.base_time.isoformat()}')
