@@ -20,7 +20,7 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy):
         self.__seconds = seconds
         super().__init__(limit, seconds, self._load_state())
 
-    def handle_invalid_message(self, e: InvalidMessages) -> None:
+    def handle_invalid_messages(self, e: InvalidMessages) -> None:
         self._add_to_redis(len(e.messages))
         super().handle_invalid_messages(e)
 
