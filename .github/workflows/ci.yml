@@ -18,6 +18,20 @@ jobs:
           python-version: 3.8
       - name: Setup pre-commit
         run: make setup-git
+      - uses: getsentry/paths-filter@v2
+        id: files
+        with:
+          # Enable listing of files matching each filter.
+          # Paths to files will be available in `${FILTER_NAME}_files` output variable.
+          # Paths will be escaped and space-delimited.
+          # Output is usable as command line argument list in linux shell
+          list-files: shell
+
+          # It doesn't make sense to lint deleted files.
+          # Therefore we specify we are only interested in added or modified files.
+          filters: |
+            all:
+              - added|modified: '**/*'
       - name: Run pre-commit checks
         # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
@@ -25,7 +39,7 @@ jobs:
         # we skip the `no-commit-to-branch` because in CI we are in fact on master already
         # and we have merged to it
         run: |
-          SKIP=no-commit-to-branch pre-commit run --files $(git diff --diff-filter=d --name-only master)
+          SKIP=no-commit-to-branch pre-commit run --files ${{ steps.files.outputs.all_files }}
 
   typing:
     name: "mypy typing"
