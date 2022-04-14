@@ -1,17 +1,11 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    UUID,
-    Column,
-    DateTime,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from .matview import aggregate_columns_v1, create_matview_v1
 
+from .matview import aggregate_columns_v1, create_matview_v1
 
 raw_columns: Sequence[Column[Modifiers]] = [
     Column("session_id", UUID()),

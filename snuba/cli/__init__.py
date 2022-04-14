@@ -1,5 +1,6 @@
-import click
 from pkgutil import walk_packages
+
+import click
 
 
 @click.group()

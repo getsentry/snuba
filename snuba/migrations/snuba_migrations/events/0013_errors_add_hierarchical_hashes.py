@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, FixedString, Array, UUID
+from snuba.clickhouse.columns import UUID, Array, Column, FixedString
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 

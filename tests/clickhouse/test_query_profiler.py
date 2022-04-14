@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_profiler import generate_profile

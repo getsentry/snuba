@@ -1,6 +1,6 @@
 from typing import Sequence
-from setuptools import setup, find_packages
 
+from setuptools import find_packages, setup
 
 VERSION = "22.5.0.dev0"
 

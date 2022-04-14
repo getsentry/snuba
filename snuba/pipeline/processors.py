@@ -1,6 +1,7 @@
 from typing import Callable, Sequence
 
 import sentry_sdk
+
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan

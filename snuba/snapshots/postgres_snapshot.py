@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Generator, Iterable, NewType, Sequence
 
 import jsonschema
+
 from snuba import settings
 from snuba.snapshots import (
     BulkLoadSource,

@@ -1,4 +1,5 @@
 import pytest
+
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.conditions import (
     BooleanFunctions,

@@ -1,11 +1,6 @@
 from typing import Sequence, Tuple
 
-from snuba.clickhouse.columns import (
-    AggregateFunction,
-    Column,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import AggregateFunction, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers

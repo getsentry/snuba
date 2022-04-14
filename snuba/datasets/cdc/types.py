@@ -1,4 +1,4 @@
-from typing import Any, Literal, Sequence, Union, TypedDict
+from typing import Any, Literal, Sequence, TypedDict, Union
 
 
 class BeginEvent(TypedDict):

@@ -2,6 +2,7 @@ import copy
 from typing import List
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (

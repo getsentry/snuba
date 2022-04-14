@@ -5,10 +5,10 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from snuba.datasets.cdc.cdcprocessors import (
-    CdcProcessor,
     CdcMessageRow,
-    postgres_date_to_clickhouse,
+    CdcProcessor,
     parse_postgres_datetime,
+    postgres_date_to_clickhouse,
 )
 from snuba.writer import WriterTableRow
 

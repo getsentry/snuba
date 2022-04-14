@@ -5,14 +5,11 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
     QueryRunner,
 )
-from snuba.pipeline.processors import (
-    execute_entity_processors,
-    execute_plan_processors,
-)
+from snuba.pipeline.processors import execute_entity_processors, execute_plan_processors
 from snuba.pipeline.query_pipeline import (
-    QueryPlanner,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
+    QueryPlanner,
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request

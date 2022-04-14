@@ -1,24 +1,24 @@
-import pytest
 import uuid
+
+import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.query import Query
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import (
+    Argument,
     Column,
     Expression,
     FunctionCall,
-    Literal,
     Lambda,
-    Argument,
+    Literal,
 )
-from snuba.clickhouse.query import Query
 from snuba.query.processors.type_converters.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
 from snuba.request.request_settings import HTTPRequestSettings
-
 
 tests = [
     pytest.param(

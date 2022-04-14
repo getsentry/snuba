@@ -1,6 +1,7 @@
 from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     Column,
     DateTime,
     IPv4,
@@ -8,7 +9,6 @@ from snuba.clickhouse.columns import (
     Nested,
     String,
     UInt,
-    UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines

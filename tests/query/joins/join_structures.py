@@ -15,8 +15,8 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import (
     EVENTS_SCHEMA,
-    GROUPS_SCHEMA,
     GROUPS_ASSIGNEE,
+    GROUPS_SCHEMA,
 )
 
 TNode = TypeVar("TNode", bound=SimpleDataSource)

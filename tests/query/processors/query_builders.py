@@ -1,10 +1,11 @@
-from snuba.clickhouse.columns import ColumnSet
-from snuba.query.data_source.simple import Table
 from typing import Optional, Sequence
+
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 
 
