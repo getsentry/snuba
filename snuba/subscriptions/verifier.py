@@ -51,13 +51,27 @@ class SubscriptionResultData:
         data_a = a.pop("data")
         data_b = b.pop("data")
 
-        if (
-            a == b
-            and isinstance(data_a, int)
-            and isinstance(data_b, int)
-            and abs(data_a - data_b) == 1
-        ):
-            return True
+        if a == b:
+            if (
+                isinstance(data_a, int)
+                and isinstance(data_b, int)
+                and abs(data_a - data_b) == 1
+            ):
+                return True
+
+            # Sometimes the data is a list of dicts and not an integer
+            try:
+                if len(data_a) == len(data_b):
+                    for (a, b) in zip(data_a, data_b):
+                        a_keys = a.keys()
+                        b_keys = b.keys()
+                        if a_keys == b_keys:
+                            for key in a_keys:
+                                if abs(data_a[key] - data_b[key]) > 1:
+                                    return False
+                    return True
+            except (TypeError, AttributeError):
+                pass
 
         return False
 
