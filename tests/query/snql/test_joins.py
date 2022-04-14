@@ -221,7 +221,10 @@ def test_joins(
         )
         relationships.append(
             RelationshipTuple(
-                node(lhs_alias, lhs), uuid.uuid4().hex, node(rhs_alias, rhs), data,
+                node(lhs_alias, lhs),
+                uuid.uuid4().hex,
+                node(rhs_alias, rhs),
+                data,
             )
         )
 

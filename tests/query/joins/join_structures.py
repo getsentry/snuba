@@ -96,7 +96,10 @@ def clickhouse_groups_node(
     condition: Optional[Expression] = None,
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
-        "gr", Table("groupedmessage_local", GROUPS_SCHEMA), selected_columns, condition,
+        "gr",
+        Table("groupedmessage_local", GROUPS_SCHEMA),
+        selected_columns,
+        condition,
     )
 
 
@@ -113,7 +116,8 @@ def clickhouse_assignees_node(
 
 
 def events_groups_join(
-    left: IndividualNode[TNode], right: IndividualNode[TNode],
+    left: IndividualNode[TNode],
+    right: IndividualNode[TNode],
 ) -> JoinClause[TNode]:
     return JoinClause(
         left_node=left,

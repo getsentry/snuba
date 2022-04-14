@@ -57,7 +57,10 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
     """
 
     def __init__(
-        self, request: Request, runner: QueryRunner, query_planner: EntityQueryPlanner,
+        self,
+        request: Request,
+        runner: QueryRunner,
+        query_planner: EntityQueryPlanner,
     ):
         self.__request = request
         self.__runner = runner
@@ -82,10 +85,14 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
     ) -> QueryExecutionPipeline:
         assert isinstance(request.query, LogicalQuery)
         return SimpleExecutionPipeline(
-            request, runner, self.build_planner(request.query, request.settings),
+            request,
+            runner,
+            self.build_planner(request.query, request.settings),
         )
 
     def build_planner(
-        self, query: LogicalQuery, settings: RequestSettings,
+        self,
+        query: LogicalQuery,
+        settings: RequestSettings,
     ) -> EntityQueryPlanner:
         return EntityQueryPlanner(query, settings, self.__query_plan_builder)

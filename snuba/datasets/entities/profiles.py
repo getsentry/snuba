@@ -48,7 +48,9 @@ profile_columns = EntityColumnSet(
 
 
 class ProfilesEntity(Entity, ABC):
-    def __init__(self,) -> None:
+    def __init__(
+        self,
+    ) -> None:
         writable_storage = get_writable_storage(StorageKey.PROFILES)
 
         super().__init__(

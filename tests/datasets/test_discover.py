@@ -152,7 +152,8 @@ test_data = [
 
 @pytest.mark.parametrize("query_body, expected_entity", test_data)
 def test_data_source(
-    query_body: MutableMapping[str, Any], expected_entity: EntityKey,
+    query_body: MutableMapping[str, Any],
+    expected_entity: EntityKey,
 ) -> None:
     dataset = get_dataset("discover")
     # HACK until these are converted to proper SnQL queries

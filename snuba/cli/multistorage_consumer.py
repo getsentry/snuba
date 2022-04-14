@@ -39,7 +39,8 @@ logger = logging.getLogger(__name__)
     required=True,
 )
 @click.option(
-    "--consumer-group", default="snuba-consumers",
+    "--consumer-group",
+    default="snuba-consumers",
 )
 @click.option(
     "--commit-log-topic",
@@ -76,14 +77,18 @@ logger = logging.getLogger(__name__)
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option(
-    "--parallel-collect", is_flag=True, default=True,
+    "--parallel-collect",
+    is_flag=True,
+    default=True,
 )
 @click.option("--processes", type=int)
 @click.option(
-    "--input-block-size", type=int,
+    "--input-block-size",
+    type=int,
 )
 @click.option(
-    "--output-block-size", type=int,
+    "--output-block-size",
+    type=int,
 )
 @click.option("--log-level")
 @click.option(
@@ -260,7 +265,9 @@ def multistorage_consumer(
             build_kafka_producer_configuration(commit_log_topic_spec.topic)
         )
         consumer = KafkaConsumerWithCommitLog(
-            consumer_configuration, producer=producer, commit_log_topic=commit_log,
+            consumer_configuration,
+            producer=producer,
+            commit_log_topic=commit_log,
         )
 
     dead_letter_producer: Optional[KafkaProducer] = None

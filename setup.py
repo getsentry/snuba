@@ -6,7 +6,7 @@ VERSION = "22.5.0.dev0"
 
 
 def get_requirements() -> Sequence[str]:
-    with open(u"requirements.txt") as fp:
+    with open("requirements.txt") as fp:
         return [x.strip() for x in fp.read().split("\n") if not x.startswith("#")]
 
 

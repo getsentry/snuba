@@ -31,7 +31,9 @@ class SliceOfMapOptimizer(QueryProcessor):
                     (
                         lambda_fn,
                         FunctionCall(
-                            None, "arraySlice", (innermost_exp,) + slice_args,
+                            None,
+                            "arraySlice",
+                            (innermost_exp,) + slice_args,
                         ),
                     ),
                 )

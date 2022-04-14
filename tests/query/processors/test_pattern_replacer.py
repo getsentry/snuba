@@ -67,7 +67,8 @@ test_data = [
 
 
 @pytest.mark.parametrize(
-    "unprocessed, expected", test_data,
+    "unprocessed, expected",
+    test_data,
 )
 def test_pattern_replacer_format_expressions(
     unprocessed: Query, expected: Query
@@ -75,10 +76,16 @@ def test_pattern_replacer_format_expressions(
     def transform(match: MatchResult, exp: Expression) -> Expression:
         assert isinstance(exp, Column)  # mypy
         return FunctionCall(
-            None, "nullIf", (Column(None, None, exp.column_name), Literal(None, ""),)
+            None,
+            "nullIf",
+            (
+                Column(None, None, exp.column_name),
+                Literal(None, ""),
+            ),
         )
 
     PatternReplacer(
-        Param("column", ColumnMatch(None, StringMatch("column1"))), transform,
+        Param("column", ColumnMatch(None, StringMatch("column1"))),
+        transform,
     ).process_query(unprocessed, HTTPRequestSettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()

@@ -29,7 +29,8 @@ new_dest_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     ),
     (
         Column(
-            "sessions_crashed_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)]),
+            "sessions_crashed_preaggr",
+            AggregateFunction("sumIf", [UInt(32), UInt(8)]),
         ),
         "sessions_crashed",
     ),
@@ -42,7 +43,8 @@ new_dest_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     ),
     (
         Column(
-            "sessions_errored_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)]),
+            "sessions_errored_preaggr",
+            AggregateFunction("sumIf", [UInt(32), UInt(8)]),
         ),
         "sessions_errored",
     ),

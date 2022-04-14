@@ -80,12 +80,14 @@ def ensure_drop_temporary_tables(_logger: logging.Logger) -> None:
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
     clickhouse.execute(
         operations.DropTable(
-            storage_set=StorageSetKey.CDC, table_name=TABLE_NAME_NEW,
+            storage_set=StorageSetKey.CDC,
+            table_name=TABLE_NAME_NEW,
         ).format_sql()
     )
     clickhouse.execute(
         operations.DropTable(
-            storage_set=StorageSetKey.CDC, table_name=TABLE_NAME_OLD,
+            storage_set=StorageSetKey.CDC,
+            table_name=TABLE_NAME_OLD,
         ).format_sql()
     )
 

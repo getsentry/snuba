@@ -62,7 +62,13 @@ def test_hexint_column_processor(unprocessed: Expression, formatted_value: str) 
             FunctionCall(
                 None,
                 "lower",
-                (FunctionCall(None, "hex", (Column(None, None, "column1"),),),),
+                (
+                    FunctionCall(
+                        None,
+                        "hex",
+                        (Column(None, None, "column1"),),
+                    ),
+                ),
             ),
         )
     ]

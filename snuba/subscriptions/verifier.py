@@ -174,7 +174,9 @@ def build_verifier(
         SubscriptionResultConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    None, group_id=consumer_group, auto_offset_reset=auto_offset_reset,
+                    None,
+                    group_id=consumer_group,
+                    auto_offset_reset=auto_offset_reset,
                 )
             ),
             override_topics=[orig_result_topic, new_result_topic],
@@ -323,11 +325,15 @@ class ResultStore:
                     off_by_one.add(id)
 
             self.__metrics.increment(
-                METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
+                METRIC_OUTCOME_NAME,
+                len(matching_results),
+                {"outcome": "same_result"},
             )
 
             self.__metrics.increment(
-                METRIC_OUTCOME_NAME, len(off_by_one), {"outcome": "off_by_one"},
+                METRIC_OUTCOME_NAME,
+                len(off_by_one),
+                {"outcome": "off_by_one"},
             )
 
             self.__metrics.increment(

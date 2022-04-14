@@ -59,7 +59,12 @@ def test_column_curried_function_translation() -> None:
         None,
         "duration_quantiles",
         FunctionCall(
-            None, "quantilesIfMerge", (Literal(None, 0.5), Literal(None, 0.9),)
+            None,
+            "quantilesIfMerge",
+            (
+                Literal(None, 0.5),
+                Literal(None, 0.9),
+            ),
         ),
         (Column(None, None, "duration_quantiles"),),
     ).attempt_map(
@@ -68,7 +73,12 @@ def test_column_curried_function_translation() -> None:
     ) == CurriedFunctionCall(
         "duration_quantiles",
         FunctionCall(
-            None, "quantilesIfMerge", (Literal(None, 0.5), Literal(None, 0.9),)
+            None,
+            "quantilesIfMerge",
+            (
+                Literal(None, 0.5),
+                Literal(None, 0.9),
+            ),
         ),
         (Column(None, None, "duration_quantiles"),),
     )

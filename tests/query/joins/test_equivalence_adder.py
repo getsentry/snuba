@@ -219,7 +219,9 @@ TEST_REPLACEMENT = [
                     Literal(None, 1),
                 ),
                 binary_condition(
-                    ConditionFunctions.EQ, Column(None, "gr", "id"), Literal(None, 1),
+                    ConditionFunctions.EQ,
+                    Column(None, "gr", "id"),
+                    Literal(None, 1),
                 ),
             ]
         ),
@@ -232,7 +234,9 @@ TEST_REPLACEMENT = [
                     Literal(None, 1),
                 ),
                 binary_condition(
-                    ConditionFunctions.EQ, Column(None, "gr", "id"), Literal(None, 1),
+                    ConditionFunctions.EQ,
+                    Column(None, "gr", "id"),
+                    Literal(None, 1),
                 ),
                 binary_condition(
                     ConditionFunctions.EQ,

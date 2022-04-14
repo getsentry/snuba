@@ -118,7 +118,8 @@ class PostgresSnapshot(BulkLoadSource):
         with open(meta_file_name, "r") as meta_file:
             json_desc = json.load(meta_file)
             jsonschema.validate(
-                json_desc, SNAPSHOT_METADATA_SCHEMA,
+                json_desc,
+                SNAPSHOT_METADATA_SCHEMA,
             )
 
             if json_desc["product"] != product:
@@ -159,7 +160,8 @@ class PostgresSnapshot(BulkLoadSource):
 
     @contextmanager
     def get_parsed_table_file(
-        self, table: str,
+        self,
+        table: str,
     ) -> Generator[Iterable[SnapshotTableRow], None, None]:
         table_desc = self.__descriptor.get_table(table)
         assert not table_desc.zip, "Cannot parse a gzip table file on the fly"
@@ -182,7 +184,10 @@ class PostgresSnapshot(BulkLoadSource):
                     if not expected_set <= existing_set:
                         raise ValueError(
                             "The table %s is missing columns %r "
-                            % (table, expected_set - existing_set,)
+                            % (
+                                table,
+                                expected_set - existing_set,
+                            )
                         )
 
                     if len(existing_set) != len(expected_set):

@@ -111,7 +111,10 @@ def generate_profile(
             table="",
             all_columns=set(),
             multi_level_condition=False,
-            where_profile=FilterProfile(columns=set(), mapping_cols=set(),),
+            where_profile=FilterProfile(
+                columns=set(),
+                mapping_cols=set(),
+            ),
             groupby_cols=set(),
             array_join_cols=set(),
         )

@@ -51,7 +51,13 @@ def test_add_node() -> None:
     password = ""
     database = os.environ.get("CLICKHOUSE_DATABASE", "default")
 
-    client = ClickhousePool(host_name, port, user, password, database,)
+    client = ClickhousePool(
+        host_name,
+        port,
+        user,
+        password,
+        database,
+    )
 
     assert set(client.execute("SHOW TABLES").results) == set()
 

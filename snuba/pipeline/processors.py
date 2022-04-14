@@ -31,7 +31,8 @@ def _execute_clickhouse_processors(
 
 
 def execute_plan_processors(
-    query_plan: ClickhouseQueryPlan, settings: RequestSettings,
+    query_plan: ClickhouseQueryPlan,
+    settings: RequestSettings,
 ) -> None:
     """
     Executes the plan query processors but not the db ones (those
@@ -45,7 +46,8 @@ def execute_plan_processors(
 
 
 def execute_all_clickhouse_processors(
-    query_plan: ClickhouseQueryPlan, settings: RequestSettings,
+    query_plan: ClickhouseQueryPlan,
+    settings: RequestSettings,
 ) -> None:
     """
     Executes all Clickhouse query processing including the plan processors

@@ -152,7 +152,8 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
         # Record the lag between the fastest and slowest partition
         self.__metrics.timing(
-            "partition_lag_ms", (fastest - slowest).total_seconds() * 1000,
+            "partition_lag_ms",
+            (fastest - slowest).total_seconds() * 1000,
         )
 
         if (
@@ -356,7 +357,7 @@ class ScheduledSubscriptionQueue:
 
 
 class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
-    """"
+    """ "
     This strategy is responsible for producing a message for all of the subscriptions
     scheduled for a given tick.
 

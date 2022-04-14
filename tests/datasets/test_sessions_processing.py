@@ -56,7 +56,11 @@ def test_sessions_processing() -> None:
                 "duration_quantiles",
                 CurriedFunctionCall(
                     "_snuba_duration_quantiles",
-                    FunctionCall(None, "quantilesIfMerge", quantiles,),
+                    FunctionCall(
+                        None,
+                        "quantilesIfMerge",
+                        quantiles,
+                    ),
                     (Column(None, None, "duration_quantiles"),),
                 ),
             ),
@@ -184,7 +188,8 @@ selector_tests = [
 
 
 @pytest.mark.parametrize(
-    "query_body, is_subscription, expected_table", selector_tests,
+    "query_body, is_subscription, expected_table",
+    selector_tests,
 )
 def test_select_storage(
     query_body: MutableMapping[str, Any], is_subscription: bool, expected_table: str

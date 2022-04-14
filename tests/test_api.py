@@ -2235,7 +2235,9 @@ class TestCreateSubscriptionApi(BaseApiTest):
             len(
                 list(
                     RedisSubscriptionDataStore(
-                        redis_client, entity_key, partition,
+                        redis_client,
+                        entity_key,
+                        partition,
                     ).all()
                 )
             )
@@ -2346,7 +2348,9 @@ class TestDeleteSubscriptionApi(BaseApiTest):
             len(
                 list(
                     RedisSubscriptionDataStore(
-                        redis_client, entity_key, partition,
+                        redis_client,
+                        entity_key,
+                        partition,
                     ).all()
                 )
             )
@@ -2358,7 +2362,12 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         )
         assert resp.status_code == 202, resp
         assert (
-            RedisSubscriptionDataStore(redis_client, entity_key, partition,).all() == []
+            RedisSubscriptionDataStore(
+                redis_client,
+                entity_key,
+                partition,
+            ).all()
+            == []
         )
 
     def test_invalid_dataset_and_entity_combination(self) -> None:

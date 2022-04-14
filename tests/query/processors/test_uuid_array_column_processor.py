@@ -53,7 +53,11 @@ tests = [
         FunctionCall(
             None,
             "arraySlice",
-            (Column(None, None, "column1"), Literal(None, 0), Literal(None, 2),),
+            (
+                Column(None, None, "column1"),
+                Literal(None, 0),
+                Literal(None, 2),
+            ),
         ),
         FunctionCall(
             None,
@@ -93,7 +97,9 @@ tests = [
 
 @pytest.mark.parametrize("unprocessed, expected, formatted_value", tests)
 def test_uuid_array_column_processor(
-    unprocessed: Expression, expected: Expression, formatted_value: str,
+    unprocessed: Expression,
+    expected: Expression,
+    formatted_value: str,
 ) -> None:
     unprocessed_query = Query(
         Table("transactions", ColumnSet([])),

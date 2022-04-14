@@ -102,7 +102,7 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
-BULK_BINARY_LOAD_CHUNK = 2 ** 22  # 4 MB
+BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 # Processor/Writer Options
 
@@ -138,7 +138,7 @@ STATS_IN_RESPONSE = False
 PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 REPLACER_MAX_BLOCK_SIZE = 512
-REPLACER_MAX_MEMORY_USAGE = 10 * (1024 ** 3)  # 10GB
+REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
 # TLL of Redis key that denotes whether a project had replacements
 # run recently. Useful for decidig whether or not to add FINAL clause
 # to queries.

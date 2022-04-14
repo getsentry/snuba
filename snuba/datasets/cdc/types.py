@@ -45,5 +45,9 @@ class CommitEvent(TypedDict):
 
 
 Event = Union[
-    BeginEvent, InsertEvent, UpdateEvent, DeleteEvent, CommitEvent,
+    BeginEvent,
+    InsertEvent,
+    UpdateEvent,
+    DeleteEvent,
+    CommitEvent,
 ]

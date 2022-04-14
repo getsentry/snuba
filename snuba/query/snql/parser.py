@@ -299,7 +299,10 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             ],
         ],
     ) -> Union[
-        CompositeQuery[QueryEntity], LogicalQuery, QueryEntity, JoinClause[QueryEntity],
+        CompositeQuery[QueryEntity],
+        LogicalQuery,
+        QueryEntity,
+        JoinClause[QueryEntity],
     ]:
         _, _, _, match = visited_children
         if isinstance(match, (CompositeQuery, LogicalQuery)):
@@ -354,7 +357,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             raise ParsingException(f"{node.text} is not a valid entity name")
 
     def visit_relationships(
-        self, node: Node, visited_children: Tuple[RelationshipTuple, Any],
+        self,
+        node: Node,
+        visited_children: Tuple[RelationshipTuple, Any],
     ) -> Sequence[RelationshipTuple]:
         relationships = [visited_children[0]]
         if isinstance(visited_children[1], Node):
@@ -474,12 +479,16 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return visit_arithmetic_term(node, visited_children)
 
     def visit_low_pri_arithmetic(
-        self, node: Node, visited_children: Tuple[Any, Expression, LowPriArithmetic],
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, LowPriArithmetic],
     ) -> Expression:
         return visit_low_pri_arithmetic(node, visited_children)
 
     def visit_high_pri_arithmetic(
-        self, node: Node, visited_children: Tuple[Any, Expression, HighPriArithmetic],
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, HighPriArithmetic],
     ) -> Expression:
         return visit_high_pri_arithmetic(node, visited_children)
 
@@ -524,7 +533,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return conditions
 
     def visit_and_expression(
-        self, node: Node, visited_children: Tuple[Any, Expression, Node],
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, Node],
     ) -> Expression:
         _, left_condition, and_condition = visited_children
         args = [left_condition]
@@ -775,7 +786,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return exprs
 
     def visit_arrayjoin_optional(
-        self, node: Node, visited_children: List[Tuple[Any, Any, Any, Expression]],
+        self,
+        node: Node,
+        visited_children: List[Tuple[Any, Any, Any, Expression]],
     ) -> List[Expression]:
         exprs: List[Expression] = list()
         if visited_children is not None:
@@ -831,19 +844,25 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return CurriedFunctionCall(alias, internal_f, param_list2)
 
     def visit_aliased_tag_column(
-        self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
+        self,
+        node: Node,
+        visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
         return SelectedExpression(self.__extract_alias_from_match(alias), column)
 
     def visit_aliased_subscriptable(
-        self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
+        self,
+        node: Node,
+        visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
         return SelectedExpression(self.__extract_alias_from_match(alias), column)
 
     def visit_aliased_column_name(
-        self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
+        self,
+        node: Node,
+        visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
         return SelectedExpression(self.__extract_alias_from_match(alias), column)
@@ -1025,7 +1044,10 @@ def _array_join_transformation(
                                 FunctionCall(
                                     None,
                                     OPERATOR_TO_FUNCTION[op],
-                                    (Argument(None, "x"), value,),
+                                    (
+                                        Argument(None, "x"),
+                                        value,
+                                    ),
                                 ),
                             ),
                         ),
@@ -1301,7 +1323,8 @@ def _align_max_days_date_align(
             return exp
         elif exp == from_exp:
             return replace(
-                exp, parameters=(from_exp.parameters[0], Literal(None, from_date)),
+                exp,
+                parameters=(from_exp.parameters[0], Literal(None, from_date)),
             )
         elif exp == to_exp:
             return replace(
@@ -1440,7 +1463,9 @@ CustomProcessors = Sequence[
 
 
 def parse_snql_query(
-    body: str, dataset: Dataset, custom_processing: Optional[CustomProcessors] = None,
+    body: str,
+    dataset: Dataset,
+    custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
@@ -1450,7 +1475,8 @@ def parse_snql_query(
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
-            query, POST_PROCESSORS,
+            query,
+            POST_PROCESSORS,
         )
 
     # Custom processing to tweak the AST before validation

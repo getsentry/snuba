@@ -312,7 +312,8 @@ class TableWriter:
         return self.__replacer_processor
 
     def __update_writer_options(
-        self, options: ClickhouseWriterOptions = None,
+        self,
+        options: ClickhouseWriterOptions = None,
     ) -> Mapping[str, Any]:
         if options is None:
             options = {}

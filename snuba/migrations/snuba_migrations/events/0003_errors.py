@@ -125,7 +125,8 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_local",
+                storage_set=StorageSetKey.EVENTS,
+                table_name="errors_local",
             )
         ]
 
@@ -136,7 +137,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="errors_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="errors_local", sharding_key="event_hash",
+                    local_table_name="errors_local",
+                    sharding_key="event_hash",
                 ),
             )
         ]

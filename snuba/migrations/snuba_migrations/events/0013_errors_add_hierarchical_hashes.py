@@ -18,13 +18,19 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column("hierarchical_hashes", Array(UUID()),),
+                column=Column(
+                    "hierarchical_hashes",
+                    Array(UUID()),
+                ),
                 after="primary_hash",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("hierarchical_hashes", Array(FixedString(32)),),
+                column=Column(
+                    "hierarchical_hashes",
+                    Array(FixedString(32)),
+                ),
                 after="primary_hash",
             ),
         ]
@@ -50,7 +56,10 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_dist",
-                column=Column("hierarchical_hashes", Array(FixedString(32)),),
+                column=Column(
+                    "hierarchical_hashes",
+                    Array(FixedString(32)),
+                ),
                 after="primary_hash",
             ),
         ]
