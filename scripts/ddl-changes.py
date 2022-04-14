@@ -1,7 +1,6 @@
-import re
+import os.path
 import subprocess
 from shutil import ExecError
-from sys import stderr
 
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
@@ -13,7 +12,15 @@ def _main() -> None:
     runs `snuba migrations run -dry-run with the proper parameters`, for a CI action
     """
     diff_result = subprocess.run(
-        ["git", "diff", "--name-status", "origin/master", "--", "snuba/migrations"],
+        [
+            "git",
+            "diff",
+            "--diff-filter=AM",
+            "--name-only",
+            "origin/master",
+            "--",
+            "snuba/migrations/snuba_migrations/*/[0-9]*.py",
+        ],
         stdout=subprocess.PIPE,
         text=True,
     )
@@ -25,32 +32,15 @@ def _main() -> None:
             print("-- start migrations")
             print()
         for line in lines:
-            # example git diff output:
-            # A     snuba/migrations/snuba_migrations/metrics/0030_metrics_distributions_v2_writing_mv.py
-            regex = (
-                r"(?P<modification_type>[AMD])\t"
-                r"snuba/migrations/snuba_migrations/(?P<migration_group>[a-z]+)/(?P<migration_id>[0-9a-z_]+)\.py"
-            )
+            migration_filename = os.path.basename(line)
+            migration_group = MigrationGroup(os.path.basename(os.path.dirname(line)))
+            migration_id, _ = os.path.splitext(migration_filename)
 
-            matches = re.match(regex, line)
-            if matches:
-                re_groups = matches.groupdict()
-
-                (modification_type, migration_group, migration_id) = (
-                    re_groups["modification_type"],
-                    MigrationGroup(re_groups["migration_group"]),
-                    re_groups["migration_id"],
-                )
-                # Don't try to dry-run deleted files
-                if modification_type in {"M", "A"}:
-                    runner = Runner()
-                    migration_key = MigrationKey(migration_group, migration_id)
-                    print(f"-- migration {migration_group.value} : {migration_id}")
-                    runner.run_migration(migration_key, dry_run=True)
-                    print(f"-- end migration {migration_group.value} : {migration_id}")
-            else:
-                # output to stderr doesn't get added to the comment
-                print(f"ignoring line from git-diff: {line}", file=stderr)
+            runner = Runner()
+            migration_key = MigrationKey(migration_group, migration_id)
+            print(f"-- migration {migration_group.value} : {migration_id}")
+            runner.run_migration(migration_key, dry_run=True)
+            print(f"-- end migration {migration_group.value} : {migration_id}")
 
 
 if __name__ == "__main__":

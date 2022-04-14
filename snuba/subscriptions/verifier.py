@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import time
@@ -43,11 +45,28 @@ class SubscriptionResultData:
             and self.to_dict() == cast(SubscriptionResultData, other).to_dict()
         )
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def is_off_by_one(self, other: SubscriptionResultData) -> bool:
+        a = self.to_dict()
+        b = other.to_dict()
+        data_a = a.pop("data")
+        data_b = b.pop("data")
+
+        if (
+            a == b
+            and isinstance(data_a, int)
+            and isinstance(data_b, int)
+            and abs(data_a - data_b) == 1
+        ):
+            return True
+
+        return False
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "data": self.result["data"],
             "meta": self.result["meta"],
             "totals": self.result.get("totals"),
+            "request": self.request,
         }
 
 
@@ -291,18 +310,29 @@ class ResultStore:
 
             non_matching_results = intersection_ids - matching_results
 
+            # Group the non matching results into those that are off than one,
+            # and those more different than off by one
+            off_by_one: Set[str] = set()
+            for id in non_matching_results:
+                if new_results[id].is_off_by_one(orig_results[id]):
+                    off_by_one.add(id)
+
             self.__metrics.increment(
                 METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
             )
 
             self.__metrics.increment(
+                METRIC_OUTCOME_NAME, len(off_by_one), {"outcome": "off_by_one"},
+            )
+
+            self.__metrics.increment(
                 METRIC_OUTCOME_NAME,
-                len(non_matching_results),
+                len(non_matching_results) - len(off_by_one),
                 {"outcome": "different_result"},
             )
 
             # Log up to 100 subscription results per second
-            for id in list(non_matching_results)[:100]:
+            for id in list(off_by_one)[:100]:
                 logger.warning(
                     "Encountered non matching subscription result",
                     extra={

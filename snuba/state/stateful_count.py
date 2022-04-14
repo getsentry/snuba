@@ -3,7 +3,7 @@ from typing import Sequence, Tuple
 
 from arroyo.processing.strategies.dead_letter_queue import (
     CountInvalidMessagePolicy,
-    InvalidMessage,
+    InvalidMessages,
 )
 
 from snuba.redis import redis_client
@@ -20,9 +20,9 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy):
         self.__seconds = seconds
         super().__init__(limit, seconds, self._load_state())
 
-    def handle_invalid_message(self, e: InvalidMessage) -> None:
+    def handle_invalid_messages(self, e: InvalidMessages) -> None:
         self._add_to_redis()
-        super().handle_invalid_message(e)
+        super().handle_invalid_messages(e)
 
     def _add_to_redis(self) -> None:
         """
