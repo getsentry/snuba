@@ -1,6 +1,9 @@
+import copy
+from dataclasses import replace
 from functools import partial
 from typing import Callable, List, Mapping, Optional, Tuple
 
+from snuba import state
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, QueryRunner
 from snuba.pipeline.query_pipeline import (
     QueryExecutionPipeline,
@@ -24,6 +27,20 @@ CallbackFunc = Callable[
     [LogicalQuery, RequestSettings, str, Optional[Result[QueryResult]], QueryResults],
     None,
 ]
+
+
+def _is_query_copying_disallowed(current_referrer: str) -> bool:
+    """
+    Check if the given referrer is disallowed from making a copy of the query.
+    """
+    pipeline_config = state.get_config("pipeline-delegator-disallow-query-copy", False)
+    if isinstance(pipeline_config, str):
+        referrers_disallowed = pipeline_config.split(";")
+        for referrer in referrers_disallowed:
+            if current_referrer == referrer:
+                return True
+
+    return False
 
 
 class MultipleConcurrentPipeline(QueryExecutionPipeline):
@@ -86,15 +103,18 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             to separate the rate limiter namespace and avoid double counting
             when enforcing the quota.
             """
-            if not get_config("pipeline_split_rate_limiter", 0):
-                return request
+            query = (
+                request.query
+                if _is_query_copying_disallowed(request.settings.referrer)
+                else copy.deepcopy(request.query)
+            )
 
-            return Request(
-                id=request.id,
-                body=request.body,
-                query=request.query,
-                app_id=request.app_id,
-                snql_anonymized=request.snql_anonymized,
+            if not get_config("pipeline_split_rate_limiter", 0):
+                return replace(request, query=query)
+
+            return replace(
+                request,
+                query=query,
                 settings=RateLimiterDelegate(builder_id, request.settings),
             )
 
