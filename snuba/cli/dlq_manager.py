@@ -27,7 +27,6 @@ def list() -> None:
     click.echo("Messages found in Snuba dead-letter topic:")
     for message in messages:
         click.echo(line_break)
-        click.echo(f"DLQ recieved at {message.timestamp}")
         click.echo(message.payload.value)
     click.echo(line_break)
 
