@@ -147,11 +147,16 @@ def test_result_store() -> None:
     store = ResultStore(threshold_sec=2, metrics=metrics)
     now = 5
 
-    def get_result_data(timestamp: int) -> SubscriptionResultData:
+    def get_result_data(timestamp: int, count: int = 1) -> SubscriptionResultData:
         return SubscriptionResultData(
             "some-id",
             {},
-            {"meta": [], "data": [], "totals": {}, "trace_output": "idk"},
+            {
+                "meta": [],
+                "data": [{"count": count}],
+                "totals": {},
+                "trace_output": "idk",
+            },
             timestamp,
             "events",
         )
@@ -167,23 +172,88 @@ def test_result_store() -> None:
     store.increment(ResultTopic.ORIGINAL, get_result_data(now + 3))
     assert len(metrics.calls) == 0
 
-    # Now we can record the now + 3 metrics
+    # Now we can record the now + 3 metrics.
     store.increment(ResultTopic.ORIGINAL, get_result_data(now + 5))
-    assert len(metrics.calls) == 1
-    assert Increment("result_count_diff", 1, None) in metrics.calls
+    assert len(metrics.calls) == 5
+    assert (
+        Increment("subscription_result_outcomes", 1, {"outcome": "missing_from_new"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "missing_from_orig"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "same_result"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "off_by_one"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "different_result"})
+        in metrics.calls
+    )
+
     metrics.calls = []
 
     # We get a message in the new topic
     store.increment(ResultTopic.NEW, get_result_data(now + 5))
     assert len(metrics.calls) == 0
 
-    # The diff for now + 5 is 0 since we got 1 message in each topic
+    # Results are the same at now + 5 is 0 since we got 1 message in each topic
     store.increment(ResultTopic.ORIGINAL, get_result_data(now + 10))
-    assert len(metrics.calls) == 1
-    assert Increment("result_count_diff", 0, None) in metrics.calls
+    assert len(metrics.calls) == 5
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "missing_from_new"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "missing_from_orig"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 1, {"outcome": "same_result"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "off_by_one"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "different_result"})
+        in metrics.calls
+    )
     metrics.calls = []
 
     # Stale message
     store.increment(ResultTopic.ORIGINAL, get_result_data(now))
     assert len(metrics.calls) == 1
-    assert Increment("stale_message", 1, None) in metrics.calls
+    assert Increment("stale_message", 1, {"topic": "original"}) in metrics.calls
+    metrics.calls = []
+
+    # Off by one - count is higher in NEW
+    store.increment(ResultTopic.NEW, get_result_data(now + 10, count=2))
+    store.increment(ResultTopic.NEW, get_result_data(now + 12))
+    assert len(metrics.calls) == 5
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "missing_from_new"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "missing_from_orig"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "same_result"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 1, {"outcome": "off_by_one"})
+        in metrics.calls
+    )
+    assert (
+        Increment("subscription_result_outcomes", 0, {"outcome": "different_result"})
+        in metrics.calls
+    )

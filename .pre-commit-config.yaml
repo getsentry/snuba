@@ -33,7 +33,7 @@ repos:
     -   id: mypy
         files: snuba
         args: [--config-file, mypy.ini, --ignore-missing-imports, --strict, --warn-unreachable]
-        additional_dependencies: ['sentry-arroyo==0.0.8']
+        additional_dependencies: ['sentry-arroyo==0.0.16']
   - repo: https://github.com/pycqa/isort
     rev: 5.8.0
     hooks:

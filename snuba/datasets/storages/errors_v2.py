@@ -108,7 +108,8 @@ storage = WritableTableStorage(
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,
         commit_log_topic=Topic.COMMIT_LOG,
-        subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
+        # TODO: Temporarily running in Global mode for testing
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_EVENTS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),
@@ -120,5 +121,4 @@ storage = WritableTableStorage(
         state_name=ReplacerState.ERRORS_V2,
         use_promoted_prewhere=False,
     ),
-    ignore_write_errors=True,
 )

@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import json
 import logging
 import time
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
+from functools import cached_property
+from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence, Set, cast
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer
@@ -32,6 +34,45 @@ class SubscriptionResultData:
     result: Result
     timestamp: int
     entity_name: str
+
+    @cached_property
+    def identifier(self) -> str:
+        return f"{self.entity_name}:{self.subscription_id}:{self.timestamp}"
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.to_dict() == cast(SubscriptionResultData, other).to_dict()
+        )
+
+    def is_off_by_one(self, other: SubscriptionResultData) -> bool:
+        a = self.to_dict()
+        b = other.to_dict()
+        data_a = a.pop("data")
+        data_b = b.pop("data")
+
+        # Data is a list of dicts
+        try:
+            if len(data_a) == len(data_b):
+                for (a, b) in zip(data_a, data_b):
+                    a_keys = a.keys()
+                    b_keys = b.keys()
+                    if a_keys == b_keys:
+                        for key in a_keys:
+                            if abs(a[key] - b[key]) > 1:
+                                return False
+                return True
+        except (TypeError, AttributeError):
+            pass
+        return False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "data": self.result["data"],
+            "meta": self.result["meta"],
+            "totals": self.result.get("totals"),
+            "request": self.request,
+        }
 
 
 class SubscriptionResultDecoder(Decoder[KafkaPayload, SubscriptionResultData]):
@@ -162,10 +203,14 @@ class ResultStore:
     """
 
     def __init__(self, threshold_sec: int, metrics: MetricsBackend) -> None:
-        # Maps timestamp to the count of messages received within each second
-        self.__stores: Mapping[ResultTopic, MutableMapping[int, int]] = {
-            ResultTopic.ORIGINAL: defaultdict(int),
-            ResultTopic.NEW: defaultdict(int),
+        # For each result topic, stores all the subscription IDs and their
+        # result checksums for each second.
+        self.__stores: Mapping[
+            ResultTopic,
+            MutableMapping[int, MutableMapping[str, SubscriptionResultData]],
+        ] = {
+            ResultTopic.ORIGINAL: {},
+            ResultTopic.NEW: {},
         }
 
         # The last timestamp we recorded metrics for
@@ -197,12 +242,15 @@ class ResultStore:
                 self.__timestamp_high_watermark
                 >= self.__timestamp_low_watermark + self.__threshold_sec
             ):
-                self.__metrics.increment("stale_message")
+                self.__metrics.increment("stale_message", tags={"topic": topic.value})
             return
 
         # Increment counters
         store = self.__stores[topic]
-        store[item.timestamp] += 1
+
+        if item.timestamp not in store:
+            store[item.timestamp] = {}
+        store[item.timestamp][item.identifier] = item
 
         # Record metrics and advance the low watermark
         low_watermark = self.__timestamp_high_watermark - self.__threshold_sec
@@ -238,9 +286,66 @@ class ResultStore:
             if next_ts is None:
                 return
 
-            orig_count = self.__stores[ResultTopic.ORIGINAL].pop(next_ts, 0)
-            new_count = self.__stores[ResultTopic.NEW].pop(next_ts, 0)
-            self.__metrics.increment("result_count_diff", abs(new_count - orig_count))
+            orig_results = self.__stores[ResultTopic.ORIGINAL].pop(next_ts, {})
+            new_results = self.__stores[ResultTopic.NEW].pop(next_ts, {})
+
+            orig_subscription_ids = set(orig_results.keys())
+            new_subscription_ids = set(new_results.keys())
+
+            intersection_ids = new_subscription_ids.intersection(orig_subscription_ids)
+
+            METRIC_OUTCOME_NAME = "subscription_result_outcomes"
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME,
+                len(orig_subscription_ids - intersection_ids),
+                tags={"outcome": "missing_from_new"},
+            )
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME,
+                len(new_subscription_ids - intersection_ids),
+                tags={"outcome": "missing_from_orig"},
+            )
+
+            matching_results: Set[str] = set()
+
+            for id in intersection_ids:
+                if orig_results[id] == new_results[id]:
+                    matching_results.add(id)
+
+            non_matching_results = intersection_ids - matching_results
+
+            # Group the non matching results into those that are off than one,
+            # and those more different than off by one
+            off_by_one: Set[str] = set()
+            for id in non_matching_results:
+                if new_results[id].is_off_by_one(orig_results[id]):
+                    off_by_one.add(id)
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
+            )
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME, len(off_by_one), {"outcome": "off_by_one"},
+            )
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME,
+                len(non_matching_results) - len(off_by_one),
+                {"outcome": "different_result"},
+            )
+
+            # Log up to 100 subscription results per second
+            for id in list(non_matching_results - off_by_one)[:100]:
+                logger.warning(
+                    "Encountered non matching subscription result",
+                    extra={
+                        "subscription_id": id,
+                        "original": orig_results[id].to_dict(),
+                        "new": new_results[id].to_dict(),
+                    },
+                )
 
 
 class CountResults(ProcessingStrategy[SubscriptionResultData]):

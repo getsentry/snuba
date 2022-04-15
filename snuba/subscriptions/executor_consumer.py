@@ -17,6 +17,7 @@ from typing import (
 )
 from zlib import crc32
 
+import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
@@ -33,6 +34,7 @@ from snuba.datasets.factory import get_dataset, get_dataset_name
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
 from snuba.request import Request
+from snuba.state import get_config
 from snuba.subscriptions.codecs import (
     SubscriptionScheduledTaskEncoder,
     SubscriptionTaskResultEncoder,
@@ -110,6 +112,26 @@ def build_executor_consumer(
     consumer_configuration = build_kafka_consumer_configuration(
         scheduled_topic_spec.topic, consumer_group, auto_offset_reset=auto_offset_reset,
     )
+
+    # Collect metrics from librdkafka if we have stats_collection_freq_ms set
+    # for the consumer group, or use the default.
+    stats_collection_frequency_ms = get_config(
+        f"stats_collection_freq_ms_{consumer_group}",
+        get_config("stats_collection_freq_ms", 0),
+    )
+
+    if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
+
+        def stats_callback(stats_json: str) -> None:
+            stats = rapidjson.loads(stats_json)
+            metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
+
+        consumer_configuration.update(
+            {
+                "statistics.interval.ms": stats_collection_frequency_ms,
+                "stats_cb": stats_callback,
+            }
+        )
 
     if cooperative_rebalancing is True:
         consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"

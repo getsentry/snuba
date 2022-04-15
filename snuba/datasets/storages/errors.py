@@ -2,7 +2,7 @@ from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer
-from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.message_filters import KafkaHeaderFilterWithBypass
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -38,11 +38,12 @@ storage = WritableTableStorage(
     mandatory_condition_checkers=[ProjectIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=ErrorsProcessor(promoted_tag_columns),
-        pre_filter=KafkaHeaderFilter("transaction_forwarder", "1"),
+        pre_filter=KafkaHeaderFilterWithBypass("transaction_forwarder", "1", 100),
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,
         commit_log_topic=Topic.COMMIT_LOG,
-        subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
+        # TODO: Temporarily running in Global mode for testing
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_EVENTS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),
