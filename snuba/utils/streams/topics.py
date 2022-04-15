@@ -26,6 +26,7 @@ class Topic(Enum):
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
+    DEAD_LETTER_TOPIC = "snuba-dead-letter-topic"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
