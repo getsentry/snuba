@@ -103,7 +103,17 @@ class CommitLogTickConsumer(Consumer[Tick]):
         on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
-        self.__consumer.subscribe(topics, on_assign=on_assign, on_revoke=on_revoke)
+        def revocation_callback(partitions: Sequence[Partition]) -> None:
+            for partition in partitions:
+                if partition in self.__previous_messages:
+                    del self.__previous_messages[partition]
+
+            if on_revoke is not None:
+                on_revoke(partitions)
+
+        self.__consumer.subscribe(
+            topics, on_assign=on_assign, on_revoke=revocation_callback
+        )
 
     def unsubscribe(self) -> None:
         self.__consumer.unsubscribe()
