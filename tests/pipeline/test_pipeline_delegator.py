@@ -8,7 +8,10 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.pipeline_delegator import PipelineDelegator
+from snuba.pipeline.pipeline_delegator import (
+    PipelineDelegator,
+    _is_query_copying_disallowed,
+)
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -16,9 +19,21 @@ from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
-from snuba.state import set_config
+from snuba.state import delete_config, set_config
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
+
+
+def test_query_copying_disallowed() -> None:
+    set_config(
+        "pipeline-delegator-disallow-query-copy", "subscription;subscriptions_executor"
+    )
+
+    assert _is_query_copying_disallowed("subscription") is True
+    assert _is_query_copying_disallowed("tsdb-modelid:4") is False
+    assert _is_query_copying_disallowed("subscriptions_executor") is True
+
+    delete_config("pipeline-delegator-disallow-query-copy")
 
 
 def test() -> None:

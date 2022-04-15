@@ -21,16 +21,16 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy):
         super().__init__(limit, seconds, self._load_state())
 
     def handle_invalid_messages(self, e: InvalidMessages) -> None:
-        self._add_to_redis()
+        self._add_to_redis(len(e.messages))
         super().handle_invalid_messages(e)
 
-    def _add_to_redis(self) -> None:
+    def _add_to_redis(self, num_hits: int) -> None:
         """
-        Increments the current time entry in Redis by 1
+        Increments the current time entry in Redis by number of hits
         """
         now = int(time())
         p = redis_client.pipeline()
-        p.hincrby(self.__name, str(now), 1)
+        p.hincrby(self.__name, str(now), num_hits)
         p.hkeys(self.__name)
         self._prune(now, p.execute()[1])
 
