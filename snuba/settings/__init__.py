@@ -64,8 +64,6 @@ DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
     "subscriptions.executor.latency": 0.1,
-    "subscriptions.executor.executor.latency": 0.1,
-    "subscriptions.scheduler.scheduling_latency": 0.1,
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
