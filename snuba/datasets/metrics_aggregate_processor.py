@@ -4,6 +4,7 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.events_format import enforce_retention
 from snuba.processor import (
     AggregateInsertBatch,
     MessageProcessor,
@@ -42,18 +43,6 @@ def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
     time_seconds = timestamp.timestamp()
     out_seconds = interval_seconds * (time_seconds // interval_seconds)
     return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
-
-
-def enforce_retention_days(message: Mapping[str, Any]) -> int:
-    retention_days: int = message["retention_days"]
-
-    if settings.ENFORCE_RETENTION:
-        retention_days = (
-            settings.LOWER_RETENTION_DAYS
-            if retention_days <= settings.LOWER_RETENTION_DAYS
-            else settings.DEFAULT_RETENTION_DAYS
-        )
-    return retention_days
 
 
 class MetricsAggregateProcessor(MessageProcessor, ABC):
@@ -106,7 +95,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
                 "tags.key": _array_literal(keys),
                 "tags.value": _array_literal(values),
                 **self._process_values(message),
-                "retention_days": _literal(enforce_retention_days(message)),
+                "retention_days": _literal(enforce_retention(message, timestamp)),
                 "granularity": _literal(granularity),
             }
             for granularity in self.GRANULARITIES_SECONDS
