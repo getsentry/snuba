@@ -44,6 +44,18 @@ def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
     return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
 
 
+def enforce_retention_days(message: Mapping[str, Any]) -> int:
+    retention_days: int = message["retention_days"]
+
+    if settings.ENFORCE_RETENTION:
+        retention_days = (
+            settings.LOWER_RETENTION_DAYS
+            if retention_days <= settings.LOWER_RETENTION_DAYS
+            else settings.DEFAULT_RETENTION_DAYS
+        )
+    return retention_days
+
+
 class MetricsAggregateProcessor(MessageProcessor, ABC):
     TEN_SECONDS = 10
     ONE_MINUTE = 60
@@ -94,7 +106,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
                 "tags.key": _array_literal(keys),
                 "tags.value": _array_literal(values),
                 **self._process_values(message),
-                "retention_days": _literal(message["retention_days"]),
+                "retention_days": _literal(enforce_retention_days(message)),
                 "granularity": _literal(granularity),
             }
             for granularity in self.GRANULARITIES_SECONDS

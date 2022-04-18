@@ -34,7 +34,8 @@ SET_MESSAGE_SHARED = {
     "timestamp": 1619225296,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": [324234, 345345, 456456, 567567],
-    "retention_days": 30,
+    # test enforce retention days of 30
+    "retention_days": 22,
 }
 
 COUNTER_MESSAGE_SHARED = {
@@ -45,7 +46,8 @@ COUNTER_MESSAGE_SHARED = {
     "timestamp": 1619225296,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": 123.123,
-    "retention_days": 30,
+    # test enforce retention days of 30
+    "retention_days": 23,
 }
 
 DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
@@ -57,7 +59,8 @@ DIST_MESSAGE_SHARED = {
     "timestamp": 1619225296,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": DIST_VALUES,
-    "retention_days": 30,
+    # test enforce retention days of 90
+    "retention_days": 50,
 }
 
 TEST_CASES_BUCKETS = [
@@ -117,7 +120,7 @@ TEST_CASES_BUCKETS = [
                 "tags.value": [11, 22, 33],
                 "values": [324.12, 345.23, 4564.56, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 30,
+                "retention_days": 90,
                 "partition": 1,
                 "offset": 100,
             }
@@ -275,7 +278,7 @@ TEST_CASES_AGGREGATES = [
                         _array_literal([float(len(DIST_VALUES))]),
                     ),
                 ),
-                "retention_days": _literal(30),
+                "retention_days": _literal(90),
                 "granularity": _literal(granularity),
             }
             for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
@@ -408,7 +411,7 @@ TEST_CASES_POLYMORPHIC = [
                 "metric_type": "distribution",
                 "distribution_values": [324.12, 345.23, 4564.56, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 30,
+                "retention_days": 90,
                 "partition": 1,
                 "offset": 100,
             }

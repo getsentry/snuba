@@ -9,6 +9,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     METRICS_COUNTERS_TYPE,
     METRICS_DISTRIBUTIONS_TYPE,
     METRICS_SET_TYPE,
+    enforce_retention_days,
 )
 from snuba.processor import (
     InsertBatch,
@@ -65,7 +66,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             "tags.value": values,
             **self._process_values(message),
             "materialization_version": mat_version,
-            "retention_days": message["retention_days"],
+            "retention_days": enforce_retention_days(message),
             "partition": metadata.partition,
             "offset": metadata.offset,
         }

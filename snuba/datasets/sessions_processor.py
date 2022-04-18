@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
-from snuba import environment
+from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     MAX_UINT32,
@@ -25,6 +25,18 @@ STATUS_MAPPING = {
 }
 
 metrics = MetricsWrapper(environment.metrics, "sessions.processor")
+
+
+def enforce_retention_days(message: Mapping[str, Any]) -> int:
+    retention_days: int = message["retention_days"]
+
+    if settings.ENFORCE_RETENTION:
+        retention_days = (
+            settings.LOWER_RETENTION_DAYS
+            if retention_days <= settings.LOWER_RETENTION_DAYS
+            else settings.DEFAULT_RETENTION_DAYS
+        )
+    return retention_days
 
 
 class SessionsProcessor(MessageProcessor):
@@ -67,7 +79,7 @@ class SessionsProcessor(MessageProcessor):
             "seq": message["seq"],
             "org_id": message["org_id"],
             "project_id": message["project_id"],
-            "retention_days": message["retention_days"],
+            "retention_days": enforce_retention_days(message),
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "errors": errors,
