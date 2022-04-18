@@ -463,6 +463,13 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             )
             return
 
+        # Record the amount of time between the message timestamp and when scheduling
+        # for that timestamp occurs
+        self.__metrics.timing(
+            "scheduling_latency",
+            (time.time() - datetime.timestamp(message.timestamp)) * 1000,
+        )
+
         self.__queue.append(
             message,
             deque(

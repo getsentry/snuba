@@ -271,10 +271,6 @@ def subscriptions(
         )
 
         def handler(signum: int, frame: Optional[Any]) -> None:
-            # TODO: Temporary code for debugging the shutdown sequence of the subscriptions
-            # consumer without updating arroyo or affecting other consumers.
-            logging.getLogger().setLevel(logging.DEBUG)
-
             batching_consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
