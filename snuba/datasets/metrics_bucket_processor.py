@@ -21,7 +21,6 @@ from snuba.processor import (
 from snuba.utils.streams.topics import Topic
 
 DISABLED_MATERIALIZATION_VERSION = 1
-METRICS_TOPIC = Topic.METRICS.value
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -42,16 +41,18 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             return None
 
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(message["timestamp"]))
-        assert timestamp is not None
+        if timestamp is None:
+            _raise_invalid_message(message, "Invalid timestamp")
 
         keys = []
         values = []
         tags = message["tags"]
-        assert isinstance(tags, Mapping)
+        if not isinstance(tags, Mapping):
+            _raise_invalid_message(message, "Invalid tags type")
         for key, value in sorted(tags.items()):
-            assert key.isdigit()
+            if not key.isdigit() or not isinstance(value, int):
+                _raise_invalid_message(message, "Tag key/value invalid")
             keys.append(int(key))
-            assert isinstance(value, int)
             values.append(value)
 
         mat_version = (
@@ -84,10 +85,8 @@ class SetsMetricsProcessor(MetricsBucketProcessor):
         values = message["value"]
         for value in values:
             if not isinstance(value, int):
-                raise InvalidMessages(
-                    messages=[message],
-                    reason=f"Illegal value in set. Int expected: {value}",
-                    original_topic=METRICS_TOPIC,
+                _raise_invalid_message(
+                    message, f"Illegal value in set. Int expected: {value}"
                 )
         return {"set_values": values}
 
@@ -99,10 +98,8 @@ class CounterMetricsProcessor(MetricsBucketProcessor):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         value = message["value"]
         if not isinstance(value, (int, float)):
-            raise InvalidMessages(
-                messages=[message],
-                reason=f"Illegal value for counter value. Int/Float expected: {value}",
-                original_topic=METRICS_TOPIC,
+            _raise_invalid_message(
+                message, f"Illegal value for counter value. Int/Float expected: {value}"
             )
         return {"value": value}
 
@@ -115,10 +112,8 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
         values = message["value"]
         for value in values:
             if not isinstance(value, (int, float)):
-                raise InvalidMessages(
-                    messages=[message],
-                    reason=f"Illegal value in set. Int/Float expected: {value}",
-                    original_topic=METRICS_TOPIC,
+                _raise_invalid_message(
+                    message, f"Illegal value in set. Int/Float expected: {value}"
                 )
         return {"values": values}
 
@@ -142,29 +137,32 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             values = message["value"]
             for value in values:
                 if not isinstance(value, int):
-                    raise InvalidMessages(
-                        messages=[message],
-                        reason=f"Illegal value in set. Int expected: {value}",
-                        original_topic=METRICS_TOPIC,
+                    _raise_invalid_message(
+                        message, f"Illegal value in set. Int expected: {value}"
                     )
-
             return {"metric_type": OutputType.SET.value, "set_values": values}
         elif message["type"] == METRICS_COUNTERS_TYPE:
             value = message["value"]
             if not isinstance(value, (int, float)):
-                raise InvalidMessages(
-                    messages=[message],
-                    reason=f"Illegal value for counter value. Int/Float expected: {value}",
-                    original_topic=METRICS_TOPIC,
+                _raise_invalid_message(
+                    message,
+                    f"Illegal value for counter value. Int/Float expected: {value}",
                 )
             return {"metric_type": OutputType.COUNTER.value, "count_value": value}
         else:  # METRICS_DISTRIBUTIONS_TYPE
             values = message["value"]
             for value in values:
                 if not isinstance(value, (int, float)):
-                    raise InvalidMessages(
-                        messages=[message],
-                        reason=f"Illegal value in set. Int/Float expected: {value}",
-                        original_topic=METRICS_TOPIC,
+                    _raise_invalid_message(
+                        message, f"Illegal value in set. Int/Float expected: {value}"
                     )
             return {"metric_type": OutputType.DIST.value, "distribution_values": values}
+
+
+def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
+    """
+    Pass an invalid message to the DLQ by raising `InvalidMessages` exception.
+    """
+    raise InvalidMessages(
+        messages=[str(message)], reason=reason, original_topic=Topic.METRICS.value,
+    )

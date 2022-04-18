@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from arroyo.processing.strategies.dead_letter_queue import IgnoreInvalidMessagePolicy
+from arroyo.processing.strategies.dead_letter_queue import CountInvalidMessagePolicy
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
@@ -51,8 +51,11 @@ POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
 ]
 
 
-def ignore_policy_closure() -> DeadLetterQueuePolicy:
-    return IgnoreInvalidMessagePolicy()
+def count_policy_closure() -> DeadLetterQueuePolicy:
+    """
+    Ignore up to 5 bad messages per minute before raising.
+    """
+    return CountInvalidMessagePolicy(limit=5)
 
 
 polymorphic_bucket = WritableTableStorage(
@@ -81,7 +84,7 @@ polymorphic_bucket = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_closure=count_policy_closure,
     ),
 )
 
@@ -115,7 +118,7 @@ sets_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         SetsAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_closure=count_policy_closure,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -138,7 +141,7 @@ counters_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         CounterAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_closure=count_policy_closure,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -172,7 +175,7 @@ distributions_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         DistributionsAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_closure=count_policy_closure,
     ),
     write_format=WriteFormat.VALUES,
 )
