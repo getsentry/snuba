@@ -181,6 +181,7 @@ class BaseTransactionsEntity(Entity, ABC):
             },
             selector_func=v2_selector_function,
             split_rate_limiter=True,
+            ignore_secondary_exceptions=True,
             callback_func=comparison_callback,
         )
 
