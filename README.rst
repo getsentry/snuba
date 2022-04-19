@@ -4,7 +4,7 @@
 Snuba is a service that provides a rich data model on top of Clickhouse
 together with a fast ingestion consumer and a query optimizer.
 
-Snuba was originally developed to replace a combination of Postgres and
+Snuba was originally developed to replace a combination of Postgres and  
 Redis to search and provide aggregated data on Sentry errors.
 Since then it has evolved into the current form where it supports most
 time series related Sentry features over several data sets.
