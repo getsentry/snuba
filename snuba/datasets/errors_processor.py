@@ -17,7 +17,9 @@ class ErrorsProcessor(EventsProcessorBase):
         self._promoted_tag_columns = promoted_tag_columns
 
     def extract_promoted_tags(
-        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
+        self,
+        output: MutableMapping[str, Any],
+        tags: Mapping[str, Any],
     ) -> None:
         output.update(
             {
@@ -30,7 +32,9 @@ class ErrorsProcessor(EventsProcessorBase):
         return event["data"].get("type") != "transaction"
 
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: InsertEvent,
+        self,
+        output: MutableMapping[str, Any],
+        event: InsertEvent,
     ) -> None:
         output["event_id"] = str(uuid.UUID(event["event_id"]))
 

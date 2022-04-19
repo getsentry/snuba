@@ -11,10 +11,13 @@ from snuba.environment import setup_logging, setup_sentry
 
 @click.command()
 @click.option(
-    "--clickhouse-host", help="Clickhouse server to write to.",
+    "--clickhouse-host",
+    help="Clickhouse server to write to.",
 )
 @click.option(
-    "--clickhouse-port", type=int, help="Clickhouse native port to write to.",
+    "--clickhouse-port",
+    type=int,
+    help="Clickhouse native port to write to.",
 )
 @click.option(
     "--storage",

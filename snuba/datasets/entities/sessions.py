@@ -52,7 +52,10 @@ metrics = MetricsWrapper(environment.metrics, "api.sessions")
 
 def function_column(col_name: str, function_name: str) -> ColumnToFunction:
     return ColumnToFunction(
-        None, col_name, function_name, (Column(None, None, col_name),),
+        None,
+        col_name,
+        function_name,
+        (Column(None, None, col_name),),
     )
 
 
@@ -161,7 +164,10 @@ sessions_raw_translators = TranslationMappers(
         ),
         ColumnToFunction(None, "duration_avg", "avgIf", (duration, duration_condition)),
         ColumnToFunction(
-            None, "sessions", "sumIf", (quantity, eq(seq, Literal(None, 0))),
+            None,
+            "sessions",
+            "sumIf",
+            (quantity, eq(seq, Literal(None, 0))),
         ),
         ColumnToFunction(
             None, "sessions_crashed", "sumIf", (quantity, eq(status, Literal(None, 2)))

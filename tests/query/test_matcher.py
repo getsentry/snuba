@@ -24,7 +24,12 @@ from snuba.query.matchers import (
 )
 
 test_cases = [
-    ("Literal match", Literal(None), LiteralExpr("random_alias", 1), MatchResult(),),
+    (
+        "Literal match",
+        Literal(None),
+        LiteralExpr("random_alias", 1),
+        MatchResult(),
+    ),
     (
         "Literal match with none type",
         Literal(Any(type(None))),
@@ -64,7 +69,8 @@ test_cases = [
     (
         "Matches a column with all fields",
         Column(
-            Param("table_name", AnyOptionalString()), Param("column_name", Any(str)),
+            Param("table_name", AnyOptionalString()),
+            Param("column_name", Any(str)),
         ),
         ColumnExpr("alias", "table_name", "test_col"),
         MatchResult({"column_name": "test_col", "table_name": "table_name"}),
@@ -125,7 +131,11 @@ test_cases = [
     (
         "Does not match any Column",
         FunctionCall(None, (Param("p1", Any(ColumnExpr)),)),
-        FunctionCallExpr("irrelevant", "irrelevant", (LiteralExpr(None, "str"),),),
+        FunctionCallExpr(
+            "irrelevant",
+            "irrelevant",
+            (LiteralExpr(None, "str"),),
+        ),
         None,
     ),
     (
@@ -239,7 +249,9 @@ test_cases = [
             with_optionals=True,
         ),
         FunctionCallExpr(
-            "irrelevant", "irrelevant", (ColumnExpr(None, None, "c_name1"),),
+            "irrelevant",
+            "irrelevant",
+            (ColumnExpr(None, None, "c_name1"),),
         ),
         None,
     ),

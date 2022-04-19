@@ -234,7 +234,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(
-            name, list2cmdline(cmd), quiet=False,
+            name,
+            list2cmdline(cmd),
+            quiet=False,
         )
 
     manager.loop()

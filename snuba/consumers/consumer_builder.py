@@ -7,6 +7,9 @@ from arroyo import Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
+from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
+    DeadLetterQueuePolicy,
+)
 from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
@@ -201,7 +204,8 @@ class ConsumerBuilder:
 
         if self.commit_log_topic is None:
             consumer = KafkaConsumer(
-                configuration, commit_retry_policy=self.__commit_retry_policy,
+                configuration,
+                commit_retry_policy=self.__commit_retry_policy,
             )
         else:
             consumer = KafkaConsumerWithCommitLog(
@@ -226,12 +230,21 @@ class ConsumerBuilder:
         if processor_wrapper is not None:
             processor = processor_wrapper(processor)
 
+        dead_letter_queue_policy: Optional[DeadLetterQueuePolicy] = None
+        dead_letter_queue_policy_closure = (
+            stream_loader.get_dead_letter_queue_policy_closure()
+        )
+        if dead_letter_queue_policy_closure is not None:
+            # The DLQ Policy is instantiated here so it gets the correct
+            # metrics singleton in the init function of the policy
+            dead_letter_queue_policy = dead_letter_queue_policy_closure()
+
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload
         ] = KafkaConsumerStrategyFactory(
-            stream_loader.get_pre_filter(),
-            functools.partial(process_message, processor),
-            build_batch_writer(
+            prefilter=stream_loader.get_pre_filter(),
+            process_message=functools.partial(process_message, processor),
+            collector=build_batch_writer(
                 table_writer,
                 metrics=self.metrics,
                 replacements_producer=(
@@ -253,12 +266,14 @@ class ConsumerBuilder:
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
+            dead_letter_queue_policy=dead_letter_queue_policy,
             parallel_collect=self.__parallel_collect,
         )
 
         if self.__profile_path is not None:
             strategy_factory = ProcessingStrategyProfilerWrapperFactory(
-                strategy_factory, self.__profile_path,
+                strategy_factory,
+                self.__profile_path,
             )
 
         return strategy_factory

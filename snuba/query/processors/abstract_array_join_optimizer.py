@@ -27,7 +27,10 @@ from snuba.query.matchers import (
 
 class AbstractArrayJoinOptimizer(QueryProcessor):
     def __init__(
-        self, column_name: str, key_names: Sequence[str], val_names: Sequence[str],
+        self,
+        column_name: str,
+        key_names: Sequence[str],
+        val_names: Sequence[str],
     ):
         assert key_names, "key_names cannot be empty"
         assert val_names, "val_names cannot be empty"
@@ -110,7 +113,8 @@ def find_pattern(query: Query, pattern: FunctionCall) -> bool:
 
 def _array_join_pattern(column_name: str) -> FunctionCall:
     return FunctionCall(
-        String("arrayJoin"), (Column(column_name=String(column_name)),),
+        String("arrayJoin"),
+        (Column(column_name=String(column_name)),),
     )
 
 

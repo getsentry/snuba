@@ -27,7 +27,13 @@ class HexIntColumnProcessor(BaseTypeConverter):
             return FunctionCall(
                 exp.alias,
                 "lower",
-                (FunctionCall(None, "hex", (Column(None, None, exp.column_name),),),),
+                (
+                    FunctionCall(
+                        None,
+                        "hex",
+                        (Column(None, None, exp.column_name),),
+                    ),
+                ),
             )
 
         return exp

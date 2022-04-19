@@ -14,7 +14,6 @@ if TYPE_CHECKING:
         marks_ms: Mapping[str, int]
         tags: Tags
 
-
 else:
     from typing import Any
 

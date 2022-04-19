@@ -72,7 +72,11 @@ def test_apdex_format_expressions() -> None:
                             Literal(None, 2),
                         ),
                     ),
-                    FunctionCall(None, "count", (),),
+                    FunctionCall(
+                        None,
+                        "count",
+                        (),
+                    ),
                     "perf",
                 ),
             ),

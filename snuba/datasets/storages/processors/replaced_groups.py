@@ -70,14 +70,16 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         if flags.needs_final:
             tags["cause"] = "final_flag"
             metrics.increment(
-                name=FINAL_METRIC, tags=tags,
+                name=FINAL_METRIC,
+                tags=tags,
             )
             set_final = True
         elif flags.group_ids_to_exclude:
             # If the number of groups to exclude exceeds our limit, the query
             # should just use final instead of the exclusion set.
             max_group_ids_exclude = get_config(
-                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+                "max_group_ids_exclude",
+                settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
             )
             assert isinstance(max_group_ids_exclude, int)
             groups_to_exclude = self._groups_to_exclude(
@@ -86,7 +88,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if len(groups_to_exclude) > max_group_ids_exclude:
                 tags["cause"] = "max_groups"
                 metrics.increment(
-                    name=FINAL_METRIC, tags=tags,
+                    name=FINAL_METRIC,
+                    tags=tags,
                 )
                 set_final = True
             elif groups_to_exclude:
@@ -126,7 +129,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         query.set_from_clause(replace(query.get_from_clause(), final=final))
 
     def _query_overlaps_replacements(
-        self, query: Query, latest_replacement_time: Optional[datetime],
+        self,
+        query: Query,
+        latest_replacement_time: Optional[datetime],
     ) -> bool:
         """
         Given a Query and the latest replacement time for any project

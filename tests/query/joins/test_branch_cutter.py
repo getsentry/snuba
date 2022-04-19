@@ -237,7 +237,10 @@ TEST_CASES = [
                 FunctionCall(
                     "_snuba_g",
                     "g",
-                    (Column("_snuba_col", "events", "column"), Literal(None, "val"),),
+                    (
+                        Column("_snuba_col", "events", "column"),
+                        Literal(None, "val"),
+                    ),
                 ),
                 Column("_snuba_col2", "groups", "column2"),
             ),
@@ -256,7 +259,10 @@ TEST_CASES = [
                     FunctionCall(
                         "_snuba_g",
                         "g",
-                        (Column("_snuba_col", None, "column"), Literal(None, "val"),),
+                        (
+                            Column("_snuba_col", None, "column"),
+                            Literal(None, "val"),
+                        ),
                     )
                 },
                 "groups": {Column("_snuba_col2", None, "column2")},
@@ -276,7 +282,10 @@ TEST_CASES = [
                     FunctionCall(
                         "_snuba_g",
                         "g",
-                        (Column("_snuba_col", None, "column"), Literal(None, "val"),),
+                        (
+                            Column("_snuba_col", None, "column"),
+                            Literal(None, "val"),
+                        ),
                     )
                 },
                 "groups": {Column("_snuba_col2", None, "column2")},
@@ -421,7 +430,10 @@ TEST_CASES = [
                     FunctionCall(
                         "_snuba_gen_1",
                         "g",
-                        (Column("_snuba_col", None, "column"), Literal(None, "val"),),
+                        (
+                            Column("_snuba_col", None, "column"),
+                            Literal(None, "val"),
+                        ),
                     )
                 },
                 "groups": {Column("_snuba_gen_2", None, "column2")},
@@ -441,7 +453,10 @@ TEST_CASES = [
                     FunctionCall(
                         "_snuba_gen_1",
                         "g",
-                        (Column("_snuba_col", None, "column"), Literal(None, "val"),),
+                        (
+                            Column("_snuba_col", None, "column"),
+                            Literal(None, "val"),
+                        ),
                     )
                 },
                 "groups": {Column("_snuba_gen_2", None, "column2")},
@@ -719,8 +734,16 @@ TEST_CASES = [
             ),
             cut_branches={
                 "events": {
-                    Column("_snuba_events.group_id", None, "group_id",),
-                    Column("_snuba_events.timestamp", None, "timestamp",),
+                    Column(
+                        "_snuba_events.group_id",
+                        None,
+                        "group_id",
+                    ),
+                    Column(
+                        "_snuba_events.timestamp",
+                        None,
+                        "timestamp",
+                    ),
                 }
             },
         ),

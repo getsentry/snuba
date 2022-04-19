@@ -58,7 +58,9 @@ class TestSubscriptionScheduler:
         tick = self.build_tick(start, end)
 
         store = RedisSubscriptionDataStore(
-            redis_client, self.entity_key, self.partition_id,
+            redis_client,
+            self.entity_key,
+            self.partition_id,
         )
         for subscription in subscriptions:
             store.create(subscription.identifier.uuid, subscription.data)

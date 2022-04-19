@@ -39,7 +39,9 @@ TEST_CASES = [
         "sum(value)",
         EntityKey.METRICS_COUNTERS,
         FunctionCall(
-            "_snuba_sum(value)", "sumMerge", (Column("_snuba_value", None, "value"),),
+            "_snuba_sum(value)",
+            "sumMerge",
+            (Column("_snuba_value", None, "value"),),
         ),
         id="Test counters entity",
     ),
@@ -61,7 +63,11 @@ TEST_CASES = [
         "metrics_distributions",
         "max(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
-        FunctionCall("_snuba_max(value)", "maxMerge", (Column(None, None, "max"),),),
+        FunctionCall(
+            "_snuba_max(value)",
+            "maxMerge",
+            (Column(None, None, "max"),),
+        ),
         id="Test distribution max",
     ),
     pytest.param(
@@ -71,7 +77,10 @@ TEST_CASES = [
         FunctionCall(
             "_snuba_maxIf(value, cond())",
             "maxMergeIf",
-            (Column(None, None, "max"), FunctionCall(None, "cond", tuple()),),
+            (
+                Column(None, None, "max"),
+                FunctionCall(None, "cond", tuple()),
+            ),
         ),
         id="Test distribution max with condition",
     ),
@@ -79,7 +88,11 @@ TEST_CASES = [
         "metrics_distributions",
         "min(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
-        FunctionCall("_snuba_min(value)", "minMerge", (Column(None, None, "min"),),),
+        FunctionCall(
+            "_snuba_min(value)",
+            "minMerge",
+            (Column(None, None, "min"),),
+        ),
         id="Test distribution min",
     ),
     pytest.param(
@@ -89,7 +102,10 @@ TEST_CASES = [
         FunctionCall(
             "_snuba_minIf(value, cond())",
             "minMergeIf",
-            (Column(None, None, "min"), FunctionCall(None, "cond", tuple()),),
+            (
+                Column(None, None, "min"),
+                FunctionCall(None, "cond", tuple()),
+            ),
         ),
         id="Test distribution min with condition",
     ),
@@ -97,7 +113,11 @@ TEST_CASES = [
         "metrics_distributions",
         "avg(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
-        FunctionCall("_snuba_avg(value)", "avgMerge", (Column(None, None, "avg"),),),
+        FunctionCall(
+            "_snuba_avg(value)",
+            "avgMerge",
+            (Column(None, None, "avg"),),
+        ),
         id="Test distribution avg",
     ),
     pytest.param(
@@ -107,7 +127,10 @@ TEST_CASES = [
         FunctionCall(
             "_snuba_avgIf(value, cond())",
             "avgMergeIf",
-            (Column(None, None, "avg"), FunctionCall(None, "cond", tuple()),),
+            (
+                Column(None, None, "avg"),
+                FunctionCall(None, "cond", tuple()),
+            ),
         ),
         id="Test distribution avg with condition",
     ),
@@ -116,7 +139,9 @@ TEST_CASES = [
         "count(value)",
         EntityKey.METRICS_DISTRIBUTIONS,
         FunctionCall(
-            "_snuba_count(value)", "countMerge", (Column(None, None, "count"),),
+            "_snuba_count(value)",
+            "countMerge",
+            (Column(None, None, "count"),),
         ),
         id="Test distribution count",
     ),
@@ -235,9 +260,13 @@ def test_metrics_processing(
         reader: Reader,
     ) -> QueryResult:
         assert query.get_selected_columns() == [
-            SelectedExpression("org_id", Column("_snuba_org_id", None, "org_id"),),
             SelectedExpression(
-                "project_id", Column("_snuba_project_id", None, "project_id"),
+                "org_id",
+                Column("_snuba_org_id", None, "org_id"),
+            ),
+            SelectedExpression(
+                "project_id",
+                Column("_snuba_project_id", None, "project_id"),
             ),
             SelectedExpression(
                 "tags[10]",
@@ -254,7 +283,10 @@ def test_metrics_processing(
                     ),
                 ),
             ),
-            SelectedExpression(column_name, translated_value,),
+            SelectedExpression(
+                column_name,
+                translated_value,
+            ),
         ]
         return QueryResult(
             result={"meta": [], "data": [], "totals": {}},

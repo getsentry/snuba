@@ -149,5 +149,8 @@ class TracingQueryFormatter(
             f"{node.join_type.name.upper()} JOIN",
             *_indent_str_list(node.right_node.accept(self), 1),
             "ON",
-            *_indent_str_list(on_list, 1,),
+            *_indent_str_list(
+                on_list,
+                1,
+            ),
         ]

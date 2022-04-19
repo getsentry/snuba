@@ -16,7 +16,8 @@ from snuba.request.request_settings import RequestSettings
 CONDITION_PATTERN = condition_pattern(
     {ConditionFunctions.EQ, ConditionFunctions.NEQ},
     FunctionCallPattern(
-        String("ifNull"), (mapping_pattern, LiteralPattern(String(""))),
+        String("ifNull"),
+        (mapping_pattern, LiteralPattern(String(""))),
     ),
     LiteralPattern(String("")),
     commutative=False,

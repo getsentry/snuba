@@ -1,5 +1,10 @@
 from typing import Sequence
 
+from arroyo.processing.strategies.dead_letter_queue import IgnoreInvalidMessagePolicy
+from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
+    DeadLetterQueuePolicy,
+)
+
 from snuba.clickhouse.columns import (
     AggregateFunction,
     Array,
@@ -45,6 +50,11 @@ POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
     Column("offset", UInt(64)),
 ]
 
+
+def ignore_policy_closure() -> DeadLetterQueuePolicy:
+    return IgnoreInvalidMessagePolicy()
+
+
 polymorphic_bucket = WritableTableStorage(
     storage_key=StorageKey.METRICS_RAW,
     storage_set_key=StorageSetKey.METRICS,
@@ -71,6 +81,7 @@ polymorphic_bucket = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
+        dead_letter_queue_policy_closure=ignore_policy_closure,
     ),
 )
 
@@ -102,7 +113,9 @@ sets_storage = WritableTableStorage(
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        SetsAggregateProcessor(), default_topic=Topic.METRICS,
+        SetsAggregateProcessor(),
+        default_topic=Topic.METRICS,
+        dead_letter_queue_policy_closure=ignore_policy_closure,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -123,7 +136,9 @@ counters_storage = WritableTableStorage(
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        CounterAggregateProcessor(), default_topic=Topic.METRICS,
+        CounterAggregateProcessor(),
+        default_topic=Topic.METRICS,
+        dead_letter_queue_policy_closure=ignore_policy_closure,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -155,7 +170,9 @@ distributions_storage = WritableTableStorage(
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        DistributionsAggregateProcessor(), default_topic=Topic.METRICS,
+        DistributionsAggregateProcessor(),
+        default_topic=Topic.METRICS,
+        dead_letter_queue_policy_closure=ignore_policy_closure,
     ),
     write_format=WriteFormat.VALUES,
 )

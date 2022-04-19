@@ -28,10 +28,16 @@ def test_events_column_format_expressions() -> None:
                 FunctionCall(
                     "the_group_id",
                     "nullIf",
-                    (Column(None, None, "group_id"), Literal(None, 0),),
+                    (
+                        Column(None, None, "group_id"),
+                        Literal(None, 0),
+                    ),
                 ),
             ),
-            SelectedExpression("the_message", Column("the_message", None, "message"),),
+            SelectedExpression(
+                "the_message",
+                Column("the_message", None, "message"),
+            ),
         ],
     )
 

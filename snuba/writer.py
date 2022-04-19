@@ -82,7 +82,10 @@ class MockBatchWriter(BatchWriter[bytes]):
     """
 
     def __init__(
-        self, storage_key: StorageKey, avg_write_latency: int, std_deviation: int,
+        self,
+        storage_key: StorageKey,
+        avg_write_latency: int,
+        std_deviation: int,
     ) -> None:
         self.__latency_seconds = (avg_write_latency) / 1000
         self.__latency_deviation_ms = std_deviation

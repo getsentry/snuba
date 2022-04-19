@@ -253,7 +253,8 @@ class TestMetricsApiSets(BaseApiTest):
                 }
 
                 processed = processor.process_message(
-                    msg, KafkaMessageMetadata(0, 0, self.base_time),
+                    msg,
+                    KafkaMessageMetadata(0, 0, self.base_time),
                 )
                 if processed:
                     events.append(processed)
@@ -351,7 +352,8 @@ class TestMetricsApiDistributions(BaseApiTest):
                 }
 
                 processed = processor.process_message(
-                    msg, KafkaMessageMetadata(0, 0, self.base_time),
+                    msg,
+                    KafkaMessageMetadata(0, 0, self.base_time),
                 )
                 if processed:
                     events.append(processed)
@@ -386,9 +388,9 @@ class TestMetricsApiDistributions(BaseApiTest):
         assert aggregation["project_id"] == self.project_ids[0]
         assert aggregation["quants"] == [
             approx(50, rel=1),
-            approx(90),
-            approx(95),
-            approx(99),
+            approx(90, rel=1),
+            approx(95, rel=1),
+            approx(99, rel=1),
         ]
 
     def test_dists_min_max_avg_one_day_granularity(self) -> None:
