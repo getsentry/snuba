@@ -1,3 +1,8 @@
+from arroyo.processing.strategies.dead_letter_queue import (
+    CountInvalidMessagePolicy,
+    DeadLetterQueuePolicy,
+)
+
 from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
@@ -81,6 +86,11 @@ materialized_view_schema = TableSchema(
     columns=materialized_view_columns,
 )
 
+
+def count_policy_closure() -> DeadLetterQueuePolicy:
+    return CountInvalidMessagePolicy(limit=5)
+
+
 raw_storage = WritableTableStorage(
     storage_key=StorageKey.OUTCOMES_RAW,
     storage_set_key=StorageSetKey.OUTCOMES,
@@ -90,6 +100,7 @@ raw_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=OutcomesProcessor(),
         default_topic=Topic.OUTCOMES,
+        dead_letter_queue_policy_closure=count_policy_closure,
     ),
 )
 
