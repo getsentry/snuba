@@ -230,7 +230,7 @@ class ProfilesLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.profiles")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_profiles"]
+        return ["0001_profiles", "0002_profiles_add_index_for_profile_id"]
 
 
 _REGISTERED_GROUPS = {
