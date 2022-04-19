@@ -381,9 +381,10 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
             or force is True
         ):
-            self.__commit(self.__commit_data)
-            self.__last_committed = now
-            self.__commit_data = {}
+            if self.__commit_data:
+                self.__commit(self.__commit_data)
+                self.__last_committed = now
+                self.__commit_data = {}
 
     def poll(self) -> None:
         while self.__queue:
