@@ -10,10 +10,13 @@ from snuba.environment import setup_logging, setup_sentry
 
 @click.command()
 @click.option(
-    "--clickhouse-host", help="Clickhouse server to write to.",
+    "--clickhouse-host",
+    help="Clickhouse server to write to.",
 )
 @click.option(
-    "--clickhouse-port", type=int, help="Clickhouse native port to write to.",
+    "--clickhouse-port",
+    type=int,
+    help="Clickhouse native port to write to.",
 )
 @click.option(
     "--dry-run",
@@ -49,7 +52,10 @@ def cleanup(
 
     storage = get_writable_storage(StorageKey(storage_name))
 
-    (clickhouse_user, clickhouse_password,) = storage.get_cluster().get_credentials()
+    (
+        clickhouse_user,
+        clickhouse_password,
+    ) = storage.get_cluster().get_credentials()
 
     cluster = storage.get_cluster()
     database = cluster.get_database()

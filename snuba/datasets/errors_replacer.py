@@ -368,7 +368,8 @@ class ProjectsQueryFlags:
         ]
 
         ProjectsQueryFlags._remove_stale_and_load_new_sorted_set_data(
-            p, [groups_key for groups_key, _ in exclude_groups_keys_and_types],
+            p,
+            [groups_key for groups_key, _ in exclude_groups_keys_and_types],
         )
 
         for _, needs_final_type_key in needs_final_keys_and_type_keys:
@@ -381,7 +382,10 @@ class ProjectsQueryFlags:
         # retrieve the latest timestamp for any exclude groups replacement
         for exclude_groups_key, _ in exclude_groups_keys_and_types:
             p.zrevrange(
-                exclude_groups_key, 0, 0, withscores=True,
+                exclude_groups_key,
+                0,
+                0,
+                withscores=True,
             )
 
     @staticmethod
@@ -732,7 +736,12 @@ def process_replace_group(
     query_time_flags = (None, project_id)
 
     return _build_group_replacement(
-        message, project_id, full_where, query_args, query_time_flags, all_columns,
+        message,
+        project_id,
+        full_where,
+        query_args,
+        query_time_flags,
+        all_columns,
     )
 
 
@@ -902,7 +911,12 @@ def process_merge(
     query_time_flags = (EXCLUDE_GROUPS, project_id, previous_group_ids)
 
     return _build_group_replacement(
-        message, project_id, where, query_args, query_time_flags, all_columns,
+        message,
+        project_id,
+        where,
+        query_args,
+        query_time_flags,
+        all_columns,
     )
 
 

@@ -108,7 +108,10 @@ def __is_set_condition(exp: Expression, operator: str) -> bool:
     return False
 
 
-def in_condition(lhs: Expression, rhs: Sequence[Literal],) -> Expression:
+def in_condition(
+    lhs: Expression,
+    rhs: Sequence[Literal],
+) -> Expression:
     return __set_condition(ConditionFunctions.IN, lhs, rhs)
 
 
@@ -120,8 +123,15 @@ def is_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern:
     return __set_condition_pattern(lhs, ConditionFunctions.IN)
 
 
-def not_in_condition(lhs: Expression, rhs: Sequence[Literal],) -> Expression:
-    return __set_condition(ConditionFunctions.NOT_IN, lhs, rhs,)
+def not_in_condition(
+    lhs: Expression,
+    rhs: Sequence[Literal],
+) -> Expression:
+    return __set_condition(
+        ConditionFunctions.NOT_IN,
+        lhs,
+        rhs,
+    )
 
 
 def is_not_in_condition(exp: Expression) -> bool:

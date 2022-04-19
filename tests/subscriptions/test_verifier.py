@@ -59,7 +59,10 @@ def make_encoded_subscription_result(
             timestamp,
             SubscriptionWithMetadata(
                 EntityKey.EVENTS,
-                Subscription(subscription_identifier, subscription_data,),
+                Subscription(
+                    subscription_identifier,
+                    subscription_data,
+                ),
                 5,
             ),
         ),

@@ -45,7 +45,10 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
 
     @with_span()
     def execute(
-        self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
+        self,
+        query: Query,
+        request_settings: RequestSettings,
+        runner: QueryRunner,
     ) -> QueryResult:
         def process_and_run_query(
             query: Query, request_settings: RequestSettings

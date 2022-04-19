@@ -37,11 +37,11 @@ class NotificationBase(ABC):
         timestamp: Optional[str] = None,
     ) -> None:
         """
-            Given
-            action: past-tense verb: 'created', 'removed', 'sent' etc.
-            data: any extra data that is need to notify
-            user: email address or other user identification of person taking action (could also be "auto")
-            timestamp: time the action occurred (or can be generated when notify is called)
+        Given
+        action: past-tense verb: 'created', 'removed', 'sent' etc.
+        data: any extra data that is need to notify
+        user: email address or other user identification of person taking action (could also be "auto")
+        timestamp: time the action occurred (or can be generated when notify is called)
         """
         raise NotImplementedError()
 
@@ -73,21 +73,21 @@ class RuntimeConfigLogClient(NotificationBase):
         timestamp: Optional[str] = None,
     ) -> None:
         """
-            Data has the runtime option, its old value, and new value.
-            If it's being removed, the new value will be `None`. Likewise
-            if it's being added, the old value will be `None`.
+        Data has the runtime option, its old value, and new value.
+        If it's being removed, the new value will be `None`. Likewise
+        if it's being added, the old value will be `None`.
 
-            example:
-                {
-                    "option": "enable_events_read_only_table",
-                    "old": 0, // or None if added
-                    "new": 1, // or None if removed
-                }
+        example:
+            {
+                "option": "enable_events_read_only_table",
+                "old": 0, // or None if added
+                "new": 1, // or None if removed
+            }
 
-            The text generated will look like:
-              * meredith@sentry.io added enable_events_read_only_table (value:1)
-              * meredith@sentry.io removed enable_events_read_only_table (value:0)
-              * meredith@sentry.io updated enable_events_read_only_table (from value:0 to value:1)
+        The text generated will look like:
+          * meredith@sentry.io added enable_events_read_only_table (value:1)
+          * meredith@sentry.io removed enable_events_read_only_table (value:0)
+          * meredith@sentry.io updated enable_events_read_only_table (from value:0 to value:1)
 
         """
 
@@ -112,16 +112,16 @@ class RuntimeConfigSlackClient(NotificationBase):
         timestamp: Optional[str] = None,
     ) -> None:
         """
-            Data has the runtime option, its old value, and new value.
-            If it's being removed, the new value will be `None`. Likewise
-            if it's being added, the old value will be `None`.
+        Data has the runtime option, its old value, and new value.
+        If it's being removed, the new value will be `None`. Likewise
+        if it's being added, the old value will be `None`.
 
-            example:
-                {
-                    "option": "enable_events_read_only_table",
-                    "old": 0, // or None if added
-                    "new": 1, // or None if removed
-                }
+        example:
+            {
+                "option": "enable_events_read_only_table",
+                "old": 0, // or None if added
+                "new": 1, // or None if removed
+            }
 
         """
         if not timestamp:

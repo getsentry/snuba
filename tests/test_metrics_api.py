@@ -253,7 +253,8 @@ class TestMetricsApiSets(BaseApiTest):
                 }
 
                 processed = processor.process_message(
-                    msg, KafkaMessageMetadata(0, 0, self.base_time),
+                    msg,
+                    KafkaMessageMetadata(0, 0, self.base_time),
                 )
                 if processed:
                     events.append(processed)
@@ -351,7 +352,8 @@ class TestMetricsApiDistributions(BaseApiTest):
                 }
 
                 processed = processor.process_message(
-                    msg, KafkaMessageMetadata(0, 0, self.base_time),
+                    msg,
+                    KafkaMessageMetadata(0, 0, self.base_time),
                 )
                 if processed:
                     events.append(processed)

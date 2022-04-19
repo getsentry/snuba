@@ -66,10 +66,14 @@ errors_translators = TranslationMappers(
             "coalesce",
             (
                 FunctionCall(
-                    None, "IPv4NumToString", (Column(None, None, "ip_address_v4"),),
+                    None,
+                    "IPv4NumToString",
+                    (Column(None, None, "ip_address_v4"),),
                 ),
                 FunctionCall(
-                    None, "IPv6NumToString", (Column(None, None, "ip_address_v6"),),
+                    None,
+                    "IPv6NumToString",
+                    (Column(None, None, "ip_address_v6"),),
                 ),
             ),
         ),

@@ -1,15 +1,15 @@
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.type_condition_optimizer import TypeConditionOptimizer
 from snuba.query.conditions import (
+    BooleanFunctions,
     ConditionFunctions,
     binary_condition,
-    BooleanFunctions,
 )
 from snuba.query.data_source.simple import Table
-from snuba.datasets.storages.type_condition_optimizer import TypeConditionOptimizer
-from snuba.request.request_settings import HTTPRequestSettings
 from snuba.query.expressions import Column, Literal
-from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_type_condition_optimizer() -> None:

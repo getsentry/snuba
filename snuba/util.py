@@ -256,8 +256,7 @@ def create_metrics(
 
 
 def with_span(op: str = "function") -> Callable[[F], F]:
-    """ Wraps a function call in a Sentry AM span
-    """
+    """Wraps a function call in a Sentry AM span"""
 
     def decorator(func: F) -> F:
         frame_info = inspect.stack()[1]

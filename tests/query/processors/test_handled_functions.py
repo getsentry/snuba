@@ -24,7 +24,12 @@ def test_handled_processor() -> None:
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
             SelectedExpression(
-                "result", FunctionCall("result", "isHandled", tuple(),),
+                "result",
+                FunctionCall(
+                    "result",
+                    "isHandled",
+                    tuple(),
+                ),
             ),
         ],
     )
@@ -81,7 +86,11 @@ def test_handled_processor_invalid() -> None:
         selected_columns=[
             SelectedExpression(
                 "result",
-                FunctionCall("result", "isHandled", (Column(None, None, "type"),),),
+                FunctionCall(
+                    "result",
+                    "isHandled",
+                    (Column(None, None, "type"),),
+                ),
             ),
         ],
     )
@@ -99,7 +108,12 @@ def test_not_handled_processor() -> None:
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
             SelectedExpression(
-                "result", FunctionCall("result", "notHandled", tuple(),),
+                "result",
+                FunctionCall(
+                    "result",
+                    "notHandled",
+                    tuple(),
+                ),
             ),
         ],
     )
@@ -157,7 +171,11 @@ def test_not_handled_processor_invalid() -> None:
         selected_columns=[
             SelectedExpression(
                 "result",
-                FunctionCall("result", "notHandled", (Column(None, None, "type"),),),
+                FunctionCall(
+                    "result",
+                    "notHandled",
+                    (Column(None, None, "type"),),
+                ),
             ),
         ],
     )

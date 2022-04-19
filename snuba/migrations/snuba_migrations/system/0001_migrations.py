@@ -10,7 +10,10 @@ columns: Sequence[Column[Modifiers]] = [
     Column("group", String()),
     Column("migration_id", String()),
     Column("timestamp", DateTime()),
-    Column("status", Enum([("completed", 0), ("in_progress", 1), ("not_started", 2)]),),
+    Column(
+        "status",
+        Enum([("completed", 0), ("in_progress", 1), ("not_started", 2)]),
+    ),
     Column("version", UInt(64, Modifiers(default="1"))),
 ]
 
@@ -46,7 +49,8 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_local",
+                storage_set=StorageSetKey.MIGRATIONS,
+                table_name="migrations_local",
             )
         ]
 
