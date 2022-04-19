@@ -337,10 +337,12 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
                 meta,
             ),
             processor.process_message(
-                {**template, "status": "exited", "quantity": 5}, meta,
+                {**template, "status": "exited", "quantity": 5},
+                meta,
             ),
             processor.process_message(
-                {**template, "status": "errored", "errors": 1, "quantity": 2}, meta,
+                {**template, "status": "errored", "errors": 1, "quantity": 2},
+                meta,
             ),
             processor.process_message(
                 {
