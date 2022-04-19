@@ -13,6 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+      - name: Internal github app token
+        id: token
+        uses: getsentry/action-github-app-token@v1
+        continue-on-error: true
+        with:
+          app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
+          private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - uses: actions/setup-python@v2
         with:
           python-version: 3.8
@@ -40,6 +47,13 @@ jobs:
         # and we have merged to it
         run: |
           SKIP=no-commit-to-branch pre-commit run --files ${{ steps.files.outputs.all_files }}
+
+      # If working tree is dirty, commit and update if we have a token
+      - name: Apply any pre-commit fixed files
+        if: steps.token.outcome == 'success' && github.ref != 'refs/heads/master' && always()
+        uses: getsentry/action-github-commit@main
+        with:
+          github-token: ${{ steps.token.outputs.token }}
 
   typing:
     name: "mypy typing"
