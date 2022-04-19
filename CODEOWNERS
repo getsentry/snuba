@@ -13,3 +13,5 @@
 /cloudbuild.yaml                @getsentry/releases
 /scripts/bump-version.sh        @getsentry/releases
 /scripts/post-release.sh        @getsentry/releases
+
+/snuba/migrations/snuba_migrations/profiles @getsentry/profiling
