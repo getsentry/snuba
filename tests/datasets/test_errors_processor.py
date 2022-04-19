@@ -4,7 +4,6 @@ from uuid import UUID
 
 import pytz
 
-from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.events_processor_base import InsertEvent
@@ -23,7 +22,7 @@ def test_error_processor() -> None:
         InsertEvent(
             {
                 "organization_id": 1,
-                "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                "retention_days": 58,
                 "event_id": "dcb9d002cac548c795d1c9adbfc68040",
                 "group_id": 100,
                 "project_id": 300688,
