@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -50,6 +50,7 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     GranularityValidator,
+    QueryValidator,
 )
 from snuba.request.request_settings import RequestSettings
 
@@ -91,7 +92,7 @@ class MetricsEntity(Entity, ABC):
         if writable_storage:
             storages.append(writable_storage)
 
-        validators = []
+        validators: List[QueryValidator] = []
         if not allow_cross_org:
             validators.append(EntityRequiredColumnValidator({"org_id", "project_id"}))
         validators.append(GranularityValidator(minimum=10))
