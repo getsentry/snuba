@@ -1,15 +1,8 @@
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.matchers import (
-    Column,
-    FunctionCall,
-    Literal,
-    String,
-)
-
+from snuba.query.matchers import Column, FunctionCall, Literal, String
 from snuba.request.request_settings import RequestSettings
 
 

@@ -70,7 +70,10 @@ class RolloutSelector:
         self.__config_prefix = config_prefix
 
     def __is_query_rolled_out(
-        self, referrer: str, config_referrer_prefix: str, general_rollout_config: str,
+        self,
+        referrer: str,
+        config_referrer_prefix: str,
+        general_rollout_config: str,
     ) -> bool:
         rollout_percentage = get_config(
             f"rollout_upgraded_{self.__config_prefix}_{config_referrer_prefix}_{referrer}",
@@ -83,11 +86,15 @@ class RolloutSelector:
 
     def choose(self, referrer: str) -> Choice:
         trust_secondary = self.__is_query_rolled_out(
-            referrer, "trust", f"rollout_upgraded_{self.__config_prefix}_trust",
+            referrer,
+            "trust",
+            f"rollout_upgraded_{self.__config_prefix}_trust",
         )
 
         execute_both = self.__is_query_rolled_out(
-            referrer, "execute", f"rollout_upgraded_{self.__config_prefix}_execute",
+            referrer,
+            "execute",
+            f"rollout_upgraded_{self.__config_prefix}_execute",
         )
 
         primary = (
@@ -172,12 +179,18 @@ def comparison_callback(
     if score >= 0.99:
         # This is just a sanity check to ensure the algorithm makes sense
         if random() < cast(float, get_config("upgrade_log_perfect_match", 0.0)):
-            log("Pipeline delegator perfect match",)
+            log(
+                "Pipeline delegator perfect match",
+            )
     elif score >= 0.75:
         if random() < cast(float, get_config("upgrade_log_avg_match", 0.0)):
-            log("Pipeline delegator average match",)
+            log(
+                "Pipeline delegator average match",
+            )
     elif random() < cast(float, get_config("upgrade_log_low_similarity", 0.0)):
-        log("Pipeline delegator low similarity",)
+        log(
+            "Pipeline delegator low similarity",
+        )
 
 
 def calculate_score(

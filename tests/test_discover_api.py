@@ -47,7 +47,8 @@ class TestDiscoverApi(BaseApiTest):
         write_unprocessed_events(self.events_storage, [self.event])
 
         write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [get_raw_transaction()],
         )
 
     def test_raw_data(self) -> None:

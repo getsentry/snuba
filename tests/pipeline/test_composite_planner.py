@@ -252,8 +252,14 @@ TEST_CASES = [
     pytest.param(
         CompositeQuery(
             from_clause=JoinClause(
-                left_node=IndividualNode(alias="err", data_source=events_ent,),
-                right_node=IndividualNode(alias="groups", data_source=groups_ent,),
+                left_node=IndividualNode(
+                    alias="err",
+                    data_source=events_ent,
+                ),
+                right_node=IndividualNode(
+                    alias="groups",
+                    data_source=groups_ent,
+                ),
                 keys=[
                     JoinCondition(
                         left=JoinConditionExpression("err", "group_id"),
@@ -265,10 +271,15 @@ TEST_CASES = [
             selected_columns=[
                 SelectedExpression(
                     "f_release",
-                    FunctionCall("f_release", "f", (Column(None, "err", "release"),),),
+                    FunctionCall(
+                        "f_release",
+                        "f",
+                        (Column(None, "err", "release"),),
+                    ),
                 ),
                 SelectedExpression(
-                    "_snuba_right", Column("_snuba_right", "groups", "right_col"),
+                    "_snuba_right",
+                    Column("_snuba_right", "groups", "right_col"),
                 ),
             ],
             condition=binary_condition(
@@ -353,7 +364,8 @@ TEST_CASES = [
                 ),
                 selected_columns=[
                     SelectedExpression(
-                        "f_release", Column("f_release", "err", "f_release"),
+                        "f_release",
+                        Column("f_release", "err", "f_release"),
                     ),
                     SelectedExpression(
                         "_snuba_right",
@@ -459,10 +471,12 @@ TEST_CASES = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "f_release", Column("f_release", "err", "f_release"),
+                    "f_release",
+                    Column("f_release", "err", "f_release"),
                 ),
                 SelectedExpression(
-                    "_snuba_right", Column("_snuba_right", "groups", "_snuba_right"),
+                    "_snuba_right",
+                    Column("_snuba_right", "groups", "_snuba_right"),
                 ),
             ],
         ),
@@ -502,7 +516,8 @@ def test_composite_planner(
 
     if plan.root_processors is not None and composite_plan.root_processors is not None:
         assert_subquery_processors_equality(
-            plan.root_processors, composite_plan.root_processors,
+            plan.root_processors,
+            composite_plan.root_processors,
         )
 
     query_alias_processors = plan.aliased_processors is not None
@@ -516,7 +531,8 @@ def test_composite_planner(
         assert len(plan.aliased_processors) == len(composite_plan.aliased_processors)
         for k in plan.aliased_processors:
             assert_subquery_processors_equality(
-                plan.aliased_processors[k], composite_plan.aliased_processors[k],
+                plan.aliased_processors[k],
+                composite_plan.aliased_processors[k],
             )
 
     def runner(
@@ -526,6 +542,9 @@ def test_composite_planner(
     ) -> QueryResult:
         report = query.equals(processed_query)
         assert report[0], f"Mismatch: {report[1]}"
-        return QueryResult({"data": []}, {"stats": {}, "sql": "", "experiments": {}},)
+        return QueryResult(
+            {"data": []},
+            {"stats": {}, "sql": "", "experiments": {}},
+        )
 
     CompositeExecutionPipeline(logical_query, HTTPRequestSettings(), runner).execute()

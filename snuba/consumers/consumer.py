@@ -333,7 +333,8 @@ def build_batch_writer(
     supports_replacements = replacements_producer is not None
 
     writer = table_writer.get_batch_writer(
-        metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1},
+        metrics,
+        {"load_balancing": "in_order", "insert_distributed_sync": 1},
     )
 
     def build_writer() -> ProcessedMessageBatchWriter:
@@ -484,7 +485,8 @@ class MultistorageCollector(
     def __init__(
         self,
         steps: Mapping[
-            StorageKey, ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
+            StorageKey,
+            ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
         dead_letter_step: Optional[
             ProcessingStep[
@@ -700,7 +702,9 @@ def process_message_multistorage_identical_storages(
 
         if result is None:
             result = _process_message_multistorage_work(
-                metadata=metadata, storage_key=storage_key, storage_message=value,
+                metadata=metadata,
+                storage_key=storage_key,
+                storage_message=value,
             )
 
         intermediate_results[storage_key] = result
@@ -753,10 +757,13 @@ def build_multistorage_batch_writer(
     return ProcessedMessageBatchWriter(
         InsertBatchWriter(
             storage.get_table_writer().get_batch_writer(
-                metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1},
+                metrics,
+                {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
             MetricsWrapper(
-                metrics, "insertions", {"storage": storage.get_storage_key().value},
+                metrics,
+                "insertions",
+                {"storage": storage.get_storage_key().value},
             ),
         ),
         replacement_batch_writer,
@@ -772,7 +779,9 @@ def build_collector(
     dead_letter_step: Optional[DeadLetterStep] = None
     if producer and topic:
         dead_letter_step = DeadLetterStep(
-            producer=producer, topic=topic, metrics=metrics,
+            producer=producer,
+            topic=topic,
+            metrics=metrics,
         )
     return MultistorageCollector(
         {

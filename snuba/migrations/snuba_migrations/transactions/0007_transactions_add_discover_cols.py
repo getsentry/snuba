@@ -1,10 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    String,
-)
+from snuba.clickhouse.columns import Column, DateTime, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers

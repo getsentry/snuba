@@ -497,7 +497,11 @@ class UInt(ColumnType[TModifiers]):
 
 
 class Float(ColumnType[TModifiers]):
-    def __init__(self, size: int, modifiers: Optional[TModifiers] = None,) -> None:
+    def __init__(
+        self,
+        size: int,
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
         super().__init__(modifiers)
         assert size in (32, 64)
         self.size = size
@@ -532,7 +536,9 @@ class DateTime(ColumnType[TModifiers]):
 
 class Enum(ColumnType[TModifiers]):
     def __init__(
-        self, values: Sequence[tuple[str, int]], modifiers: Optional[TModifiers] = None,
+        self,
+        values: Sequence[tuple[str, int]],
+        modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.values = values

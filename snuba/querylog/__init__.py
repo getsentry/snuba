@@ -14,7 +14,9 @@ metrics = MetricsWrapper(environment.metrics, "api")
 
 
 def _record_timer_metrics(
-    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata,
+    request: Request,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
 ) -> None:
     final = str(request.query.get_final())
     referrer = request.referrer or "none"
@@ -126,6 +128,7 @@ def _record_failure_building_request(
     # table would be useful.
     if settings.RECORD_QUERIES:
         timer.send_metrics_to(
-            metrics, tags={"status": status.value, "referrer": referrer or "none"},
+            metrics,
+            tags={"status": status.value, "referrer": referrer or "none"},
         )
         _add_tags(timer)

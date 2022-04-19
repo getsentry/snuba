@@ -56,7 +56,8 @@ from snuba.utils.streams.topics import Topic
 query_processors = [
     UniqInSelectAndHavingProcessor(),
     PostReplacementConsistencyEnforcer(
-        project_column="project_id", replacer_state_name=ReplacerState.ERRORS_V2,
+        project_column="project_id",
+        replacer_state_name=ReplacerState.ERRORS_V2,
     ),
     MappingColumnPromoter(
         mapping_specs={

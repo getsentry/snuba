@@ -52,7 +52,9 @@ def build_time_range(query_from: datetime, query_to: datetime) -> Expression:
             (Column(None, None, "timestamp"), Literal(None, query_from)),
         ),
         FunctionCall(
-            None, "less", (Column(None, None, "timestamp"), Literal(None, query_to)),
+            None,
+            "less",
+            (Column(None, None, "timestamp"), Literal(None, query_to)),
         ),
     )
 
@@ -72,7 +74,8 @@ def build_group_ids_condition() -> Expression:
 @pytest.fixture
 def query() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])), condition=build_in("project_id", [2]),
+        Table("my_table", ColumnSet([])),
+        condition=build_in("project_id", [2]),
     )
 
 
@@ -103,14 +106,16 @@ def query_with_future_timestamp() -> ClickhouseQuery:
 @pytest.fixture
 def query_with_single_group_id() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])), condition=build_group_id_condition(),
+        Table("my_table", ColumnSet([])),
+        condition=build_group_id_condition(),
     )
 
 
 @pytest.fixture
 def query_with_multiple_group_ids() -> ClickhouseQuery:
     return ClickhouseQuery(
-        Table("my_table", ColumnSet([])), condition=build_group_ids_condition(),
+        Table("my_table", ColumnSet([])),
+        condition=build_group_ids_condition(),
     )
 
 
@@ -172,7 +177,11 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
                 FunctionCall(
                     None,
                     "tuple",
-                    (Literal(None, 100), Literal(None, 101), Literal(None, 102),),
+                    (
+                        Literal(None, 100),
+                        Literal(None, 101),
+                        Literal(None, 102),
+                    ),
                 ),
             ),
         ),
@@ -435,7 +444,8 @@ def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
 
     enforcer.process_query(query, HTTPRequestSettings())
     assert query.get_condition() == build_and(
-        build_not_in("group_id", [100, 101, 102]), build_in("project_id", [2]),
+        build_not_in("group_id", [100, 101, 102]),
+        build_in("project_id", [2]),
     )
     assert not query.get_from_clause().final
 
