@@ -77,16 +77,27 @@ class TagsTypeTransformer(QueryProcessor):
 class MetricsEntity(Entity, ABC):
     def __init__(
         self,
-        writable_storage_key: StorageKey,
+        writable_storage_key: Optional[StorageKey],
         readable_storage_key: StorageKey,
         value_schema: Sequence[Column[SchemaModifiers]],
         mappers: TranslationMappers,
+        allow_cross_org: bool = False,
     ) -> None:
-        writable_storage = get_writable_storage(writable_storage_key)
+        writable_storage = (
+            get_writable_storage(writable_storage_key) if writable_storage_key else None
+        )
         readable_storage = get_storage(readable_storage_key)
+        storages = [readable_storage]
+        if writable_storage:
+            storages.append(writable_storage)
+
+        validators = []
+        if not allow_cross_org:
+            validators.append(EntityRequiredColumnValidator({"org_id", "project_id"}))
+        validators.append(GranularityValidator(minimum=10))
 
         super().__init__(
-            storages=[writable_storage, readable_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(
                     readable_storage,
@@ -109,10 +120,7 @@ class MetricsEntity(Entity, ABC):
             ),
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[
-                EntityRequiredColumnValidator({"org_id", "project_id"}),
-                GranularityValidator(minimum=10),
-            ],
+            validators=validators,
             required_time_column="timestamp",
         )
 
@@ -158,6 +166,17 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
+        )
+
+
+class OrgMetricsCountersEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=None,
+            readable_storage_key=StorageKey.METRICS_COUNTERS,
+            value_schema=[],
+            mappers=TranslationMappers(),
+            allow_cross_org=True,
         )
 
 
