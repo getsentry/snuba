@@ -150,12 +150,7 @@ org_counters_storage = ReadableTableStorage(
         local_table_name="metrics_counters_v2_local",
         dist_table_name="metrics_counters_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
-        columns=ColumnSet(
-            [
-                *aggregated_columns,
-                Column("value", AggregateFunction("sum", [Float(64)])),
-            ]
-        ),
+        columns=ColumnSet([*aggregated_columns]),
     ),
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
 )

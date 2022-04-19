@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -82,7 +82,7 @@ class MetricsEntity(Entity, ABC):
         readable_storage_key: StorageKey,
         value_schema: Sequence[Column[SchemaModifiers]],
         mappers: TranslationMappers,
-        allow_cross_org: bool = False,
+        validators: Optional[Sequence[QueryValidator]] = None,
     ) -> None:
         writable_storage = (
             get_writable_storage(writable_storage_key) if writable_storage_key else None
@@ -92,10 +92,11 @@ class MetricsEntity(Entity, ABC):
         if writable_storage:
             storages.append(writable_storage)
 
-        validators: List[QueryValidator] = []
-        if not allow_cross_org:
-            validators.append(EntityRequiredColumnValidator({"org_id", "project_id"}))
-        validators.append(GranularityValidator(minimum=10))
+        if validators is None:
+            validators = [
+                EntityRequiredColumnValidator({"org_id", "project_id"}),
+                GranularityValidator(minimum=10),
+            ]
 
         super().__init__(
             storages=storages,
@@ -175,9 +176,14 @@ class OrgMetricsCountersEntity(MetricsEntity):
         super().__init__(
             writable_storage_key=None,
             readable_storage_key=StorageKey.METRICS_COUNTERS,
-            value_schema=[],
-            mappers=TranslationMappers(),
-            allow_cross_org=True,
+            value_schema=[Column("value", AggregateFunction("sum", [Float(64)]))],
+            mappers=TranslationMappers(
+                functions=[
+                    FunctionNameMapper("sum", "sumMerge"),
+                    FunctionNameMapper("sumIf", "sumMergeIf"),
+                ],
+            ),
+            validators=[],
         )
 
 
