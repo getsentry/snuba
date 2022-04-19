@@ -108,6 +108,13 @@ def enforce_retention(message: Mapping[str, Any], timestamp: Optional[datetime])
             message.get("retention_days") or settings.DEFAULT_RETENTION_DAYS
         )
 
+    if settings.ENFORCE_RETENTION:
+        retention_days = (
+            settings.LOWER_RETENTION_DAYS
+            if retention_days <= settings.LOWER_RETENTION_DAYS
+            else settings.DEFAULT_RETENTION_DAYS
+        )
+
     # This is not ideal but it should never happen anyways
     timestamp = _ensure_valid_date(timestamp)
     if timestamp is None:
