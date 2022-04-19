@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pytz
+
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.groupassignee_processor import (
@@ -171,7 +172,8 @@ class TestGroupassignee:
         ret = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute("SELECT * FROM groupassignee_local;").results
+            .execute("SELECT * FROM groupassignee_local;")
+            .results
         )
         assert ret[0] == (
             42,  # offset
@@ -217,7 +219,8 @@ class TestGroupassignee:
         ret = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute("SELECT * FROM groupassignee_local;").results
+            .execute("SELECT * FROM groupassignee_local;")
+            .results
         )
         assert ret[0] == (
             0,  # offset

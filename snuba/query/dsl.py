@@ -1,6 +1,6 @@
 from typing import Optional, Sequence
 
-from snuba.query.expressions import Expression, FunctionCall, Literal, Column
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.

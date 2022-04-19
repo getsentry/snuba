@@ -31,7 +31,8 @@ def val_column(col_name: str) -> str:
 
 def array_join_pattern(column_name: str) -> FunctionCall:
     return FunctionCall(
-        String("arrayJoin"), (Column(column_name=String(key_column(column_name))),),
+        String("arrayJoin"),
+        (Column(column_name=String(key_column(column_name))),),
     )
 
 
@@ -296,7 +297,12 @@ def zip_columns(column1: ColumnExpr, column2: ColumnExpr) -> Expression:
                 None,
                 ("x", "y"),
                 FunctionCallExpr(
-                    None, "tuple", (Argument(None, "x"), Argument(None, "y"),),
+                    None,
+                    "tuple",
+                    (
+                        Argument(None, "x"),
+                        Argument(None, "y"),
+                    ),
                 ),
             ),
             column1,
@@ -323,7 +329,11 @@ def filter_key_values(
                     # A pair here is a tuple with two elements (key
                     # and value) and the index of the first element in
                     # Clickhouse is 1 instead of 0.
-                    tupleElement(None, Argument(None, "pair"), LiteralExpr(None, 1),),
+                    tupleElement(
+                        None,
+                        Argument(None, "pair"),
+                        LiteralExpr(None, 1),
+                    ),
                     keys,
                 ),
             ),
@@ -339,5 +349,12 @@ def filter_keys(column: Expression, keys: Sequence[LiteralExpr]) -> Expression:
     return FunctionCallExpr(
         None,
         "arrayFilter",
-        (Lambda(None, ("tag",), in_condition(Argument(None, "tag"), keys),), column,),
+        (
+            Lambda(
+                None,
+                ("tag",),
+                in_condition(Argument(None, "tag"), keys),
+            ),
+            column,
+        ),
     )

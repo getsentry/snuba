@@ -20,7 +20,13 @@ from snuba.web import QueryResult
 
 @pytest.mark.parametrize(
     "entity, expected_table_name",
-    [pytest.param(get_entity(EntityKey.DISCOVER), "discover", id="discover",)],
+    [
+        pytest.param(
+            get_entity(EntityKey.DISCOVER),
+            "discover",
+            id="discover",
+        )
+    ],
 )
 def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> None:
     dataset_name = "discover"

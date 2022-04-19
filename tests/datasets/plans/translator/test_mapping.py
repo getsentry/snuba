@@ -1,4 +1,5 @@
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -52,7 +53,10 @@ test_cases = [
                     FunctionCall(
                         "alias2",
                         "f1",
-                        (Column(None, None, "column2"), Column(None, None, "column3"),),
+                        (
+                            Column(None, None, "column2"),
+                            Column(None, None, "column3"),
+                        ),
                     ),
                 ),
                 SelectedExpression(

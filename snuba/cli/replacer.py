@@ -13,7 +13,8 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 @click.command()
 @click.option(
-    "--replacements-topic", help="Topic to consume replacement messages from.",
+    "--replacements-topic",
+    help="Topic to consume replacement messages from.",
 )
 @click.option(
     "--consumer-group",
@@ -21,7 +22,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Consumer group use for consuming the replacements topic.",
 )
 @click.option(
-    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--storage",

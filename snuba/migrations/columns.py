@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence, List
 from dataclasses import dataclass
-from snuba.clickhouse.columns import TypeModifier, TypeModifiers, Nullable
+from typing import List, Optional, Sequence
+
+from snuba.clickhouse.columns import Nullable, TypeModifier, TypeModifiers
 
 
 @dataclass(frozen=True)

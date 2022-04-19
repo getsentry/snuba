@@ -266,12 +266,24 @@ def test_multistorage_strategy_dead_letter_step(
     payloads = [
         KafkaPayload(
             None,
-            json.dumps((2, "insert", get_raw_event(),)).encode("utf8"),
+            json.dumps(
+                (
+                    2,
+                    "insert",
+                    get_raw_event(),
+                )
+            ).encode("utf8"),
             [("transaction_forwarder", "0".encode("utf8"))],
         ),
         KafkaPayload(
             None,
-            json.dumps((2, "insert", get_raw_transaction(),)).encode("utf8"),
+            json.dumps(
+                (
+                    2,
+                    "insert",
+                    get_raw_transaction(),
+                )
+            ).encode("utf8"),
             [("transaction_forwarder", "1".encode("utf8"))],
         ),
     ]
@@ -320,7 +332,11 @@ def test_dead_letter_step() -> None:
     # We only produce to dead letter topic if the payload is an insert
     # so payload of `None` shouldn't produce any futures
     none_message = Message(
-        Partition(Topic("topic"), 0), 0, (storage_key, None), datetime.now(), 1,
+        Partition(Topic("topic"), 0),
+        0,
+        (storage_key, None),
+        datetime.now(),
+        1,
     )
     dead_letter_step.submit(none_message)
     assert not dead_letter_step._DeadLetterStep__futures

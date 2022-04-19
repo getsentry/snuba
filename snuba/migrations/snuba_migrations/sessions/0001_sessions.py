@@ -1,17 +1,11 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    UUID,
-    Column,
-    DateTime,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from .matview import aggregate_columns_v1, create_matview_v1
 
+from .matview import aggregate_columns_v1, create_matview_v1
 
 raw_columns: Sequence[Column[Modifiers]] = [
     Column("session_id", UUID()),
@@ -67,10 +61,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="sessions_hourly_mv_local",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_local",
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_local",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_raw_local",
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_raw_local",
             ),
         ]
 
@@ -81,7 +77,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="sessions_raw_dist",
                 columns=raw_columns,
                 engine=table_engines.Distributed(
-                    local_table_name="sessions_raw_local", sharding_key="org_id",
+                    local_table_name="sessions_raw_local",
+                    sharding_key="org_id",
                 ),
             ),
             operations.CreateTable(
@@ -89,7 +86,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="sessions_hourly_dist",
                 columns=aggregate_columns_v1,
                 engine=table_engines.Distributed(
-                    local_table_name="sessions_hourly_local", sharding_key="org_id",
+                    local_table_name="sessions_hourly_local",
+                    sharding_key="org_id",
                 ),
             ),
         ]
@@ -97,9 +95,11 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_dist",
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_dist",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_raw_dist",
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_raw_dist",
             ),
         ]

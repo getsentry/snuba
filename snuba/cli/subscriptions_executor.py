@@ -1,3 +1,4 @@
+import logging
 import signal
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -113,7 +114,8 @@ def subscriptions_executor(
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            result_topic_spec.topic, override_params={"partitioner": "consistent"},
+            result_topic_spec.topic,
+            override_params={"partitioner": "consistent"},
         )
     )
 
@@ -133,6 +135,9 @@ def subscriptions_executor(
     )
 
     def handler(signum: int, frame: Any) -> None:
+        # TODO: Temporary code for debugging executor shutdown
+        logging.getLogger().setLevel(logging.DEBUG)
+
         processor.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)

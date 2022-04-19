@@ -85,12 +85,14 @@ def test_rollout_percentage(
     expceted: Choice,
 ) -> None:
     set_config(
-        "rollout_upgraded_errors_trust_configreferrer", referrer_trust_config,
+        "rollout_upgraded_errors_trust_configreferrer",
+        referrer_trust_config,
     )
     set_config("rollout_upgraded_errors_trust", global_trust_config)
 
     set_config(
-        "rollout_upgraded_errors_execute_configreferrer", referrer_execute_config,
+        "rollout_upgraded_errors_execute_configreferrer",
+        referrer_execute_config,
     )
     set_config("rollout_upgraded_errors_execute", global_execute_config)
 

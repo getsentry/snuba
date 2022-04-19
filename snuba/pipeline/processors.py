@@ -1,6 +1,7 @@
 from typing import Callable, Sequence
 
 import sentry_sdk
+
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
@@ -30,7 +31,8 @@ def _execute_clickhouse_processors(
 
 
 def execute_plan_processors(
-    query_plan: ClickhouseQueryPlan, settings: RequestSettings,
+    query_plan: ClickhouseQueryPlan,
+    settings: RequestSettings,
 ) -> None:
     """
     Executes the plan query processors but not the db ones (those
@@ -44,7 +46,8 @@ def execute_plan_processors(
 
 
 def execute_all_clickhouse_processors(
-    query_plan: ClickhouseQueryPlan, settings: RequestSettings,
+    query_plan: ClickhouseQueryPlan,
+    settings: RequestSettings,
 ) -> None:
     """
     Executes all Clickhouse query processing including the plan processors

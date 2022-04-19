@@ -28,7 +28,9 @@ def test() -> None:
     mock_callback = Mock(side_effect=callback_func)
 
     delegator = ThreadedFunctionDelegator[Any, int](
-        callables=callables, selector_func=selector_func, callback_func=mock_callback,
+        callables=callables,
+        selector_func=selector_func,
+        callback_func=mock_callback,
     )
 
     result = delegator.execute(5)

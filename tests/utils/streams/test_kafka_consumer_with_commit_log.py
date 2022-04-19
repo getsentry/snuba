@@ -69,6 +69,8 @@ def test_commit_log_consumer() -> None:
 
         assert commit_codec.decode(
             KafkaPayload(
-                commit_message.key(), commit_message.value(), commit_message.headers(),
+                commit_message.key(),
+                commit_message.value(),
+                commit_message.headers(),
             )
         ) == Commit("test", Partition(topic, 0), message.next_offset, now)

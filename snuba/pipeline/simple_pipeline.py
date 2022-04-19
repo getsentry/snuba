@@ -5,14 +5,11 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
     QueryRunner,
 )
-from snuba.pipeline.processors import (
-    execute_entity_processors,
-    execute_plan_processors,
-)
+from snuba.pipeline.processors import execute_entity_processors, execute_plan_processors
 from snuba.pipeline.query_pipeline import (
-    QueryPlanner,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
+    QueryPlanner,
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
@@ -60,7 +57,10 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
     """
 
     def __init__(
-        self, request: Request, runner: QueryRunner, query_planner: EntityQueryPlanner,
+        self,
+        request: Request,
+        runner: QueryRunner,
+        query_planner: EntityQueryPlanner,
     ):
         self.__request = request
         self.__runner = runner
@@ -85,10 +85,14 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
     ) -> QueryExecutionPipeline:
         assert isinstance(request.query, LogicalQuery)
         return SimpleExecutionPipeline(
-            request, runner, self.build_planner(request.query, request.settings),
+            request,
+            runner,
+            self.build_planner(request.query, request.settings),
         )
 
     def build_planner(
-        self, query: LogicalQuery, settings: RequestSettings,
+        self,
+        query: LogicalQuery,
+        settings: RequestSettings,
     ) -> EntityQueryPlanner:
         return EntityQueryPlanner(query, settings, self.__query_plan_builder)

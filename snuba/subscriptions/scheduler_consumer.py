@@ -104,9 +104,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
         def revocation_callback(partitions: Sequence[Partition]) -> None:
-            for partition in partitions:
-                if partition in self.__previous_messages:
-                    del self.__previous_messages[partition]
+            self.__previous_messages = {}
 
             if on_revoke is not None:
                 on_revoke(partitions)

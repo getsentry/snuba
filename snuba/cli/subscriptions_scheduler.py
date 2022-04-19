@@ -130,7 +130,8 @@ def subscriptions_scheduler(
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            scheduled_topic_spec.topic, override_params={"partitioner": "consistent"},
+            scheduled_topic_spec.topic,
+            override_params={"partitioner": "consistent"},
         )
     )
 

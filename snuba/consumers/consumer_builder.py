@@ -204,7 +204,8 @@ class ConsumerBuilder:
 
         if self.commit_log_topic is None:
             consumer = KafkaConsumer(
-                configuration, commit_retry_policy=self.__commit_retry_policy,
+                configuration,
+                commit_retry_policy=self.__commit_retry_policy,
             )
         else:
             consumer = KafkaConsumerWithCommitLog(
@@ -271,7 +272,8 @@ class ConsumerBuilder:
 
         if self.__profile_path is not None:
             strategy_factory = ProcessingStrategyProfilerWrapperFactory(
-                strategy_factory, self.__profile_path,
+                strategy_factory,
+                self.__profile_path,
             )
 
         return strategy_factory

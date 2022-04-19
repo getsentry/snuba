@@ -133,14 +133,17 @@ class TransactionsMessageProcessor(MessageProcessor):
         return processed
 
     def _process_tags(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
 
         tags: Mapping[str, Any] = _as_dict_safe(event_dict["data"].get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
-            "sentry:release", event_dict.get("release"),
+            "sentry:release",
+            event_dict.get("release"),
         )
         processed["environment"] = promoted_tags.get("environment")
         processed["user"] = promoted_tags.get("sentry:user", "")
@@ -149,7 +152,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         )
 
     def _process_measurements(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         measurements = event_dict["data"].get("measurements")
         if measurements is not None:
@@ -176,7 +181,9 @@ class TransactionsMessageProcessor(MessageProcessor):
                 )
 
     def _process_breakdown(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         breakdowns = event_dict["data"].get("breakdowns")
         if breakdowns is not None:
@@ -205,7 +212,9 @@ class TransactionsMessageProcessor(MessageProcessor):
                     )
 
     def _process_contexts_and_user(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         contexts: MutableMapping[str, Any] = _as_dict_safe(
             event_dict["data"].get("contexts", None)
@@ -246,7 +255,9 @@ class TransactionsMessageProcessor(MessageProcessor):
                 processed["ip_address_v6"] = str(ip_address)
 
     def _process_request_data(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         request = (
             event_dict["data"].get(
@@ -260,7 +271,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["http_referer"] = http_data["http_referer"]
 
     def _process_sdk_data(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         sdk = event_dict["data"].get("sdk", None) or {}
         processed["sdk_name"] = _unicodify(sdk.get("name") or "")
@@ -282,7 +295,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         return op, int(group, 16), exclusive_time
 
     def _process_spans(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         data = event_dict["data"]
         trace_context = data["contexts"]["trace"]
@@ -328,7 +343,9 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["spans.exclusive_time_32"].append(exclusive_time)
 
     def _sanitize_contexts(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> MutableMapping[str, Any]:
         """
         Contexts can store a lot of data. We don't want to store all the data in

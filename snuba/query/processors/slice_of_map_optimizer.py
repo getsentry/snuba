@@ -1,7 +1,6 @@
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import Expression, FunctionCall
-
 from snuba.request.request_settings import RequestSettings
 
 
@@ -32,7 +31,9 @@ class SliceOfMapOptimizer(QueryProcessor):
                     (
                         lambda_fn,
                         FunctionCall(
-                            None, "arraySlice", (innermost_exp,) + slice_args,
+                            None,
+                            "arraySlice",
+                            (innermost_exp,) + slice_args,
                         ),
                     ),
                 )
