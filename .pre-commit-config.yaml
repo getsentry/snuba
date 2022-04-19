@@ -6,11 +6,11 @@ exclude: >
 
 repos:
   - repo: https://github.com/psf/black
-    rev: 19.10b0
+    rev: 22.3.0
     hooks:
       - id: black
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v4.2.0
     hooks:
       - id: check-case-conflict
       - id: check-merge-conflict
@@ -23,24 +23,17 @@ repos:
       - id: fix-encoding-pragma
         args: ["--remove"]
   - repo: https://github.com/pycqa/flake8
-    rev: 3.8.3
+    rev: 4.0.1
     hooks:
       - id: flake8
         language_version: python3.8
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v0.812'
-    hooks:
-    -   id: mypy
-        files: snuba
-        args: [--config-file, mypy.ini, --ignore-missing-imports, --strict, --warn-unreachable]
-        additional_dependencies: ['sentry-arroyo==0.0.16']
   - repo: https://github.com/pycqa/isort
-    rev: 5.8.0
+    rev: 5.10.1
     hooks:
       - id: isort
         name: isort (python)
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.3.0
+    rev: v4.2.0
     hooks:
       - id: no-commit-to-branch
         args: ['--branch', 'master']

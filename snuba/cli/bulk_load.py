@@ -43,7 +43,10 @@ from snuba.writer import BufferedWriterWrapper
     help="Signals that the table is ready to pipe into Clickhouse. No need to parse.",
 )
 @click.option(
-    "--show-progress", default=False, is_flag=True, help="Shows a progress bar.",
+    "--show-progress",
+    default=False,
+    is_flag=True,
+    help="Shows a progress bar.",
 )
 @click.option("--log-level", help="Logging level to use.")
 def bulk_load(
@@ -69,7 +72,8 @@ def bulk_load(
 
     # TODO: Have a more abstract way to load sources if/when we support more than one.
     snapshot_source = PostgresSnapshot.load(
-        product=settings.SNAPSHOT_LOAD_PRODUCT, path=source,
+        product=settings.SNAPSHOT_LOAD_PRODUCT,
+        path=source,
     )
 
     loader = table_writer.get_bulk_loader(

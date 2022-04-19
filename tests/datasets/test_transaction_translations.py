@@ -17,7 +17,9 @@ from snuba.query.expressions import (
 
 test_data = [
     pytest.param(
-        Column(None, None, "group_id"), Literal(None, 0), id="basic column translation",
+        Column(None, None, "group_id"),
+        Literal(None, 0),
+        id="basic column translation",
     ),
     pytest.param(
         Column(None, None, "primary_hash"),
@@ -51,11 +53,21 @@ test_data = [
                 FunctionCall(
                     None,
                     "not",
-                    (FunctionCall(None, "identity", (Literal(None, None),),),),
+                    (
+                        FunctionCall(
+                            None,
+                            "identity",
+                            (Literal(None, None),),
+                        ),
+                    ),
                 ),
             ),
         ),
-        FunctionCall(None, "identity", (Literal(None, None),),),
+        FunctionCall(
+            None,
+            "identity",
+            (Literal(None, None),),
+        ),
         id="countIf not identity none mapper",
     ),
     pytest.param(
@@ -66,7 +78,13 @@ test_data = [
                 FunctionCall(
                     None,
                     "not",
-                    (FunctionCall(None, "identity", (Literal(None, 42),),),),
+                    (
+                        FunctionCall(
+                            None,
+                            "identity",
+                            (Literal(None, 42),),
+                        ),
+                    ),
                 ),
             ),
         ),
@@ -77,7 +95,13 @@ test_data = [
                 FunctionCall(
                     None,
                     "not",
-                    (FunctionCall(None, "identity", (Literal(None, 42),),),),
+                    (
+                        FunctionCall(
+                            None,
+                            "identity",
+                            (Literal(None, 42),),
+                        ),
+                    ),
                 ),
             ),
         ),
@@ -261,7 +285,14 @@ test_data = [
             "plus",
             (
                 Literal(None, 0),
-                FunctionCall(None, "multiply", (Literal(None, 0.0), Literal(None, 0),)),
+                FunctionCall(
+                    None,
+                    "multiply",
+                    (
+                        Literal(None, 0.0),
+                        Literal(None, 0),
+                    ),
+                ),
             ),
         ),
         FunctionCall(
@@ -269,7 +300,14 @@ test_data = [
             "plus",
             (
                 Literal(None, 0),
-                FunctionCall(None, "multiply", (Literal(None, 0.0), Literal(None, 0),)),
+                FunctionCall(
+                    None,
+                    "multiply",
+                    (
+                        Literal(None, 0.0),
+                        Literal(None, 0),
+                    ),
+                ),
             ),
         ),
         id="literals aren't cached",
@@ -279,7 +317,8 @@ test_data = [
 
 @pytest.mark.parametrize("expression, expected", test_data)
 def test_transaction_translation(
-    expression: Expression, expected: ClickhouseExpression,
+    expression: Expression,
+    expected: ClickhouseExpression,
 ) -> None:
     translator = SnubaClickhouseMappingTranslator(
         transaction_translation_mappers.concat(null_function_translation_mappers)

@@ -162,12 +162,18 @@ test_data = [
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("_snuba_environment", None, "environment"), Literal(None, "abc"),),
+            (
+                Column("_snuba_environment", None, "environment"),
+                Literal(None, "abc"),
+            ),
         ),
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("_snuba_project_id", None, "project_id"), Literal(None, 1),),
+            (
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
         ),
         True,
     ),
@@ -187,7 +193,9 @@ test_data = [
             OPERATOR_TO_FUNCTION["="],
             (
                 FunctionCall(
-                    None, "uniq", (Column("_snuba_environment", None, "environment"),),
+                    None,
+                    "uniq",
+                    (Column("_snuba_environment", None, "environment"),),
                 ),
                 Literal(None, "abc"),
             ),
@@ -195,7 +203,10 @@ test_data = [
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("_snuba_project_id", None, "project_id"), Literal(None, 1),),
+            (
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
         ),
         False,
         id="Do not promote a column that is in a uniq function",
@@ -239,7 +250,10 @@ test_data = [
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("_snuba_project_id", None, "project_id"), Literal(None, 1),),
+            (
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
         ),
         False,
         id="Do not promote a column that is in a countIf function",

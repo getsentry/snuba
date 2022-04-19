@@ -33,7 +33,7 @@ FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
 
 
 minimal_clickhouse_grammar = Grammar(
-    fr"""
+    rf"""
 # This root element is needed because of the ambiguity of the aggregation
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
@@ -109,12 +109,16 @@ class ClickhouseVisitor(NodeVisitor):  # type: ignore
         return visit_arithmetic_term(node, visited_children)
 
     def visit_low_pri_arithmetic(
-        self, node: Node, visited_children: Tuple[Any, Expression, LowPriArithmetic],
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, LowPriArithmetic],
     ) -> Expression:
         return visit_low_pri_arithmetic(node, visited_children)
 
     def visit_high_pri_arithmetic(
-        self, node: Node, visited_children: Tuple[Any, Expression, HighPriArithmetic],
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, HighPriArithmetic],
     ) -> Expression:
         return visit_high_pri_arithmetic(node, visited_children)
 

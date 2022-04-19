@@ -49,7 +49,9 @@ logger = logging.getLogger(__name__)
     help="The dataset to target",
 )
 @click.option(
-    "--entity", "entity_name", help="The entity to target",
+    "--entity",
+    "entity_name",
+    help="The entity to target",
 )
 @click.option("--topic")
 @click.option("--partitions", type=int)

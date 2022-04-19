@@ -114,7 +114,8 @@ def subscriptions_executor(
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            result_topic_spec.topic, override_params={"partitioner": "consistent"},
+            result_topic_spec.topic,
+            override_params={"partitioner": "consistent"},
         )
     )
 

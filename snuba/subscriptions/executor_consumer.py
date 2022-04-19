@@ -99,7 +99,9 @@ def build_executor_consumer(
         ), "All entities must have same scheduled and result topics"
 
     consumer_configuration = build_kafka_consumer_configuration(
-        scheduled_topic_spec.topic, consumer_group, auto_offset_reset=auto_offset_reset,
+        scheduled_topic_spec.topic,
+        consumer_group,
+        auto_offset_reset=auto_offset_reset,
     )
 
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set

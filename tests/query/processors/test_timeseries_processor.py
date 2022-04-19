@@ -106,7 +106,9 @@ tests = [
         binary_condition(
             ConditionFunctions.GTE,
             FunctionCall(
-                None, "toStartOfDay", (Column("my_time", None, "finish_ts"),),
+                None,
+                "toStartOfDay",
+                (Column("my_time", None, "finish_ts"),),
             ),
             Literal(None, parse_datetime("2020-01-01T01:01:01.000000Z")),
         ),
@@ -140,7 +142,9 @@ tests = [
                         "intDiv",
                         (
                             FunctionCall(
-                                None, "toUInt32", (Column(None, None, "finish_ts"),),
+                                None,
+                                "toUInt32",
+                                (Column(None, None, "finish_ts"),),
                             ),
                             Literal(None, 1440),
                         ),
@@ -224,7 +228,9 @@ def test_invalid_datetime() -> None:
             ),
         ],
         condition=binary_condition(
-            ConditionFunctions.EQ, Column("my_time", None, "time"), Literal(None, ""),
+            ConditionFunctions.EQ,
+            Column("my_time", None, "time"),
+            Literal(None, ""),
         ),
     )
 

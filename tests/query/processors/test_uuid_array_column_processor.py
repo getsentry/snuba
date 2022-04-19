@@ -1,24 +1,24 @@
-import pytest
 import uuid
+
+import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.query import Query
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import (
+    Argument,
     Column,
     Expression,
     FunctionCall,
-    Literal,
     Lambda,
-    Argument,
+    Literal,
 )
-from snuba.clickhouse.query import Query
 from snuba.query.processors.type_converters.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
 from snuba.request.request_settings import HTTPRequestSettings
-
 
 tests = [
     pytest.param(
@@ -53,7 +53,11 @@ tests = [
         FunctionCall(
             None,
             "arraySlice",
-            (Column(None, None, "column1"), Literal(None, 0), Literal(None, 2),),
+            (
+                Column(None, None, "column1"),
+                Literal(None, 0),
+                Literal(None, 2),
+            ),
         ),
         FunctionCall(
             None,
@@ -93,7 +97,9 @@ tests = [
 
 @pytest.mark.parametrize("unprocessed, expected, formatted_value", tests)
 def test_uuid_array_column_processor(
-    unprocessed: Expression, expected: Expression, formatted_value: str,
+    unprocessed: Expression,
+    expected: Expression,
+    formatted_value: str,
 ) -> None:
     unprocessed_query = Query(
         Table("transactions", ColumnSet([])),

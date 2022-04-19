@@ -202,7 +202,8 @@ array_has_tests = [
 
 @pytest.mark.parametrize("query, expected_conditions", array_has_tests)
 def test_array_has_optimizer(
-    query: ClickhouseQuery, expected_conditions: Optional[Expression],
+    query: ClickhouseQuery,
+    expected_conditions: Optional[Expression],
 ) -> None:
     request_settings = HTTPRequestSettings()
     array_has_processor = ArrayHasOptimizer(["spans.op", "spans.group"])

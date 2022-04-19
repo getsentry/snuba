@@ -120,7 +120,11 @@ tests = [
                 None,
                 "replaceAll",
                 (
-                    FunctionCall(None, "toString", (Column(None, None, "column1"),),),
+                    FunctionCall(
+                        None,
+                        "toString",
+                        (Column(None, None, "column1"),),
+                    ),
                     Literal(None, "-"),
                     Literal(None, ""),
                 ),
@@ -153,7 +157,9 @@ tests = [
                     "replaceAll",
                     (
                         FunctionCall(
-                            None, "toString", (Column(None, None, "column1"),),
+                            None,
+                            "toString",
+                            (Column(None, None, "column1"),),
                         ),
                         Literal(None, "-"),
                         Literal(None, ""),
@@ -168,7 +174,9 @@ tests = [
                     "replaceAll",
                     (
                         FunctionCall(
-                            None, "toString", (Column(None, None, "column1"),),
+                            None,
+                            "toString",
+                            (Column(None, None, "column1"),),
                         ),
                         Literal(None, "-"),
                         Literal(None, ""),
@@ -229,7 +237,9 @@ tests = [
 
 @pytest.mark.parametrize("unprocessed, expected, formatted_value", tests)
 def test_uuid_column_processor(
-    unprocessed: Expression, expected: Expression, formatted_value: str,
+    unprocessed: Expression,
+    expected: Expression,
+    formatted_value: str,
 ) -> None:
     unprocessed_query = Query(
         Table("transactions", ColumnSet([])),
@@ -252,7 +262,11 @@ def test_uuid_column_processor(
                 None,
                 "replaceAll",
                 (
-                    FunctionCall(None, "toString", (Column(None, None, "column2"),),),
+                    FunctionCall(
+                        None,
+                        "toString",
+                        (Column(None, None, "column2"),),
+                    ),
                     Literal(None, "-"),
                     Literal(None, ""),
                 ),

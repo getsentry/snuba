@@ -76,10 +76,10 @@ class Schema(ABC):
 
             expected_type = expected_columns[column.flattened]
 
-            if column.type.get_raw() != expected_type.get_raw() or column.type.has_modifier(
-                Nullable
-            ) != expected_type.has_modifier(
-                Nullable
+            if (
+                column.type.get_raw() != expected_type.get_raw()
+                or column.type.has_modifier(Nullable)
+                != expected_type.has_modifier(Nullable)
             ):
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
