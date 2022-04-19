@@ -1,6 +1,7 @@
 from arroyo.processing.strategies.dead_letter_queue import (
     CountInvalidMessagePolicy,
     DeadLetterQueuePolicy,
+    IgnoreInvalidMessagePolicy,
 )
 
 from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
@@ -88,7 +89,10 @@ materialized_view_schema = TableSchema(
 
 
 def count_policy_closure() -> DeadLetterQueuePolicy:
-    return CountInvalidMessagePolicy(limit=5)
+    """
+    Ignore up to 5 bad messages per minute before throwing an unhandled exception.
+    """
+    return CountInvalidMessagePolicy(next_policy=IgnoreInvalidMessagePolicy(), limit=5)
 
 
 raw_storage = WritableTableStorage(
