@@ -74,11 +74,13 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         query_pipeline_builders: QueryPipelineBuilders,
         selector_func: SelectorFunc,
         split_rate_limiter: bool,
+        ignore_secondary_exceptions: bool,
         callback_func: Optional[CallbackFunc],
     ):
         self.__request = request
         self.__runner = runner
         self.__split_rate_limtier = split_rate_limiter
+        self.__ignore_secondary_exceptions = ignore_secondary_exceptions
         self.__query_pipeline_builders = query_pipeline_builders
 
         self.__selector_func = lambda query: selector_func(
@@ -130,6 +132,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             },
             selector_func=self.__selector_func,
             callback_func=self.__callback_func,
+            ignore_secondary_exceptions=self.__ignore_secondary_exceptions,
         )
         assert isinstance(self.__request.query, LogicalQuery)
         return executor.execute(self.__request.query)
@@ -145,12 +148,14 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
         query_pipeline_builders: QueryPipelineBuilders,
         selector_func: SelectorFunc,
         split_rate_limiter: bool,
+        ignore_secondary_exceptions: bool,
         callback_func: Optional[CallbackFunc] = None,
     ) -> None:
         self.__query_pipeline_builders = query_pipeline_builders
         self.__selector_func = selector_func
         self.__callback_func = callback_func
         self.__split_rate_limiter = split_rate_limiter
+        self.__ignore_secondary_exceptions = ignore_secondary_exceptions
 
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
@@ -161,6 +166,7 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
             query_pipeline_builders=self.__query_pipeline_builders,
             selector_func=self.__selector_func,
             split_rate_limiter=self.__split_rate_limiter,
+            ignore_secondary_exceptions=self.__ignore_secondary_exceptions,
             callback_func=self.__callback_func,
         )
 
