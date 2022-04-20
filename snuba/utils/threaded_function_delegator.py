@@ -87,7 +87,7 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
                         self.__callback_func(primary_result, other_results)
                 except Exception as error:
                     if self.__ignore_secondary_exceptions:
-                        logger.warning(error)
+                        logger.warning(error, exc_info=True)
                     else:
                         logger.exception(error)
 
