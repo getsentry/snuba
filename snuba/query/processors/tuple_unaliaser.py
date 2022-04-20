@@ -60,6 +60,45 @@ class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
 
 
 class TupleUnaliaser(QueryProcessor):
+    """ removes aliases of tuples nested inside other functions
+
+    Due to a backwards incomaptibility issue in clickhouse from
+    20.8 -> 21.8, aliased tuples within functions sometimes cause
+    parsing errors in certain conditions.
+
+    Issue: https://github.com/ClickHouse/ClickHouse/issues/35625
+
+    This query processor removes the aliases of
+    `tuple` function calls whenever they are nested within other expressions
+
+    !!!WARNING!!!!
+    This approach makes the assumption that aliases are expanded by the time they reach the query
+    processor. At time of writing (2022-04-20 (blaze it)), this is done right after parsing in the
+    pipeline. If aliases were no longer expanded,
+    this processor would create invalid queries. For example:
+
+    greater(
+        multiIf(
+          equals(
+            tupleElement(
+alias declared ------> (tuple('$S', -1337) AS project_threshold_config),
+              -1337
+            ),
+            '$S'
+          ),
+          ` measurements [ lcp ] `,
+          duration
+        ),
+        multiply(
+alias used --------> tupleElement(project_threshold_config, -1337),
+          -1337
+        )
+      )
+
+    if the project_threshold_config were not expanded earlier, the alias would not be found when
+    executing the query
+    """
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         visitor = _TupleUnaliasVisitor()
         query.transform(visitor)
