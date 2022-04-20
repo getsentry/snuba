@@ -164,5 +164,7 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
     Pass an invalid message to the DLQ by raising `InvalidMessage` exception.
     """
     raise InvalidMessage(
-        message=str(message), reason=reason, original_topic=Topic.METRICS.value,
+        message=str(message),
+        reason=reason,
+        original_topic=Topic.METRICS.value,
     )
