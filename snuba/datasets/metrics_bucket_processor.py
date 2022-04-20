@@ -5,7 +5,7 @@ from typing import Any, Mapping, Optional
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.events_format import enforce_retention
+from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_aggregate_processor import (
     METRICS_COUNTERS_TYPE,
     METRICS_DISTRIBUTIONS_TYPE,
@@ -57,6 +57,11 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             else settings.ENABLED_MATERIALIZATION_VERSION
         )
 
+        try:
+            retention_days = enforce_retention(message, timestamp)
+        except EventTooOld:
+            return None
+
         processed = {
             "org_id": message["org_id"],
             "project_id": message["project_id"],
@@ -66,7 +71,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             "tags.value": values,
             **self._process_values(message),
             "materialization_version": mat_version,
-            "retention_days": enforce_retention(message, timestamp),
+            "retention_days": retention_days,
             "partition": metadata.partition,
             "offset": metadata.offset,
         }
