@@ -1,4 +1,6 @@
+import random
 from dataclasses import replace
+from typing import cast
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -14,6 +16,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.request.request_settings import RequestSettings
+from snuba.state import get_config
 
 
 class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
@@ -99,6 +102,17 @@ alias used --------> tupleElement(project_threshold_config, -1337),
     executing the query
     """
 
+    def should_run(self) -> bool:
+        try:
+            unaliaser_config_percentage = float(
+                cast(float, get_config("tuple_unaliaser_rollout", 0))
+            )
+            return random.random() < unaliaser_config_percentage
+        except ValueError:
+            return False
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        if not self.should_run():
+            return None
         visitor = _TupleUnaliasVisitor()
         query.transform(visitor)
