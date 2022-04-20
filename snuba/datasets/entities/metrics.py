@@ -177,13 +177,8 @@ class OrgMetricsCountersEntity(MetricsEntity):
             writable_storage_key=None,
             readable_storage_key=StorageKey.METRICS_COUNTERS,
             value_schema=[Column("value", AggregateFunction("sum", [Float(64)]))],
-            mappers=TranslationMappers(
-                functions=[
-                    FunctionNameMapper("sum", "sumMerge"),
-                    FunctionNameMapper("sumIf", "sumMergeIf"),
-                ],
-            ),
-            validators=[],
+            mappers=TranslationMappers(),
+            validators=[GranularityValidator(minimum=3600)],
         )
 
 
