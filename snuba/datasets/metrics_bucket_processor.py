@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Mapping, Optional
 
-from arroyo.processing.strategies.dead_letter_queue import InvalidMessages
+from arroyo.processing.strategies.dead_letter_queue import InvalidMessage
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -161,8 +161,8 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
 
 def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
     """
-    Pass an invalid message to the DLQ by raising `InvalidMessages` exception.
+    Pass an invalid message to the DLQ by raising `InvalidMessage` exception.
     """
-    raise InvalidMessages(
-        messages=[str(message)], reason=reason, original_topic=Topic.METRICS.value,
+    raise InvalidMessage(
+        message=str(message), reason=reason, original_topic=Topic.METRICS.value,
     )
