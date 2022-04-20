@@ -33,7 +33,10 @@ test_cases = [
                             FunctionCall(
                                 None,
                                 "indexOf",
-                                (Column(None, None, "tags.key"), Literal(None, "foo"),),
+                                (
+                                    Column(None, None, "tags.key"),
+                                    Literal(None, "foo"),
+                                ),
                             ),
                         ),
                     ),
@@ -53,7 +56,10 @@ test_cases = [
                             FunctionCall(
                                 None,
                                 "indexOf",
-                                (Column(None, None, "tags.key"), Literal(None, "foo"),),
+                                (
+                                    Column(None, None, "tags.key"),
+                                    Literal(None, "foo"),
+                                ),
                             ),
                         ),
                     ),

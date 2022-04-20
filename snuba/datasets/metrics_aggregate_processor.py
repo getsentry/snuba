@@ -118,7 +118,8 @@ class SetsAggregateProcessor(MetricsAggregateProcessor):
 
         return {
             "value": _call(
-                "arrayReduce", (_literal("uniqState"), _array_literal(values)),
+                "arrayReduce",
+                (_literal("uniqState"), _array_literal(values)),
             )
         }
 
@@ -139,7 +140,11 @@ class CounterAggregateProcessor(MetricsAggregateProcessor):
 
         return {
             "value": _call(
-                "arrayReduce", (_literal("sumState"), _array_literal([value]),),
+                "arrayReduce",
+                (
+                    _literal("sumState"),
+                    _array_literal([value]),
+                ),
             ),
         }
 
@@ -169,19 +174,32 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
                 ),
             ),
             "min": _call(
-                "arrayReduce", (_literal("minState"), _array_literal([min(values)])),
+                "arrayReduce",
+                (_literal("minState"), _array_literal([min(values)])),
             ),
             "max": _call(
-                "arrayReduce", (_literal("maxState"), _array_literal([max(values)])),
+                "arrayReduce",
+                (_literal("maxState"), _array_literal([max(values)])),
             ),
             "avg": _call(
-                "arrayReduce", (_literal("avgState"), _array_literal(values),),
+                "arrayReduce",
+                (
+                    _literal("avgState"),
+                    _array_literal(values),
+                ),
             ),
             "sum": _call(
-                "arrayReduce", (_literal("sumState"), _array_literal([sum(values)]),),
+                "arrayReduce",
+                (
+                    _literal("sumState"),
+                    _array_literal([sum(values)]),
+                ),
             ),
             "count": _call(
                 "arrayReduce",
-                (_literal("countState"), _array_literal([float(len(values))]),),
+                (
+                    _literal("countState"),
+                    _array_literal([float(len(values))]),
+                ),
             ),
         }

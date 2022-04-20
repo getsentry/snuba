@@ -25,19 +25,28 @@ class BasicFunctionsProcessor(QueryProcessor):
                     return FunctionCall(
                         exp.alias,
                         "ifNull",
-                        (replace(exp, alias=None), Literal(None, 0),),
+                        (
+                            replace(exp, alias=None),
+                            Literal(None, 0),
+                        ),
                     )
                 if exp.function_name == "emptyIfNull":
                     return FunctionCall(
                         exp.alias,
                         "ifNull",
-                        (replace(exp, alias=None), Literal(None, ""),),
+                        (
+                            replace(exp, alias=None),
+                            Literal(None, ""),
+                        ),
                     )
                 if exp.function_name == "log":
                     return FunctionCall(
                         exp.alias,
                         "ifNotFinite",
-                        (replace(exp, alias=None), Literal(None, 0),),
+                        (
+                            replace(exp, alias=None),
+                            Literal(None, 0),
+                        ),
                     )
             if isinstance(exp, CurriedFunctionCall):
                 if exp.internal_function.function_name == "top":

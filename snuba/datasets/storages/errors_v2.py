@@ -58,7 +58,8 @@ query_processors = [
     UniqInSelectAndHavingProcessor(),
     TupleUnaliaser(),
     PostReplacementConsistencyEnforcer(
-        project_column="project_id", replacer_state_name=ReplacerState.ERRORS_V2,
+        project_column="project_id",
+        replacer_state_name=ReplacerState.ERRORS_V2,
     ),
     MappingColumnPromoter(
         mapping_specs={

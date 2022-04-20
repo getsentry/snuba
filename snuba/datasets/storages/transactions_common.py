@@ -70,8 +70,14 @@ columns = ColumnSet(
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
         ("contexts", Nested([("key", String()), ("value", String())])),
-        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
-        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
+        (
+            "measurements",
+            Nested([("key", String()), ("value", Float(64))]),
+        ),
+        (
+            "span_op_breakdowns",
+            Nested([("key", String()), ("value", Float(64))]),
+        ),
         (
             "spans",
             Nested(

@@ -38,7 +38,7 @@ storage = WritableTableStorage(
         pre_filter=KafkaHeaderFilter("transaction_forwarder", "0"),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
-        subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_TRANSACTIONS,
     ),

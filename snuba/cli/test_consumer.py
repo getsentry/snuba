@@ -66,17 +66,22 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option(
-    "--parallel-collect", is_flag=True, default=True,
+    "--parallel-collect",
+    is_flag=True,
+    default=True,
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
-    "--processes", type=int,
+    "--processes",
+    type=int,
 )
 @click.option(
-    "--input-block-size", type=int,
+    "--input-block-size",
+    type=int,
 )
 @click.option(
-    "--output-block-size", type=int,
+    "--output-block-size",
+    type=int,
 )
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
@@ -148,7 +153,8 @@ def test_consumer(
         parallel_collect=parallel_collect,
         profile_path=profile_path,
         mock_parameters=MockParameters(
-            avg_write_latency=avg_latency_ms, std_deviation=latency_std_deviation_ms,
+            avg_write_latency=avg_latency_ms,
+            std_deviation=latency_std_deviation_ms,
         ),
     )
 

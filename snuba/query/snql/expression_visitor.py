@@ -63,7 +63,8 @@ def get_arithmetic_function(
 
 
 def get_arithmetic_expression(
-    term: Expression, exp: Union[LowPriArithmetic, HighPriArithmetic, Sequence[Any]],
+    term: Expression,
+    exp: Union[LowPriArithmetic, HighPriArithmetic, Sequence[Any]],
 ) -> Expression:
     if isinstance(exp, Node):
         return term
@@ -117,14 +118,16 @@ def visit_arithmetic_term(
 
 
 def visit_low_pri_arithmetic(
-    node: Node, visited_children: Tuple[Any, Expression, LowPriArithmetic],
+    node: Node,
+    visited_children: Tuple[Any, Expression, LowPriArithmetic],
 ) -> Expression:
     _, term, exp = visited_children
     return get_arithmetic_expression(term, exp)
 
 
 def visit_high_pri_arithmetic(
-    node: Node, visited_children: Tuple[Any, Expression, HighPriArithmetic],
+    node: Node,
+    visited_children: Tuple[Any, Expression, HighPriArithmetic],
 ) -> Expression:
     _, term, exp = visited_children
 

@@ -9,6 +9,7 @@ from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
+from snuba.query import OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     ConditionFunctions,
@@ -22,7 +23,6 @@ from snuba.query.expressions import CurriedFunctionCall as CurriedFunctionCallEx
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query import OrderByDirection, SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -82,7 +82,10 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         self.__timestamp_col = timestamp_col
 
     def execute(
-        self, query: Query, request_settings: RequestSettings, runner: SplitQueryRunner,
+        self,
+        query: Query,
+        request_settings: RequestSettings,
+        runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
         If a query is:
@@ -194,14 +197,20 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
     """
 
     def __init__(
-        self, id_column: str, project_column: str, timestamp_column: str,
+        self,
+        id_column: str,
+        project_column: str,
+        timestamp_column: str,
     ) -> None:
         self.__id_column = id_column
         self.__project_column = project_column
         self.__timestamp_column = timestamp_column
 
     def execute(
-        self, query: Query, request_settings: RequestSettings, runner: SplitQueryRunner,
+        self,
+        query: Query,
+        request_settings: RequestSettings,
+        runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
         Split query in 2 steps if a large number of columns is being selected.
@@ -225,7 +234,10 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         # Do not split if there is already a = or IN condition on an ID column
         id_column_matcher = FunctionCall(
             Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
-            (Column(None, String(self.__id_column)), AnyExpression(),),
+            (
+                Column(None, String(self.__id_column)),
+                AnyExpression(),
+            ),
         )
 
         for expr in query.get_condition() or []:
@@ -348,7 +360,8 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             self.__timestamp_column,
             "<",
             LiteralExpr(
-                None, (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)),
+                None,
+                (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)),
             ),
         )
 

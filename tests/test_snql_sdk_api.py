@@ -49,7 +49,8 @@ class TestSDKSnQLApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) + timedelta(minutes=180)
         write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [get_raw_transaction()],
         )
 
     def test_simple_query(self) -> None:

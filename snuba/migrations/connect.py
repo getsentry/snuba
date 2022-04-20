@@ -4,7 +4,7 @@ import time
 from packaging import version
 
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
+from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings
 from snuba.migrations.clickhouse import CLICKHOUSE_SERVER_MIN_VERSION
 from snuba.migrations.errors import InvalidClickhouseVersion
 
@@ -47,6 +47,9 @@ def check_clickhouse_connections() -> None:
 
 def check_clickhouse(clickhouse: ClickhousePool) -> None:
     ver = clickhouse.execute("SELECT version()").results[0][0]
+    # The newer versions of altinity on arm add this to the version
+    # and it breaks this check
+    ver = ver.replace(".testingarm", "")
     if version.parse(ver) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
         raise InvalidClickhouseVersion(
             f"Snuba requires Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION}"

@@ -9,7 +9,8 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Expression, ExpressionVisitor
 
 Aggregation = Union[
-    Tuple[Any, Any, Any], Sequence[Any],
+    Tuple[Any, Any, Any],
+    Sequence[Any],
 ]
 
 

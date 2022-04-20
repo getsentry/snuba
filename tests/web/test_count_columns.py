@@ -43,7 +43,10 @@ SIMPLE_QUERY = ClickhouseQuery(
             "alias",
             FunctionCall("alias", "something", (Column(None, None, "event_id"),)),
         ),
-        SelectedExpression("group_id", Column(None, None, "group_id"),),
+        SelectedExpression(
+            "group_id",
+            Column(None, None, "group_id"),
+        ),
     ],
     array_join=None,
     condition=binary_condition(
@@ -61,7 +64,14 @@ SIMPLE_QUERY = ClickhouseQuery(
 )
 
 TEST_CASES = [
-    pytest.param(SIMPLE_QUERY, 3, {"errors_local"}, True, 0.1, id="Simple Query",),
+    pytest.param(
+        SIMPLE_QUERY,
+        3,
+        {"errors_local"},
+        True,
+        0.1,
+        id="Simple Query",
+    ),
     pytest.param(
         CompositeQuery(
             from_clause=SIMPLE_QUERY,
@@ -99,7 +109,8 @@ TEST_CASES = [
                     FunctionCall("alias", "something", (Column(None, "err", "alias"),)),
                 ),
                 SelectedExpression(
-                    "group_id", Column("group_id", "groups", "group_id"),
+                    "group_id",
+                    Column("group_id", "groups", "group_id"),
                 ),
                 SelectedExpression("message", Column("message", "groups", "message")),
             ],

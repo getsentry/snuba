@@ -92,7 +92,6 @@ except ImportError:
     def check_down_file_exists() -> bool:
         return False
 
-
 else:
 
     def check_down_file_exists() -> bool:
@@ -468,7 +467,8 @@ def dataset_query(
                 "message": str(cause),
             }
             logger.warning(
-                str(cause), exc_info=True,
+                str(cause),
+                exc_info=True,
             )
         elif isinstance(cause, ClickhouseError):
             details = {
@@ -507,7 +507,9 @@ def dataset_query(
 def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
     data = {"error": {"type": "subscription", "message": str(exception)}}
     return Response(
-        json.dumps(data, indent=4), 400, {"Content-Type": "application/json"},
+        json.dumps(data, indent=4),
+        400,
+        {"Content-Type": "application/json"},
     )
 
 
@@ -580,7 +582,8 @@ if application.debug or application.testing:
                 rows.extend(processed_message.rows)
 
         BatchWriterEncoderWrapper(
-            table_writer.get_batch_writer(metrics), JSONRowEncoder(),
+            table_writer.get_batch_writer(metrics),
+            JSONRowEncoder(),
         ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})

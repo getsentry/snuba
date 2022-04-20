@@ -39,7 +39,9 @@ added_condition = build_cond("")
 required_condition = binary_condition(
     "and",
     binary_condition(
-        "equals", Column("_snuba_project_id", None, "project_id"), Literal(None, 1),
+        "equals",
+        Column("_snuba_project_id", None, "project_id"),
+        Literal(None, 1),
     ),
     binary_condition(
         "and",
@@ -106,7 +108,9 @@ test_cases = [
         f"MATCH (events SAMPLE 0.5) SELECT 4-5, c WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), 0.5,
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
+                0.5,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -337,7 +341,8 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                    "count",
+                    FunctionCall("_snuba_count", "count", tuple()),
                 ),
             ],
             groupby=[
@@ -490,10 +495,12 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "now", Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
+                    "now",
+                    Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
                 ),
                 SelectedExpression(
-                    "now", Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
+                    "now",
+                    Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
                 ),
                 SelectedExpression(
                     "3*foo(c) AS foo",
@@ -540,7 +547,9 @@ test_cases = [
                     binary_condition(
                         "and",
                         binary_condition(
-                            "equals", Column("_snuba_c", None, "c"), Literal(None, 2),
+                            "equals",
+                            Column("_snuba_c", None, "c"),
+                            Literal(None, 2),
                         ),
                         binary_condition(
                             "and",
@@ -823,7 +832,8 @@ test_cases = [
                                                             (
                                                                 Literal(None, "Stack"),
                                                                 Literal(
-                                                                    None, "Arithmetic",
+                                                                    None,
+                                                                    "Arithmetic",
                                                                 ),
                                                             ),
                                                         ),
@@ -855,7 +865,8 @@ test_cases = [
                 left_node=IndividualNode(
                     "e",
                     QueryEntity(
-                        EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKey.EVENTS,
+                        get_entity(EntityKey.EVENTS).get_data_model(),
                     ),
                 ),
                 right_node=IndividualNode(
@@ -940,7 +951,8 @@ test_cases = [
                 left_node=IndividualNode(
                     "e",
                     QueryEntity(
-                        EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKey.EVENTS,
+                        get_entity(EntityKey.EVENTS).get_data_model(),
                     ),
                 ),
                 right_node=IndividualNode(
@@ -1330,7 +1342,8 @@ test_cases = [
         CompositeQuery(
             from_clause=LogicalQuery(
                 QueryEntity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                    EntityKey.EVENTS,
+                    get_entity(EntityKey.EVENTS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -1369,7 +1382,8 @@ test_cases = [
             from_clause=CompositeQuery(
                 from_clause=LogicalQuery(
                     QueryEntity(
-                        EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKey.EVENTS,
+                        get_entity(EntityKey.EVENTS).get_data_model(),
                     ),
                     selected_columns=[
                         SelectedExpression(
@@ -1470,10 +1484,12 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "tags_key", Column("_snuba_tags_key", None, "tags_key"),
+                    "tags_key",
+                    Column("_snuba_tags_key", None, "tags_key"),
                 ),
                 SelectedExpression(
-                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                    "count",
+                    FunctionCall("_snuba_count", "count", tuple()),
                 ),
             ],
             groupby=[Column("_snuba_tags_key", None, "tags_key")],
@@ -1483,7 +1499,8 @@ test_cases = [
                     FunctionCall("_snuba_count", "count", tuple()),
                 ),
                 OrderBy(
-                    OrderByDirection.ASC, Column("_snuba_tags_key", None, "tags_key"),
+                    OrderByDirection.ASC,
+                    Column("_snuba_tags_key", None, "tags_key"),
                 ),
             ],
             limit=10,
@@ -1547,7 +1564,8 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "times_seen", FunctionCall("_snuba_times_seen", "count", tuple()),
+                    "times_seen",
+                    FunctionCall("_snuba_times_seen", "count", tuple()),
                 ),
             ],
             limit=1000,
@@ -1577,7 +1595,8 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "times_seen", FunctionCall("_snuba_times_seen", "count", tuple()),
+                    "times_seen",
+                    FunctionCall("_snuba_times_seen", "count", tuple()),
                 ),
             ],
             limit=1000,
@@ -1607,7 +1626,8 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "times_seen", FunctionCall("_snuba_times_seen", "count", tuple()),
+                    "times_seen",
+                    FunctionCall("_snuba_times_seen", "count", tuple()),
                 ),
             ],
             limit=1000,
@@ -1676,7 +1696,8 @@ test_cases = [
                     "tn", Column("_snuba_transaction_name", None, "transaction_name")
                 ),
                 SelectedExpression(
-                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                    "count",
+                    FunctionCall("_snuba_count", "count", tuple()),
                 ),
             ],
             groupby=[Column("_snuba_transaction_name", None, "transaction_name")],
