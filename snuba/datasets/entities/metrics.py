@@ -82,7 +82,7 @@ class MetricsEntity(Entity, ABC):
         readable_storage_key: StorageKey,
         value_schema: Sequence[Column[SchemaModifiers]],
         mappers: TranslationMappers,
-        abstract_column_set: ColumnSet = None,
+        abstract_column_set: Optional[ColumnSet] = None,
         validators: Optional[Sequence[QueryValidator]] = None,
     ) -> None:
         writable_storage = (
