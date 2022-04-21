@@ -81,6 +81,7 @@ def test() -> None:
         },
         selector_func=lambda query, referrer: ("errors", ["errors_ro"]),
         split_rate_limiter=True,
+        ignore_secondary_exceptions=True,
         callback_func=mock_callback,
     )
 
