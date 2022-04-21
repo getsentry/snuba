@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 
 from snuba.clickhouse.query import Expression
-from snuba.query.expressions import ExpressionVisitor
-from snuba.query.expressions import FunctionCall
+from snuba.query.expressions import ExpressionVisitor, FunctionCall
 
 
 class SnubaClickhouseTranslator(ExpressionVisitor[Expression], ABC):

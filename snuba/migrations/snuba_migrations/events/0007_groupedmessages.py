@@ -46,7 +46,8 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.CDC, table_name="groupedmessage_local",
+                storage_set=StorageSetKey.CDC,
+                table_name="groupedmessage_local",
             )
         ]
 
@@ -57,7 +58,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="groupedmessage_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="groupedmessage_local", sharding_key=None,
+                    local_table_name="groupedmessage_local",
+                    sharding_key=None,
                 ),
             )
         ]
@@ -65,6 +67,7 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.CDC, table_name="groupedmessage_dist",
+                storage_set=StorageSetKey.CDC,
+                table_name="groupedmessage_dist",
             )
         ]

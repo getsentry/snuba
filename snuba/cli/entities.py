@@ -50,7 +50,8 @@ def list() -> None:
 
 @entities.command()
 @click.argument(
-    "entity_name", type=click.Choice([entity.value for entity in EntityKey]),
+    "entity_name",
+    type=click.Choice([entity.value for entity in EntityKey]),
 )
 def describe(entity_name: str) -> None:
     try:

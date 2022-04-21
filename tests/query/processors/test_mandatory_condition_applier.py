@@ -2,6 +2,7 @@ import copy
 from typing import List
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
@@ -32,7 +33,9 @@ test_data = [
         "table2",
         [
             binary_condition(
-                ConditionFunctions.EQ, Column("time", None, "time"), Literal(None, "1"),
+                ConditionFunctions.EQ,
+                Column("time", None, "time"),
+                Literal(None, "1"),
             ),
             binary_condition(
                 ConditionFunctions.EQ,
@@ -61,10 +64,14 @@ def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> Non
         binary_condition(
             BooleanFunctions.AND,
             binary_condition(
-                OPERATOR_TO_FUNCTION["="], Column("d", None, "d"), Literal(None, "1"),
+                OPERATOR_TO_FUNCTION["="],
+                Column("d", None, "d"),
+                Literal(None, "1"),
             ),
             binary_condition(
-                OPERATOR_TO_FUNCTION["="], Column("c", None, "c"), Literal(None, "3"),
+                OPERATOR_TO_FUNCTION["="],
+                Column("c", None, "c"),
+                Literal(None, "3"),
             ),
         ),
     )

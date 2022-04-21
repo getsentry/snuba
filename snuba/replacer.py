@@ -81,7 +81,10 @@ class RoundRobinConnectionPool(ShardedConnectionPool):
     by one node each time `get_connections` is invoked.
     """
 
-    def __init__(self, cluster: ClickhouseCluster,) -> None:
+    def __init__(
+        self,
+        cluster: ClickhouseCluster,
+    ) -> None:
         self.__cluster = cluster
         self.__counter = 0
         self.__nodes: Mapping[int, List[ClickhouseNode]] = defaultdict(list)
@@ -219,14 +222,18 @@ class ShardedExecutor(InsertExecutor):
                     nodes[len(nodes) - remaining_attempts],
                 )
                 self.__runner(
-                    connection, query, records_count, metrics,
+                    connection,
+                    query,
+                    records_count,
+                    metrics,
                 )
                 return
             except Exception as e:
                 if remaining_attempts == 1:
                     raise
                 logger.warning(
-                    "Replacement processing failed on the main connection", exc_info=e,
+                    "Replacement processing failed on the main connection",
+                    exc_info=e,
                 )
 
     def execute(self, replacement: Replacement, records_count: int) -> int:
@@ -256,7 +263,8 @@ class ShardedExecutor(InsertExecutor):
         except Exception as e:
             count = self.__backup_executor.execute(replacement, records_count)
             logger.warning(
-                "Replacement processing failed on the main connection", exc_info=e,
+                "Replacement processing failed on the main connection",
+                exc_info=e,
             )
             return count
 
@@ -315,10 +323,14 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             logger.info("Replacing %s rows took %sms" % (records_count, duration))
             metrics.timing(
-                "replacements.count", records_count, tags={"host": connection.host},
+                "replacements.count",
+                records_count,
+                tags={"host": connection.host},
             )
             metrics.timing(
-                "replacements.duration", duration, tags={"host": connection.host},
+                "replacements.duration",
+                duration,
+                tags={"host": connection.host},
             )
 
         query_table_name = self.__replacer_processor.get_schema().get_table_name()
@@ -371,7 +383,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         if version == 2:
             return self.__replacer_processor.process_message(
                 ReplacementMessage(
-                    action_type=action_type, data=data, metadata=metadata,
+                    action_type=action_type,
+                    data=data,
+                    metadata=metadata,
                 )
             )
         else:
@@ -442,7 +456,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             except ValueError as e:
                 redis_client.delete(key)
                 logger.warning(
-                    "Unexpected value found for an offset in Redis", exc_info=e,
+                    "Unexpected value found for an offset in Redis",
+                    exc_info=e,
                 )
                 self.__last_offset_processed_per_partition[key] = -1
 

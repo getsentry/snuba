@@ -65,7 +65,9 @@ test_cases = [
                 SelectedExpression("column3", Column("al", None, "column3")),
             ],
             condition=binary_condition(
-                "eq", lhs=Column("al", None, "column3"), rhs=Literal(None, "blabla"),
+                "eq",
+                lhs=Column("al", None, "column3"),
+                rhs=Literal(None, "blabla"),
             ),
             groupby=[
                 Column(None, None, "column1"),
@@ -74,7 +76,9 @@ test_cases = [
                 Column(None, None, "column4"),
             ],
             having=binary_condition(
-                "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
+                "eq",
+                lhs=Column(None, None, "column1"),
+                rhs=Literal(None, 123),
             ),
             order_by=[
                 OrderBy(OrderByDirection.ASC, Column(None, None, "column1")),
@@ -452,7 +456,9 @@ test_cases = [
                             ),
                         ],
                         condition=binary_condition(
-                            "eq", Column(None, None, "user"), Literal(None, "me"),
+                            "eq",
+                            Column(None, None, "user"),
+                            Literal(None, "me"),
                         ),
                     ),
                 ),
@@ -568,11 +574,15 @@ def test_format_clickhouse_specific_query() -> None:
             SelectedExpression("column2", Column(None, "table1", "column2")),
         ],
         condition=binary_condition(
-            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, "blabla"),
+            "eq",
+            lhs=Column(None, None, "column1"),
+            rhs=Literal(None, "blabla"),
         ),
         groupby=[Column(None, None, "column1"), Column(None, "table1", "column2")],
         having=binary_condition(
-            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
+            "eq",
+            lhs=Column(None, None, "column1"),
+            rhs=Literal(None, 123),
         ),
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=[Column(None, None, "column1")],

@@ -5,10 +5,10 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from snuba.datasets.cdc.cdcprocessors import (
-    CdcProcessor,
     CdcMessageRow,
-    postgres_date_to_clickhouse,
+    CdcProcessor,
     parse_postgres_datetime,
+    postgres_date_to_clickhouse,
 )
 from snuba.writer import WriterTableRow
 
@@ -30,7 +30,10 @@ class GroupAssigneeRow(CdcMessageRow):
 
     @classmethod
     def from_wal(
-        cls, offset: int, columnnames: Sequence[str], columnvalues: Sequence[Any],
+        cls,
+        offset: int,
+        columnnames: Sequence[str],
+        columnvalues: Sequence[Any],
     ) -> GroupAssigneeRow:
         raw_data = dict(zip(columnnames, columnvalues))
         return cls(
@@ -50,7 +53,10 @@ class GroupAssigneeRow(CdcMessageRow):
         )
 
     @classmethod
-    def from_bulk(cls, row: Mapping[str, Any],) -> GroupAssigneeRow:
+    def from_bulk(
+        cls,
+        row: Mapping[str, Any],
+    ) -> GroupAssigneeRow:
         return cls(
             offset=0,
             record_deleted=False,
@@ -79,11 +85,14 @@ class GroupAssigneeRow(CdcMessageRow):
 class GroupAssigneeProcessor(CdcProcessor):
     def __init__(self, postgres_table: str) -> None:
         super().__init__(
-            pg_table=postgres_table, message_row_class=GroupAssigneeRow,
+            pg_table=postgres_table,
+            message_row_class=GroupAssigneeRow,
         )
 
     def _process_delete(
-        self, offset: int, key: Mapping[str, Any],
+        self,
+        offset: int,
+        key: Mapping[str, Any],
     ) -> Sequence[WriterTableRow]:
         key_names = key["keynames"]
         key_values = key["keyvalues"]

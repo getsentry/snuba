@@ -334,7 +334,8 @@ def test_produce_result() -> None:
         1,
         SubscriptionTaskResult(
             ScheduledSubscriptionTask(
-                epoch, SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
+                epoch,
+                SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
             ),
             (request, result),
         ),

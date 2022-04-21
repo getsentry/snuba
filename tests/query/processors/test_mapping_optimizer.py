@@ -1,4 +1,5 @@
 import pytest
+
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -188,7 +189,10 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("query, expected_condition", TEST_CASES)
-def test_tags_hash_map(query: ClickhouseQuery, expected_condition: Expression,) -> None:
+def test_tags_hash_map(
+    query: ClickhouseQuery,
+    expected_condition: Expression,
+) -> None:
     set_config("tags_hash_map_enabled", 1)
     MappingOptimizer(
         column_name="tags",

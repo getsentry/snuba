@@ -26,7 +26,9 @@ class SlackClient(object):
 
         try:
             resp = requests.post(
-                "https://slack.com/api/chat.postMessage", headers=headers, json=message,
+                "https://slack.com/api/chat.postMessage",
+                headers=headers,
+                json=message,
             )
         except Exception as exc:
             logger.error(exc, exc_info=True)

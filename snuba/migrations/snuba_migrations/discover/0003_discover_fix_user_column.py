@@ -21,7 +21,10 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.DISCOVER,
                 table_name=table_name,
-                column=Column("user", String(),),
+                column=Column(
+                    "user",
+                    String(),
+                ),
             )
         ]
 

@@ -99,7 +99,9 @@ def build_executor_consumer(
         ), "All entities must have same scheduled and result topics"
 
     consumer_configuration = build_kafka_consumer_configuration(
-        scheduled_topic_spec.topic, consumer_group, auto_offset_reset=auto_offset_reset,
+        scheduled_topic_spec.topic,
+        consumer_group,
+        auto_offset_reset=auto_offset_reset,
     )
 
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
@@ -213,8 +215,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def __execute_query(
         self, task: ScheduledSubscriptionTask, tick_upper_offset: int
     ) -> Tuple[Request, Result]:
-        # Measure the amount of time that took between this task being
-        # scheduled and it beginning to execute.
+        # Measure the amount of time that took between the task's scheduled
+        # time and it beginning to execute.
         self.__metrics.timing(
             "executor.latency", (time.time() - task.timestamp.timestamp()) * 1000
         )
@@ -381,9 +383,10 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
             or force is True
         ):
-            self.__commit(self.__commit_data)
-            self.__last_committed = now
-            self.__commit_data = {}
+            if self.__commit_data:
+                self.__commit(self.__commit_data)
+                self.__last_committed = now
+                self.__commit_data = {}
 
     def poll(self) -> None:
         while self.__queue:

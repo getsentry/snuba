@@ -241,17 +241,32 @@ TEST_CASES_AGGREGATES = [
                     ),
                 ),
                 "min": _call(
-                    "arrayReduce", (_literal("minState"), _array_literal([324.12]),)
+                    "arrayReduce",
+                    (
+                        _literal("minState"),
+                        _array_literal([324.12]),
+                    ),
                 ),
                 "max": _call(
-                    "arrayReduce", (_literal("maxState"), _array_literal([567567]),)
+                    "arrayReduce",
+                    (
+                        _literal("maxState"),
+                        _array_literal([567567]),
+                    ),
                 ),
                 "avg": _call(
-                    "arrayReduce", (_literal("avgState"), _array_literal(DIST_VALUES),),
+                    "arrayReduce",
+                    (
+                        _literal("avgState"),
+                        _array_literal(DIST_VALUES),
+                    ),
                 ),
                 "sum": _call(
                     "arrayReduce",
-                    (_literal("sumState"), _array_literal([sum(DIST_VALUES)]),),
+                    (
+                        _literal("sumState"),
+                        _array_literal([sum(DIST_VALUES)]),
+                    ),
                 ),
                 "count": _call(
                     "arrayReduce",
@@ -403,10 +418,12 @@ TEST_CASES_POLYMORPHIC = [
 
 
 @pytest.mark.parametrize(
-    "message, expected_output", TEST_CASES_POLYMORPHIC,
+    "message, expected_output",
+    TEST_CASES_POLYMORPHIC,
 )
 def test_metrics_polymorphic_processor(
-    message: Mapping[str, Any], expected_output: Optional[Sequence[Mapping[str, Any]]],
+    message: Mapping[str, Any],
+    expected_output: Optional[Sequence[Mapping[str, Any]]],
 ) -> None:
     settings.DISABLED_DATASETS = set()
 

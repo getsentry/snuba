@@ -34,6 +34,7 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
@@ -55,8 +56,10 @@ from snuba.utils.streams.topics import Topic
 # the new storage.
 query_processors = [
     UniqInSelectAndHavingProcessor(),
+    TupleUnaliaser(),
     PostReplacementConsistencyEnforcer(
-        project_column="project_id", replacer_state_name=ReplacerState.ERRORS_V2,
+        project_column="project_id",
+        replacer_state_name=ReplacerState.ERRORS_V2,
     ),
     MappingColumnPromoter(
         mapping_specs={
@@ -108,8 +111,7 @@ storage = WritableTableStorage(
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,
         commit_log_topic=Topic.COMMIT_LOG,
-        # TODO: Temporarily running in Global mode for testing
-        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
+        subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_EVENTS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),

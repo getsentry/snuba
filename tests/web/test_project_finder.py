@@ -26,7 +26,10 @@ EVENTS_SCHEMA = EntityColumnSet(
 SIMPLE_QUERY = Query(
     Entity(EntityKey.EVENTS, EVENTS_SCHEMA),
     selected_columns=[
-        SelectedExpression("alias", Column("_snuba_project", None, "project_id"),)
+        SelectedExpression(
+            "alias",
+            Column("_snuba_project", None, "project_id"),
+        )
     ],
     array_join=None,
     condition=binary_condition(
@@ -37,7 +40,11 @@ SIMPLE_QUERY = Query(
 )
 
 TEST_CASES = [
-    pytest.param(SIMPLE_QUERY, {1, 2}, id="Simple Query",),
+    pytest.param(
+        SIMPLE_QUERY,
+        {1, 2},
+        id="Simple Query",
+    ),
     pytest.param(
         CompositeQuery(
             from_clause=SIMPLE_QUERY,
@@ -55,10 +62,12 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize(
-    "query, expected_proj", TEST_CASES,
+    "query, expected_proj",
+    TEST_CASES,
 )
 def test_count_columns(
-    query: Union[Query, CompositeQuery[Entity]], expected_proj: Set[int],
+    query: Union[Query, CompositeQuery[Entity]],
+    expected_proj: Set[int],
 ) -> None:
     project_finder = ProjectsFinder()
     assert project_finder.visit(query) == expected_proj

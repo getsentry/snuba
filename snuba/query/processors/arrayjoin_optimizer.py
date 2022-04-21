@@ -23,7 +23,10 @@ from snuba.request.request_settings import RequestSettings
 
 class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
     def __init__(
-        self, column_name: str, key_names: Sequence[str], val_names: Sequence[str],
+        self,
+        column_name: str,
+        key_names: Sequence[str],
+        val_names: Sequence[str],
     ):
         super().__init__(column_name, key_names, val_names)
         self.__array_join_pattern = FunctionCall(
@@ -31,7 +34,8 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
             (
                 Column(
                     column_name=Param(
-                        "col", Or([String(column) for column in self.all_columns]),
+                        "col",
+                        Or([String(column) for column in self.all_columns]),
                     ),
                 ),
             ),
@@ -203,7 +207,9 @@ def filter_expression(
                     "tuple",
                     tuple(
                         FunctionCallExpr(
-                            None, "tuple", tuple(LiteralExpr(None, t) for t in tuples),
+                            None,
+                            "tuple",
+                            tuple(LiteralExpr(None, t) for t in tuples),
                         )
                         for tuples in multiple_filtered[indices]
                     ),

@@ -130,4 +130,3 @@ _Plus 124 more_
 - feat: Subscription executor has --override-result-topic option (#2281) by @lynnagara
 - feat(admin): Add UI component that loads the query node data (#2283) by @lynnagara
 - meta: Bump new development version (63881433)
-

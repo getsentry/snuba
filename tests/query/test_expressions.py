@@ -207,7 +207,10 @@ TEST_CASES = [
     (Literal(None, "meowmeow"), "'meowmeow'"),
     (Literal(None, 123), "123"),
     (Literal(None, False), "False"),
-    (Literal(None, datetime(2020, 4, 20, 16, 20)), "datetime(2020-04-20T16:20:00)",),
+    (
+        Literal(None, datetime(2020, 4, 20, 16, 20)),
+        "datetime(2020-04-20T16:20:00)",
+    ),
     (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "date(2020-04-20)"),
     (Literal(None, None), "None"),
     (

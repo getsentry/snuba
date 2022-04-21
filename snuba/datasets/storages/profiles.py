@@ -24,7 +24,8 @@ processors = [
 ]
 
 loader = build_kafka_stream_loader_from_settings(
-    processor=ProfilesMessageProcessor(), default_topic=Topic.PROFILES,
+    processor=ProfilesMessageProcessor(),
+    default_topic=Topic.PROFILES,
 )
 
 readable_columns = ColumnSet(
