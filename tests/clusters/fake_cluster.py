@@ -97,7 +97,9 @@ class FakeClickhouseCluster(ClickhouseCluster):
             Tuple[ClickhouseNode, ClickhouseClientSettings], FakeClickhousePool
         ] = {}
 
-    def get_queries(self,) -> Mapping[str, Sequence[str]]:
+    def get_queries(
+        self,
+    ) -> Mapping[str, Sequence[str]]:
         return {
             key[0].host_name: self.__connections[key].get_queries()
             for key in self.__connections
@@ -122,7 +124,9 @@ class FakeClickhouseCluster(ClickhouseCluster):
         return [node[0] for node in self.__nodes.values()]
 
     def get_node_connection(
-        self, client_settings: ClickhouseClientSettings, node: ClickhouseNode,
+        self,
+        client_settings: ClickhouseClientSettings,
+        node: ClickhouseNode,
     ) -> ClickhousePool:
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)

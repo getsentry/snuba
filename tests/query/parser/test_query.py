@@ -51,7 +51,10 @@ def with_required(condition: Optional[Expression] = None) -> Expression:
             FunctionCall(
                 None,
                 "equals",
-                (Column("_snuba_project_id", None, "project_id"), Literal(None, 1),),
+                (
+                    Column("_snuba_project_id", None, "project_id"),
+                    Literal(None, 1),
+                ),
             ),
         ),
     )
@@ -196,7 +199,10 @@ test_cases = [
                     FunctionCall(
                         None,
                         "tuple",
-                        (Literal(None, "dist1"), Literal(None, "dist2"),),
+                        (
+                            Literal(None, "dist1"),
+                            Literal(None, "dist2"),
+                        ),
                     ),
                 )
             ),
@@ -741,7 +747,8 @@ test_cases = [
                                                     (
                                                         Argument(None, "x"),
                                                         Literal(
-                                                            None, "ArithmeticException",
+                                                            None,
+                                                            "ArithmeticException",
                                                         ),
                                                     ),
                                                 ),
@@ -772,7 +779,8 @@ test_cases = [
                                                     (
                                                         Argument(None, "x"),
                                                         Literal(
-                                                            None, "RuntimeException",
+                                                            None,
+                                                            "RuntimeException",
                                                         ),
                                                     ),
                                                 ),
@@ -851,7 +859,8 @@ test_cases = [
                                                     (
                                                         Argument(None, "x"),
                                                         Literal(
-                                                            None, "ArithmeticException",
+                                                            None,
+                                                            "ArithmeticException",
                                                         ),
                                                     ),
                                                 ),
@@ -882,7 +891,8 @@ test_cases = [
                                                     (
                                                         Argument(None, "x"),
                                                         Literal(
-                                                            None, "RuntimeException",
+                                                            None,
+                                                            "RuntimeException",
                                                         ),
                                                     ),
                                                 ),
@@ -1129,10 +1139,12 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "group_id", Column("_snuba_group_id", None, "group_id"),
+                    "group_id",
+                    Column("_snuba_group_id", None, "group_id"),
                 ),
                 SelectedExpression(
-                    "group_id", Column("_snuba_group_id", None, "group_id"),
+                    "group_id",
+                    Column("_snuba_group_id", None, "group_id"),
                 ),
                 SelectedExpression(
                     "count()", FunctionCall("_snuba_count()", "count", tuple())

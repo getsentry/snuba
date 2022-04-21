@@ -68,7 +68,10 @@ class CustomFunction(QueryProcessor):
     """
 
     def __init__(
-        self, name: str, signature: Sequence[Tuple[str, ParamType]], body: Expression,
+        self,
+        name: str,
+        signature: Sequence[Tuple[str, ParamType]],
+        body: Expression,
     ) -> None:
         self.__function_name = name
         self.__param_names: Sequence[str] = []

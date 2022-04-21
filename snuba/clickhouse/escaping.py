@@ -1,5 +1,4 @@
 import re
-
 from typing import Optional, Pattern
 
 ESCAPE_STRING_RE = re.compile(r"(['\\])")

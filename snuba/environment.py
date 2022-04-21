@@ -19,7 +19,8 @@ def setup_logging(level: Optional[str] = None) -> None:
         level = settings.LOG_LEVEL
 
     logging.basicConfig(
-        level=getattr(logging, level.upper()), format=settings.LOG_FORMAT,
+        level=getattr(logging, level.upper()),
+        format=settings.LOG_FORMAT,
     )
 
 
@@ -42,5 +43,7 @@ def setup_sentry() -> None:
 
 
 metrics = create_metrics(
-    "snuba", tags=None, sample_rates=settings.DOGSTATSD_SAMPLING_RATES,
+    "snuba",
+    tags=None,
+    sample_rates=settings.DOGSTATSD_SAMPLING_RATES,
 )

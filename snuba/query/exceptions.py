@@ -18,7 +18,10 @@ class ValidationException(InvalidQueryException):
 class InvalidExpressionException(ValidationException):
     @classmethod
     def from_args(
-        cls, expression: Expression, message: str, should_report: bool = True,
+        cls,
+        expression: Expression,
+        message: str,
+        should_report: bool = True,
     ) -> "InvalidExpressionException":
         return cls(message, should_report=should_report, expression=repr(expression))
 

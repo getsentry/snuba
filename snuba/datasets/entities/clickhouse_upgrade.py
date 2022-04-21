@@ -17,6 +17,8 @@ from typing import (
 )
 from uuid import UUID
 
+from sentry_sdk import set_tag
+
 from snuba import environment, settings
 from snuba.query.logical import Query
 from snuba.reader import Row
@@ -70,7 +72,10 @@ class RolloutSelector:
         self.__config_prefix = config_prefix
 
     def __is_query_rolled_out(
-        self, referrer: str, config_referrer_prefix: str, general_rollout_config: str,
+        self,
+        referrer: str,
+        config_referrer_prefix: str,
+        general_rollout_config: str,
     ) -> bool:
         rollout_percentage = get_config(
             f"rollout_upgraded_{self.__config_prefix}_{config_referrer_prefix}_{referrer}",
@@ -83,11 +88,15 @@ class RolloutSelector:
 
     def choose(self, referrer: str) -> Choice:
         trust_secondary = self.__is_query_rolled_out(
-            referrer, "trust", f"rollout_upgraded_{self.__config_prefix}_trust",
+            referrer,
+            "trust",
+            f"rollout_upgraded_{self.__config_prefix}_trust",
         )
 
         execute_both = self.__is_query_rolled_out(
-            referrer, "execute", f"rollout_upgraded_{self.__config_prefix}_execute",
+            referrer,
+            "execute",
+            f"rollout_upgraded_{self.__config_prefix}_execute",
         )
 
         primary = (
@@ -158,26 +167,34 @@ def comparison_callback(
     secondary_result_portion = secondary_result.result.result["data"][:50]
 
     def log(title: str) -> None:
+        set_tag("referrer", referrer)
         logger.warning(
             title,
             extra={
-                "referrer": referrer,
-                "schema": primary_schema,
                 "primary": primary_result_portion,
                 "secondary": secondary_result_portion,
+                "referrer": referrer,
+                "schema": primary_schema,
+                "score": score,
             },
             exc_info=True,
         )
 
-    if score >= 0.99:
+    if score >= 0.90:
         # This is just a sanity check to ensure the algorithm makes sense
         if random() < cast(float, get_config("upgrade_log_perfect_match", 0.0)):
-            log("Pipeline delegator perfect match",)
+            log(
+                f"Pipeline delegator good match: {score}",
+            )
     elif score >= 0.75:
         if random() < cast(float, get_config("upgrade_log_avg_match", 0.0)):
-            log("Pipeline delegator average match",)
+            log(
+                f"Pipeline delegator average match: {score}",
+            )
     elif random() < cast(float, get_config("upgrade_log_low_similarity", 0.0)):
-        log("Pipeline delegator low similarity",)
+        log(
+            f"Pipeline delegator low match: {score}",
+        )
 
 
 def calculate_score(

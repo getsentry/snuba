@@ -101,7 +101,9 @@ class BaseEventsSubscription(EntitySubscriptionValidation, EntitySubscription, A
             binary_condition(
                 ConditionFunctions.LTE,
                 FunctionCall(
-                    None, "ifNull", (Column(None, None, "offset"), Literal(None, 0)),
+                    None,
+                    "ifNull",
+                    (Column(None, None, "offset"), Literal(None, 0)),
                 ),
                 Literal(None, offset),
             )

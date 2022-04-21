@@ -47,7 +47,8 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     # There shouldn't be any data in the table yet
     assert (
-        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0] == 0
+        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0]
+        == 0
     ), f"{TABLE_NAME} is not empty"
 
     new_order_by = f"ORDER BY ({new_primary_key})"
@@ -79,12 +80,14 @@ def ensure_drop_temporary_tables(_logger: logging.Logger) -> None:
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
     clickhouse.execute(
         operations.DropTable(
-            storage_set=StorageSetKey.CDC, table_name=TABLE_NAME_NEW,
+            storage_set=StorageSetKey.CDC,
+            table_name=TABLE_NAME_NEW,
         ).format_sql()
     )
     clickhouse.execute(
         operations.DropTable(
-            storage_set=StorageSetKey.CDC, table_name=TABLE_NAME_OLD,
+            storage_set=StorageSetKey.CDC,
+            table_name=TABLE_NAME_OLD,
         ).format_sql()
     )
 

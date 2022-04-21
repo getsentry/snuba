@@ -158,7 +158,8 @@ def test_stateful_count(
 
 
 def test_multiple_invalid_messages(
-    valid_message: Message[KafkaPayload], invalid_message: Message[KafkaPayload],
+    valid_message: Message[KafkaPayload],
+    invalid_message: Message[KafkaPayload],
 ) -> None:
     fake_batching_processor = FakeBatchingProcessingStep()
     count_policy = StatefulCountInvalidMessagePolicy(CONSUMER_GROUP_NAME, 5)

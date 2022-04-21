@@ -62,7 +62,10 @@ TEST_CASES = [
                     FunctionCall(
                         "my_func",
                         "f_call",
-                        (Literal(None, "literal1"), Column("param2", None, "param2"),),
+                        (
+                            Literal(None, "literal1"),
+                            Column("param2", None, "param2"),
+                        ),
                     ),
                 ),
             ],
@@ -147,7 +150,8 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         partial_function(
-            "f_call_impl(param1, inner_call(param2), my_const)", [("my_const", 420)],
+            "f_call_impl(param1, inner_call(param2), my_const)",
+            [("my_const", 420)],
         ),
     )
     # We cannot just run == on the query objects. The content of the two
@@ -169,7 +173,9 @@ INVALID_QUERIES = [
                 SelectedExpression(
                     "my_func",
                     FunctionCall(
-                        "my_func", "f_call", (Column("param2", None, "param2"),),
+                        "my_func",
+                        "f_call",
+                        (Column("param2", None, "param2"),),
                     ),
                 ),
             ],

@@ -219,7 +219,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                         "subscriptions-scheduler",
                         "--entity=metrics_counters",
                         "--consumer-group=snuba-metrics-subscriptions-scheduler",
-                        "--followed-consumer-group=metrics_group",
+                        "--followed-consumer-group=snuba-metrics-consumers",
                         "--auto-offset-reset=latest",
                         "--log-level=debug",
                         "--delay-seconds=1",
@@ -233,7 +233,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                         "subscriptions-scheduler",
                         "--entity=metrics_sets",
                         "--consumer-group=snuba-metrics-subscriptions-scheduler",
-                        "--followed-consumer-group=metrics_group",
+                        "--followed-consumer-group=snuba-metrics-consumers",
                         "--auto-offset-reset=latest",
                         "--log-level=debug",
                         "--delay-seconds=1",
@@ -293,7 +293,9 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(
-            name, list2cmdline(cmd), quiet=False,
+            name,
+            list2cmdline(cmd),
+            quiet=False,
         )
 
     manager.loop()

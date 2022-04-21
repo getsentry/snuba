@@ -1,6 +1,7 @@
 from functools import partial
 
 import pytest
+
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query import SelectedExpression
@@ -218,7 +219,9 @@ TEST_REPLACEMENT = [
                     Literal(None, 1),
                 ),
                 binary_condition(
-                    ConditionFunctions.EQ, Column(None, "gr", "id"), Literal(None, 1),
+                    ConditionFunctions.EQ,
+                    Column(None, "gr", "id"),
+                    Literal(None, 1),
                 ),
             ]
         ),
@@ -231,7 +234,9 @@ TEST_REPLACEMENT = [
                     Literal(None, 1),
                 ),
                 binary_condition(
-                    ConditionFunctions.EQ, Column(None, "gr", "id"), Literal(None, 1),
+                    ConditionFunctions.EQ,
+                    Column(None, "gr", "id"),
+                    Literal(None, 1),
                 ),
                 binary_condition(
                     ConditionFunctions.EQ,

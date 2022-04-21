@@ -33,10 +33,12 @@ columns = ColumnSet([("some_int", UInt(8, Modifiers(nullable=True)))])
 
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
-        alias="ev", data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
+        alias="ev",
+        data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
     ),
     right_node=IndividualNode(
-        alias="gr", data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
+        alias="gr",
+        data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
     ),
     keys=[
         JoinCondition(
@@ -104,7 +106,11 @@ SIMPLE_FORMATTED = [
 
 
 TEST_JOIN = [
-    pytest.param(LOGICAL_QUERY, SIMPLE_FORMATTED, id="Simple logical query",),
+    pytest.param(
+        LOGICAL_QUERY,
+        SIMPLE_FORMATTED,
+        id="Simple logical query",
+    ),
     pytest.param(
         CompositeQuery(
             from_clause=LOGICAL_QUERY,
@@ -251,7 +257,8 @@ TEST_JOIN = [
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
-    query: Union[ProcessableQuery, CompositeQuery[Entity]], formatted: TExpression,
+    query: Union[ProcessableQuery, CompositeQuery[Entity]],
+    formatted: TExpression,
 ) -> None:
     formatted_query = format_query(query)  # type: ignore
     assert formatted_query == formatted

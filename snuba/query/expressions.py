@@ -329,7 +329,9 @@ class SubscriptableReference(Expression):
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         transformed = replace(
-            self, column=self.column.transform(func), key=self.key.transform(func),
+            self,
+            column=self.column.transform(func),
+            key=self.key.transform(func),
         )
         return func(transformed)
 
