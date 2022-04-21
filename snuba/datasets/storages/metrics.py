@@ -144,15 +144,23 @@ counters_storage = WritableTableStorage(
 )
 
 org_counters_storage = ReadableTableStorage(
-    storage_key=StorageKey.METRICS_COUNTERS,
+    storage_key=StorageKey.ORG_METRICS_COUNTERS,
     storage_set_key=StorageSetKey.METRICS,
     schema=TableSchema(
         local_table_name="metrics_counters_v2_local",
         dist_table_name="metrics_counters_v2_dist",
         storage_set_key=StorageSetKey.METRICS,
-        columns=ColumnSet([*aggregated_columns]),
+        columns=ColumnSet(
+            [
+                Column("org_id", UInt(64)),
+                Column("project_id", UInt(64)),
+                Column("metric_id", UInt(64)),
+                Column("granularity", UInt(32)),
+                Column("timestamp", DateTime()),
+            ]
+        ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
+    query_processors=[TableRateLimit()],
 )
 
 

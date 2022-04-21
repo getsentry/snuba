@@ -82,6 +82,7 @@ class MetricsEntity(Entity, ABC):
         readable_storage_key: StorageKey,
         value_schema: Sequence[Column[SchemaModifiers]],
         mappers: TranslationMappers,
+        abstract_column_set: ColumnSet = None,
         validators: Optional[Sequence[QueryValidator]] = None,
     ) -> None:
         writable_storage = (
@@ -91,6 +92,18 @@ class MetricsEntity(Entity, ABC):
         storages = [readable_storage]
         if writable_storage:
             storages.append(writable_storage)
+
+        if abstract_column_set is None:
+            abstract_column_set = ColumnSet(
+                [
+                    Column("org_id", UInt(64)),
+                    Column("project_id", UInt(64)),
+                    Column("metric_id", UInt(64)),
+                    Column("timestamp", DateTime()),
+                    Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
+                    *value_schema,
+                ]
+            )
 
         if validators is None:
             validators = [
@@ -110,16 +123,7 @@ class MetricsEntity(Entity, ABC):
                     ).concat(mappers),
                 )
             ),
-            abstract_column_set=ColumnSet(
-                [
-                    Column("org_id", UInt(64)),
-                    Column("project_id", UInt(64)),
-                    Column("metric_id", UInt(64)),
-                    Column("timestamp", DateTime()),
-                    Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
-                    *value_schema,
-                ]
-            ),
+            abstract_column_set=abstract_column_set,
             join_relationships={},
             writable_storage=writable_storage,
             validators=validators,
@@ -175,9 +179,17 @@ class OrgMetricsCountersEntity(MetricsEntity):
     def __init__(self) -> None:
         super().__init__(
             writable_storage_key=None,
-            readable_storage_key=StorageKey.METRICS_COUNTERS,
-            value_schema=[Column("value", AggregateFunction("sum", [Float(64)]))],
+            readable_storage_key=StorageKey.ORG_METRICS_COUNTERS,
+            value_schema=[],
             mappers=TranslationMappers(),
+            abstract_column_set=ColumnSet(
+                [
+                    Column("org_id", UInt(64)),
+                    Column("project_id", UInt(64)),
+                    Column("metric_id", UInt(64)),
+                    Column("timestamp", DateTime()),
+                ]
+            ),
             validators=[GranularityValidator(minimum=3600)],
         )
 
