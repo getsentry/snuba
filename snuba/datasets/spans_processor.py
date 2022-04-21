@@ -6,7 +6,10 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.events_format import enforce_retention, extract_extra_tags
+from snuba.datasets.events_format import (
+    extract_extra_tags,
+    override_and_enforce_retention,
+)
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -41,7 +44,7 @@ class SpansMessageProcessor(MessageProcessor):
             "deleted": 0,
             "project_id": event["project_id"],
             "transaction_id": str(uuid.UUID(event["event_id"])),
-            "retention_days": enforce_retention(
+            "retention_days": override_and_enforce_retention(
                 event, datetime.utcfromtimestamp(data["timestamp"])
             ),
             "transaction_span_id": int(transaction_ctx["span_id"], 16),
