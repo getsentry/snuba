@@ -453,8 +453,10 @@ class TestMetricsApiDistributions(BaseApiTest):
                     """.format(
             metric_id=self.metric_id,
             org_id=self.org_id,
-            start_time=(self.base_time - self.skew).isoformat(),
-            end_time=(self.base_time + self.skew).isoformat(),
+            start_time=timestamp_to_bucket(
+                self.base_time - self.skew, 3600
+            ).isoformat(),
+            end_time=timestamp_to_bucket(self.base_time + self.skew, 3600).isoformat(),
         )
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
