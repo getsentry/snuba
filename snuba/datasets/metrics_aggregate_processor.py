@@ -80,7 +80,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
             values.append(value)
 
         try:
-            retention_days = enforce_retention(message, timestamp)
+            retention_days = enforce_retention(message["retention_days"], timestamp)
         except EventTooOld:
             return None
 

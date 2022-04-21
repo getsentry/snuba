@@ -68,7 +68,7 @@ class SessionsProcessor(MessageProcessor):
             "seq": message["seq"],
             "org_id": message["org_id"],
             "project_id": message["project_id"],
-            "retention_days": enforce_retention(message, received),
+            "retention_days": enforce_retention(message["retention_days"], received),
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "errors": errors,
