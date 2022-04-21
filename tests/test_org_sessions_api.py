@@ -75,10 +75,12 @@ class TestOrgSessionsApi(BaseApiTest):
                 meta,
             ),
             processor.process_message(
-                {**template, "status": "exited", "quantity": 5}, meta,
+                {**template, "status": "exited", "quantity": 5},
+                meta,
             ),
             processor.process_message(
-                {**template, "status": "errored", "errors": 1, "quantity": 2}, meta,
+                {**template, "status": "errored", "errors": 1, "quantity": 2},
+                meta,
             ),
             processor.process_message(
                 {
@@ -110,7 +112,10 @@ class TestOrgSessionsApi(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        response = self.app.post("/sessions/snql", data=query.snuba(),)
+        response = self.app.post(
+            "/sessions/snql",
+            data=query.snuba(),
+        )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 2
@@ -139,7 +144,10 @@ class TestOrgSessionsApi(BaseApiTest):
             orderby=[OrderBy(Column("org_id"), Direction.ASC)],
         )
 
-        response = self.app.post("/sessions/snql", data=query.snuba(),)
+        response = self.app.post(
+            "/sessions/snql",
+            data=query.snuba(),
+        )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 3
@@ -150,8 +158,13 @@ class TestOrgSessionsApi(BaseApiTest):
         assert data["data"][2]["org_id"] == self.org_id2
         assert data["data"][2]["project_id"] == self.project_id3
 
-        query = query.set_orderby([OrderBy(Column("org_id"), Direction.DESC)],)
-        response = self.app.post("/sessions/snql", data=query.snuba(),)
+        query = query.set_orderby(
+            [OrderBy(Column("org_id"), Direction.DESC)],
+        )
+        response = self.app.post(
+            "/sessions/snql",
+            data=query.snuba(),
+        )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 3

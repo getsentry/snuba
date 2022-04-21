@@ -84,7 +84,10 @@ class EventsBooleanContextsProcessor(QueryProcessor):
         matcher = FunctionCall(
             String("arrayElement"),
             (
-                Column(None, String("contexts.value"),),
+                Column(
+                    None,
+                    String("contexts.value"),
+                ),
                 FunctionCall(
                     String("indexOf"),
                     (

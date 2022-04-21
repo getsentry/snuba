@@ -205,7 +205,9 @@ class Runner:
         migration_id = migration_key.migration_id
 
         context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
+            migration_id,
+            logger,
+            partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
 
@@ -265,7 +267,9 @@ class Runner:
         migration_id = migration_key.migration_id
 
         context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
+            migration_id,
+            logger,
+            partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
 

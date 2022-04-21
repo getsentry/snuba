@@ -167,7 +167,8 @@ tests = [
 
 
 @pytest.mark.parametrize(
-    "vals", tests,
+    "vals",
+    tests,
 )
 def test_rate_limit_failures(vals: Tuple[int, int, int]) -> None:
     params = []

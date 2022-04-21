@@ -41,7 +41,8 @@ def test_concurrency_limit() -> None:
 
     connection.reset_mock(side_effect=True)
     connection.execute.side_effect = ClickhouseError(
-        "some error", code=errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES,
+        "some error",
+        code=errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES,
     )
 
     with pytest.raises(ClickhouseError):

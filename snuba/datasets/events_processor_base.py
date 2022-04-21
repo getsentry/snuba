@@ -87,7 +87,9 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
     @abstractmethod
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: InsertEvent,
+        self,
+        output: MutableMapping[str, Any],
+        event: InsertEvent,
     ) -> None:
         raise NotImplementedError
 
@@ -102,7 +104,9 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
     @abstractmethod
     def extract_promoted_tags(
-        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
+        self,
+        output: MutableMapping[str, Any],
+        tags: Mapping[str, Any],
     ) -> None:
         raise NotImplementedError
 
@@ -126,7 +130,9 @@ class EventsProcessorBase(MessageProcessor, ABC):
         raise NotImplementedError
 
     def extract_required(
-        self, output: MutableMapping[str, Any], event: InsertEvent,
+        self,
+        output: MutableMapping[str, Any],
+        event: InsertEvent,
     ) -> None:
         output["group_id"] = event["group_id"] or 0
 

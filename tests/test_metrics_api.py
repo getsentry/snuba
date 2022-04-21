@@ -43,6 +43,12 @@ def teardown_common() -> None:
     state.delete_config("date_align_seconds")
 
 
+def utc_yesterday_12_15() -> datetime:
+    return (datetime.utcnow() - timedelta(days=1)).replace(
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=pytz.utc
+    )
+
+
 class TestMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
@@ -73,9 +79,7 @@ class TestMetricsApiCounters(BaseApiTest):
         }
         self.skew = timedelta(seconds=self.seconds)
 
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
-        )
+        self.base_time = utc_yesterday_12_15()
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
@@ -170,12 +174,16 @@ class TestMetricsApiCounters(BaseApiTest):
         assert response.status_code == 200
         assert len(data["data"]) == 0, data
 
-    def test_retrieval_single_hour_at_hour_granularity(self) -> None:
+    def test_retrieval_at_hour_granularity(self) -> None:
+        # we need to query hours 2-3, (offset by 1 and 2) because
+        # we start 15 minutes into hour 1
         query_str = self.build_simple_query(
-            start_time=timestamp_to_bucket(self.base_time, 3600).isoformat(),
-            end_time=(
-                timestamp_to_bucket(self.base_time, 3600) + timedelta(hours=1)
-            ).isoformat(),
+            start_time=(self.base_time + timedelta(hours=1))
+            .replace(minute=0)
+            .isoformat(),
+            end_time=(self.base_time + timedelta(hours=2))
+            .replace(minute=0)
+            .isoformat(),
             granularity=3600,
         )
         response = self.app.post(
@@ -222,9 +230,7 @@ class TestMetricsApiSets(BaseApiTest):
         }
         self.skew = timedelta(seconds=self.seconds)
 
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
-        ) - timedelta(minutes=self.seconds)
+        self.base_time = utc_yesterday_12_15() - timedelta(minutes=self.seconds)
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
@@ -253,7 +259,8 @@ class TestMetricsApiSets(BaseApiTest):
                 }
 
                 processed = processor.process_message(
-                    msg, KafkaMessageMetadata(0, 0, self.base_time),
+                    msg,
+                    KafkaMessageMetadata(0, 0, self.base_time),
                 )
                 if processed:
                     events.append(processed)
@@ -320,9 +327,7 @@ class TestMetricsApiDistributions(BaseApiTest):
         }
         self.skew = timedelta(seconds=self.seconds)
 
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
-        ) - timedelta(seconds=self.seconds)
+        self.base_time = utc_yesterday_12_15() - timedelta(seconds=self.seconds)
         self.storage = cast(
             WritableTableStorage,
             get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
@@ -351,7 +356,8 @@ class TestMetricsApiDistributions(BaseApiTest):
                 }
 
                 processed = processor.process_message(
-                    msg, KafkaMessageMetadata(0, 0, self.base_time),
+                    msg,
+                    KafkaMessageMetadata(0, 0, self.base_time),
                 )
                 if processed:
                     events.append(processed)
@@ -386,9 +392,9 @@ class TestMetricsApiDistributions(BaseApiTest):
         assert aggregation["project_id"] == self.project_ids[0]
         assert aggregation["quants"] == [
             approx(50, rel=1),
-            approx(90),
-            approx(95),
-            approx(99),
+            approx(90, rel=1),
+            approx(95, rel=1),
+            approx(99, rel=1),
         ]
 
     def test_dists_min_max_avg_one_day_granularity(self) -> None:

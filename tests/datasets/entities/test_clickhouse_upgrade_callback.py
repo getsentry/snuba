@@ -103,14 +103,20 @@ TESTS = [
 
 
 @pytest.mark.parametrize(
-    "row1, row2, expected", TESTS,
+    "row1, row2, expected",
+    TESTS,
 )
 def test_similarities(row1: SplitRow, row2: SplitRow, expected: float) -> None:
     assert abs(row_similarity(row1, row2) - expected) < 0.0001
 
 
 TESTS = [
-    pytest.param([], [], 1.0, id="Empty results",),
+    pytest.param(
+        [],
+        [],
+        1.0,
+        id="Empty results",
+    ),
     pytest.param(
         [{"key": "asd", "value1": 1.0, "value2": 1.0}],
         [],
@@ -191,12 +197,17 @@ TESTS = [
 
 
 @pytest.mark.parametrize(
-    "data_row1, data_row2, expected", TESTS,
+    "data_row1, data_row2, expected",
+    TESTS,
 )
 def test_similarity_results(
-    data_row1: MutableSequence[Row], data_row2: MutableSequence[Row], expected: float,
+    data_row1: MutableSequence[Row],
+    data_row2: MutableSequence[Row],
+    expected: float,
 ) -> None:
     schema = SplitSchema(
-        complete=True, key_cols=("key",), value_cols=("value1", "value2"),
+        complete=True,
+        key_cols=("key",),
+        value_cols=("value1", "value2"),
     )
     assert abs(calculate_score(data_row1, data_row2, schema) - expected) < 0.0001

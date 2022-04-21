@@ -63,7 +63,9 @@ EVENT_FUNCTIONS = FunctionCallMatch(
 
 
 def match_query_to_entity(
-    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet,
+    query: Query,
+    events_only_columns: ColumnSet,
+    transactions_only_columns: ColumnSet,
 ) -> EntityKey:
     # First check for a top level condition on the event type
     condition = query.get_condition()

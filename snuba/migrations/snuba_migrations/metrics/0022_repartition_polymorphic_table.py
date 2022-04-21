@@ -23,7 +23,10 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
         Column("timestamp", DateTime()),
-        Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))]),),
+        Column(
+            "tags",
+            Nested([Column("key", UInt(64)), Column("value", UInt(64))]),
+        ),
         Column("metric_type", String(Modifiers(low_cardinality=True))),
         Column("set_values", Array(UInt(64))),
         Column("count_value", Float(64)),
@@ -63,7 +66,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.dist_table_name,
                 columns=self.column_list,
                 engine=table_engines.Distributed(
-                    local_table_name=self.local_table_name, sharding_key=None,
+                    local_table_name=self.local_table_name,
+                    sharding_key=None,
                 ),
             )
         ]

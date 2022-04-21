@@ -176,7 +176,8 @@ def test_groupedmessages_compatibility() -> None:
         )
 
     runner.run_migration(
-        MigrationKey(MigrationGroup.EVENTS, migration_id), force=True,
+        MigrationKey(MigrationGroup.EVENTS, migration_id),
+        force=True,
     )
 
     outcome = perform_select_query(
@@ -194,7 +195,7 @@ def run_prior_migrations(
     migration_group: MigrationGroup, stop_migration_id: str, runner: Runner
 ) -> None:
 
-    """ Runs all migrations up to the migration denoted by migration ID
+    """Runs all migrations up to the migration denoted by migration ID
 
     Arguments:
     migration_group -- the group of the desired migration
@@ -226,7 +227,7 @@ def perform_select_query(
     connection: ClickhousePool,
 ) -> Sequence[Any]:
 
-    """ Performs a SELECT query, with optional WHERE and LIMIT clauses
+    """Performs a SELECT query, with optional WHERE and LIMIT clauses
 
     Arguments:
     columns -- a list of columns to be SELECTed
