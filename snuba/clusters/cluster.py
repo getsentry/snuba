@@ -229,7 +229,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         return self.__user, self.__password
 
     def get_query_connection(
-        self, client_settings: ClickhouseClientSettings,
+        self,
+        client_settings: ClickhouseClientSettings,
     ) -> ClickhousePool:
         """
         Get a connection to the query node
@@ -237,7 +238,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         return self.get_node_connection(client_settings, self.__query_node)
 
     def get_node_connection(
-        self, client_settings: ClickhouseClientSettings, node: ClickhouseNode,
+        self,
+        client_settings: ClickhouseClientSettings,
+        node: ClickhouseNode,
     ) -> ClickhousePool:
         """
         Get a Clickhouse connection using the client settings provided. Reuse any
@@ -246,7 +249,11 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         """
 
         return self.__connection_cache.get_node_connection(
-            client_settings, node, self.__user, self.__password, self.__database,
+            client_settings,
+            node,
+            self.__user,
+            self.__password,
+            self.__database,
         )
 
     def get_reader(self) -> Reader:

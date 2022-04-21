@@ -57,14 +57,18 @@ test_cases = [
 test_expressions = [
     pytest.param(
         FunctionCall(
-            None, "f", (Column(alias=None, table_name=None, column_name="col"),),
+            None,
+            "f",
+            (Column(alias=None, table_name=None, column_name="col"),),
         ),
         True,
         id="Invalid function name",
     ),
     pytest.param(
         FunctionCall(
-            None, "count", (Column(alias=None, table_name=None, column_name="col"),),
+            None,
+            "count",
+            (Column(alias=None, table_name=None, column_name="col"),),
         ),
         False,
         id="Valid function name",

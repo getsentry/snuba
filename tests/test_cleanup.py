@@ -51,7 +51,8 @@ test_data = [
 
 class TestCleanup:
     @pytest.mark.parametrize(
-        "storage_key, create_event_row_for_date", test_data,
+        "storage_key, create_event_row_for_date",
+        test_data,
     )
     @patch("snuba.cleanup.current_time")
     def test_main_cases(
@@ -167,7 +168,8 @@ class TestCleanup:
         )
 
     @pytest.mark.parametrize(
-        "storage_key, create_event_row_for_date", test_data,
+        "storage_key, create_event_row_for_date",
+        test_data,
     )
     @patch("snuba.cleanup.current_time")
     def test_midnight_error_case(

@@ -1,6 +1,7 @@
-import pytest
 import uuid
 from typing import Sequence, Tuple, Union
+
+import pytest
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -13,7 +14,7 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.snql.joins import build_join_clause, RelationshipTuple
+from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 
 ###################################
 ## Used to build expected result ##
@@ -220,7 +221,10 @@ def test_joins(
         )
         relationships.append(
             RelationshipTuple(
-                node(lhs_alias, lhs), uuid.uuid4().hex, node(rhs_alias, rhs), data,
+                node(lhs_alias, lhs),
+                uuid.uuid4().hex,
+                node(rhs_alias, rhs),
+                data,
             )
         )
 

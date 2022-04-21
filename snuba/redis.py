@@ -59,7 +59,7 @@ def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]
                     if KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE in str(e):
                         # Exponentially increase the sleep starting from
                         # 0.5 seconds on each retry
-                        sleep_duration = 0.5 * (2 ** retry_counter)
+                        sleep_duration = 0.5 * (2**retry_counter)
                         time.sleep(sleep_duration)
                         retry_counter += 1
                         continue

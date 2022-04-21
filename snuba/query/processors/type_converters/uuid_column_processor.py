@@ -24,7 +24,9 @@ class UUIDColumnProcessor(BaseTypeConverter):
                 "replaceAll",
                 (
                     FunctionCall(
-                        None, "toString", (Column(None, None, exp.column_name),),
+                        None,
+                        "toString",
+                        (Column(None, None, exp.column_name),),
                     ),
                     Literal(None, "-"),
                     Literal(None, ""),

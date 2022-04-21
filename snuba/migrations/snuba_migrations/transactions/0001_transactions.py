@@ -82,7 +82,8 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.TRANSACTIONS, table_name="transactions_local",
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
             )
         ]
 
@@ -102,6 +103,7 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.TRANSACTIONS, table_name="transactions_dist",
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_dist",
             )
         ]

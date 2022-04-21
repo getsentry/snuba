@@ -21,7 +21,8 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.command()
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
-    "--replacements-topic", help="Topic to produce replacement messages info.",
+    "--replacements-topic",
+    help="Topic to produce replacement messages info.",
 )
 @click.option(
     "--commit-log-topic",
@@ -33,7 +34,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Consumer group use for consuming the raw events topic.",
 )
 @click.option(
-    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--storage",
@@ -73,17 +76,22 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option(
-    "--parallel-collect", is_flag=True, default=True,
+    "--parallel-collect",
+    is_flag=True,
+    default=True,
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
-    "--processes", type=int,
+    "--processes",
+    type=int,
 )
 @click.option(
-    "--input-block-size", type=int,
+    "--input-block-size",
+    type=int,
 )
 @click.option(
-    "--output-block-size", type=int,
+    "--output-block-size",
+    type=int,
 )
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)

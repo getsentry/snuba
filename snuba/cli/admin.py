@@ -12,7 +12,11 @@ from snuba.environment import setup_logging
 @click.option("--processes", default=1)
 @click.option("--threads", default=1)
 def admin(
-    *, debug: bool, log_level: Optional[str], processes: int, threads: int,
+    *,
+    debug: bool,
+    log_level: Optional[str],
+    processes: int,
+    threads: int,
 ) -> None:
     from snuba import settings
 

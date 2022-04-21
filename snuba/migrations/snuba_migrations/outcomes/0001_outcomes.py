@@ -90,10 +90,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="outcomes_mv_hourly_local",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_hourly_local",
+                storage_set=StorageSetKey.OUTCOMES,
+                table_name="outcomes_hourly_local",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_raw_local",
+                storage_set=StorageSetKey.OUTCOMES,
+                table_name="outcomes_raw_local",
             ),
         ]
 
@@ -104,7 +106,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="outcomes_raw_dist",
                 columns=raw_columns,
                 engine=table_engines.Distributed(
-                    local_table_name="outcomes_raw_local", sharding_key="org_id",
+                    local_table_name="outcomes_raw_local",
+                    sharding_key="org_id",
                 ),
             ),
             operations.CreateTable(
@@ -112,7 +115,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="outcomes_hourly_dist",
                 columns=hourly_columns,
                 engine=table_engines.Distributed(
-                    local_table_name="outcomes_hourly_local", sharding_key="org_id",
+                    local_table_name="outcomes_hourly_local",
+                    sharding_key="org_id",
                 ),
             ),
         ]
@@ -123,6 +127,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_hourly_dist"
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_raw_dist",
+                storage_set=StorageSetKey.OUTCOMES,
+                table_name="outcomes_raw_dist",
             ),
         ]

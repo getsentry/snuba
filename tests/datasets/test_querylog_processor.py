@@ -72,7 +72,8 @@ def test_simple() -> None:
                     all_columns={"timestamp", "tags"},
                     multi_level_condition=False,
                     where_profile=FilterProfile(
-                        columns={"timestamp"}, mapping_cols={"tags"},
+                        columns={"timestamp"},
+                        mapping_cols={"tags"},
                     ),
                     groupby_cols=set(),
                     array_join_cols=set(),
@@ -182,7 +183,8 @@ def test_missing_fields() -> None:
                     all_columns={"timestamp", "tags"},
                     multi_level_condition=False,
                     where_profile=FilterProfile(
-                        columns={"timestamp"}, mapping_cols={"tags"},
+                        columns={"timestamp"},
+                        mapping_cols={"tags"},
                     ),
                     groupby_cols=set(),
                     array_join_cols=set(),

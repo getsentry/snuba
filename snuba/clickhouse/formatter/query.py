@@ -85,7 +85,8 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
 
 
 def _format_query_content(
-    query: FormattableQuery, expression_formatter_type: Type[ExpressionFormatterBase],
+    query: FormattableQuery,
+    expression_formatter_type: Type[ExpressionFormatterBase],
 ) -> Sequence[FormattedNode]:
     """
     Produces the content of the formatted query.
@@ -132,7 +133,9 @@ def _format_select(
 
 
 def _build_optional_string_node(
-    name: str, expression: Optional[Expression], formatter: ExpressionVisitor[str],
+    name: str,
+    expression: Optional[Expression],
+    formatter: ExpressionVisitor[str],
 ) -> Optional[StringNode]:
     return (
         StringNode(f"{name} {expression.accept(formatter)}")
