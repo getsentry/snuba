@@ -11,13 +11,13 @@ from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
-    enforce_retention,
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
     extract_http,
     extract_nested,
     extract_user,
+    override_and_enforce_retention,
 )
 from snuba.processor import (
     InsertBatch,
@@ -85,7 +85,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             # We are purposely using a naive datetime here to work with the
             # rest of the codebase. We can be confident that clients are only
             # sending UTC dates.
-            retention_days = enforce_retention(
+            retention_days = override_and_enforce_retention(
                 event, datetime.utcfromtimestamp(data["timestamp"])
             )
         except EventTooOld:
