@@ -80,6 +80,7 @@ def test_scheduler_consumer() -> None:
         "latest",
         60 * 5,
         None,
+        None,
         metrics_backend,
     )
     scheduler = builder.build_consumer()

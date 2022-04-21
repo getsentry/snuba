@@ -48,6 +48,11 @@ logger = logging.getLogger(__name__)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
+@click.option(
+    "--stale-threshold-seconds",
+    type=int,
+    help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
+)
 def subscriptions_scheduler(
     *,
     entity_name: str,
@@ -57,6 +62,7 @@ def subscriptions_scheduler(
     schedule_ttl: int,
     log_level: Optional[str],
     delay_seconds: Optional[int],
+    stale_threshold_seconds: Optional[int],
 ) -> None:
     """
     The subscriptions scheduler's job is to schedule subscriptions for a single entity.
@@ -112,6 +118,11 @@ def subscriptions_scheduler(
         storage is not None
     ), f"Entity {entity_name} does not have a writable storage by default."
 
+    if stale_threshold_seconds is not None and delay_seconds is not None:
+        assert (
+            stale_threshold_seconds > delay_seconds
+        ), "stale_threshold_seconds must be greater than delay_seconds"
+
     stream_loader = storage.get_table_writer().get_stream_loader()
 
     scheduled_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
@@ -119,7 +130,8 @@ def subscriptions_scheduler(
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            scheduled_topic_spec.topic, override_params={"partitioner": "consistent"},
+            scheduled_topic_spec.topic,
+            override_params={"partitioner": "consistent"},
         )
     )
 
@@ -131,6 +143,7 @@ def subscriptions_scheduler(
         auto_offset_reset,
         schedule_ttl,
         delay_seconds,
+        stale_threshold_seconds,
         metrics,
     )
 

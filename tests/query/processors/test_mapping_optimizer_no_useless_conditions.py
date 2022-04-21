@@ -27,8 +27,15 @@ def tag_existence_expression(tag_name: str = "foo") -> FunctionCall:
                                 None,
                                 "indexOf",
                                 (
-                                    Column(None, None, "tags.key",),
-                                    Literal(None, tag_name,),
+                                    Column(
+                                        None,
+                                        None,
+                                        "tags.key",
+                                    ),
+                                    Literal(
+                                        None,
+                                        tag_name,
+                                    ),
                                 ),
                             ),
                         ),
@@ -84,7 +91,9 @@ def optimized_tag_expression(
         (
             Column(None, None, "_tags_hash_map"),
             FunctionCall(
-                None, "cityHash64", (Literal(None, f"{tag_name}={tag_value}"),),
+                None,
+                "cityHash64",
+                (Literal(None, f"{tag_name}={tag_value}"),),
             ),
         ),
     )
@@ -139,7 +148,10 @@ TEST_CASES = [
         ),
         build_query(
             selected_columns=[Column("count", None, "count")],
-            condition=and_exp(noop, or_exp(optimized_tag_expression(), noop),),
+            condition=and_exp(
+                noop,
+                or_exp(optimized_tag_expression(), noop),
+            ),
         ),
         id="useless condition nested in OR",
     ),
@@ -160,7 +172,8 @@ TEST_CASES = [
         build_query(
             selected_columns=[Column("count", None, "count")],
             condition=and_exp(
-                noop_or, and_exp(noop_or, and_exp(noop_or, optimized_tag_expression())),
+                noop_or,
+                and_exp(noop_or, and_exp(noop_or, optimized_tag_expression())),
             ),
         ),
         id="useless condition nested in AND",
@@ -230,7 +243,8 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("input_query, expected_query", deepcopy(TEST_CASES))
 def test_recursive_useless_condition(
-    input_query: ClickhouseQuery, expected_query: ClickhouseQuery,
+    input_query: ClickhouseQuery,
+    expected_query: ClickhouseQuery,
 ) -> None:
     # copy the condition to the having condition so that we test both being
     # applied in one test
@@ -246,7 +260,8 @@ def test_recursive_useless_condition(
 
 @pytest.mark.parametrize("input_query, expected_query", deepcopy(TEST_CASES))
 def test_useless_has_condition(
-    input_query: ClickhouseQuery, expected_query: ClickhouseQuery,
+    input_query: ClickhouseQuery,
+    expected_query: ClickhouseQuery,
 ) -> None:
     from snuba.query.processors.empty_tag_condition_processor import (
         EmptyTagConditionProcessor,

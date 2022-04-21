@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Union
 
-from dataclasses import dataclass
 from snuba.datasets.cdc.cdcprocessors import (
-    CdcProcessor,
     CdcMessageRow,
-    postgres_date_to_clickhouse,
+    CdcProcessor,
     parse_postgres_datetime,
+    postgres_date_to_clickhouse,
 )
 from snuba.writer import WriterTableRow
 
@@ -48,7 +48,10 @@ class GroupedMessageRow(CdcMessageRow):
 
     @classmethod
     def from_wal(
-        cls, offset: int, columnnames: Sequence[str], columnvalues: Sequence[Any],
+        cls,
+        offset: int,
+        columnnames: Sequence[str],
+        columnvalues: Sequence[Any],
     ) -> GroupedMessageRow:
         raw_data = dict(zip(columnnames, columnvalues))
         return cls(
@@ -70,7 +73,10 @@ class GroupedMessageRow(CdcMessageRow):
         )
 
     @classmethod
-    def from_bulk(cls, row: Mapping[str, Any],) -> GroupedMessageRow:
+    def from_bulk(
+        cls,
+        row: Mapping[str, Any],
+    ) -> GroupedMessageRow:
         return cls(
             offset=None,
             project_id=int(row["project_id"]),
@@ -109,11 +115,14 @@ class GroupedMessageRow(CdcMessageRow):
 class GroupedMessageProcessor(CdcProcessor):
     def __init__(self, postgres_table: str):
         super(GroupedMessageProcessor, self).__init__(
-            pg_table=postgres_table, message_row_class=GroupedMessageRow,
+            pg_table=postgres_table,
+            message_row_class=GroupedMessageRow,
         )
 
     def _process_delete(
-        self, offset: int, key: Mapping[str, Any],
+        self,
+        offset: int,
+        key: Mapping[str, Any],
     ) -> Sequence[WriterTableRow]:
         key_names = key["keynames"]
         key_values = key["keyvalues"]

@@ -158,7 +158,10 @@ class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
 
     @abstractmethod
     def execute(
-        self, query: TQuery, request_settings: RequestSettings, runner: QueryRunner,
+        self,
+        query: TQuery,
+        request_settings: RequestSettings,
+        runner: QueryRunner,
     ) -> QueryResult:
         """
         Executes the Query passed in as parameter.

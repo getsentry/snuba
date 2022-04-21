@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import time
@@ -43,11 +45,33 @@ class SubscriptionResultData:
             and self.to_dict() == cast(SubscriptionResultData, other).to_dict()
         )
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def is_off_by_one(self, other: SubscriptionResultData) -> bool:
+        a = self.to_dict()
+        b = other.to_dict()
+        data_a = a.pop("data")
+        data_b = b.pop("data")
+
+        # Data is a list of dicts
+        try:
+            if len(data_a) == len(data_b):
+                for (a, b) in zip(data_a, data_b):
+                    a_keys = a.keys()
+                    b_keys = b.keys()
+                    if a_keys == b_keys:
+                        for key in a_keys:
+                            if abs(a[key] - b[key]) > 1:
+                                return False
+                return True
+        except (TypeError, AttributeError):
+            pass
+        return False
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "data": self.result["data"],
             "meta": self.result["meta"],
             "totals": self.result.get("totals"),
+            "request": self.request,
         }
 
 
@@ -150,7 +174,9 @@ def build_verifier(
         SubscriptionResultConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    None, group_id=consumer_group, auto_offset_reset=auto_offset_reset,
+                    None,
+                    group_id=consumer_group,
+                    auto_offset_reset=auto_offset_reset,
                 )
             ),
             override_topics=[orig_result_topic, new_result_topic],
@@ -291,18 +317,33 @@ class ResultStore:
 
             non_matching_results = intersection_ids - matching_results
 
+            # Group the non matching results into those that are off than one,
+            # and those more different than off by one
+            off_by_one: Set[str] = set()
+            for id in non_matching_results:
+                if new_results[id].is_off_by_one(orig_results[id]):
+                    off_by_one.add(id)
+
             self.__metrics.increment(
-                METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
+                METRIC_OUTCOME_NAME,
+                len(matching_results),
+                {"outcome": "same_result"},
             )
 
             self.__metrics.increment(
                 METRIC_OUTCOME_NAME,
-                len(non_matching_results),
+                len(off_by_one),
+                {"outcome": "off_by_one"},
+            )
+
+            self.__metrics.increment(
+                METRIC_OUTCOME_NAME,
+                len(non_matching_results) - len(off_by_one),
                 {"outcome": "different_result"},
             )
 
             # Log up to 100 subscription results per second
-            for id in list(non_matching_results)[:100]:
+            for id in list(non_matching_results - off_by_one)[:100]:
                 logger.warning(
                     "Encountered non matching subscription result",
                     extra={

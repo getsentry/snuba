@@ -38,7 +38,8 @@ class TestSnQLApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) + timedelta(minutes=180)
         write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [get_raw_transaction()],
         )
 
     def test_simple_query(self) -> None:
@@ -758,7 +759,7 @@ class TestSnQLApi(BaseApiTest):
                     timestamp >= toDateTime('2021-08-18T18:34:04') AND
                     timestamp < toDateTime('2021-09-01T18:34:04') AND
                     org_id = 1 AND
-                    project_id IN tuple(5433960)
+                    project_id IN tuple(123)
                 LIMIT 1 OFFSET 0
                 """
                 }

@@ -1,6 +1,9 @@
+import copy
+from dataclasses import replace
 from functools import partial
 from typing import Callable, List, Mapping, Optional, Tuple
 
+from snuba import state
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, QueryRunner
 from snuba.pipeline.query_pipeline import (
     QueryExecutionPipeline,
@@ -24,6 +27,20 @@ CallbackFunc = Callable[
     [LogicalQuery, RequestSettings, str, Optional[Result[QueryResult]], QueryResults],
     None,
 ]
+
+
+def _is_query_copying_disallowed(current_referrer: str) -> bool:
+    """
+    Check if the given referrer is disallowed from making a copy of the query.
+    """
+    pipeline_config = state.get_config("pipeline-delegator-disallow-query-copy", False)
+    if isinstance(pipeline_config, str):
+        referrers_disallowed = pipeline_config.split(";")
+        for referrer in referrers_disallowed:
+            if current_referrer == referrer:
+                return True
+
+    return False
 
 
 class MultipleConcurrentPipeline(QueryExecutionPipeline):
@@ -57,11 +74,13 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         query_pipeline_builders: QueryPipelineBuilders,
         selector_func: SelectorFunc,
         split_rate_limiter: bool,
+        ignore_secondary_exceptions: bool,
         callback_func: Optional[CallbackFunc],
     ):
         self.__request = request
         self.__runner = runner
         self.__split_rate_limtier = split_rate_limiter
+        self.__ignore_secondary_exceptions = ignore_secondary_exceptions
         self.__query_pipeline_builders = query_pipeline_builders
 
         self.__selector_func = lambda query: selector_func(
@@ -86,15 +105,18 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             to separate the rate limiter namespace and avoid double counting
             when enforcing the quota.
             """
-            if not get_config("pipeline_split_rate_limiter", 0):
-                return request
+            query = (
+                request.query
+                if _is_query_copying_disallowed(request.settings.referrer)
+                else copy.deepcopy(request.query)
+            )
 
-            return Request(
-                id=request.id,
-                body=request.body,
-                query=request.query,
-                app_id=request.app_id,
-                snql_anonymized=request.snql_anonymized,
+            if not get_config("pipeline_split_rate_limiter", 0):
+                return replace(request, query=query)
+
+            return replace(
+                request,
+                query=query,
                 settings=RateLimiterDelegate(builder_id, request.settings),
             )
 
@@ -110,6 +132,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             },
             selector_func=self.__selector_func,
             callback_func=self.__callback_func,
+            ignore_secondary_exceptions=self.__ignore_secondary_exceptions,
         )
         assert isinstance(self.__request.query, LogicalQuery)
         return executor.execute(self.__request.query)
@@ -125,12 +148,14 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
         query_pipeline_builders: QueryPipelineBuilders,
         selector_func: SelectorFunc,
         split_rate_limiter: bool,
+        ignore_secondary_exceptions: bool,
         callback_func: Optional[CallbackFunc] = None,
     ) -> None:
         self.__query_pipeline_builders = query_pipeline_builders
         self.__selector_func = selector_func
         self.__callback_func = callback_func
         self.__split_rate_limiter = split_rate_limiter
+        self.__ignore_secondary_exceptions = ignore_secondary_exceptions
 
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
@@ -141,6 +166,7 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
             query_pipeline_builders=self.__query_pipeline_builders,
             selector_func=self.__selector_func,
             split_rate_limiter=self.__split_rate_limiter,
+            ignore_secondary_exceptions=self.__ignore_secondary_exceptions,
             callback_func=self.__callback_func,
         )
 

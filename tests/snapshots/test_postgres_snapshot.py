@@ -1,10 +1,10 @@
-from snuba.snapshots import (
+import pytest
+
+from snuba.snapshots import (  # NOQA
     ColumnConfig,
     DateFormatPrecision,
     DateTimeFormatterConfig,
-)  # NOQA
-import pytest
-
+)
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 
 META_FILE = """

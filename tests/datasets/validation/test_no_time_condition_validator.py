@@ -16,7 +16,9 @@ tests = [
     pytest.param(
         EntityKey.EVENTS,
         binary_condition(
-            "equals", Column("_snuba_project_id", None, "project_id"), Literal(None, 1),
+            "equals",
+            Column("_snuba_project_id", None, "project_id"),
+            Literal(None, 1),
         ),
         id="equals",
     ),
