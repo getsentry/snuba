@@ -27,7 +27,7 @@ from snuba.processor import AggregateInsertBatch, InsertBatch
 MATERIALIZATION_VERSION = 4
 
 timestamp = int(datetime.now(timezone.utc).timestamp())
-# I don't know why this is off by 7 hours
+# expects that test is run in utc local time
 expected_timestamp = datetime.fromtimestamp(timestamp)
 
 SET_MESSAGE_SHARED = {
