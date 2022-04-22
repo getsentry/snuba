@@ -86,7 +86,9 @@ class TransactionsMessageProcessor(MessageProcessor):
             # rest of the codebase. We can be confident that clients are only
             # sending UTC dates.
             retention_days = override_and_enforce_retention(
-                event, datetime.utcfromtimestamp(data["timestamp"])
+                event["project_id"],
+                event.get("retention_days"),
+                datetime.utcfromtimestamp(data["timestamp"]),
             )
         except EventTooOld:
             return None

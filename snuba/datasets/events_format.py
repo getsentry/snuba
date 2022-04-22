@@ -101,22 +101,21 @@ def extract_extra_contexts(
 
 
 def override_and_enforce_retention(
-    message: Mapping[str, Any], timestamp: Optional[datetime]
+    project_id: int, retention_days: Optional[int], timestamp: Optional[datetime]
 ) -> int:
     """
     Overriding retention with RETENTION_OVERRIDES is only
     used for events/transactions datasets.
     """
-    project_id = message["project_id"]
-    retention_days = settings.RETENTION_OVERRIDES.get(project_id)
-    if retention_days is None:
-        retention_days = int(
-            message.get("retention_days") or settings.DEFAULT_RETENTION_DAYS
-        )
+    if project_id:
+        retention_days = settings.RETENTION_OVERRIDES.get(project_id)
+
     return enforce_retention(retention_days, timestamp)
 
 
-def enforce_retention(retention_days: int, timestamp: Optional[datetime]) -> int:
+def enforce_retention(
+    retention_days: Optional[int], timestamp: Optional[datetime]
+) -> int:
     if retention_days is None:
         retention_days = settings.DEFAULT_RETENTION_DAYS
 

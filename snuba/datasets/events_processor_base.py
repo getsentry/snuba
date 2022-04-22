@@ -199,7 +199,8 @@ class EventsProcessorBase(MessageProcessor, ABC):
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = override_and_enforce_retention(
-            event,
+            event["project_id"],
+            event.get("retention_days"),
             datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT),
         )
 

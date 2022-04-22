@@ -45,7 +45,9 @@ class SpansMessageProcessor(MessageProcessor):
             "project_id": event["project_id"],
             "transaction_id": str(uuid.UUID(event["event_id"])),
             "retention_days": override_and_enforce_retention(
-                event, datetime.utcfromtimestamp(data["timestamp"])
+                event["project_id"],
+                event.get("retention_days"),
+                datetime.utcfromtimestamp(data["timestamp"]),
             ),
             "transaction_span_id": int(transaction_ctx["span_id"], 16),
             "trace_id": str(uuid.UUID(transaction_ctx["trace_id"])),
