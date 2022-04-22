@@ -1,8 +1,8 @@
 import logging
 import signal
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
-from typing import Any, Optional, Sequence
+from contextlib import contextmanager
+from typing import Any, Iterator, Optional, Sequence
 
 import click
 from arroyo import configure_metrics
@@ -143,3 +143,11 @@ def subscriptions_executor(
 
     with closing(producer), executor:
         processor.run()
+
+
+@contextmanager
+def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
+    try:
+        yield producer
+    finally:
+        producer.close().result()
