@@ -108,7 +108,7 @@ def override_and_enforce_retention(
     used for events/transactions datasets.
     """
     if project_id:
-        retention_days = settings.RETENTION_OVERRIDES.get(project_id)
+        retention_days = settings.RETENTION_OVERRIDES.get(project_id) or retention_days
 
     return enforce_retention(retention_days, timestamp)
 
