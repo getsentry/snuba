@@ -141,7 +141,7 @@ def subscriptions_executor(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with closing(producer), executor:
+    with executor, closing(producer):
         processor.run()
 
 
