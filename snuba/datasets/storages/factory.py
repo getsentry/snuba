@@ -1,6 +1,7 @@
 from typing import Mapping
 
 from snuba import settings
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -38,6 +39,7 @@ from snuba.datasets.storages.spans import storage as spans_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.transactions_ro import storage as transactions_ro_storage
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
+from snuba.utils.streams.topics import Topic
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
 
@@ -107,6 +109,11 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
 STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
     **WRITABLE_STORAGES,
     **NON_WRITABLE_STORAGES,
+}
+
+STORAGES_WITH_DLQ: Mapping[StorageSetKey, Topic] = {
+    metrics_polymorphic_storage.get_storage_set_key(): Topic.DEAD_LETTER_METRICS,
+    sessions_raw_storage.get_storage_set_key(): Topic.DEAD_LETTER_SESSIONS,
 }
 
 
