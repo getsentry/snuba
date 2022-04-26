@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 from unittest.mock import patch
 
@@ -26,15 +26,20 @@ from snuba.processor import AggregateInsertBatch, InsertBatch
 
 MATERIALIZATION_VERSION = 4
 
+timestamp = int(datetime.now(timezone.utc).timestamp())
+# expects that test is run in utc local time
+expected_timestamp = datetime.fromtimestamp(timestamp)
+
 SET_MESSAGE_SHARED = {
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
     "type": "s",
-    "timestamp": 1619225296,
+    "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": [324234, 345345, 456456, 567567],
-    "retention_days": 30,
+    # test enforce retention days of 30
+    "retention_days": 22,
 }
 
 COUNTER_MESSAGE_SHARED = {
@@ -42,10 +47,11 @@ COUNTER_MESSAGE_SHARED = {
     "project_id": 2,
     "metric_id": 1232341,
     "type": "c",
-    "timestamp": 1619225296,
+    "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": 123.123,
-    "retention_days": 30,
+    # test enforce retention days of 30
+    "retention_days": 23,
 }
 
 DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
@@ -54,10 +60,11 @@ DIST_MESSAGE_SHARED = {
     "project_id": 2,
     "metric_id": 1232341,
     "type": "d",
-    "timestamp": 1619225296,
+    "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": DIST_VALUES,
-    "retention_days": 30,
+    # test enforce retention days of 90
+    "retention_days": 50,
 }
 
 TEST_CASES_BUCKETS = [
@@ -68,7 +75,7 @@ TEST_CASES_BUCKETS = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
-                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "set_values": [324234, 345345, 456456, 567567],
@@ -90,7 +97,7 @@ TEST_CASES_BUCKETS = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
-                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "value": 123.123,
@@ -112,12 +119,12 @@ TEST_CASES_BUCKETS = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
-                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "values": [324.12, 345.23, 4564.56, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 30,
+                "retention_days": 90,
                 "partition": 1,
                 "offset": 100,
             }
@@ -165,7 +172,7 @@ def test_metrics_processor(
     )
 
 
-MOCK_TIME_BUCKET = datetime(2021, 4, 24, 0, 0, 0)
+MOCK_TIME_BUCKET = expected_timestamp
 TEST_CASES_AGGREGATES = [
     pytest.param(
         SET_MESSAGE_SHARED,
@@ -275,7 +282,7 @@ TEST_CASES_AGGREGATES = [
                         _array_literal([float(len(DIST_VALUES))]),
                     ),
                 ),
-                "retention_days": _literal(30),
+                "retention_days": _literal(90),
                 "granularity": _literal(granularity),
             }
             for granularity in MetricsAggregateProcessor.GRANULARITIES_SECONDS
@@ -364,7 +371,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
-                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "metric_type": "set",
@@ -383,7 +390,7 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
-                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "metric_type": "counter",
@@ -402,13 +409,13 @@ TEST_CASES_POLYMORPHIC = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
-                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "timestamp": expected_timestamp,
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "metric_type": "distribution",
                 "distribution_values": [324.12, 345.23, 4564.56, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 30,
+                "retention_days": 90,
                 "partition": 1,
                 "offset": 100,
             }

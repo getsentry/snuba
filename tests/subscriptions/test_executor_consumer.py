@@ -56,7 +56,6 @@ def test_executor_consumer() -> None:
     End to end integration test
     """
 
-    state.set_config("executor_sample_rate_events", 1.0)
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS])
@@ -216,7 +215,6 @@ def generate_message(
 
 
 def test_execute_query_strategy() -> None:
-    state.set_config("executor_sample_rate_events", 1.0)
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
@@ -250,7 +248,6 @@ def test_execute_query_strategy() -> None:
 
 
 def test_too_many_concurrent_queries() -> None:
-    state.set_config("executor_sample_rate_events", 1.0)
     state.set_config("executor_queue_size_factor", 1)
     dataset = get_dataset("events")
     entity_names = ["events"]
@@ -274,7 +271,6 @@ def test_too_many_concurrent_queries() -> None:
 
 def test_skip_execution_for_entity() -> None:
     # Skips execution if the entity name is not on the list
-    state.set_config("executor_sample_rate_metrics", 1.0)
     dataset = get_dataset("metrics")
     entity_names = ["metrics_sets"]
     executor = ThreadPoolExecutor()
@@ -368,7 +364,6 @@ def test_produce_result() -> None:
 
 
 def test_execute_and_produce_result() -> None:
-    state.set_config("executor_sample_rate_events", 1.0)
     dataset = get_dataset("events")
     entity_names = ["events"]
     executor = ThreadPoolExecutor()
