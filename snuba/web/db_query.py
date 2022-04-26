@@ -466,6 +466,18 @@ def execute_query_with_readthrough_caching(
         "cache_partition_loaded",
         tags={"partition_id": reader.cache_partition_id or "default"},
     )
+
+    cache_wait_timeout: int = int(query_settings.get("max_execution_time", 30))
+    # Increase the cache wait timeout for tiger clusters to debug
+    # ExecutionTimeoutErrors
+    if reader.cache_partition_id and reader.cache_partition_id in {
+        "tiger_errors",
+        "tiger_transactions",
+    }:
+        tiger_wait_timeout_config = state.get_config("tiger-cache-wait-time")
+        if tiger_wait_timeout_config:
+            cache_wait_timeout = tiger_wait_timeout_config
+
     return cache_partition.get_readthrough(
         query_id,
         partial(
@@ -480,7 +492,7 @@ def execute_query_with_readthrough_caching(
             robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
-        timeout=query_settings.get("max_execution_time", 30),
+        timeout=cache_wait_timeout,
         timer=timer,
     )
 
