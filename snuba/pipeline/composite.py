@@ -52,7 +52,9 @@ class CompositeQueryPlanner(QueryPlanner[CompositeQueryPlan]):
     """
 
     def __init__(
-        self, query: CompositeQuery[Entity], settings: RequestSettings,
+        self,
+        query: CompositeQuery[Entity],
+        settings: RequestSettings,
     ) -> None:
         self.__query = query
         self.__settings = settings
@@ -453,9 +455,11 @@ class CompositeExecutionPipeline(QueryExecutionPipeline):
     def execute(self) -> QueryResult:
         plan = CompositeQueryPlanner(self.__query, self.__settings).build_best_plan()
         root_processors, aliased_processors = plan.get_plan_processors()
-        ProcessorsExecutor(root_processors, aliased_processors, self.__settings,).visit(
-            plan.query
-        )
+        ProcessorsExecutor(
+            root_processors,
+            aliased_processors,
+            self.__settings,
+        ).visit(plan.query)
 
         return plan.execution_strategy.execute(
             plan.query, self.__settings, self.__runner

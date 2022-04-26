@@ -103,13 +103,19 @@ class TestBuildRequestBase:
         if exception is not None:
             with pytest.raises(exception):
                 request = subscription.build_request(
-                    self.dataset, datetime.utcnow(), 100, timer,
+                    self.dataset,
+                    datetime.utcnow(),
+                    100,
+                    timer,
                 )
                 parse_and_run_query(self.dataset, request, timer)
             return
 
         request = subscription.build_request(
-            self.dataset, datetime.utcnow(), 100, timer,
+            self.dataset,
+            datetime.utcnow(),
+            100,
+            timer,
         )
         result = parse_and_run_query(self.dataset, request, timer)
 

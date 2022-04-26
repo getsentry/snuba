@@ -2,20 +2,14 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.query import Query
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
-from snuba.query.expressions import (
-    Column,
-    Expression,
-    FunctionCall,
-    Literal,
-)
-from snuba.clickhouse.query import Query
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.type_converters.fixedstring_array_column_processor import (
     FixedStringArrayColumnProcessor,
 )
 from snuba.request.request_settings import HTTPRequestSettings
-
 
 tests = [
     pytest.param(
@@ -50,7 +44,9 @@ tests = [
 
 @pytest.mark.parametrize("unprocessed, expected, formatted_value", tests)
 def test_uuid_array_column_processor(
-    unprocessed: Expression, expected: Expression, formatted_value: str,
+    unprocessed: Expression,
+    expected: Expression,
+    formatted_value: str,
 ) -> None:
     unprocessed_query = Query(
         Table("transactions", ColumnSet([])),
@@ -67,7 +63,10 @@ def test_uuid_array_column_processor(
         unprocessed_query, HTTPRequestSettings()
     )
     assert unprocessed_query.get_selected_columns() == [
-        SelectedExpression("column2", Column(None, None, "column2"),)
+        SelectedExpression(
+            "column2",
+            Column(None, None, "column2"),
+        )
     ]
 
     assert expected_query.get_condition() == unprocessed_query.get_condition()

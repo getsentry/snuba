@@ -21,7 +21,8 @@ class Decoder(Generic[TEncoded, TDecoded], ABC):
 
 
 class Codec(
-    Encoder[TEncoded, TDecoded], Decoder[TEncoded, TDecoded],
+    Encoder[TEncoded, TDecoded],
+    Decoder[TEncoded, TDecoded],
 ):
     pass
 

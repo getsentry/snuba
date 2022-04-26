@@ -39,10 +39,12 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
         callback_func: Optional[
             Callable[[Optional[Result[TResult]], List[Result[TResult]]], None]
         ],
+        ignore_secondary_exceptions: bool = False,
     ) -> None:
         self.__callables = callables
         self.__selector_func = selector_func
         self.__callback_func = callback_func
+        self.__ignore_secondary_exceptions = ignore_secondary_exceptions
 
     def __execute_callable(self, function_id: str) -> Result[TResult]:
         start_time = time.time()
@@ -84,6 +86,9 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
                     if self.__callback_func is not None:
                         self.__callback_func(primary_result, other_results)
                 except Exception as error:
-                    logger.exception(error)
+                    if self.__ignore_secondary_exceptions:
+                        logger.warning(error, exc_info=True)
+                    else:
+                        logger.exception(error)
 
             executor.submit(execute_callback)

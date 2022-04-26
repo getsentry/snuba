@@ -36,7 +36,8 @@ time_validation_tests = [
         CompositeQuery(
             from_clause=LogicalQuery(
                 QueryEntity(
-                    EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                    EntityKey.EVENTS,
+                    get_entity(EntityKey.EVENTS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -95,7 +96,8 @@ time_validation_tests = [
                 left_node=IndividualNode(
                     "e",
                     QueryEntity(
-                        EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKey.EVENTS,
+                        get_entity(EntityKey.EVENTS).get_data_model(),
                     ),
                 ),
                 right_node=IndividualNode(
@@ -179,7 +181,8 @@ time_validation_tests = [
         AND timestamp=toDateTime('2021-01-01T00:00:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -208,7 +211,8 @@ time_validation_tests = [
         AND timestamp IN tuple(toDateTime('2021-01-01T00:00:00'))""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -242,7 +246,8 @@ time_validation_tests = [
         AND timestamp < toDateTime('2021-01-02T00:30:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -280,7 +285,8 @@ time_validation_tests = [
         AND timestamp < toDateTime('2021-01-20T00:30:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -319,7 +325,8 @@ time_validation_tests = [
         AND timestamp < toDateTime('2021-01-03T00:30:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -366,7 +373,8 @@ time_validation_tests = [
         AND (timestamp < toDateTime('2021-01-02T00:30:00') OR timestamp < toDateTime('2021-01-02T00:30:00'))""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),

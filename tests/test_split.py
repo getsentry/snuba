@@ -27,8 +27,18 @@ def setup_function(function) -> None:
 
 
 split_specs = [
-    ("events", "event_id", "project_id", "timestamp",),
-    ("transactions", "event_id", "project_id", "finish_ts",),
+    (
+        "events",
+        "event_id",
+        "project_id",
+        "timestamp",
+    ),
+    (
+        "transactions",
+        "event_id",
+        "project_id",
+        "finish_ts",
+    ),
 ]
 
 
@@ -47,7 +57,9 @@ def test_no_split(
     )
 
     def do_query(
-        query: ClickhouseQuery, request_settings: RequestSettings, reader: Reader,
+        query: ClickhouseQuery,
+        request_settings: RequestSettings,
+        reader: Reader,
     ) -> QueryResult:
         assert query == query
         return QueryResult({}, {})
@@ -115,7 +127,9 @@ def test_col_split(
     second_query_data: Sequence[MutableMapping[str, Any]],
 ) -> None:
     def do_query(
-        query: ClickhouseQuery, request_settings: RequestSettings, reader: Reader,
+        query: ClickhouseQuery,
+        request_settings: RequestSettings,
+        reader: Reader,
     ) -> QueryResult:
         selected_col_names = [
             c.expression.column_name
@@ -344,7 +358,8 @@ def test_time_split_ast() -> None:
     found_timestamps = []
 
     def do_query(
-        query: ClickhouseQuery, request_settings: RequestSettings,
+        query: ClickhouseQuery,
+        request_settings: RequestSettings,
     ) -> QueryResult:
         from_date_ast, to_date_ast = get_time_range(query, "timestamp")
         assert from_date_ast is not None and isinstance(from_date_ast, datetime)

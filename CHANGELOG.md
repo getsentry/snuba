@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.4.0
+
+### Various fixes & improvements
+
+- feat(subscriptions): Temporarily run errors in global mode (#2616) by @lynnagara
+- fix(subscriptions): Fix InvalidRangeError when rebalancing occurs (#2611) by @lynnagara
+- fix(subscriptions): Fix off by one calculation in verifier (#2610) by @lynnagara
+- feat(dlq): Introduce DLQ to Metrics with Ignore policy. (#2585) by @rahul-kumar-saini
+- fix(query): Avoid race in pipeline delegator (#2608) by @nikhars
+- fix: Match only migration files in scripts/ddl-changes.py (#2613) by @asottile-sentry
+- feat: Bump arroyo to 0.0.16 (#2606) by @lynnagara
+- feat(subscriptions): Count the off by one results separately in the verifier (#2607) by @lynnagara
+- fix: Fix Clickhouse version check (#2584) by @evanh
+- feat(subscriptions): Ignore stale subscriptions (#2596) by @lynnagara
+- feat(subscriptions): Compare the subscription request as well in the verifier (#2600) by @lynnagara
+- Revert "fix(query): Avoid race in pipeline delegator (#2597)" (#2601) by @nikhars
+- fix(tiger writes): Disable ignore write errors (#2598) by @nikhars
+- fix(query): Avoid race in pipeline delegator (#2597) by @nikhars
+- feat: Record librdkafka buffer size from the subscriptions executor (#2599) by @lynnagara
+- feat(subscriptions): Log non matching results to Sentry (#2595) by @lynnagara
+- fix(subscription-verifier): Totals is not always present in result (#2594) by @lynnagara
+- feat(subscriptions): Record more metrics from the subscriptions verifier (#2590) by @lynnagara
+- feat(subscriptions): Record stale message topic data (#2589) by @lynnagara
+- feat(admin): Added SnQL to SQL conversion (#2572) by @rahul-kumar-saini
+- fix(consumers): Allow bypassing header based routing for small percentage of messages (#2233) by @nikhars
+- ref(devserver): update metrics-consumer command (#2588) by @MeredithAnya
+- OPS-1608: add events-subscriptions-verifier to freight config (#2592) by @mwarkentin
+- fix(metrics): Remove bucket storages from devserver (#2591) by @jjbayer
+
+_Plus 75 more_
+
 ## 22.3.0
 
 ### Various fixes & improvements
@@ -99,4 +130,3 @@ _Plus 124 more_
 - feat: Subscription executor has --override-result-topic option (#2281) by @lynnagara
 - feat(admin): Add UI component that loads the query node data (#2283) by @lynnagara
 - meta: Bump new development version (63881433)
-

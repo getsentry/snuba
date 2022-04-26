@@ -16,7 +16,8 @@ def build_plan(table_name: str, storage_set: StorageSetKey) -> ClickhouseQueryPl
     return ClickhouseQueryPlan(
         Query(Table(table_name, ColumnSet([]))),
         SimpleQueryPlanExecutionStrategy(
-            get_cluster(storage_set), db_query_processors=[],
+            get_cluster(storage_set),
+            db_query_processors=[],
         ),
         storage_set,
         plan_query_processors=[],

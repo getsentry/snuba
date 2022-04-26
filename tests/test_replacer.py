@@ -35,7 +35,9 @@ class TestReplacer:
         self.storage = get_writable_storage(StorageKey.ERRORS)
 
         self.replacer = replacer.ReplacerWorker(
-            self.storage, CONSUMER_GROUP, DummyMetricsBackend(strict=True),
+            self.storage,
+            CONSUMER_GROUP,
+            DummyMetricsBackend(strict=True),
         )
 
         self.project_id = 1
@@ -298,7 +300,11 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (True, set(), {ReplacementType.EXCLUDE_GROUPS},)
+        ) == (
+            True,
+            set(),
+            {ReplacementType.EXCLUDE_GROUPS},
+        )
 
         errors_replacer.set_project_needs_final(
             2, ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
@@ -308,7 +314,11 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (True, set(), {ReplacementType.EXCLUDE_GROUPS},)
+        ) == (
+            True,
+            set(),
+            {ReplacementType.EXCLUDE_GROUPS},
+        )
 
     def test_query_time_flags_groups(self) -> None:
         """
@@ -376,7 +386,11 @@ class TestReplacer:
             flags.needs_final,
             flags.group_ids_to_exclude,
             flags.replacement_types,
-        ) == (False, {1, 2}, {ReplacementType.EXCLUDE_GROUPS},)
+        ) == (
+            False,
+            {1, 2},
+            {ReplacementType.EXCLUDE_GROUPS},
+        )
 
     def test_query_time_flags_project_and_groups(self) -> None:
         """

@@ -77,7 +77,8 @@ class StrictConsumer:
         self.__consumer = self._create_consumer(consumer_config)
 
         def _on_partitions_assigned(
-            consumer: Consumer, partitions: Sequence[TopicPartition],
+            consumer: Consumer,
+            partitions: Sequence[TopicPartition],
         ) -> None:
             logger.info("New partitions assigned: %r", partitions)
             if self.__consuming:
@@ -91,7 +92,8 @@ class StrictConsumer:
                 self.__on_partitions_assigned(consumer, partitions)
 
         def _on_partitions_revoked(
-            consumer: Consumer, partitions: Sequence[TopicPartition],
+            consumer: Consumer,
+            partitions: Sequence[TopicPartition],
         ) -> None:
             logger.info("Partitions revoked: %r", partitions)
             if self.__on_partitions_revoked:
@@ -146,7 +148,9 @@ class StrictConsumer:
             if commit_decision == CommitDecision.COMMIT_THIS:
                 self.__consumer.commit(asynchronous=False)
             elif commit_decision == CommitDecision.COMMIT_PREV:
-                prev_watermark = watermarks.get((message.partition(), message.topic()),)
+                prev_watermark = watermarks.get(
+                    (message.partition(), message.topic()),
+                )
                 if prev_watermark is not None:
                     commit_pos = TopicPartition(
                         partition=message.partition(),

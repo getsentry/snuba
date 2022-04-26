@@ -29,7 +29,10 @@ class QuerySplitStrategy(ABC):
 
     @abstractmethod
     def execute(
-        self, query: Query, request_settings: RequestSettings, runner: SplitQueryRunner,
+        self,
+        query: Query,
+        request_settings: RequestSettings,
+        runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
         Executes and/or splits the query provided, like the equivalent method in

@@ -70,7 +70,12 @@ def test_tick_buffer_wait_slowest() -> None:
     next_step = mock.Mock()
 
     # Create strategy with 2 partitions
-    strategy = TickBuffer(SchedulingWatermarkMode.GLOBAL, 2, 10, next_step,)
+    strategy = TickBuffer(
+        SchedulingWatermarkMode.GLOBAL,
+        2,
+        10,
+        next_step,
+    )
 
     topic = Topic("messages")
     commit_log_partition = Partition(topic, 0)

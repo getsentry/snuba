@@ -3,7 +3,6 @@ from typing import Any, Generator, Mapping, MutableMapping
 
 import jsonschema
 
-
 Schema = Mapping[str, Any]  # placeholder for JSON schema
 
 

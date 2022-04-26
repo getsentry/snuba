@@ -37,18 +37,30 @@ spans_groups = Column(None, None, "spans.group")
 
 spans_group_col = FunctionCall("spans_group", "arrayJoin", (spans_groups,))
 
-spans_op_group_col = FunctionCall(None, "tuple", (spans_op_col, spans_group_col),)
+spans_op_group_col = FunctionCall(
+    None,
+    "tuple",
+    (spans_op_col, spans_group_col),
+)
 
 spans_exclusive_time_col = FunctionCall(
-    "spans_exclusive_time", "arrayJoin", (Column(None, None, "spans.exclusive_time"),),
+    "spans_exclusive_time",
+    "arrayJoin",
+    (Column(None, None, "spans.exclusive_time"),),
 )
 
 spans_op_filter_tests = [
-    pytest.param(build_query(), set(), id="no op filter",),
+    pytest.param(
+        build_query(),
+        set(),
+        id="no op filter",
+    ),
     pytest.param(
         build_query(
             condition=binary_condition(
-                ConditionFunctions.EQ, spans_op_col, Literal(None, "db"),
+                ConditionFunctions.EQ,
+                spans_op_col,
+                Literal(None, "db"),
             ),
         ),
         {"db"},
@@ -57,7 +69,8 @@ spans_op_filter_tests = [
     pytest.param(
         build_query(
             condition=in_condition(
-                spans_op_col, [Literal(None, "db"), Literal(None, "http")],
+                spans_op_col,
+                [Literal(None, "db"), Literal(None, "http")],
             ),
         ),
         {"db", "http"},
@@ -65,8 +78,14 @@ spans_op_filter_tests = [
     ),
     pytest.param(
         build_query(
-            condition=in_condition(spans_op_col, [Literal(None, "db")],),
-            having=in_condition(spans_op_col, [Literal(None, "http")],),
+            condition=in_condition(
+                spans_op_col,
+                [Literal(None, "db")],
+            ),
+            having=in_condition(
+                spans_op_col,
+                [Literal(None, "http")],
+            ),
         ),
         {"db", "http"},
         id="conditions and having",
@@ -77,11 +96,13 @@ spans_op_filter_tests = [
                 BooleanFunctions.OR,
                 spans_op_col,
                 in_condition(
-                    spans_op_col, [Literal(None, "db"), Literal(None, "http")],
+                    spans_op_col,
+                    [Literal(None, "db"), Literal(None, "http")],
                 ),
             ),
             having=in_condition(
-                spans_op_col, [Literal(None, "db"), Literal(None, "http")],
+                spans_op_col,
+                [Literal(None, "db"), Literal(None, "http")],
             ),
         ),
         set(),
@@ -102,7 +123,11 @@ def test_get_single_column_filters(
 
 
 spans_op_group_tuple_filter_tests = [
-    pytest.param(build_query(), set(), id="no op+group filter",),
+    pytest.param(
+        build_query(),
+        set(),
+        id="no op+group filter",
+    ),
     pytest.param(
         build_query(
             condition=binary_condition(
@@ -327,14 +352,22 @@ def array_join_col(ops=None, groups=None, op_groups=None):
         cols = FunctionCall(
             None,
             "arrayFilter",
-            (Lambda(None, (argument_name,), combine_and_conditions(conditions)), cols,),
+            (
+                Lambda(None, (argument_name,), combine_and_conditions(conditions)),
+                cols,
+            ),
         )
 
     return arrayJoin("snuba_all_spans", cols)
 
 
 span_processor_tests = [
-    pytest.param(build_query(), [], None, id="no spans columns in select clause",),
+    pytest.param(
+        build_query(),
+        [],
+        None,
+        id="no spans columns in select clause",
+    ),
     pytest.param(
         build_query(
             selected_columns=[spans_op_col, spans_group_col, spans_exclusive_time_col]
@@ -361,7 +394,9 @@ span_processor_tests = [
         build_query(
             selected_columns=[spans_op_col, spans_group_col, spans_exclusive_time_col],
             condition=binary_condition(
-                ConditionFunctions.EQ, spans_op_col, Literal(None, "db"),
+                ConditionFunctions.EQ,
+                spans_op_col,
+                Literal(None, "db"),
             ),
         ),
         [
@@ -397,7 +432,8 @@ span_processor_tests = [
         build_query(
             selected_columns=[spans_op_col, spans_group_col, spans_exclusive_time_col],
             condition=in_condition(
-                spans_op_col, [Literal(None, "db"), Literal(None, "http")],
+                spans_op_col,
+                [Literal(None, "db"), Literal(None, "http")],
             ),
         ),
         [
@@ -442,7 +478,9 @@ span_processor_tests = [
         build_query(
             selected_columns=[spans_op_col, spans_group_col, spans_exclusive_time_col],
             condition=binary_condition(
-                ConditionFunctions.EQ, spans_group_col, Literal(None, "a" * 16),
+                ConditionFunctions.EQ,
+                spans_group_col,
+                Literal(None, "a" * 16),
             ),
         ),
         [
@@ -484,7 +522,8 @@ span_processor_tests = [
         build_query(
             selected_columns=[spans_op_col, spans_group_col, spans_exclusive_time_col],
             condition=in_condition(
-                spans_group_col, [Literal(None, "a" * 16), Literal(None, "b" * 16)],
+                spans_group_col,
+                [Literal(None, "a" * 16), Literal(None, "b" * 16)],
             ),
         ),
         [

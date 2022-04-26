@@ -36,12 +36,14 @@ class SubscriptionCreator:
         self._test_request(data, timer)
 
         identifier = SubscriptionIdentifier(
-            self.__partitioner.build_partition_id(data), uuid1(),
+            self.__partitioner.build_partition_id(data),
+            uuid1(),
         )
         RedisSubscriptionDataStore(
             redis_client, self.entity_key, identifier.partition
         ).create(
-            identifier.uuid, data,
+            identifier.uuid,
+            data,
         )
         return identifier
 
