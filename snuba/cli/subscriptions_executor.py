@@ -8,7 +8,7 @@ import click
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
-from snuba import environment
+from snuba import environment, state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
@@ -137,6 +137,8 @@ def subscriptions_executor(
         logging.getLogger().setLevel(logging.DEBUG)
 
         processor.signal_shutdown()
+        # Ensure the querylog producer is flushed
+        state.flush_producer()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
