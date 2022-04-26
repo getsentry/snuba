@@ -200,6 +200,141 @@ class TestMetricsApiCounters(BaseApiTest):
         assert aggregation["total_seconds"] == 3600
 
 
+class TestOrgMetricsApiCounters(BaseApiTest):
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "org_metrics_counters"
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    def setup_method(self, test_method: Any) -> None:
+        super().setup_method(test_method)
+
+        # values for test data
+        self.metric_id = 1001
+        self.org_projects = {101: [1, 2], 102: [3]}
+        self.seconds = 180 * 60
+
+        self.skew = timedelta(seconds=self.seconds)
+
+        self.base_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+        )
+        self.storage = cast(
+            WritableTableStorage,
+            get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
+        )
+        self.generate_counters()
+
+    def teardown_method(self, test_method: Any) -> None:
+        teardown_common()
+
+    def generate_counters(self) -> None:
+        events = []
+        for n in range(self.seconds):
+            for org_id, project_ids in self.org_projects.items():
+                for project_id in project_ids:
+                    processed = (
+                        self.storage.get_table_writer()
+                        .get_stream_loader()
+                        .get_processor()
+                        .process_message(
+                            (
+                                {
+                                    "org_id": org_id,
+                                    "project_id": project_id,
+                                    "unit": "ms",
+                                    "type": METRICS_COUNTERS_TYPE,
+                                    "value": 1.0,
+                                    "tags": {},
+                                    "timestamp": self.base_time.timestamp() + n,
+                                    "metric_id": self.metric_id,
+                                    "retention_days": RETENTION_DAYS,
+                                }
+                            ),
+                            KafkaMessageMetadata(0, 0, self.base_time),
+                        )
+                    )
+                    if processed:
+                        events.append(processed)
+        write_processed_messages(self.storage, events)
+
+    def build_simple_query(
+        self,
+        metric_id: Optional[int] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        granularity: Optional[int] = None,
+    ) -> str:
+        if not metric_id:
+            metric_id = self.metric_id
+        if not start_time:
+            start_time = (self.base_time - self.skew).isoformat()
+        if not end_time:
+            end_time = (self.base_time + self.skew).isoformat()
+        if not granularity:
+            granularity = 3600
+        query_str = f"""MATCH (org_metrics_counters)
+                    SELECT org_id, project_id BY org_id, project_id
+                    WHERE metric_id = {metric_id}
+                    AND timestamp >= toDateTime('{start_time}')
+                    AND timestamp < toDateTime('{end_time}')
+                    ORDER BY org_id ASC, project_id ASC
+                    GRANULARITY {granularity}
+                    """
+
+        return query_str
+
+    def test_retrieval_basic(self) -> None:
+        query_str = self.build_simple_query()
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == [
+            {"org_id": 101, "project_id": 1},
+            {"org_id": 101, "project_id": 2},
+            {"org_id": 102, "project_id": 3},
+        ]
+
+    def test_retrieval_counter_not_present(self) -> None:
+        ABSENT_METRIC_ID = 4096
+        query_str = self.build_simple_query(metric_id=ABSENT_METRIC_ID)
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert data["data"] == [], data
+
+    def test_retrieval_single_hour_at_hour_granularity(self) -> None:
+        query_str = self.build_simple_query(
+            start_time=timestamp_to_bucket(self.base_time, 3600).isoformat(),
+            end_time=(
+                timestamp_to_bucket(self.base_time, 3600) + timedelta(hours=1)
+            ).isoformat(),
+            granularity=3600,
+        )
+        response = self.app.post(
+            SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert data["data"] == [
+            {"org_id": 101, "project_id": 1},
+            {"org_id": 101, "project_id": 2},
+            {"org_id": 102, "project_id": 3},
+        ]
+
+
 class TestMetricsApiSets(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
