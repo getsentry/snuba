@@ -82,7 +82,7 @@ def run_migrations() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def clear_recorded_metrics() -> Iterator[None]:
-    from snuba.utils.metrics.backends.dummy import clear_recorded_metric_calls
+    from snuba.utils.metrics.backends.testing import clear_recorded_metric_calls
 
     yield
 
