@@ -50,6 +50,7 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     GranularityValidator,
+    QueryValidator,
 )
 from snuba.request.request_settings import RequestSettings
 
@@ -77,16 +78,41 @@ class TagsTypeTransformer(QueryProcessor):
 class MetricsEntity(Entity, ABC):
     def __init__(
         self,
-        writable_storage_key: StorageKey,
+        writable_storage_key: Optional[StorageKey],
         readable_storage_key: StorageKey,
         value_schema: Sequence[Column[SchemaModifiers]],
         mappers: TranslationMappers,
+        abstract_column_set: Optional[ColumnSet] = None,
+        validators: Optional[Sequence[QueryValidator]] = None,
     ) -> None:
-        writable_storage = get_writable_storage(writable_storage_key)
+        writable_storage = (
+            get_writable_storage(writable_storage_key) if writable_storage_key else None
+        )
         readable_storage = get_storage(readable_storage_key)
+        storages = [readable_storage]
+        if writable_storage:
+            storages.append(writable_storage)
+
+        if abstract_column_set is None:
+            abstract_column_set = ColumnSet(
+                [
+                    Column("org_id", UInt(64)),
+                    Column("project_id", UInt(64)),
+                    Column("metric_id", UInt(64)),
+                    Column("timestamp", DateTime()),
+                    Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
+                    *value_schema,
+                ]
+            )
+
+        if validators is None:
+            validators = [
+                EntityRequiredColumnValidator({"org_id", "project_id"}),
+                GranularityValidator(minimum=10),
+            ]
 
         super().__init__(
-            storages=[writable_storage, readable_storage],
+            storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(
                     readable_storage,
@@ -97,22 +123,10 @@ class MetricsEntity(Entity, ABC):
                     ).concat(mappers),
                 )
             ),
-            abstract_column_set=ColumnSet(
-                [
-                    Column("org_id", UInt(64)),
-                    Column("project_id", UInt(64)),
-                    Column("metric_id", UInt(64)),
-                    Column("timestamp", DateTime()),
-                    Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
-                    *value_schema,
-                ]
-            ),
+            abstract_column_set=abstract_column_set,
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[
-                EntityRequiredColumnValidator({"org_id", "project_id"}),
-                GranularityValidator(minimum=10),
-            ],
+            validators=validators,
             required_time_column="timestamp",
         )
 
@@ -158,6 +172,25 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
+        )
+
+
+class OrgMetricsCountersEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=None,
+            readable_storage_key=StorageKey.ORG_METRICS_COUNTERS,
+            value_schema=[],
+            mappers=TranslationMappers(),
+            abstract_column_set=ColumnSet(
+                [
+                    Column("org_id", UInt(64)),
+                    Column("project_id", UInt(64)),
+                    Column("metric_id", UInt(64)),
+                    Column("timestamp", DateTime()),
+                ]
+            ),
+            validators=[GranularityValidator(minimum=3600)],
         )
 
 
