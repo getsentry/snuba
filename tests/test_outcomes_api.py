@@ -342,7 +342,10 @@ class TestOutcomesAPI(BaseApiTest):
                 self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_processor()
-                .process_message(message, KafkaMessageMetadata(0, 0, self.base_time),)
+                .process_message(
+                    message,
+                    KafkaMessageMetadata(0, 0, self.base_time),
+                )
             )
             if processed:
                 outcomes.append(processed)
