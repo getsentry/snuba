@@ -486,7 +486,9 @@ def execute_query_with_readthrough_caching(
     )
 
 
-def _get_cache_wait_timeout(query_settings: MutableMapping[str, Any], reader: Reader):
+def _get_cache_wait_timeout(
+    query_settings: MutableMapping[str, Any], reader: Reader
+) -> int:
     """
     Helper function to determine how long a query should wait when doing
     a readthrough caching.
