@@ -59,9 +59,10 @@ def _select_pipelines(
     missing any (or duplicating for that matter) query execution and subscription
     results.
 
-    The are four modes which can be set:
+    The are five modes which can be set:
     - legacy (the default)
     - new
+    - both
     - transition_legacy
     - transition_new
 
