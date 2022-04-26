@@ -33,6 +33,7 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
+from snuba.subscriptions.utils import run_new_pipeline
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -171,6 +172,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__max_concurrent_queries,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
+            commit,
         )
 
 
@@ -188,6 +190,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         max_concurrent_queries: int,
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
+        # TODO: To be removed once executor is fully rolled out
+        commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
@@ -195,6 +199,10 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__max_concurrent_queries = max_concurrent_queries
         self.__metrics = metrics
         self.__next_step = next_step
+
+        self.__commit = commit
+        self.__commit_data: MutableMapping[Partition, Position] = {}
+        self.__last_committed: Optional[float] = None
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
 
@@ -287,7 +295,11 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         entity_name = task.task.entity.value
 
-        if entity_name in self.__entity_names:
+        should_execute = entity_name in self.__entity_names and run_new_pipeline(
+            entity_name, task.timestamp
+        )
+
+        if should_execute:
             self.__queue.append(
                 (
                     message,
@@ -301,6 +313,21 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
         else:
             self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
+
+            # Periodically commit offsets if we haven't started rollout yet
+            self.__commit_data[message.partition] = Position(
+                message.offset, message.timestamp
+            )
+
+            now = time.time()
+
+            if (
+                self.__last_committed is None
+                or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
+            ):
+                self.__commit(self.__commit_data)
+                self.__last_committed = now
+                self.__commit_data = {}
 
     def close(self) -> None:
         self.__closed = True
