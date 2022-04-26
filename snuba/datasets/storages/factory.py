@@ -37,7 +37,6 @@ from snuba.datasets.storages.sessions import (
     org_materialized_storage as org_sessions_hourly_storage,
 )
 from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
-from snuba.datasets.storages.spans import storage as spans_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.transactions_ro import storage as transactions_ro_storage
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
@@ -72,7 +71,6 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             querylog_storage,
             sessions_raw_storage,
             transactions_storage,
-            spans_storage,
             transactions_v2_storage,
             errors_v2_storage,
             profiles_writable_storage,
