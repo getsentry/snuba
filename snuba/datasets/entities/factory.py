@@ -31,6 +31,7 @@ def get_entity(name: EntityKey) -> Entity:
         MetricsCountersEntity,
         MetricsDistributionsEntity,
         MetricsSetsEntity,
+        OrgMetricsCountersEntity,
     )
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
@@ -56,6 +57,7 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
         EntityKey.METRICS_SETS: MetricsSetsEntity,
         EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
+        EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
         EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
         EntityKey.PROFILES: ProfilesEntity,
         **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
