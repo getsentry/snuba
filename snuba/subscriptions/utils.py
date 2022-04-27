@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Literal, NamedTuple, Optional, Set, Union
 
 from snuba import state
+from snuba.datasets.entities import EntityKey
 from snuba.utils.types import Interval
 
 logger = logging.getLogger(__name__)
@@ -43,16 +44,16 @@ class SubscriptionMode(Enum):
     TRANSITION_NEW = "transition_new"
 
 
-def run_new_pipeline(entity_name: str, scheduled_ts: datetime) -> bool:
-    return SubscriptionMode.NEW in _select_pipelines(entity_name, scheduled_ts)
+def run_new_pipeline(entity: EntityKey, scheduled_ts: datetime) -> bool:
+    return SubscriptionMode.NEW in _select_pipelines(entity, scheduled_ts)
 
 
-def run_legacy_pipeline(entity_name: str, scheduled_ts: datetime) -> bool:
-    return SubscriptionMode.LEGACY in _select_pipelines(entity_name, scheduled_ts)
+def run_legacy_pipeline(entity: EntityKey, scheduled_ts: datetime) -> bool:
+    return SubscriptionMode.LEGACY in _select_pipelines(entity, scheduled_ts)
 
 
 def _select_pipelines(
-    entity_name: str, scheduled_ts: datetime
+    entity: EntityKey, scheduled_ts: datetime
 ) -> Set[Union[Literal[SubscriptionMode.LEGACY], Literal[SubscriptionMode.NEW]]]:
     """
     Use to transition between the old and new subscription pipelines without
@@ -71,6 +72,7 @@ def _select_pipelines(
     time will use the prior pipeline and any subscriptions scheduled after the
     transition time will use the pipeline being transitioned to.
     """
+    entity_name = entity.value
     try:
         mode = SubscriptionMode(
             state.get_config(f"subscription_mode_{entity_name}", "legacy")

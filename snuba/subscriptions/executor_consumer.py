@@ -293,10 +293,11 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         tick_upper_offset = task.task.tick_upper_offset
 
-        entity_name = task.task.entity.value
+        entity = task.task.entity
+        entity_name = entity.value
 
         should_execute = entity_name in self.__entity_names and run_new_pipeline(
-            entity_name, task.timestamp
+            entity, task.timestamp
         )
 
         if should_execute:
