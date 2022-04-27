@@ -282,7 +282,8 @@ def test_too_many_concurrent_queries() -> None:
 
 
 def test_skip_execution_for_entity() -> None:
-    state.set_config("subscription_mode_events", "new")
+    state.set_config("subscription_mode_metrics_sets", "new")
+    state.set_config("subscription_mode_metrics_counter", "new")
 
     # Skips execution if the entity name is not on the list
     dataset = get_dataset("metrics")
