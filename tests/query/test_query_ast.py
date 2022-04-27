@@ -162,8 +162,8 @@ def test_get_all_columns_legacy() -> None:
         "groupby": [["format_eventid", ["event_id"]]],
     }
     events = get_dataset("events")
-    snql_query = json_to_snql(query_body, "events")
-    query, _ = parse_snql_query(str(snql_query), events)
+    snql_request = json_to_snql(query_body, "events")
+    query, _ = parse_snql_query(str(snql_request.query), events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_column1", None, "column1"),
@@ -328,8 +328,8 @@ def test_alias_validation(
     query_body: MutableMapping[str, Any], expected_result: bool
 ) -> None:
     events = get_dataset("events")
-    snql_query = json_to_snql(query_body, "events")
-    query, _ = parse_snql_query(str(snql_query), events)
+    snql_request = json_to_snql(query_body, "events")
+    query, _ = parse_snql_query(str(snql_request.query), events)
     settings = HTTPRequestSettings()
     query_plan = (
         events.get_default_entity()

@@ -195,9 +195,9 @@ def test_select_storage(
     query_body: MutableMapping[str, Any], is_subscription: bool, expected_table: str
 ) -> None:
     sessions = get_dataset("sessions")
-    snql_query = json_to_snql(query_body, "sessions")
-    query, snql_anonymized = parse_snql_query(str(snql_query), sessions)
-    query_body = json.loads(snql_query.snuba())
+    snql_request = json_to_snql(query_body, "sessions")
+    query, snql_anonymized = parse_snql_query(str(snql_request.query), sessions)
+    query_body = json.loads(snql_request.serialize())
     subscription_settings = (
         SubscriptionRequestSettings if is_subscription else HTTPRequestSettings
     )

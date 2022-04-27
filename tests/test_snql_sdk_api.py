@@ -8,6 +8,7 @@ from snuba_sdk import (
     Condition,
     Direction,
     Entity,
+    Flags,
     Function,
     Identifier,
     Join,
@@ -16,6 +17,7 @@ from snuba_sdk import (
     OrderBy,
     Query,
     Relationship,
+    Request,
 )
 
 from snuba.datasets.entities import EntityKey
@@ -54,8 +56,10 @@ class TestSDKSnQLApi(BaseApiTest):
         )
 
     def test_simple_query(self) -> None:
-        query = (
-            Query("discover", Entity("discover_events"))
+        request = Request(
+            dataset="discover",
+            app_id="test",
+            query=Query(Entity("discover_events"))
             .set_select([Function("count", [], "count")])
             .set_groupby([Column("project_id"), Column("tags[custom_tag]")])
             .set_where(
@@ -67,12 +71,11 @@ class TestSDKSnQLApi(BaseApiTest):
                 ]
             )
             .set_orderby([OrderBy(Function("count", [], "count"), Direction.ASC)])
-            .set_limit(1000)
-            .set_consistent(True)
-            .set_debug(True)
+            .set_limit(1000),
+            flags=Flags(consistent=True, debug=True),
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=request.serialize())
         data = json.loads(response.data)
 
         assert response.status_code == 200, data
@@ -86,8 +89,10 @@ class TestSDKSnQLApi(BaseApiTest):
         ]
 
     def test_sessions_query(self) -> None:
-        query = (
-            Query("sessions", Entity("sessions"))
+        request = Request(
+            dataset="sessions",
+            app_id="test",
+            query=Query(Entity("sessions"))
             .set_select([Column("project_id"), Column("release")])
             .set_groupby([Column("project_id"), Column("release")])
             .set_where(
@@ -105,10 +110,10 @@ class TestSDKSnQLApi(BaseApiTest):
                 ]
             )
             .set_orderby([OrderBy(Column("sessions"), Direction.DESC)])
-            .set_limit(100)
+            .set_limit(100),
         )
 
-        response = self.post("/sessions/snql", data=query.snuba())
+        response = self.post("/sessions/snql", data=request.serialize())
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -118,8 +123,10 @@ class TestSDKSnQLApi(BaseApiTest):
         ev = Entity("events", "ev")
         gm = Entity("groupedmessage", "gm")
         join = Join([Relationship(ev, "grouped", gm)])
-        query = (
-            Query("discover", join)
+        request = Request(
+            dataset="discover",
+            app_id="test",
+            query=Query(join)
             .set_select(
                 [
                     Column("group_id", ev),
@@ -135,10 +142,10 @@ class TestSDKSnQLApi(BaseApiTest):
                     Condition(Column("timestamp", ev), Op.GTE, self.base_time),
                     Condition(Column("timestamp", ev), Op.LT, self.next_time),
                 ]
-            )
+            ),
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=request.serialize())
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -146,7 +153,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_sub_query(self) -> None:
         inner_query = (
-            Query("discover", Entity("discover_events"))
+            Query(Entity("discover_events"))
             .set_select([Function("count", [], "count")])
             .set_groupby([Column("project_id"), Column("tags[custom_tag]")])
             .set_where(
@@ -159,8 +166,10 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        query = (
-            Query("discover", inner_query)
+        request = Request(
+            dataset="discover",
+            app_id="test",
+            query=Query(inner_query)
             .set_select([Function("avg", [Column("count")], "avg_count")])
             .set_orderby(
                 [
@@ -169,17 +178,19 @@ class TestSDKSnQLApi(BaseApiTest):
                     )
                 ]
             )
-            .set_limit(1000)
+            .set_limit(1000),
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=request.serialize())
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
 
     def test_arrayjoin(self) -> None:
-        query = (
-            Query("events", Entity("events"))
+        request = Request(
+            dataset="events",
+            app_id="test",
+            query=Query(Entity("events"))
             .set_select(
                 [
                     Function("count", [], "times_seen"),
@@ -205,17 +216,19 @@ class TestSDKSnQLApi(BaseApiTest):
                     )
                 ]
             )
-            .set_limit(1000)
+            .set_limit(1000),
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        response = self.post("/events/snql", data=request.serialize())
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert len(data["data"]) == 6
 
     def test_tags_in_groupby(self) -> None:
-        query = (
-            Query("events", Entity("events"))
+        request = Request(
+            dataset="events",
+            app_id="test",
+            query=Query(Entity("events"))
             .set_select(
                 [
                     Function("count", [], "times_seen"),
@@ -241,10 +254,10 @@ class TestSDKSnQLApi(BaseApiTest):
                     )
                 ]
             )
-            .set_limit(1000)
+            .set_limit(1000),
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        response = self.post("/events/snql", data=request.serialize())
         data = json.loads(response.data)
         assert response.status_code == 200, data
 
@@ -252,8 +265,10 @@ class TestSDKSnQLApi(BaseApiTest):
         ev = Entity("events", "ev")
         gm = Entity("groupedmessage", "gm")
         join = Join([Relationship(ev, "grouped", gm)])
-        query = (
-            Query("discover", join)
+        request = Request(
+            dataset="discover",
+            app_id="test",
+            query=Query(join)
             .set_select(
                 [
                     Column("group_id", ev),
@@ -272,19 +287,21 @@ class TestSDKSnQLApi(BaseApiTest):
                         Column("exception_stacks.type", ev), Op.LIKE, "Arithmetic%"
                     ),
                 ]
-            )
-            .set_debug(True)
+            ),
+            flags=Flags(debug=True),
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=request.serialize())
         data = json.loads(response.data)
 
         assert response.status_code == 200
         assert data["data"] == []
 
     def test_escape_edge_cases(self) -> None:
-        query = (
-            Query("events", Entity("events"))
+        request = Request(
+            dataset="events",
+            app_id="test",
+            query=Query(Entity("events"))
             .set_select([Function("count", [], "times_seen")])
             .set_where(
                 [
@@ -293,16 +310,18 @@ class TestSDKSnQLApi(BaseApiTest):
                     Condition(Column("timestamp"), Op.LT, self.next_time),
                     Condition(Column("environment"), Op.EQ, "\\' \n \\n \\"),
                 ]
-            )
+            ),
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        response = self.post("/events/snql", data=request.serialize())
         data = json.loads(response.data)
         assert response.status_code == 200, data
 
     def test_suspect_spans_lambdas(self) -> None:
-        query = (
-            Query("discover", Entity("discover_transactions"))
+        request = Request(
+            dataset="discover",
+            app_id="test",
+            query=Query(Entity("discover_transactions"))
             .set_select(
                 [
                     Column("spans.op"),
@@ -377,10 +396,10 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_orderby(
                 [OrderBy(Column("array_spans_exclusive_time"), Direction.DESC)]
             )
-            .set_limit(10)
+            .set_limit(10),
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=request.serialize())
         resp = json.loads(response.data)
         assert response.status_code == 200, resp
         data = resp["data"]
@@ -388,8 +407,10 @@ class TestSDKSnQLApi(BaseApiTest):
         assert data[0]["array_spans_exclusive_time"] > 0
 
     def test_attribution_tags(self) -> None:
-        query = (
-            Query("events", Entity("events"))
+        request = Request(
+            dataset="events",
+            app_id="default",
+            query=Query(Entity("events"))
             .set_select([Function("count", [], "count")])
             .set_where(
                 [
@@ -397,12 +418,10 @@ class TestSDKSnQLApi(BaseApiTest):
                     Condition(Column("timestamp"), Op.GTE, self.base_time),
                     Condition(Column("timestamp"), Op.LT, self.next_time),
                 ]
-            )
-            .set_team("sns")
-            .set_feature("test")
+            ),
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        response = self.post("/events/snql", data=request.serialize())
         resp = json.loads(response.data)
         assert response.status_code == 200, resp
         metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
@@ -412,8 +431,10 @@ class TestSDKSnQLApi(BaseApiTest):
         assert metric_calls[0].tags["app_id"] == "default"
 
     def test_invalid_time_conditions(self) -> None:
-        query = (
-            Query("events", Entity("events"))
+        request = Request(
+            dataset="events",
+            app_id="test",
+            query=Query(Entity("events"))
             .set_select([Function("count", [], "count")])
             .set_where(
                 [
@@ -421,9 +442,9 @@ class TestSDKSnQLApi(BaseApiTest):
                     Condition(Column("timestamp"), Op.GTE, self.next_time),
                     Condition(Column("timestamp"), Op.LT, self.base_time),
                 ]
-            )
+            ),
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        response = self.post("/events/snql", data=request.serialize())
         resp = json.loads(response.data)
         assert response.status_code == 400, resp

@@ -408,9 +408,9 @@ test_data = [
 
 def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
-    snql_query = json_to_snql(query_body, "transactions")
-    body = json.loads(snql_query.snuba())
-    query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
+    snql_request = json_to_snql(query_body, "transactions")
+    body = json.loads(snql_request.serialize())
+    query, snql_anonymized = parse_snql_query(str(snql_request.query), dataset)
     request = Request(
         id="a",
         body=body,

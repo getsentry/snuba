@@ -5,12 +5,17 @@ from uuid import uuid4
 
 import pytz
 import simplejson as json
-from snuba_sdk.column import Column
-from snuba_sdk.conditions import Condition, Op
-from snuba_sdk.entity import Entity
-from snuba_sdk.expressions import Granularity
-from snuba_sdk.orderby import Direction, OrderBy
-from snuba_sdk.query import Query
+from snuba_sdk import (
+    Column,
+    Condition,
+    Direction,
+    Entity,
+    Granularity,
+    Op,
+    OrderBy,
+    Query,
+    Request,
+)
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -98,24 +103,26 @@ class TestOrgSessionsApi(BaseApiTest):
         write_processed_messages(self.storage, filtered)
 
     def test_simple(self) -> None:
-        query = Query(
+        request = Request(
             dataset="sessions",
-            match=Entity("org_sessions"),
-            select=[Column("org_id"), Column("project_id")],
-            groupby=[Column("org_id"), Column("project_id")],
-            where=[
-                Condition(
-                    Column("started"), Op.GTE, datetime.utcnow() - timedelta(hours=6)
-                ),
-                Condition(Column("started"), Op.LT, datetime.utcnow()),
-            ],
-            granularity=Granularity(3600),
+            app_id="test",
+            query=Query(
+                match=Entity("org_sessions"),
+                select=[Column("org_id"), Column("project_id")],
+                groupby=[Column("org_id"), Column("project_id")],
+                where=[
+                    Condition(
+                        Column("started"),
+                        Op.GTE,
+                        datetime.utcnow() - timedelta(hours=6),
+                    ),
+                    Condition(Column("started"), Op.LT, datetime.utcnow()),
+                ],
+                granularity=Granularity(3600),
+            ),
         )
 
-        response = self.app.post(
-            "/sessions/snql",
-            data=query.snuba(),
-        )
+        response = self.app.post("/sessions/snql", data=request.serialize())
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 2
@@ -129,25 +136,27 @@ class TestOrgSessionsApi(BaseApiTest):
         self.org_id2 = next(self.id_iter)
         self.generate_session_events(self.org_id2, self.project_id3)
 
-        query = Query(
+        request = Request(
             dataset="sessions",
-            match=Entity("org_sessions"),
-            select=[Column("org_id"), Column("project_id")],
-            groupby=[Column("org_id"), Column("project_id")],
-            where=[
-                Condition(
-                    Column("started"), Op.GTE, datetime.utcnow() - timedelta(hours=6)
-                ),
-                Condition(Column("started"), Op.LT, datetime.utcnow()),
-            ],
-            granularity=Granularity(3600),
-            orderby=[OrderBy(Column("org_id"), Direction.ASC)],
+            app_id="test",
+            query=Query(
+                match=Entity("org_sessions"),
+                select=[Column("org_id"), Column("project_id")],
+                groupby=[Column("org_id"), Column("project_id")],
+                where=[
+                    Condition(
+                        Column("started"),
+                        Op.GTE,
+                        datetime.utcnow() - timedelta(hours=6),
+                    ),
+                    Condition(Column("started"), Op.LT, datetime.utcnow()),
+                ],
+                granularity=Granularity(3600),
+                orderby=[OrderBy(Column("org_id"), Direction.ASC)],
+            ),
         )
 
-        response = self.app.post(
-            "/sessions/snql",
-            data=query.snuba(),
-        )
+        response = self.app.post("/sessions/snql", data=request.serialize())
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 3
@@ -158,13 +167,10 @@ class TestOrgSessionsApi(BaseApiTest):
         assert data["data"][2]["org_id"] == self.org_id2
         assert data["data"][2]["project_id"] == self.project_id3
 
-        query = query.set_orderby(
+        request.query = request.query.set_orderby(
             [OrderBy(Column("org_id"), Direction.DESC)],
         )
-        response = self.app.post(
-            "/sessions/snql",
-            data=query.snuba(),
-        )
+        response = self.app.post("/sessions/snql", data=request.serialize())
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 3

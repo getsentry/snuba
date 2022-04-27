@@ -282,8 +282,8 @@ def test_prewhere(
         ["timestamp", "<", "2021-01-02T00:00:00"],
         ["project_id", "=", 1],
     ]
-    snql_query = json_to_snql(query_body, "events")
-    query, _ = parse_snql_query(str(snql_query), events)
+    snql_request = json_to_snql(query_body, "events")
+    query, _ = parse_snql_query(str(snql_request.query), events)
     query = identity_translate(query)
     query.set_from_clause(Table("my_table", all_columns, final=final))
 

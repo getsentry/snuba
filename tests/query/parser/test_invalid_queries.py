@@ -45,5 +45,5 @@ def test_failures(
 ) -> None:
     with pytest.raises(expected_exception):
         events = get_dataset("events")
-        snql_query = json_to_snql(query_body, "events")
-        parse_snql_query(str(snql_query), events)
+        snql_request = json_to_snql(query_body, "events")
+        parse_snql_query(str(snql_request.query), events)
