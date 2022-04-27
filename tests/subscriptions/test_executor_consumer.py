@@ -215,6 +215,7 @@ def generate_message(
 
 
 def test_execute_query_strategy() -> None:
+    state.set_config("subscription_mode_events", "new")
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
