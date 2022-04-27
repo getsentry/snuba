@@ -10,6 +10,8 @@ class Topic(Enum):
     EVENT_REPLACEMENTS = "event-replacements"
     COMMIT_LOG = "snuba-commit-log"
     CDC = "cdc"
+    TRANSACTIONS = "transactions"
+    TRANSACTIONS_COMMIT_LOG = "snuba-transactions-commit-log"
     METRICS = "snuba-metrics"
     OUTCOMES = "outcomes"
     SESSIONS = "ingest-sessions"
@@ -31,6 +33,7 @@ class Topic(Enum):
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
     config = {
         Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
         Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
     }
