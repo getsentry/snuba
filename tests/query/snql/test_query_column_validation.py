@@ -443,7 +443,6 @@ def test_entity_column_validation(
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
-        "connected": (EntityKey.SPANS, "trace_id"),
     }
 
     def events_mock(relationship: str) -> JoinRelationship:
