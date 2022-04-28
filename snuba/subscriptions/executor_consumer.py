@@ -191,6 +191,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
         # TODO: To be removed once executor is fully rolled out
+        # Commit is only passed here because we are temporarily
+        # skipping executions during the transition phase.
         commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         self.__dataset = dataset
