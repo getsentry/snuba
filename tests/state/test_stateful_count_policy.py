@@ -115,11 +115,10 @@ def test_count_short(
     processing_step: FakeProcessingStep,
 ) -> None:
     dlq_count_short: DeadLetterQueue[KafkaPayload] = DeadLetterQueue(
-        processing_step, StatefulCountInvalidMessagePolicy(CONSUMER_GROUP_NAME, 5, 1)
+        processing_step, StatefulCountInvalidMessagePolicy(CONSUMER_GROUP_NAME, 1, 1)
     )
     dlq_count_short.submit(valid_message)
-    for _ in range(5):
-        dlq_count_short.submit(invalid_message)
+    dlq_count_short.submit(invalid_message)
     with pytest.raises(InvalidMessages):
         dlq_count_short.submit(invalid_message)
     time.sleep(1)

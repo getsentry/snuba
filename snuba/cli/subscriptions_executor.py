@@ -1,14 +1,14 @@
 import logging
 import signal
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
-from typing import Any, Optional, Sequence
+from contextlib import contextmanager
+from typing import Any, Iterator, Optional, Sequence
 
 import click
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
-from snuba import environment
+from snuba import environment, state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
@@ -88,8 +88,6 @@ def subscriptions_executor(
     The subscription's executor consumes scheduled subscriptions from the scheduled
     subscription topic for that entity, executes the queries on ClickHouse and publishes
     results on the results topic.
-
-    It currently only supports executing subscriptions on a single dataset/entity.
     """
     setup_logging(log_level)
     setup_sentry()
@@ -97,7 +95,7 @@ def subscriptions_executor(
     metrics = MetricsWrapper(
         environment.metrics,
         "subscriptions.executor",
-        tags={"entity": ",".join(entity_names)},
+        tags={"dataset": dataset_name},
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -139,9 +137,19 @@ def subscriptions_executor(
         logging.getLogger().setLevel(logging.DEBUG)
 
         processor.signal_shutdown()
+        # Ensure the querylog producer is flushed
+        state.flush_producer()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with closing(producer), executor:
+    with executor, closing(producer):
         processor.run()
+
+
+@contextmanager
+def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
+    try:
+        yield producer
+    finally:
+        producer.close().result()

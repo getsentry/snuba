@@ -466,6 +466,7 @@ def execute_query_with_readthrough_caching(
         "cache_partition_loaded",
         tags={"partition_id": reader.cache_partition_id or "default"},
     )
+
     return cache_partition.get_readthrough(
         query_id,
         partial(
@@ -480,9 +481,31 @@ def execute_query_with_readthrough_caching(
             robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
-        timeout=query_settings.get("max_execution_time", 30),
+        timeout=_get_cache_wait_timeout(query_settings, reader),
         timer=timer,
     )
+
+
+def _get_cache_wait_timeout(
+    query_settings: MutableMapping[str, Any], reader: Reader
+) -> int:
+    """
+    Helper function to determine how long a query should wait when doing
+    a readthrough caching.
+
+    The overrides are primarily used for debugging the ExecutionTimeoutError
+    raised by the readthrough caching system on the tigers cluster. When we
+    have root caused the problem we can remove the overrides.
+    """
+    cache_wait_timeout: int = int(query_settings.get("max_execution_time", 30))
+    if reader.cache_partition_id and reader.cache_partition_id in {
+        "tiger_errors",
+        "tiger_transactions",
+    }:
+        tiger_wait_timeout_config = state.get_config("tiger-cache-wait-time")
+        if tiger_wait_timeout_config:
+            cache_wait_timeout = tiger_wait_timeout_config
+    return cache_wait_timeout
 
 
 def raw_query(

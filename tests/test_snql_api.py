@@ -11,7 +11,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.utils.metrics.backends.dummy import get_recorded_metric_calls
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -193,42 +193,6 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp >= toDateTime('2021-01-01')
                     AND timestamp < toDateTime('2021-01-02')
                     """
-                }
-            ),
-        )
-        assert response.status_code == 429
-
-    def test_project_rate_limiting_joins(self) -> None:
-        state.set_config("project_concurrent_limit", self.project_id)
-        state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
-
-        response = self.post(
-            "/transactions/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
-                    WHERE s.project_id = 2
-                    AND t.project_id = 2
-                    AND t.finish_ts >= toDateTime('2021-01-01')
-                    AND t.finish_ts < toDateTime('2021-01-02')
-                    """,
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-        response = self.post(
-            "/transactions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
-                    WHERE s.project_id = {self.project_id}
-                    AND t.project_id = {self.project_id}
-                    AND t.finish_ts >= toDateTime('2021-01-01')
-                    AND t.finish_ts < toDateTime('2021-01-02')
-                    """,
                 }
             ),
         )

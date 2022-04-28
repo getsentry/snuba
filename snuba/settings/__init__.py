@@ -160,7 +160,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental", "profiles"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -178,6 +178,9 @@ ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
+
+# Use the subscriptions pipeline in devserver
+ENABLE_NEW_SUBSCRIPTIONS = os.environ.get("ENABLE_NEW_SUBSCRIPTIONS", False)
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000

@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
     "--dataset",
     "dataset_name",
     default="events",
-    type=click.Choice(DATASET_NAMES),
+    type=click.Choice([*DATASET_NAMES]),
     help="The dataset to target",
 )
 @click.option(
