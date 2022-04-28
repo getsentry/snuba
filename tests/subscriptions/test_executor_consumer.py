@@ -422,7 +422,6 @@ def test_execute_and_produce_result() -> None:
 
 
 def test_skip_stale_message() -> None:
-    state.set_config("executor_sample_rate_events", 1.0)
     dataset = get_dataset("events")
     entity_names = ["events"]
     executor = ThreadPoolExecutor()
