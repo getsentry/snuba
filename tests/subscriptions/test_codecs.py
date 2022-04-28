@@ -37,7 +37,8 @@ from tests.subscriptions.subscriptions_utils import create_entity_subscription
 
 
 def build_snql_subscription_data(
-    entity_key: EntityKey, organization: Optional[int] = None,
+    entity_key: EntityKey,
+    organization: Optional[int] = None,
 ) -> SubscriptionData:
 
     return SubscriptionData(
@@ -50,17 +51,37 @@ def build_snql_subscription_data(
 
 
 SNQL_CASES = [
-    pytest.param(build_snql_subscription_data, None, EntityKey.EVENTS, id="snql",),
-    pytest.param(build_snql_subscription_data, 1, EntityKey.SESSIONS, id="snql",),
     pytest.param(
-        build_snql_subscription_data, 1, EntityKey.METRICS_COUNTERS, id="snql",
+        build_snql_subscription_data,
+        None,
+        EntityKey.EVENTS,
+        id="snql",
     ),
-    pytest.param(build_snql_subscription_data, 1, EntityKey.METRICS_SETS, id="snql",),
+    pytest.param(
+        build_snql_subscription_data,
+        1,
+        EntityKey.SESSIONS,
+        id="snql",
+    ),
+    pytest.param(
+        build_snql_subscription_data,
+        1,
+        EntityKey.METRICS_COUNTERS,
+        id="snql",
+    ),
+    pytest.param(
+        build_snql_subscription_data,
+        1,
+        EntityKey.METRICS_SETS,
+        id="snql",
+    ),
 ]
 
 
 def assert_entity_subscription_on_subscription_class(
-    organization: Optional[int], subscription: SubscriptionData, entity_key: EntityKey,
+    organization: Optional[int],
+    subscription: SubscriptionData,
+    entity_key: EntityKey,
 ) -> None:
     subscription_cls = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key]
     if organization:

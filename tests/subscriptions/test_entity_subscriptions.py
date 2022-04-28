@@ -16,7 +16,10 @@ from snuba.subscriptions.entity_subscription import (
 
 TESTS = [
     pytest.param(
-        EventsSubscription, {"data_dict": {}}, None, id="Events subscription",
+        EventsSubscription,
+        {"data_dict": {}},
+        None,
+        id="Events subscription",
     ),
     pytest.param(
         TransactionsSubscription,
@@ -69,7 +72,9 @@ TESTS_CONDITIONS_SNQL_METHOD = [
             binary_condition(
                 ConditionFunctions.LTE,
                 FunctionCall(
-                    None, "ifNull", (Column(None, None, "offset"), Literal(None, 0)),
+                    None,
+                    "ifNull",
+                    (Column(None, None, "offset"), Literal(None, 0)),
                 ),
                 Literal(None, 5),
             )
@@ -89,7 +94,9 @@ TESTS_CONDITIONS_SNQL_METHOD = [
             binary_condition(
                 ConditionFunctions.LTE,
                 FunctionCall(
-                    None, "ifNull", (Column(None, None, "offset"), Literal(None, 0)),
+                    None,
+                    "ifNull",
+                    (Column(None, None, "offset"), Literal(None, 0)),
                 ),
                 Literal(None, 5),
             )
@@ -107,7 +114,9 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         SessionsSubscription(data_dict={"organization": 1}),
         [
             binary_condition(
-                ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 1),
+                ConditionFunctions.EQ,
+                Column(None, None, "org_id"),
+                Literal(None, 1),
             ),
         ],
         True,
@@ -117,7 +126,9 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         MetricsCountersSubscription(data_dict={"organization": 1}),
         [
             binary_condition(
-                ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 1),
+                ConditionFunctions.EQ,
+                Column(None, None, "org_id"),
+                Literal(None, 1),
             ),
         ],
         True,
@@ -127,7 +138,9 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         MetricsSetsSubscription(data_dict={"organization": 1}),
         [
             binary_condition(
-                ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 1),
+                ConditionFunctions.EQ,
+                Column(None, None, "org_id"),
+                Literal(None, 1),
             ),
         ],
         True,

@@ -203,9 +203,9 @@ def optimize_partitions(
         hour=0, minute=0, second=0, microsecond=0
     )
     if not ignore_cutoff:
-        cutoff_time: Optional[
-            datetime
-        ] = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        cutoff_time: Optional[datetime] = (
+            last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        )
         logger.info("Cutoff time: %s", str(cutoff_time))
     else:
         cutoff_time = None

@@ -5,18 +5,7 @@ import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
-from functools import lru_cache
-from typing import (
-    Callable,
-    Deque,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    cast,
-)
-from zlib import crc32
+from typing import Callable, Deque, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import rapidjson
 from arroyo import Message, Partition, Topic
@@ -31,7 +20,7 @@ from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
-from snuba.datasets.factory import get_dataset, get_dataset_name
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
 from snuba.request import Request
@@ -112,7 +101,9 @@ def build_executor_consumer(
         ), "All entities must have same scheduled and result topics"
 
     consumer_configuration = build_kafka_consumer_configuration(
-        scheduled_topic_spec.topic, consumer_group, auto_offset_reset=auto_offset_reset,
+        scheduled_topic_spec.topic,
+        consumer_group,
+        auto_offset_reset=auto_offset_reset,
     )
 
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
@@ -186,15 +177,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
-            commit,
         )
-
-
-@lru_cache(maxsize=50000)
-def subscription_id_to_float(subscription_id: str) -> float:
-    # Converts a subscription ID string to a float between 0 and 1
-    # Used for sampling query execution by subscription ID during rollout
-    return (crc32(subscription_id.encode("utf-8")) & 0xFFFFFFFF) / 2 ** 32
 
 
 class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
@@ -212,7 +195,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
-        commit: Optional[Callable[[Mapping[Partition, Position]], None]] = None,
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
@@ -221,7 +203,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__next_step = next_step
-        self.__commit = commit
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
 
@@ -242,8 +223,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def __execute_query(
         self, task: ScheduledSubscriptionTask, tick_upper_offset: int
     ) -> Tuple[Request, Result]:
-        # Measure the amount of time that took between this task being
-        # scheduled and it beginning to execute.
+        # Measure the amount of time that took between the task's scheduled
+        # time and it beginning to execute.
         self.__metrics.timing(
             "executor.latency", (time.time() - task.timestamp.timestamp()) * 1000
         )
@@ -312,27 +293,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         tick_upper_offset = task.task.tick_upper_offset
 
-        # We need to sample queries to ClickHouse while this is being rolled out
-        # as we don't want to duplicate every subscription query
-        dataset_name = get_dataset_name(self.__dataset)
-        executor_sample_rate = cast(
-            float, state.get_config(f"executor_sample_rate_{dataset_name}", 0.0)
-        )
+        entity_name = task.task.entity.value
 
-        # HACK: Just commit offsets and return if we haven't started rollout
-        # yet. This is just a temporary workaround to prevent the lag continuously
-        # growing and dwarfing others on op's Kafka dashboard
-        if self.__commit is not None and executor_sample_rate == 0:
-            self.__commit(
-                {message.partition: Position(message.offset, message.timestamp)}
-            )
-
-            return
-
-        subscription_id = str(task.task.subscription.identifier)
-        should_execute = (
-            subscription_id_to_float(subscription_id) < executor_sample_rate
-        )
+        should_execute = entity_name in self.__entity_names
 
         # Don't execute stale subscriptions
         if (
@@ -342,9 +305,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         ):
             should_execute = False
 
-        entity_name = task.task.entity.value
-
-        if should_execute and entity_name in self.__entity_names:
+        if should_execute:
             self.__queue.append(
                 (
                     message,
@@ -440,9 +401,10 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
             or force is True
         ):
-            self.__commit(self.__commit_data)
-            self.__last_committed = now
-            self.__commit_data = {}
+            if self.__commit_data:
+                self.__commit(self.__commit_data)
+                self.__last_committed = now
+                self.__commit_data = {}
 
     def poll(self) -> None:
         while self.__queue:

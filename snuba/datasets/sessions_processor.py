@@ -4,6 +4,7 @@ from typing import Any, Mapping, Optional
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.events_format import enforce_retention
 from snuba.processor import (
     MAX_UINT32,
     NIL_UUID,
@@ -67,7 +68,7 @@ class SessionsProcessor(MessageProcessor):
             "seq": message["seq"],
             "org_id": message["org_id"],
             "project_id": message["project_id"],
-            "retention_days": message["retention_days"],
+            "retention_days": enforce_retention(message["retention_days"], received),
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "errors": errors,

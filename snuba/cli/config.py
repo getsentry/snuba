@@ -33,7 +33,7 @@ def config() -> None:
 
 
 @config.command("get-all")
-@click.option("--format", type=click.Choice(FORMATS.keys()), default="human")
+@click.option("--format", type=click.Choice([*FORMATS.keys()]), default="human")
 def get_all(*, format: str) -> None:
     "Dump all runtime configuration."
 
@@ -42,7 +42,7 @@ def get_all(*, format: str) -> None:
 
 
 @config.command()
-@click.option("--format", type=click.Choice(FORMATS.keys()), default="human")
+@click.option("--format", type=click.Choice([*FORMATS.keys()]), default="human")
 @click.argument("key")
 def get(*, key: str, format: str) -> None:
     "Get a single key."

@@ -51,12 +51,18 @@ class CdcMessageRow(ABC):
 
     @classmethod
     def from_wal(
-        cls, offset: int, columnnames: Sequence[str], columnvalues: Sequence[Any],
+        cls,
+        offset: int,
+        columnnames: Sequence[str],
+        columnvalues: Sequence[Any],
     ) -> CdcMessageRow:
         raise NotImplementedError
 
     @classmethod
-    def from_bulk(cls, row: Mapping[str, Any],) -> CdcMessageRow:
+    def from_bulk(
+        cls,
+        row: Mapping[str, Any],
+    ) -> CdcMessageRow:
         raise NotImplementedError
 
     @abstractmethod
@@ -76,7 +82,10 @@ class CdcProcessor(MessageProcessor):
         return []
 
     def _process_insert(
-        self, offset: int, columnnames: Sequence[str], columnvalues: Sequence[Any],
+        self,
+        offset: int,
+        columnnames: Sequence[str],
+        columnvalues: Sequence[Any],
     ) -> Sequence[WriterTableRow]:
         return [
             self._message_row_class.from_wal(
@@ -106,7 +115,9 @@ class CdcProcessor(MessageProcessor):
         return ret
 
     def _process_delete(
-        self, offset: int, key: Mapping[str, Any],
+        self,
+        offset: int,
+        key: Mapping[str, Any],
     ) -> Sequence[WriterTableRow]:
         return []
 

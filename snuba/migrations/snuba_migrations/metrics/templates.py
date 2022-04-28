@@ -54,7 +54,8 @@ COL_SCHEMA_DISTRIBUTIONS_V2: Sequence[Column[Modifiers]] = [
 
 
 def get_forward_bucket_table_local(
-    table_name: str, value_cols: Sequence[Column[Modifiers]],
+    table_name: str,
+    value_cols: Sequence[Column[Modifiers]],
 ) -> Sequence[operations.SqlOperation]:
     return [
         operations.CreateTable(
@@ -90,7 +91,8 @@ def get_forward_bucket_table_dist(
                 *POST_VALUES_BUCKETS_COLUMNS,
             ],
             engine=table_engines.Distributed(
-                local_table_name=local_table_name, sharding_key=None,
+                local_table_name=local_table_name,
+                sharding_key=None,
             ),
         ),
     ]
@@ -450,7 +452,10 @@ def get_forward_migrations_dist(
 
 def get_reverse_table_migration(table_name: str) -> Sequence[operations.SqlOperation]:
     return [
-        operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=table_name,),
+        operations.DropTable(
+            storage_set=StorageSetKey.METRICS,
+            table_name=table_name,
+        ),
     ]
 
 

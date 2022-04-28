@@ -19,14 +19,16 @@ from snuba.query.validation.validators import (
 
 required_column_tests = [
     pytest.param(
-        EntityKey.SPANS,
+        EntityKey.EVENTS,
         binary_condition(
-            "equals", Column("_snuba_project_id", None, "project_id"), Literal(None, 1),
+            "equals",
+            Column("_snuba_project_id", None, "project_id"),
+            Literal(None, 1),
         ),
         id="spans has project required with =",
     ),
     pytest.param(
-        EntityKey.SPANS,
+        EntityKey.EVENTS,
         binary_condition(
             "in",
             Column("_snuba_project_id", None, "project_id"),
@@ -91,10 +93,12 @@ def test_entity_required_column_validation(
 
 invalid_required_column_tests = [
     pytest.param(
-        EntityKey.EVENTS, None, id="entity has columns, but there are no conditions",
+        EntityKey.EVENTS,
+        None,
+        id="entity has columns, but there are no conditions",
     ),
     pytest.param(
-        EntityKey.SPANS,
+        EntityKey.EVENTS,
         binary_condition(
             "notIn",
             Column(None, None, "project_id"),
@@ -123,7 +127,10 @@ def test_entity_required_column_validation_failure(
 
 
 entity_contains_columns_tests = [
-    pytest.param(EntityKey.OUTCOMES, id="Validate Outcomes Entity Columns",)
+    pytest.param(
+        EntityKey.OUTCOMES,
+        id="Validate Outcomes Entity Columns",
+    )
 ]
 
 

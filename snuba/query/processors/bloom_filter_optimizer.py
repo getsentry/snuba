@@ -56,7 +56,9 @@ def generate_bloom_filter_condition(
         combine_or_conditions(
             [
                 FunctionCallExpr(
-                    None, "has", (ColumnExpr(None, None, key), LiteralExpr(None, val)),
+                    None,
+                    "has",
+                    (ColumnExpr(None, None, key), LiteralExpr(None, val)),
                 )
                 for val in sorted(vals)
             ]

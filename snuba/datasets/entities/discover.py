@@ -72,7 +72,9 @@ class DefaultNoneColumnMapper(ColumnMapper):
     columns: ColumnSet
 
     def attempt_map(
-        self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
+        self,
+        expression: Column,
+        children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
         if expression.column_name in self.columns:
             return identity(

@@ -116,7 +116,10 @@ def get_typed_value(value: Any) -> Any:
 
 
 def set_config(
-    key: str, value: Optional[Any], user: Optional[str] = None, force: bool = False,
+    key: str,
+    value: Optional[Any],
+    user: Optional[str] = None,
+    force: bool = False,
 ) -> None:
     value = get_typed_value(value)
     enc_value = "{}".format(value).encode("utf-8") if value is not None else None
@@ -320,6 +323,12 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         )
     except Exception as ex:
         logger.exception("Could not record query due to error: %r", ex)
+
+
+def flush_producer() -> None:
+    global kfk
+    if kfk is not None:
+        kfk.flush()
 
 
 def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:

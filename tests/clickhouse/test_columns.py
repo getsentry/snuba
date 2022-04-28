@@ -37,8 +37,20 @@ TEST_CASES = [
         "UUID",
         id="UUIDs",
     ),
-    pytest.param(IPv4(None), IPv4(), IPv4(Modifier(nullable=True)), "IPv4", id="IPs",),
-    pytest.param(IPv6(None), IPv6(), IPv6(Modifier(nullable=True)), "IPv6", id="IPs",),
+    pytest.param(
+        IPv4(None),
+        IPv4(),
+        IPv4(Modifier(nullable=True)),
+        "IPv4",
+        id="IPs",
+    ),
+    pytest.param(
+        IPv6(None),
+        IPv6(),
+        IPv6(Modifier(nullable=True)),
+        "IPv6",
+        id="IPs",
+    ),
     pytest.param(
         FixedString(32, Modifier(nullable=True)),
         FixedString(32),
@@ -60,7 +72,13 @@ TEST_CASES = [
         "Nullable(Float64)",
         id="floats",
     ),
-    pytest.param(Date(), Date(), Date(Modifier(nullable=True)), "Date", id="dates",),
+    pytest.param(
+        Date(),
+        Date(),
+        Date(Modifier(nullable=True)),
+        "Date",
+        id="dates",
+    ),
     pytest.param(
         DateTime(),
         DateTime(),
