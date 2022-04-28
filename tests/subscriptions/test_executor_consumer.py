@@ -458,8 +458,7 @@ def test_skip_stale_message() -> None:
     message = next(make_message)
     strategy.submit(message)
 
-    # No message will be produced, or offsets committed
+    # No message will be produced
     strategy.poll()
     assert broker_storage.consume(Partition(result_topic, 0), 0) is None
-    assert commit.call_count == 1
-    assert commit.call_args[0][0] == {}
+    assert Increment("skipped_execution", 1, {"entity": "events"}) in metrics.calls
