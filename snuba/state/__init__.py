@@ -325,6 +325,12 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         logger.exception("Could not record query due to error: %r", ex)
 
 
+def flush_producer() -> None:
+    global kfk
+    if kfk is not None:
+        kfk.flush()
+
+
 def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
     try:
         queries = []

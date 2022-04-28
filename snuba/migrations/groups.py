@@ -16,7 +16,6 @@ class MigrationGroup(Enum):
     METRICS = "metrics"
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
-    SPANS_EXPERIMENTAL = "spans_experimental"
     PROFILES = "profiles"
 
 
@@ -25,7 +24,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.METRICS,
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
-    MigrationGroup.SPANS_EXPERIMENTAL,
     MigrationGroup.PROFILES,
 }
 
@@ -217,14 +215,6 @@ class QuerylogLoader(DirectoryLoader):
         return ["0001_querylog", "0002_status_type_change", "0003_add_profile_fields"]
 
 
-class SpansExperimentalLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.spans_experimental")
-
-    def get_migrations(self) -> Sequence[str]:
-        return ["0001_spans_experimental"]
-
-
 class ProfilesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.migrations.snuba_migrations.profiles")
@@ -242,7 +232,6 @@ _REGISTERED_GROUPS = {
     MigrationGroup.OUTCOMES: OutcomesLoader(),
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
-    MigrationGroup.SPANS_EXPERIMENTAL: SpansExperimentalLoader(),
     MigrationGroup.PROFILES: ProfilesLoader(),
 }
 
