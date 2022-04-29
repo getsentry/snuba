@@ -4,6 +4,7 @@ import logging
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime
 from typing import Callable, Deque, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import rapidjson
@@ -54,6 +55,7 @@ def build_executor_consumer(
     auto_offset_reset: str,
     metrics: MetricsBackend,
     executor: ThreadPoolExecutor,
+    stale_threshold_seconds: Optional[int],
     # TODO: Should be removed once testing is done
     override_result_topic: str,
     cooperative_rebalancing: bool = False,
@@ -138,6 +140,7 @@ def build_executor_consumer(
             entity_names,
             producer,
             metrics,
+            stale_threshold_seconds,
             override_result_topic,
         ),
     )
@@ -152,6 +155,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
+        stale_threshold_seconds: Optional[int],
         result_topic: str,
     ) -> None:
         self.__executor = executor
@@ -160,6 +164,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self.__entity_names = entity_names
         self.__producer = producer
         self.__metrics = metrics
+        self.__stale_threshold_seconds = stale_threshold_seconds
         self.__result_topic = result_topic
 
     def create(
@@ -170,6 +175,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__entity_names,
             self.__executor,
             self.__max_concurrent_queries,
+            self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
             commit,
@@ -188,6 +194,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         entity_names: Sequence[str],
         executor: ThreadPoolExecutor,
         max_concurrent_queries: int,
+        stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
         # TODO: To be removed once executor is fully rolled out
@@ -199,6 +206,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__entity_names = set(entity_names)
         self.__executor = executor
         self.__max_concurrent_queries = max_concurrent_queries
+        self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__next_step = next_step
 
@@ -301,6 +309,14 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         should_execute = entity_name in self.__entity_names and run_new_pipeline(
             entity, task.timestamp
         )
+
+        # Don't execute stale subscriptions
+        if (
+            self.__stale_threshold_seconds is not None
+            and time.time() - datetime.timestamp(task.timestamp)
+            >= self.__stale_threshold_seconds
+        ):
+            should_execute = False
 
         if should_execute:
             self.__queue.append(
