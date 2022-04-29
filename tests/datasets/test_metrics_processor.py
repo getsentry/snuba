@@ -28,7 +28,8 @@ MATERIALIZATION_VERSION = 4
 
 timestamp = int(datetime.now(timezone.utc).timestamp())
 # expects that test is run in utc local time
-expected_timestamp = datetime.fromtimestamp(timestamp)
+expected_timestamp = datetime.utcfromtimestamp(timestamp)
+
 
 SET_MESSAGE_SHARED = {
     "org_id": 1,
