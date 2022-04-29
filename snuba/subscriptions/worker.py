@@ -26,7 +26,7 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
-from snuba.subscriptions.utils import Tick
+from snuba.subscriptions.utils import Tick, run_legacy_pipeline
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -243,6 +243,7 @@ class SubscriptionWorker(
         results = [
             SubscriptionTaskResult(task, future.result())
             for task, future in itertools.chain.from_iterable(batch)
+            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
         # Produce all of the subscription results asynchronously and wait for
