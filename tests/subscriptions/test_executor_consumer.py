@@ -55,7 +55,7 @@ def test_executor_consumer() -> None:
     """
     End to end integration test
     """
-
+    state.set_config("subscription_mode_events", "new")
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS])
@@ -113,6 +113,7 @@ def test_executor_consumer() -> None:
         auto_offset_reset,
         TestingMetricsBackend(),
         ThreadPoolExecutor(2),
+        None,
         override_result_topic=scheduled_result_topic_spec.topic.value,
     )
     for i in range(1, 5):
@@ -215,15 +216,24 @@ def generate_message(
 
 
 def test_execute_query_strategy() -> None:
+    state.set_config("subscription_mode_events", "new")
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
     executor = ThreadPoolExecutor(max_concurrent_queries)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
+    commit = mock.Mock()
 
     strategy = ExecuteQuery(
-        dataset, entity_names, executor, max_concurrent_queries, metrics, next_step
+        dataset,
+        entity_names,
+        executor,
+        max_concurrent_queries,
+        None,
+        metrics,
+        next_step,
+        commit,
     )
 
     make_message = generate_message(EntityKey.EVENTS)
@@ -248,14 +258,18 @@ def test_execute_query_strategy() -> None:
 
 
 def test_too_many_concurrent_queries() -> None:
+    state.set_config("subscription_mode_events", "new")
     state.set_config("executor_queue_size_factor", 1)
     dataset = get_dataset("events")
     entity_names = ["events"]
     executor = ThreadPoolExecutor(2)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
+    commit = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, entity_names, executor, 4, metrics, next_step)
+    strategy = ExecuteQuery(
+        dataset, entity_names, executor, 4, None, metrics, next_step, commit
+    )
 
     make_message = generate_message(EntityKey.EVENTS)
 
@@ -270,14 +284,20 @@ def test_too_many_concurrent_queries() -> None:
 
 
 def test_skip_execution_for_entity() -> None:
+    state.set_config("subscription_mode_metrics_sets", "new")
+    state.set_config("subscription_mode_metrics_counter", "new")
+
     # Skips execution if the entity name is not on the list
     dataset = get_dataset("metrics")
     entity_names = ["metrics_sets"]
     executor = ThreadPoolExecutor()
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
+    commit = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, entity_names, executor, 4, metrics, next_step)
+    strategy = ExecuteQuery(
+        dataset, entity_names, executor, 4, None, metrics, next_step, commit
+    )
 
     metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
     strategy.submit(metrics_sets_message)
@@ -295,6 +315,7 @@ def test_skip_execution_for_entity() -> None:
 
 
 def test_produce_result() -> None:
+    state.set_config("subscription_mode_events", "new")
     epoch = datetime(1970, 1, 1)
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
@@ -364,6 +385,7 @@ def test_produce_result() -> None:
 
 
 def test_execute_and_produce_result() -> None:
+    state.set_config("subscription_mode_events", "new")
     dataset = get_dataset("events")
     entity_names = ["events"]
     executor = ThreadPoolExecutor()
@@ -386,8 +408,10 @@ def test_execute_and_produce_result() -> None:
         entity_names,
         executor,
         max_concurrent_queries,
+        None,
         metrics,
         ProduceResult(producer, result_topic.name, commit),
+        commit,
     )
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
@@ -407,3 +431,46 @@ def test_execute_and_produce_result() -> None:
     assert produced_message is not None
     assert produced_message.payload.key == str(subscription_identifier).encode("utf-8")
     assert commit.call_count == 1
+
+
+def test_skip_stale_message() -> None:
+    dataset = get_dataset("events")
+    entity_names = ["events"]
+    executor = ThreadPoolExecutor()
+    max_concurrent_queries = 2
+    metrics = TestingMetricsBackend()
+
+    scheduled_topic = Topic("scheduled-subscriptions-events")
+    result_topic = Topic("events-subscriptions-results")
+    clock = TestingClock()
+    broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
+    broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
+    broker.create_topic(scheduled_topic, partitions=1)
+    broker.create_topic(result_topic, partitions=1)
+    producer = broker.get_producer()
+
+    commit = mock.Mock()
+
+    stale_threshold_seconds = 60
+
+    strategy = ExecuteQuery(
+        dataset,
+        entity_names,
+        executor,
+        max_concurrent_queries,
+        stale_threshold_seconds,
+        metrics,
+        ProduceResult(producer, result_topic.name, commit),
+        commit,
+    )
+
+    subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
+
+    make_message = generate_message(EntityKey.EVENTS, subscription_identifier)
+    message = next(make_message)
+    strategy.submit(message)
+
+    # No message will be produced
+    strategy.poll()
+    assert broker_storage.consume(Partition(result_topic, 0), 0) is None
+    assert Increment("skipped_execution", 1, {"entity": "events"}) in metrics.calls
