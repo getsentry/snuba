@@ -2,7 +2,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
 from unittest import mock
 
 import pytest
@@ -10,6 +10,7 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
@@ -21,6 +22,7 @@ from snuba.redis import redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.entity_subscription import EventsSubscription
+from snuba.subscriptions.executor_consumer import ExecuteQuery
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
     CommittableTick,
@@ -32,13 +34,10 @@ from snuba.subscriptions.scheduler_processing_strategy import (
 )
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
-from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
-from snuba.utils.metrics import MetricsBackend
-from snuba.subscriptions.executor_consumer import ExecuteQuery
-from typing import Mapping
 
 
 class JustRunTheQueryStrategy(ProcessingStrategy[Tick]):
