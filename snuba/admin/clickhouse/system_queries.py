@@ -24,7 +24,10 @@ def _run_sql_query_on_host(
     Run the SQL query. It should be validated before getting to this point
     """
     connection = get_ro_node_connection(
-        clickhouse_host, clickhouse_port, storage_name, ClickhouseClientSettings.QUERY
+        clickhouse_host,
+        clickhouse_port,
+        storage_name,
+        ClickhouseClientSettings.ADMIN_QUERY,
     )
     query_result = connection.execute(query=sql, with_column_types=True)
 

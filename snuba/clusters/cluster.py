@@ -45,7 +45,8 @@ class ClickhouseClientSettings(Enum):
         {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
-    QUERY = ClickhouseClientSettingsType(
+    QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
+    ADMIN_QUERY = ClickhouseClientSettingsType(
         {"readonly": 1}, None, settings.CLICKHOUSE_READONLY_USER
     )
     TRACING = ClickhouseClientSettingsType(
