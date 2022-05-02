@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from snuba import environment, state
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -7,7 +9,7 @@ from .appid import AppID
 from .default import APPIDS as DEFAULT_APPIDS
 
 metrics = MetricsWrapper(environment.metrics, "snuba.attribution")
-
+logger = logging.getLogger("snuba.attribution")
 
 APPIDS: dict[str, AppID] = {}
 DEFAULT_APPID = AppID.from_dict(DEFAULT_APPIDS[0])
