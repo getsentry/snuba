@@ -1,0 +1,25 @@
+name: Release Commits
+
+on:
+  # push:
+  #   branches:
+  #     - master
+  pull_request:
+    # just for testing out
+    branches:
+      - 'meredith/**'
+
+jobs:
+  release-commits:
+    name: Release Commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Create Release and Sync Sentry Commits
+        uses: getsentry/action-release@v1
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: sentry
+          SENTRY_PROJECT: snuba
+        with:
+          environment: production
