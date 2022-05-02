@@ -240,6 +240,23 @@ class ClickhousePool(object):
                             # balancer a chance to mark a bad host as down.
                             time.sleep(0.1)
                 except errors.Error as e:
+                    if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                        attempts_remaining -= 1
+                        if attempts_remaining <= 0:
+                            raise ClickhouseError(e.message, code=e.code) from e
+
+                        attempts_remaining = min(
+                            attempts_remaining, 1
+                        )  # only retry once
+
+                        sleep_interval_seconds = state.get_config(
+                            "simultaneous_queries_sleep_seconds", 1
+                        )
+                        assert sleep_interval_seconds is not None
+                        # Linear backoff. Adds one second at each iteration.
+                        time.sleep(sleep_interval_seconds)
+                        continue
+
                     raise ClickhouseError(e.message, code=e.code) from e
         finally:
             # Return finished connection to the appropriate connection pool
