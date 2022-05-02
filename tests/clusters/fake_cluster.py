@@ -128,7 +128,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         client_settings: ClickhouseClientSettings,
         node: ClickhouseNode,
     ) -> ClickhousePool:
-        settings, timeout, _ = client_settings.value
+        settings, timeout = client_settings.value
         cache_key = (node, client_settings)
         if cache_key not in self.__connections:
             self.__connections[cache_key] = (
