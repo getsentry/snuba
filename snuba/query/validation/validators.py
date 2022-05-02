@@ -31,7 +31,11 @@ class QueryValidator(ABC):
     """
 
     @abstractmethod
-    def validate(self, query: Query, alias: Optional[str] = None,) -> None:
+    def validate(
+        self,
+        query: Query,
+        alias: Optional[str] = None,
+    ) -> None:
         """
         Validate that the query is correct. If the query is not valid, raise an
         Exception, otherwise return None. If the entity that calls this is part
@@ -194,7 +198,11 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
                     f"where clause. missing condition for field {exp}"
                 )
 
-    def validate(self, query: Query, alias: Optional[str] = None,) -> None:
+    def validate(
+        self,
+        query: Query,
+        alias: Optional[str] = None,
+    ) -> None:
         selected = query.get_selected_columns()
         if len(selected) > self.max_allowed_aggregations:
             aggregation_error_text = (
@@ -217,7 +225,7 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
 
 
 class GranularityValidator(QueryValidator):
-    """ Verify that the given granularity is a multiple of the configured value """
+    """Verify that the given granularity is a multiple of the configured value"""
 
     def __init__(self, minimum: int, required: bool = False):
         self.minimum = minimum

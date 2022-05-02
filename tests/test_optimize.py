@@ -96,7 +96,8 @@ test_data = [
 
 class TestOptimize:
     @pytest.mark.parametrize(
-        "storage_key, create_event_row_for_date, parallel", test_data,
+        "storage_key, create_event_row_for_date, parallel",
+        test_data,
     )
     def test_optimize(
         self,
@@ -188,7 +189,11 @@ class TestOptimize:
     @pytest.mark.parametrize(
         "table,host,expected",
         [
-            ("errors_local", None, {"table": "errors_local"},),
+            (
+                "errors_local",
+                None,
+                {"table": "errors_local"},
+            ),
             (
                 "errors_local",
                 "some-hostname.domain.com",

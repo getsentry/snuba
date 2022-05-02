@@ -31,12 +31,12 @@ def get_entity(name: EntityKey) -> Entity:
         MetricsCountersEntity,
         MetricsDistributionsEntity,
         MetricsSetsEntity,
+        OrgMetricsCountersEntity,
     )
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
     from snuba.datasets.entities.profiles import ProfilesEntity
     from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
-    from snuba.datasets.entities.spans import SpansEntity
     from snuba.datasets.entities.transactions import TransactionsEntity
 
     dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
@@ -51,11 +51,11 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.SESSIONS: SessionsEntity,
         EntityKey.ORG_SESSIONS: OrgSessionsEntity,
         EntityKey.TRANSACTIONS: TransactionsEntity,
-        EntityKey.SPANS: SpansEntity,
         EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
         EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
         EntityKey.METRICS_SETS: MetricsSetsEntity,
         EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
+        EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
         EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
         EntityKey.PROFILES: ProfilesEntity,
         **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),

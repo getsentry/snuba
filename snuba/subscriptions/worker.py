@@ -14,6 +14,7 @@ from arroyo.backends.abstract import Producer
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
 from snuba import state
+from snuba.attribution import get_app_id
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
@@ -25,7 +26,7 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
-from snuba.subscriptions.utils import Tick
+from snuba.subscriptions.utils import Tick, run_legacy_pipeline
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -84,7 +85,11 @@ class SubscriptionWorker(
         )
 
         request = task.task.subscription.data.build_request(
-            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics,
+            self.__dataset,
+            task.timestamp,
+            tick.offsets.upper,
+            timer,
+            self.__metrics,
         )
         return self.__execute_query(request, timer, task)
 
@@ -99,6 +104,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=True
@@ -120,6 +126,7 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
+                    app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
                     settings=SubscriptionRequestSettings(
                         referrer=request.referrer, consistent=False
@@ -236,6 +243,7 @@ class SubscriptionWorker(
         results = [
             SubscriptionTaskResult(task, future.result())
             for task, future in itertools.chain.from_iterable(batch)
+            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
         # Produce all of the subscription results asynchronously and wait for

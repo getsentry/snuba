@@ -292,7 +292,9 @@ class Query(DataSource, ABC):
         def transform_expression_list(
             expressions: Sequence[Expression],
         ) -> Sequence[Expression]:
-            return list(map(lambda exp: exp.transform(func), expressions),)
+            return list(
+                map(lambda exp: exp.transform(func), expressions),
+            )
 
         self.__selected_columns = list(
             map(

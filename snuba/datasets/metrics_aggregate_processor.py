@@ -4,6 +4,7 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.processor import (
     AggregateInsertBatch,
     MessageProcessor,
@@ -78,6 +79,11 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
             assert isinstance(value, int)
             values.append(value)
 
+        try:
+            retention_days = enforce_retention(message["retention_days"], timestamp)
+        except EventTooOld:
+            return None
+
         processed = [
             {
                 "org_id": _literal(message["org_id"]),
@@ -94,7 +100,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
                 "tags.key": _array_literal(keys),
                 "tags.value": _array_literal(values),
                 **self._process_values(message),
-                "retention_days": _literal(message["retention_days"]),
+                "retention_days": _literal(retention_days),
                 "granularity": _literal(granularity),
             }
             for granularity in self.GRANULARITIES_SECONDS
@@ -118,7 +124,8 @@ class SetsAggregateProcessor(MetricsAggregateProcessor):
 
         return {
             "value": _call(
-                "arrayReduce", (_literal("uniqState"), _array_literal(values)),
+                "arrayReduce",
+                (_literal("uniqState"), _array_literal(values)),
             )
         }
 
@@ -139,7 +146,11 @@ class CounterAggregateProcessor(MetricsAggregateProcessor):
 
         return {
             "value": _call(
-                "arrayReduce", (_literal("sumState"), _array_literal([value]),),
+                "arrayReduce",
+                (
+                    _literal("sumState"),
+                    _array_literal([value]),
+                ),
             ),
         }
 
@@ -169,19 +180,32 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
                 ),
             ),
             "min": _call(
-                "arrayReduce", (_literal("minState"), _array_literal([min(values)])),
+                "arrayReduce",
+                (_literal("minState"), _array_literal([min(values)])),
             ),
             "max": _call(
-                "arrayReduce", (_literal("maxState"), _array_literal([max(values)])),
+                "arrayReduce",
+                (_literal("maxState"), _array_literal([max(values)])),
             ),
             "avg": _call(
-                "arrayReduce", (_literal("avgState"), _array_literal(values),),
+                "arrayReduce",
+                (
+                    _literal("avgState"),
+                    _array_literal(values),
+                ),
             ),
             "sum": _call(
-                "arrayReduce", (_literal("sumState"), _array_literal([sum(values)]),),
+                "arrayReduce",
+                (
+                    _literal("sumState"),
+                    _array_literal([sum(values)]),
+                ),
             ),
             "count": _call(
                 "arrayReduce",
-                (_literal("countState"), _array_literal([float(len(values))]),),
+                (
+                    _literal("countState"),
+                    _array_literal([float(len(values))]),
+                ),
             ),
         }

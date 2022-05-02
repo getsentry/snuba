@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_profiler import generate_profile
@@ -31,7 +32,9 @@ test_cases = [
                 SelectedExpression(
                     "something",
                     FunctionCall(
-                        "something", "arrayJoin", (Column(None, None, "contexts.key"),),
+                        "something",
+                        "arrayJoin",
+                        (Column(None, None, "contexts.key"),),
                     ),
                 ),
             ],
@@ -52,7 +55,10 @@ test_cases = [
                     binary_condition(
                         ConditionFunctions.EQ,
                         build_mapping_expr(
-                            "tags[asd]", None, "tags", Literal(None, "asd"),
+                            "tags[asd]",
+                            None,
+                            "tags",
+                            Literal(None, "asd"),
                         ),
                         Literal(None, "sdf"),
                     ),
@@ -110,7 +116,8 @@ test_cases = [
             all_columns={"events.column2", "events.timestamp"},
             multi_level_condition=True,
             where_profile=FilterProfile(
-                columns={"events.timestamp"}, mapping_cols=set(),
+                columns={"events.timestamp"},
+                mapping_cols=set(),
             ),
             groupby_cols=set(),
             array_join_cols=set(),
@@ -145,7 +152,10 @@ test_cases = [
                         binary_condition(
                             ConditionFunctions.EQ,
                             build_mapping_expr(
-                                "tags[asd]", None, "tags", Literal(None, "asd"),
+                                "tags[asd]",
+                                None,
+                                "tags",
+                                Literal(None, "asd"),
                             ),
                             Literal(None, "sdf"),
                         ),
@@ -221,7 +231,8 @@ test_cases = [
             },
             multi_level_condition=True,
             where_profile=FilterProfile(
-                columns={"sentry_errors.timestamp"}, mapping_cols=set(),
+                columns={"sentry_errors.timestamp"},
+                mapping_cols=set(),
             ),
             groupby_cols=set(),
             array_join_cols=set(),
@@ -233,7 +244,8 @@ test_cases = [
 
 @pytest.mark.parametrize("query, profile", test_cases)
 def test_format_expressions(
-    query: ClickhouseQuery, profile: ClickhouseQueryProfile,
+    query: ClickhouseQuery,
+    profile: ClickhouseQueryProfile,
 ) -> None:
     generated_profile = generate_profile(query)
     assert generated_profile == profile
@@ -247,7 +259,10 @@ def test_serialization() -> None:
         table="events",
         all_columns={"col", "timestamp", "arrayjoin"},
         multi_level_condition=True,
-        where_profile=FilterProfile(columns={"timestamp"}, mapping_cols=set(),),
+        where_profile=FilterProfile(
+            columns={"timestamp"},
+            mapping_cols=set(),
+        ),
         groupby_cols={"col"},
         array_join_cols={"arrayjoin"},
     )

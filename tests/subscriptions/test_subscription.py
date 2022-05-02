@@ -86,7 +86,9 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, self.entity_key, identifier.partition,
+                    redis_client,
+                    self.entity_key,
+                    identifier.partition,
                 ).all(),
             )[0][1]
             == subscription
@@ -97,7 +99,8 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
             creator.create(
-                subscription, self.timer,
+                subscription,
+                self.timer,
             )
 
     def test_invalid_aggregation(self) -> None:
@@ -184,7 +187,9 @@ class TestSessionsSubscriptionCreator:
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, EntityKey.SESSIONS, identifier.partition,
+                    redis_client,
+                    EntityKey.SESSIONS,
+                    identifier.partition,
                 ).all(),
             )[0][1]
             == subscription
@@ -301,7 +306,9 @@ class TestMetricsCountersSubscriptionCreator:
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, entity_key, identifier.partition,
+                    redis_client,
+                    entity_key,
+                    identifier.partition,
                 ).all(),
             )[0][1]
             == subscription
@@ -314,7 +321,8 @@ class TestMetricsCountersSubscriptionCreator:
         creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
         with raises(InvalidQueryException):
             creator.create(
-                subscription, self.timer,
+                subscription,
+                self.timer,
             )
 
 
@@ -333,7 +341,9 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_client, self.entity_key, identifier.partition,
+                    redis_client,
+                    self.entity_key,
+                    identifier.partition,
                 ).all(),
             )[0][1]
             == subscription
@@ -344,7 +354,9 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         )
         assert (
             RedisSubscriptionDataStore(
-                redis_client, self.entity_key, identifier.partition,
+                redis_client,
+                self.entity_key,
+                identifier.partition,
             ).all()
             == []
         )

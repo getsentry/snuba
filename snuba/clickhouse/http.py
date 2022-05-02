@@ -153,7 +153,7 @@ class HTTPWriteBatch:
 
         self.__queue: Union[
             Queue[Union[bytes, None]], SimpleQueue[Union[bytes, None]]
-        ] = Queue(buffer_size) if buffer_size else SimpleQueue()
+        ] = (Queue(buffer_size) if buffer_size else SimpleQueue())
 
         body = self.__read_until_eof()
         if chunk_size > 1:

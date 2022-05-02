@@ -4,6 +4,7 @@ import sentry_sdk
 from sentry_sdk import Hub
 
 from snuba import environment, settings, state
+from snuba.attribution.log import AttributionData, QueryAttributionData, log_attribution
 from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
@@ -13,7 +14,9 @@ metrics = MetricsWrapper(environment.metrics, "api")
 
 
 def _record_timer_metrics(
-    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata,
+    request: Request,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
 ) -> None:
     final = str(request.query.get_final())
     referrer = request.referrer or "none"
@@ -36,19 +39,26 @@ def _record_timer_metrics(
 
 
 def _record_attribution_metrics(
-    request: Request, query_metadata: SnubaQueryMetadata
+    request: Request, query_metadata: SnubaQueryMetadata, extra_data: Mapping[str, Any]
 ) -> None:
+    attr_data = AttributionData(
+        app_id=request.app_id,
+        referrer=request.referrer,
+        dataset=query_metadata.dataset,
+        entity=query_metadata.entity,
+        queries=[],
+    )
     for q in query_metadata.query_list:
-        tags = {
-            "team": request.settings.get_team(),
-            "feature": request.settings.get_feature(),
-            "parent_api": request.settings.get_parent_api(),
-            "referrer": request.referrer,
-            "table": q.profile.table,
-        }
         profile = q.result_profile
         bytes_scanned = profile.get("bytes", 0.0) if profile else 0.0
-        metrics.increment("snuba.attribution", bytes_scanned, tags=tags)
+        attr_query = QueryAttributionData(
+            table=q.profile.table,
+            query_id=extra_data["stats"]["query_id"],
+            bytes_scanned=bytes_scanned,
+        )
+        attr_data.queries.append(attr_query)
+
+    log_attribution(attr_data)
 
 
 def record_query(
@@ -68,7 +78,7 @@ def record_query(
         # QueryMetadata class
         state.record_query(query_metadata.to_dict())
         _record_timer_metrics(request, timer, query_metadata)
-        _record_attribution_metrics(request, query_metadata)
+        _record_attribution_metrics(request, query_metadata, extra_data)
         _add_tags(timer, extra_data.get("experiments"), query_metadata)
 
 
@@ -118,6 +128,7 @@ def _record_failure_building_request(
     # table would be useful.
     if settings.RECORD_QUERIES:
         timer.send_metrics_to(
-            metrics, tags={"status": status.value, "referrer": referrer or "none"},
+            metrics,
+            tags={"status": status.value, "referrer": referrer or "none"},
         )
         _add_tags(timer)

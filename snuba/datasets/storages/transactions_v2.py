@@ -12,6 +12,7 @@ from snuba.datasets.storages.transactions_common import (
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
+from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
@@ -24,17 +25,20 @@ schema = WritableTableSchema(
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
+v2_query_processors = [*query_processors, TupleUnaliaser()]
+
+
 storage = WritableTableStorage(
     storage_key=StorageKey.TRANSACTIONS_V2,
     storage_set_key=StorageSetKey.TRANSACTIONS_V2,
     schema=schema,
-    query_processors=query_processors,
+    query_processors=v2_query_processors,
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=TransactionsMessageProcessor(),
         pre_filter=KafkaHeaderFilter("transaction_forwarder", "0"),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
-        subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_TRANSACTIONS,
     ),
@@ -44,5 +48,4 @@ storage = WritableTableStorage(
         "insert_allow_materialized_columns": 1,
         "input_format_skip_unknown_fields": 1,
     },
-    ignore_write_errors=True,
 )

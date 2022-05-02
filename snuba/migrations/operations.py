@@ -92,7 +92,10 @@ class CreateMaterializedView(SqlOperation):
 
 class RenameTable(SqlOperation):
     def __init__(
-        self, storage_set: StorageSetKey, old_table_name: str, new_table_name: str,
+        self,
+        storage_set: StorageSetKey,
+        old_table_name: str,
+        new_table_name: str,
     ):
         super().__init__(storage_set)
         self.__old_table_name = old_table_name

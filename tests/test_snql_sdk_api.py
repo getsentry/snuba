@@ -22,7 +22,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.utils.metrics.backends.dummy import get_recorded_metric_calls
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -49,7 +49,8 @@ class TestSDKSnQLApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) + timedelta(minutes=180)
         write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [get_raw_transaction()],
         )
 
     def test_simple_query(self) -> None:
@@ -404,12 +405,11 @@ class TestSDKSnQLApi(BaseApiTest):
         response = self.post("/events/snql", data=query.snuba())
         resp = json.loads(response.data)
         assert response.status_code == 200, resp
-        metric_calls = get_recorded_metric_calls("increment", "api.snuba.attribution")
+        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
         assert metric_calls is not None
         assert len(metric_calls) == 1
         assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["team"] == "sns"
-        assert metric_calls[0].tags["feature"] == "test"
+        assert metric_calls[0].tags["app_id"] == "default"
 
     def test_invalid_time_conditions(self) -> None:
         query = (

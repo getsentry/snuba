@@ -7,7 +7,7 @@ develop: install-python-dependencies setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
-	pip install 'pre-commit==2.9.0'
+	pip install 'pre-commit==2.18.1'
 	pre-commit install --install-hooks
 
 test:

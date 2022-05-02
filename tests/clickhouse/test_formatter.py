@@ -174,7 +174,9 @@ test_expressions = [
                     ),
                 ),
                 binary_condition(
-                    ConditionFunctions.EQ, Column(None, None, "c4"), Literal(None, 4),
+                    ConditionFunctions.EQ,
+                    Column(None, None, "c4"),
+                    Literal(None, 4),
                 ),
             ),
             binary_condition(

@@ -21,7 +21,8 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.command()
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
-    "--replacements-topic", help="Topic to produce replacement messages info.",
+    "--replacements-topic",
+    help="Topic to produce replacement messages info.",
 )
 @click.option(
     "--commit-log-topic",
@@ -33,7 +34,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Consumer group use for consuming the raw events topic.",
 )
 @click.option(
-    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--storage",
@@ -73,20 +76,32 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option(
-    "--parallel-collect", is_flag=True, default=True,
+    "--parallel-collect",
+    is_flag=True,
+    default=True,
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
-    "--processes", type=int,
+    "--processes",
+    type=int,
 )
 @click.option(
-    "--input-block-size", type=int,
+    "--input-block-size",
+    type=int,
 )
 @click.option(
-    "--output-block-size", type=int,
+    "--output-block-size",
+    type=int,
 )
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
+)
+# TODO: For testing alternate rebalancing strategies. To be eventually removed.
+@click.option(
+    "--cooperative-rebalancing",
+    is_flag=True,
+    default=False,
+    help="Use cooperative-sticky partition assignment strategy",
 )
 def consumer(
     *,
@@ -107,6 +122,7 @@ def consumer(
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
+    cooperative_rebalancing: bool = False,
 ) -> None:
 
     setup_logging(log_level)
@@ -148,6 +164,7 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         parallel_collect=parallel_collect,
+        cooperative_rebalancing=cooperative_rebalancing,
     )
 
     consumer = consumer_builder.build_base_consumer()

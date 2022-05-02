@@ -4,6 +4,7 @@ import time
 from collections import defaultdict, deque
 from concurrent.futures import Future
 from datetime import datetime
+from functools import partial
 from pickle import PickleBuffer
 from typing import (
     Any,
@@ -29,12 +30,10 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.streaming import (
-    CollectStep,
-    FilterStep,
-    ParallelCollectStep,
-    ParallelTransformStep,
-    TransformStep,
+from arroyo.processing.strategies.streaming import FilterStep, TransformStep
+from arroyo.processing.strategies.streaming.factory import (
+    ConsumerStrategyFactory,
+    StreamMessageFilter,
 )
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
@@ -45,7 +44,6 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey, are_writes_identical
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.table_storage import TableWriter
-from snuba.environment import setup_sentry
 from snuba.processor import (
     AggregateInsertBatch,
     InsertBatch,
@@ -335,7 +333,8 @@ def build_batch_writer(
     supports_replacements = replacements_producer is not None
 
     writer = table_writer.get_batch_writer(
-        metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1},
+        metrics,
+        {"load_balancing": "in_order", "insert_distributed_sync": 1},
     )
 
     def build_writer() -> ProcessedMessageBatchWriter:
@@ -486,7 +485,8 @@ class MultistorageCollector(
     def __init__(
         self,
         steps: Mapping[
-            StorageKey, ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
+            StorageKey,
+            ProcessingStep[Union[None, BytesInsertBatch, ReplacementBatch]],
         ],
         dead_letter_step: Optional[
             ProcessingStep[
@@ -596,6 +596,11 @@ class MultistorageKafkaPayload(NamedTuple):
     payload: KafkaPayload
 
 
+MultistorageProcessedMessage = Sequence[
+    Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+]
+
+
 def process_message(
     processor: MessageProcessor, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
@@ -643,7 +648,7 @@ def _process_message_multistorage_work(
 
 def process_message_multistorage(
     message: Message[MultistorageKafkaPayload],
-) -> Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]:
+) -> MultistorageProcessedMessage:
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
         message.offset, message.partition.index, message.timestamp
@@ -664,7 +669,7 @@ def process_message_multistorage(
 
 def process_message_multistorage_identical_storages(
     message: Message[MultistorageKafkaPayload],
-) -> Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]:
+) -> MultistorageProcessedMessage:
     """
     This method is similar to process_message_multistorage except for a minor difference.
     It performs an optimization where it avoids processing a message multiple times if the
@@ -697,12 +702,104 @@ def process_message_multistorage_identical_storages(
 
         if result is None:
             result = _process_message_multistorage_work(
-                metadata=metadata, storage_key=storage_key, storage_message=value,
+                metadata=metadata,
+                storage_key=storage_key,
+                storage_message=value,
             )
 
         intermediate_results[storage_key] = result
 
     return list(intermediate_results.items())
+
+
+def has_destination_storages(message: Message[MultistorageKafkaPayload]) -> bool:
+    return len(message.payload.storage_keys) > 0
+
+
+def find_destination_storages(
+    storages: Sequence[WritableTableStorage], message: Message[KafkaPayload]
+) -> MultistorageKafkaPayload:
+    storage_keys: MutableSequence[StorageKey] = []
+    for storage in storages:
+        filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
+        if filter is None or not filter.should_drop(message):
+            storage_keys.append(storage.get_storage_key())
+    return MultistorageKafkaPayload(storage_keys, message.payload)
+
+
+def build_multistorage_batch_writer(
+    metrics: MetricsBackend, storage: WritableTableStorage
+) -> ProcessedMessageBatchWriter:
+    replacement_batch_writer: Optional[ReplacementBatchWriter]
+    stream_loader = storage.get_table_writer().get_stream_loader()
+    replacement_topic_spec = stream_loader.get_replacement_topic_spec()
+    default_topic_spec = stream_loader.get_default_topic_spec()
+    if replacement_topic_spec is not None:
+        # XXX: The producer is flushed when closed on strategy teardown
+        # after an assignment is revoked, but never explicitly closed.
+        # XXX: This assumes that the Kafka cluster used for the input topic
+        # to the storage is the same as the replacement topic.
+        replacement_batch_writer = ReplacementBatchWriter(
+            ConfluentKafkaProducer(
+                build_kafka_producer_configuration(
+                    default_topic_spec.topic,
+                    override_params={
+                        "partitioner": "consistent",
+                        "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                    },
+                )
+            ),
+            Topic(replacement_topic_spec.topic_name),
+        )
+    else:
+        replacement_batch_writer = None
+
+    return ProcessedMessageBatchWriter(
+        InsertBatchWriter(
+            storage.get_table_writer().get_batch_writer(
+                metrics,
+                {"load_balancing": "in_order", "insert_distributed_sync": 1},
+            ),
+            MetricsWrapper(
+                metrics,
+                "insertions",
+                {"storage": storage.get_storage_key().value},
+            ),
+        ),
+        replacement_batch_writer,
+    )
+
+
+def build_collector(
+    metrics: MetricsBackend,
+    storages: Sequence[WritableTableStorage],
+    topic: Optional[Topic],
+    producer: Optional[ConfluentKafkaProducer] = None,
+) -> ProcessingStep[MultistorageProcessedMessage]:
+    dead_letter_step: Optional[DeadLetterStep] = None
+    if producer and topic:
+        dead_letter_step = DeadLetterStep(
+            producer=producer,
+            topic=topic,
+            metrics=metrics,
+        )
+    return MultistorageCollector(
+        {
+            storage.get_storage_key(): build_multistorage_batch_writer(metrics, storage)
+            for storage in storages
+        },
+        ignore_errors={
+            storage.get_storage_key()
+            for storage in storages
+            if storage.get_is_write_error_ignorable() is True
+        },
+        dead_letter_step=dead_letter_step,
+    )
+
+
+class MultiStorageStreamFilter(StreamMessageFilter[MultistorageKafkaPayload]):
+    def should_drop(self, message: Message[MultistorageKafkaPayload]) -> bool:
+        return not has_destination_storages(message)
 
 
 class MultistorageConsumerProcessingStrategyFactory(
@@ -720,6 +817,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         metrics: MetricsBackend,
         producer: Optional[AbstractProducer[KafkaPayload]],
         topic: Optional[Topic],
+        initialize_parallel_transform: Optional[Callable[[], None]] = None,
     ):
         if processes is not None:
             assert input_block_size is not None, "input block size required"
@@ -733,13 +831,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             ), "output block size cannot be used without processes"
 
         self.__storages = storages
-        self.__max_batch_size = max_batch_size
-        self.__max_batch_time = max_batch_time
-        self.__processes = processes
-        self.__input_block_size = input_block_size
-        self.__output_block_size = output_block_size
         self.__metrics = metrics
-        self.__parallel_collect = parallel_collect
         self.__producer = producer
         self.__topic = topic
 
@@ -750,128 +842,29 @@ class MultistorageConsumerProcessingStrategyFactory(
         ):
             self.__process_message_fn = process_message_multistorage_identical_storages
 
-    def __find_destination_storages(
-        self, message: Message[KafkaPayload]
-    ) -> MultistorageKafkaPayload:
-        storage_keys: MutableSequence[StorageKey] = []
-        for storage in self.__storages:
-            filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
-            if filter is None or not filter.should_drop(message):
-                storage_keys.append(storage.get_storage_key())
-        return MultistorageKafkaPayload(storage_keys, message.payload)
-
-    def __has_destination_storages(
-        self, message: Message[MultistorageKafkaPayload]
-    ) -> bool:
-        return len(message.payload.storage_keys) > 0
-
-    def __build_batch_writer(
-        self, storage: WritableTableStorage
-    ) -> ProcessedMessageBatchWriter:
-        replacement_batch_writer: Optional[ReplacementBatchWriter]
-        stream_loader = storage.get_table_writer().get_stream_loader()
-        replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-        default_topic_spec = stream_loader.get_default_topic_spec()
-        if replacement_topic_spec is not None:
-            # XXX: The producer is flushed when closed on strategy teardown
-            # after an assignment is revoked, but never explicitly closed.
-            # XXX: This assumes that the Kafka cluster used for the input topic
-            # to the storage is the same as the replacement topic.
-            replacement_batch_writer = ReplacementBatchWriter(
-                ConfluentKafkaProducer(
-                    build_kafka_producer_configuration(
-                        default_topic_spec.topic,
-                        override_params={
-                            "partitioner": "consistent",
-                            "message.max.bytes": 50000000,  # 50MB, default is 1MB
-                        },
-                    )
-                ),
-                Topic(replacement_topic_spec.topic_name),
-            )
-        else:
-            replacement_batch_writer = None
-
-        return ProcessedMessageBatchWriter(
-            InsertBatchWriter(
-                storage.get_table_writer().get_batch_writer(
-                    self.__metrics,
-                    {"load_balancing": "in_order", "insert_distributed_sync": 1},
-                ),
-                MetricsWrapper(
-                    self.__metrics,
-                    "insertions",
-                    {"storage": storage.get_storage_key().value},
-                ),
+        self.__inner_factory = ConsumerStrategyFactory(
+            prefilter=MultiStorageStreamFilter(),
+            process_message=self.__process_message_fn,
+            collector=partial(
+                build_collector,
+                self.__metrics,
+                self.__storages,
+                self.__topic,
+                self.__producer,
             ),
-            replacement_batch_writer,
-        )
-
-    def __build_collector(
-        self,
-    ) -> ProcessingStep[
-        Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
-    ]:
-        dead_letter_step: Optional[DeadLetterStep] = None
-        if self.__producer and self.__topic:
-            dead_letter_step = DeadLetterStep(
-                producer=self.__producer, topic=self.__topic, metrics=self.__metrics,
-            )
-        return MultistorageCollector(
-            {
-                storage.get_storage_key(): self.__build_batch_writer(storage)
-                for storage in self.__storages
-            },
-            ignore_errors={
-                storage.get_storage_key()
-                for storage in self.__storages
-                if storage.get_is_write_error_ignorable() is True
-            },
-            dead_letter_step=dead_letter_step,
+            max_batch_size=max_batch_size,
+            max_batch_time=max_batch_time,
+            processes=processes,
+            input_block_size=input_block_size,
+            output_block_size=output_block_size,
+            initialize_parallel_transform=initialize_parallel_transform,
+            parallel_collect=parallel_collect,
         )
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
-        # 1. Identify the storages that should be used for the input message.
-        # 2. Filter out any messages that do not apply to any storage.
-        # 3. Transform the messages using the selected storages.
-        # 4. Route the messages to the collector for each storage.
-        collect = (
-            ParallelCollectStep(
-                self.__build_collector,
-                commit,
-                self.__max_batch_size,
-                self.__max_batch_time,
-            )
-            if self.__parallel_collect
-            else CollectStep(
-                self.__build_collector,
-                commit,
-                self.__max_batch_size,
-                self.__max_batch_time,
-            )
-        )
-
-        strategy: ProcessingStrategy[MultistorageKafkaPayload]
-
-        if self.__processes is None:
-            strategy = TransformStep(self.__process_message_fn, collect)
-        else:
-            assert self.__input_block_size is not None
-            assert self.__output_block_size is not None
-            strategy = ParallelTransformStep(
-                self.__process_message_fn,
-                collect,
-                self.__processes,
-                self.__max_batch_size,
-                self.__max_batch_time,
-                self.__input_block_size,
-                self.__output_block_size,
-                initializer=setup_sentry,
-            )
-
         return TransformStep(
-            self.__find_destination_storages,
-            FilterStep(self.__has_destination_storages, strategy),
+            partial(find_destination_storages, self.__storages),
+            FilterStep(has_destination_storages, self.__inner_factory.create(commit)),
         )

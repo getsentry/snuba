@@ -1,6 +1,7 @@
 from typing import Mapping, Optional, cast
 
 import pytest
+
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (

@@ -1,11 +1,6 @@
 from typing import Sequence, Tuple
 
-from snuba.clickhouse.columns import (
-    AggregateFunction,
-    Column,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import AggregateFunction, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -34,7 +29,8 @@ new_dest_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     ),
     (
         Column(
-            "sessions_crashed_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)]),
+            "sessions_crashed_preaggr",
+            AggregateFunction("sumIf", [UInt(32), UInt(8)]),
         ),
         "sessions_crashed",
     ),
@@ -47,7 +43,8 @@ new_dest_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     ),
     (
         Column(
-            "sessions_errored_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)]),
+            "sessions_errored_preaggr",
+            AggregateFunction("sumIf", [UInt(32), UInt(8)]),
         ),
         "sessions_errored",
     ),

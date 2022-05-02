@@ -37,11 +37,11 @@ class Migration(migration.ClickhouseNodeMigration):
         self, table_name: str
     ) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(
-                storage_set=StorageSetKey.METRICS,
-                table_name=table_name,
-                column_name="histogram_buckets",
-            )
+            # operations.DropColumn(
+            #     storage_set=StorageSetKey.METRICS,
+            #     table_name=table_name,
+            #     column_name="histogram_buckets",
+            # )
         ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:

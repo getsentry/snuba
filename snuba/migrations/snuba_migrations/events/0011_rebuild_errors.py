@@ -141,7 +141,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 after="tags",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_local",
+                storage_set=StorageSetKey.EVENTS,
+                table_name="errors_local",
             ),
             operations.RenameTable(
                 storage_set=StorageSetKey.EVENTS,
@@ -164,7 +165,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="errors_dist_new",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="errors_local", sharding_key=sample_expr,
+                    local_table_name="errors_local",
+                    sharding_key=sample_expr,
                 ),
             ),
             operations.AddColumn(
@@ -177,7 +179,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 after="tags",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_dist",
+                storage_set=StorageSetKey.EVENTS,
+                table_name="errors_dist",
             ),
             operations.RenameTable(
                 storage_set=StorageSetKey.EVENTS,
@@ -189,7 +192,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="errors_dist_ro",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="errors_local", sharding_key=sample_expr,
+                    local_table_name="errors_local",
+                    sharding_key=sample_expr,
                 ),
             ),
         ]

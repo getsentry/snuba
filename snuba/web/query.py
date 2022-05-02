@@ -117,8 +117,11 @@ def parse_and_run_query(
     """
     # from_clause = request.query.get_from_clause()
     start, end = None, None
+    entity_name = "unknown"
     if isinstance(request.query, LogicalQuery):
-        entity = get_entity(request.query.get_from_clause().key)
+        entity_key = request.query.get_from_clause().key
+        entity = get_entity(entity_key)
+        entity_name = entity_key.value
         if entity.required_time_column is not None:
             start, end = get_time_range(request.query, entity.required_time_column)
 
@@ -127,6 +130,7 @@ def parse_and_run_query(
         start_timestamp=start,
         end_timestamp=end,
         dataset=get_dataset_name(dataset),
+        entity=entity_name,
         timer=timer,
         query_list=[],
         projects=ProjectsFinder().visit(request.query),

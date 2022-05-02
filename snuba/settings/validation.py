@@ -21,7 +21,9 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
     topic_names = {
         "events",
         "event-replacements",
+        "transactions",
         "snuba-commit-log",
+        "snuba-transactions-commit-log",
         "snuba-sessions-commit-log",
         "snuba-metrics-commit-log",
         "cdc",

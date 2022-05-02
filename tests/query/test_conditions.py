@@ -76,7 +76,9 @@ def test_map_expressions_in_basic_condition() -> None:
     condition = condition.transform(replace_col)
 
     condition_b = binary_condition(
-        ConditionFunctions.EQ, FunctionCall(None, "f", (c3,)), c2,
+        ConditionFunctions.EQ,
+        FunctionCall(None, "f", (c3,)),
+        c2,
     )
     ret = list(condition)
     expected = [c3, FunctionCall(None, "f", (c3,)), c2, condition_b]
@@ -207,17 +209,25 @@ def test_is_x_condition_functions() -> None:
 
 def test_first_level_conditions() -> None:
     c1 = binary_condition(
-        ConditionFunctions.EQ, Column(None, "table1", "column1"), Literal(None, "test"),
+        ConditionFunctions.EQ,
+        Column(None, "table1", "column1"),
+        Literal(None, "test"),
     )
     c2 = binary_condition(
-        ConditionFunctions.EQ, Column(None, "table2", "column2"), Literal(None, "test"),
+        ConditionFunctions.EQ,
+        Column(None, "table2", "column2"),
+        Literal(None, "test"),
     )
     c3 = binary_condition(
-        ConditionFunctions.EQ, Column(None, "table3", "column3"), Literal(None, "test"),
+        ConditionFunctions.EQ,
+        Column(None, "table3", "column3"),
+        Literal(None, "test"),
     )
 
     cond = binary_condition(
-        BooleanFunctions.AND, binary_condition(BooleanFunctions.AND, c1, c2), c3,
+        BooleanFunctions.AND,
+        binary_condition(BooleanFunctions.AND, c1, c2),
+        c3,
     )
     assert get_first_level_and_conditions(cond) == [c1, c2, c3]
 
@@ -231,7 +241,9 @@ def test_first_level_conditions() -> None:
     assert get_first_level_and_conditions(cond) == [c1, c2, c3]
 
     cond = binary_condition(
-        BooleanFunctions.OR, binary_condition(BooleanFunctions.AND, c1, c2), c3,
+        BooleanFunctions.OR,
+        binary_condition(BooleanFunctions.AND, c1, c2),
+        c3,
     )
     assert get_first_level_or_conditions(cond) == [
         binary_condition(BooleanFunctions.AND, c1, c2),
@@ -253,7 +265,9 @@ def test_first_level_conditions() -> None:
 
 def test_binary_match() -> None:
     c1 = binary_condition(
-        ConditionFunctions.EQ, Column(None, "table1", "column1"), Literal(None, "test"),
+        ConditionFunctions.EQ,
+        Column(None, "table1", "column1"),
+        Literal(None, "test"),
     )
 
     lhs = ColumnPattern(String("table1"), String("column1"))

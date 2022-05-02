@@ -145,6 +145,7 @@ REGULAR_FUNCTIONS = {
     "toUInt64",
     "toFloat64",
     # dates and times
+    "toStartOfMinute",
     "toStartOfDay",
     "toStartOfHour",
     "toStartOfYear",
