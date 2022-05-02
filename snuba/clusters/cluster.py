@@ -28,6 +28,7 @@ from snuba.writer import BatchWriter
 class ClickhouseClientSettingsType(NamedTuple):
     settings: Mapping[str, Any]
     timeout: Optional[int]
+    override_user: Optional[str] = None
 
 
 class ConnectionId(NamedTuple):
@@ -44,8 +45,12 @@ class ClickhouseClientSettings(Enum):
         {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
-    QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
-    TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
+    QUERY = ClickhouseClientSettingsType(
+        {"readonly": 1}, None, settings.CLICKHOUSE_READONLY_USER
+    )
+    TRACING = ClickhouseClientSettingsType(
+        {"readonly": 2}, None, settings.CLICKHOUSE_TRACE_USER
+    )
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple for each
@@ -153,13 +158,14 @@ class ConnectionCache:
         database: str,
     ) -> ClickhousePool:
         with self.__lock:
-            settings, timeout = client_settings.value
-            cache_key = (node, client_settings, user, password, database)
+            settings, timeout, override_user = client_settings.value
+            computed_user = override_user if override_user is not None else user
+            cache_key = (node, client_settings, computed_user, password, database)
             if cache_key not in self.__cache:
                 self.__cache[cache_key] = ClickhousePool(
                     node.host_name,
                     node.port,
-                    user,
+                    computed_user,
                     password,
                     database,
                     client_settings=settings,
