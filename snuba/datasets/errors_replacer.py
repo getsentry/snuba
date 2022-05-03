@@ -490,7 +490,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         type_ = message.action_type
 
         attributes_json = json.dumps({"message_type": type_, **message.data})
-        logger.info(f"received_replacement_message: {attributes_json}")
+        logger.info(attributes_json)
 
         if type_ in REPLACEMENT_EVENT_TYPES:
             metrics.increment(
