@@ -13,8 +13,14 @@ Snuba assumes:
 1. A Clickhouse server endpoint at ``CLICKHOUSE_HOST`` (default ``localhost``).
 2. A redis instance running at ``REDIS_HOST`` (default ``localhost``). On port
    `6379`
+3. A Kafka cluster running at ``localhost`` on port `9092`.
 
-A quick way to get these services running is to set up sentry, then use::
+A quick way to get these services running is to set up sentry, and add the following line
+in ``~/.sentry/sentry.conf.py``::
+
+    SENTRY_EVENTSTREAM = "sentry.eventstream.kafka.KafkaEventStream"
+
+And then use::
 
     sentry devservices up --exclude=snuba
 
