@@ -62,6 +62,8 @@ def test_concurrency_limit() -> None:
     connection = mock.Mock()
     connection.execute.side_effect = TestError("some error")
 
+    state.set_config("simultaneous_queries_sleep_seconds", 0.5)
+
     pool = ClickhousePool("host", 100, "test", "test", "test")
     pool.pool = queue.LifoQueue(1)
     pool.pool.put(connection, block=False)

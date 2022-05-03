@@ -245,13 +245,16 @@ class ClickhousePool(object):
                         if attempts_remaining <= 0:
                             raise ClickhouseError(e.message, code=e.code) from e
 
+                        sleep_interval_seconds = state.get_config(
+                            "simultaneous_queries_sleep_seconds", None
+                        )
+                        if not sleep_interval_seconds:
+                            raise ClickhouseError(e.message, code=e.code) from e
+
                         attempts_remaining = min(
                             attempts_remaining, 1
                         )  # only retry once
 
-                        sleep_interval_seconds = state.get_config(
-                            "simultaneous_queries_sleep_seconds", 1
-                        )
                         assert sleep_interval_seconds is not None
                         # Linear backoff. Adds one second at each iteration.
                         time.sleep(sleep_interval_seconds)
