@@ -17,4 +17,5 @@ class MetricsDataset(Dataset):
             get_entity(EntityKey.METRICS_COUNTERS),
             get_entity(EntityKey.METRICS_DISTRIBUTIONS),
             get_entity(EntityKey.METRICS_SETS),
+            get_entity(EntityKey.ORG_METRICS_COUNTERS),
         )

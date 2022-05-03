@@ -136,6 +136,7 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
             # Team and feature are used for resource attribution
             "team": {"type": "string", "default": "<unknown>"},
             "feature": {"type": "string", "default": "<unknown>"},
+            "app_id": {"type": "string", "default": "default"},
         },
         "additionalProperties": False,
     },

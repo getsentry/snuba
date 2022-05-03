@@ -7,6 +7,7 @@ import simplejson as json
 from flask.testing import FlaskClient
 
 from snuba import state
+from snuba.datasets.factory import get_enabled_dataset_names
 
 
 @pytest.fixture
@@ -213,3 +214,48 @@ def test_query_trace_invalid_query(admin_api: FlaskClient[Any]) -> None:
     data = json.loads(response.data)
     assert "; is not allowed in the query" in data["error"]["message"]
     assert "validation" == data["error"]["type"]
+
+
+def test_get_snuba_datasets(admin_api: FlaskClient[Any]) -> None:
+    response = admin_api.get("/snuba_datasets")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert set(data) == set(get_enabled_dataset_names())
+
+
+def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient[Any]) -> None:
+    response = admin_api.post(
+        "/snql_to_sql", data=json.dumps({"dataset": "", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "dataset '' is not available"
+
+
+def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient[Any]) -> None:
+    response = admin_api.post(
+        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": ""})
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert (
+        data["error"]["message"]
+        == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
+    )
+
+
+def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient[Any]) -> None:
+    snql_query = """
+    MATCH (sessions)
+    SELECT sessions_crashed
+    WHERE org_id = 100
+    AND project_id IN tuple(100)
+    AND started >= toDateTime('2022-01-01 00:00:00')
+    AND started < toDateTime('2022-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": snql_query})
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["sql"] != ""

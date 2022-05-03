@@ -1,10 +1,11 @@
-from snuba.clickhouse.columns import ColumnSet
-from snuba.query.data_source.simple import Table
 from typing import Optional, Sequence
+
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 
 
@@ -40,8 +41,13 @@ def nested_expression(column: str, key: str) -> FunctionCall:
 
 
 def nested_condition(
-    column_name: str, key: str, operator: str, val: str,
+    column_name: str,
+    key: str,
+    operator: str,
+    val: str,
 ) -> Expression:
     return binary_condition(
-        operator, nested_expression(column_name, key), Literal(None, val),
+        operator,
+        nested_expression(column_name, key),
+        Literal(None, val),
     )

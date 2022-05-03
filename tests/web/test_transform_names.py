@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 
 from snuba import settings
+from snuba.attribution import get_app_id
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
@@ -78,7 +79,12 @@ def test_transform_column_names() -> None:
     result = parse_and_run_query(
         dataset,
         Request(
-            id="asd", body={}, query=query, snql_anonymized="", settings=query_settings
+            id="asd",
+            body={},
+            query=query,
+            app_id=get_app_id("default"),
+            snql_anonymized="",
+            settings=query_settings,
         ),
         timer,
     )

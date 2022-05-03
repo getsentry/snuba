@@ -60,6 +60,9 @@ class RateLimiterDelegate(RequestSettings):
     def get_feature(self) -> str:
         return self.__delegate.get_feature()
 
+    def get_app_id(self) -> str:
+        return self.__delegate.get_app_id()
+
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return [
             self.__append_prefix(r) for r in self.__delegate.get_rate_limit_params()

@@ -150,7 +150,9 @@ invalid_tests = [
                 Literal(None, 1),
             ),
             having=binary_condition(
-                "greater", Column("_snuba_count", None, "count"), Literal(None, 1),
+                "greater",
+                Column("_snuba_count", None, "count"),
+                Literal(None, 1),
             ),
         ),
         id="no having clauses",

@@ -1,6 +1,6 @@
 from __future__ import annotations
-from copy import copy
 
+from copy import copy
 from typing import Mapping, MutableMapping, NamedTuple, Set
 
 from snuba.datasets.entities import EntityKey

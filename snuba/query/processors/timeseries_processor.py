@@ -31,7 +31,11 @@ class TimeSeriesProcessor(QueryProcessor):
         # The columns here might overlap with the columns that get replaced, so we have to search for transformed
         # columns.
         column_match = ColumnMatch(
-            None, Param("column_name", Or([String(tc) for tc in time_parse_columns]),),
+            None,
+            Param(
+                "column_name",
+                Or([String(tc) for tc in time_parse_columns]),
+            ),
         )
         self.condition_match = FunctionCallMatch(
             Or(
@@ -70,7 +74,8 @@ class TimeSeriesProcessor(QueryProcessor):
                                             String("intDiv"),
                                             (
                                                 FunctionCallMatch(
-                                                    String("toUInt32"), (column_match,),
+                                                    String("toUInt32"),
+                                                    (column_match,),
                                                 ),
                                                 LiteralMatch(Any(int)),
                                             ),

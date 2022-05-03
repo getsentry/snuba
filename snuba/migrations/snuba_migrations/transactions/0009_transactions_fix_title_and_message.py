@@ -22,14 +22,16 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "title", String(Modifiers(materialized="transaction_name")),
+                    "title",
+                    String(Modifiers(materialized="transaction_name")),
                 ),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "message", String(Modifiers(materialized="transaction_name")),
+                    "message",
+                    String(Modifiers(materialized="transaction_name")),
                 ),
             ),
         ]

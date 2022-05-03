@@ -15,6 +15,7 @@ PORT = 1218
 
 ADMIN_HOST = os.environ.get("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
+ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
 
@@ -101,7 +102,7 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
-BULK_BINARY_LOAD_CHUNK = 2 ** 22  # 4 MB
+BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 # Processor/Writer Options
 
@@ -111,7 +112,11 @@ BROKER_CONFIG: Mapping[str, Any] = {
 }
 
 # Mapping of default Kafka topic name to custom names
-KAFKA_TOPIC_MAP: Mapping[str, str] = {}
+KAFKA_TOPIC_MAP: Mapping[str, str] = {
+    # TODO: Remove once we are done splitting transactions from the shared events topic
+    "transactions": "events",
+    "snuba-transactions-commit-log": "snuba-commit-log",
+}
 
 # Mapping of default Kafka topic name to broker config
 KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
@@ -124,6 +129,9 @@ DISCARD_OLD_EVENTS = True
 CLICKHOUSE_HTTP_CHUNK_SIZE = 8192
 HTTP_WRITER_BUFFER_SIZE = 1
 
+# Retention related settings
+ENFORCE_RETENTION: bool = False
+LOWER_RETENTION_DAYS = 30
 DEFAULT_RETENTION_DAYS = 90
 RETENTION_OVERRIDES: Mapping[int, int] = {}
 
@@ -134,7 +142,7 @@ STATS_IN_RESPONSE = False
 PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 REPLACER_MAX_BLOCK_SIZE = 512
-REPLACER_MAX_MEMORY_USAGE = 10 * (1024 ** 3)  # 10GB
+REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
 # TLL of Redis key that denotes whether a project had replacements
 # run recently. Useful for decidig whether or not to add FINAL clause
 # to queries.
@@ -156,7 +164,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental", "profiles"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -174,6 +182,9 @@ ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
 # Metric Alerts Subscription Options
 ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
+
+# Use the subscriptions pipeline in devserver
+ENABLE_NEW_SUBSCRIPTIONS = os.environ.get("ENABLE_NEW_SUBSCRIPTIONS", False)
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000

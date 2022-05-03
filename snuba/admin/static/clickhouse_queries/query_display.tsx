@@ -1,15 +1,20 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Collapse } from "../collapse";
-import { Table } from "../table";
 
-import { ClickhouseNodeData, QueryRequest, QueryResult } from "./types";
+import {
+  ClickhouseNodeData,
+  QueryRequest,
+  QueryResult,
+  PredefinedQuery,
+} from "./types";
 
 type QueryState = Partial<QueryRequest>;
 
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
+  predefinedQuery: PredefinedQuery | null;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [query, setQuery] = useState<QueryState>({});
@@ -22,6 +27,12 @@ function QueryDisplay(props: {
       setNodeData(res);
     });
   }, []);
+
+  useEffect(() => {
+    if (props.predefinedQuery) {
+      setQuery({ sql: props.predefinedQuery.sql });
+    }
+  }, [props.predefinedQuery]);
 
   function selectStorage(storage: string) {
     setQuery((prevQuery) => {
@@ -62,7 +73,7 @@ function QueryDisplay(props: {
       })
       .catch((err) => {
         console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
+        window.alert("An error occurred: " + err.error);
       });
   }
 
@@ -73,7 +84,8 @@ function QueryDisplay(props: {
   return (
     <div>
       <form>
-        <h2>Construct a query</h2>
+        <h2>Construct a ClickHouse System Query</h2>
+        <div style={queryDescription}>{props.predefinedQuery?.description}</div>
         <div>
           <TextArea value={query.sql || ""} onChange={updateQuerySql} />
         </div>
@@ -196,10 +208,16 @@ function TextArea(props: {
       spellCheck={false}
       value={value}
       onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 100 }}
+      style={{ width: "100%", height: 140 }}
       placeholder={"Write your query here"}
     />
   );
 }
 
+const queryDescription = {
+  minHeight: 10,
+  width: "auto",
+  fontSize: 16,
+  padding: "10px 5px",
+};
 export default QueryDisplay;

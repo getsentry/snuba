@@ -11,8 +11,10 @@ import {
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
+  PredefinedQuery,
 } from "./clickhouse_queries/types";
 import { TracingRequest, TracingResult } from "./tracing/types";
+import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -30,6 +32,9 @@ interface Client {
   getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
+  convertSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
+  getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
 }
@@ -121,6 +126,33 @@ function Client() {
       );
     },
 
+    getSnubaDatasetNames: () => {
+      const url = baseUrl + "snuba_datasets";
+      return fetch(url).then((resp) => resp.json());
+    },
+
+    convertSnQLQuery: (query: SnQLRequest) => {
+      const url = baseUrl + "snql_to_sql";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error.message || "Could not convert SnQL";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
+
+    getPredefinedQueryOptions: () => {
+      const url = baseUrl + "clickhouse_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
     executeSystemQuery: (query: QueryRequest) => {
       const url = baseUrl + "run_clickhouse_system_query";
       return fetch(url, {

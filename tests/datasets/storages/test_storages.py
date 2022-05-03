@@ -9,7 +9,6 @@ from snuba.datasets.storages import StorageKey, are_writes_identical
         (StorageKey.ERRORS, StorageKey.ERRORS_V2, True),
         (StorageKey.TRANSACTIONS, StorageKey.TRANSACTIONS_V2, True),
         (StorageKey.ERRORS, StorageKey.TRANSACTIONS, False),
-        (StorageKey.METRICS_SETS, StorageKey.METRICS_BUCKETS, False),
     ],
 )
 def test_storage_keys_same_writes(

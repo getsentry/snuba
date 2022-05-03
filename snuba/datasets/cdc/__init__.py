@@ -1,4 +1,5 @@
 from typing import Any
+
 from snuba.datasets.storage import WritableTableStorage
 from snuba.snapshots.loaders.single_table import RowProcessor
 

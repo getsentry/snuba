@@ -11,6 +11,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -37,7 +38,8 @@ class TestSnQLApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) + timedelta(minutes=180)
         write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [get_raw_transaction()],
         )
 
     def test_simple_query(self) -> None:
@@ -191,42 +193,6 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp >= toDateTime('2021-01-01')
                     AND timestamp < toDateTime('2021-01-02')
                     """
-                }
-            ),
-        )
-        assert response.status_code == 429
-
-    def test_project_rate_limiting_joins(self) -> None:
-        state.set_config("project_concurrent_limit", self.project_id)
-        state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
-
-        response = self.post(
-            "/transactions/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
-                    WHERE s.project_id = 2
-                    AND t.project_id = 2
-                    AND t.finish_ts >= toDateTime('2021-01-01')
-                    AND t.finish_ts < toDateTime('2021-01-02')
-                    """,
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-        response = self.post(
-            "/transactions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
-                    WHERE s.project_id = {self.project_id}
-                    AND t.project_id = {self.project_id}
-                    AND t.finish_ts >= toDateTime('2021-01-01')
-                    AND t.finish_ts < toDateTime('2021-01-02')
-                    """,
                 }
             ),
         )
@@ -622,10 +588,68 @@ class TestSnQLApi(BaseApiTest):
                     """,
                     "team": "sns",
                     "feature": "test",
+                    "app_id": "default",
                 }
             ),
         )
         assert response.status_code == 200
+
+    def test_app_id_attribution(self) -> None:
+        state.set_config("use_attribution", 1)
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS count
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                    "app_id": "default",
+                }
+            ),
+        )
+        assert response.status_code == 200
+        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
+        assert metric_calls is not None
+        assert len(metric_calls) == 1
+        assert metric_calls[0].value > 0
+        assert metric_calls[0].tags["app_id"] == "default"
+        assert metric_calls[0].tags["referrer"] == "test"
+        assert metric_calls[0].tags["dataset"] == "events"
+        assert metric_calls[0].tags["entity"] == "events"
+        assert metric_calls[0].tags["table"].startswith("errors")
+
+    def test_invalid_app_id_attribution(self) -> None:
+        state.set_config("use_attribution", 1)
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS count
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                    "app_id": "unregistered",
+                }
+            ),
+        )
+        assert response.status_code == 200
+        metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
+        assert metric_calls is not None
+        assert len(metric_calls) == 1
+        assert metric_calls[0].value > 0
+        assert metric_calls[0].tags["app_id"] == "invalid"
+
+        metric_calls = get_recorded_metric_calls(
+            "increment", "snuba.attribution.invalid_app_id"
+        )
+        assert metric_calls is not None
+        assert len(metric_calls) == 1
+        assert metric_calls[0].tags["app_id"] == "unregistered"
 
     def test_missing_alias_bug(self) -> None:
         response = self.post(
@@ -699,7 +723,7 @@ class TestSnQLApi(BaseApiTest):
                     timestamp >= toDateTime('2021-08-18T18:34:04') AND
                     timestamp < toDateTime('2021-09-01T18:34:04') AND
                     org_id = 1 AND
-                    project_id IN tuple(5433960)
+                    project_id IN tuple(123)
                 LIMIT 1 OFFSET 0
                 """
                 }

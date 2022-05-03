@@ -35,7 +35,9 @@ def test_event_id_column_format_expressions() -> None:
                     "replaceAll",
                     (
                         FunctionCall(
-                            None, "toString", (Column(None, None, "event_id"),),
+                            None,
+                            "toString",
+                            (Column(None, None, "event_id"),),
                         ),
                         Literal(None, "-"),
                         Literal(None, ""),

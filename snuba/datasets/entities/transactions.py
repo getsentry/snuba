@@ -11,7 +11,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.clickhouse_upgrade import (
     Option,
     RolloutSelector,
@@ -30,7 +29,6 @@ from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query import ProcessableQuery
-from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -58,10 +56,14 @@ transaction_translator = TranslationMappers(
             "coalesce",
             (
                 FunctionCall(
-                    None, "IPv4NumToString", (Column(None, None, "ip_address_v4"),),
+                    None,
+                    "IPv4NumToString",
+                    (Column(None, None, "ip_address_v4"),),
                 ),
                 FunctionCall(
-                    None, "IPv6NumToString", (Column(None, None, "ip_address_v6"),),
+                    None,
+                    "IPv6NumToString",
+                    (Column(None, None, "ip_address_v6"),),
                 ),
             ),
         ),
@@ -170,7 +172,8 @@ class BaseTransactionsEntity(Entity, ABC):
 
         v2_pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=get_storage(StorageKey.TRANSACTIONS_V2), mappers=mappers,
+                storage=get_storage(StorageKey.TRANSACTIONS_V2),
+                mappers=mappers,
             )
         )
 
@@ -181,6 +184,7 @@ class BaseTransactionsEntity(Entity, ABC):
             },
             selector_func=v2_selector_function,
             split_rate_limiter=True,
+            ignore_secondary_exceptions=True,
             callback_func=comparison_callback,
         )
 
@@ -188,21 +192,7 @@ class BaseTransactionsEntity(Entity, ABC):
             storages=[storage],
             query_pipeline_builder=pipeline_builder,
             abstract_column_set=schema.get_columns(),
-            join_relationships={
-                "contains": JoinRelationship(
-                    rhs_entity=EntityKey.SPANS,
-                    columns=[
-                        ("project_id", "project_id"),
-                        ("span_id", "transaction_span_id"),
-                    ],
-                    join_type=JoinType.INNER,
-                    equivalences=[
-                        ColumnEquivalence("event_id", "transaction_id"),
-                        ColumnEquivalence("transaction_name", "transaction_name"),
-                        ColumnEquivalence("trace_id", "trace_id"),
-                    ],
-                )
-            },
+            join_relationships={},
             writable_storage=storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",

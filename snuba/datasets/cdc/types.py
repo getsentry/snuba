@@ -1,4 +1,4 @@
-from typing import Any, Literal, Sequence, Union, TypedDict
+from typing import Any, Literal, Sequence, TypedDict, Union
 
 
 class BeginEvent(TypedDict):
@@ -45,5 +45,9 @@ class CommitEvent(TypedDict):
 
 
 Event = Union[
-    BeginEvent, InsertEvent, UpdateEvent, DeleteEvent, CommitEvent,
+    BeginEvent,
+    InsertEvent,
+    UpdateEvent,
+    DeleteEvent,
+    CommitEvent,
 ]

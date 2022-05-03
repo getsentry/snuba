@@ -5,6 +5,7 @@ from typing import Any, MutableMapping, Optional, Sequence
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
+from snuba.attribution import get_app_id
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -55,7 +56,9 @@ tags_filter_tests = [
         build_query(
             selected_columns=[
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
             ],
         ),
@@ -66,13 +69,17 @@ tags_filter_tests = [
         build_query(
             selected_columns=[
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
             ],
             condition=binary_condition(
                 ConditionFunctions.EQ,
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
                 Literal(None, "tag"),
             ),
@@ -84,12 +91,16 @@ tags_filter_tests = [
         build_query(
             selected_columns=[
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
             ],
             condition=in_condition(
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
                 [Literal(None, "tag1"), Literal(None, "tag2")],
             ),
@@ -101,20 +112,26 @@ tags_filter_tests = [
         build_query(
             selected_columns=[
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
             ],
             condition=binary_condition(
                 ConditionFunctions.EQ,
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
                 Literal(None, "tag"),
             ),
             having=binary_condition(
                 ConditionFunctions.EQ,
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
                 Literal(None, "tag2"),
             ),
@@ -126,17 +143,23 @@ tags_filter_tests = [
         build_query(
             selected_columns=[
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
             ],
             condition=binary_condition(
                 BooleanFunctions.OR,
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
                 in_condition(
                     FunctionCall(
-                        "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                        "tags_key",
+                        "arrayJoin",
+                        (Column(None, None, "tags.key"),),
                     ),
                     [Literal(None, "tag1"), Literal(None, "tag2")],
                 ),
@@ -144,7 +167,9 @@ tags_filter_tests = [
             having=binary_condition(
                 ConditionFunctions.EQ,
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                    "tags_key",
+                    "arrayJoin",
+                    (Column(None, None, "tags.key"),),
                 ),
                 Literal(None, "tag"),
             ),
@@ -157,7 +182,8 @@ tags_filter_tests = [
 
 @pytest.mark.parametrize("query, expected_result", tags_filter_tests)
 def test_get_filtered_mapping_keys(
-    query: ClickhouseQuery, expected_result: Sequence[str],
+    query: ClickhouseQuery,
+    expected_result: Sequence[str],
 ) -> None:
     """
     Test the algorithm that identifies potential tag keys we can pre-filter
@@ -389,6 +415,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
         id="a",
         body=body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
         settings=HTTPRequestSettings(referrer="r"),
     )
@@ -401,7 +428,8 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     ArrayJoinKeyValueOptimizer("tags").process_query(query, request.settings)
 
     query_plan = SingleStorageQueryPlanBuilder(
-        storage=storage, mappers=transaction_translator,
+        storage=storage,
+        mappers=transaction_translator,
     ).build_and_rank_plans(query, request.settings)[0]
 
     return query_plan.query
@@ -436,7 +464,8 @@ def test_formatting() -> None:
         arrayJoin(
             "snuba_all_tags",
             zip_columns(
-                Column(None, None, "tags.key"), Column(None, None, "tags.value"),
+                Column(None, None, "tags.key"),
+                Column(None, None, "tags.value"),
             ),
         ),
         Literal(None, 1),
@@ -451,7 +480,8 @@ def test_formatting() -> None:
             "snuba_all_tags",
             filter_key_values(
                 zip_columns(
-                    Column(None, None, "tags.key"), Column(None, None, "tags.value"),
+                    Column(None, None, "tags.key"),
+                    Column(None, None, "tags.value"),
                 ),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
