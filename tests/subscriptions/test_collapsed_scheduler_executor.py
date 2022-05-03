@@ -1,59 +1,51 @@
 import uuid
-from collections import deque
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
+from dataclasses import replace
 from datetime import datetime, timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence, cast
 from unittest import mock
 
-import pytest
 from arroyo import Message, Partition, Topic
-from arroyo.backends.kafka import KafkaPayload
-from arroyo.backends.local.backend import LocalBroker as Broker
-from arroyo.backends.local.storages.memory import MemoryMessageStorage
-from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
+from arroyo.backends.abstract import Producer
+from arroyo.backends.kafka import KafkaPayload, KafkaProducer
+from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.types import Position
-from arroyo.utils.clock import TestingClock
 
 from snuba import state
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.entity_subscription import EventsSubscription
-from snuba.subscriptions.executor_consumer import ExecuteQuery
+from snuba.subscriptions.executor_consumer import SubscriptionExecutorProcessingFactory
 from snuba.subscriptions.scheduler import SubscriptionScheduler
-from snuba.subscriptions.scheduler_processing_strategy import (
-    CommittableTick,
-    ProduceScheduledSubscriptionMessage,
-    ProvideCommitStrategy,
-    ScheduledSubscriptionQueue,
-    TickBuffer,
-    TickSubscription,
-)
+from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
 
 
-class JustRunTheQueryStrategy(ProcessingStrategy[Tick]):
+class ForwardToExecutor(ProcessingStrategy[Tick]):
     def __init__(
         self,
         partitions: int,
-        schedulers: Mapping[int, SubscriptionScheduler],
+        schedulers: Sequence[Mapping[int, SubscriptionScheduler]],
         metrics: MetricsBackend,
-        next_step: ExecuteQuery,
+        next_step: ProcessingStrategy[KafkaPayload],
     ) -> None:
         self.__partitions = partitions
         self.__next_step = next_step
         self.__metrics = metrics
 
         self.__schedulers = schedulers
-
+        self.__encoder = SubscriptionScheduledTaskEncoder()
         # Store the last message we received for each partition so know when
         # to commit offsets.
         # self.__latest_messages_by_partition: MutableMapping[
@@ -68,6 +60,7 @@ class JustRunTheQueryStrategy(ProcessingStrategy[Tick]):
         self.__next_step.poll()
 
     def submit(self, message: Message[Tick]) -> None:
+
         # NOTE: do we want to just run the query right after the TickBuffer
         # if so, what assumptions are we making?
         # There will be never be more than one of these consumers
@@ -77,11 +70,17 @@ class JustRunTheQueryStrategy(ProcessingStrategy[Tick]):
         # let's get the query to run
         tick = message.payload
         assert tick.partition is not None
-        tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
-        assert tasks
-        print("TASKS: ", len(tasks))
-        # build the KafkaPayload
-        # self.__next_step.submit(message=payload)
+
+        tasks = []
+        for entity_scheduler in self.__schedulers:
+            tasks.extend([task for task in entity_scheduler[tick.partition].find(tick)])
+
+        encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+
+        for task in encoded_tasks:
+            self.__next_step.submit(
+                cast(Message[KafkaPayload], replace(message, payload=task))
+            )
 
     def close(self) -> None:
         self.__closed = True
@@ -93,6 +92,74 @@ class JustRunTheQueryStrategy(ProcessingStrategy[Tick]):
         pass
 
 
+from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
+
+
+class CollapsedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
+    def __init__(
+        self,
+        executor: ThreadPoolExecutor,
+        partitions: int,
+        max_concurrent_queries: int,
+        dataset: Dataset,
+        entity_names: Sequence[str],
+        producer: Producer[KafkaPayload],
+        metrics: MetricsBackend,
+        stale_threshold_seconds: Optional[int],
+        result_topic: str,
+        schedule_ttl: int,
+    ) -> None:
+        self.__executor = executor
+        self.__partitions = partitions
+        self.__max_concurrent_queries = max_concurrent_queries
+        self.__dataset = dataset
+        self.__entity_names = entity_names
+        self.__producer = producer
+        self.__metrics = metrics
+        self.__stale_threshold_seconds = stale_threshold_seconds
+        self.__result_topic = result_topic
+
+        entity_keys = [EntityKey(entity_name) for entity_name in self.__entity_names]
+
+        self.__schedulers = [
+            {
+                index: SubscriptionScheduler(
+                    entity_key,
+                    RedisSubscriptionDataStore(
+                        redis_client, entity_key, PartitionId(index)
+                    ),
+                    partition_id=PartitionId(index),
+                    cache_ttl=timedelta(seconds=schedule_ttl),
+                    metrics=self.__metrics,
+                )
+                for index in range(self.__partitions)
+            }
+            for entity_key in entity_keys
+        ]
+
+    def create(
+        self, commit: Callable[[Mapping[Partition, Position]], None]
+    ) -> ProcessingStrategy[Tick]:
+        execute_step = SubscriptionExecutorProcessingFactory(
+            self.__executor,
+            self.__max_concurrent_queries,
+            self.__dataset,
+            self.__entity_names,
+            self.__producer,
+            self.__metrics,
+            self.__stale_threshold_seconds,
+            self.__result_topic,
+        ).create(commit)
+        return TickBuffer(
+            SchedulingWatermarkMode.PARTITION,
+            self.__partitions,
+            None,
+            ForwardToExecutor(
+                self.__partitions, self.__schedulers, self.__metrics, execute_step
+            ),
+        )
+
+
 def do_setup() -> None:
     store = RedisSubscriptionDataStore(redis_client, EntityKey.EVENTS, PartitionId(0))
     store.create(
@@ -101,7 +168,7 @@ def do_setup() -> None:
             project_id=1,
             time_window_sec=60,
             resolution_sec=60,
-            query="MATCH events SELECT count()",
+            query="MATCH (events) SELECT count()",
             entity_subscription=EventsSubscription(data_dict={}),
         ),
     )
@@ -119,55 +186,49 @@ def test_collapsed_scheduler() -> None:
     executor = ThreadPoolExecutor(max_concurrent_queries)
     metrics = TestingMetricsBackend()
 
-    schedulers = {
-        index: SubscriptionScheduler(
-            EntityKey.EVENTS,
-            RedisSubscriptionDataStore(
-                redis_client, EntityKey.EVENTS, PartitionId(index)
-            ),
-            partition_id=PartitionId(index),
-            cache_ttl=timedelta(seconds=300),
-            metrics=metrics,
-        )
-        for index in range(num_partitions)
-    }
-
     commit = mock.Mock()
-    produce_step = mock.Mock()
-
-    execute_strategy = ExecuteQuery(
-        dataset,
-        entity_names,
-        executor,
-        max_concurrent_queries,
-        None,
-        metrics,
-        produce_step,
-        commit,
-    )
 
     topic = Topic("snuba-commit-log")
     partition = Partition(topic, 0)
-    next_step = JustRunTheQueryStrategy(
-        partitions=2,
-        metrics=TestingMetricsBackend(),
-        next_step=execute_strategy,
-        schedulers=schedulers,
-    )
-    tick_buffer_strategy = TickBuffer(
-        SchedulingWatermarkMode.PARTITION, num_partitions, None, next_step
+    stale_threshold_seconds = None
+    result_topic = "idk"
+    schedule_ttl = 60
+
+    producer = KafkaProducer(
+        build_kafka_producer_configuration(SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS)
     )
 
-    message = Message(
-        partition,
-        4,
-        Tick(
-            0,
-            offsets=Interval(1, 3),
-            timestamps=Interval(epoch, epoch + timedelta(seconds=60)),
-        ),
-        epoch,
-        5,
-    )
+    with closing(producer):
+        factory = CollapsedSchedulerExecutorFactory(
+            executor,
+            num_partitions,
+            max_concurrent_queries,
+            dataset,
+            entity_names,
+            producer,
+            metrics,
+            stale_threshold_seconds,
+            result_topic,
+            schedule_ttl,
+        )
 
-    tick_buffer_strategy.submit(message)
+        strategy = factory.create(commit)
+
+        message = Message(
+            partition,
+            4,
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=60)),
+            ),
+            epoch,
+            5,
+        )
+        # TODO: make polling the tick buffer work
+        strategy.submit(message)
+        import time
+
+        time.sleep(1.0)
+        strategy.poll()
+        assert commit.call_count == 1
