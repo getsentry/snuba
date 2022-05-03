@@ -145,8 +145,10 @@ class SubscriptionResultConsumer(Consumer[SubscriptionResultData]):
     def seek(self, offsets: Mapping[Partition, int]) -> None:
         self.__consumer.seek(offsets)
 
-    def stage_positions(self, positions: Mapping[Partition, Position]) -> None:
-        return self.__consumer.stage_positions(positions)
+    def stage_positions(
+        self, positions: Mapping[Partition, Position], force: bool = False
+    ) -> None:
+        return self.__consumer.stage_positions(positions, force=force)
 
     def commit_positions(self) -> Mapping[Partition, Position]:
         return self.__consumer.commit_positions()

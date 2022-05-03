@@ -180,8 +180,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         self.__consumer.seek(offsets)
 
-    def stage_positions(self, positions: Mapping[Partition, Position]) -> None:
-        return self.__consumer.stage_positions(positions)
+    def stage_positions(
+        self, positions: Mapping[Partition, Position], force: bool = False
+    ) -> None:
+        return self.__consumer.stage_positions(positions, force=force)
 
     def commit_positions(self) -> Mapping[Partition, Position]:
         return self.__consumer.commit_positions()
@@ -202,6 +204,7 @@ class SchedulerBuilder:
         followed_consumer_group: str,
         producer: Producer[KafkaPayload],
         auto_offset_reset: str,
+        strict_offset_reset: Optional[bool],
         schedule_ttl: int,
         delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
@@ -236,6 +239,7 @@ class SchedulerBuilder:
         self.__followed_consumer_group = followed_consumer_group
         self.__producer = producer
         self.__auto_offset_reset = auto_offset_reset
+        self.__strict_offset_reset = strict_offset_reset
         self.__schedule_ttl = schedule_ttl
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
@@ -267,6 +271,7 @@ class SchedulerBuilder:
                     self.__commit_log_topic_spec.topic,
                     self.__consumer_group,
                     auto_offset_reset=self.__auto_offset_reset,
+                    strict_offset_reset=self.__strict_offset_reset,
                 ),
             ),
             followed_consumer_group=self.__followed_consumer_group,
