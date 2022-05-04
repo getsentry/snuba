@@ -58,11 +58,24 @@ def get_ro_node_connection(
         )
 
     database = cluster.get_database()
+
+    assert client_settings in {
+        ClickhouseClientSettings.QUERY,
+        ClickhouseClientSettings.TRACING,
+    }, "admin can only use QUERY or TRACING ClickhouseClientSettings"
+
+    if client_settings == ClickhouseClientSettings.QUERY:
+        username = settings.CLICKHOUSE_READONLY_USER
+        password = settings.CLICKHOUSE_READONLY_PASSWORD
+    else:
+        username = settings.CLICKHOUSE_TRACE_USER
+        password = settings.CLICKHOUSE_TRACE_PASSWORD
+
     connection = ClickhousePool(
         clickhouse_host,
         clickhouse_port,
-        settings.CLICKHOUSE_READONLY_USER,
-        settings.CLICKHOUSE_READONLY_PASSWORD,
+        username,
+        password,
         database,
         max_pool_size=2,
         client_settings=client_settings.value.settings,
