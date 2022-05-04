@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import random
 import sys
@@ -487,6 +488,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
+
+        attributes_json = json.dumps({"message_type": type_, **message.data})
+        logger.info(attributes_json)
 
         if type_ in REPLACEMENT_EVENT_TYPES:
             metrics.increment(
