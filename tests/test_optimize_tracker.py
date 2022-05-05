@@ -44,7 +44,7 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
     assert tracker.get_completed_parts() == {"Partition 1", "Partition 2"}
     parts_to_optimize = tracker.get_parts_to_optimize()
     assert parts_to_optimize is not None
-    assert len(tracker.get_parts_to_optimize()) == 0
+    assert len(parts_to_optimize) == 0
 
     tracker.delete_all_states()
     assert tracker.get_all_parts() is None
