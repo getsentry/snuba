@@ -71,6 +71,9 @@ DOGSTATSD_SAMPLING_RATES = {
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
 CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
 
+CLICKHOUSE_TRACE_USER = os.environ.get("CLICKHOUSE_TRACE_USER", "default")
+CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASS", "")
+
 # Redis Options
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 
@@ -112,7 +115,11 @@ BROKER_CONFIG: Mapping[str, Any] = {
 }
 
 # Mapping of default Kafka topic name to custom names
-KAFKA_TOPIC_MAP: Mapping[str, str] = {}
+KAFKA_TOPIC_MAP: Mapping[str, str] = {
+    # TODO: Remove once we are done splitting transactions from the shared events topic
+    "transactions": "events",
+    "snuba-transactions-commit-log": "snuba-commit-log",
+}
 
 # Mapping of default Kafka topic name to broker config
 KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}

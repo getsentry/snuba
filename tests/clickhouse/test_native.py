@@ -25,7 +25,7 @@ def test_transform_datetime() -> None:
     )
 
 
-def test_concurrency_limit() -> None:
+def test_robust_concurrency_limit() -> None:
     connection = mock.Mock()
     connection.execute.side_effect = ClickhouseError(
         "some error", extra_data={"code": 1}
@@ -48,6 +48,36 @@ def test_concurrency_limit() -> None:
     with pytest.raises(ClickhouseError):
         pool.execute_robust("SELECT something")
     assert connection.execute.call_count == 3, "Expected three attempts"
+
+
+class TestError(errors.Error):  # type: ignore
+    code = 1
+
+
+class TestConcurrentError(errors.Error):  # type: ignore
+    code = errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES
+
+
+def test_concurrency_limit() -> None:
+    connection = mock.Mock()
+    connection.execute.side_effect = TestError("some error")
+
+    state.set_config("simultaneous_queries_sleep_seconds", 0.5)
+
+    pool = ClickhousePool("host", 100, "test", "test", "test")
+    pool.pool = queue.LifoQueue(1)
+    pool.pool.put(connection, block=False)
+
+    with pytest.raises(ClickhouseError):
+        pool.execute("SELECT something")
+    connection.execute.assert_called_once()
+
+    connection.reset_mock(side_effect=True)
+    connection.execute.side_effect = TestConcurrentError("some error")
+
+    with pytest.raises(ClickhouseError):
+        pool.execute("SELECT something")
+    assert connection.execute.call_count == 2, "Expected two attempts"
 
 
 TEST_DB_NAME = "test"
