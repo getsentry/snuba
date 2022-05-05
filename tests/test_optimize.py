@@ -11,6 +11,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import (
     JobTimeoutException,
     OptimizationBucket,
+    _build_optimization_buckets,
     _get_metrics_tags,
     _subdivide_parts,
     optimize_partitions,
@@ -346,3 +347,73 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
         )
 
     tracker.delete_all_states()
+
+
+prev_midnight = (datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+build_optimization_test_data = [
+    pytest.param(
+        prev_midnight,
+        1,
+        [
+            OptimizationBucket(
+                parallel=1,
+                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+            )
+        ],
+        id="non-parallel",
+    ),
+    pytest.param(
+        prev_midnight,
+        2,
+        [
+            OptimizationBucket(
+                parallel=1,
+                cutoff_time=prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME,
+            ),
+            OptimizationBucket(
+                parallel=2,
+                cutoff_time=prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME,
+            ),
+            OptimizationBucket(
+                parallel=1,
+                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+            ),
+        ],
+        id="parallel start from midnight",
+    ),
+    pytest.param(
+        prev_midnight
+        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(minutes=10),
+        2,
+        [
+            OptimizationBucket(
+                parallel=2,
+                cutoff_time=prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME,
+            ),
+            OptimizationBucket(
+                parallel=1,
+                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+            ),
+        ],
+        id="parallel start after parallel start threshold",
+    ),
+    pytest.param(
+        prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME + timedelta(minutes=10),
+        2,
+        [
+            OptimizationBucket(
+                parallel=1,
+                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+            ),
+        ],
+        id="parallel start after parallel end threshold",
+    ),
+]
+
+
+@pytest.mark.parametrize("start_time, parallel, expected", build_optimization_test_data)
+def test_build_optimization_buckets(start_time, parallel, expected):
+    assert _build_optimization_buckets(start_time, parallel) == expected

@@ -217,7 +217,7 @@ PARALLEL_OPTIMIZE_JOB_START_TIME = timedelta(hours=3)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs in
 # parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=9)
+PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.

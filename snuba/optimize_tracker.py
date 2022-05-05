@@ -56,6 +56,9 @@ class OptimizedPartitionTracker:
         """
         Update the list of all partitions which need to be optimized.
         """
+        if len(part_names) == 0:
+            return
+
         encoded_part_names = [part.encode("utf-8") for part in part_names]
         pipe = self.__redis_client.pipeline()
         pipe.sadd(self.__all_bucket, *encoded_part_names)

@@ -118,4 +118,6 @@ def optimize(
         tracker=tracker,
         before=today,
     )
+
+    tracker.delete_all_states()
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

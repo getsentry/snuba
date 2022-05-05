@@ -40,12 +40,14 @@ class OptimizationBucket:
     cutoff_time: datetime
 
 
-def build_optimization_buckets(max_parallel: int) -> Sequence[OptimizationBucket]:
+def _build_optimization_buckets(
+    start_time: datetime, max_parallel: int
+) -> Sequence[OptimizationBucket]:
     """
     Build buckets of optimization jobs.
 
-    Each bucket represents the number of threads and the time till the job
-    can be run with that many threads.
+    Each bucket represents the number of threads that can run the
+    optimization and the time till the job can be run with that many threads.
     """
     last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
         hour=0, minute=0, second=0, microsecond=0
@@ -59,20 +61,28 @@ def build_optimization_buckets(max_parallel: int) -> Sequence[OptimizationBucket
             )
         ]
     else:
-        return [
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=last_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME,
-            ),
-            OptimizationBucket(
-                parallel=max_parallel,
-                cutoff_time=last_midnight + settings.PARALLEL_OPTIMIZE_JOB_CUTOFF_TIME,
-            ),
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
-            ),
-        ]
+        parallel_start_time = last_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        parallel_end_time = last_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME
+        full_job_end_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+        pre_parallel_bucket = OptimizationBucket(
+            parallel=1,
+            cutoff_time=parallel_start_time,
+        )
+        parallel_bucket = OptimizationBucket(
+            parallel=max_parallel,
+            cutoff_time=parallel_end_time,
+        )
+        final_bucket = OptimizationBucket(
+            parallel=1,
+            cutoff_time=full_job_end_time,
+        )
+
+        if start_time < parallel_start_time:
+            return [pre_parallel_bucket, parallel_bucket, final_bucket]
+        elif start_time < parallel_end_time:
+            return [parallel_bucket, final_bucket]
+        else:
+            return [final_bucket]
 
 
 def run_optimize(
@@ -128,10 +138,15 @@ def run_optimize_cron_job(
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
 
-    optimization_bucket = build_optimization_buckets(max_parallel=parallel)
+    optimization_bucket = _build_optimization_buckets(
+        start_time=datetime.now(), max_parallel=parallel
+    )
 
     if not tracker.get_all_parts():
         parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
+        if len(parts) == 0:
+            logger.info("No partitions need optimization")
+            return 0
         part_names = [part.name for part in parts]
         logger.info(f"All partitions list: {part_names}")
         tracker.update_all_parts(part_names)
