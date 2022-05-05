@@ -207,6 +207,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         cache_partition_id: Optional[str] = None,
     ):
         super().__init__(storage_sets)
+        self.__host = host
         self.__query_node = ClickhouseNode(host, port)
         self.__user = user
         self.__password = password
@@ -335,6 +336,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             )
             .results
         ]
+
+    def get_host(self) -> str:
+        return self.__host
 
 
 CLUSTERS = [

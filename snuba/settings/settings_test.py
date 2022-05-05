@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from typing import Set
 
 TESTING = True
@@ -26,3 +27,6 @@ REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 
 # Set enforce retention to true for tests
 ENFORCE_RETENTION = True
+
+# Ignore optimize job cut off time for tests
+OPTIMIZE_JOB_CUTOFF_TIME = timedelta(days=1)

@@ -42,7 +42,7 @@ class OptimizedPartitionTracker:
 
         return partitions_set
 
-    def get_all_partitions(self) -> Optional[Set[str]]:
+    def get_all_parts(self) -> Optional[Set[str]]:
         """
         Get a set of all partitions which need to be optimized.
         """
@@ -52,7 +52,7 @@ class OptimizedPartitionTracker:
 
         return self.__redis_set_of_bytes_to_set_of_strings(all_partitions)
 
-    def update_all_partitions(self, part_names: Sequence[str]) -> None:
+    def update_all_parts(self, part_names: Sequence[str]) -> None:
         """
         Update the list of all partitions which need to be optimized.
         """
@@ -62,7 +62,7 @@ class OptimizedPartitionTracker:
         pipe.expireat(self.__all_bucket, self.__key_expire_time)
         pipe.execute()
 
-    def get_completed_partitions(self) -> Optional[Set[str]]:
+    def get_completed_parts(self) -> Optional[Set[str]]:
         """
         Get a set of partitions that have completed optimization.
         """
@@ -72,7 +72,7 @@ class OptimizedPartitionTracker:
 
         return self.__redis_set_of_bytes_to_set_of_strings(completed_partitions)
 
-    def update_completed_partitions(self, part_name: str) -> None:
+    def update_completed_parts(self, part_name: str) -> None:
         """
         Add partitions that have completed optimization.
         """
@@ -81,7 +81,22 @@ class OptimizedPartitionTracker:
         pipe.expireat(self.__completed_bucket, self.__key_expire_time)
         pipe.execute()
 
-    def remove_all_partitions(self) -> None:
+    def get_parts_to_optimize(self) -> Optional[Set[str]]:
+        """
+        Get a set of partition names which need optimization.
+        """
+        all_partitions = self.get_all_parts()
+        completed_partitions = self.get_completed_parts()
+
+        if all_partitions:
+            if not completed_partitions:
+                return all_partitions
+            else:
+                return all_partitions - completed_partitions
+
+        return None
+
+    def delete_all_states(self) -> None:
         """
         Delete the sets of partitions which had to be optimized and
         which have already been optimized.

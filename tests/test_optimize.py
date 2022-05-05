@@ -10,14 +10,14 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import (
     JobTimeoutException,
+    OptimizationBucket,
     _get_metrics_tags,
     _subdivide_parts,
-    optimize_partition_runner,
+    optimize_partitions,
 )
-from snuba.optimize_tracker import RedisOptimizedPartitionTracker
+from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.processor import InsertBatch
 from snuba.redis import redis_client
-from snuba.util import Part
 from tests.helpers import write_processed_messages
 
 test_data = [
@@ -170,14 +170,28 @@ class TestOptimize:
             )
         ] == [(a_month_earlier_monday, 90)]
 
+        optimization_bucket = [
+            OptimizationBucket(
+                parallel=parallel, cutoff_time=(datetime.now() + timedelta(minutes=10))
+            )
+        ]
+
+        tracker = OptimizedPartitionTracker(
+            redis_client=redis_client,
+            host="some-hostname.domain.com",
+            database=database,
+            table=table,
+            expire_time=datetime.now() + timedelta(minutes=10),
+        )
+
         optimize.optimize_partition_runner(
             clickhouse=clickhouse,
             database=database,
             table=table,
-            parts=parts,
-            parallel=parallel,
-            cutoff_time=None,
-            optimize_partition_tracker=None,
+            parts=[part.name for part in parts],
+            optimization_buckets=optimization_bucket,
+            tracker=tracker,
+            clickhouse_host="some-hostname.domain.com",
         )
 
         # all parts should be optimized
@@ -185,6 +199,8 @@ class TestOptimize:
             clickhouse, storage, database, table
         )
         assert parts == []
+
+        tracker.delete_all_states()
 
     @pytest.mark.parametrize(
         "table,host,expected",
@@ -210,81 +226,83 @@ class TestOptimize:
         "parts,subdivisions,expected",
         [
             pytest.param(
-                [Part("1", datetime(2022, 3, 28), 90)],
+                ["(90,'2022-03-28')"],
                 2,
-                [[Part("1", datetime(2022, 3, 28), 90)], []],
+                [["(90,'2022-03-28')"], []],
                 id="one part",
             ),
             pytest.param(
                 [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
+                    "(90,'2022-03-28')",
+                    "(90,'2022-03-21')",
                 ],
                 2,
                 [
-                    [Part("1", datetime(2022, 3, 28), 90)],
-                    [Part("2", datetime(2022, 3, 21), 90)],
+                    ["(90,'2022-03-28')"],
+                    ["(90,'2022-03-21')"],
                 ],
                 id="two parts",
             ),
             pytest.param(
                 [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
-                    Part("3", datetime(2022, 3, 28), 30),
+                    "(90,'2022-03-28')",
+                    "(90,'2022-03-21')",
+                    "(30,'2022-03-28')",
                 ],
                 2,
                 [
                     [
-                        Part("1", datetime(2022, 3, 28), 90),
-                        Part("2", datetime(2022, 3, 21), 90),
+                        "(90,'2022-03-28')",
+                        "(90,'2022-03-21')",
                     ],
-                    [Part("3", datetime(2022, 3, 28), 30)],
+                    [
+                        "(30,'2022-03-28')",
+                    ],
                 ],
                 id="three parts",
             ),
             pytest.param(
                 [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
-                    Part("3", datetime(2022, 3, 28), 30),
-                    Part("4", datetime(2022, 3, 21), 30),
+                    "(90,'2022-03-28')",
+                    "(90,'2022-03-21')",
+                    "(30,'2022-03-28')",
+                    "(30,'2022-03-21')",
                 ],
                 2,
                 [
                     [
-                        Part("1", datetime(2022, 3, 28), 90),
-                        Part("2", datetime(2022, 3, 21), 90),
+                        "(90,'2022-03-28')",
+                        "(90,'2022-03-21')",
                     ],
                     [
-                        Part("3", datetime(2022, 3, 28), 30),
-                        Part("4", datetime(2022, 3, 21), 30),
+                        "(30,'2022-03-28')",
+                        "(30,'2022-03-21')",
                     ],
                 ],
                 id="four parts",
             ),
             pytest.param(
                 [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
-                    Part("3", datetime(2022, 3, 28), 30),
-                    Part("4", datetime(2022, 3, 21), 30),
-                    Part("5", datetime(2022, 3, 14), 90),
-                    Part("6", datetime(2022, 3, 7), 90),
+                    "(90,'2022-03-28')",
+                    "(90,'2022-03-21')",
+                    "(30,'2022-03-28')",
+                    "(30,'2022-03-21')",
+                    "(90,'2022-03-14')",
+                    "(90,'2022-03-07')",
                 ],
                 3,
                 [
                     [
-                        Part("1", datetime(2022, 3, 28), 90),
-                        Part("4", datetime(2022, 3, 21), 30),
+                        "(90,'2022-03-28')",
+                        "(30,'2022-03-21')",
                     ],
                     [
-                        Part("3", datetime(2022, 3, 28), 30),
-                        Part("5", datetime(2022, 3, 14), 90),
+                        "(30,'2022-03-28')",
+                        "(90,'2022-03-14')",
                     ],
                     [
-                        Part("2", datetime(2022, 3, 21), 90),
-                        Part("6", datetime(2022, 3, 7), 90),
+                        "(90,'2022-03-21')",
+                        "(90,'2022-03-07')",
                     ],
                 ],
                 id="six parts",
@@ -292,15 +310,12 @@ class TestOptimize:
         ],
     )
     def test_subdivide_parts(
-        self,
-        parts: Sequence[util.Part],
-        subdivisions: int,
-        expected: Sequence[Sequence[util.Part]],
-    ) -> None:
+        self, parts: Sequence[str], subdivisions: int, expected: Sequence[Sequence[str]]
+    ):
         assert _subdivide_parts(parts, subdivisions) == expected
 
 
-def test_optimize_runner_raises_exception_with_cutoff_time() -> None:
+def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.
     """
@@ -310,20 +325,24 @@ def test_optimize_runner_raises_exception_with_cutoff_time() -> None:
     table = storage.get_table_writer().get_schema().get_local_table_name()
     database = cluster.get_database()
 
+    tracker = OptimizedPartitionTracker(
+        redis_client=redis_client,
+        host="some-hostname.domain.com",
+        database=database,
+        table=table,
+        expire_time=datetime.now() + timedelta(minutes=10),
+    )
+
     parts = [util.Part("1", datetime.now(), 90)]
     with pytest.raises(JobTimeoutException):
-        optimize_partition_runner(
+        optimize_partitions(
             clickhouse=clickhouse_pool,
             database=database,
             table=table,
-            parts=parts,
-            parallel=2,
+            parts=[part.name for part in parts],
             cutoff_time=datetime.now(),
-            optimize_partition_tracker=RedisOptimizedPartitionTracker(
-                redis_client=redis_client,
-                host="some-hostname.domain.com",
-                database=database,
-                table=table,
-                expire_time=datetime.now(),
-            ),
+            tracker=tracker,
+            clickhouse_host="some-hostname.domain.com",
         )
+
+    tracker.delete_all_states()
