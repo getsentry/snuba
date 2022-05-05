@@ -1,7 +1,7 @@
-sentry:
-  organization: sentry
-  project: snuba
-  repository: getsentry/snuba
+# sentry:
+#   organization: sentry
+#   project: snuba
+#   repository: getsentry/snuba
 
 steps:
 - kind: KubernetesDeployment
