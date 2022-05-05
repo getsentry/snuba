@@ -1,3 +1,4 @@
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -55,7 +56,7 @@ def test_combined_scheduler_and_executor() -> None:
     topic = Topic("snuba-commit-log")
     partition = Partition(topic, 0)
     stale_threshold_seconds = None
-    result_topic = "idk"
+    result_topic = "events-subscription-results"
     schedule_ttl = 60
 
     producer = KafkaProducer(
@@ -89,12 +90,15 @@ def test_combined_scheduler_and_executor() -> None:
             epoch,
             5,
         )
-        # TODO: make polling the tick buffer work
         strategy.submit(message)
-        import time
 
-        time.sleep(1.0)
-        strategy.poll()
+        # Wait for the query to be executed and the result message produced
+        for i in range(10):
+            time.sleep(0.5)
+            strategy.poll()
+            if commit.call_count == 1:
+                break
+
         assert commit.call_count == 1
         strategy.close()
         strategy.join()
