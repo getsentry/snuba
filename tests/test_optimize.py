@@ -334,7 +334,7 @@ class TestOptimize:
     )
     def test_subdivide_parts(
         self, parts: Sequence[str], subdivisions: int, expected: Sequence[Sequence[str]]
-    ):
+    ) -> None:
         assert _subdivide_parts(parts, subdivisions) == expected
 
 
@@ -372,7 +372,6 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
 
 
 prev_midnight = (datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-
 
 build_optimization_test_data = [
     pytest.param(
@@ -437,5 +436,7 @@ build_optimization_test_data = [
 
 
 @pytest.mark.parametrize("start_time, parallel, expected", build_optimization_test_data)
-def test_build_optimization_buckets(start_time, parallel, expected):
+def test_build_optimization_buckets(
+    start_time: datetime, parallel: int, expected: Sequence[OptimizationBucket]
+) -> None:
     assert _build_optimization_buckets(start_time, parallel) == expected
