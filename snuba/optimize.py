@@ -137,7 +137,7 @@ def run_optimize_cron_job(
         tracker.update_all_parts(part_names)
 
     parts_to_optimize = tracker.get_parts_to_optimize()
-    if parts_to_optimize is None:
+    if parts_to_optimize is None or len(parts_to_optimize) == 0:
         logger.info("No partitions need optimization")
         return 0
 

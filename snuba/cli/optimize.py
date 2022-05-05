@@ -101,16 +101,12 @@ def optimize(
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
-    optimize_partition_tracker = (
-        OptimizedPartitionTracker(
-            redis_client=redis_client,
-            host=clickhouse_host,
-            database=database,
-            table=table,
-            expire_time=cutoff_time,
-        )
-        if clickhouse_host
-        else None
+    tracker = OptimizedPartitionTracker(
+        redis_client=redis_client,
+        host=clickhouse_host,
+        database=database,
+        table=table,
+        expire_time=cutoff_time,
     )
 
     num_dropped = run_optimize_cron_job(
@@ -119,7 +115,7 @@ def optimize(
         database=database,
         parallel=parallel,
         clickhouse_host=clickhouse_host,
-        tracker=optimize_partition_tracker,
+        tracker=tracker,
         before=today,
     )
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
