@@ -44,12 +44,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey, are_writes_identical
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.table_storage import TableWriter
-from snuba.processor import (
-    AggregateInsertBatch,
-    InsertBatch,
-    MessageProcessor,
-    ReplacementBatch,
-)
+from snuba.processor import AggregateInsertBatch, InsertBatch, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -601,23 +596,25 @@ MultistorageProcessedMessage = Sequence[
 ]
 
 
-def process_message(
-    processor: MessageProcessor, message: Message[KafkaPayload]
+def adapt_multistorage_message(
+    message: Message[MultistorageKafkaPayload],
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
-    result = processor.process_message(
-        rapidjson.loads(message.payload.value),
-        KafkaMessageMetadata(
-            message.offset, message.partition.index, message.timestamp
-        ),
-    )
+    """
+    Temporary method needed while we refactor the consumer
+    building process in order not to have two different code
+    paths between single storage and multi storage consumers.
 
-    if isinstance(result, InsertBatch):
-        return BytesInsertBatch(
-            [json_row_encoder.encode(row) for row in result.rows],
-            result.origin_timestamp,
-        )
+    Once we replace the collector in the consumer builder with
+    a multi storage one, this will not be needed anymore.
+    """
+    assert (
+        len(message.payload.storage_keys) <= 2
+    ), "Expected one storage only to process"
+    partial = process_message_multistorage(message)
+    if len(partial) == 0:
+        return None
     else:
-        return result
+        return partial[0][1]
 
 
 def _process_message_multistorage_work(
@@ -797,6 +794,39 @@ def build_collector(
     )
 
 
+class TransformingStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
+    """
+    Wraps a strategy factory to execute a transform step before routing
+    messages to the strategy produced by the wrapped factory.
+
+    This abomination is needed as a step to get rid of the duplications
+    between multistorage consumer and standard consumer. It is needed
+    So we can prefix the KafkaConsumerStrategyFactory with the step that
+    turns a message into a multistorage message. Then we can reuse the
+    same logic for both consumer types. And when there will be only one
+    consumer type we will get rid of this and embed the logic in the
+    KafkaConsumerStrategyFactory.
+    """
+
+    def __init__(
+        self,
+        wrapped_factory: ProcessingStrategyFactory[MultistorageKafkaPayload],
+        pre_transform: Callable[[Message[KafkaPayload]], MultistorageKafkaPayload],
+        pre_filter: Callable[[Message[MultistorageKafkaPayload]], bool],
+    ) -> None:
+        self.__wrapped_factory = wrapped_factory
+        self.__pre_transform = pre_transform
+        self.__pre_filter = pre_filter
+
+    def create(
+        self, commit: Callable[[Mapping[Partition, Position]], None]
+    ) -> ProcessingStrategy[KafkaPayload]:
+        return TransformStep(
+            self.__pre_transform,
+            FilterStep(self.__pre_filter, self.__wrapped_factory.create(commit)),
+        )
+
+
 class MultiStorageStreamFilter(StreamMessageFilter[MultistorageKafkaPayload]):
     def should_drop(self, message: Message[MultistorageKafkaPayload]) -> bool:
         return not has_destination_storages(message)
@@ -842,29 +872,30 @@ class MultistorageConsumerProcessingStrategyFactory(
         ):
             self.__process_message_fn = process_message_multistorage_identical_storages
 
-        self.__inner_factory = ConsumerStrategyFactory(
-            prefilter=MultiStorageStreamFilter(),
-            process_message=self.__process_message_fn,
-            collector=partial(
-                build_collector,
-                self.__metrics,
-                self.__storages,
-                self.__topic,
-                self.__producer,
+        self.__wrapped_factory = TransformingStrategyFactory(
+            wrapped_factory=ConsumerStrategyFactory(
+                prefilter=MultiStorageStreamFilter(),
+                process_message=self.__process_message_fn,
+                collector=partial(
+                    build_collector,
+                    self.__metrics,
+                    self.__storages,
+                    self.__topic,
+                    self.__producer,
+                ),
+                max_batch_size=max_batch_size,
+                max_batch_time=max_batch_time,
+                processes=processes,
+                input_block_size=input_block_size,
+                output_block_size=output_block_size,
+                initialize_parallel_transform=initialize_parallel_transform,
+                parallel_collect=parallel_collect,
             ),
-            max_batch_size=max_batch_size,
-            max_batch_time=max_batch_time,
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-            initialize_parallel_transform=initialize_parallel_transform,
-            parallel_collect=parallel_collect,
+            pre_transform=partial(find_destination_storages, self.__storages),
+            pre_filter=has_destination_storages,
         )
 
     def create(
         self, commit: Callable[[Mapping[Partition, Position]], None]
     ) -> ProcessingStrategy[KafkaPayload]:
-        return TransformStep(
-            partial(find_destination_storages, self.__storages),
-            FilterStep(has_destination_storages, self.__inner_factory.create(commit)),
-        )
+        return self.__wrapped_factory.create(commit)

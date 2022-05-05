@@ -38,6 +38,12 @@ from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings, ConnectionId
+from snuba.consumers.consumer import (
+    MultiStorageStreamFilter,
+    TransformingStrategyFactory,
+    find_destination_storages,
+    has_destination_storages,
+)
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
@@ -604,6 +610,11 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
+        type_ = record[1]
+
+        storage = dataset.get_default_entity().get_writable_storage()
+        assert storage is not None
+
         message: Message[KafkaPayload] = Message(
             Partition(Topic("topic"), 0),
             0,
@@ -611,30 +622,32 @@ if application.debug or application.testing:
             datetime.now(),
         )
 
-        type_ = record[1]
-
-        storage = dataset.get_default_entity().get_writable_storage()
-        assert storage is not None
-
         if type_ == "insert":
-            from arroyo.processing.strategies.streaming import (
-                KafkaConsumerStrategyFactory,
+            from arroyo.processing.strategies.streaming.factory import (
+                ConsumerStrategyFactory,
             )
 
-            from snuba.consumers.consumer import build_batch_writer, process_message
+            from snuba.consumers.consumer import (
+                adapt_multistorage_message,
+                build_batch_writer,
+            )
 
             table_writer = storage.get_table_writer()
-            stream_loader = table_writer.get_stream_loader()
-            strategy = KafkaConsumerStrategyFactory(
-                stream_loader.get_pre_filter(),
-                functools.partial(process_message, stream_loader.get_processor()),
-                build_batch_writer(table_writer, metrics=metrics),
-                max_batch_size=1,
-                max_batch_time=1.0,
-                processes=None,
-                input_block_size=None,
-                output_block_size=None,
+            strategy = TransformingStrategyFactory(
+                wrapped_factory=ConsumerStrategyFactory(
+                    MultiStorageStreamFilter(),
+                    adapt_multistorage_message,
+                    build_batch_writer(table_writer, metrics=metrics),
+                    max_batch_size=1,
+                    max_batch_time=1.0,
+                    processes=None,
+                    input_block_size=None,
+                    output_block_size=None,
+                ),
+                pre_transform=functools.partial(find_destination_storages, [storage]),
+                pre_filter=has_destination_storages,
             ).create(lambda offsets: None)
+
             strategy.submit(message)
             strategy.close()
             strategy.join()

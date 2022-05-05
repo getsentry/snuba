@@ -4,7 +4,7 @@ import json
 import pickle
 from datetime import datetime
 from pickle import PickleBuffer
-from typing import MutableSequence, Optional
+from typing import MutableSequence, Optional, Union
 from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
@@ -12,25 +12,27 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
-from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
+from arroyo.processing.strategies.streaming.factory import ConsumerStrategyFactory
 from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
 from snuba.clickhouse.errors import ClickhouseWriterError
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
     DeadLetterStep,
     InsertBatchWriter,
     MultistorageConsumerProcessingStrategyFactory,
+    MultistorageKafkaPayload,
     ProcessedMessageBatchWriter,
     ReplacementBatchWriter,
-    process_message,
 )
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.processor import InsertBatch, ReplacementBatch
+from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
@@ -43,7 +45,7 @@ def test_streaming_consumer_strategy() -> None:
         Message(
             Partition(Topic("events"), 0),
             i,
-            KafkaPayload(None, b"{}", []),
+            MultistorageKafkaPayload([], KafkaPayload(None, b"{}", [])),
             datetime.now(),
         )
         for i in itertools.count()
@@ -72,7 +74,24 @@ def test_streaming_consumer_strategy() -> None:
             ),
         )
 
-    factory = KafkaConsumerStrategyFactory(
+    def process_message(
+        processor: MessageProcessor, message: Message[MultistorageKafkaPayload]
+    ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+        result = processor.process_message(
+            message.payload[1].value,
+            KafkaMessageMetadata(
+                message.offset, message.partition.index, message.timestamp
+            ),
+        )
+        if isinstance(result, InsertBatch):
+            return BytesInsertBatch(
+                [JSONRowEncoder().encode(row) for row in result.rows],
+                result.origin_timestamp,
+            )
+        else:
+            return result
+
+    factory = ConsumerStrategyFactory(
         None,
         functools.partial(process_message, processor),
         write_step,

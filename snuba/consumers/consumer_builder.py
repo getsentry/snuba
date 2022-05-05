@@ -10,15 +10,20 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
+from arroyo.processing.strategies.streaming.factory import ConsumerStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba.consumers.consumer import (
+    MultistorageKafkaPayload,
+    MultiStorageStreamFilter,
+    TransformingStrategyFactory,
+    adapt_multistorage_message,
     build_batch_writer,
     build_mock_batch_writer,
-    process_message,
+    find_destination_storages,
+    has_destination_storages,
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -239,11 +244,11 @@ class ConsumerBuilder:
             # metrics singleton in the init function of the policy
             dead_letter_queue_policy = dead_letter_queue_policy_closure()
 
-        strategy_factory: ProcessingStrategyFactory[
-            KafkaPayload
-        ] = KafkaConsumerStrategyFactory(
-            prefilter=stream_loader.get_pre_filter(),
-            process_message=functools.partial(process_message, processor),
+        wrapped_factory: ProcessingStrategyFactory[
+            MultistorageKafkaPayload
+        ] = ConsumerStrategyFactory(
+            prefilter=MultiStorageStreamFilter(),
+            process_message=adapt_multistorage_message,
             collector=build_batch_writer(
                 table_writer,
                 metrics=self.metrics,
@@ -271,10 +276,16 @@ class ConsumerBuilder:
         )
 
         if self.__profile_path is not None:
-            strategy_factory = ProcessingStrategyProfilerWrapperFactory(
-                strategy_factory,
+            wrapped_factory = ProcessingStrategyProfilerWrapperFactory(
+                wrapped_factory,
                 self.__profile_path,
             )
+
+        strategy_factory = TransformingStrategyFactory(
+            wrapped_factory=wrapped_factory,
+            pre_transform=functools.partial(find_destination_storages, [self.storage]),
+            pre_filter=has_destination_storages,
+        )
 
         return strategy_factory
 
