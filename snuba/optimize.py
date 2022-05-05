@@ -262,9 +262,6 @@ def _subdivide_parts(
 
         return partition_name
 
-    if number_of_subdivisions == 1:
-        return [parts]
-
     sorted_parts = sorted(parts, key=sort_partitions, reverse=True)
     output: MutableSequence[Sequence[str]] = []
 
