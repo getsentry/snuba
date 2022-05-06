@@ -17,16 +17,11 @@ DIST_TABLE_NAME = "replays_dist"
 
 columns = ColumnSet(
     [
-        ("event_id", UUID()),
+        ("replay_id", UUID()),
         ### columns used by other sentry events
         ("project_id", UInt(64)),
         # time columns
         ("timestamp", DateTime()),
-        ("start_ts", DateTime()),
-        ("start_ms", UInt(16)),
-        ("finish_ts", DateTime(Modifiers(nullable=True))),
-        ("finish_ms", UInt(16, Modifiers(nullable=True))),
-        ("duration", UInt(32, Modifiers(nullable=True))),
         # release/environment info
         ("platform", String()),
         ("environment", String(Modifiers(nullable=True))),
@@ -46,9 +41,10 @@ columns = ColumnSet(
         ("tags", Nested([("key", String()), ("value", String())])),
         # deletion info
         ("retention_days", UInt(16)),
-        ("deleted", UInt(8)),
         ("title", String(Modifiers(readonly=True))),
         # TODO: add ids of sub-events in nodestore / ids of filestore?
+        ("partition", UInt(16)),
+        ("offset", UInt(64)),
     ]
 )
 
@@ -66,6 +62,7 @@ storage = WritableTableStorage(
     query_processors=[TableRateLimit()],
     mandatory_condition_checkers=[ProjectIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=ReplaysProcessor(), default_topic=Topic.REPLAYEVENTS,
+        processor=ReplaysProcessor(),
+        default_topic=Topic.REPLAYEVENTS,
     ),
 )

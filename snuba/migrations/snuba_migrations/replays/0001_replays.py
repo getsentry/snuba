@@ -16,20 +16,16 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 raw_columns: Sequence[Column[Modifiers]] = [
-    Column("event_id", UUID()),
-    Column("root_replay_id", UUID()),
+    Column("replay_id", UUID()),
+    Column("sequence_id", UInt(16)),
+    Column("trace_ids", Array(UUID())),
     ### columns used by other sentry events
     Column("project_id", UInt(64)),
     # time columns
     Column("timestamp", DateTime()),
-    Column("start_ts", DateTime()),
-    Column("start_ms", UInt(16)),
-    Column("finish_ts", DateTime(Modifiers(nullable=True))),
-    Column("finish_ms", UInt(16, Modifiers(nullable=True))),
-    Column("duration", UInt(32, Modifiers(nullable=True))),
     # release/environment info
-    Column("platform", String()),
-    Column("environment", String(Modifiers(nullable=True))),
+    Column("platform", String(Modifiers(low_cardinality=True))),
+    Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("release", String(Modifiers(nullable=True))),
     Column("dist", String(Modifiers(nullable=True))),
     Column("ip_address_v4", IPv4(Modifiers(nullable=True))),
@@ -46,11 +42,11 @@ raw_columns: Sequence[Column[Modifiers]] = [
     Column("tags", Nested([("key", String()), ("value", String())])),
     # deletion info
     Column("retention_days", UInt(16)),
-    Column("deleted", UInt(8)),
-    # title
+    # title (aka name?)
     Column("title", String()),
-    Column("associated_event_ids", Array(UUID()))
-    # TODO: add ids of sub-events in nodestore / ids of filestore?
+    # internal data
+    Column("partition", UInt(16)),
+    Column("offset", UInt(64)),
 ]
 
 
@@ -61,15 +57,14 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.REPLAYS,
-                version_column="deleted",
                 table_name="replays_local",
                 columns=raw_columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.REPLAYS,
-                    order_by="(project_id, toStartOfDay(start_ts), cityHash64(event_id))",
-                    partition_by="(retention_days, toMonday(received))",
+                    order_by="(project_id, toStartOfDay(timestamp), cityHash64(replay_id), sequence_id)",
+                    partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
-                    ttl="received + toIntervalDay(retention_days)",
+                    ttl="timestamp + toIntervalDay(retention_days)",
                 ),
             ),
         ]
@@ -77,7 +72,8 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.REPLAYS, table_name="replays_local",
+                storage_set=StorageSetKey.REPLAYS,
+                table_name="replays_local",
             ),
         ]
 
@@ -88,7 +84,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="replays_dist",
                 columns=raw_columns,
                 engine=table_engines.Distributed(
-                    local_table_name="replays_local", sharding_key="project_id",
+                    local_table_name="replays_local",
+                    sharding_key="project_id",
                 ),
             ),
         ]

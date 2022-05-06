@@ -58,10 +58,9 @@ class ReplaysProcessor(MessageProcessor):
         self, message: Dict[str, Any]
     ) -> Optional[Tuple[EventDict, RetentionDays]]:
         event = message
-
         data = event["data"]
         event_type = data.get("type")
-        if event_type != "replayevent":
+        if event_type != "replay_event":
             return None
 
         try:
@@ -69,7 +68,7 @@ class ReplaysProcessor(MessageProcessor):
             # rest of the codebase. We can be confident that clients are only
             # sending UTC dates.
             retention_days = enforce_retention(
-                event, datetime.utcfromtimestamp(data["timestamp"])
+                message["retention_days"], datetime.utcfromtimestamp(data["timestamp"])
             )
         except EventTooOld:
             return None
@@ -110,14 +109,17 @@ class ReplaysProcessor(MessageProcessor):
         return processed
 
     def _process_tags(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
 
         tags: Mapping[str, Any] = _as_dict_safe(event_dict["data"].get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
-            "sentry:release", event_dict.get("release"),
+            "sentry:release",
+            event_dict.get("release"),
         )
         processed["environment"] = promoted_tags.get("environment")
         processed["user"] = promoted_tags.get("sentry:user", "")
@@ -126,7 +128,9 @@ class ReplaysProcessor(MessageProcessor):
         )
 
     def _process_contexts_and_user(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         contexts: MutableMapping[str, Any] = _as_dict_safe(
             event_dict["data"].get("contexts", None)
@@ -167,7 +171,9 @@ class ReplaysProcessor(MessageProcessor):
                 processed["ip_address_v6"] = str(ip_address)
 
     def _process_sdk_data(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> None:
         sdk = event_dict["data"].get("sdk", None) or {}
         processed["sdk_name"] = _unicodify(sdk.get("name") or "")
@@ -179,7 +185,9 @@ class ReplaysProcessor(MessageProcessor):
             metrics.increment("missing_sdk_version")
 
     def _sanitize_contexts(
-        self, processed: MutableMapping[str, Any], event_dict: EventDict,
+        self,
+        processed: MutableMapping[str, Any],
+        event_dict: EventDict,
     ) -> MutableMapping[str, Any]:
         """
         Contexts can store a lot of data. We don't want to store all the data in
@@ -218,7 +226,7 @@ class ReplaysProcessor(MessageProcessor):
         return sanitized_context
 
     def process_message(
-        self, message: Dict[Any, Any], metadata: KafkaMessageMetadata
+        self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         event_dict, retention_days = self._structure_and_validate_message(message) or (
             None,
