@@ -1,3 +1,4 @@
+import logging
 import signal
 from typing import Any, Optional, Sequence
 
@@ -16,6 +17,8 @@ from snuba.datasets.storages.factory import WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
+
+logger = logging.getLogger(__name__)
 
 
 @click.command()
@@ -127,7 +130,7 @@ def consumer(
 
     setup_logging(log_level)
     setup_sentry()
-
+    logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
 
     metrics = MetricsWrapper(

@@ -131,6 +131,7 @@ def multistorage_consumer(
     setup_logging(log_level)
     setup_sentry()
 
+    logger.info("Consumer Starting")
     storages = {
         key: get_writable_storage(key)
         for key in (getattr(StorageKey, name.upper()) for name in storage_names)
