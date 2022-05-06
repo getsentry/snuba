@@ -7,7 +7,8 @@ import math
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Mapping, Optional, Sequence, Tuple
+from datetime import datetime
+from typing import Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
@@ -225,11 +226,25 @@ class SubscriptionWorker(
         # consumer poll timeout (or session timeout during consumer
         # rebalancing) and cause the entire batch to be have to be replayed.
         tick = message.payload
+        max_validity_latency = state.get_config("subscriptions_max_latency_sec", 0)
+        assert isinstance(max_validity_latency, int)
+
+        if max_validity_latency == 0:
+            tasks: Iterator[ScheduledSubscriptionTask] = self.__schedulers[
+                message.partition.index
+            ].find(tick)
+        else:
+            tasks = (
+                t
+                for t in self.__schedulers[message.partition.index].find(tick)
+                if datetime.timestamp(t.timestamp) > time.time() - max_validity_latency
+            )
+
         return [
             SubscriptionTaskResultFuture(
                 task, self.__executor.submit(self.__execute, task, tick)
             )
-            for task in self.__schedulers[message.partition.index].find(tick)
+            for task in tasks
         ]
 
     def flush_batch(
