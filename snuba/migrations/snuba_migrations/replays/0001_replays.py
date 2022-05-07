@@ -40,11 +40,9 @@ raw_columns: Sequence[Column[Modifiers]] = [
     Column("sdk_name", String()),
     Column("sdk_version", String()),
     Column("tags", Nested([("key", String()), ("value", String())])),
-    # deletion info
-    Column("retention_days", UInt(16)),
-    # title (aka name?)
     Column("title", String()),
     # internal data
+    Column("retention_days", UInt(16)),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
 ]

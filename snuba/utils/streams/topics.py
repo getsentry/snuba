@@ -27,7 +27,7 @@ class Topic(Enum):
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
-    REPLAYEVENTS = "snuba-replayevents"
+    REPLAYEVENTS = "snuba-replay-events"
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
 
 

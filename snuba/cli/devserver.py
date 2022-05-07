@@ -101,16 +101,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--consumer-group=cdc_group",
             ],
         ),
-        (
-            "replays-consumer",
-            [
-                "snuba",
-                "consumer",
-                "--auto-offset-reset=latest",
-                "--log-level=debug",
-                "--storage=replays",
-            ],
-        ),
     ]
 
     if settings.ENABLE_NEW_SUBSCRIPTIONS:
@@ -296,6 +286,19 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                     "--log-level=debug",
                     "--storage=profiles",
+                ],
+            ),
+        ]
+    if settings.ENABLE_REPLAYS_CONSUMER:
+        daemons += [
+            (
+                "replays-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--storage=replays",
                 ],
             ),
         ]
