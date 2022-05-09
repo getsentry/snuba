@@ -103,7 +103,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         ),
     ]
 
-    if not settings.ENABLE_NEW_SUBSCRIPTIONS:
+    if settings.ENABLE_NEW_SUBSCRIPTIONS:
         daemons += [
             (
                 "subscriptions-scheduler-executor-events",
