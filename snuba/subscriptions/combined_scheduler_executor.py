@@ -62,11 +62,14 @@ def build_scheduler_executor_consumer(
         assert result_topic_spec is not None
         return partition_count, commit_log_topic_spec, result_topic_spec
 
-    entity_topic_configuration = {
+    entity_topic_configurations = [
         get_topic_configuration_for_entity(entity_name) for entity_name in entity_names
-    }
-    partitions, commit_log_topic, result_topic = entity_topic_configuration.pop()
-    assert len(entity_topic_configuration) == 0
+    ]
+    entity_topic_configuration = entity_topic_configurations[0]
+    for c in entity_topic_configurations[1:]:
+        assert c == entity_topic_configuration
+
+    partitions, commit_log_topic, result_topic = entity_topic_configuration
 
     tick_consumer = CommitLogTickConsumer(
         KafkaConsumer(
