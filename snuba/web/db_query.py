@@ -87,7 +87,6 @@ cache_partitions: MutableMapping[str, Cache[Result]] = {
         "snuba-query-cache:",
         ResultCacheCodec(),
         ThreadPoolExecutor(),
-        ExecutionTimeoutError,
     )
 }
 # This lock prevents us from initializing the cache twice. The cache is initialized
@@ -601,7 +600,10 @@ def raw_query(
                             errors.ErrorCodes.NETWORK_ERROR,
                         ):
                             sentry_sdk.set_tag("timeout", "network")
-                elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
+                elif isinstance(
+                    cause,
+                    (TimeoutError, ExecutionTimeoutError, TigerExecutionTimeoutError),
+                ):
                     if scope.span:
                         sentry_sdk.set_tag("timeout", "cache_timeout")
 

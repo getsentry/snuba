@@ -9,7 +9,12 @@ from pkg_resources import resource_string
 from redis.exceptions import ResponseError
 from snuba.redis import RedisClientType
 from snuba.state import get_config
-from snuba.state.cache.abstract import Cache, ExecutionError, TValue
+from snuba.state.cache.abstract import (
+    Cache,
+    ExecutionError,
+    ExecutionTimeoutError,
+    TValue,
+)
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.serializable_exception import SerializableException
@@ -29,7 +34,7 @@ class RedisCache(Cache[TValue]):
         prefix: str,
         codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
-        timeout_exception: Type[Exception],
+        timeout_exception: Optional[Type[Exception]] = ExecutionTimeoutError,
     ) -> None:
         self.__client = client
         self.__prefix = prefix
