@@ -13,6 +13,7 @@ from snuba.state.cache.abstract import (
     Cache,
     ExecutionError,
     ExecutionTimeoutError,
+    TigerExecutionTimeoutError,
     TValue,
 )
 from snuba.utils.codecs import ExceptionAwareCodec
@@ -39,6 +40,7 @@ class RedisCache(Cache[TValue]):
         self.__prefix = prefix
         self.__codec = codec
         self.__executor = executor
+        self.__is_tiger_cache = True if "tiger" in self.__prefix else False
 
         # TODO: This should probably be lazily instantiated, rather than
         # automatically happening at startup.
@@ -257,9 +259,14 @@ class RedisCache(Cache[TValue]):
                     # If the effective timeout was the remaining task timeout,
                     # this means that the client responsible for generating the
                     # cache value didn't do so before it promised to.
-                    raise ExecutionTimeoutError(
-                        "result not available before execution deadline"
-                    )
+                    if self.__is_tiger_cache:
+                        raise TigerExecutionTimeoutError(
+                            "result not available before execution deadline"
+                        )
+                    else:
+                        raise ExecutionTimeoutError(
+                            "result not available before execution deadline"
+                        )
                 else:
                     # If the effective timeout was the timeout provided to this
                     # method, that means that our timeout was stricter
