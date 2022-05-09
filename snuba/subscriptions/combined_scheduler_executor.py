@@ -11,6 +11,7 @@ from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
+from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -155,6 +156,17 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             for entity_key in entity_keys
         ]
 
+        # Just apply the max buffer size if they are configured differently
+        # for each entity that is being run together
+        self.__buffer_size = max(
+            [
+                settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
+                    entity_key.value, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
+                )
+                for entity_key in entity_keys
+            ]
+        )
+
         self.__executor_factory = SubscriptionExecutorProcessingFactory(
             executor,
             max_concurrent_queries,
@@ -193,7 +205,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         return TickBuffer(
             self.__mode,
             self.__partitions,
-            None,
+            self.__buffer_size,
             ForwardToExecutor(self.__schedulers, execute_step),
         )
 
