@@ -1,11 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
-from typing import Callable, Mapping, Optional, Sequence, cast
+from typing import Callable, Mapping, Optional, Sequence, Tuple, cast
 
-from arroyo import Message, Partition
+from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
-from arroyo.backends.kafka import KafkaPayload
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
@@ -13,24 +14,100 @@ from arroyo.types import Position
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.executor_consumer import SubscriptionExecutorProcessingFactory
 from snuba.subscriptions.scheduler import SubscriptionScheduler
+from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
 from snuba.subscriptions.scheduler_processing_strategy import TickBuffer
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
+
+
+def build_scheduler_executor_consumer(
+    dataset_name: str,
+    entity_names: Sequence[str],
+    consumer_group: str,
+    followed_consumer_group: str,
+    producer: Producer[KafkaPayload],
+    auto_offset_reset: str,
+    schedule_ttl: int,
+    delay_seconds: Optional[int],
+    stale_threshold_seconds: Optional[int],
+    max_concurrent_queries: int,
+    executor: ThreadPoolExecutor,
+    metrics: MetricsBackend,
+) -> StreamProcessor[Tick]:
+    dataset = get_dataset(dataset_name)
+
+    # Only entities in the same dataset with the same partition count, commit log
+    # topic and result topics may be run together.
+    def get_topic_configuration_for_entity(
+        entity_name: str,
+    ) -> Tuple[int, KafkaTopicSpec, KafkaTopicSpec]:
+        storage = get_entity(EntityKey(entity_name)).get_writable_storage()
+        assert storage is not None
+        stream_loader = storage.get_table_writer().get_stream_loader()
+        partition_count = stream_loader.get_default_topic_spec().partitions_number
+
+        commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
+        assert commit_log_topic_spec is not None
+
+        result_topic_spec = stream_loader.get_subscription_result_topic_spec()
+        assert result_topic_spec is not None
+        return partition_count, commit_log_topic_spec, result_topic_spec
+
+    entity_topic_configuration = {
+        get_topic_configuration_for_entity(entity_name) for entity_name in entity_names
+    }
+    partitions, commit_log_topic, result_topic = entity_topic_configuration.pop()
+    assert len(entity_topic_configuration) == 0
+
+    tick_consumer = CommitLogTickConsumer(
+        KafkaConsumer(
+            build_kafka_consumer_configuration(
+                commit_log_topic.topic,
+                consumer_group,
+                auto_offset_reset=auto_offset_reset,
+            ),
+        ),
+        followed_consumer_group=followed_consumer_group,
+        time_shift=(
+            timedelta(seconds=delay_seconds * -1) if delay_seconds is not None else None
+        ),
+    )
+
+    factory = CombinedSchedulerExecutorFactory(
+        dataset,
+        entity_names,
+        executor,
+        partitions,
+        max_concurrent_queries,
+        producer,
+        metrics,
+        stale_threshold_seconds,
+        result_topic.topic_name,
+        schedule_ttl,
+    )
+
+    return StreamProcessor(
+        tick_consumer,
+        Topic(commit_log_topic.topic_name),
+        factory,
+    )
 
 
 class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
     """
-    An alternative to the separate schedule and executor consumers / strategies
-    which can be used to schedule and execute subscriptions for multiple entities
-    in a dataset all at once. This is designed to be easier to run (less pods)
-    but does not scale with subscription volume as like the separate
-    scheduler and executor.
+    An alternative to the separate scheduler and executor which can be used to schedule
+    and execute subscriptions for multiple entities in a dataset all at once. This is designed
+    to be easier to run (less containers) but does not scale with subscription volume like
+    the separate scheduler and executor.
 
     It should only be used in environments where:
     - there are relatively few subscriptions
@@ -41,17 +118,18 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
 
     def __init__(
         self,
+        dataset: Dataset,
+        entity_names: Sequence[str],
         executor: ThreadPoolExecutor,
         partitions: int,
         max_concurrent_queries: int,
-        dataset: Dataset,
-        entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
         stale_threshold_seconds: Optional[int],
         result_topic: str,
         schedule_ttl: int,
     ) -> None:
+        # TODO: self.__partitions might not be the same for each entity
         self.__partitions = partitions
         self.__entity_names = entity_names
         self.__metrics = metrics

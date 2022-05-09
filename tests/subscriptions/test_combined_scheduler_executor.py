@@ -65,11 +65,11 @@ def test_combined_scheduler_and_executor() -> None:
 
     with closing(producer):
         factory = CombinedSchedulerExecutorFactory(
+            dataset,
+            entity_names,
             executor,
             num_partitions,
             max_concurrent_queries,
-            dataset,
-            entity_names,
             producer,
             metrics,
             stale_threshold_seconds,
