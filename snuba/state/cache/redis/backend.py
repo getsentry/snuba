@@ -2,20 +2,14 @@ import concurrent.futures
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Optional
+from typing import Callable, Optional, Type
 
 from pkg_resources import resource_string
 
 from redis.exceptions import ResponseError
 from snuba.redis import RedisClientType
 from snuba.state import get_config
-from snuba.state.cache.abstract import (
-    Cache,
-    ExecutionError,
-    ExecutionTimeoutError,
-    TigerExecutionTimeoutError,
-    TValue,
-)
+from snuba.state.cache.abstract import Cache, ExecutionError, TValue
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.serializable_exception import SerializableException
@@ -35,12 +29,13 @@ class RedisCache(Cache[TValue]):
         prefix: str,
         codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
+        timeout_exception: Type[Exception],
     ) -> None:
         self.__client = client
         self.__prefix = prefix
         self.__codec = codec
         self.__executor = executor
-        self.__is_tiger_cache = True if "tiger" in self.__prefix else False
+        self.__timeout_exception = timeout_exception
 
         # TODO: This should probably be lazily instantiated, rather than
         # automatically happening at startup.
@@ -259,14 +254,9 @@ class RedisCache(Cache[TValue]):
                     # If the effective timeout was the remaining task timeout,
                     # this means that the client responsible for generating the
                     # cache value didn't do so before it promised to.
-                    if self.__is_tiger_cache:
-                        raise TigerExecutionTimeoutError(
-                            "result not available before execution deadline"
-                        )
-                    else:
-                        raise ExecutionTimeoutError(
-                            "result not available before execution deadline"
-                        )
+                    raise self.__timeout_exception(
+                        "result not available before execution deadline"
+                    )
                 else:
                     # If the effective timeout was the timeout provided to this
                     # method, that means that our timeout was stricter
