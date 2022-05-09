@@ -312,14 +312,18 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
 
         if kfk is None:
             kfk = Producer(
-                # the querylog payloafs can get really large so we allow larger messages
+                # the querylog payloads can get really large so we allow larger messages
                 # (double the default)
                 # The performance is not business critical and therefore we accept the tradeoffs
                 # in more bandwidth for more observability
                 # for this to be meaningful, the following setting has to be matched on the broker:
                 # max.message.bytes=2097176
                 build_kafka_producer_configuration(
-                    topic=None, override_params={"max.request.size": 2097176}
+                    topic=None,
+                    override_params={
+                        "compression.type": "zstd",
+                        "max.request.size": 2097176,
+                    },
                 )
             )
 
