@@ -40,6 +40,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "discover",
             "events",
             "events_ro",
+            "replays",
             "metrics",
             "migrations",
             "outcomes",
