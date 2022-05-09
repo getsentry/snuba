@@ -24,9 +24,7 @@ from confluent_kafka import Producer
 from snuba import environment, settings
 from snuba.redis import redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.configuration_builder import (
-    build_default_kafka_producer_configuration,
-)
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
 metrics = MetricsWrapper(environment.metrics, "snuba.state")
@@ -313,7 +311,17 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         ).execute()
 
         if kfk is None:
-            kfk = Producer(build_default_kafka_producer_configuration())
+            kfk = Producer(
+                # the querylog payloafs can get really large so we allow larger messages
+                # (double the default)
+                # The performance is not business critical and therefore we accept the tradeoffs
+                # in more bandwidth for more observability
+                # for this to be meaningful, the following setting has to be matched on the broker:
+                # max.message.bytes=2097176
+                build_kafka_producer_configuration(
+                    topic=None, override_params={"max.request.size": 2097176}
+                )
+            )
 
         kfk.poll(0)  # trigger queued delivery callbacks
         kfk.produce(
