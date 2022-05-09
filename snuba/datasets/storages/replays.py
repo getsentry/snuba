@@ -1,4 +1,4 @@
-from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, IPv4, IPv6
+from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, IPv4, IPv6
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -18,10 +18,12 @@ DIST_TABLE_NAME = "replays_dist"
 columns = ColumnSet(
     [
         ("replay_id", UUID()),
-        ### columns used by other sentry events
-        ("project_id", UInt(64)),
-        # time columns
+        ("sequence_id", UInt(16)),
         ("timestamp", DateTime()),
+        ("trace_ids", Array(UUID())),
+        ("title", String(Modifiers(readonly=True))),
+        ### common sentry event columns
+        ("project_id", UInt(64)),
         # release/environment info
         ("platform", String()),
         ("environment", String(Modifiers(nullable=True))),
@@ -41,8 +43,6 @@ columns = ColumnSet(
         ("tags", Nested([("key", String()), ("value", String())])),
         # deletion info
         ("retention_days", UInt(16)),
-        ("title", String(Modifiers(readonly=True))),
-        # TODO: add ids of sub-events in nodestore / ids of filestore?
         ("partition", UInt(16)),
         ("offset", UInt(64)),
     ]
