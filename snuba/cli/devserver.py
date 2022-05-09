@@ -191,44 +191,19 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         if settings.ENABLE_METRICS_SUBSCRIPTIONS:
             daemons += [
                 (
-                    "subscriptions-scheduler-metrics-counters",
+                    "subscriptions-scheduler-executor-metrics",
                     [
                         "snuba",
-                        "subscriptions-scheduler",
-                        "--entity=metrics_counters",
-                        "--consumer-group=snuba-metrics-subscriptions-scheduler",
-                        "--followed-consumer-group=snuba-metrics-consumers",
-                        "--auto-offset-reset=latest",
-                        "--log-level=debug",
-                        "--delay-seconds=1",
-                        "--schedule-ttl=10",
-                    ],
-                ),
-                (
-                    "subscriptions-scheduler-metrics-sets",
-                    [
-                        "snuba",
-                        "subscriptions-scheduler",
-                        "--entity=metrics_sets",
-                        "--consumer-group=snuba-metrics-subscriptions-scheduler",
-                        "--followed-consumer-group=snuba-metrics-consumers",
-                        "--auto-offset-reset=latest",
-                        "--log-level=debug",
-                        "--delay-seconds=1",
-                        "--schedule-ttl=10",
-                    ],
-                ),
-                (
-                    "subscriptions-executor-metrics",
-                    [
-                        "snuba",
-                        "subscriptions-executor",
+                        "subscriptions-scheduler-executor",
                         "--dataset=metrics",
-                        "--entity=metrics_counters",
                         "--entity=metrics_sets",
-                        "--consumer-group=snuba-metrics-subscription-executor",
+                        "--entity=metrics_counters",
+                        "--consumer-group=snuba-metrics-subscriptions-scheduler-executor",
+                        "--followed-consumer-group=snuba-metrics-consumers",
                         "--auto-offset-reset=latest",
-                        "--override-result-topic=metrics-subscription-results",
+                        "--log-level=debug",
+                        "--delay-seconds=1",
+                        "--schedule-ttl=10",
                     ],
                 ),
             ]
