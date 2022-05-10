@@ -40,7 +40,7 @@ def list(storage_set: str) -> None:
             click.echo(line_break)
             click.echo(message.payload.value)
     else:
-        click.echo(f"No messages found in {storage_set} dead-letter-topic!")
+        click.echo(f"No messages found in {storage_set} dead-letter topic!")
     click.echo(line_break)
 
 
