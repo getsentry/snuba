@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
-from typing import Callable, Mapping, Optional, Sequence, Tuple, cast
+from typing import Callable, Mapping, NamedTuple, Optional, Sequence, cast
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -30,6 +30,12 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 
 
+class TopicConfig(NamedTuple):
+    partition: int
+    commit_log_topic: KafkaTopicSpec
+    result_topic: KafkaTopicSpec
+
+
 def build_scheduler_executor_consumer(
     dataset_name: str,
     entity_names: Sequence[str],
@@ -50,7 +56,7 @@ def build_scheduler_executor_consumer(
     # topic and result topics may be run together.
     def get_topic_configuration_for_entity(
         entity_name: str,
-    ) -> Tuple[int, KafkaTopicSpec, KafkaTopicSpec]:
+    ) -> TopicConfig:
         storage = get_entity(EntityKey(entity_name)).get_writable_storage()
         assert storage is not None
         stream_loader = storage.get_table_writer().get_stream_loader()
@@ -61,7 +67,7 @@ def build_scheduler_executor_consumer(
 
         result_topic_spec = stream_loader.get_subscription_result_topic_spec()
         assert result_topic_spec is not None
-        return partition_count, commit_log_topic_spec, result_topic_spec
+        return TopicConfig(partition_count, commit_log_topic_spec, result_topic_spec)
 
     entity_topic_configurations = [
         get_topic_configuration_for_entity(entity_name) for entity_name in entity_names
