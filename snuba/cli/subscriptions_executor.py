@@ -148,11 +148,14 @@ def subscriptions_executor(
 
     def handler(signum: int, frame: Any) -> None:
         # TODO: Temporary code for debugging executor shutdown
-        logging.getLogger().setLevel(logging.DEBUG)
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
 
         processor.signal_shutdown()
+        logger.debug("Flushing querylog producer")
         # Ensure the querylog producer is flushed
         state.flush_producer()
+        logger.debug("Flushed querylog producer")
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
