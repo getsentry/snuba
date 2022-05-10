@@ -74,9 +74,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             [
                 "snuba",
                 "consumer",
-                # "--processes=5",
-                # "--input-block-size=32",
-                # "--output-block-size=32",
                 "--auto-offset-reset=latest",
                 "--log-level=debug",
                 "--storage=errors",
