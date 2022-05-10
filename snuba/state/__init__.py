@@ -328,7 +328,8 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
 def flush_producer() -> None:
     global kfk
     if kfk is not None:
-        kfk.flush()
+        messages_remaining = kfk.flush()
+        logger.debug(f"{messages_remaining} querylog messages pending delivery")
 
 
 def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
