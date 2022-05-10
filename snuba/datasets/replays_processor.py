@@ -25,7 +25,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "replays.processor")
-
+from sentry_sdk import capture_exception
 
 EventDict = Mapping[Any, Any]
 RetentionDays = int
@@ -145,26 +145,32 @@ class ReplaysProcessor(MessageProcessor):
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        event_dict, retention_days = self._structure_and_validate_message(message) or (
-            None,
-            None,
-        )
+        try:
+            event_dict, retention_days = self._structure_and_validate_message(
+                message
+            ) or (
+                None,
+                None,
+            )
 
-        if not event_dict:
-            return None
-        processed: MutableMapping[str, Any] = {
-            "retention_days": retention_days,
-        }
-        # The following helper functions should be able to be applied in any order.
-        # At time of writing, there are no reads of the values in the `processed`
-        # dictionary to inform values in other functions.
-        # Ideally we keep continue that rule
-        self._process_base_event_values(processed, event_dict)
-        self._process_tags(processed, event_dict)
-        self._process_sdk_data(processed, event_dict)
-        processed["partition"] = metadata.partition
-        processed["offset"] = metadata.offset
+            if not event_dict:
+                return None
+            processed: MutableMapping[str, Any] = {
+                "retention_days": retention_days,
+            }
+            # The following helper functions should be able to be applied in any order.
+            # At time of writing, there are no reads of the values in the `processed`
+            # dictionary to inform values in other functions.
+            # Ideally we keep continue that rule
+            self._process_base_event_values(processed, event_dict)
+            self._process_tags(processed, event_dict)
+            self._process_sdk_data(processed, event_dict)
+            processed["partition"] = metadata.partition
+            processed["offset"] = metadata.offset
 
-        # the following operation modifies the event_dict and is therefore *not* order-independent
-        self._process_user(processed, event_dict)
-        return InsertBatch([processed], None)
+            # the following operation modifies the event_dict and is therefore *not* order-independent
+            self._process_user(processed, event_dict)
+            return InsertBatch([processed], None)
+        except Exception as e:
+            metrics.increment("consumer_error")
+            capture_exception(e)
