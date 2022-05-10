@@ -16,7 +16,9 @@ test_cases = [
         id="Aggregation string cannot be parsed",
     ),
     pytest.param(
-        {"orderby": [[[[["column"]]]]]}, InvalidQueryError, id="Nonsensical order by",
+        {"orderby": [[[[["column"]]]]]},
+        InvalidQueryError,
+        id="Nonsensical order by",
     ),
     pytest.param(
         {"conditions": [["timestamp", "IS NOT NULL", "this makes no sense"]]},

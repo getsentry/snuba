@@ -103,5 +103,6 @@ class TestState:
 
 def test_safe_dumps():
     assert safe_dumps(ChainMap({"a": 1}, {"b": 2}), sort_keys=True,) == safe_dumps(
-        {"a": 1, "b": 2}, sort_keys=True,
+        {"a": 1, "b": 2},
+        sort_keys=True,
     )

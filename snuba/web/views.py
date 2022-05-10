@@ -92,7 +92,6 @@ except ImportError:
     def check_down_file_exists() -> bool:
         return False
 
-
 else:
 
     def check_down_file_exists() -> bool:
@@ -428,6 +427,16 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         assert False, "unexpected fallthrough"
 
 
+# These codes are from:
+# https://github.com/ClickHouse/ClickHouse/blob/1c0b731ea6b86ce3bf7f88bd3ec27df7b218454d/src/Common/ErrorCodes.cpp
+ILLEGAL_TYPE_OF_ARGUMENT = 43
+TYPE_MISMATCH = 53
+CLICKHOUSE_TYPING_ERROR_CODES = {
+    ILLEGAL_TYPE_OF_ARGUMENT,
+    TYPE_MISMATCH,
+}
+
+
 @with_span()
 def dataset_query(
     dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
@@ -468,9 +477,16 @@ def dataset_query(
                 "message": str(cause),
             }
             logger.warning(
-                str(cause), exc_info=True,
+                str(cause),
+                exc_info=True,
             )
         elif isinstance(cause, ClickhouseError):
+            # Since the query validator doesn't have a typing system, queries containing type errors are run on
+            # Clickhouse and generate ClickhouseErrors. Return a 400 status code for such requests because the problem
+            # lies with the query, not Snuba.
+            if cause.code in CLICKHOUSE_TYPING_ERROR_CODES:
+                status = 400
+
             details = {
                 "type": "clickhouse",
                 "message": str(cause),
@@ -507,7 +523,9 @@ def dataset_query(
 def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
     data = {"error": {"type": "subscription", "message": str(exception)}}
     return Response(
-        json.dumps(data, indent=4), 400, {"Content-Type": "application/json"},
+        json.dumps(data, indent=4),
+        400,
+        {"Content-Type": "application/json"},
     )
 
 
@@ -580,7 +598,8 @@ if application.debug or application.testing:
                 rows.extend(processed_message.rows)
 
         BatchWriterEncoderWrapper(
-            table_writer.get_batch_writer(metrics), JSONRowEncoder(),
+            table_writer.get_batch_writer(metrics),
+            JSONRowEncoder(),
         ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})

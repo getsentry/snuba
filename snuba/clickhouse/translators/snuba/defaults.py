@@ -23,14 +23,18 @@ from snuba.query.expressions import (
 
 class DefaultLiteralMapper(LiteralMapper):
     def attempt_map(
-        self, expression: Literal, children_translator: SnubaClickhouseStrictTranslator,
+        self,
+        expression: Literal,
+        children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Literal]:
         return expression
 
 
 class DefaultColumnMapper(ColumnMapper):
     def attempt_map(
-        self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
+        self,
+        expression: Column,
+        children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Column]:
         return expression
 
@@ -96,7 +100,9 @@ class DefaultArgumentMapper(ArgumentMapper):
 
 class DefaultLambdaMapper(LambdaMapper):
     def attempt_map(
-        self, expression: Lambda, children_translator: SnubaClickhouseStrictTranslator,
+        self,
+        expression: Lambda,
+        children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Lambda]:
         return Lambda(
             alias=expression.alias,

@@ -15,7 +15,9 @@ from snuba.utils.streams.topics import Topic
 
 @click.command()
 @click.option(
-    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--migrate/--no-migrate", default=True)

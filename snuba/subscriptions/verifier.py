@@ -51,14 +51,19 @@ class SubscriptionResultData:
         data_a = a.pop("data")
         data_b = b.pop("data")
 
-        if (
-            a == b
-            and isinstance(data_a, int)
-            and isinstance(data_b, int)
-            and abs(data_a - data_b) == 1
-        ):
-            return True
-
+        # Data is a list of dicts
+        try:
+            if len(data_a) == len(data_b):
+                for (a, b) in zip(data_a, data_b):
+                    a_keys = a.keys()
+                    b_keys = b.keys()
+                    if a_keys == b_keys:
+                        for key in a_keys:
+                            if abs(a[key] - b[key]) > 1:
+                                return False
+                return True
+        except (TypeError, AttributeError):
+            pass
         return False
 
     def to_dict(self) -> dict[str, Any]:
@@ -169,7 +174,9 @@ def build_verifier(
         SubscriptionResultConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    None, group_id=consumer_group, auto_offset_reset=auto_offset_reset,
+                    None,
+                    group_id=consumer_group,
+                    auto_offset_reset=auto_offset_reset,
                 )
             ),
             override_topics=[orig_result_topic, new_result_topic],
@@ -318,11 +325,15 @@ class ResultStore:
                     off_by_one.add(id)
 
             self.__metrics.increment(
-                METRIC_OUTCOME_NAME, len(matching_results), {"outcome": "same_result"},
+                METRIC_OUTCOME_NAME,
+                len(matching_results),
+                {"outcome": "same_result"},
             )
 
             self.__metrics.increment(
-                METRIC_OUTCOME_NAME, len(off_by_one), {"outcome": "off_by_one"},
+                METRIC_OUTCOME_NAME,
+                len(off_by_one),
+                {"outcome": "off_by_one"},
             )
 
             self.__metrics.increment(
@@ -332,7 +343,7 @@ class ResultStore:
             )
 
             # Log up to 100 subscription results per second
-            for id in list(off_by_one)[:100]:
+            for id in list(non_matching_results - off_by_one)[:100]:
                 logger.warning(
                     "Encountered non matching subscription result",
                     extra={

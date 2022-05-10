@@ -1,6 +1,7 @@
 from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     Column,
     DateTime,
     IPv4,
@@ -8,7 +9,6 @@ from snuba.clickhouse.columns import (
     Nested,
     String,
     UInt,
-    UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
@@ -60,7 +60,8 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.DISCOVER, table_name="discover_local",
+                storage_set=StorageSetKey.DISCOVER,
+                table_name="discover_local",
             )
         ]
 
@@ -71,7 +72,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="discover_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="discover_local", sharding_key=None,
+                    local_table_name="discover_local",
+                    sharding_key=None,
                 ),
             )
         ]

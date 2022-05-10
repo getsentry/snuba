@@ -12,8 +12,8 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.processor import MAX_UINT32, NIL_UUID
-from .matview import create_matview_v1
 
+from .matview import create_matview_v1
 
 aggregate_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),

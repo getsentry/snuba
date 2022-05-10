@@ -201,7 +201,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
             "timestamp": datetime.timestamp(end_timestamp),
             "tags": {
                 # Sentry
-                "environment": u"prød",
+                "environment": "prød",
                 "sentry:release": "1",
                 "sentry:dist": "dist1",
                 "url": "http://127.0.0.1:/query",

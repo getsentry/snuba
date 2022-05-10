@@ -1,7 +1,7 @@
-# sentry:
-#   organization: sentry
-#   project: snuba
-#   repository: getsentry/snuba
+sentry:
+  organization: sentry
+  project: snuba
+  repository: getsentry/snuba
 
 steps:
 - kind: KubernetesDeployment
@@ -23,8 +23,6 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
-    name: spans-consumer
-  - image: us.gcr.io/sentryio/snuba:{sha}
     name: sessions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: outcomes-consumer
@@ -38,8 +36,6 @@ steps:
     name: events-subscriptions-scheduler
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-executor
-  - image: us.gcr.io/sentryio/snuba:{sha}
-    name: events-subscriptions-verifier
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}

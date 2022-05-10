@@ -7,7 +7,10 @@ from snuba.utils.metrics.types import Tags
 
 class Gauge:
     def __init__(
-        self, metrics: MetricsBackend, name: str, tags: Optional[Tags] = None,
+        self,
+        metrics: MetricsBackend,
+        name: str,
+        tags: Optional[Tags] = None,
     ) -> None:
         self.__metrics = metrics
         self.__name = name

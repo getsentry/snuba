@@ -1,4 +1,5 @@
 import pytest
+
 from snuba.clickhouse.columns import UUID, Any, ColumnSet, String, UInt
 from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression

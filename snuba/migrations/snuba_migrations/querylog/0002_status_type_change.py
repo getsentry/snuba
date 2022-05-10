@@ -41,7 +41,9 @@ class Migration(migration.ClickhouseNodeMigration):
         )
         return [
             operations.ModifyColumn(
-                StorageSetKey.QUERYLOG, table_name, Column("status", status_type),
+                StorageSetKey.QUERYLOG,
+                table_name,
+                Column("status", status_type),
             ),
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,

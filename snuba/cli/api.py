@@ -1,6 +1,6 @@
+import os
 from typing import Optional, Union
 
-import os
 import click
 
 from snuba.environment import setup_logging
@@ -18,7 +18,7 @@ def api(
     debug: bool,
     log_level: Optional[str],
     processes: int,
-    threads: int
+    threads: int,
 ) -> None:
     from snuba import settings
 
@@ -36,8 +36,9 @@ def api(
         if processes > 1 or threads > 1:
             raise click.ClickException("processes/threads can only be 1 in debug")
 
-        from snuba.web.views import application
         from werkzeug.serving import WSGIRequestHandler
+
+        from snuba.web.views import application
 
         setup_logging(log_level)
 

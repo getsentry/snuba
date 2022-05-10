@@ -91,7 +91,8 @@ def build_request(
                 )
             elif settings_class == SubscriptionRequestSettings:
                 settings_obj = settings_class(
-                    referrer=referrer, consistent=_consistent_override(True, referrer),
+                    referrer=referrer,
+                    consistent=_consistent_override(True, referrer),
                 )
 
             app_id = get_app_id(settings_obj.get_app_id())
@@ -128,7 +129,8 @@ def build_request(
             raise exception
 
         span.set_data(
-            "snuba_query_parsed", repr(query).split("\n"),
+            "snuba_query_parsed",
+            repr(query).split("\n"),
         )
         span.set_data(
             "snuba_query_raw",

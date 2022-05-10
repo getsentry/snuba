@@ -141,7 +141,9 @@ promoted_context_columns = {"trace.trace_id": "trace_id", "trace.span_id": "span
 
 mandatory_conditions = [
     binary_condition(
-        ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
+        ConditionFunctions.EQ,
+        Column(None, None, "deleted"),
+        Literal(None, 0),
     ),
 ]
 
@@ -159,7 +161,8 @@ prewhere_candidates = [
 query_processors = [
     UniqInSelectAndHavingProcessor(),
     PostReplacementConsistencyEnforcer(
-        project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
+        project_column="project_id",
+        replacer_state_name=ReplacerState.ERRORS,
     ),
     MappingColumnPromoter(
         mapping_specs={
@@ -191,7 +194,9 @@ query_processors = [
 
 query_splitters = [
     ColumnSplitQueryStrategy(
-        id_column="event_id", project_column="project_id", timestamp_column="timestamp",
+        id_column="event_id",
+        project_column="project_id",
+        timestamp_column="timestamp",
     ),
     TimeSplitQueryStrategy(timestamp_col="timestamp"),
 ]
