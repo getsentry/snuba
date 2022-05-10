@@ -3,7 +3,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Mapping, Optional
 
-from arroyo.processing.strategies.dead_letter_queue import InvalidMessage
+from arroyo.processing.strategies.dead_letter_queue import (
+    InvalidMessages,
+    InvalidRawMessage,
+)
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -19,9 +22,12 @@ from snuba.processor import (
     ProcessedMessage,
     _ensure_valid_date,
 )
-from snuba.utils.streams.topics import Topic
 
 DISABLED_MATERIALIZATION_VERSION = 1
+ILLEGAL_VALUE_IN_SET = "Illegal value in set."
+ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
+INT_FLOAT_EXPECTED = "Int/Float expected"
+INT_EXPECTED = "Int expected"
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -92,7 +98,7 @@ class SetsMetricsProcessor(MetricsBucketProcessor):
         for value in values:
             if not isinstance(value, int):
                 _raise_invalid_message(
-                    message, f"Illegal value in set. Int expected: {value}"
+                    message, f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
                 )
         return {"set_values": values}
 
@@ -105,7 +111,7 @@ class CounterMetricsProcessor(MetricsBucketProcessor):
         value = message["value"]
         if not isinstance(value, (int, float)):
             _raise_invalid_message(
-                message, f"Illegal value for counter value. Int/Float expected: {value}"
+                message, f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
             )
         return {"value": value}
 
@@ -119,7 +125,7 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
         for value in values:
             if not isinstance(value, (int, float)):
                 _raise_invalid_message(
-                    message, f"Illegal value in set. Int/Float expected: {value}"
+                    message, f"{ILLEGAL_VALUE_IN_SET} {INT_FLOAT_EXPECTED}: {value}"
                 )
         return {"values": values}
 
@@ -144,7 +150,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             for value in values:
                 if not isinstance(value, int):
                     _raise_invalid_message(
-                        message, f"Illegal value in set. Int expected: {value}"
+                        message, f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
                     )
             return {"metric_type": OutputType.SET.value, "set_values": values}
         elif message["type"] == METRICS_COUNTERS_TYPE:
@@ -152,7 +158,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             if not isinstance(value, (int, float)):
                 _raise_invalid_message(
                     message,
-                    f"Illegal value for counter value. Int/Float expected: {value}",
+                    f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}",
                 )
             return {"metric_type": OutputType.COUNTER.value, "count_value": value}
         else:  # METRICS_DISTRIBUTIONS_TYPE
@@ -160,17 +166,20 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             for value in values:
                 if not isinstance(value, (int, float)):
                     _raise_invalid_message(
-                        message, f"Illegal value in set. Int/Float expected: {value}"
+                        message, f"{ILLEGAL_VALUE_IN_SET} {INT_FLOAT_EXPECTED}: {value}"
                     )
             return {"metric_type": OutputType.DIST.value, "distribution_values": values}
 
 
 def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
     """
-    Pass an invalid message to the DLQ by raising `InvalidMessage` exception.
+    Pass an invalid message to the DLQ by raising `InvalidMessages` exception.
     """
-    raise InvalidMessage(
-        message=str(message),
-        reason=reason,
-        original_topic=Topic.METRICS.value,
+    raise InvalidMessages(
+        [
+            InvalidRawMessage(
+                payload=str(message),
+                reason=reason,
+            )
+        ]
     )
