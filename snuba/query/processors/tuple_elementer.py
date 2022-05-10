@@ -2,9 +2,9 @@ import random
 from dataclasses import replace
 from typing import cast
 
-from snuba.utils.serializable_exception import SerializableException
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -17,7 +17,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.request.request_settings import RequestSettings
-from snuba.query.exceptions import InvalidQueryException
 from snuba.state import get_config
 
 
@@ -35,10 +34,6 @@ def _validate_tupleElement_and_get_index(exp: FunctionCall):
 
 
 class _TupleElementerVisitor(ExpressionVisitor[Expression]):
-    def __init__(self) -> None:
-        # TODO: make level handling a context manager maybe
-        self.__current_tuple = 0
-
     def visit_literal(self, exp: Literal) -> Expression:
         return exp
 
@@ -53,19 +48,23 @@ class _TupleElementerVisitor(ExpressionVisitor[Expression]):
             # the tupleElement function's last parameter must be a constant:
             # https://clickhouse.com/docs/en/sql-reference/functions/tuple-functions#tupleelement
 
-            # TODO: throw proper validation exceptions
             element_index_exp = exp.parameters[1]
-            assert isinstance(element_index_exp, Literal)
-            assert isinstance(element_index_exp.value, int)
+            if not isinstance(element_index_exp, Literal) or not isinstance(
+                element_index_exp.value, int
+            ):
+                raise InvalidQueryException(
+                    f"tupleElement must be indexed with an int literal, calculated values not supported, received {element_index_exp}"
+                )
             # clickhouse tuples are 1 -indexed, python tuples are not
             element_index = element_index_exp.value - 1
-            assert (
+            if (
                 isinstance(exp.parameters[0], FunctionCall)
                 and exp.parameters[0].function_name == "tuple"
-            )
-            to_return = exp.parameters[0].parameters[element_index]
-            to_return.accept(self)
-            return to_return
+                and isinstance(exp.parameters[0].parameters[element_index], Literal)
+            ):
+                to_return = exp.parameters[0].parameters[element_index]
+                to_return.accept(self)
+                return to_return
         transfomed_params = tuple([param.accept(self) for param in exp.parameters])
         return replace(exp, parameters=transfomed_params)
 
@@ -92,7 +91,25 @@ class TupleElementer(QueryProcessor):
     e.g.: tupleElement(tuple("a", "b"), 1) -> "a"
 
     Thie is a zero cost function in clickhouse that is resolved at AST
-    parse time. We do it on our end to avoid backwards incomaptibility issues
+    parse time. We do it on our end to avoid backwards incomaptibility issues.
+
+    Only works with tuple Literals. WILL NOT WORK FOR CALCULATED TUPLES e.g:
+
+    tupleElement(
+        arrayJoin(
+          arrayMap(
+            (x,y ->
+              tuple(
+                x,
+                y
+              )
+            ),
+            tags.key,
+            tags.value
+          )
+        ) AS `snuba_all_tags`,
+        2
+      ) AS `_snuba_tags_value` |> tags_value
 
     Due to a backwards incomaptibility issue in clickhouse from
     20.8 -> 21.8, tupleElement calls cause parsing errors
