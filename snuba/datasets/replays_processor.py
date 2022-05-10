@@ -174,3 +174,4 @@ class ReplaysProcessor(MessageProcessor):
         except Exception as e:
             metrics.increment("consumer_error")
             capture_exception(e)
+            return None
