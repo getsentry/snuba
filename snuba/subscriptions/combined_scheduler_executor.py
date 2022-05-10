@@ -184,7 +184,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
 
         mode = modes.pop()
 
-        assert len(modes) == 0, "Entities provided to not share the same mode"
+        assert len(modes) == 0, "Entities provided do not share the same mode"
 
         self.__mode = mode
 
