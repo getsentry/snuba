@@ -15,6 +15,10 @@ class ExecutionTimeoutError(ExecutionError):
     pass
 
 
+class TigerExecutionTimeoutError(ExecutionError):
+    pass
+
+
 class Cache(Generic[TValue], ABC):
     @abstractmethod
     def get(self, key: str) -> Optional[TValue]:
