@@ -34,7 +34,7 @@ class RedisCache(Cache[TValue]):
         prefix: str,
         codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
-        timeout_exception: Optional[Type[Exception]] = ExecutionTimeoutError,
+        timeout_exception: Type[Exception] = ExecutionTimeoutError,
     ) -> None:
         self.__client = client
         self.__prefix = prefix
