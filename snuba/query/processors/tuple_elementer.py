@@ -20,19 +20,6 @@ from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 
 
-def _validate_tupleElement_and_get_index(exp: FunctionCall):
-    element_index_exp = exp.parameters[1]
-    assert isinstance(element_index_exp, Literal)
-    assert isinstance(element_index_exp.value, int)
-    # clickhouse tuples are 1 -indexed, python tuples are not
-    element_index = element_index_exp.value - 1
-    assert (
-        isinstance(exp.parameters[0], FunctionCall)
-        and exp.parameters[0].function_name == "tuple"
-    )
-    return element_index
-
-
 class _TupleElementerVisitor(ExpressionVisitor[Expression]):
     def visit_literal(self, exp: Literal) -> Expression:
         return exp
