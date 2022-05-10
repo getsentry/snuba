@@ -157,7 +157,8 @@ def clickhouse_trace_query() -> Response:
         return make_response(jsonify({"error": details}), 400)
     except Exception as err:
         return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}), 500,
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
         )
 
 
@@ -229,7 +230,9 @@ def configs() -> Response:
         ]
 
         return Response(
-            json.dumps(config_data), 200, {"Content-Type": "application/json"},
+            json.dumps(config_data),
+            200,
+            {"Content-Type": "application/json"},
         )
 
 
@@ -283,7 +286,9 @@ def config(config_key: str) -> Response:
             assert config_key != "", "Key cannot be empty string"
 
             state.set_config(
-                config_key, new_value, user=user,
+                config_key,
+                new_value,
+                user=user,
             )
             state.set_config_description(config_key, new_desc, user=user)
 

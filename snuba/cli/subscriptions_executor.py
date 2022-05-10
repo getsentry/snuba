@@ -1,13 +1,14 @@
+import logging
 import signal
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
-from typing import Any, Optional, Sequence
+from contextlib import contextmanager
+from typing import Any, Iterator, Optional, Sequence
 
 import click
 from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
-from snuba import environment
+from snuba import environment, state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
@@ -53,6 +54,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Kafka consumer auto offset reset.",
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--stale-threshold-seconds",
+    type=int,
+    help="Skip execution if timestamp is beyond this threshold compared to the system time",
+)
 # This option allows us to reroute the produced subscription results to a different
 # topic temporarily while we are testing and running the old and new subscription
 # pipeline concurrently. It is currently (temporarily) required to reduce the chance
@@ -80,6 +86,7 @@ def subscriptions_executor(
     max_concurrent_queries: int,
     auto_offset_reset: str,
     log_level: Optional[str],
+    stale_threshold_seconds: Optional[int],
     override_result_topic: str,
     cooperative_rebalancing: bool,
 ) -> None:
@@ -87,8 +94,6 @@ def subscriptions_executor(
     The subscription's executor consumes scheduled subscriptions from the scheduled
     subscription topic for that entity, executes the queries on ClickHouse and publishes
     results on the results topic.
-
-    It currently only supports executing subscriptions on a single dataset/entity.
     """
     setup_logging(log_level)
     setup_sentry()
@@ -96,7 +101,7 @@ def subscriptions_executor(
     metrics = MetricsWrapper(
         environment.metrics,
         "subscriptions.executor",
-        tags={"entity": ",".join(entity_names)},
+        tags={"dataset": dataset_name},
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -113,11 +118,19 @@ def subscriptions_executor(
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            result_topic_spec.topic, override_params={"partitioner": "consistent"},
+            result_topic_spec.topic,
+            override_params={"partitioner": "consistent"},
         )
     )
 
     executor = ThreadPoolExecutor(max_concurrent_queries)
+
+    # TODO: Consider removing and always passing via CLI.
+    # If a value provided via config, it overrides the one provided via CLI.
+    # This is so we can quickly change this in an emergency.
+    stale_threshold_seconds = state.get_config(
+        f"subscriptions_stale_threshold_sec_{dataset_name}", stale_threshold_seconds
+    )
 
     processor = build_executor_consumer(
         dataset_name,
@@ -128,15 +141,32 @@ def subscriptions_executor(
         auto_offset_reset,
         metrics,
         executor,
+        stale_threshold_seconds,
         override_result_topic,
         cooperative_rebalancing,
     )
 
     def handler(signum: int, frame: Any) -> None:
+        # TODO: Temporary code for debugging executor shutdown
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+
         processor.signal_shutdown()
+        logger.debug("Flushing querylog producer")
+        # Ensure the querylog producer is flushed
+        state.flush_producer()
+        logger.debug("Flushed querylog producer")
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with closing(producer), executor:
+    with executor, closing(producer):
         processor.run()
+
+
+@contextmanager
+def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
+    try:
+        yield producer
+    finally:
+        producer.close().result()

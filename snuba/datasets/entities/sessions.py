@@ -40,7 +40,10 @@ from snuba.query.processors.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
-from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.query.validation.validators import (
+    ColumnValidationMode,
+    EntityRequiredColumnValidator,
+)
 from snuba.request.request_settings import RequestSettings, SubscriptionRequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -49,7 +52,10 @@ metrics = MetricsWrapper(environment.metrics, "api.sessions")
 
 def function_column(col_name: str, function_name: str) -> ColumnToFunction:
     return ColumnToFunction(
-        None, col_name, function_name, (Column(None, None, col_name),),
+        None,
+        col_name,
+        function_name,
+        (Column(None, None, col_name),),
     )
 
 
@@ -158,7 +164,10 @@ sessions_raw_translators = TranslationMappers(
         ),
         ColumnToFunction(None, "duration_avg", "avgIf", (duration, duration_condition)),
         ColumnToFunction(
-            None, "sessions", "sumIf", (quantity, eq(seq, Literal(None, 0))),
+            None,
+            "sessions",
+            "sumIf",
+            (quantity, eq(seq, Literal(None, 0))),
         ),
         ColumnToFunction(
             None, "sessions_crashed", "sumIf", (quantity, eq(status, Literal(None, 2)))
@@ -256,6 +265,8 @@ class SessionsEntity(Entity):
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schema()
 
+        read_columns = read_schema.get_columns()
+        time_columns = ColumnSet([("bucketed_started", DateTime())])
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_pipeline_builder=SimplePipelineBuilder(
@@ -263,11 +274,12 @@ class SessionsEntity(Entity):
                     selector=SessionsQueryStorageSelector()
                 ),
             ),
-            abstract_column_set=read_schema.get_columns(),
+            abstract_column_set=read_columns + time_columns,
             join_relationships={},
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             required_time_column="started",
+            validate_data_model=ColumnValidationMode.WARN,
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
@@ -295,6 +307,7 @@ class OrgSessionsEntity(Entity):
                     ("org_id", UInt(64)),
                     ("project_id", UInt(64)),
                     ("started", DateTime()),
+                    ("bucketed_started", DateTime()),
                 ]
             ),
             join_relationships={},

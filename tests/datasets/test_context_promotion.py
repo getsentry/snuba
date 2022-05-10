@@ -25,8 +25,16 @@ span_id_as_uint64 = int(span_id_hex, 16)
 @pytest.mark.parametrize(
     "entity, expected_table_name",
     [
-        pytest.param(get_entity(EntityKey.DISCOVER), "discover", id="discover",),
-        pytest.param(get_entity(EntityKey.EVENTS), "errors", id="events",),
+        pytest.param(
+            get_entity(EntityKey.DISCOVER),
+            "discover",
+            id="discover",
+        ),
+        pytest.param(
+            get_entity(EntityKey.EVENTS),
+            "errors",
+            id="events",
+        ),
     ],
 )
 def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:

@@ -11,7 +11,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.utils.metrics.backends.dummy import get_recorded_metric_calls
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -38,7 +38,8 @@ class TestSnQLApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) + timedelta(minutes=180)
         write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [get_raw_transaction()],
         )
 
     def test_simple_query(self) -> None:
@@ -192,42 +193,6 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp >= toDateTime('2021-01-01')
                     AND timestamp < toDateTime('2021-01-02')
                     """
-                }
-            ),
-        )
-        assert response.status_code == 429
-
-    def test_project_rate_limiting_joins(self) -> None:
-        state.set_config("project_concurrent_limit", self.project_id)
-        state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
-
-        response = self.post(
-            "/transactions/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
-                    WHERE s.project_id = 2
-                    AND t.project_id = 2
-                    AND t.finish_ts >= toDateTime('2021-01-01')
-                    AND t.finish_ts < toDateTime('2021-01-02')
-                    """,
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-        response = self.post(
-            "/transactions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
-                    WHERE s.project_id = {self.project_id}
-                    AND t.project_id = {self.project_id}
-                    AND t.finish_ts >= toDateTime('2021-01-01')
-                    AND t.finish_ts < toDateTime('2021-01-02')
-                    """,
                 }
             ),
         )
@@ -758,7 +723,7 @@ class TestSnQLApi(BaseApiTest):
                     timestamp >= toDateTime('2021-08-18T18:34:04') AND
                     timestamp < toDateTime('2021-09-01T18:34:04') AND
                     org_id = 1 AND
-                    project_id IN tuple(5433960)
+                    project_id IN tuple(123)
                 LIMIT 1 OFFSET 0
                 """
                 }
@@ -901,3 +866,47 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert response.status_code == 200
+
+    def test_clickhouse_type_mismatch_error(self) -> None:
+        """Test that snql queries that cause Clickhosue type errors have a 400 status code."""
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover_events)
+                    SELECT count()
+                    WHERE type != 'transaction' AND project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND type IN array(1, 2, 3)
+                    LIMIT 1000""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert b"DB::Exception: Type mismatch" in response.data
+        assert response.status_code == 400
+
+    def test_clickhouse_illegal_type_error(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover_events)
+                    SELECT quantile(0.95)(type)
+                    WHERE type != 'transaction' AND project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 1000""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert b"DB::Exception: Illegal type" in response.data
+        assert response.status_code == 400

@@ -7,6 +7,7 @@ from arroyo.processing.strategies.dead_letter_queue import InvalidMessage
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_aggregate_processor import (
     METRICS_COUNTERS_TYPE,
     METRICS_DISTRIBUTIONS_TYPE,
@@ -61,6 +62,11 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             else settings.ENABLED_MATERIALIZATION_VERSION
         )
 
+        try:
+            retention_days = enforce_retention(message["retention_days"], timestamp)
+        except EventTooOld:
+            return None
+
         processed = {
             "org_id": message["org_id"],
             "project_id": message["project_id"],
@@ -70,7 +76,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             "tags.value": values,
             **self._process_values(message),
             "materialization_version": mat_version,
-            "retention_days": message["retention_days"],
+            "retention_days": retention_days,
             "partition": metadata.partition,
             "offset": metadata.offset,
         }

@@ -189,7 +189,8 @@ def test_subscription_worker(
     evaluations = 3
 
     subscription = Subscription(
-        SubscriptionIdentifier(PartitionId(0), uuid1()), subscription_data,
+        SubscriptionIdentifier(PartitionId(0), uuid1()),
+        subscription_data,
     )
 
     store = DummySubscriptionDataStore()
@@ -289,7 +290,8 @@ def test_subscription_worker_consistent() -> None:
     evaluations = 1
 
     subscription = Subscription(
-        SubscriptionIdentifier(PartitionId(0), uuid1()), subscription_data,
+        SubscriptionIdentifier(PartitionId(0), uuid1()),
+        subscription_data,
     )
 
     store = DummySubscriptionDataStore()

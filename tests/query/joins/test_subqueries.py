@@ -1,6 +1,7 @@
 from typing import cast
 
 import pytest
+
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query import SelectedExpression
@@ -37,10 +38,12 @@ from tests.query.joins.join_structures import (
 
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
-        alias="ev", data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
+        alias="ev",
+        data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
     ),
     right_node=IndividualNode(
-        alias="gr", data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
+        alias="gr",
+        data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
     ),
     keys=[
         JoinCondition(
@@ -53,7 +56,10 @@ BASIC_JOIN = JoinClause(
 
 TEST_CASES = [
     pytest.param(
-        CompositeQuery(from_clause=BASIC_JOIN, selected_columns=[],),
+        CompositeQuery(
+            from_clause=BASIC_JOIN,
+            selected_columns=[],
+        ),
         CompositeQuery(
             from_clause=events_groups_join(
                 events_node(
@@ -104,7 +110,8 @@ TEST_CASES = [
                 groups_node(
                     [
                         SelectedExpression(
-                            "_snuba_group_id", Column("_snuba_group_id", None, "id"),
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "id"),
                         ),
                         SelectedExpression(
                             "_snuba_id", Column("_snuba_id", None, "id")
@@ -153,7 +160,8 @@ TEST_CASES = [
                 groups_node(
                     [
                         SelectedExpression(
-                            "_snuba_group_id", Column("_snuba_group_id", None, "id"),
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "id"),
                         ),
                         SelectedExpression(
                             "_snuba_id", Column("_snuba_id", None, "id")
@@ -217,7 +225,8 @@ TEST_CASES = [
                 groups_node(
                     [
                         SelectedExpression(
-                            "_snuba_group_id", Column("_snuba_group_id", None, "id"),
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "id"),
                         ),
                         SelectedExpression(
                             "_snuba_id", Column("_snuba_id", None, "id")
@@ -502,7 +511,8 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("original_query, processed_query", TEST_CASES)
 def test_subquery_generator(
-    original_query: CompositeQuery[Entity], processed_query: CompositeQuery[Entity],
+    original_query: CompositeQuery[Entity],
+    processed_query: CompositeQuery[Entity],
 ) -> None:
     ENTITY_IMPL[EntityKey.EVENTS] = Events()
     ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()

@@ -3,6 +3,7 @@ from typing import Sequence, Tuple
 
 from arroyo.processing.strategies.dead_letter_queue import (
     CountInvalidMessagePolicy,
+    DeadLetterQueuePolicy,
     InvalidMessages,
 )
 
@@ -15,10 +16,16 @@ class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy):
     the state of counted hits in Redis
     """
 
-    def __init__(self, consumer_group_name: str, limit: int, seconds: int = 60) -> None:
+    def __init__(
+        self,
+        consumer_group_name: str,
+        next_policy: DeadLetterQueuePolicy,
+        limit: int,
+        seconds: int = 60,
+    ) -> None:
         self.__name = f"dlq:{consumer_group_name}"
         self.__seconds = seconds
-        super().__init__(limit, seconds, self._load_state())
+        super().__init__(next_policy, limit, seconds, self._load_state())
 
     def handle_invalid_messages(self, e: InvalidMessages) -> None:
         self._add_to_redis(len(e.messages))

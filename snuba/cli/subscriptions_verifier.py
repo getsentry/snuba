@@ -48,7 +48,10 @@ def subscriptions_verifier(
     """
     setup_logging()
     setup_sentry()
-    metrics = MetricsWrapper(environment.metrics, "subscriptions.verifier",)
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "subscriptions.verifier",
+    )
 
     configure_metrics(StreamMetricsAdapter(metrics))
 

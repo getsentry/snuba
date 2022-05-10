@@ -33,7 +33,11 @@ from snuba.querylog.query_metadata import (
 from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
-from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
+from snuba.state.cache.abstract import (
+    Cache,
+    ExecutionTimeoutError,
+    TigerExecutionTimeoutError,
+)
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
     GLOBAL_RATE_LIMIT_NAME,
@@ -79,7 +83,10 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # reader when running a query.
 cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
-        redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
+        redis_client,
+        "snuba-query-cache:",
+        ResultCacheCodec(),
+        ThreadPoolExecutor(),
     )
 }
 # This lock prevents us from initializing the cache twice. The cache is initialized
@@ -326,10 +333,12 @@ def execute_query_with_rate_limits(
         )
         if org_rate_limit_stats is not None:
             metrics.gauge(
-                name="org_concurrent", value=org_rate_limit_stats.concurrent,
+                name="org_concurrent",
+                value=org_rate_limit_stats.concurrent,
             )
             metrics.gauge(
-                name="org_per_second", value=org_rate_limit_stats.rate,
+                name="org_per_second",
+                value=org_rate_limit_stats.rate,
             )
 
         return execute_query(
@@ -360,11 +369,17 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
             # during the first query. So, for the vast majority of queries, the overhead
             # of acquiring the lock is not needed.
             if partition_id not in cache_partitions:
+                exception = (
+                    TigerExecutionTimeoutError
+                    if "tiger" in partition_id
+                    else ExecutionTimeoutError
+                )
                 cache_partitions[partition_id] = RedisCache(
                     redis_client,
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
                     ThreadPoolExecutor(),
+                    exception,
                 )
 
     return cache_partitions[
@@ -464,6 +479,7 @@ def execute_query_with_readthrough_caching(
         "cache_partition_loaded",
         tags={"partition_id": reader.cache_partition_id or "default"},
     )
+
     return cache_partition.get_readthrough(
         query_id,
         partial(
@@ -478,9 +494,31 @@ def execute_query_with_readthrough_caching(
             robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
-        timeout=query_settings.get("max_execution_time", 30),
+        timeout=_get_cache_wait_timeout(query_settings, reader),
         timer=timer,
     )
+
+
+def _get_cache_wait_timeout(
+    query_settings: MutableMapping[str, Any], reader: Reader
+) -> int:
+    """
+    Helper function to determine how long a query should wait when doing
+    a readthrough caching.
+
+    The overrides are primarily used for debugging the ExecutionTimeoutError
+    raised by the readthrough caching system on the tigers cluster. When we
+    have root caused the problem we can remove the overrides.
+    """
+    cache_wait_timeout: int = int(query_settings.get("max_execution_time", 30))
+    if reader.cache_partition_id and reader.cache_partition_id in {
+        "tiger_errors",
+        "tiger_transactions",
+    }:
+        tiger_wait_timeout_config = state.get_config("tiger-cache-wait-time")
+        if tiger_wait_timeout_config:
+            cache_wait_timeout = tiger_wait_timeout_config
+    return cache_wait_timeout
 
 
 def raw_query(
@@ -562,7 +600,10 @@ def raw_query(
                             errors.ErrorCodes.NETWORK_ERROR,
                         ):
                             sentry_sdk.set_tag("timeout", "network")
-                elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
+                elif isinstance(
+                    cause,
+                    (TimeoutError, ExecutionTimeoutError, TigerExecutionTimeoutError),
+                ):
                     if scope.span:
                         sentry_sdk.set_tag("timeout", "cache_timeout")
 

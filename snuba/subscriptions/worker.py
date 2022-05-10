@@ -7,7 +7,8 @@ import math
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Mapping, Optional, Sequence, Tuple
+from datetime import datetime
+from typing import Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
@@ -26,7 +27,7 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
-from snuba.subscriptions.utils import Tick
+from snuba.subscriptions.utils import Tick, run_legacy_pipeline
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -85,7 +86,11 @@ class SubscriptionWorker(
         )
 
         request = task.task.subscription.data.build_request(
-            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics,
+            self.__dataset,
+            task.timestamp,
+            tick.offsets.upper,
+            timer,
+            self.__metrics,
         )
         return self.__execute_query(request, timer, task)
 
@@ -221,11 +226,26 @@ class SubscriptionWorker(
         # consumer poll timeout (or session timeout during consumer
         # rebalancing) and cause the entire batch to be have to be replayed.
         tick = message.payload
+        max_validity_latency = state.get_config("subscriptions_max_latency_sec", 0)
+        assert isinstance(max_validity_latency, int)
+
+        if (
+            max_validity_latency != 0
+            and time.time() - datetime.timestamp(tick.timestamps.lower)
+            > max_validity_latency
+        ):
+            self.__metrics.increment(
+                "skipping_tick_subscriptions", tags={"dataset": self.__dataset_name}
+            )
+            tasks: Iterator[ScheduledSubscriptionTask] = iter([])
+        else:
+            tasks = self.__schedulers[message.partition.index].find(tick)
+
         return [
             SubscriptionTaskResultFuture(
                 task, self.__executor.submit(self.__execute, task, tick)
             )
-            for task in self.__schedulers[message.partition.index].find(tick)
+            for task in tasks
         ]
 
     def flush_batch(
@@ -239,6 +259,7 @@ class SubscriptionWorker(
         results = [
             SubscriptionTaskResult(task, future.result())
             for task, future in itertools.chain.from_iterable(batch)
+            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
         # Produce all of the subscription results asynchronously and wait for

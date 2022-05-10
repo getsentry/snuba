@@ -45,11 +45,13 @@ logger = logging.getLogger(__name__)
     "--dataset",
     "dataset_name",
     default="events",
-    type=click.Choice(DATASET_NAMES),
+    type=click.Choice([*DATASET_NAMES]),
     help="The dataset to target",
 )
 @click.option(
-    "--entity", "entity_name", help="The entity to target",
+    "--entity",
+    "entity_name",
+    help="The entity to target",
 )
 @click.option("--topic")
 @click.option("--partitions", type=int)
@@ -271,10 +273,6 @@ def subscriptions(
         )
 
         def handler(signum: int, frame: Optional[Any]) -> None:
-            # TODO: Temporary code for debugging the shutdown sequence of the subscriptions
-            # consumer without updating arroyo or affecting other consumers.
-            logging.getLogger().setLevel(logging.DEBUG)
-
             batching_consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)

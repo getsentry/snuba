@@ -8,7 +8,8 @@ TTranslator = TypeVar("TTranslator")
 
 
 class ExpressionMapper(
-    ABC, Generic[TExpIn, TExpOut, TTranslator],
+    ABC,
+    Generic[TExpIn, TExpOut, TTranslator],
 ):
     """
     One translation rule used by the a mapping expression translator to
@@ -24,7 +25,9 @@ class ExpressionMapper(
 
     @abstractmethod
     def attempt_map(
-        self, expression: TExpIn, children_translator: TTranslator,
+        self,
+        expression: TExpIn,
+        children_translator: TTranslator,
     ) -> Optional[TExpOut]:
         """
         Maps an expression if this rule matches such expression. If not, it returns None.
