@@ -87,7 +87,7 @@ def __set_condition_pattern(
         (
             Param("lhs", lhs),
             Param(
-                "tuple",
+                "sequence",
                 Or(
                     [
                         FunctionCallPattern(String("tuple"), None),
