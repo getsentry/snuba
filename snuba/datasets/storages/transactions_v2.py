@@ -12,6 +12,7 @@ from snuba.datasets.storages.transactions_common import (
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
+from snuba.query.processors.tuple_elementer import TupleElementer
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
@@ -25,7 +26,7 @@ schema = WritableTableSchema(
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
-v2_query_processors = [*query_processors, TupleUnaliaser()]
+v2_query_processors = [*query_processors, TupleUnaliaser(), TupleElementer()]
 
 
 storage = WritableTableStorage(
