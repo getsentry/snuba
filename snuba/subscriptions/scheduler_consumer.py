@@ -180,10 +180,8 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         self.__consumer.seek(offsets)
 
-    def stage_positions(
-        self, positions: Mapping[Partition, Position], force: bool = False
-    ) -> None:
-        return self.__consumer.stage_positions(positions, force=force)
+    def stage_positions(self, positions: Mapping[Partition, Position]) -> None:
+        return self.__consumer.stage_positions(positions)
 
     def commit_positions(self) -> Mapping[Partition, Position]:
         return self.__consumer.commit_positions()

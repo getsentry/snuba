@@ -66,7 +66,7 @@ class StrictConsumer:
 
         # This is a made up flag that exists in arroyo.  This consumer always behaves
         # as if it forces the offset reset so remove it.
-        broker_config.pop("force.offset.reset", None)
+        broker_config.pop("arroyo.strict.offset.reset", None)
 
         consumer_config: KafkaBrokerConfig = {
             **broker_config,
