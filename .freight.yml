@@ -1,7 +1,7 @@
-# sentry:
-#   organization: sentry
-#   project: snuba
-#   repository: getsentry/snuba
+sentry:
+  organization: sentry
+  project: snuba
+  repository: getsentry/snuba
 
 steps:
 - kind: KubernetesDeployment
@@ -37,8 +37,6 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
-    name: events-subscriptions-verifier
-  - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: sessions-subscriptions-consumer
@@ -46,6 +44,8 @@ steps:
     name: metrics-counters-subscriptions-scheduler
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: metrics-sets-subscriptions-scheduler
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: metrics-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: cdc-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}

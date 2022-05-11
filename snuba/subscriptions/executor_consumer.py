@@ -10,7 +10,7 @@ from typing import Callable, Deque, Mapping, MutableMapping, Optional, Sequence,
 import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
-from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
@@ -486,3 +486,12 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__commit(
                 {message.partition: Position(message.offset, message.timestamp)}
             )
+
+        # Flush producer
+        if isinstance(self.__producer, KafkaProducer):
+            remaining = timeout - (time.time() - start) if timeout is not None else None
+            # TODO: This is just for testing. If it works expose a flush method on KafkaProducer
+            producer = self.__producer._KafkaProducer__producer  # type: ignore
+            logger.debug("Flushing executor producer")
+            messages = producer.flush(*[remaining] if remaining is not None else [])
+            logger.debug(f"{messages} executor messages pending delivery")

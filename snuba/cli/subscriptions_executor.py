@@ -131,6 +131,13 @@ def subscriptions_executor(
 
     executor = ThreadPoolExecutor(max_concurrent_queries)
 
+    # TODO: Consider removing and always passing via CLI.
+    # If a value provided via config, it overrides the one provided via CLI.
+    # This is so we can quickly change this in an emergency.
+    stale_threshold_seconds = state.get_config(
+        f"subscriptions_stale_threshold_sec_{dataset_name}", stale_threshold_seconds
+    )
+
     processor = build_executor_consumer(
         dataset_name,
         entity_names,
@@ -148,11 +155,14 @@ def subscriptions_executor(
 
     def handler(signum: int, frame: Any) -> None:
         # TODO: Temporary code for debugging executor shutdown
-        logging.getLogger().setLevel(logging.DEBUG)
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
 
         processor.signal_shutdown()
+        logger.debug("Flushing querylog producer")
         # Ensure the querylog producer is flushed
         state.flush_producer()
+        logger.debug("Flushed querylog producer")
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
