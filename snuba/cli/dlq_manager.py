@@ -1,5 +1,5 @@
 import os
-from typing import MutableSequence, Optional, Sequence
+from typing import MutableSequence, Optional, Sequence, Tuple
 
 import click
 from arroyo import Message, Partition
@@ -115,22 +115,24 @@ def info(storage_set: str) -> None:
     """
     Display useful info for a dead-letter topic for a storage set
     """
-    latest_offset = _get_latest_offset(storage_set)
+    earliest_offset, latest_offset = _get_offsets_info(storage_set)
     dead_letter_topic_snuba = STORAGES_WITH_DLQ[StorageSetKey(storage_set)]
     click.echo(f"\nDisplaying info for {storage_set}:\n")
     click.echo(f"Dead letter topic name: {dead_letter_topic_snuba.value}")
+    click.echo(f"Earliest offset: {earliest_offset}")
     click.echo(f"Latest offset: {latest_offset}")
 
 
-def _get_latest_offset(storage_set: str) -> Optional[int]:
+def _get_offsets_info(storage_set: str) -> Tuple[Optional[int], Optional[int]]:
     consumer = _build_consumer(storage_set)
     message = consumer.poll(10)
-    offset = None
+    earliest_offset = message.offset if message else None
+    latest_offset = None
     while message is not None:
-        offset = message.offset
-        message = consumer.poll(10)
+        latest_offset = message.offset
+        message = consumer.poll(1)
     consumer.close()
-    return offset
+    return earliest_offset, latest_offset
 
 
 def _build_consumer(storage_set: str) -> KafkaConsumer:
