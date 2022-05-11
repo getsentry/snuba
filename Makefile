@@ -24,8 +24,6 @@ backend-typing:
 install-python-dependencies:
 	pip install -e .
 	pip install -r requirements-test.txt
-	# temporary stuff
-	pip uninstall -y sentry-arroyo
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
