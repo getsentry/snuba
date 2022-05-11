@@ -8,6 +8,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
     Argument,
     Column,
+    CurriedFunctionCall,
     Expression,
     FunctionCall,
     Lambda,
@@ -150,6 +151,69 @@ TEST_QUERIES = [
         build_query(selected_columns=[arrayjoin_pattern()]),
         build_query(selected_columns=[arrayjoin_pattern()]),
         id="Arrayjoin pattern tuples not expanded",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[
+                Lambda(
+                    None,
+                    ("a",),
+                    tupleElement(None, some_tuple("foo", "bar"), Literal(None, 1)),
+                )
+            ]
+        ),
+        build_query(selected_columns=[Lambda(None, ("a",), Literal(None, "foo"))]),
+        id="simple lambda",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[
+                Lambda(
+                    None,
+                    ("a",),
+                    tupleElement(None, arrayjoin_pattern(), Literal(None, 1)),
+                )
+            ]
+        ),
+        build_query(
+            selected_columns=[
+                Lambda(
+                    None,
+                    ("a",),
+                    tupleElement(None, arrayjoin_pattern(), Literal(None, 1)),
+                )
+            ]
+        ),
+        id="unoptimized lambda",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[
+                CurriedFunctionCall(
+                    None,
+                    FunctionCall(
+                        None,
+                        "topK",
+                        (tupleElement(None, some_tuple(1, 2), Literal(None, 2)),),
+                    ),
+                    (some_tuple(1, 2, 3, 4),),
+                )
+            ]
+        ),
+        build_query(
+            selected_columns=[
+                CurriedFunctionCall(
+                    None,
+                    FunctionCall(
+                        None,
+                        "topK",
+                        (Literal(None, 2),),
+                    ),
+                    (some_tuple(1, 2, 3, 4),),
+                )
+            ]
+        ),
+        id="curried function",
     ),
 ]
 

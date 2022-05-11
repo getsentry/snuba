@@ -34,7 +34,8 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.tuple_unaliaser import TupleElementer, TupleUnaliaser
+from snuba.query.processors.tuple_elementer import TupleElementer
+from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
