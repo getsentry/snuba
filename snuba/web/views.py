@@ -539,6 +539,8 @@ def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> Re
     entity_key = ENTITY_NAME_LOOKUP[entity]
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
+
+    metrics.increment("subscription_created", tags={"entity": entity_key.value})
     return (
         json.dumps({"subscription_id": str(identifier)}),
         202,
@@ -559,6 +561,8 @@ def delete_subscription(
         )
     entity_key = ENTITY_NAME_LOOKUP[entity]
     SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
+    metrics.increment("subscription_deleted", tags={"entity": entity_key.value})
+
     return "ok", 202, {"Content-Type": "text/plain"}
 
 
