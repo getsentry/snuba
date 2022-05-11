@@ -131,16 +131,13 @@ jobs:
             docker push ghcr.io/getsentry/snuba-ci:latest
           fi
 
-  # For now, we cannot build linux/arm64 images on Linux hosts since
-  # |docker buildx ls| does not list arm64 as an option.
-  #
   # This step does not have a set timeout because it is very slow. This is due
   # because emulation required (this is running on an Intel host rather than an arm64 host)
   # and that many Python packages do not have arm wheels, thus, requirying to build them from source.
   # Upgrading Python package versions + giving access to a cache could improve things a lot
   snuba-arm64-image:
     name: "Docker Arm64 build"
-    runs-on: macos-11
+    runs-on: ubuntu-latest
     env:
       # `sentry devservices up snuba` picks up the `amd64` version of the image
       # For now, we will publish to a different name until we want to officially
@@ -157,13 +154,8 @@ jobs:
         # it can be used as a docker tag
         run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
 
-      - name: Set up Docker
-        run: |
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask docker
-          sudo /Applications/Docker.app/Contents/MacOS/Docker --unattended --install-privileged-components
-          open -a /Applications/Docker.app --args --unattended --accept-license
-          echo "We are waiting for Docker to be up and running. It can take over 2 minutes..."
-          while ! /Applications/Docker.app/Contents/Resources/bin/docker info &>/dev/null; do sleep 1; done
+      - name: enable arm64 building
+        run: docker run --rm --privileged tonistiigi/binfmt --install arm64
 
       - name: Registry login
         run: |
