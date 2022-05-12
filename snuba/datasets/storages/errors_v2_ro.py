@@ -8,9 +8,10 @@ from snuba.datasets.storages.errors_common import (
     query_processors,
     query_splitters,
 )
+from snuba.query.processors.tuple_elementer import TupleElementer
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 
-v2_query_processors = [*query_processors, TupleUnaliaser()]
+v2_query_processors = [*query_processors, TupleUnaliaser(), TupleElementer()]
 
 schema = TableSchema(
     columns=all_columns,
