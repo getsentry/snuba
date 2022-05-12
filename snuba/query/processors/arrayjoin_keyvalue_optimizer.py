@@ -70,7 +70,7 @@ def _get_mapping_keys_in_condition(
 
         match = is_in_condition_pattern(array_join_pattern(column_name)).match(c)
         if match is not None:
-            function = match.expression("tuple")
+            function = match.expression("sequence")
             assert isinstance(function, FunctionCallExpr)
             keys_found |= {
                 lit.value
