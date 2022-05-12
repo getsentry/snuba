@@ -50,7 +50,7 @@ max_query_duration_s = 60
 rate_lookback_s = 60
 
 
-def _kafka_producer():
+def _kafka_producer() -> Producer:
     global kfk
     if kfk is None:
         kfk = Producer(
