@@ -2,8 +2,7 @@ import os
 from typing import MutableSequence, Optional, Sequence, Tuple
 
 import click
-from arroyo import Message, Partition
-from arroyo import Topic as ArroyoTopic
+from arroyo import Message, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 
 from snuba.datasets.storages.factory import WRITABLE_STORAGES
@@ -81,16 +80,15 @@ def list(storage_set: str, offset: int, limit: int) -> None:
 def _consume_dead_letters(
     storage_set: str, offset: int, limit: int
 ) -> Sequence[Message[KafkaPayload]]:
-    dead_letter_topic_arroyo = ArroyoTopic(STORAGE_SETS_WITH_DLQ[storage_set].value)
     consumer = _build_consumer(storage_set)
     messages: MutableSequence[Message[KafkaPayload]] = []
     consumer.poll(10)
     if offset != 0:
         try:
-            consumer.tell()
-            consumer.seek({Partition(dead_letter_topic_arroyo, 0): offset})
+            offsets = consumer.tell()
+            consumer.seek({partition: offset for partition in offsets})
         except Exception as e:
-            click.echo(f"An error occured: {e}")
+            click.echo(f"\nAn error occured: {e}")
             consumer.close()
             return messages
 
@@ -102,7 +100,11 @@ def _consume_dead_letters(
                 return messages
             messages.append(message)
         except Exception as e:
-            click.echo(f"An error occured: {e}")
+            click.echo(f"\nAn error occured: {e}")
+            click.echo(
+                "\nIf the offset is out of range, see available min/max offset using:"
+            )
+            click.echo(f"snuba dlq-manager info --storage-set={storage_set}")
             consumer.close()
             return messages
     return messages
@@ -151,6 +153,6 @@ def _build_consumer(storage_set: str) -> KafkaConsumer:
             auto_offset_reset="earliest",
         )
     )
-    dead_letter_topic_arroyo = ArroyoTopic(dead_letter_topic_snuba.value)
+    dead_letter_topic_arroyo = Topic(dead_letter_topic_snuba.value)
     consumer.subscribe([dead_letter_topic_arroyo])
     return consumer
