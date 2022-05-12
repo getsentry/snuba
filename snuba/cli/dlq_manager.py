@@ -42,7 +42,7 @@ def dlq_manager() -> None:
     "--offset",
     "offset",
     type=int,
-    help="An offset to start reading from, 0 by default",
+    help="An offset on the dead-letter topic to start reading from, 0 by default",
     default=0,
 )
 @click.option(
@@ -60,18 +60,15 @@ def list(storage_set: str, offset: int, limit: int) -> None:
     line_break = "-" * 50
     if messages:
         click.echo(
-            f"\nListing the first {limit} messages from "
-            f"offset {offset} in {storage_set} dead-letter topic:"
+            f"\nListing the first {limit} messages "
+            f"{f'from offset {offset} ' if offset != 0 else ''}"
+            f"in {storage_set} dead-letter topic:"
             f"\n(see --help for pagination)\n"
         )
         for message in messages:
             click.echo(line_break)
-            click.echo(
-                {
-                    "offset": message.offset,
-                    "invalid_message": message.payload.value,
-                }
-            )
+            click.echo(f"DLQ Offset: {message.offset}\n")
+            click.echo(message.payload.value)
     else:
         click.echo(f"\nNo messages found in {storage_set} dead-letter topic!")
     click.echo(line_break)
@@ -124,10 +121,13 @@ def info(storage_set: str) -> None:
     """
     earliest_offset, latest_offset = _get_offsets_info(storage_set)
     dead_letter_topic_snuba = STORAGE_SETS_WITH_DLQ[storage_set]
-    click.echo(f"\nDisplaying info for {storage_set}:\n")
+    click.echo(f"\nDisplaying info for {storage_set} dead letter messages:\n")
     click.echo(f"Dead letter topic name: {dead_letter_topic_snuba.value}")
-    click.echo(f"Earliest offset: {earliest_offset}")
-    click.echo(f"Latest offset: {latest_offset}")
+    if earliest_offset is None:
+        click.echo(f"No messages on {dead_letter_topic_snuba.value}!")
+    else:
+        click.echo(f"Earliest offset: {earliest_offset}")
+        click.echo(f"Latest offset: {latest_offset}")
 
 
 def _get_offsets_info(storage_set: str) -> Tuple[Optional[int], Optional[int]]:
