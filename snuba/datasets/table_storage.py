@@ -81,6 +81,7 @@ class KafkaStreamLoader:
         dead_letter_queue_policy_closure: Optional[
             Callable[[], DeadLetterQueuePolicy]
         ] = None,
+        dead_letter_queue_topic: Optional[Topic] = None,
     ) -> None:
         assert (
             (subscription_scheduler_mode is None)
@@ -97,6 +98,7 @@ class KafkaStreamLoader:
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
         self.__dead_letter_queue_policy_closure = dead_letter_queue_policy_closure
+        self.__dead_letter_queue_topic = dead_letter_queue_topic
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
@@ -131,6 +133,9 @@ class KafkaStreamLoader:
     ) -> Optional[Callable[[], DeadLetterQueuePolicy]]:
         return self.__dead_letter_queue_policy_closure
 
+    def get_dead_letter_queue_topic(self) -> Optional[Topic]:
+        return self.__dead_letter_queue_topic
+
 
 def build_kafka_stream_loader_from_settings(
     processor: MessageProcessor,
@@ -144,6 +149,7 @@ def build_kafka_stream_loader_from_settings(
     dead_letter_queue_policy_closure: Optional[
         Callable[[], DeadLetterQueuePolicy]
     ] = None,
+    dead_letter_queue_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
 
@@ -182,6 +188,7 @@ def build_kafka_stream_loader_from_settings(
         subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
         dead_letter_queue_policy_closure=dead_letter_queue_policy_closure,
+        dead_letter_queue_topic=dead_letter_queue_topic,
     )
 
 

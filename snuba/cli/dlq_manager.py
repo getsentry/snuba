@@ -6,9 +6,21 @@ from arroyo import Message, Partition
 from arroyo import Topic as ArroyoTopic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 
-from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.storages.factory import STORAGES_WITH_DLQ
+from snuba.datasets.storages.factory import WRITABLE_STORAGES
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
+
+__STORAGE_TO_DLQ_TOPIC = {
+    storage: storage.get_table_writer()
+    .get_stream_loader()
+    .get_dead_letter_queue_topic()
+    for storage in WRITABLE_STORAGES.values()
+}
+
+STORAGE_SETS_WITH_DLQ = {
+    storage.get_storage_set_key().value: topic
+    for storage, topic in __STORAGE_TO_DLQ_TOPIC.items()
+    if topic is not None
+}
 
 
 @click.group()
@@ -21,11 +33,9 @@ def dlq_manager() -> None:
 
 @dlq_manager.command()
 @click.option(
-    "--storage",
+    "--storage-set",
     "storage_set",
-    type=click.Choice(
-        [storage_set_key.value for storage_set_key in STORAGES_WITH_DLQ.keys()]
-    ),
+    type=click.Choice([storage_set for storage_set in STORAGE_SETS_WITH_DLQ]),
     help="The storage set to list dead letters for",
     required=True,
 )
@@ -71,15 +81,12 @@ def list(storage_set: str, offset: int, limit: int) -> None:
 def _consume_dead_letters(
     storage_set: str, offset: int, limit: int
 ) -> Sequence[Message[KafkaPayload]]:
-    dead_letter_topic_arroyo = ArroyoTopic(
-        STORAGES_WITH_DLQ[StorageSetKey(storage_set)].value
-    )
+    dead_letter_topic_arroyo = ArroyoTopic(STORAGE_SETS_WITH_DLQ[storage_set].value)
     consumer = _build_consumer(storage_set)
     messages: MutableSequence[Message[KafkaPayload]] = []
-
+    consumer.poll(10)
     if offset != 0:
         try:
-            message = consumer.poll(10)
             consumer.tell()
             consumer.seek({Partition(dead_letter_topic_arroyo, 0): offset})
         except Exception as e:
@@ -89,7 +96,7 @@ def _consume_dead_letters(
 
     for _ in range(limit):
         try:
-            message = consumer.poll(10)
+            message = consumer.poll(1)
             if message is None:
                 consumer.close()
                 return messages
@@ -103,11 +110,9 @@ def _consume_dead_letters(
 
 @dlq_manager.command()
 @click.option(
-    "--storage",
+    "--storage-set",
     "storage_set",
-    type=click.Choice(
-        [storage_set_key.value for storage_set_key in STORAGES_WITH_DLQ.keys()]
-    ),
+    type=click.Choice([storage_set for storage_set in STORAGE_SETS_WITH_DLQ]),
     help="The storage set to see info about dead-letter topic for",
     required=True,
 )
@@ -116,7 +121,7 @@ def info(storage_set: str) -> None:
     Display useful info for a dead-letter topic for a storage set
     """
     earliest_offset, latest_offset = _get_offsets_info(storage_set)
-    dead_letter_topic_snuba = STORAGES_WITH_DLQ[StorageSetKey(storage_set)]
+    dead_letter_topic_snuba = STORAGE_SETS_WITH_DLQ[storage_set]
     click.echo(f"\nDisplaying info for {storage_set}:\n")
     click.echo(f"Dead letter topic name: {dead_letter_topic_snuba.value}")
     click.echo(f"Earliest offset: {earliest_offset}")
@@ -137,7 +142,7 @@ def _get_offsets_info(storage_set: str) -> Tuple[Optional[int], Optional[int]]:
 
 def _build_consumer(storage_set: str) -> KafkaConsumer:
     bootstrap_servers = [os.environ.get("BOOTSTRAP_SERVERS") or "localhost:9092"]
-    dead_letter_topic_snuba = STORAGES_WITH_DLQ[StorageSetKey(storage_set)]
+    dead_letter_topic_snuba = STORAGE_SETS_WITH_DLQ[storage_set]
     consumer = KafkaConsumer(
         build_kafka_consumer_configuration(
             topic=dead_letter_topic_snuba,

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from functools import partial
 
 from snuba import settings
 from snuba.clickhouse.columns import (
@@ -115,21 +116,23 @@ class MinuteResolutionProcessor(QueryProcessor):
             )
 
 
+partially_built_stream_loader = partial(
+    build_kafka_stream_loader_from_settings,
+    processor=SessionsProcessor(),
+    default_topic=Topic.SESSIONS,
+    dead_letter_queue_topic=Topic.DEAD_LETTER_SESSIONS,
+)
 # The raw table we write onto, and that potentially we could
 # query.
 if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
-    kafka_stream_loader = build_kafka_stream_loader_from_settings(
-        processor=SessionsProcessor(),
-        default_topic=Topic.SESSIONS,
+    kafka_stream_loader = partially_built_stream_loader(
         commit_log_topic=Topic.SESSIONS_COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_SESSIONS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_SESSIONS,
     )
 else:
-    kafka_stream_loader = build_kafka_stream_loader_from_settings(
-        processor=SessionsProcessor(), default_topic=Topic.SESSIONS
-    )
+    kafka_stream_loader = partially_built_stream_loader()
 
 raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,

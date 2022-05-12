@@ -82,6 +82,7 @@ polymorphic_bucket = WritableTableStorage(
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
         dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_topic=Topic.DEAD_LETTER_METRICS,
     ),
 )
 
@@ -116,6 +117,7 @@ sets_storage = WritableTableStorage(
         SetsAggregateProcessor(),
         default_topic=Topic.METRICS,
         dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_topic=Topic.DEAD_LETTER_METRICS,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -139,6 +141,7 @@ counters_storage = WritableTableStorage(
         CounterAggregateProcessor(),
         default_topic=Topic.METRICS,
         dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_topic=Topic.DEAD_LETTER_METRICS,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -193,6 +196,7 @@ distributions_storage = WritableTableStorage(
         DistributionsAggregateProcessor(),
         default_topic=Topic.METRICS,
         dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_topic=Topic.DEAD_LETTER_METRICS,
     ),
     write_format=WriteFormat.VALUES,
 )
