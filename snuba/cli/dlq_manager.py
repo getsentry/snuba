@@ -56,6 +56,7 @@ def list(storage_set: str, offset: int, limit: int) -> None:
     """
     List all messages found in a dead-letter topic
     """
+    click.echo("\nthis could take up to 10 seconds...\n")
     messages = _consume_dead_letters(storage_set, offset, limit)
     line_break = "-" * 50
     if messages:
@@ -78,8 +79,13 @@ def _consume_dead_letters(
     storage_set: str, offset: int, limit: int
 ) -> Sequence[Message[KafkaPayload]]:
     consumer = _build_consumer(storage_set)
-    messages: MutableSequence[Message[KafkaPayload]] = []
-    consumer.poll(10)
+    message = consumer.poll(10)
+
+    if message is None:
+        return []
+
+    messages: MutableSequence[Message[KafkaPayload]] = [message]
+
     if offset != 0:
         try:
             offsets = consumer.tell()
@@ -119,6 +125,7 @@ def info(storage_set: str) -> None:
     """
     Display useful info for a dead-letter topic for a storage set
     """
+    click.echo("\nthis could take up to 10 seconds...\n")
     earliest_offset, latest_offset = _get_offsets_info(storage_set)
     dead_letter_topic_snuba = STORAGE_SETS_WITH_DLQ[storage_set]
     click.echo(f"\nDisplaying info for {storage_set} dead letter messages:\n")
