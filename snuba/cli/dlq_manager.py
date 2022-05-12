@@ -34,19 +34,19 @@ def dlq_manager() -> None:
     "offset",
     type=int,
     help="An offset to start reading from, 0 by default",
+    default=0,
 )
 @click.option(
     "--limit",
     "limit",
     type=int,
     help="Max number of messages to display, 10 by default",
+    default=10,
 )
-def list(storage_set: str, offset: Optional[int], limit: Optional[int]) -> None:
+def list(storage_set: str, offset: int, limit: int) -> None:
     """
     List all messages found in a dead-letter topic
     """
-    limit = limit or 10
-    offset = offset or 0
     messages = _consume_dead_letters(storage_set, offset, limit)
     line_break = "-" * 50
     if messages:
