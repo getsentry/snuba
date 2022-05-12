@@ -87,7 +87,7 @@ REDIS_INIT_MAX_RETRIES = 3
 USE_RESULT_CACHE = True
 
 # Query Recording Options
-RECORD_QUERIES = False
+RECORD_QUERIES = True
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
