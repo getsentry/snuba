@@ -42,7 +42,7 @@ def dlq_manager() -> None:
     "--offset",
     "offset",
     type=int,
-    help="An offset on the dead-letter topic to start reading from, 0 by default",
+    help="An offset on the dead-letter topic to start reading from, earliest by default",
     default=0,
 )
 @click.option(
