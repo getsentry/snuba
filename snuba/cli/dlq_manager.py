@@ -2,7 +2,7 @@ import os
 from typing import MutableSequence, Optional, Sequence, Tuple
 
 import click
-from arroyo import Message, Topic
+from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 
 from snuba.datasets.storages.factory import WRITABLE_STORAGES
@@ -46,23 +46,30 @@ def dlq_manager() -> None:
     default=0,
 )
 @click.option(
+    "--partition",
+    "partition_index",
+    type=int,
+    help="The partition to read from, must be used with the --offset arg. See 'info' command.",
+    default=0,
+)
+@click.option(
     "--limit",
     "limit",
     type=int,
     help="Max number of messages to display, 10 by default",
     default=10,
 )
-def list(storage_set: str, offset: int, limit: int) -> None:
+def list(storage_set: str, offset: int, partition_index: int, limit: int) -> None:
     """
     List all messages found in a dead-letter topic
     """
     click.echo("\nthis could take up to 10 seconds...\n")
-    messages = _consume_dead_letters(storage_set, offset, limit)
+    messages = _consume_dead_letters(storage_set, offset, partition_index, limit)
     line_break = "-" * 50
     if messages:
         click.echo(
             f"\nListing the first {limit} messages "
-            f"{f'from offset {offset} ' if offset != 0 else ''}"
+            f"{f'from offset {offset} on partition {partition_index}' if offset != 0 else ''}"
             f"in {storage_set} dead-letter topic:"
             f"\n(see --help for pagination)\n"
         )
@@ -76,7 +83,7 @@ def list(storage_set: str, offset: int, limit: int) -> None:
 
 
 def _consume_dead_letters(
-    storage_set: str, offset: int, limit: int
+    storage_set: str, offset: int, partition_index: int, limit: int
 ) -> Sequence[Message[KafkaPayload]]:
     consumer = _build_consumer(storage_set)
     message = consumer.poll(10)
@@ -84,14 +91,23 @@ def _consume_dead_letters(
     if message is None:
         return []
 
-    messages: MutableSequence[Message[KafkaPayload]] = [message]
+    messages: MutableSequence[Message[KafkaPayload]] = []
+
+    if message.offset >= offset:
+        messages.append(message)
 
     if offset != 0:
         try:
             offsets = consumer.tell()
-            consumer.seek({partition: offset for partition in offsets})
+            if offsets:
+                part: Partition = [p for p in offsets][0]
+                consumer.seek({Partition(part.topic, partition_index): offset})
         except Exception as e:
             click.echo(f"\nAn error occured: {e}")
+            click.echo(
+                "\nIf the partition is not assigned, see available partitions using:"
+            )
+            click.echo(f"snuba dlq-manager info --storage-set={storage_set}")
             consumer.close()
             return messages
 
@@ -126,7 +142,8 @@ def info(storage_set: str) -> None:
     Display useful info for a dead-letter topic for a storage set
     """
     click.echo("\nthis could take up to 10 seconds...\n")
-    earliest_offset, latest_offset = _get_offsets_info(storage_set)
+    consumer = _build_consumer(storage_set)
+    earliest_offset, latest_offset = _get_offsets_info(consumer)
     dead_letter_topic_snuba = STORAGE_SETS_WITH_DLQ[storage_set]
     click.echo(f"\nDisplaying info for {storage_set} dead letter messages:\n")
     click.echo(f"Dead letter topic name: {dead_letter_topic_snuba.value}")
@@ -134,18 +151,21 @@ def info(storage_set: str) -> None:
         click.echo(f"No messages on {dead_letter_topic_snuba.value}!")
     else:
         click.echo(f"Earliest offset: {earliest_offset}")
-        click.echo(f"Latest offset: {latest_offset}")
+        click.echo(f"Latest offset: {latest_offset}\n")
+        for partition, offset in consumer.tell().items():
+            click.echo(
+                f"Partition {partition.index}: Contains up to offset {offset - 1}"
+            )
+    consumer.close()
 
 
-def _get_offsets_info(storage_set: str) -> Tuple[Optional[int], Optional[int]]:
-    consumer = _build_consumer(storage_set)
+def _get_offsets_info(consumer: KafkaConsumer) -> Tuple[Optional[int], Optional[int]]:
     message = consumer.poll(10)
     earliest_offset = message.offset if message else None
     latest_offset = None
     while message is not None:
         latest_offset = message.offset
         message = consumer.poll(1)
-    consumer.close()
     return earliest_offset, latest_offset
 
 
