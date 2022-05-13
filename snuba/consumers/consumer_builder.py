@@ -46,6 +46,7 @@ class KafkaParameters:
     group_id: str
     commit_log_topic: Optional[str]
     auto_offset_reset: str
+    strict_offset_reset: Optional[bool]
     queued_max_messages_kbytes: int
     queued_min_messages: int
 
@@ -146,6 +147,7 @@ class ConsumerBuilder:
         self.max_batch_time_ms = max_batch_time_ms
         self.group_id = kafka_params.group_id
         self.auto_offset_reset = kafka_params.auto_offset_reset
+        self.strict_offset_reset = kafka_params.strict_offset_reset
         self.queued_max_messages_kbytes = kafka_params.queued_max_messages_kbytes
         self.queued_min_messages = kafka_params.queued_min_messages
         self.processes = processing_params.processes
@@ -182,6 +184,7 @@ class ConsumerBuilder:
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
+            strict_offset_reset=self.strict_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
