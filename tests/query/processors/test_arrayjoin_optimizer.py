@@ -470,7 +470,7 @@ def test_formatting() -> None:
         ),
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
-        "(tupleElement((arrayJoin(arrayMap((x, y -> (x, y)), "
+        "(tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 1) AS tags_key)"
     )
 
@@ -489,8 +489,8 @@ def test_formatting() -> None:
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
         "(tupleElement((arrayJoin(arrayFilter((pair -> in("
-        "tupleElement(pair, 1), ('t1', 't2'))), "
-        "arrayMap((x, y -> (x, y)), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
+        "tupleElement(pair, 1), tuple('t1', 't2'))), "
+        "arrayMap((x, y -> tuple(x, y)), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
     )
 
 
@@ -518,10 +518,10 @@ def test_aliasing() -> None:
     )
 
     assert sql == (
-        "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> (x, y)), "
+        "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 2) AS _snuba_tags_value) "
         f"FROM {transactions_table_name} "
-        "WHERE in((tupleElement(snuba_all_tags, 1) AS _snuba_tags_key), ('t1', 't2')) "
+        "WHERE in((tupleElement(snuba_all_tags, 1) AS _snuba_tags_key), tuple('t1', 't2')) "
         "AND equals((project_id AS _snuba_project_id), 1) "
         "AND greaterOrEquals((finish_ts AS _snuba_finish_ts), toDateTime('2021-01-01T00:00:00', 'Universal')) "
         "AND less(_snuba_finish_ts, toDateTime('2021-01-02T00:00:00', 'Universal')) "
