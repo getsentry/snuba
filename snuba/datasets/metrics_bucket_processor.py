@@ -188,7 +188,7 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
             ]
         )
     else:
-        logger.warning(
+        logger.error(
             "Ignored an invalid message on Metrics! (Did not go to DLQ)",
             exc_info=True,
             extra={"message": message, "reason": reason},
