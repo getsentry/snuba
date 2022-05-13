@@ -178,7 +178,7 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
     """
     Pass an invalid message to the DLQ by raising `InvalidMessages` exception.
     """
-    if state.get_config("ENABLE_METRICS_DLQ", False):
+    if state.get_config("enable_metrics_dlq", False):
         raise InvalidMessages(
             [
                 InvalidRawMessage(
@@ -188,7 +188,7 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
             ]
         )
     else:
-        logger.warning(
+        logger.error(
             "Ignored an invalid message on Metrics! (Did not go to DLQ)",
             exc_info=True,
             extra={"message": message, "reason": reason},
