@@ -78,6 +78,7 @@ def test_scheduler_consumer() -> None:
         "events",
         mock_scheduler_producer,
         "latest",
+        False,
         60 * 5,
         None,
         None,

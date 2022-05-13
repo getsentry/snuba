@@ -53,6 +53,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--stale-threshold-seconds",
@@ -85,6 +90,7 @@ def subscriptions_executor(
     consumer_group: str,
     max_concurrent_queries: int,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
     override_result_topic: str,
@@ -139,6 +145,7 @@ def subscriptions_executor(
         producer,
         max_concurrent_queries,
         auto_offset_reset,
+        not no_strict_offset_reset,
         metrics,
         executor,
         stale_threshold_seconds,

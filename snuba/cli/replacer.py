@@ -52,6 +52,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Kafka consumer auto offset reset.",
 )
 @click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
+@click.option(
     "--queued-max-messages-kbytes",
     default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     type=int,
@@ -73,6 +78,7 @@ def replacer(
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: Optional[str] = None,
@@ -113,6 +119,7 @@ def replacer(
                 bootstrap_servers=bootstrap_server,
                 group_id=consumer_group,
                 auto_offset_reset=auto_offset_reset,
+                strict_offset_reset=not no_strict_offset_reset,
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
             ),
