@@ -33,7 +33,14 @@ def test_processors_of_multistorage_consumer_are_idempotent(
     Test that when the same message is provided to the processors, the result would be the same. That is the process
     message operation is idempotent.
     """
-    metadata = KafkaMessageMetadata(1000, 1, datetime.now())
+    metadata = KafkaMessageMetadata(
+        offset=1000,
+        partition=1,
+        timestamp=datetime.now(),
+        topic="",
+        key=None,
+        headers=[],
+    )
 
     result1 = processor.process_message(message, metadata)
     result2 = processor.process_message(message, metadata)

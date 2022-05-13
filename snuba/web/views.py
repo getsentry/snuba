@@ -593,7 +593,12 @@ if application.debug or application.testing:
                 .process_message(
                     message,
                     KafkaMessageMetadata(
-                        offset=offset, partition=0, timestamp=datetime.utcnow()
+                        offset=offset,
+                        partition=0,
+                        timestamp=datetime.utcnow(),
+                        topic="topic",
+                        key=None,
+                        headers=[],
                     ),
                 )
             )

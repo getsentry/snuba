@@ -607,7 +607,12 @@ def process_message(
     result = processor.process_message(
         rapidjson.loads(message.payload.value),
         KafkaMessageMetadata(
-            message.offset, message.partition.index, message.timestamp
+            offset=message.offset,
+            partition=message.partition.index,
+            timestamp=message.timestamp,
+            topic=message.partition.topic.name,
+            key=message.payload.key,
+            headers=message.payload.headers,
         ),
     )
 
@@ -651,7 +656,12 @@ def process_message_multistorage(
 ) -> MultistorageProcessedMessage:
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
-        message.offset, message.partition.index, message.timestamp
+        offset=message.offset,
+        partition=message.partition.index,
+        timestamp=message.timestamp,
+        topic=message.partition.topic.name,
+        key=message.payload.payload.key,
+        headers=message.payload.payload.headers,
     )
 
     results: MutableSequence[
@@ -686,7 +696,12 @@ def process_message_multistorage_identical_storages(
     """
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
-        message.offset, message.partition.index, message.timestamp
+        offset=message.offset,
+        partition=message.partition.index,
+        timestamp=message.timestamp,
+        topic=message.partition.topic.name,
+        key=message.payload.payload.key,
+        headers=message.payload.payload.headers,
     )
 
     intermediate_results: MutableMapping[
