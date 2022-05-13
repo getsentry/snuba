@@ -275,7 +275,12 @@ class TestTransactionsProcessor:
         payload[2]["data"]["type"] = "error"
 
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
@@ -311,7 +316,12 @@ class TestTransactionsProcessor:
         del payload[2]["data"]["contexts"]
 
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
@@ -346,7 +356,12 @@ class TestTransactionsProcessor:
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
@@ -384,7 +399,12 @@ class TestTransactionsProcessor:
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
 
         payload = message.serialize()

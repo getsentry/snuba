@@ -46,7 +46,12 @@ class TestOrgSessionsApi(BaseApiTest):
     def generate_session_events(self, org_id: int, project_id: int) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         distinct_id = uuid4().hex
         template = {

@@ -129,7 +129,14 @@ def generate_transactions() -> None:
             .get_processor()
             .process_message(
                 (2, "insert", raw_transaction),
-                KafkaMessageMetadata(0, 0, datetime.utcnow()),
+                KafkaMessageMetadata(
+                    offset=0,
+                    partition=0,
+                    timestamp=datetime.utcnow(),
+                    topic="topic",
+                    key=None,
+                    headers=[],
+                ),
             )
         )
         assert isinstance(processed, InsertBatch)

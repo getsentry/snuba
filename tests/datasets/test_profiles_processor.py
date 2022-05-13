@@ -49,7 +49,12 @@ class ProfileEvent:
 class TestProfilesProcessor:
     def test_missing_symbols(self) -> None:
         meta = KafkaMessageMetadata(
-            offset=1, partition=0, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=0,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         message = ProfileEvent(
             organization_id=123456789,
@@ -84,7 +89,12 @@ class TestProfilesProcessor:
 
     def test_process_message(self) -> None:
         meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+            offset=0,
+            partition=0,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         message = ProfileEvent(
             organization_id=123456789,

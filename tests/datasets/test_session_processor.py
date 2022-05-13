@@ -30,7 +30,12 @@ class TestSessionProcessor:
         }
 
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         assert SessionsProcessor().process_message(payload, meta) == InsertBatch(
             [
@@ -78,7 +83,12 @@ class TestSessionProcessor:
         }
 
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         assert SessionsProcessor().process_message(payload, meta) == InsertBatch(
             [
@@ -127,7 +137,12 @@ class TestSessionProcessor:
         }
 
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         assert SessionsProcessor().process_message(payload, meta) == InsertBatch(
             [
@@ -176,7 +191,12 @@ class TestSessionProcessor:
         }
 
         meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+            offset=1,
+            partition=2,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
         assert SessionsProcessor().process_message(payload, meta) == InsertBatch(
             [

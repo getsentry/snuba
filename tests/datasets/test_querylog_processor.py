@@ -94,7 +94,15 @@ def test_simple() -> None:
     )
 
     assert processor.process_message(
-        message, KafkaMessageMetadata(0, 0, datetime.now())
+        message,
+        KafkaMessageMetadata(
+            offset=0,
+            partition=0,
+            timestamp=datetime.now(),
+            topic="topic",
+            key=None,
+            headers=[],
+        ),
     ) == InsertBatch(
         [
             {
@@ -216,7 +224,15 @@ def test_missing_fields() -> None:
         )
 
         assert processor.process_message(
-            message, KafkaMessageMetadata(0, 0, datetime.now())
+            message,
+            KafkaMessageMetadata(
+                offset=0,
+                partition=0,
+                timestamp=datetime.now(),
+                topic="topic",
+                key=None,
+                headers=[],
+            ),
         ) == InsertBatch(
             [
                 {

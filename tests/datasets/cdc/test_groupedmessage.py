@@ -226,7 +226,12 @@ class TestGroupedMessage:
         processor = GroupedMessageProcessor("sentry_groupedmessage")
 
         metadata = KafkaMessageMetadata(
-            offset=42, partition=0, timestamp=datetime(1970, 1, 1)
+            offset=42,
+            partition=0,
+            timestamp=datetime(1970, 1, 1),
+            topic="topic",
+            key=None,
+            headers=[],
         )
 
         ret = processor.process_message(self.INSERT_MSG, metadata)

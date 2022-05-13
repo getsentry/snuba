@@ -111,7 +111,14 @@ class TestMetricsApiCounters(BaseApiTest):
                                 "retention_days": RETENTION_DAYS,
                             }
                         ),
-                        KafkaMessageMetadata(0, 0, self.base_time),
+                        KafkaMessageMetadata(
+                            offset=0,
+                            partition=0,
+                            timestamp=self.base_time,
+                            topic="topic",
+                            key=None,
+                            headers=[],
+                        ),
                     )
                 )
                 if processed:
@@ -258,7 +265,14 @@ class TestOrgMetricsApiCounters(BaseApiTest):
                                     "retention_days": RETENTION_DAYS,
                                 }
                             ),
-                            KafkaMessageMetadata(0, 0, self.base_time),
+                            KafkaMessageMetadata(
+                                offset=0,
+                                partition=0,
+                                timestamp=self.base_time,
+                                topic="topic",
+                                key=None,
+                                headers=[],
+                            ),
                         )
                     )
                     if processed:
@@ -395,7 +409,14 @@ class TestMetricsApiSets(BaseApiTest):
 
                 processed = processor.process_message(
                     msg,
-                    KafkaMessageMetadata(0, 0, self.base_time),
+                    KafkaMessageMetadata(
+                        offset=0,
+                        partition=0,
+                        timestamp=self.base_time,
+                        topic="topic",
+                        key=None,
+                        headers=[],
+                    ),
                 )
                 if processed:
                     events.append(processed)
@@ -492,7 +513,14 @@ class TestMetricsApiDistributions(BaseApiTest):
 
                 processed = processor.process_message(
                     msg,
-                    KafkaMessageMetadata(0, 0, self.base_time),
+                    KafkaMessageMetadata(
+                        offset=0,
+                        partition=0,
+                        timestamp=self.base_time,
+                        topic="topic",
+                        key=None,
+                        headers=[],
+                    ),
                 )
                 if processed:
                     events.append(processed)

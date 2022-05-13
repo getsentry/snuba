@@ -35,7 +35,15 @@ def write_unprocessed_events(
     processed_messages = []
     for i, event in enumerate(events):
         processed_message = processor.process_message(
-            (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
+            (2, "insert", event, {}),
+            KafkaMessageMetadata(
+                offset=i,
+                partition=0,
+                timestamp=datetime.now(),
+                topic="topic",
+                key=None,
+                headers=[],
+            ),
         )
         assert processed_message is not None
         processed_messages.append(processed_message)

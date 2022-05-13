@@ -163,7 +163,14 @@ class TestTransactionsApi(BaseApiTest):
                                     },
                                 },
                             ),
-                            KafkaMessageMetadata(0, 0, self.base_time),
+                            KafkaMessageMetadata(
+                                offset=0,
+                                partition=0,
+                                timestamp=self.base_time,
+                                topic="topic",
+                                key=None,
+                                headers=[],
+                            ),
                         )
                     )
                     if processed:

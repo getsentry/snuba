@@ -147,7 +147,14 @@ def test_metrics_processor(
 ) -> None:
     settings.DISABLED_DATASETS = set()
 
-    meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
+    meta = KafkaMessageMetadata(
+        offset=100,
+        partition=1,
+        timestamp=datetime(1970, 1, 1),
+        topic="topic",
+        key=None,
+        headers=[],
+    )
 
     expected_set_result = (
         InsertBatch(expected_set, None) if expected_set is not None else None
@@ -325,7 +332,14 @@ def test_metrics_aggregate_processor(
     settings.DISABLED_DATASETS = set()
     settings.WRITE_METRICS_AGG_DIRECTLY = True
 
-    meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
+    meta = KafkaMessageMetadata(
+        offset=100,
+        partition=1,
+        timestamp=datetime(1970, 1, 1),
+        topic="topic",
+        key=None,
+        headers=[],
+    )
 
     expected_set_result = (
         AggregateInsertBatch(expected_set, None) if expected_set is not None else None
@@ -435,7 +449,14 @@ def test_metrics_polymorphic_processor(
 ) -> None:
     settings.DISABLED_DATASETS = set()
 
-    meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
+    meta = KafkaMessageMetadata(
+        offset=100,
+        partition=1,
+        timestamp=datetime(1970, 1, 1),
+        topic="topic",
+        key=None,
+        headers=[],
+    )
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
     with patch(
