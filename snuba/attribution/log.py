@@ -60,7 +60,9 @@ def _record_attribution_delivery_callback(
     )
 
     if error is not None:
-        logger.warning("Could not record attribution due to error: %r", error)
+        logger.warning(
+            "Could not record attribution due to error: %r", error, exc_info=True
+        )
 
 
 def record_attribution(attr_data: AttributionData) -> None:
@@ -87,4 +89,6 @@ def record_attribution(attr_data: AttributionData) -> None:
             on_delivery=_record_attribution_delivery_callback,
         )
     except Exception as ex:
-        logger.exception("Could not record attribution due to error: %r", ex)
+        logger.warning(
+            "Could not record attribution due to error: %r", ex, exc_info=True
+        )
