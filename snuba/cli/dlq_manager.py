@@ -21,6 +21,8 @@ STORAGE_SETS_WITH_DLQ = {
     if topic is not None
 }
 
+LINE_BREAK = "-" * 50
+
 
 @click.group()
 def dlq_manager() -> None:
@@ -65,21 +67,24 @@ def list(storage_set: str, offset: int, partition_index: int, limit: int) -> Non
     """
     click.echo("\nthis could take up to 10 seconds...\n")
     messages = _consume_dead_letters(storage_set, offset, partition_index, limit)
-    line_break = "-" * 50
     if messages:
-        click.echo(
-            f"\nListing the first {limit} messages "
-            f"{f'from offset {offset} on partition {partition_index}' if offset != 0 else ''}"
-            f"in {storage_set} dead-letter topic:"
-            f"\n(see --help for pagination)\n"
-        )
+        click.echo(f"Listing the first {limit} messages ", nl=False)
+
+        if offset != 0:
+            click.echo(f"from offset {offset} ", nl=False)
+        if partition_index != 0:
+            click.echo(f"on partition {partition_index} ", nl=False)
+
+        click.echo(f"in {storage_set} dead-letter topic:")
+        click.echo("(see --help for pagination)\n")
+
         for message in messages:
-            click.echo(line_break)
+            click.echo(LINE_BREAK)
             click.echo(f"DLQ Offset: {message.offset}\n")
             click.echo(message.payload.value)
     else:
         click.echo(f"\nNo messages found in {storage_set} dead-letter topic!")
-    click.echo(line_break)
+    click.echo(LINE_BREAK)
 
 
 def _consume_dead_letters(
@@ -98,10 +103,12 @@ def _consume_dead_letters(
 
     if offset != 0:
         try:
-            offsets = consumer.tell()
-            if offsets:
-                part: Partition = [p for p in offsets][0]
-                consumer.seek({Partition(part.topic, partition_index): offset})
+            assigned_partitions = consumer.tell()
+            if assigned_partitions:
+                arbitrary_partition = [p for p in assigned_partitions][0]
+                consumer.seek(
+                    {Partition(arbitrary_partition.topic, partition_index): offset}
+                )
         except Exception as e:
             click.echo(f"\nAn error occured: {e}")
             click.echo(
@@ -145,8 +152,10 @@ def info(storage_set: str) -> None:
     consumer = _build_consumer(storage_set)
     earliest_offset, latest_offset = _get_offsets_info(consumer)
     dead_letter_topic_snuba = STORAGE_SETS_WITH_DLQ[storage_set]
+
     click.echo(f"\nDisplaying info for {storage_set} dead letter messages:\n")
     click.echo(f"Dead letter topic name: {dead_letter_topic_snuba.value}")
+
     if earliest_offset is None:
         click.echo(f"No messages on {dead_letter_topic_snuba.value}!")
     else:
