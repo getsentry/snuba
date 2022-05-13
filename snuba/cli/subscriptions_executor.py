@@ -163,7 +163,7 @@ def subscriptions_executor(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with executor, closing(producer):
+    with executor, closing(producer), flush_querylog():
         processor.run()
 
 
@@ -173,3 +173,11 @@ def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
         yield producer
     finally:
         producer.close().result()
+
+
+@contextmanager
+def flush_querylog() -> Iterator[None]:
+    try:
+        yield
+    finally:
+        state.flush_producer()

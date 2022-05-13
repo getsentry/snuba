@@ -495,8 +495,3 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             logger.debug("Flushing executor producer")
             messages = producer.flush(*[remaining] if remaining is not None else [])
             logger.debug(f"{messages} executor messages pending delivery")
-
-        # Flush querylog producer
-        logger.debug("Flushing querylog producer")
-        state.flush_producer()
-        logger.debug("Flushed querylog producer")
