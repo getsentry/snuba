@@ -808,7 +808,7 @@ class TestApi(SimpleAPITest):
             ).data
         )
         assert (
-            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in((project_id AS _snuba_project_id), tuple(1))"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in((project_id AS _snuba_project_id), (1))"
             in result["sql"]
         )
 
@@ -833,12 +833,8 @@ class TestApi(SimpleAPITest):
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert (
-            "PREWHERE in((project_id AS _snuba_project_id), tuple(1))" in result["sql"]
-        )
-        assert (
-            result["sql"].count("in((project_id AS _snuba_project_id), tuple(1))") == 1
-        )
+        assert "PREWHERE in((project_id AS _snuba_project_id), (1))" in result["sql"]
+        assert result["sql"].count("in((project_id AS _snuba_project_id), (1))") == 1
 
     def test_aggregate(self) -> None:
         result = json.loads(
@@ -1322,7 +1318,7 @@ class TestApi(SimpleAPITest):
             ).data
         )
         formatted = sorted([f"'{t}'" for t in tags])
-        tag_phrase = f"in(tupleElement(pair, 1), tuple({', '.join(formatted)})"
+        tag_phrase = f"in(tupleElement(pair, 1), ({', '.join(formatted)})"
         assert tag_phrase in result["sql"]
 
     def test_unicode_condition(self) -> None:
