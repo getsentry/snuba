@@ -216,6 +216,15 @@ test_expressions = [
         "((table1.param1, table1.param2) AS some_tuple)",
         "((table1.param1, table1.param2) AS some_tuple)",
     ),
+    (
+        FunctionCall(
+            "single_tuple",
+            "tuple",
+            (Column(None, "table1", "param1"),),
+        ),
+        "(tuple(table1.param1) AS single_tuple)",
+        "(tuple(table1.param1) AS single_tuple)",
+    ),
 ]
 
 
