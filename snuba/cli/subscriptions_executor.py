@@ -159,10 +159,6 @@ def subscriptions_executor(
         logger.setLevel(logging.DEBUG)
 
         processor.signal_shutdown()
-        logger.debug("Flushing querylog producer")
-        # Ensure the querylog producer is flushed
-        state.flush_producer()
-        logger.debug("Flushed querylog producer")
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
