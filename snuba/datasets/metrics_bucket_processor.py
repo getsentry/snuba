@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
@@ -8,7 +9,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
     InvalidRawMessage,
 )
 
-from snuba import settings
+from snuba import settings, state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_aggregate_processor import (
@@ -28,6 +29,8 @@ ILLEGAL_VALUE_IN_SET = "Illegal value in set."
 ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
 INT_FLOAT_EXPECTED = "Int/Float expected"
 INT_EXPECTED = "Int expected"
+
+logger = logging.getLogger(__name__)
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -175,11 +178,18 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
     """
     Pass an invalid message to the DLQ by raising `InvalidMessages` exception.
     """
-    raise InvalidMessages(
-        [
-            InvalidRawMessage(
-                payload=str(message),
-                reason=reason,
-            )
-        ]
-    )
+    if state.get_config("ENABLE_METRICS_DLQ", False):
+        raise InvalidMessages(
+            [
+                InvalidRawMessage(
+                    payload=str(message),
+                    reason=reason,
+                )
+            ]
+        )
+    else:
+        logger.warning(
+            "Ignored an invalid message on Metrics! (Did not go to DLQ)",
+            exc_info=True,
+            extra={"message": message, "reason": reason},
+        )
