@@ -45,6 +45,11 @@ logger = logging.getLogger(__name__)
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
@@ -59,6 +64,7 @@ def subscriptions_scheduler(
     consumer_group: str,
     followed_consumer_group: str,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     schedule_ttl: int,
     log_level: Optional[str],
     delay_seconds: Optional[int],
@@ -141,6 +147,7 @@ def subscriptions_scheduler(
         followed_consumer_group,
         producer,
         auto_offset_reset,
+        not no_strict_offset_reset,
         schedule_ttl,
         delay_seconds,
         stale_threshold_seconds,

@@ -53,6 +53,7 @@ def build_executor_consumer(
     producer: Producer[KafkaPayload],
     max_concurrent_queries: int,
     auto_offset_reset: str,
+    strict_offset_reset: Optional[bool],
     metrics: MetricsBackend,
     executor: ThreadPoolExecutor,
     stale_threshold_seconds: Optional[int],
@@ -105,6 +106,7 @@ def build_executor_consumer(
         scheduled_topic_spec.topic,
         consumer_group,
         auto_offset_reset=auto_offset_reset,
+        strict_offset_reset=strict_offset_reset,
     )
 
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set

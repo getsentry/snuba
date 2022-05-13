@@ -1,4 +1,3 @@
-import logging
 import signal
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -12,7 +11,9 @@ from snuba import environment, state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
-from snuba.subscriptions.executor_consumer import build_executor_consumer
+from snuba.subscriptions.combined_scheduler_executor import (
+    build_scheduler_executor_consumer,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -42,6 +43,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Consumer group used for consuming the scheduled subscription topic/s.",
 )
 @click.option(
+    "--followed-consumer-group",
+    required=True,
+    help="Name of the consumer group to follow",
+)
+@click.option(
     "--max-concurrent-queries",
     default=20,
     type=int,
@@ -53,60 +59,36 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
-@click.option(
-    "--no-strict-offset-reset",
-    is_flag=True,
-    help="Forces the kafka consumer auto offset reset.",
-)
-@click.option("--log-level", help="Logging level to use.")
+@click.option("--schedule-ttl", type=int, default=60 * 5)
+@click.option("--delay-seconds", type=int)
 @click.option(
     "--stale-threshold-seconds",
     type=int,
-    help="Skip execution if timestamp is beyond this threshold compared to the system time",
+    help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
 )
-# This option allows us to reroute the produced subscription results to a different
-# topic temporarily while we are testing and running the old and new subscription
-# pipeline concurrently. It is currently (temporarily) required to reduce the chance
-# of inadvertently writing to the actual result topics while we are still validating
-# results and running the old subscriptions pipeline. Eventaully we can just get it
-# from stream_loader.get_subscription_result_topic_spec()
-@click.option(
-    "--override-result-topic",
-    type=str,
-    required=True,
-    help="Override the result topic for testing",
-)
-# TODO: For testing alternate rebalancing strategies. To be eventually removed.
-@click.option(
-    "--cooperative-rebalancing",
-    is_flag=True,
-    default=False,
-    help="Use cooperative-sticky partition assignment strategy",
-)
-def subscriptions_executor(
+@click.option("--log-level", help="Logging level to use.")
+def subscriptions_scheduler_executor(
     *,
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    followed_consumer_group: str,
     max_concurrent_queries: int,
     auto_offset_reset: str,
-    no_strict_offset_reset: bool,
-    log_level: Optional[str],
+    schedule_ttl: int,
+    delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
-    override_result_topic: str,
-    cooperative_rebalancing: bool,
+    log_level: Optional[str],
 ) -> None:
     """
-    The subscription's executor consumes scheduled subscriptions from the scheduled
-    subscription topic for that entity, executes the queries on ClickHouse and publishes
-    results on the results topic.
+    Combined subscriptions scheduler and executor. Alternative to the separate scheduler and executor processes.
     """
     setup_logging(log_level)
     setup_sentry()
 
     metrics = MetricsWrapper(
         environment.metrics,
-        "subscriptions.executor",
+        "subscriptions.scheduler_executor",
         tags={"dataset": dataset_name},
     )
 
@@ -131,38 +113,25 @@ def subscriptions_executor(
 
     executor = ThreadPoolExecutor(max_concurrent_queries)
 
-    # TODO: Consider removing and always passing via CLI.
-    # If a value provided via config, it overrides the one provided via CLI.
-    # This is so we can quickly change this in an emergency.
-    stale_threshold_seconds = state.get_config(
-        f"subscriptions_stale_threshold_sec_{dataset_name}", stale_threshold_seconds
-    )
-
-    processor = build_executor_consumer(
+    processor = build_scheduler_executor_consumer(
         dataset_name,
         entity_names,
         consumer_group,
+        followed_consumer_group,
         producer,
-        max_concurrent_queries,
         auto_offset_reset,
-        not no_strict_offset_reset,
-        metrics,
-        executor,
+        schedule_ttl,
+        delay_seconds,
         stale_threshold_seconds,
-        override_result_topic,
-        cooperative_rebalancing,
+        max_concurrent_queries,
+        executor,
+        metrics,
     )
 
     def handler(signum: int, frame: Any) -> None:
-        # TODO: Temporary code for debugging executor shutdown
-        logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
-
         processor.signal_shutdown()
-        logger.debug("Flushing querylog producer")
         # Ensure the querylog producer is flushed
         state.flush_producer()
-        logger.debug("Flushed querylog producer")
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
