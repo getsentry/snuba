@@ -130,13 +130,11 @@ def subscriptions_scheduler_executor(
 
     def handler(signum: int, frame: Any) -> None:
         processor.signal_shutdown()
-        # Ensure the querylog producer is flushed
-        state.flush_producer()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with executor, closing(producer):
+    with executor, closing(producer), flush_querylog():
         processor.run()
 
 
@@ -146,3 +144,11 @@ def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
         yield producer
     finally:
         producer.close().result()
+
+
+@contextmanager
+def flush_querylog() -> Iterator[None]:
+    try:
+        yield
+    finally:
+        state.flush_producer()
