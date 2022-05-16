@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.5.0
+
+### Various fixes & improvements
+
+- fix(tiger): don't call the explicit tuple function in clickhouse (#2699) by @volokluev
+- fix(dlq): Metrics ignored messages should be Sentry Errors (#2698) by @rahul-kumar-saini
+- fix: Allow arbitrary AppIDs (#2692) by @evanh
+- dlq(metrics): Metrics produce policy + basic validation replaced with DLQ stuff (#2614) by @rahul-kumar-saini
+- feat(devserver): Force latest offset in devserver (#2573) by @mitsuhiko
+- fix(querylog): fix the kafka config, add test for producer (#2695) by @volokluev
+- fix kafka config option (#2694) by @volokluev
+- fix(querylog): compress, allow larger messages on the querylog producer (#2682) by @volokluev
+- ref: try building the arm64 image using linux builders (#2688) by @asottile-sentry
+- fix(tiger): Implement tupleElement function in snuba (#2687) by @volokluev
+- fix: Support array as well as tuple in condition (#2686) by @evanh
+- feat(arroyo): Upgrade Arroyo for new Parallel Transform Step (#2679) by @rahul-kumar-saini
+- feat(subscriptions): Deploy transactions scheduler and executor (#2690) by @lynnagara
+- Bring in CLA Lite (#2667) by @chadwhitacre
+- feat(subscriptions): Record a metric on subscription creation and deletion (#2689) by @lynnagara
+- feat(subscriptions): Combined scheduler and executor (#2666) by @volokluev
+- chore(tiger): Raise a different timeout exception from tiger clusters (#2680) by @nikhars
+- feat(subscriptions): Remove verifier from Freight (#2684) by @lynnagara
+- feat(subscriptions): Debug producer shutdown (#2685) by @lynnagara
+- feat(subscriptions): Add logging for skipped subscriptions (#2678) by @lynnagara
+- ref(dev-tooling): Enable commit tracking attempt II (#2677) by @MeredithAnya
+- feat(subscriptions): Add config to skip stale subscriptions in executor (#2676) by @lynnagara
+- Skip old subscriptions (#2675) by @fpacifici
+- Add logging (#2674) by @fpacifici
+
+_Plus 57 more_
+
 ## 22.4.0
 
 ### Various fixes & improvements
