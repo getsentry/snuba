@@ -260,9 +260,6 @@ class ClickhousePool(object):
                         time.sleep(sleep_interval_seconds)
                         continue
 
-                    if e.code == errors.ErrorCodes.MEMORY_LIMIT_EXCEEDED:
-                        pass
-
                     raise ClickhouseError(e.message, code=e.code) from e
         finally:
             # Return finished connection to the appropriate connection pool
