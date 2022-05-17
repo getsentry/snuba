@@ -29,11 +29,13 @@ class RequestSchema:
     def __init__(
         self,
         query_schema: Schema,
-        settings_schema: Schema,
+        query_settings_schema: Schema,
+        attribution_info_schema: Schema,
         settings_class: Type[RequestSettings] = HTTPRequestSettings,
     ):
         self.__query_schema = query_schema
-        self.__settings_schema = settings_schema
+        self.__query_settings_schema = query_settings_schema
+        self.__attribution_info_schema = attribution_info_schema
 
         self.__composite_schema: MutableMapping[str, Any] = {
             "type": "object",
@@ -44,7 +46,7 @@ class RequestSchema:
         }
         self.__setting_class = settings_class
 
-        for schema in itertools.chain([self.__query_schema, self.__settings_schema]):
+        for schema in itertools.chain([self.__query_schema, self.__query_settings_schema, self.__attribution_info_schema]):
             assert schema["type"] == "object", "subschema must be object"
             assert (
                 schema["additionalProperties"] is False
@@ -92,7 +94,7 @@ class RequestSchema:
             if key in value
         }
 
-        return RequestParts(query=query_body, settings=settings)
+        return RequestParts(query=query_body, query_settings=query_settings, attribution_info=attribution_info)
 
     def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
         """
@@ -142,6 +144,7 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
         "additionalProperties": False,
     },
     # Subscriptions have no customizable settings.
+    # TODO: Add app-id to the subscription settings
     SubscriptionRequestSettings: {
         "type": "object",
         "properties": {},
