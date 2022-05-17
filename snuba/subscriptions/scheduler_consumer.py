@@ -127,6 +127,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
         except Exception:
             logger.error(
                 f"Error decoding commit log message for followed group: {self.__followed_consumer_group}.",
+                extra={"payload": str(message.payload), "offset": message.offset},
                 exc_info=True,
             )
             return None
