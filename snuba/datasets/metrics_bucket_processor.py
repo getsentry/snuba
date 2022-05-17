@@ -201,7 +201,8 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
     """
     Pass an invalid message to the DLQ by raising `InvalidMessages` exception.
     """
-    if state.get_config("enable_metrics_dlq", False):
+    print("raising")
+    if True or state.get_config("enable_metrics_dlq", False):
         raise InvalidMessages(
             [
                 InvalidRawMessage(
