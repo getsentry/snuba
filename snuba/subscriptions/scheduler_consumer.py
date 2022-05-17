@@ -121,8 +121,15 @@ class CommitLogTickConsumer(Consumer[Tick]):
         if message is None:
             return None
 
-        commit = commit_codec.decode(message.payload)
-        assert commit.orig_message_ts is not None
+        try:
+            commit = commit_codec.decode(message.payload)
+            assert commit.orig_message_ts is not None
+        except Exception:
+            logger.error(
+                f"Error decoding commit log message for followed group: {self.__followed_consumer_group}.",
+                exc_info=True,
+            )
+            return None
 
         if commit.group != self.__followed_consumer_group:
             return None
