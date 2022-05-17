@@ -21,7 +21,8 @@ metrics = MetricsWrapper(environment.metrics, "parser")
 
 class RequestParts(NamedTuple):
     query: Mapping[str, Any]
-    settings: Mapping[str, Any]
+    query_settings: Mapping[str, Any]
+    attribution_info: Mapping[str, Any]
 
 
 class RequestSchema:
