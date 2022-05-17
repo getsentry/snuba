@@ -9,8 +9,9 @@ from types import TracebackType
 from typing import ChainMap as TypingChainMap
 from typing import Iterator, Mapping, MutableMapping, Optional, Sequence, Type
 
-from snuba import state
+from snuba import environment, state
 from snuba.redis import redis_client as rds
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger("snuba.state.rate_limit")
@@ -21,6 +22,8 @@ PROJECT_REFERRER_RATE_LIMIT_NAME = "project_referrer"
 REFERRER_RATE_LIMIT_NAME = "referrer"
 GLOBAL_RATE_LIMIT_NAME = "global"
 TABLE_RATE_LIMIT_NAME = "table"
+
+metrics = MetricsWrapper(environment.metrics, "api")
 
 
 @dataclass(frozen=True)
@@ -131,7 +134,10 @@ def rate_limit(
 
     pipe = rds.pipeline(transaction=False)
     # cleanup old query timestamps past our retention window
-    pipe.zremrangebyscore(bucket, "-inf", "({:f}".format(now - rate_history_s))
+    stale_queries = pipe.zremrangebyscore(
+        bucket, "-inf", "({:f}".format(now - rate_history_s)
+    )
+    metrics.increment("rate_limit.stale", stale_queries, tags={"bucket": bucket})
 
     # Now for the tricky bit:
     # ======================
