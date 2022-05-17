@@ -184,7 +184,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
-    if True or settings.ENABLE_SENTRY_METRICS_DEV:
+    if settings.ENABLE_SENTRY_METRICS_DEV:
         daemons += [
             (
                 "metrics-consumer",
