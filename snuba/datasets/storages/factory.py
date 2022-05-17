@@ -9,6 +9,9 @@ from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
 from snuba.datasets.storages.errors_v2 import storage as errors_v2_storage
 from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
+from snuba.datasets.storages.experimental import (
+    writable_storage as experimental_storage,
+)
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
 from snuba.datasets.storages.metrics import counters_storage as metrics_counters_storage
@@ -74,6 +77,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             transactions_v2_storage,
             errors_v2_storage,
             profiles_writable_storage,
+            experimental_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
