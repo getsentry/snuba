@@ -25,7 +25,7 @@ install-python-dependencies:
 	pip install -e .
 	pip install -r requirements-test.txt
 	pip uninstall -y sentry-arroyo
-	pip install git+https://github.com/getsentry/arroyo@9bbb9195698c25a0ce687cd8a00e433bc8da5d3d#egg=sentry-arroyo
+	pip install git+https://github.com/getsentry/arroyo@f90c76d5d6b28a09fbc84b5720d8d352238f1cc5#egg=sentry-arroyo
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
