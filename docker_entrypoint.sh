@@ -12,6 +12,7 @@ help_return=$?
 
 if [[ "${help_return}" -eq 0 ]]; then
   set -- snuba "$@"
+  set gosu snuba "$@"
 else
   # Print the error message if it returns non-zero, to help with troubleshooting.
   printf "Error running snuba ${1} --help, passing command to exec directly."
