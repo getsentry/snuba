@@ -121,7 +121,6 @@ def check_clickhouse(filter_experimental: bool = True) -> bool:
             ]
         else:
             datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-        print(datasets)
         entities = itertools.chain(
             *[dataset.get_all_entities() for dataset in datasets]
         )
@@ -138,9 +137,6 @@ def check_clickhouse(filter_experimental: bool = True) -> bool:
                 connection_grouped_table_names[cluster.get_connection_id()].add(
                     cast(TableSchema, storage.get_schema()).get_table_name()
                 )
-        import pprint
-
-        pprint.pprint(connection_grouped_table_names)
         # De-dupe clusters by host:TCP port:HTTP port:database
         unique_clusters = {
             storage.get_cluster().get_connection_id(): storage.get_cluster()
@@ -152,9 +148,6 @@ def check_clickhouse(filter_experimental: bool = True) -> bool:
             clickhouse_tables = clickhouse.execute("show tables").results
             known_table_names = connection_grouped_table_names[cluster_key]
             logger.debug(f"checking for {known_table_names} on {cluster_key}")
-            import pdb
-
-            pdb.set_trace()
             for table in known_table_names:
                 if (table,) not in clickhouse_tables:
                     logger.error(f"{table} not present in cluster {cluster}")
