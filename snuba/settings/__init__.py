@@ -100,6 +100,148 @@ SENTRY_DSN = None
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
 SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
 
+
+# Query Specifics
+CLUSTERS = [
+    {  # Proxied via Envoy Sidecar
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"discover", "migrations"},
+        "single_node": True,
+        "database": "default",
+    },
+    {  # Proxied via Envoy Sidecar
+        # Defined separately from the interface to the other clusters so that
+        # the replacer can address individual storage nodes.
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"events"},
+        "single_node": True,
+        "cluster_name": "snuba_errors",
+        "distributed_cluster_name": None,
+        "database": "default",
+    },
+    {  # Proxied via Envoy Sidecar
+        # Defined separately as query/dist nodes must match events for joins
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"events_ro"},
+        "database": "default",
+        "single_node": True,
+        "cluster_name": "snuba_errors_ro",
+        "distributed_cluster_name": None,
+    },
+    {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"transactions", "transactions_ro"},
+        "single_node": True,
+        "database": "default",
+        "cluster_name": "snuba_transactions",
+        "distributed_cluster_name": None,
+    },
+    {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"outcomes"},
+        "single_node": True,
+        "database": "default",
+        "cluster_name": "snuba_outcomes",
+        "distributed_cluster_name": None,
+    },
+    {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"sessions"},
+        "single_node": True,
+        "cluster_name": "snuba_sessions",
+        "database": "default",
+        "distributed_cluster_name": None,
+    },
+    {  # Proxied via Envoy Sidecar
+        # Defined separately as query/dist nodes must match events for joins
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"cdc"},
+        "single_node": True,
+        "cluster_name": "cdc",
+        "database": "default",
+        "distributed_cluster_name": None,
+    },
+    {  # Proxied via Envoy Sidecar
+        # Defined separately (with different ports) so proxy can talk
+        # directly to storage nodes - no query nodes needed
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8124,
+        "storage_sets": {"metrics"},
+        "single_node": True,
+        "cluster_name": "snuba-metrics",
+        "database": "default",
+        "distributed_cluster_name": None,
+    },
+    {  # Singular host for query logging.
+        "host": "localhost",
+        "port": 9000,
+        "http_port": 8123,
+        "storage_sets": {"querylog"},
+        "single_node": True,
+        "database": "default",
+    },
+    {  # Proxied via Envoy Sidecar to the Tiger transactions cluster.
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8133,
+        "storage_sets": {"transactions_v2"},
+        "single_node": True,
+        "database": "default",
+        "cluster_name": "snuba-transactions-tiger",
+        "distributed_cluster_name": None,
+        "cache_partition_id": "tiger_transactions",
+    },
+    {  # Proxied via Envoy Sidecar to the Tiger errors cluster.
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8133,
+        "storage_sets": {"errors_v2"},
+        "single_node": True,
+        "cluster_name": "snuba-errors-tiger",
+        "distributed_cluster_name": None,
+        "database": "default",
+        "cache_partition_id": "tiger_errors",
+    },
+    {  # Proxied via Envoy Sidecar to the Tiger errors readonly cluster.
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8133,
+        "storage_sets": {"errors_v2_ro"},
+        "database": "default",
+        "single_node": True,
+        "cluster_name": "snuba-errors-ro-tiger",
+        "distributed_cluster_name": None,
+        "cache_partition_id": "tiger_errors",
+    },
+    {  # Proxied via Envoy Sidecar
+        # Defined separately (with different ports) so proxy can talk
+        # directly to storage nodes - no query nodes needed
+        "host": "127.0.0.1",
+        "port": 9000,
+        "http_port": 8134,
+        "storage_sets": {"profiles"},
+        "single_node": True,
+        "database": "default",
+        "cluster_name": "snuba-profiles",
+        "distributed_cluster_name": None,
+    },
+]
+
 # Snuba Options
 
 SNAPSHOT_LOAD_PRODUCT = "snuba"

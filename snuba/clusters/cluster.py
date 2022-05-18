@@ -374,16 +374,59 @@ expected_storage_sets = {
     if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
 }
 
-# Map all storages to clusters via storage sets
-_STORAGE_SET_CLUSTER_MAP = {
-    storage_set: cluster
-    for cluster in CLUSTERS
-    for storage_set in cluster.get_storage_set_keys()
-}
+"""
+The problem is:
+
+the settings define which storagesets a cluster contains
+
+we want to mark datasets as experimental
+
+datasets and storage sets are not 1:1
+
+Questions:
+
+- can we update the settings to add a new storageset before it exists?
+- can we make it so that we can still start the server even if an experimental storage set is
+    broken?
+
+    - mark storage sets as experimental
+
+"""
+
+_STORAGE_SET_CLUSTER_MAP = None
+
+
+def _get_storage_set_cluster_map() -> dict:
+    global _STORAGE_SET_CLUSTER_MAP
+    # Map all storages to clusters via storage sets
+    if _STORAGE_SET_CLUSTER_MAP is None:
+        _STORAGE_SET_CLUSTER_MAP = {
+            storage_set: cluster
+            for cluster in CLUSTERS
+            for storage_set in cluster.get_storage_set_keys()
+        }
+    return _STORAGE_SET_CLUSTER_MAP
+
+
+class UndefinedClickhouseCluster(ClickhouseCluster):
+    pass
 
 
 def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
-    return _STORAGE_SET_CLUSTER_MAP[storage_set_key]
+    return _get_storage_set_cluster_map().get(
+        storage_set_key,
+        UndefinedClickhouseCluster(
+            host="foo",
+            port=420,
+            user="filippo",
+            password="p455w0rd",
+            database="nonya",
+            http_port=69,
+            storage_sets={storage_set_key.value},
+            single_node=False,
+            cluster_name="undefined",
+        ),
+    )
