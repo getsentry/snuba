@@ -1,12 +1,8 @@
+from http.client import BAD_REQUEST, INTERNAL_SERVER_ERROR
+
 from clickhouse_driver.errors import ErrorCodes
 
 from snuba.clickhouse.errors import ClickhouseError
-
-### HTTP Status Codes ###
-INTERNAL_SERVER_ERROR = 500
-BAD_REQUEST = 400
-
-### ClickHouse Error Codes ###
 
 # Since the query validator doesn't have a typing system, queries containing type errors are run on
 # Clickhouse and generate ClickhouseErrors. Return a 400 status code for such requests because the problem
