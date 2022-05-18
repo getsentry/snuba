@@ -10,7 +10,17 @@ class InvalidEntityError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-def import_entities():
+class _EntityNameLookuper:
+    def __getitem__(self, key: Entity) -> EntityKey:
+        return EntityKey[key.registry_key()]
+
+
+# for some reason subscriptions gets the EntityKey from the Entity class so we have
+# to do this for now
+ENTITY_NAME_LOOKUP = _EntityNameLookuper()
+
+
+def import_entities() -> None:
     from snuba.datasets.cdc.groupassignee_entity import (  # noqa: F401
         GroupAssigneeEntity,
     )

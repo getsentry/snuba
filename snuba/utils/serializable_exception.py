@@ -85,13 +85,16 @@ class SerializableException(Exception, metaclass=RegisteredClass):
     @classmethod
     def from_dict(cls, edict: SerializableExceptionDict) -> "SerializableException":
         assert edict["__type__"] == "SerializableException"
-        defined_exception = cls._registry.get_class_by_name(edict.get("__name__", ""))
+        defined_exception = cls.from_name(edict.get("__name__", ""))
 
         if defined_exception is not None:
-            return defined_exception(
-                message=edict.get("__message__", ""),
-                should_report=edict.get("__should_report__", True),
-                **edict.get("__extra_data__", {})
+            return cast(
+                SerializableException,
+                defined_exception(
+                    message=edict.get("__message__", ""),
+                    should_report=edict.get("__should_report__", True),
+                    **edict.get("__extra_data__", {})
+                ),
             )
         # if an exception is created from a dictionary which is not in the registry,
         # create a new Exception type with that name and message dynamically.

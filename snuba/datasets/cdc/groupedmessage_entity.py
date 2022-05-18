@@ -48,5 +48,5 @@ class GroupedMessageEntity(Entity):
         ]
 
     @classmethod
-    def registry_key(cls):
+    def registry_key(cls) -> str:
         return "groupedmessage"
