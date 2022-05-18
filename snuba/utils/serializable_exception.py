@@ -42,9 +42,11 @@ Usage:
 >>> raise SerializableException.from_dict(recvd_exception_dict) # this will be an instance of MyException
 """
 
-from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
+from typing import Any, Dict, List, Optional, TypedDict, Union, cast
 
 import rapidjson
+
+from snuba.utils.registered_class import RegisteredClass
 
 # mypy has not figured out recursive types yet so this can't be totally typesafe
 JsonSerializable = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
@@ -58,34 +60,7 @@ class SerializableExceptionDict(TypedDict):
     __should_report__: bool
 
 
-class _ExceptionRegistry:
-    """Keep a mapping of SerializableExceptions to their names"""
-
-    def __init__(self) -> None:
-        self.__mapping: Dict[str, Type["SerializableException"]] = {}
-
-    def register_class(self, cls: Type["SerializableException"]) -> None:
-        existing_class = self.__mapping.get(cls.__name__)
-        if not existing_class:
-            self.__mapping[cls.__name__] = cls
-
-    def get_class_by_name(
-        self, cls_name: str
-    ) -> Optional[Type["SerializableException"]]:
-        return self.__mapping.get(cls_name)
-
-
-_REGISTRY = None
-
-
-def _get_registry() -> _ExceptionRegistry:
-    global _REGISTRY
-    if not _REGISTRY:
-        _REGISTRY = _ExceptionRegistry()
-    return _REGISTRY
-
-
-class SerializableException(Exception):
+class SerializableException(Exception, metaclass=RegisteredClass):
     def __init__(
         self,
         message: Optional[str] = None,
@@ -110,7 +85,7 @@ class SerializableException(Exception):
     @classmethod
     def from_dict(cls, edict: SerializableExceptionDict) -> "SerializableException":
         assert edict["__type__"] == "SerializableException"
-        defined_exception = _get_registry().get_class_by_name(edict.get("__name__", ""))
+        defined_exception = cls._registry.get_class_by_name(edict.get("__name__", ""))
 
         if defined_exception is not None:
             return defined_exception(
@@ -130,14 +105,6 @@ class SerializableException(Exception):
                 **edict.get("__extra_data__", {})
             ),
         )
-
-    def __init_subclass__(cls) -> None:
-        # NOTE: This function is called when a subclass of SerializableException
-        # is **DEFINED** not when its __init__ function is called (the name is a bit confusing)
-        # This is how we keep a registry of all the defined snuba Exceptions. It happens
-        # at the time that the python AST is loaded into memory
-        _get_registry().register_class(cls)
-        return super().__init_subclass__()
 
     @classmethod
     def from_standard_exception_instance(
