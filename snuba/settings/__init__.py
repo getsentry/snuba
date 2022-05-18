@@ -167,7 +167,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -199,6 +199,7 @@ ENABLED_MATERIALIZATION_VERSION = 4
 
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
+ENABLE_FUNCTIONS_CONSUMER = os.environ.get("ENABLE_FUNCTIONS_CONSUMER", False)
 
 # Place the actual time we start ingesting on the new version.
 ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)

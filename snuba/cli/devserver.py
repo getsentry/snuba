@@ -214,6 +214,21 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
+    if settings.ENABLE_FUNCTIONS_CONSUMER:
+        daemons += [
+            (
+                "functions",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--storage=functions",
+                ],
+            ),
+        ]
+
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(
