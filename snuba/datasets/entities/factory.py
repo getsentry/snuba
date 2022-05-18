@@ -1,6 +1,5 @@
-from typing import Callable, MutableMapping
+from typing import cast
 
-from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.table_storage import TableWriter
@@ -11,63 +10,45 @@ class InvalidEntityError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-ENTITY_IMPL: MutableMapping[EntityKey, Entity] = {}
-ENTITY_NAME_LOOKUP: MutableMapping[Entity, EntityKey] = {}
-
-
-def get_entity(name: EntityKey) -> Entity:
-    if name in ENTITY_IMPL:
-        return ENTITY_IMPL[name]
-
-    from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
-    from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
-    from snuba.datasets.entities.discover import (
+def import_entities():
+    from snuba.datasets.cdc.groupassignee_entity import (  # noqa: F401
+        GroupAssigneeEntity,
+    )
+    from snuba.datasets.cdc.groupedmessage_entity import (  # noqa: F401
+        GroupedMessageEntity,
+    )
+    from snuba.datasets.entities.discover import (  # noqa: F401
         DiscoverEntity,
         DiscoverEventsEntity,
         DiscoverTransactionsEntity,
     )
-    from snuba.datasets.entities.events import EventsEntity
-    from snuba.datasets.entities.metrics import (
+    from snuba.datasets.entities.events import EventsEntity  # noqa: F401
+    from snuba.datasets.entities.metrics import (  # noqa: F401
         MetricsCountersEntity,
         MetricsDistributionsEntity,
         MetricsSetsEntity,
         OrgMetricsCountersEntity,
     )
-    from snuba.datasets.entities.outcomes import OutcomesEntity
-    from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
-    from snuba.datasets.entities.profiles import ProfilesEntity
-    from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
-    from snuba.datasets.entities.transactions import TransactionsEntity
+    from snuba.datasets.entities.outcomes import OutcomesEntity  # noqa: F401
+    from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity  # noqa: F401
+    from snuba.datasets.entities.profiles import ProfilesEntity  # noqa: F401
+    from snuba.datasets.entities.sessions import (  # noqa: F401
+        OrgSessionsEntity,
+        SessionsEntity,
+    )
+    from snuba.datasets.entities.transactions import TransactionsEntity  # noqa: F401
 
-    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
 
-    entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
-        EntityKey.DISCOVER: DiscoverEntity,
-        EntityKey.EVENTS: EventsEntity,
-        EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
-        EntityKey.GROUPEDMESSAGES: GroupedMessageEntity,
-        EntityKey.OUTCOMES: OutcomesEntity,
-        EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
-        EntityKey.SESSIONS: SessionsEntity,
-        EntityKey.ORG_SESSIONS: OrgSessionsEntity,
-        EntityKey.TRANSACTIONS: TransactionsEntity,
-        EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
-        EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
-        EntityKey.METRICS_SETS: MetricsSetsEntity,
-        EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
-        EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
-        EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
-        EntityKey.PROFILES: ProfilesEntity,
-        **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
-    }
+def get_entity(name: EntityKey) -> Entity:
+    registered_entity = Entity.from_name(name.value)
+    if registered_entity is not None:
+        return cast(Entity, registered_entity())
+    import_entities()
+    registered_entity = Entity.from_name(name.value)
+    if registered_entity is not None:
+        return cast(Entity, registered_entity())
 
-    try:
-        entity = ENTITY_IMPL[name] = entity_factories[name]()
-        ENTITY_NAME_LOOKUP[entity] = name
-    except KeyError as error:
-        raise InvalidEntityError(f"entity {name!r} does not exist") from error
-
-    return entity
+    raise InvalidEntityError(f"entity {name!r} does not exist")
 
 
 def enforce_table_writer(entity: Entity) -> TableWriter:
@@ -75,5 +56,5 @@ def enforce_table_writer(entity: Entity) -> TableWriter:
 
     assert (
         writable_storage is not None
-    ), f"Entity {ENTITY_NAME_LOOKUP[entity]} does not have a writable storage."
+    ), f"Entity {entity.__class__.__name__} does not have a writable storage."
     return writable_storage.get_table_writer()

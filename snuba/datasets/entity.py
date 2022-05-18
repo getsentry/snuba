@@ -14,10 +14,11 @@ from snuba.query.validation.validators import (
     QueryValidator,
 )
 from snuba.utils.describer import Describable, Description, Property
+from snuba.utils.registered_class import RegisteredClass
 from snuba.utils.schemas import ColumnSet
 
 
-class Entity(Describable, ABC):
+class Entity(Describable, ABC, metaclass=RegisteredClass):
     """
     The Entity has access to multiple Storage objects, which represent the physical
     data model. Each one represents a table/view on the DB we can query.
@@ -156,3 +157,11 @@ class Entity(Describable, ABC):
                 Description(header="Relationships", content=relationships),
             ],
         )
+
+    @classmethod
+    def registry_key(cls) -> str:
+        name = cls.__name__
+        no_entity = name.replace("Entity", "")
+        return "".join(
+            ["_" + i.lower() if i.isupper() else i for i in no_entity]
+        ).lstrip("_")

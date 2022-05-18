@@ -1,3 +1,4 @@
+from abc import ABCMeta
 from typing import Dict, Generic, Optional, Type, TypeVar
 
 T = TypeVar("T")
@@ -10,15 +11,16 @@ class _ClassRegistry(Generic[T]):
         self.__mapping: Dict[str, Type[T]] = {}
 
     def register_class(self, cls: Type[T]) -> None:
-        existing_class = self.__mapping.get(cls.__name__)
+        key = cls.registry_key()
+        existing_class = self.__mapping.get(key)
         if not existing_class:
-            self.__mapping[cls.__name__] = cls
+            self.__mapping[key] = cls
 
     def get_class_by_name(self, cls_name: str) -> Optional[Type[T]]:
         return self.__mapping.get(cls_name)
 
 
-class RegisteredClass(type):
+class RegisteredClass(ABCMeta):
     """Metaclass for making classes that can be looked up by name"""
 
     _registry: _ClassRegistry = _ClassRegistry()
@@ -29,8 +31,11 @@ class RegisteredClass(type):
             res._registry = _ClassRegistry()
         else:
             res._registry.register_class(res)
-
         return res
 
     def from_name(self, name: str) -> Optional[Type]:
         return self._registry.get_class_by_name(name)
+
+    def registry_key(self) -> str:
+        # TODO: see if this can be made safe
+        return self.__name__

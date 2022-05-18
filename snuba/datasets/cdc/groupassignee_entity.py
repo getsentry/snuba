@@ -49,3 +49,7 @@ class GroupAssigneeEntity(Entity):
             BasicFunctionsProcessor(),
             ProjectRateLimiterProcessor("project_id"),
         ]
+
+    @classmethod
+    def registry_key(cls):
+        return "groupassignee"

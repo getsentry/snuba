@@ -24,3 +24,18 @@ def test_register_different():
     assert X.from_name("Bar") is None
     assert X.from_name("Y") is Y
     assert Y.from_name("Y") is Y
+
+
+def test_custom_key():
+    class CustomKey(metaclass=RegisteredClass):
+        @classmethod
+        def registry_key(cls):
+            return "custom_af"
+
+    class ExtraCustom(CustomKey):
+        @classmethod
+        def registry_key(cls):
+            return "cool_key"
+
+    assert CustomKey.from_name("cool_key") is ExtraCustom
+    assert CustomKey.from_name("custom_af") is None
