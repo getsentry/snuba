@@ -3,7 +3,6 @@ from functools import partial
 import pytest
 
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -27,12 +26,7 @@ from snuba.query.joins.equivalence_adder import (
     add_equivalent_conditions,
 )
 from snuba.query.joins.pre_processor import QualifiedCol
-from tests.query.joins.equivalence_schema import (
-    EVENTS_SCHEMA,
-    GROUPS_SCHEMA,
-    Events,
-    GroupedMessage,
-)
+from tests.query.joins.equivalence_schema import EVENTS_SCHEMA, GROUPS_SCHEMA
 
 
 def test_classify_and_replace() -> None:
@@ -263,8 +257,6 @@ def test_add_equivalent_condition(
     join_clause: JoinClause[EntitySource],
     expected_expr: Expression,
 ) -> None:
-    ENTITY_IMPL[EntityKey.EVENTS] = Events()
-    ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
 
     query = CompositeQuery(
         from_clause=join_clause,
@@ -277,5 +269,3 @@ def test_add_equivalent_condition(
     )
     add_equivalent_conditions(query)
     assert query.get_condition() == expected_expr
-
-    ENTITY_IMPL.clear()
