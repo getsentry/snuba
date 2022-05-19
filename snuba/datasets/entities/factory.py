@@ -1,3 +1,4 @@
+import functools
 from typing import cast
 
 from snuba.datasets.entities import EntityKey
@@ -12,7 +13,11 @@ class InvalidEntityError(SerializableException):
 
 class _EntityNameLookuper:
     def __getitem__(self, key: Entity) -> EntityKey:
-        return EntityKey[key.registry_key()]
+        registry_key = key.registry_key()
+        entities = [e for e in EntityKey if e.value == registry_key]
+        if entities:
+            return entities[0]
+        raise KeyError(key)
 
 
 # for some reason subscriptions gets the EntityKey from the Entity class so we have
@@ -49,6 +54,7 @@ def import_entities() -> None:
     from snuba.datasets.entities.transactions import TransactionsEntity  # noqa: F401
 
 
+@functools.lru_cache(maxsize=420)
 def get_entity(name: EntityKey) -> Entity:
     registered_entity = Entity.from_name(name.value)
     if registered_entity is not None:

@@ -391,6 +391,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         lhs_entity = get_entity(lhs.data_source.key)
         data = lhs_entity.get_join_relationship(relationship)
         if data is None:
+            import pdb
+
+            pdb.set_trace()
             raise ParsingException(
                 f"{lhs.data_source.key.value} does not have a join relationship -[{relationship}]->"
             )
