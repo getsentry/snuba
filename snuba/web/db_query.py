@@ -350,18 +350,20 @@ def execute_query_with_rate_limits(
                 name="table_concurrent",
                 value=table_rate_limit_stats.concurrent,
                 tags={
+                    "table": stats.get("clickhouse_table", ""),
                     "cache_partition": reader.cache_partition_id
                     if reader.cache_partition_id
-                    else "default"
+                    else "default",
                 },
             )
             metrics.gauge(
                 name="table_per_second",
                 value=table_rate_limit_stats.rate,
                 tags={
+                    "table": stats.get("clickhouse_table", ""),
                     "cache_partition": reader.cache_partition_id
                     if reader.cache_partition_id
-                    else "default"
+                    else "default",
                 },
             )
 
