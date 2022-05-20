@@ -43,6 +43,7 @@ from snuba.state.rate_limit import (
     GLOBAL_RATE_LIMIT_NAME,
     ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
+    TABLE_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
     get_global_rate_limit_params,
@@ -339,6 +340,29 @@ def execute_query_with_rate_limits(
             metrics.gauge(
                 name="org_per_second",
                 value=org_rate_limit_stats.rate,
+            )
+
+        table_rate_limit_stats = rate_limit_stats_container.get_stats(
+            TABLE_RATE_LIMIT_NAME
+        )
+        if table_rate_limit_stats is not None:
+            metrics.gauge(
+                name="table_concurrent",
+                value=table_rate_limit_stats.concurrent,
+                tags={
+                    "cache_partition": reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                },
+            )
+            metrics.gauge(
+                name="table_per_second",
+                value=table_rate_limit_stats.rate,
+                tags={
+                    "cache_partition": reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                },
             )
 
         return execute_query(
