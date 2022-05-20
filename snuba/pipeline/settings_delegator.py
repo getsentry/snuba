@@ -1,3 +1,4 @@
+import copy
 from typing import Optional, Sequence
 
 from snuba.request.request_settings import RequestSettings
@@ -25,7 +26,7 @@ class RateLimiterDelegate(RequestSettings):
 
     def __init__(self, prefix: str, delegate: RequestSettings):
         self.referrer = delegate.referrer
-        self.__delegate = delegate
+        self.__delegate = copy.deepcopy(delegate)
         self.__prefix = prefix
 
     def __append_prefix(self, rate_limiter: RateLimitParameters) -> RateLimitParameters:
