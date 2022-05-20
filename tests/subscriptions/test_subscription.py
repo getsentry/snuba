@@ -35,26 +35,6 @@ TESTS_CREATE = [
     ),
 ]
 
-TESTS_CREATE_SESSIONS = [
-    pytest.param(
-        SubscriptionData(
-            project_id=123,
-            query=(
-                """MATCH (sessions) SELECT if(greater(sessions,0),
-                divide(sessions_crashed,sessions),null)
-                AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
-                WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
-                OFFSET 0 GRANULARITY 3600"""
-            ),
-            time_window_sec=10 * 60,
-            resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
-        ),
-        id="Snql subscription",
-    ),
-]
-
-
 TESTS_INVALID = [
     pytest.param(
         SubscriptionData(
@@ -173,27 +153,6 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 ),
                 self.timer,
             )
-
-
-class TestSessionsSubscriptionCreator:
-    timer = Timer("test")
-
-    @pytest.mark.parametrize("subscription", TESTS_CREATE_SESSIONS)
-    def test(self, subscription: SubscriptionData) -> None:
-        dataset = get_dataset("sessions")
-        creator = SubscriptionCreator(dataset, EntityKey.SESSIONS)
-        identifier = creator.create(subscription, self.timer)
-        assert (
-            cast(
-                List[Tuple[UUID, SubscriptionData]],
-                RedisSubscriptionDataStore(
-                    redis_client,
-                    EntityKey.SESSIONS,
-                    identifier.partition,
-                ).all(),
-            )[0][1]
-            == subscription
-        )
 
 
 TESTS_CREATE_METRICS = [
