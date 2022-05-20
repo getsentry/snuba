@@ -46,6 +46,7 @@ from snuba.state.rate_limit import (
     TABLE_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
+    RateLimitStatsContainer,
     get_global_rate_limit_params,
 )
 from snuba.util import force_bytes, with_span
@@ -273,6 +274,58 @@ def execute_query(
     return result
 
 
+def _record_rate_limit_metrics(
+    rate_limit_stats_container: RateLimitStatsContainer,
+    reader: Reader,
+    stats: MutableMapping[str, Any],
+) -> None:
+    global_rate_limit_stats = rate_limit_stats_container.get_stats(
+        GLOBAL_RATE_LIMIT_NAME
+    )
+    if global_rate_limit_stats is not None:
+        metrics.gauge(
+            name="global_concurrent",
+            value=global_rate_limit_stats.concurrent,
+            tags={"table": stats.get("clickhouse_table", "")},
+        )
+    # This is a temporary metric that will be removed once the organization
+    # rate limit has been tuned.
+    org_rate_limit_stats = rate_limit_stats_container.get_stats(
+        ORGANIZATION_RATE_LIMIT_NAME
+    )
+    if org_rate_limit_stats is not None:
+        metrics.gauge(
+            name="org_concurrent",
+            value=org_rate_limit_stats.concurrent,
+        )
+        metrics.gauge(
+            name="org_per_second",
+            value=org_rate_limit_stats.rate,
+        )
+    table_rate_limit_stats = rate_limit_stats_container.get_stats(TABLE_RATE_LIMIT_NAME)
+    if table_rate_limit_stats is not None:
+        metrics.gauge(
+            name="table_concurrent",
+            value=table_rate_limit_stats.concurrent,
+            tags={
+                "table": stats.get("clickhouse_table", ""),
+                "cache_partition": reader.cache_partition_id
+                if reader.cache_partition_id
+                else "default",
+            },
+        )
+        metrics.gauge(
+            name="table_per_second",
+            value=table_rate_limit_stats.rate,
+            tags={
+                "table": stats.get("clickhouse_table", ""),
+                "cache_partition": reader.cache_partition_id
+                if reader.cache_partition_id
+                else "default",
+            },
+        )
+
+
 @with_span(op="db")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
@@ -317,55 +370,7 @@ def execute_query_with_rate_limits(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
 
-        global_rate_limit_stats = rate_limit_stats_container.get_stats(
-            GLOBAL_RATE_LIMIT_NAME
-        )
-        if global_rate_limit_stats is not None:
-            metrics.gauge(
-                name="global_concurrent",
-                value=global_rate_limit_stats.concurrent,
-                tags={"table": stats.get("clickhouse_table", "")},
-            )
-
-        # This is a temporary metric that will be removed once the organization
-        # rate limit has been tuned.
-        org_rate_limit_stats = rate_limit_stats_container.get_stats(
-            ORGANIZATION_RATE_LIMIT_NAME
-        )
-        if org_rate_limit_stats is not None:
-            metrics.gauge(
-                name="org_concurrent",
-                value=org_rate_limit_stats.concurrent,
-            )
-            metrics.gauge(
-                name="org_per_second",
-                value=org_rate_limit_stats.rate,
-            )
-
-        table_rate_limit_stats = rate_limit_stats_container.get_stats(
-            TABLE_RATE_LIMIT_NAME
-        )
-        if table_rate_limit_stats is not None:
-            metrics.gauge(
-                name="table_concurrent",
-                value=table_rate_limit_stats.concurrent,
-                tags={
-                    "table": stats.get("clickhouse_table", ""),
-                    "cache_partition": reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default",
-                },
-            )
-            metrics.gauge(
-                name="table_per_second",
-                value=table_rate_limit_stats.rate,
-                tags={
-                    "table": stats.get("clickhouse_table", ""),
-                    "cache_partition": reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default",
-                },
-            )
+        _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
 
         return execute_query(
             clickhouse_query,
