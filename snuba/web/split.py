@@ -331,10 +331,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             )
         )
         query.set_offset(0)
-        # TODO: This is technically wrong. Event ids are unique per project, not globally.
-        # So, if the minimal query only returned the same event_id from two projects, we
-        # would be underestimating the limit here.
-        query.set_limit(len(event_ids))
 
         project_ids = list(
             set([event[self.__project_column] for event in result.result["data"]])
