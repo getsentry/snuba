@@ -73,7 +73,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--override-result-topic",
     type=str,
-    required=True,
     help="Override the result topic for testing",
 )
 # TODO: For testing alternate rebalancing strategies. To be eventually removed.
@@ -93,7 +92,7 @@ def subscriptions_executor(
     no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
-    override_result_topic: str,
+    override_result_topic: Optional[str],
     cooperative_rebalancing: bool,
 ) -> None:
     """
@@ -119,7 +118,7 @@ def subscriptions_executor(
     storage = get_entity(entity_key).get_writable_storage()
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
-    result_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
+    result_topic_spec = stream_loader.get_subscription_result_topic_spec()
     assert result_topic_spec is not None
 
     producer = KafkaProducer(
