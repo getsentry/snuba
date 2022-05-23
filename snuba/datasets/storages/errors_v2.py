@@ -125,5 +125,4 @@ storage = WritableTableStorage(
         state_name=ReplacerState.ERRORS_V2,
         use_promoted_prewhere=False,
     ),
-    ignore_write_errors=True,
 )
