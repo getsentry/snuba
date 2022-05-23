@@ -257,7 +257,7 @@ class ConsumerBuilder:
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
-            dead_letter_queue_policy_closure=stream_loader.get_dead_letter_queue_policy_creator(),
+            dead_letter_queue_policy_creator=stream_loader.get_dead_letter_queue_policy_creator(),
             parallel_collect=self.__parallel_collect,
         )
 
