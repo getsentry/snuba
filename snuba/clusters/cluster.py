@@ -419,7 +419,7 @@ def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
     return _get_storage_set_cluster_map().get(
         storage_set_key,
         UndefinedClickhouseCluster(
-            host="foo",
+            host="undefined_clickhouse_cluster",
             port=420,
             user="filippo",
             password="p455w0rd",
