@@ -4,6 +4,7 @@ from enum import Enum
 from threading import Lock
 from typing import (
     Any,
+    Dict,
     Generic,
     Mapping,
     MutableMapping,
@@ -374,10 +375,10 @@ expected_storage_sets = {
     if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
 }
 
-_STORAGE_SET_CLUSTER_MAP = None
+_STORAGE_SET_CLUSTER_MAP: Optional[Dict[StorageSetKey, ClickhouseCluster]] = None
 
 
-def _get_storage_set_cluster_map() -> dict:
+def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
     global _STORAGE_SET_CLUSTER_MAP
     # Map all storages to clusters via storage sets
     if _STORAGE_SET_CLUSTER_MAP is None:
