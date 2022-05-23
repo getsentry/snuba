@@ -190,7 +190,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
     tick.
 
     `max_ticks_buffered_per_partition` applies if the scheduler mode is
-    PARTITION. Once the maximum ticks is received for that
+    GLOBAL. Once the maximum ticks is received for that
     partition, we start to submit ticks for processing even if that timestamp
     is not received for all partitions yet.
 

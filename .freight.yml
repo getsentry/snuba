@@ -43,8 +43,6 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
-    name: sessions-subscriptions-consumer
-  - image: us.gcr.io/sentryio/snuba:{sha}
     name: metrics-counters-subscriptions-scheduler
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: metrics-sets-subscriptions-scheduler
