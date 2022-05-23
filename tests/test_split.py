@@ -14,6 +14,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
@@ -81,20 +82,20 @@ def test_no_split(
 
 
 def test_set_limit_on_split_query():
+    storage = get_dataset("events").get_default_entity().get_all_storages()[0]
     query = ClickhouseQuery(
-        get_dataset("events")
-        .get_default_entity()
-        .get_all_storages()[0]
-        .get_schema()
-        .get_data_source(),
+        Table("events", storage.get_schema().get_columns()),
+        selected_columns=[
+            SelectedExpression(col.name, Column(None, None, col.name))
+            for col in storage.get_schema().get_columns()
+        ],
+        limit=420,
     )
 
     query_run_count = 0
 
     def do_query(
-        query: ClickhouseQuery,
-        request_settings: RequestSettings,
-        reader: Reader,
+        query: ClickhouseQuery, request_settings: RequestSettings
     ) -> QueryResult:
         nonlocal query_run_count
         query_run_count += 1
