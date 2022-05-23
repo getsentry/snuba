@@ -54,7 +54,7 @@ POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
 ]
 
 
-def produce_policy_closure() -> DeadLetterQueuePolicy:
+def produce_policy_creator() -> DeadLetterQueuePolicy:
     """
     Produce all bad messages to dead-letter topic.
     """
@@ -90,7 +90,7 @@ polymorphic_bucket = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
-        dead_letter_queue_policy_closure=produce_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
 )
 
@@ -124,7 +124,7 @@ sets_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         SetsAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=produce_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -147,7 +147,7 @@ counters_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         CounterAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=produce_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -201,7 +201,7 @@ distributions_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         DistributionsAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=produce_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
 )
