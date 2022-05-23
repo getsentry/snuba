@@ -44,6 +44,7 @@ from snuba.web.query import parse_and_run_query
 logger = logging.getLogger(__name__)
 
 COMMIT_FREQUENCY_SEC = 1
+INACTIVE_PARTITION_INTERVAL = 180  # 3 min
 
 
 def build_executor_consumer(
@@ -232,6 +233,63 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             self.__metrics, "executor.concurrent.clickhouse"
         )
 
+        self.__partition_start: Optional[float] = None
+        self.__partition_map: MutableMapping[Partition, int] = {}
+
+        self.__total_concurrent_queries = 64
+
+    def __calculate_max_concurrent_queries(self, message: Message[KafkaPayload]) -> int:
+        """
+        If the executors get auto-scaled we want to make sure the total number of
+        max concurrent queries stays the same. Right now the max_concurrent_queries
+        is calculated by using (total_concurrent_queries / replicas). If we use
+        auto-scaling the replicas are not a constant anymore, so we want to have
+        the consumers figure it out themselves.
+
+        Inactive partitions are partitions whose latest message is over the
+        INACTIVE_PARTITION_INTERVAL.
+
+        Example:
+            If there are 64 partitions:
+                * 2 partitions means there are 32 replicas
+                * 4 partitions means there are 16 replicas
+                * ...
+
+            With 64 total max concurrent queries:
+                * 2 partitions means (64 / 32) 2 max_concurrent_queries
+                * 4 partitions means (64 / 16) 4 max_concurrent_queries
+
+            With 32 total max concurrent queries:
+                * 2 partitions means (32 / 32) 1 max_concurrent_queries
+                * 4 partitions means (32 / 16) 2 max_concurrent_queries
+
+        """
+        current_time = time.time()
+
+        self.__partition_map[message.partition] = int(current_time)
+
+        if self.__partition_start is None:
+            self.__partition_start = current_time
+            return self.__max_concurrent_queries
+
+        # arbitrarly setting the time we check the interval to be 2 min
+        # so that the longest we'd wait to find out a partition is
+        # inactive would be 4 min. (INACTIVE_PARTITION_INTERVAL is 3 min)
+        if current_time >= self.__partition_start + 120:
+            active_partitions = [
+                p
+                for p, latest_time in self.__partition_map.items()
+                if (current_time - latest_time) > INACTIVE_PARTITION_INTERVAL
+            ]
+            max_concurrent_queries = (
+                int(self.__total_concurrent_queries / (64 / len(active_partitions)))
+                or 1
+            )
+            self.__partition_start = current_time
+            return max_concurrent_queries
+
+        return self.__max_concurrent_queries
+
     def __execute_query(
         self, task: ScheduledSubscriptionTask, tick_upper_offset: int
     ) -> Tuple[Request, Result]:
@@ -286,6 +344,15 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def submit(self, message: Message[KafkaPayload]) -> None:
         assert not self.__closed
+
+        if state.get_config("use_calculated_max_concurrent_queries", False):
+            new_max_concurrent_queries = self.__calculate_max_concurrent_queries(
+                message
+            )
+            if new_max_concurrent_queries != self.__max_concurrent_queries:
+                self.__executor.shutdown()
+                self.__executor = ThreadPoolExecutor(new_max_concurrent_queries)
+                self.__max_concurrent_queries = new_max_concurrent_queries
 
         # If there are max_concurrent_queries + 10 pending futures in the queue,
         # we will start raising MessageRejected to slow down the consumer as
