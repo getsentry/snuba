@@ -331,6 +331,9 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             )
         )
         query.set_offset(0)
+        import pdb
+        pdb.set_trace()
+        query.set_limit(result.result["data"])
 
         project_ids = list(
             set([event[self.__project_column] for event in result.result["data"]])

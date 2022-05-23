@@ -80,6 +80,54 @@ def test_no_split(
     strategy.execute(query, HTTPRequestSettings(), do_query)
 
 
+def test_set_limit_on_split_query():
+    query = ClickhouseQuery(
+        get_dataset("events")
+        .get_default_entity()
+        .get_all_storages()[0]
+        .get_schema()
+        .get_data_source(),
+    )
+
+    query_run_count = 0
+
+    def do_query(
+        query: ClickhouseQuery,
+        request_settings: RequestSettings,
+        reader: Reader,
+    ) -> QueryResult:
+        nonlocal query_run_count
+        query_run_count += 1
+        if query_run_count == 1:
+            return QueryResult(
+                result={
+                    "data": [
+                        {
+                            "event_id": "a",
+                            "project_id": "1",
+                            "timestamp": " 2019-10-01 22:33:42",
+                        },
+                        {
+                            "event_id": "a",
+                            "project_id": "1",
+                            "timestamp": " 2019-10-01 22:44:42",
+                        },
+                    ]
+                },
+                extra={},
+            )
+        else:
+            assert query.get_limit() == 2
+            return QueryResult({}, {})
+
+    ColumnSplitQueryStrategy(
+        id_column="event_id",
+        project_column="project_id",
+        timestamp_column="timestamp",
+    ).execute(query, HTTPRequestSettings(), do_query)
+    assert query_run_count == 2
+
+
 test_data_col = [
     (
         "events",
