@@ -8,6 +8,7 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.utils.streams.topics import Topic
 
 # THESE DO NOT EXIST!
+# They are only here to test the experimental dataset feature"
 EXPERIMENTAL_LOCAL_TABLE_NAME = "experimental_local"
 EXPERIMENTAL_DIST_TABLE_NAME = "experimental_dist"
 
@@ -26,12 +27,8 @@ readable_columns = ColumnSet(
     ]
 )
 
-writable_columns = readable_columns + ColumnSet(
-    [("retention_days", UInt(16)), ("partition", UInt(16)), ("offset", UInt(64))]
-)
-
 writable_schema = WritableTableSchema(
-    columns=writable_columns,
+    columns=readable_columns,
     local_table_name=EXPERIMENTAL_DIST_TABLE_NAME,
     dist_table_name=EXPERIMENTAL_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.PROFILES,
