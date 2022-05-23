@@ -342,4 +342,5 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             self.__partitions,
             self.__buffer_size,
             ProvideCommitStrategy(self.__partitions, schedule_step, self.__metrics),
+            self.__metrics,
         )

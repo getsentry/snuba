@@ -204,6 +204,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         partitions: int,
         max_ticks_buffered_per_partition: Optional[int],
         next_step: ProcessingStrategy[Tick],
+        metrics: MetricsBackend,
     ) -> None:
         if mode == SchedulingWatermarkMode.GLOBAL:
             assert max_ticks_buffered_per_partition is not None
@@ -212,12 +213,15 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__partitions = partitions
         self.__max_ticks_buffered_per_partition = max_ticks_buffered_per_partition
         self.__next_step = next_step
+        self.__metrics = metrics
 
         self.__buffers: Mapping[int, Deque[Message[Tick]]] = {
             index: deque() for index in range(self.__partitions)
         }
 
         self.__closed = False
+        self.__record_frequency_seconds = 180  # 3 minutes
+        self.__last_recorded_time: float = 0
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -250,6 +254,17 @@ class TickBuffer(ProcessingStrategy[Tick]):
             )
             self.__next_step.submit(self.__buffers[tick_partition].popleft())
             return
+
+        # Periodically record the legnth of each buffer
+        now = time.time()
+        if now - self.__last_recorded_time > self.__record_frequency_seconds:
+            for partition_index in self.__buffers:
+                self.__metrics.gauge(
+                    "TickBuffer.queue_size",
+                    len(self.__buffers[partition_index]),
+                    tags={"partition": str(partition_index)},
+                )
+            self.__last_recorded_time = now
 
         # If there are any empty buffers, we can't submit anything yet.
         # Otherwise if all the buffers have ticks then we look for the partition/s
