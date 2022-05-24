@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import ReactDOM from "react-dom";
+// import ReactDOM from "react-dom";
+import ReactDOM from "react-dom/client";
 
 import Header from "./header";
 import Nav from "./nav";
@@ -20,7 +21,7 @@ const bodyStyle = {
 
 let client = Client();
 
-ReactDOM.render(<App />, document.getElementById("root"));
+ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
 
 function App() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
