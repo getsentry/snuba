@@ -226,6 +226,17 @@ class TickBuffer(ProcessingStrategy[Tick]):
     def poll(self) -> None:
         self.__next_step.poll()
 
+    def __record_tick_buffer_length(self) -> None:
+        now = time.time()
+        if now - self.__last_recorded_time > self.__record_frequency_seconds:
+            for partition_index in self.__buffers:
+                self.__metrics.gauge(
+                    "tick_buffer.queue_size",
+                    len(self.__buffers[partition_index]),
+                    tags={"partition": str(partition_index)},
+                )
+            self.__last_recorded_time = now
+
     def submit(self, message: Message[Tick]) -> None:
         assert not self.__closed
 
@@ -256,15 +267,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
             return
 
         # Periodically record the legnth of each buffer
-        now = time.time()
-        if now - self.__last_recorded_time > self.__record_frequency_seconds:
-            for partition_index in self.__buffers:
-                self.__metrics.gauge(
-                    "tick_buffer.queue_size",
-                    len(self.__buffers[partition_index]),
-                    tags={"partition": str(partition_index)},
-                )
-            self.__last_recorded_time = now
+        self.__record_tick_buffer_length()
 
         # If there are any empty buffers, we can't submit anything yet.
         # Otherwise if all the buffers have ticks then we look for the partition/s
