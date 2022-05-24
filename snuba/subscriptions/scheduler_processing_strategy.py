@@ -220,7 +220,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         }
 
         self.__closed = False
-        self.__record_frequency_seconds = 180  # 3 minutes
+        self.__record_frequency_seconds = 60
         self.__last_recorded_time: float = 0
 
     def poll(self) -> None:
