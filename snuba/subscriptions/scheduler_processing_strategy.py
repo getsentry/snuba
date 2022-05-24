@@ -260,7 +260,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         if now - self.__last_recorded_time > self.__record_frequency_seconds:
             for partition_index in self.__buffers:
                 self.__metrics.gauge(
-                    "TickBuffer.queue_size",
+                    "tick_buffer.queue_size",
                     len(self.__buffers[partition_index]),
                     tags={"partition": str(partition_index)},
                 )
