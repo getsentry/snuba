@@ -64,17 +64,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Skip execution if timestamp is beyond this threshold compared to the system time",
 )
-# This option allows us to reroute the produced subscription results to a different
-# topic temporarily while we are testing and running the old and new subscription
-# pipeline concurrently. It is currently (temporarily) required to reduce the chance
-# of inadvertently writing to the actual result topics while we are still validating
-# results and running the old subscriptions pipeline. Eventaully we can just get it
-# from stream_loader.get_subscription_result_topic_spec()
-@click.option(
-    "--override-result-topic",
-    type=str,
-    help="Override the result topic for testing",
-)
 # TODO: For testing alternate rebalancing strategies. To be eventually removed.
 @click.option(
     "--cooperative-rebalancing",
@@ -92,7 +81,6 @@ def subscriptions_executor(
     no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
-    override_result_topic: Optional[str],
     cooperative_rebalancing: bool,
 ) -> None:
     """
@@ -148,7 +136,6 @@ def subscriptions_executor(
         metrics,
         executor,
         stale_threshold_seconds,
-        override_result_topic,
         cooperative_rebalancing,
     )
 
