@@ -183,7 +183,6 @@ CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
 
 # Metric Alerts Subscription Options
-ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
 
 # Subscriptions scheduler buffer size
