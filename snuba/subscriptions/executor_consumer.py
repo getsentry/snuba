@@ -58,7 +58,7 @@ def build_executor_consumer(
     executor: ThreadPoolExecutor,
     stale_threshold_seconds: Optional[int],
     # TODO: Should be removed once testing is done
-    override_result_topic: str,
+    override_result_topic: Optional[str],
     cooperative_rebalancing: bool = False,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
@@ -132,6 +132,9 @@ def build_executor_consumer(
     if cooperative_rebalancing is True:
         consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
+    result_topic = override_result_topic or result_topic_spec.topic_name
+    assert result_topic is not None
+
     return StreamProcessor(
         KafkaConsumer(consumer_configuration),
         Topic(scheduled_topic_spec.topic_name),
@@ -143,7 +146,7 @@ def build_executor_consumer(
             producer,
             metrics,
             stale_threshold_seconds,
-            override_result_topic,
+            result_topic,
         ),
     )
 
