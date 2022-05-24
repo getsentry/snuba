@@ -7,9 +7,9 @@ import pytest
 from snuba import settings
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
-from snuba.datasets.storages.factory import STORAGES, get_storage
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
@@ -184,26 +184,30 @@ def test_no_schema_differences() -> None:
     runner = Runner()
     runner.run_all(force=True)
 
-    for storage_key in STORAGES:
-        storage = get_storage(storage_key)
-        conn = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
-
-        schema = storage.get_schema()
-
-        if not isinstance(schema, TableSchema):
+    for dataset_name in DATASET_NAMES:
+        dataset = get_dataset(dataset_name)
+        if dataset.is_experimental():
             continue
+        for entity in dataset.get_all_entities():
+            for storage in entity.get_all_storages():
+                conn = storage.get_cluster().get_query_connection(
+                    ClickhouseClientSettings.MIGRATE
+                )
 
-        table_name = schema.get_local_table_name()
-        local_schema = get_local_schema(conn, table_name)
+                schema = storage.get_schema()
 
-        assert (
-            schema.get_column_differences(local_schema) == []
-        ), f"Schema mismatch: {table_name} does not match schema"
+                if not isinstance(schema, TableSchema):
+                    continue
 
-    importlib.reload(settings)
-    importlib.reload(factory)
+                table_name = schema.get_local_table_name()
+                local_schema = get_local_schema(conn, table_name)
+
+                assert (
+                    schema.get_column_differences(local_schema) == []
+                ), f"Schema mismatch: {table_name} does not match schema"
+
+                importlib.reload(settings)
+                importlib.reload(factory)
 
 
 def test_settings_skipped_group() -> None:
