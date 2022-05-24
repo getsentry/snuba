@@ -346,6 +346,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
     def terminate(self) -> None:
         self.__closed = True
 
+        self.__executor.shutdown()
         self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
