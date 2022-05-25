@@ -625,14 +625,14 @@ def process_message(
     # TODO: Remove temporary mitigations for DLQ prod test
 
     # Mitigation: Last resort - Hardcode message(s) to skip in runtime config
-    # expected format is "[(topic,partition_index,offset),...]"
+    # expected format is "[(topic:partition_index:offset),...]" eg [(snuba-metrics:0:1),(snuba-metrics,0,3)]
     messages_to_skip = (get_config("kafka-messages-to-skip") or "[]")[1:-1].split(",")
     if (
-        f"({message.partition.topic.name},{message.partition.index},{message.offset})"
+        f"({message.partition.topic.name}:{message.partition.index}:{message.offset})"
         in messages_to_skip
     ):
         logger.warning(
-            f"A consumer for {message.partition.topic} skipped a message!",
+            f"A consumer for {message.partition.topic.name} skipped a message!",
             exc_info=True,
             extra=__message_to_dict(message),
         )
