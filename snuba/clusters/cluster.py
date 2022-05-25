@@ -399,11 +399,7 @@ def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
     If the storage set key is not defined
-    in the CLUSTERS config, it will return an UndefinedClickhouseCluster.
-
-    This allows not yet fully configured datasets to be deployed without causing
-    the whole server to crash. Only queries to that specific storage set will
-    fail (since its cluster is undefined)
+    in the CLUSTERS config, it will raise an UndefinedClickhouseCluster Exception.
     """
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
