@@ -660,8 +660,7 @@ def test_produce_scheduled_subscription_message() -> None:
 
 def test_produce_stale_message() -> None:
     stale_threshold_seconds = 60
-    now = datetime.now().replace(second=0, microsecond=0)
-    # epoch = datetime(1970, 1, 1)
+    now = datetime.now()
     metrics_backend = TestingMetricsBackend()
     partition_index = 0
     entity_key = EntityKey.EVENTS
@@ -748,7 +747,7 @@ def test_produce_stale_message() -> None:
             Tick(
                 0,
                 offsets=Interval(3, 4),
-                timestamps=Interval(now - timedelta(minutes=1), now),
+                timestamps=Interval(now - timedelta(seconds=50), now),
             ),
             True,
         ),
