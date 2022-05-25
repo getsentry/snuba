@@ -463,7 +463,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
 
         if (
             self.__stale_threshold_seconds is not None
-            and time.time() - datetime.timestamp(tick.timestamps.upper)
+            and time.time() - datetime.timestamp(tick.timestamps.lower)
             > self.__stale_threshold_seconds
         ):
             encoded_tasks = []
