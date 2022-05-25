@@ -10,6 +10,7 @@ from typing import (
     Any,
     Callable,
     Deque,
+    Dict,
     List,
     Mapping,
     MutableMapping,
@@ -30,6 +31,7 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
 from arroyo.processing.strategies import ProcessingStrategyFactory
+from arroyo.processing.strategies.dead_letter_queue import InvalidMessages
 from arroyo.processing.strategies.streaming import FilterStep, TransformStep
 from arroyo.processing.strategies.streaming.factory import (
     ConsumerStrategyFactory,
@@ -40,6 +42,8 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.metrics_aggregate_processor import MetricsAggregateProcessor
+from snuba.datasets.metrics_bucket_processor import MetricsBucketProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey, are_writes_identical
 from snuba.datasets.storages.factory import get_writable_storage
@@ -50,6 +54,7 @@ from snuba.processor import (
     MessageProcessor,
     ReplacementBatch,
 )
+from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -601,15 +606,69 @@ MultistorageProcessedMessage = Sequence[
 ]
 
 
+def __message_to_dict(
+    message: Message[KafkaPayload],
+) -> Dict[str, Any]:
+    # TODO: Remove temporary mitigations for DLQ prod test
+    return {
+        "message_payload_value": message.payload.value,
+        "message_offset": message.offset,
+        "message_partition": message.partition.index,
+        "message_topic": message.partition.topic.name,
+    }
+
+
 def process_message(
     processor: MessageProcessor, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
-    result = processor.process_message(
-        rapidjson.loads(message.payload.value),
-        KafkaMessageMetadata(
-            message.offset, message.partition.index, message.timestamp
-        ),
-    )
+
+    # TODO: Remove temporary mitigations for DLQ prod test
+
+    # Mitigation: Last resort - Hardcode message(s) to skip in runtime config
+    # expected format is "[(topic,partition_index,offset),...]"
+    messages_to_skip = (get_config("kafka-messages-to-skip") or "[]")[1:-1].split(",")
+    if (
+        f"({message.partition.topic.name},{message.partition.index},{message.offset})"
+        in messages_to_skip
+    ):
+        logger.warning(
+            f"A consumer for {message.partition.topic} skipped a message!",
+            exc_info=True,
+            extra=__message_to_dict(message),
+        )
+        return None
+
+    # Mitigation: JSON fails to deserialize
+    try:
+        deserialized_message = rapidjson.loads(message.payload.value)
+    except Exception as err:
+        logger.error(
+            err,
+            exc_info=True,
+            extra=__message_to_dict(message),
+        )
+        return None
+
+    # Mitigation: An unexpected exception is raised by a Metrics processor
+    try:
+        result = processor.process_message(
+            deserialized_message,
+            KafkaMessageMetadata(
+                message.offset, message.partition.index, message.timestamp
+            ),
+        )
+    except Exception as err:
+        if (
+            isinstance(processor, MetricsBucketProcessor)
+            or isinstance(processor, MetricsAggregateProcessor)
+        ) and not isinstance(err, InvalidMessages):
+            logger.error(
+                err,
+                exc_info=True,
+                extra=__message_to_dict(message),
+            )
+            return None
+        raise err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
