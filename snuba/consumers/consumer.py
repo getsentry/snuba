@@ -42,8 +42,6 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.metrics_aggregate_processor import MetricsAggregateProcessor
-from snuba.datasets.metrics_bucket_processor import MetricsBucketProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey, are_writes_identical
 from snuba.datasets.storages.factory import get_writable_storage
@@ -58,6 +56,7 @@ from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.streams.topics import Topic as StreamsTopic
 from snuba.writer import BatchWriter, MockBatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -659,9 +658,9 @@ def process_message(
         )
     except Exception as err:
         if (
-            isinstance(processor, MetricsBucketProcessor)
-            or isinstance(processor, MetricsAggregateProcessor)
-        ) and not isinstance(err, InvalidMessages):
+            message.partition.topic.name == StreamsTopic.METRICS.value
+            and not isinstance(err, InvalidMessages)
+        ):
             logger.error(
                 err,
                 exc_info=True,
