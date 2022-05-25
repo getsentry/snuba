@@ -133,7 +133,9 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
         # Keep track of the earliest partition based on its offset in the commit log topic.
         # This is used to determine the offset that we can safely commit.
-        earliest = message.offset
+        # The offset to be committed is the `next_offset`: 1 higher than the offset of
+        # the current message
+        earliest = message.next_offset
 
         for partition_message in self.__latest_messages_by_partition.values():
             if partition_message is None:

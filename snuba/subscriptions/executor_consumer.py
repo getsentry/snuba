@@ -340,7 +340,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             # Periodically commit offsets if we haven't started rollout yet
             self.__commit_data[message.partition] = Position(
-                message.offset, message.timestamp
+                message.next_offset, message.timestamp
             )
 
             now = time.time()
@@ -449,7 +449,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__queue.popleft()
 
             self.__commit_data[message.partition] = Position(
-                message.offset, message.timestamp
+                message.next_offset, message.timestamp
             )
         self.__throttled_commit()
 
