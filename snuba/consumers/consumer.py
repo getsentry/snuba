@@ -617,6 +617,17 @@ def __message_to_dict(
     }
 
 
+def skip_kafka_message(message: Message[KafkaPayload]) -> bool:
+    # TODO: Remove temporary mitigations for DLQ prod test
+
+    # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
+    messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
+    return (
+        f"{message.partition.topic.name}:{message.partition.index}:{message.offset}"
+        in messages_to_skip
+    )
+
+
 def process_message(
     processor: MessageProcessor, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
@@ -624,12 +635,7 @@ def process_message(
     # TODO: Remove temporary mitigations for DLQ prod test
 
     # Mitigation: Last resort - Hardcode message(s) to skip in runtime config
-    # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
-    messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
-    if (
-        f"{message.partition.topic.name}:{message.partition.index}:{message.offset}"
-        in messages_to_skip
-    ):
+    if skip_kafka_message(message):
         logger.warning(
             f"A consumer for {message.partition.topic.name} skipped a message!",
             exc_info=True,
