@@ -121,6 +121,7 @@ def check_clickhouse(filter_experimental: bool = True) -> bool:
             ]
         else:
             datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+
         entities = itertools.chain(
             *[dataset.get_all_entities() for dataset in datasets]
         )
