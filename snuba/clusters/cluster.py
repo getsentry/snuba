@@ -23,6 +23,7 @@ from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
 from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
 
 
@@ -390,7 +391,7 @@ def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
     return _STORAGE_SET_CLUSTER_MAP
 
 
-class UndefinedClickhouseCluster(ClickhouseCluster):
+class UndefinedClickhouseCluster(SerializableException):
     pass
 
 
@@ -407,17 +408,9 @@ def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
-    return _get_storage_set_cluster_map().get(
-        storage_set_key,
-        UndefinedClickhouseCluster(
-            host="undefined_clickhouse_cluster",
-            port=420,
-            user="filippo",
-            password="p455w0rd",
-            database="nonya",
-            http_port=69,
-            storage_sets={storage_set_key.value},
-            single_node=False,
-            cluster_name="undefined",
-        ),
-    )
+    res = _get_storage_set_cluster_map().get(storage_set_key, None)
+    if res is None:
+        raise UndefinedClickhouseCluster(
+            f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"
+        )
+    return res
