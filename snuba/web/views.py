@@ -364,7 +364,7 @@ def config_changes() -> RespTuple:
 def health() -> Response:
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
-    clickhouse_health = check_clickhouse(filter_experimental=True) if thorough else True
+    clickhouse_health = check_clickhouse(ignore_experimental=True) if thorough else True
 
     body: Mapping[str, Union[str, bool]]
     if not down_file_exists and clickhouse_health:

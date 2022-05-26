@@ -12,6 +12,6 @@ _OG_CLUSTER_MAP = _get_storage_set_cluster_map()
     "snuba.clusters.cluster._get_storage_set_cluster_map",
     return_value={StorageSetKey.ERRORS_V2: _OG_CLUSTER_MAP[StorageSetKey.ERRORS_V2]},
 )
-def test_get_local_nodes(map_mock):
+def test_get_local_nodes(map_mock: mock.MagicMock) -> None:
     assert _get_local_nodes(StorageKey.ERRORS_V2)
     assert _get_local_nodes(StorageKey.TRANSACTIONS) == []
