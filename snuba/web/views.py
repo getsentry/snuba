@@ -108,12 +108,12 @@ else:
             return False
 
 
-def check_clickhouse(filter_experimental: bool = True) -> bool:
+def check_clickhouse(ignore_experimental: bool = True) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        if filter_experimental:
+        if ignore_experimental:
             datasets = [
                 get_dataset(name)
                 for name in get_enabled_dataset_names()

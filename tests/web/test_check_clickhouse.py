@@ -42,5 +42,5 @@ def fake_get_dataset(name: str) -> Dataset:
 )
 @mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
 def test_check_clickhouse(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
-    assert check_clickhouse(filter_experimental=True)
-    assert not check_clickhouse(filter_experimental=False)
+    assert check_clickhouse(ignore_experimental=True)
+    assert not check_clickhouse(ignore_experimental=False)
