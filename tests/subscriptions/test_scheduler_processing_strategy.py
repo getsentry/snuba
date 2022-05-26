@@ -667,9 +667,8 @@ def test_produce_stale_message() -> None:
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 
-    clock = TestingClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
-    broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
+    broker: Broker[KafkaPayload] = Broker(broker_storage)
     broker.create_topic(topic, partitions=1)
     producer = broker.get_producer()
 
@@ -747,7 +746,7 @@ def test_produce_stale_message() -> None:
             Tick(
                 0,
                 offsets=Interval(3, 4),
-                timestamps=Interval(now - timedelta(seconds=30), now),
+                timestamps=Interval(now - timedelta(seconds=50), now),
             ),
             True,
         ),
