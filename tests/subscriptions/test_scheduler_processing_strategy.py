@@ -747,7 +747,7 @@ def test_produce_stale_message() -> None:
             Tick(
                 0,
                 offsets=Interval(3, 4),
-                timestamps=Interval(now - timedelta(seconds=50), now),
+                timestamps=Interval(now - timedelta(seconds=30), now),
             ),
             True,
         ),
