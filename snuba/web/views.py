@@ -108,12 +108,20 @@ else:
             return False
 
 
-def check_clickhouse() -> bool:
+def check_clickhouse(ignore_experimental: bool = True) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+        if ignore_experimental:
+            datasets = [
+                get_dataset(name)
+                for name in get_enabled_dataset_names()
+                if not get_dataset(name).is_experimental()
+            ]
+        else:
+            datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+
         entities = itertools.chain(
             *[dataset.get_all_entities() for dataset in datasets]
         )
@@ -130,7 +138,6 @@ def check_clickhouse() -> bool:
                 connection_grouped_table_names[cluster.get_connection_id()].add(
                     cast(TableSchema, storage.get_schema()).get_table_name()
                 )
-
         # De-dupe clusters by host:TCP port:HTTP port:database
         unique_clusters = {
             storage.get_cluster().get_connection_id(): storage.get_cluster()
@@ -357,7 +364,7 @@ def config_changes() -> RespTuple:
 def health() -> Response:
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
-    clickhouse_health = check_clickhouse() if thorough else True
+    clickhouse_health = check_clickhouse(ignore_experimental=True) if thorough else True
 
     body: Mapping[str, Union[str, bool]]
     if not down_file_exists and clickhouse_health:

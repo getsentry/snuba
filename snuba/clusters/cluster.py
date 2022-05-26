@@ -4,6 +4,7 @@ from enum import Enum
 from threading import Lock
 from typing import (
     Any,
+    Dict,
     Generic,
     Mapping,
     MutableMapping,
@@ -22,6 +23,7 @@ from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
 from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
 
 
@@ -374,16 +376,33 @@ expected_storage_sets = {
     if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
 }
 
-# Map all storages to clusters via storage sets
-_STORAGE_SET_CLUSTER_MAP = {
+_STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
     storage_set: cluster
     for cluster in CLUSTERS
     for storage_set in cluster.get_storage_set_keys()
 }
 
 
+def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
+    return _STORAGE_SET_CLUSTER_MAP
+
+
+class UndefinedClickhouseCluster(SerializableException):
+    pass
+
+
 def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
+    """Return a clickhouse cluster for a storage set key.
+
+    If the storage set key is not defined
+    in the CLUSTERS config, it will raise an UndefinedClickhouseCluster Exception.
+    """
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
-    return _STORAGE_SET_CLUSTER_MAP[storage_set_key]
+    res = _get_storage_set_cluster_map().get(storage_set_key, None)
+    if res is None:
+        raise UndefinedClickhouseCluster(
+            f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"
+        )
+    return res
