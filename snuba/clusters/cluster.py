@@ -376,18 +376,14 @@ expected_storage_sets = {
     if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
 }
 
-_STORAGE_SET_CLUSTER_MAP: Optional[Dict[StorageSetKey, ClickhouseCluster]] = None
+_STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
+    storage_set: cluster
+    for cluster in CLUSTERS
+    for storage_set in cluster.get_storage_set_keys()
+}
 
 
 def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
-    global _STORAGE_SET_CLUSTER_MAP
-    # Map all storages to clusters via storage sets
-    if _STORAGE_SET_CLUSTER_MAP is None:
-        _STORAGE_SET_CLUSTER_MAP = {
-            storage_set: cluster
-            for cluster in CLUSTERS
-            for storage_set in cluster.get_storage_set_keys()
-        }
     return _STORAGE_SET_CLUSTER_MAP
 
 
