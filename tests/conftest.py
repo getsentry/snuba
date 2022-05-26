@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
@@ -71,17 +70,12 @@ def run_migrations() -> Iterator[None]:
         if isinstance(schema, WritableTableSchema):
             table_name = schema.get_local_table_name()
 
-            try:
-                nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
-                for node in nodes:
-                    connection = cluster.get_node_connection(
-                        ClickhouseClientSettings.MIGRATE, node
-                    )
-                    connection.execute(
-                        f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
-                    )
-            except Exception as e:
-                logging.info(f"could not tear down all nodes for {storage_key} {e}")
+            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+            for node in nodes:
+                connection = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
+                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
     redis_client.flushdb()
 
