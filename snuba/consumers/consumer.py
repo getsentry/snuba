@@ -647,12 +647,14 @@ def process_message(
     try:
         deserialized_message = rapidjson.loads(message.payload.value)
     except Exception as err:
-        logger.error(
-            err,
-            exc_info=True,
-            extra=__message_to_dict(message),
-        )
-        return None
+        if message.partition.topic.name == StreamsTopic.METRICS.value:
+            logger.error(
+                err,
+                exc_info=True,
+                extra=__message_to_dict(message),
+            )
+            return None
+        raise err
 
     # Mitigation: An unexpected exception is raised by a Metrics processor
     try:
