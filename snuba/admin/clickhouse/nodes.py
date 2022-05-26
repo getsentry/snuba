@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Sequence, TypedDict
 
 from snuba import settings
-from snuba.clickhouse.errors import ClickhouseError
+from snuba.clusters.cluster import UndefinedClickhouseCluster
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
@@ -30,7 +30,7 @@ def _get_local_nodes(storage_key: StorageKey) -> Sequence[Node]:
             {"host": node.host_name, "port": node.port}
             for node in storage.get_cluster().get_local_nodes()
         ]
-    except (AssertionError, KeyError, ClickhouseError):
+    except (AssertionError, KeyError, UndefinedClickhouseCluster):
         # If cluster_name is not defined just return an empty list
         return []
 
