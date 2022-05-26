@@ -20,7 +20,7 @@ class TableRateLimit(QueryProcessor):
         table_name = query.get_from_clause().table_name
         (per_second, concurr) = get_configs(
             [
-                (f"table_per_second_limit_{table_name}{self.__suffix}", 1000),
+                (f"table_per_second_limit_{table_name}{self.__suffix}", 5000),
                 (f"table_concurrent_limit_{table_name}{self.__suffix}", 1000),
             ]
         )
