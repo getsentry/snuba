@@ -57,7 +57,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="functions_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(org_id, project_id, toStartOfDay(received), transaction_name, cityHash64(profile_id), function_id)",
+                    order_by="(org_id, project_id, toStartOfDay(received), transaction_name, cityHash64(profile_id), cityHash64(function_id))",
                     partition_by="(retention_days, toMonday(received))",
                     sample_by="cityHash64(profile_id)",
                     settings={"index_granularity": "8192"},
