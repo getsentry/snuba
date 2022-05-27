@@ -43,7 +43,6 @@ from arroyo.processing.strategies.streaming.factory import (
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-from snuba import state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
@@ -670,7 +669,7 @@ def process_message(
         # TODO: Remove if condition, leaving only code in else block after DLQ prod test
         if (
             message.partition.topic.name == StreamsTopic.METRICS.value
-            and not state.get_config("enable_metrics_dlq", False)
+            and not get_config("enable_metrics_dlq", False)
         ):
             logger.error(
                 err,

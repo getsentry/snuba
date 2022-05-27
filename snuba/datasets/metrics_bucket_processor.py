@@ -55,7 +55,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         tags = message["tags"]
         assert isinstance(tags, Mapping), "Invalid tags type"
         for key, value in sorted(tags.items()):
-            assert key.isdigit() or isinstance(value, int), "Tag key/value invalid"
+            assert key.isdigit() and isinstance(value, int), "Tag key/value invalid"
             keys.append(int(key))
             values.append(value)
 

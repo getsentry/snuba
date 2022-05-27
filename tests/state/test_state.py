@@ -101,7 +101,7 @@ class TestState:
         assert rand1 != rand()
 
 
-def test_safe_dumps() -> None:
+def test_safe_dumps():
     assert safe_dumps(ChainMap({"a": 1}, {"b": 2}), sort_keys=True,) == safe_dumps(
         {"a": 1, "b": 2},
         sort_keys=True,
