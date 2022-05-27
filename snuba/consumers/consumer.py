@@ -642,7 +642,6 @@ def process_message(
     if skip_kafka_message(message):
         logger.warning(
             f"A consumer for {message.partition.topic.name} skipped a message!",
-            exc_info=True,
             extra=__message_to_dict(message),
         )
         return None
@@ -678,6 +677,7 @@ def process_message(
                 exc_info=True,
                 extra={"cause": "Caught an exception on Metrics! (DLQ was disabled)"},
             )
+            return None
         else:
             raise InvalidMessages(
                 [
