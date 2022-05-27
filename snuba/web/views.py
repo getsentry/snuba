@@ -647,7 +647,9 @@ if application.debug or application.testing:
             stream_loader = table_writer.get_stream_loader()
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
-                functools.partial(process_message, stream_loader.get_processor()),
+                functools.partial(
+                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
                 max_batch_time=1.0,

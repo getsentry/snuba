@@ -43,6 +43,7 @@ from arroyo.processing.strategies.streaming.factory import (
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
+from snuba import state
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
@@ -667,21 +668,32 @@ def process_message(
             ),
         )
     except Exception as err:
-        raise InvalidMessages(
-            [
-                InvalidKafkaMessage(
-                    payload=message.payload.value,
-                    timestamp=message.timestamp,
-                    topic=message.partition.topic.name,
-                    consumer_group=consumer_group,
-                    partition=message.partition.index,
-                    offset=message.offset,
-                    headers=message.payload.headers,
-                    key=message.payload.key,
-                    reason=str(err.args),
-                )
-            ]
-        ) from err
+        # TODO: Remove if condition, leaving only code in else block after DLQ prod test
+        if (
+            message.partition.topic.name == StreamsTopic.METRICS.value
+            and not state.get_config("enable_metrics_dlq", False)
+        ):
+            logger.error(
+                err,
+                exc_info=True,
+                extra={"cause": "Caught an exception on Metrics! (DLQ was disabled)"},
+            )
+        else:
+            raise InvalidMessages(
+                [
+                    InvalidKafkaMessage(
+                        payload=message.payload.value,
+                        timestamp=message.timestamp,
+                        topic=message.partition.topic.name,
+                        consumer_group=consumer_group,
+                        partition=message.partition.index,
+                        offset=message.offset,
+                        headers=message.payload.headers,
+                        key=message.payload.key,
+                        reason=str(err.args),
+                    )
+                ]
+            ) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
