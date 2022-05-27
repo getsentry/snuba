@@ -31,7 +31,10 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.dead_letter_queue import InvalidMessages
+from arroyo.processing.strategies.dead_letter_queue import (
+    InvalidKafkaMessage,
+    InvalidMessages,
+)
 from arroyo.processing.strategies.streaming import FilterStep, TransformStep
 from arroyo.processing.strategies.streaming.factory import (
     ConsumerStrategyFactory,
@@ -629,7 +632,7 @@ def skip_kafka_message(message: Message[KafkaPayload]) -> bool:
 
 
 def process_message(
-    processor: MessageProcessor, message: Message[KafkaPayload]
+    processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
 
     # TODO: Remove temporary mitigations for DLQ prod test
@@ -656,7 +659,6 @@ def process_message(
             return None
         raise err
 
-    # Mitigation: An unexpected exception is raised by a Metrics processor
     try:
         result = processor.process_message(
             deserialized_message,
@@ -665,17 +667,21 @@ def process_message(
             ),
         )
     except Exception as err:
-        if (
-            message.partition.topic.name == StreamsTopic.METRICS.value
-            and not isinstance(err, InvalidMessages)
-        ):
-            logger.error(
-                err,
-                exc_info=True,
-                extra=__message_to_dict(message),
-            )
-            return None
-        raise err
+        raise InvalidMessages(
+            [
+                InvalidKafkaMessage(
+                    payload=message.payload.value,
+                    timestamp=message.timestamp,
+                    topic=message.partition.topic.name,
+                    consumer_group=consumer_group,
+                    partition=message.partition.index,
+                    offset=message.offset,
+                    headers=message.payload.headers,
+                    key=message.payload.key,
+                    reason=str(err.args),
+                )
+            ]
+        ) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
