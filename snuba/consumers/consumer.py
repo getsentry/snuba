@@ -678,6 +678,7 @@ def process_message(
             )
             return None
         else:
+            logger.error(err, exc_info=True)
             raise InvalidMessages(
                 [
                     InvalidKafkaMessage(
