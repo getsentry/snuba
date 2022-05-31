@@ -7,6 +7,7 @@ from snuba.state.rate_limit import RateLimitParameters
 
 class RequestSettings:
     """Sentinel class which exists for legacy purposes"""
+
     pass
 
 
