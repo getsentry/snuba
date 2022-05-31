@@ -1,4 +1,3 @@
-import time
 import uuid
 from collections import deque
 from concurrent.futures import Future
@@ -661,14 +660,14 @@ def test_produce_scheduled_subscription_message() -> None:
 
 def test_produce_stale_message() -> None:
     stale_threshold_seconds = 60
-    now = datetime.fromtimestamp(time.time())
+    now = datetime.now()
     metrics_backend = TestingMetricsBackend()
     partition_index = 0
     entity_key = EntityKey.EVENTS
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 
-    clock = TestingClock(now.timestamp())
+    clock = TestingClock()
     broker_storage: MemoryMessageStorage[KafkaPayload] = MemoryMessageStorage()
     broker: Broker[KafkaPayload] = Broker(broker_storage, clock)
     broker.create_topic(topic, partitions=1)
