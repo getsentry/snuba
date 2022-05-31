@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Union
 
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
-from snuba.attribution.attribution_info import AttributionInfo
 
 
 @dataclass(frozen=True)
