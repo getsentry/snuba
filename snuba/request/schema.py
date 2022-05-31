@@ -46,7 +46,13 @@ class RequestSchema:
         }
         self.__setting_class = settings_class
 
-        for schema in itertools.chain([self.__query_schema, self.__query_settings_schema, self.__attribution_info_schema]):
+        for schema in itertools.chain(
+            [
+                self.__query_schema,
+                self.__query_settings_schema,
+                self.__attribution_info_schema,
+            ]
+        ):
             assert schema["type"] == "object", "subschema must be object"
             assert (
                 schema["additionalProperties"] is False
@@ -94,7 +100,11 @@ class RequestSchema:
             if key in value
         }
 
-        return RequestParts(query=query_body, query_settings=query_settings, attribution_info=attribution_info)
+        return RequestParts(
+            query=query_body,
+            query_settings=query_settings,
+            attribution_info=attribution_info,
+        )
 
     def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
         """
