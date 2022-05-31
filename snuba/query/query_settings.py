@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import List
-from snuba.state.rate_limit import RateLimitParameters
 from dataclasses import dataclass, field
+from typing import List
+
 from snuba.state.quota import ResourceQuota
+from snuba.state.rate_limit import RateLimitParameters
 
 
 @dataclass()
