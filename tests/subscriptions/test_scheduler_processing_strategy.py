@@ -710,7 +710,9 @@ def test_produce_stale_message() -> None:
         metrics_backend,
     )
 
-    # Produce a stale message
+    # Produce a stale message. Since the tick spans an interval of 60 seconds,
+    # the subscription will be executed once in this window (no matter what
+    # jitter gets applied to it)
     stale_message = Message(
         partition,
         1,
