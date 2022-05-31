@@ -659,7 +659,7 @@ def test_produce_scheduled_subscription_message() -> None:
 
 
 def test_produce_stale_message() -> None:
-    stale_threshold_seconds = 60
+    stale_threshold_seconds = 90
     now = datetime.now()
     metrics_backend = TestingMetricsBackend()
     partition_index = 0
@@ -719,7 +719,7 @@ def test_produce_stale_message() -> None:
                 0,
                 offsets=Interval(1, 3),
                 timestamps=Interval(
-                    now - timedelta(minutes=3), now - timedelta(seconds=59)
+                    now - timedelta(minutes=3), now - timedelta(seconds=60)
                 ),
             ),
             True,
@@ -747,7 +747,7 @@ def test_produce_stale_message() -> None:
             Tick(
                 0,
                 offsets=Interval(3, 4),
-                timestamps=Interval(now - timedelta(seconds=59), now),
+                timestamps=Interval(now - timedelta(seconds=60), now),
             ),
             True,
         ),
