@@ -121,6 +121,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--delay-seconds=1",
                 "--schedule-ttl=10",
+                "--stale-threshold-seconds=900",
             ],
         ),
         (
@@ -137,6 +138,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--delay-seconds=1",
                 "--schedule-ttl=10",
+                "--stale-threshold-seconds=900",
             ],
         ),
     ]
