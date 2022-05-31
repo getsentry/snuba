@@ -4,22 +4,20 @@ import time
 from functools import wraps
 from typing import Any, Callable, Union
 
-from rediscluster import StrictRedisCluster
-from rediscluster.exceptions import RedisClusterException
-
 from redis.client import StrictRedis
-from redis.exceptions import BusyLoadingError, ConnectionError
+from redis.cluster import RedisCluster
+from redis.exceptions import BusyLoadingError, ConnectionError, RedisClusterException
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
 
-RedisClientType = Union[StrictRedis, StrictRedisCluster]
+RedisClientType = Union[StrictRedis, RedisCluster]
 
 
 class FailedClusterInitization(SerializableException):
     pass
 
 
-class RetryingStrictRedisCluster(StrictRedisCluster):  # type: ignore #  Missing type stubs in client lib
+class RetryingStrictRedisCluster(RedisCluster):  # type: ignore #  Missing type stubs in client lib
     """
     Execute a command with cluster reinitialization retry logic.
     Should a cluster respond with a ConnectionError or BusyLoadingError the

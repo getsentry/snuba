@@ -1,5 +1,4 @@
-from rediscluster.exceptions import RedisClusterException
-
+from redis.exceptions import RedisClusterException
 from snuba import redis
 
 

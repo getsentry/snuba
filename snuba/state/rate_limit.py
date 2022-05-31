@@ -119,7 +119,7 @@ def rate_limit(
     """
 
     bucket = "{}{}".format(state.ratelimit_prefix, rate_limit_params.bucket)
-    query_id = uuid.uuid4()
+    query_id = str(uuid.uuid4())
 
     now = time.time()
     bypass_rate_limit, rate_history_s = state.get_configs(
@@ -167,8 +167,7 @@ def rate_limit(
     #                                   running concurrently; in this case 3)
     #              ^
     #              | current time
-
-    pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # type: ignore
+    pipe.zadd(bucket, {query_id: now + state.max_query_duration_s})  # type: ignore
     if rate_limit_params.per_second_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need per-second
     else:
@@ -245,7 +244,7 @@ def rate_limit(
         try:
             # return the query to its start time, if the query_id was actually added.
             if not rate_limited:
-                rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
+                rds.zincrby(bucket, -float(state.max_query_duration_s), query_id)
         except Exception as ex:
             logger.exception(ex)
 
