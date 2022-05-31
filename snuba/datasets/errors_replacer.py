@@ -192,14 +192,18 @@ def set_project_exclude_groups(
     )
     p = redis_client.pipeline()
 
-    group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
+    group_id_data: Mapping[str | bytes, bytes | float | int | str] = {
+        str(group_id): now for group_id in group_ids
+    }
     p.zadd(key, group_id_data)
     # remove group id deletions that should have been merged by now
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
     # store the replacement type data
-    replacement_type_data: Mapping[str, float] = {replacement_type: now}
+    replacement_type_data: Mapping[str | bytes, bytes | float | int | str] = {
+        replacement_type: now
+    }
     p.zadd(type_key, replacement_type_data)
     p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(type_key, int(settings.REPLACER_KEY_TTL))

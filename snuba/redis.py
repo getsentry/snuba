@@ -2,11 +2,15 @@ from __future__ import absolute_import
 
 import time
 from functools import wraps
-from typing import Any, Callable, Union
+from typing import Any, Callable, Union, cast
 
 from redis.client import StrictRedis
-from redis.cluster import RedisCluster
-from redis.exceptions import BusyLoadingError, ConnectionError, RedisClusterException
+from redis.cluster import NodesManager, RedisCluster  # type: ignore
+from redis.exceptions import (  # type: ignore
+    BusyLoadingError,
+    ConnectionError,
+    RedisClusterException,
+)
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
 
@@ -33,7 +37,10 @@ class RetryingStrictRedisCluster(RedisCluster):  # type: ignore #  Missing type 
             BusyLoadingError,
             KeyError,  # see: https://github.com/Grokzen/redis-py-cluster/issues/287
         ):
-            self.connection_pool.nodes.reset()
+            # the code in the RedisCluster __init__ idiotically sets
+            # self.nodes_manager = None
+            # self.nodes_manager = NodesManager(...)
+            cast(NodesManager, self.nodes_manager).reset()
             return super(self.__class__, self).execute_command(*args, **kwargs)
 
 

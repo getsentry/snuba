@@ -167,7 +167,7 @@ def rate_limit(
     #                                   running concurrently; in this case 3)
     #              ^
     #              | current time
-    pipe.zadd(bucket, {query_id: now + state.max_query_duration_s})  # type: ignore
+    pipe.zadd(bucket, {query_id: now + state.max_query_duration_s})
     if rate_limit_params.per_second_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need per-second
     else:
