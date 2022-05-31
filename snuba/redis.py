@@ -5,7 +5,7 @@ from functools import wraps
 from typing import Any, Callable, Union, cast
 
 from redis.client import StrictRedis
-from redis.cluster import NodesManager, RedisCluster  # type: ignore
+from redis.cluster import ClusterNode, NodesManager, RedisCluster  # type: ignore
 from redis.exceptions import (  # type: ignore
     BusyLoadingError,
     ConnectionError,
@@ -82,8 +82,11 @@ def _initialize_redis_cluster() -> RedisClientType:
         startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
         if startup_nodes is None:
             startup_nodes = [{"host": settings.REDIS_HOST, "port": settings.REDIS_PORT}]
+        startup_cluster_nodes = [
+            ClusterNode(n["host"], n["port"]) for n in startup_nodes
+        ]
         return RetryingStrictRedisCluster(
-            startup_nodes=startup_nodes,
+            startup_nodes=startup_cluster_nodes,
             socket_keepalive=True,
             password=settings.REDIS_PASSWORD,
             max_connections_per_node=True,
