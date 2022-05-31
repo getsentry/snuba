@@ -44,11 +44,11 @@ class RedisCache(Cache[TValue]):
 
         # TODO: This should probably be lazily instantiated, rather than
         # automatically happening at startup.
-        self.__script_get = client.register_script(
-            resource_string("snuba", "state/cache/redis/scripts/get.lua")
+        self.__script_get = client.execute_command(
+            "SCRIPT LOAD", resource_string("snuba", "state/cache/redis/scripts/get.lua")
         )
-        self.__script_set = client.register_script(
-            resource_string("snuba", "state/cache/redis/scripts/set.lua")
+        self.__script_set = client.execute_command(
+            "SCRIPT LOAD", resource_string("snuba", "state/cache/redis/scripts/set.lua")
         )
 
     def __build_key(
@@ -66,7 +66,10 @@ class RedisCache(Cache[TValue]):
         return self.__codec.decode(value)
 
     def set(self, key: str, value: TValue) -> None:
-        self.__client.set(
+        raise Exception("WHAT THE FUCK IS THIS")
+        self.__client.execute_command(
+            "EVALSHA",
+            self.__script_set,
             self.__build_key(key),
             self.__codec.encode(value),
             ex=get_config("cache_expiry_sec", 1),
@@ -132,8 +135,12 @@ class RedisCache(Cache[TValue]):
         # wait for a different client to finish the work. We have to pass the
         # task creation parameters -- the timeout (execution deadline) and a
         # new task identity just in case we are the first in line.
-        result = self.__script_get(
-            [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
+        result = self.__client.execute_command(
+            "EVALSHA",
+            self.__script_get,
+            3,
+            *[result_key, wait_queue_key, task_ident_key],
+            *[timeout, uuid.uuid1().hex],
         )
 
         if timer is not None:
@@ -193,14 +200,17 @@ class RedisCache(Cache[TValue]):
                 # value, other clients will know that we raised an exception.
                 logger.debug("Setting result and waking blocked clients...")
                 try:
-                    self.__script_set(
-                        [
+                    self.__client.execute_command(
+                        "EVALSHA",
+                        self.__script_set,
+                        4,
+                        *[
                             redis_key_to_write_to,
                             wait_queue_key,
                             task_ident_key,
                             build_notify_queue_key(task_ident),
                         ],
-                        argv,
+                        *argv,
                     )
                 except ResponseError:
                     # An error response here indicates that we overran our
