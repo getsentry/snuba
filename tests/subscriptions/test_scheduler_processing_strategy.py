@@ -37,10 +37,12 @@ from tests.backends.metrics import TestingMetricsBackend
 
 def test_tick_buffer_immediate() -> None:
     epoch = datetime(1970, 1, 1)
-
     next_step = mock.Mock()
+    metrics = TestingMetricsBackend()
 
-    strategy = TickBuffer(SchedulingWatermarkMode.PARTITION, 2, None, next_step)
+    strategy = TickBuffer(
+        SchedulingWatermarkMode.PARTITION, 2, None, next_step, metrics
+    )
 
     topic = Topic("messages")
     partition = Partition(topic, 0)
@@ -66,16 +68,11 @@ def test_tick_buffer_immediate() -> None:
 def test_tick_buffer_wait_slowest() -> None:
     epoch = datetime(1970, 1, 1)
     now = datetime.now()
-
     next_step = mock.Mock()
+    metrics = TestingMetricsBackend()
 
     # Create strategy with 2 partitions
-    strategy = TickBuffer(
-        SchedulingWatermarkMode.GLOBAL,
-        2,
-        10,
-        next_step,
-    )
+    strategy = TickBuffer(SchedulingWatermarkMode.GLOBAL, 2, 10, next_step, metrics)
 
     topic = Topic("messages")
     commit_log_partition = Partition(topic, 0)
@@ -325,14 +322,15 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
     now = datetime.now()
 
     metrics_backend = TestingMetricsBackend()
-
     next_step = mock.Mock()
+    metrics = TestingMetricsBackend()
 
     strategy = TickBuffer(
         SchedulingWatermarkMode.PARTITION,
         2,
         10,
         ProvideCommitStrategy(2, next_step, metrics_backend),
+        metrics,
     )
 
     topic = Topic("messages")
@@ -410,7 +408,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
     now = datetime.now()
 
     metrics_backend = TestingMetricsBackend()
-
     next_step = mock.Mock()
 
     strategy = TickBuffer(
@@ -418,6 +415,7 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
         2,
         10,
         ProvideCommitStrategy(2, next_step, metrics_backend),
+        metrics_backend,
     )
 
     topic = Topic("messages")
@@ -438,7 +436,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
     strategy.submit(message_0_0)
 
     assert next_step.submit.call_count == 0
-    assert metrics_backend.calls == []
 
     # Another message in partition 0, cannot submit yet
     message_0_1 = Message(
@@ -457,7 +454,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
     strategy.submit(message_0_1)
 
     assert next_step.submit.call_count == 0
-    assert metrics_backend.calls == []
 
     # Message in partition 1, submitted to next step since it has the earliest timestamp.
     # Does not commit since we have not submitted anything on the other partition yet.
@@ -664,8 +660,7 @@ def test_produce_scheduled_subscription_message() -> None:
 
 def test_produce_stale_message() -> None:
     stale_threshold_seconds = 60
-    now = datetime.now().replace(second=0, microsecond=0)
-    # epoch = datetime(1970, 1, 1)
+    now = datetime.now()
     metrics_backend = TestingMetricsBackend()
     partition_index = 0
     entity_key = EntityKey.EVENTS
@@ -752,7 +747,7 @@ def test_produce_stale_message() -> None:
             Tick(
                 0,
                 offsets=Interval(3, 4),
-                timestamps=Interval(now - timedelta(minutes=1), now),
+                timestamps=Interval(now - timedelta(seconds=50), now),
             ),
             True,
         ),
