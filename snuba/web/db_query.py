@@ -228,12 +228,12 @@ def execute_query(
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
     """
@@ -246,20 +246,20 @@ def execute_query(
     column_counter = ReferencedColumnsCounter()
     column_counter.visit(clickhouse_query.get_from_clause())
     if column_counter.count_columns() > uc_max:
-        query_settings["use_uncompressed_cache"] = 0
+        clickhouse_query_settings["use_uncompressed_cache"] = 0
 
     # Force query to use the first shard replica, which
     # should have synchronously received any cluster writes
     # before this query is run.
-    consistent = request_settings.get_consistent()
+    consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        query_settings["load_balancing"] = "in_order"
-        query_settings["max_threads"] = 1
+        clickhouse_query_settings["load_balancing"] = "in_order"
+        clickhouse_query_settings["max_threads"] = 1
 
     result = reader.execute(
         formatted_query,
-        query_settings,
+        clickhouse_query_settings,
         with_totals=clickhouse_query.has_totals(),
         robust=robust,
     )
@@ -275,12 +275,12 @@ def execute_query(
 @with_span(op="db")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
     # Global rate limiter is added at the end of the chain to be
@@ -288,11 +288,11 @@ def execute_query_with_rate_limits(
     # This allows us not to borrow capacity from the global quota
     # during the evaluation if one of the more specific limiters
     # (like the project rate limiter) rejects the query first.
-    request_settings.add_rate_limit(get_global_rate_limit_params())
+    query_settings.add_rate_limit(get_global_rate_limit_params())
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
     with RateLimitAggregator(
-        request_settings.get_rate_limit_params()
+        query_settings.get_rate_limit_params()
     ) as rate_limit_stats_container:
         stats.update(rate_limit_stats_container.to_dict())
         timer.mark("rate_limit")
@@ -301,18 +301,18 @@ def execute_query_with_rate_limits(
             PROJECT_RATE_LIMIT_NAME
         )
 
-        thread_quota = request_settings.get_resource_quota()
+        thread_quota = query_settings.get_resource_quota()
         if (
-            ("max_threads" in query_settings or thread_quota is not None)
+            ("max_threads" in clickhouse_query_settings or thread_quota is not None)
             and project_rate_limit_stats is not None
             and project_rate_limit_stats.concurrent > 1
         ):
             maxt = (
-                query_settings["max_threads"]
+                clickhouse_query_settings["max_threads"]
                 if thread_quota is None
                 else thread_quota.max_threads
             )
-            query_settings["max_threads"] = max(
+            clickhouse_query_settings["max_threads"] = max(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
 
@@ -343,12 +343,12 @@ def execute_query_with_rate_limits(
 
         return execute_query(
             clickhouse_query,
-            request_settings,
+            query_settings,
             formatted_query,
             reader,
             timer,
             stats,
-            query_settings,
+            clickhouse_query_settings,
             robust=robust,
         )
 
@@ -390,12 +390,12 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
 @with_span(op="db")
 def execute_query_with_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
     # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
@@ -413,7 +413,7 @@ def execute_query_with_caching(
     execute = partial(
         execute_query_with_rate_limits,
         clickhouse_query,
-        request_settings,
+        query_settings,
         formatted_query,
         reader,
         timer,
@@ -424,7 +424,7 @@ def execute_query_with_caching(
 
     with sentry_sdk.start_span(description="execute", op="db") as span:
         key = get_query_cache_key(formatted_query)
-        query_settings["query_id"] = key
+        clickhouse_query_settings["query_id"] = key
         if use_cache:
             cache_partition = _get_cache_partition(reader)
             result = cache_partition.get(key)
@@ -446,16 +446,16 @@ def execute_query_with_caching(
 @with_span(op="db")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
-    query_settings["query_id"] = query_id
+    clickhouse_query_settings["query_id"] = query_id
 
     span = Hub.current.scope.span
     if span:
@@ -485,7 +485,7 @@ def execute_query_with_readthrough_caching(
         partial(
             execute_query_with_rate_limits,
             clickhouse_query,
-            request_settings,
+            query_settings,
             formatted_query,
             reader,
             timer,
@@ -494,7 +494,7 @@ def execute_query_with_readthrough_caching(
             robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
-        timeout=_get_cache_wait_timeout(query_settings, reader),
+        timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
         timer=timer,
     )
 
@@ -527,7 +527,7 @@ def raw_query(
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
@@ -573,7 +573,7 @@ def raw_query(
     try:
         result = execute_query_strategy(
             clickhouse_query,
-            request_settings,
+            query_settings,
             formatted_query,
             reader,
             timer,

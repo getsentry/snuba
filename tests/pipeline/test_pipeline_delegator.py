@@ -103,9 +103,9 @@ def test() -> None:
     set_config("pipeline_split_rate_limiter", 1)
 
     with cv:
-        request_settings = HTTPQuerySettings(referrer="ref")
+        query_settings = HTTPQuerySettings(referrer="ref")
         delegator.build_execution_pipeline(
-            Request("", query_body, query, get_app_id("default"), "", request_settings),
+            Request("", query_body, query, get_app_id("default"), "", query_settings),
             query_runner,
         ).execute()
         cv.wait(timeout=5)
@@ -118,7 +118,7 @@ def test() -> None:
 
     assert mock_callback.call_args == call(
         query,
-        request_settings,
+        query_settings,
         "ref",
         Result("errors", query_result, ANY),
         [Result("errors_ro", query_result, ANY)],

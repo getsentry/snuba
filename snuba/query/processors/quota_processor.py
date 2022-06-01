@@ -17,7 +17,7 @@ class ResourceQuotaProcessor(QueryProcessor):
     def __init__(self, project_field: str):
         self.__project_field = project_field
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         enabled = get_config(ENABLED_CONFIG, 1)
         if not enabled:
             return
@@ -29,11 +29,11 @@ class ResourceQuotaProcessor(QueryProcessor):
         # TODO: Like for the rate limiter Add logic for multiple IDs
         project_id = str(project_ids.pop())
         thread_quota = get_config(
-            f"{REFERRER_PROJECT_CONFIG}_{request_settings.referrer}_{project_id}"
+            f"{REFERRER_PROJECT_CONFIG}_{query_settings.referrer}_{project_id}"
         )
 
         if not thread_quota:
             return
 
         assert isinstance(thread_quota, int)
-        request_settings.set_resource_quota(ResourceQuota(max_threads=thread_quota))
+        query_settings.set_resource_quota(ResourceQuota(max_threads=thread_quota))

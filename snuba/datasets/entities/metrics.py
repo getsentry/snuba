@@ -56,7 +56,7 @@ from snuba.query.validation.validators import (
 
 
 class TagsTypeTransformer(QueryProcessor):
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             if not isinstance(exp, SubscriptableReference):
                 return exp

@@ -205,7 +205,7 @@ def test_array_has_optimizer(
     query: ClickhouseQuery,
     expected_conditions: Optional[Expression],
 ) -> None:
-    request_settings = HTTPQuerySettings()
+    query_settings = HTTPQuerySettings()
     array_has_processor = ArrayHasOptimizer(["spans.op", "spans.group"])
-    array_has_processor.process_query(query, request_settings)
+    array_has_processor.process_query(query, query_settings)
     assert query.get_condition() == expected_conditions

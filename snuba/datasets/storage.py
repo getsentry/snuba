@@ -211,6 +211,6 @@ class QueryStorageSelector(ABC):
 
     @abstractmethod
     def select_storage(
-        self, query: Query, request_settings: QuerySettings
+        self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
         raise NotImplementedError

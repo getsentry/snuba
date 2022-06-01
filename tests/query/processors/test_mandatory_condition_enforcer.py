@@ -156,10 +156,10 @@ def test_condition_enforcer(
     query: Query, valid: bool, org_id_enforcer: OrgIdEnforcer
 ) -> None:
     set_config("mandatory_condition_enforce", 1)
-    request_settings = HTTPQuerySettings(consistent=True)
+    query_settings = HTTPQuerySettings(consistent=True)
     processor = MandatoryConditionEnforcer([org_id_enforcer, ProjectIdEnforcer()])
     if valid:
-        processor.process_query(query, request_settings)
+        processor.process_query(query, query_settings)
     else:
         with pytest.raises(AssertionError):
-            processor.process_query(query, request_settings)
+            processor.process_query(query, query_settings)

@@ -18,7 +18,7 @@ class BasicFunctionsProcessor(QueryProcessor):
     This exists only to preserve the current Snuba syntax and only works on the new AST.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "uniq":

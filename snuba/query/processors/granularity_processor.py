@@ -30,7 +30,7 @@ class GranularityProcessor(QueryProcessor):
             f"Granularity must be multiple of one of {GRANULARITIES_AVAILABLE}"
         )
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         granularity = self.__get_granularity(query)
         query.add_condition_to_ast(
             binary_condition(

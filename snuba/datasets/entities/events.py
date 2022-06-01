@@ -107,11 +107,11 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         self.__mappers = mappers
 
     def select_storage(
-        self, query: Query, request_settings: QuerySettings
+        self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
         use_readonly_storage = (
             state.get_config("enable_events_readonly_table", False)
-            and not request_settings.get_consistent()
+            and not query_settings.get_consistent()
         )
 
         storage = (
@@ -127,9 +127,9 @@ class ErrorsV2QueryStorageSelector(QueryStorageSelector):
         self.__mappers = mappers
 
     def select_storage(
-        self, query: Query, request_settings: QuerySettings
+        self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
-        use_readonly_storage = not request_settings.get_consistent()
+        use_readonly_storage = not query_settings.get_consistent()
 
         storage = (
             self.__errors_ro_table if use_readonly_storage else self.__errors_table

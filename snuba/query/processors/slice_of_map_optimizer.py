@@ -10,7 +10,7 @@ class SliceOfMapOptimizer(QueryProcessor):
     a pattern often produced by UUIDArrayColumnProcessor.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         query.transform_expressions(self._process_expressions)
 
     def _process_expressions(self, exp: Expression) -> Expression:

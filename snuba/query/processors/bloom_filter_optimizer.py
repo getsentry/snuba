@@ -14,7 +14,7 @@ from snuba.query.query_settings import QuerySettings
 
 
 class BloomFilterOptimizer(AbstractArrayJoinOptimizer):
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         single_filtered, multiple_filtered = self.get_filtered_arrays(
             query, self.key_columns
         )

@@ -83,7 +83,7 @@ class NullColumnCaster(QueryProcessor):
     def mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
         return self.__mismatched_null_columns
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def cast_column_to_nullable(exp: Expression) -> Expression:
             if isinstance(exp, Column):
                 if exp.column_name in self.mismatched_null_columns:

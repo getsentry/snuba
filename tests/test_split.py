@@ -58,7 +58,7 @@ def test_no_split(
 
     def do_query(
         query: ClickhouseQuery,
-        request_settings: QuerySettings,
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         assert query == query
@@ -128,7 +128,7 @@ def test_col_split(
 ) -> None:
     def do_query(
         query: ClickhouseQuery,
-        request_settings: QuerySettings,
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         selected_col_names = [
@@ -330,7 +330,7 @@ def test_col_split_conditions(
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
 
     def do_query(
-        query: ClickhouseQuery, request_settings: QuerySettings = None
+        query: ClickhouseQuery, query_settings: QuerySettings = None
     ) -> QueryResult:
         return QueryResult(
             {
@@ -359,7 +359,7 @@ def test_time_split_ast() -> None:
 
     def do_query(
         query: ClickhouseQuery,
-        request_settings: QuerySettings,
+        query_settings: QuerySettings,
     ) -> QueryResult:
         from_date_ast, to_date_ast = get_time_range(query, "timestamp")
         assert from_date_ast is not None and isinstance(from_date_ast, datetime)

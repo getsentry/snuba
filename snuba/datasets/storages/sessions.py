@@ -105,7 +105,7 @@ materialized_view_schema = TableSchema(
 
 
 class MinuteResolutionProcessor(QueryProcessor):
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # NOTE: the product side is restricted to a 6h window, however it rounds
         # outwards, which extends the window to 7h.
         from_date, to_date = get_time_range(query, "started")

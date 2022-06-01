@@ -11,7 +11,7 @@ class TableRateLimit(QueryProcessor):
     TODO: Do this at Cluster level instead.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         table_name = query.get_from_clause().table_name
         (per_second, concurr) = get_configs(
             [
@@ -27,4 +27,4 @@ class TableRateLimit(QueryProcessor):
             concurrent_limit=concurr,
         )
 
-        request_settings.add_rate_limit(rate_limit)
+        query_settings.add_rate_limit(rate_limit)

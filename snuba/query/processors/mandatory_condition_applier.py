@@ -11,7 +11,7 @@ class MandatoryConditionApplier(QueryProcessor):
     and applies them to the query.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
 
         mandatory_conditions = query.get_from_clause().mandatory_conditions
 

@@ -49,7 +49,7 @@ class ArrayHasOptimizer(QueryProcessor):
             ),
         )
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def replace_expression(expr: Expression) -> Expression:
             match = self.__array_has_pattern.match(expr)
 

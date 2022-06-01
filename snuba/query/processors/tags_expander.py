@@ -14,7 +14,7 @@ class TagsExpanderProcessor(QueryProcessor):
     valid column name.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             # This is intentionally not configurable in order to discourage creating
             # a special syntax for expressions that should be function calls.

@@ -90,7 +90,7 @@ class MappingColumnPromoter(QueryProcessor):
         self.__specs = mapping_specs
         self.__cast_to_string = cast_to_string
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_nested_column(exp: Expression) -> Expression:
             subscript = match_subscriptable_reference(exp)
             if subscript is None:

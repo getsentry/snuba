@@ -14,5 +14,5 @@ class ConsistencyEnforcerProcessor(QueryProcessor):
     like the CDC tables.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         query.set_from_clause(replace(query.get_from_clause(), final=True))

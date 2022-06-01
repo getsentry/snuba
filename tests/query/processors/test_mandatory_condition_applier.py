@@ -78,9 +78,9 @@ def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> Non
 
     query_ast_copy = copy.deepcopy(query)
 
-    request_settings = HTTPQuerySettings(consistent=True)
+    query_settings = HTTPQuerySettings(consistent=True)
     processor = MandatoryConditionApplier()
-    processor.process_query(query, request_settings)
+    processor.process_query(query, query_settings)
 
     query_ast_copy.add_condition_to_ast(combine_and_conditions(mand_conditions))
 
