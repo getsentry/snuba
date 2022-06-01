@@ -78,7 +78,7 @@ class HTTPQuerySettings(QuerySettings):
         self.__legacy = legacy
         self.__rate_limit_params: List[RateLimitParameters] = []
         self.__resource_quota: Optional[ResourceQuota] = None
-        self.__referrer = referrer
+        self.referrer = referrer
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -121,12 +121,14 @@ class SubscriptionQuerySettings(QuerySettings):
         team: str = "workflow",
         feature: str = "subscription",
         app_id: str = "default",
+        referrer: str = "subscription",
     ) -> None:
         self.__consistent = consistent
         self.__parent_api = parent_api
         self.__team = team
         self.__feature = feature
         self.__app_id = app_id
+        self.referrer = referrer
 
     def get_turbo(self) -> bool:
         return False

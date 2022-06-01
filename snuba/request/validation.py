@@ -92,7 +92,6 @@ def build_request(
                 )
             elif settings_class == SubscriptionQuerySettings:
                 settings_obj = settings_class(
-                    referrer=referrer,
                     consistent=_consistent_override(True, referrer),
                 )
             query, snql_anonymized = parser(

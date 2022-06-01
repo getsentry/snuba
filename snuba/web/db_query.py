@@ -418,7 +418,7 @@ def execute_query_with_caching(
         reader,
         timer,
         stats,
-        query_settings,
+        clickhouse_query_settings,
         robust=robust,
     )
 
@@ -490,7 +490,7 @@ def execute_query_with_readthrough_caching(
             reader,
             timer,
             stats,
-            query_settings,
+            clickhouse_query_settings,
             robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
@@ -543,7 +543,7 @@ def raw_query(
     query. If this function ends up depending on the dataset, something is wrong.
     """
     all_confs = state.get_all_configs()
-    query_settings: MutableMapping[str, Any] = {
+    clickhouse_query_settings: MutableMapping[str, Any] = {
         k.split("/", 1)[1]: v
         for k, v in all_confs.items()
         if k.startswith("query_settings/")
@@ -560,7 +560,7 @@ def raw_query(
         timer,
         stats,
         query_metadata,
-        query_settings,
+        clickhouse_query_settings,
         trace_id,
     )
 
@@ -578,7 +578,7 @@ def raw_query(
             reader,
             timer,
             stats,
-            query_settings,
+            clickhouse_query_settings,
             robust=robust,
         )
     except Exception as cause:

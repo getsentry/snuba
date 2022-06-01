@@ -116,7 +116,6 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             replacement_type: "True" for replacement_type in flags.replacement_types
         }
         tags["referrer"] = query_settings.referrer
-        tags["parent_api"] = query_settings.get_parent_api()
         return tags
 
     def _set_query_final(self, query: Query, final: bool) -> None:
