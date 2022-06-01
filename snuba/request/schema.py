@@ -144,7 +144,9 @@ ATTRIBUTION_INFO_SCHEMA = {
         "team": {"type": "string", "default": "<unknown>"},
         "feature": {"type": "string", "default": "<unknown>"},
         "app_id": {"type": "string", "default": "default"},
+        "parent_api": {"type": "string", "default": "<unknown>"},
     },
+    "additionalProperties": False,
 }
 
 

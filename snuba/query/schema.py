@@ -21,8 +21,6 @@ SNQL_QUERY_SCHEMA = {
     "properties": {
         "query": {"type": "string"},
         "dataset": {"type": "string"},
-        # Maps to the transaction name of the Sentry API call
-        "parent_api": {"type": "string", "default": "<unknown>"},
     },
     "additionalProperties": False,
 }

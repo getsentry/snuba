@@ -1,4 +1,4 @@
-from snuba.query.query_settings import HTTPQuerySettings, SubscriptionQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request.schema import RequestSchema
 
 
@@ -16,7 +16,17 @@ def test_split_request():
     }
     schema = RequestSchema.build(HTTPQuerySettings)
     parts = schema.validate(payload)
-    import pdb
-
-    pdb.set_trace()
-    print(parts)
+    assert set(parts.query_settings.keys()) == {
+        "turbo",
+        "consistent",
+        "debug",
+        "dry_run",
+        "legacy",
+    }
+    assert set(parts.attribution_info.keys()) == {
+        "team",
+        "feature",
+        "app_id",
+        "parent_api",
+    }
+    assert set(parts.query.keys()) == {"query"}
