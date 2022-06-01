@@ -39,7 +39,9 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _process_values(
+        self, message: Mapping[str, Any]
+    ) -> Optional[Mapping[str, Any]]:
         raise NotImplementedError
 
     def process_message(
@@ -53,15 +55,18 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(message["timestamp"]))
         if timestamp is None:
             _raise_invalid_message(message, "Invalid timestamp")
+            return None
 
         keys = []
         values = []
         tags = message["tags"]
         if not isinstance(tags, Mapping):
             _raise_invalid_message(message, "Invalid tags type")
+            return None
         for key, value in sorted(tags.items()):
             if not key.isdigit() or not isinstance(value, int):
                 _raise_invalid_message(message, "Tag key/value invalid")
+                return None
             keys.append(int(key))
             values.append(value)
 
@@ -76,6 +81,10 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         except EventTooOld:
             return None
 
+        processed_values = self._process_values(message)
+        if processed_values is None:
+            return None
+
         processed = {
             "org_id": message["org_id"],
             "project_id": message["project_id"],
@@ -83,7 +92,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             "timestamp": timestamp,
             "tags.key": keys,
             "tags.value": values,
-            **self._process_values(message),
+            **processed_values,
             "materialization_version": mat_version,
             "retention_days": retention_days,
             "partition": metadata.partition,
@@ -96,13 +105,16 @@ class SetsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "s"
 
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _process_values(
+        self, message: Mapping[str, Any]
+    ) -> Optional[Mapping[str, Any]]:
         values = message["value"]
         for value in values:
             if not isinstance(value, int):
                 _raise_invalid_message(
                     message, f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
                 )
+                return None
         return {"set_values": values}
 
 
@@ -110,12 +122,15 @@ class CounterMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "c"
 
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _process_values(
+        self, message: Mapping[str, Any]
+    ) -> Optional[Mapping[str, Any]]:
         value = message["value"]
         if not isinstance(value, (int, float)):
             _raise_invalid_message(
                 message, f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
             )
+            return None
         return {"value": value}
 
 
@@ -123,13 +138,16 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "d"
 
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _process_values(
+        self, message: Mapping[str, Any]
+    ) -> Optional[Mapping[str, Any]]:
         values = message["value"]
         for value in values:
             if not isinstance(value, (int, float)):
                 _raise_invalid_message(
                     message, f"{ILLEGAL_VALUE_IN_SET} {INT_FLOAT_EXPECTED}: {value}"
                 )
+                return None
         return {"values": values}
 
 
@@ -147,7 +165,9 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             METRICS_DISTRIBUTIONS_TYPE,
         }
 
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _process_values(
+        self, message: Mapping[str, Any]
+    ) -> Optional[Mapping[str, Any]]:
         if message["type"] == METRICS_SET_TYPE:
             values = message["value"]
             for value in values:
@@ -155,6 +175,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
                     _raise_invalid_message(
                         message, f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
                     )
+                    return None
             return {"metric_type": OutputType.SET.value, "set_values": values}
         elif message["type"] == METRICS_COUNTERS_TYPE:
             value = message["value"]
@@ -163,6 +184,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
                     message,
                     f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}",
                 )
+                return None
             return {"metric_type": OutputType.COUNTER.value, "count_value": value}
         else:  # METRICS_DISTRIBUTIONS_TYPE
             values = message["value"]
@@ -171,6 +193,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
                     _raise_invalid_message(
                         message, f"{ILLEGAL_VALUE_IN_SET} {INT_FLOAT_EXPECTED}: {value}"
                     )
+                    return None
             return {"metric_type": OutputType.DIST.value, "distribution_values": values}
 
 
@@ -178,7 +201,7 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
     """
     Pass an invalid message to the DLQ by raising `InvalidMessages` exception.
     """
-    if state.get_config("ENABLE_METRICS_DLQ", False):
+    if state.get_config("enable_metrics_dlq", False):
         raise InvalidMessages(
             [
                 InvalidRawMessage(
@@ -188,8 +211,8 @@ def _raise_invalid_message(message: Mapping[str, Any], reason: str) -> None:
             ]
         )
     else:
-        logger.warning(
+        logger.error(
             "Ignored an invalid message on Metrics! (Did not go to DLQ)",
             exc_info=True,
-            extra={"message": message, "reason": reason},
+            extra={"original_message": message, "reason": reason},
         )

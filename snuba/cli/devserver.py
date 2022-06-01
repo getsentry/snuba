@@ -107,82 +107,41 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--consumer-group=cdc_group",
             ],
         ),
+        (
+            "subscriptions-scheduler-executor-events",
+            [
+                "snuba",
+                "subscriptions-scheduler-executor",
+                "--dataset=events",
+                "--entity=events",
+                "--consumer-group=snuba-events-subscriptions-scheduler-executor",
+                "--followed-consumer-group=snuba-consumers",
+                "--auto-offset-reset=latest",
+                "--no-strict-offset-reset",
+                "--log-level=debug",
+                "--delay-seconds=1",
+                "--schedule-ttl=10",
+                "--stale-threshold-seconds=900",
+            ],
+        ),
+        (
+            "subscriptions-scheduler-executor-transactions",
+            [
+                "snuba",
+                "subscriptions-scheduler-executor",
+                "--dataset=transactions",
+                "--entity=transactions",
+                "--consumer-group=snuba-transactions-subscriptions-scheduler-executor",
+                "--followed-consumer-group=transactions_group",
+                "--auto-offset-reset=latest",
+                "--no-strict-offset-reset",
+                "--log-level=debug",
+                "--delay-seconds=1",
+                "--schedule-ttl=10",
+                "--stale-threshold-seconds=900",
+            ],
+        ),
     ]
-
-    if settings.ENABLE_NEW_SUBSCRIPTIONS:
-        daemons += [
-            (
-                "subscriptions-scheduler-executor-events",
-                [
-                    "snuba",
-                    "subscriptions-scheduler-executor",
-                    "--dataset=events",
-                    "--entity=events",
-                    "--consumer-group=snuba-events-subscriptions-scheduler-executor",
-                    "--followed-consumer-group=snuba-consumers",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
-                    "--delay-seconds=1",
-                    "--schedule-ttl=10",
-                ],
-            ),
-            (
-                "subscriptions-scheduler-executor-transactions",
-                [
-                    "snuba",
-                    "subscriptions-scheduler-executor",
-                    "--dataset=transactions",
-                    "--entity=transactions",
-                    "--consumer-group=snuba-transactions-subscriptions-scheduler-executor",
-                    "--followed-consumer-group=transactions_group",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
-                    "--delay-seconds=1",
-                    "--schedule-ttl=10",
-                ],
-            ),
-        ]
-    else:
-        daemons += [
-            (
-                "subscriptions-consumer-events",
-                [
-                    "snuba",
-                    "subscriptions",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
-                    "--max-batch-size=1",
-                    "--consumer-group=snuba-events-subscriptions-consumers",
-                    "--dataset=events",
-                    "--commit-log-topic=snuba-commit-log",
-                    "--commit-log-group=snuba-consumers",
-                    "--delay-seconds=1",
-                    "--schedule-ttl=10",
-                    "--max-query-workers=1",
-                ],
-            ),
-            (
-                "subscriptions-consumer-transactions",
-                [
-                    "snuba",
-                    "subscriptions",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
-                    "--max-batch-size=1",
-                    "--consumer-group=snuba-transactions-subscriptions-consumers",
-                    "--dataset=transactions",
-                    "--commit-log-topic=snuba-commit-log",
-                    "--commit-log-group=transactions_group",
-                    "--delay-seconds=1",
-                    "--schedule-ttl=10",
-                    "--max-query-workers=1",
-                ],
-            ),
-        ]
 
     if settings.ENABLE_SENTRY_METRICS_DEV:
         daemons += [
@@ -219,28 +178,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     ],
                 ),
             ]
-
-    if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
-        daemons += [
-            (
-                "subscriptions-consumer-sessions",
-                [
-                    "snuba",
-                    "subscriptions",
-                    "--auto-offset-reset=latest",
-                    "--no-strict-offset-reset",
-                    "--log-level=debug",
-                    "--max-batch-size=1",
-                    "--consumer-group=snuba-sessions-subscriptions-consumers",
-                    "--dataset=sessions",
-                    "--commit-log-topic=snuba-sessions-commit-log",
-                    "--commit-log-group=sessions_group",
-                    "--delay-seconds=1",
-                    "--schedule-ttl=10",
-                    "--max-query-workers=1",
-                ],
-            )
-        ]
 
     if settings.ENABLE_PROFILES_CONSUMER:
         daemons += [

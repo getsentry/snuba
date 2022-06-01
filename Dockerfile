@@ -65,8 +65,8 @@ RUN set -ex; \
 # so try not to do anything heavy beyond here.
 COPY . ./
 RUN set -ex; \
-    groupadd -r snuba; \
-    useradd -r -g snuba snuba; \
+    groupadd -r snuba --gid 1000; \
+    useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
     pip install -e .; \
     snuba --help;

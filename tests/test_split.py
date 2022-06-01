@@ -14,6 +14,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
@@ -78,6 +79,54 @@ def test_no_split(
     )
 
     strategy.execute(query, HTTPRequestSettings(), do_query)
+
+
+def test_set_limit_on_split_query():
+    storage = get_dataset("events").get_default_entity().get_all_storages()[0]
+    query = ClickhouseQuery(
+        Table("events", storage.get_schema().get_columns()),
+        selected_columns=[
+            SelectedExpression(col.name, Column(None, None, col.name))
+            for col in storage.get_schema().get_columns()
+        ],
+        limit=420,
+    )
+
+    query_run_count = 0
+
+    def do_query(
+        query: ClickhouseQuery, request_settings: RequestSettings
+    ) -> QueryResult:
+        nonlocal query_run_count
+        query_run_count += 1
+        if query_run_count == 1:
+            return QueryResult(
+                result={
+                    "data": [
+                        {
+                            "event_id": "a",
+                            "project_id": "1",
+                            "timestamp": " 2019-10-01 22:33:42",
+                        },
+                        {
+                            "event_id": "a",
+                            "project_id": "1",
+                            "timestamp": " 2019-10-01 22:44:42",
+                        },
+                    ]
+                },
+                extra={},
+            )
+        else:
+            assert query.get_limit() == 2
+            return QueryResult({}, {})
+
+    ColumnSplitQueryStrategy(
+        id_column="event_id",
+        project_column="project_id",
+        timestamp_column="timestamp",
+    ).execute(query, HTTPRequestSettings(), do_query)
+    assert query_run_count == 2
 
 
 test_data_col = [
