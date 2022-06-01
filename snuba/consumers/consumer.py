@@ -59,7 +59,6 @@ from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.utils.streams.topics import Topic as StreamsTopic
 from snuba.writer import BatchWriter, MockBatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -611,7 +610,6 @@ MultistorageProcessedMessage = Sequence[
 def __message_to_dict(
     message: Message[KafkaPayload],
 ) -> Dict[str, Any]:
-    # TODO: Remove temporary mitigations for DLQ prod test
     return {
         "message_payload_value": message.payload.value,
         "message_offset": message.offset,
@@ -621,8 +619,6 @@ def __message_to_dict(
 
 
 def skip_kafka_message(message: Message[KafkaPayload]) -> bool:
-    # TODO: Remove temporary mitigations for DLQ prod test
-
     # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
     messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
     return (
@@ -631,13 +627,26 @@ def skip_kafka_message(message: Message[KafkaPayload]) -> bool:
     )
 
 
+def __invalid_kafka_message(
+    message: Message[KafkaPayload], consumer_group: str, err: Exception
+) -> InvalidKafkaMessage:
+    return InvalidKafkaMessage(
+        payload=message.payload.value,
+        timestamp=message.timestamp,
+        topic=message.partition.topic.name,
+        consumer_group=consumer_group,
+        partition=message.partition.index,
+        offset=message.offset,
+        headers=message.payload.headers,
+        key=message.payload.key,
+        reason=f"{err.__class__.__name__}: {err}",
+    )
+
+
 def process_message(
     processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
 
-    # TODO: Remove temporary mitigations for DLQ prod test
-
-    # Mitigation: Last resort - Hardcode message(s) to skip in runtime config
     if skip_kafka_message(message):
         logger.warning(
             f"A consumer for {message.partition.topic.name} skipped a message!",
@@ -645,18 +654,12 @@ def process_message(
         )
         return None
 
-    # Mitigation: JSON fails to deserialize
     try:
         deserialized_message = rapidjson.loads(message.payload.value)
     except Exception as err:
-        if message.partition.topic.name == StreamsTopic.METRICS.value:
-            logger.error(
-                err,
-                exc_info=True,
-                extra=__message_to_dict(message),
-            )
-            return None
-        raise err
+        raise InvalidMessages(
+            [__invalid_kafka_message(message, consumer_group, err)]
+        ) from err
 
     try:
         result = processor.process_message(
@@ -666,34 +669,10 @@ def process_message(
             ),
         )
     except Exception as err:
-        # TODO: Remove if condition, leaving only code in else block after DLQ prod test
-        if (
-            message.partition.topic.name == StreamsTopic.METRICS.value
-            and not get_config("enable_metrics_dlq", False)
-        ):
-            logger.error(
-                err,
-                exc_info=True,
-                extra={"cause": "Caught an exception on Metrics! (DLQ was disabled)"},
-            )
-            return None
-        else:
-            logger.error(err, exc_info=True)
-            raise InvalidMessages(
-                [
-                    InvalidKafkaMessage(
-                        payload=message.payload.value,
-                        timestamp=message.timestamp,
-                        topic=message.partition.topic.name,
-                        consumer_group=consumer_group,
-                        partition=message.partition.index,
-                        offset=message.offset,
-                        headers=message.payload.headers,
-                        key=message.payload.key,
-                        reason=str(err.args),
-                    )
-                ]
-            ) from err
+        logger.error(err, exc_info=True)
+        raise InvalidMessages(
+            [__invalid_kafka_message(message, consumer_group, err)]
+        ) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
