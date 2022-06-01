@@ -423,14 +423,14 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     storage = entity.get_writable_storage()
     assert storage is not None
     for p in entity.get_query_processors():
-        p.process_query(query, request.settings)
+        p.process_query(query, request.query_settings)
 
-    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.settings)
+    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.query_settings)
 
     query_plan = SingleStorageQueryPlanBuilder(
         storage=storage,
         mappers=transaction_translator,
-    ).build_and_rank_plans(query, request.settings)[0]
+    ).build_and_rank_plans(query, request.query_settings)[0]
 
     return query_plan.query
 

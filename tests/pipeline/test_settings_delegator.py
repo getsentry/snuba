@@ -25,7 +25,9 @@ test_cases = [
         ],
         id="HTTP Request Settings",
     ),
-    pytest.param(SubscriptionQuerySettings, [], id="Subscriptions request settings"),
+    pytest.param(
+        SubscriptionQuerySettings, [], id="Subscriptions request.query_settings"
+    ),
 ]
 
 

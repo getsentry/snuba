@@ -98,7 +98,7 @@ class SubscriptionWorker(
         self, request: Request, timer: Timer, task: ScheduledSubscriptionTask
     ) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
-            is_consistent_query = request.settings.get_consistent()
+            is_consistent_query = request.query_settings.get_consistent()
 
             def run_consistent() -> Result:
                 request_copy = Request(

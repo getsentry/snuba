@@ -513,7 +513,7 @@ def dataset_query(
 
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
-    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+    if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
     return Response(json.dumps(payload), 200, {"Content-Type": "application/json"})

@@ -25,14 +25,14 @@ def _record_timer_metrics(
         tags={
             "status": query_metadata.status.value,
             "referrer": referrer,
-            "parent_api": request.settings.get_parent_api(),
+            "parent_api": request.query_settings.get_parent_api(),
             "final": final,
             "dataset": query_metadata.dataset,
         },
         mark_tags={
             "final": final,
             "referrer": referrer,
-            "parent_api": request.settings.get_parent_api(),
+            "parent_api": request.query_settings.get_parent_api(),
             "dataset": query_metadata.dataset,
         },
     )

@@ -17,7 +17,7 @@ TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
 class QueryPlanner(ABC, Generic[TPlan]):
     """
     A QueryPlanner contains a series of steps that, given a logical
-    query and request settings, executes all the logical query processing
+    query and request.query_settings, executes all the logical query processing
     translates the query and compiles a query plan that can be used
     to execute the query.
 
