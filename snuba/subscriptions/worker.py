@@ -246,6 +246,7 @@ class SubscriptionWorker(
                 task, self.__executor.submit(self.__execute, task, tick)
             )
             for task in tasks
+            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
     def flush_batch(
@@ -259,7 +260,6 @@ class SubscriptionWorker(
         results = [
             SubscriptionTaskResult(task, future.result())
             for task, future in itertools.chain.from_iterable(batch)
-            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
         # Produce all of the subscription results asynchronously and wait for

@@ -23,7 +23,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions", "sessions", "metrics"]),
+    type=click.Choice(["events", "transactions", "metrics"]),
     help="The dataset to target.",
 )
 @click.option(
@@ -31,9 +31,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "entity_names",
     required=True,
     multiple=True,
-    type=click.Choice(
-        ["events", "transactions", "sessions", "metrics_counters", "metrics_sets"]
-    ),
+    type=click.Choice(["events", "transactions", "metrics_counters", "metrics_sets"]),
     help="The entity to target.",
 )
 @click.option(
@@ -64,18 +62,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     help="Skip execution if timestamp is beyond this threshold compared to the system time",
 )
-# This option allows us to reroute the produced subscription results to a different
-# topic temporarily while we are testing and running the old and new subscription
-# pipeline concurrently. It is currently (temporarily) required to reduce the chance
-# of inadvertently writing to the actual result topics while we are still validating
-# results and running the old subscriptions pipeline. Eventaully we can just get it
-# from stream_loader.get_subscription_result_topic_spec()
-@click.option(
-    "--override-result-topic",
-    type=str,
-    required=True,
-    help="Override the result topic for testing",
-)
 # TODO: For testing alternate rebalancing strategies. To be eventually removed.
 @click.option(
     "--cooperative-rebalancing",
@@ -93,7 +79,6 @@ def subscriptions_executor(
     no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
-    override_result_topic: str,
     cooperative_rebalancing: bool,
 ) -> None:
     """
@@ -119,7 +104,7 @@ def subscriptions_executor(
     storage = get_entity(entity_key).get_writable_storage()
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
-    result_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
+    result_topic_spec = stream_loader.get_subscription_result_topic_spec()
     assert result_topic_spec is not None
 
     producer = KafkaProducer(
@@ -149,7 +134,6 @@ def subscriptions_executor(
         metrics,
         executor,
         stale_threshold_seconds,
-        override_result_topic,
         cooperative_rebalancing,
     )
 

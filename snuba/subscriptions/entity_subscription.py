@@ -132,7 +132,6 @@ class MetricsSetsSubscription(SessionsSubscription):
 
 
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
-    SessionsSubscription: EntityKey.SESSIONS,
     EventsSubscription: EntityKey.EVENTS,
     TransactionsSubscription: EntityKey.TRANSACTIONS,
     MetricsCountersSubscription: EntityKey.METRICS_COUNTERS,

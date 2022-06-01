@@ -10,7 +10,7 @@ from typing import Callable, Deque, Mapping, MutableMapping, Optional, Sequence,
 import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
-from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
@@ -57,8 +57,6 @@ def build_executor_consumer(
     metrics: MetricsBackend,
     executor: ThreadPoolExecutor,
     stale_threshold_seconds: Optional[int],
-    # TODO: Should be removed once testing is done
-    override_result_topic: str,
     cooperative_rebalancing: bool = False,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
@@ -143,7 +141,7 @@ def build_executor_consumer(
             producer,
             metrics,
             stale_threshold_seconds,
-            override_result_topic,
+            result_topic_spec.topic_name,
         ),
     )
 
@@ -337,7 +335,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             # Periodically commit offsets if we haven't started rollout yet
             self.__commit_data[message.partition] = Position(
-                message.offset, message.timestamp
+                message.next_offset, message.timestamp
             )
 
             now = time.time()
@@ -446,7 +444,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__queue.popleft()
 
             self.__commit_data[message.partition] = Position(
-                message.offset, message.timestamp
+                message.next_offset, message.timestamp
             )
         self.__throttled_commit()
 
@@ -486,12 +484,3 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__commit(
                 {message.partition: Position(message.offset, message.timestamp)}
             )
-
-        # Flush producer
-        if isinstance(self.__producer, KafkaProducer):
-            remaining = timeout - (time.time() - start) if timeout is not None else None
-            # TODO: This is just for testing. If it works expose a flush method on KafkaProducer
-            producer = self.__producer._KafkaProducer__producer  # type: ignore
-            logger.debug("Flushing executor producer")
-            messages = producer.flush(*[remaining] if remaining is not None else [])
-            logger.debug(f"{messages} executor messages pending delivery")

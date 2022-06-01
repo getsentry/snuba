@@ -1,3 +1,4 @@
+import copy
 from typing import Optional, Sequence
 
 from snuba.query.query_settings import QuerySettings
@@ -21,11 +22,17 @@ class RateLimiterDelegate(QuerySettings):
     Specifically the PipelineDelegator provides a RateLimiterDelegate to
     to each query pipeline so that the pipeline can use a separate
     rate limiter namespace without knowing about it.
+
+    A deepcopy of `delegate` is made to allow multiple concurrent execution
+    pipelines to not interfere with each other. The rate limit parameters
+    are stored in a list in the RequestSettings object. When the add_rate_limit
+    method is called from 2 concurrent execution pipelines they would add
+    the rate limits to the same list if a deepcopy is not created.
     """
 
     def __init__(self, prefix: str, delegate: QuerySettings):
         self.referrer = delegate.referrer
-        self.__delegate = delegate
+        self.__delegate = copy.deepcopy(delegate)
         self.__prefix = prefix
 
     def __append_prefix(self, rate_limiter: RateLimitParameters) -> RateLimitParameters:

@@ -24,7 +24,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions", "sessions", "metrics"]),
+    type=click.Choice(["events", "transactions", "metrics"]),
     help="The dataset to target.",
 )
 @click.option(
@@ -32,9 +32,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "entity_names",
     required=True,
     multiple=True,
-    type=click.Choice(
-        ["events", "transactions", "sessions", "metrics_counters", "metrics_sets"]
-    ),
+    type=click.Choice(["events", "transactions", "metrics_counters", "metrics_sets"]),
     help="The entity to target.",
 )
 @click.option(
@@ -59,6 +57,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--delay-seconds", type=int)
 @click.option(
@@ -75,6 +78,7 @@ def subscriptions_scheduler_executor(
     followed_consumer_group: str,
     max_concurrent_queries: int,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     schedule_ttl: int,
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
@@ -120,6 +124,7 @@ def subscriptions_scheduler_executor(
         followed_consumer_group,
         producer,
         auto_offset_reset,
+        not no_strict_offset_reset,
         schedule_ttl,
         delay_seconds,
         stale_threshold_seconds,

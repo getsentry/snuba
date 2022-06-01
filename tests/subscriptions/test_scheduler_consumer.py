@@ -1,8 +1,9 @@
 import importlib
+import logging
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional
 from unittest import mock
 
 import pytest
@@ -362,3 +363,41 @@ def test_tick_consumer_non_monotonic() -> None:
             epoch + timedelta(seconds=2),
             4,
         )
+
+
+def test_invalid_commit_log_message(caplog: Any) -> None:
+    clock = TestingClock()
+    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+
+    topic = Topic("messages")
+    followed_consumer_group = "events"
+    partition = Partition(topic, 0)
+
+    broker.create_topic(topic, partitions=1)
+
+    producer = broker.get_producer()
+
+    inner_consumer = broker.get_consumer("group")
+
+    consumer = CommitLogTickConsumer(inner_consumer, followed_consumer_group)
+
+    def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
+        assert inner_consumer.tell() == {partition: 0}
+        assert consumer.tell() == {partition: 0}
+
+    assignment_callback = mock.Mock(side_effect=_assignment_callback)
+
+    consumer.subscribe([topic], on_assign=assignment_callback)
+
+    # produce invalid payload to commit log topic (key should not be None)
+    producer.produce(
+        partition,
+        KafkaPayload(None, b"some-value", []),
+    ).result()
+
+    clock.sleep(1)
+
+    with caplog.at_level(logging.ERROR):
+        assert consumer.poll() is None
+
+    assert followed_consumer_group in caplog.text
