@@ -17,9 +17,9 @@ from snuba.datasets.storages.processors.replaced_groups import (
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.request.request_settings import HTTPQuerySettings
 
 
 def build_in(column: str, items: Sequence[int]) -> Expression:

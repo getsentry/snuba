@@ -16,7 +16,7 @@ from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.granularity_processor import GranularityProcessor
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 @pytest.mark.parametrize(

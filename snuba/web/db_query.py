@@ -25,6 +25,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     QueryStatus,
@@ -32,7 +33,6 @@ from snuba.querylog.query_metadata import (
 )
 from snuba.reader import Reader, Result
 from snuba.redis import redis_client
-from snuba.request.request_settings import QuerySettings
 from snuba.state.cache.abstract import (
     Cache,
     ExecutionTimeoutError,

@@ -18,7 +18,7 @@ from snuba.query.expressions import (
 from snuba.query.processors.type_converters.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 tests = [
     pytest.param(

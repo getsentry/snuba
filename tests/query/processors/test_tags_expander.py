@@ -8,8 +8,8 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.request.request_settings import HTTPQuerySettings
 
 
 def test_tags_expander() -> None:

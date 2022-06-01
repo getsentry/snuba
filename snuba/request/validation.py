@@ -15,16 +15,16 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
+from snuba.query.query_settings import (
+    HTTPQuerySettings,
+    QuerySettings,
+    SubscriptionQuerySettings,
+)
 from snuba.query.snql.parser import CustomProcessors
 from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
-from snuba.request.request_settings import (
-    HTTPQuerySettings,
-    QuerySettings,
-    SubscriptionQuerySettings,
-)
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
 

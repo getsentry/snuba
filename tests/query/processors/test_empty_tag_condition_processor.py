@@ -6,7 +6,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 
 test_data = [

@@ -5,7 +5,7 @@ from snuba.query import SelectedExpression
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.logical import Query
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def build_query(tag_key: Literal) -> Query:

@@ -27,7 +27,7 @@ from snuba.query.joins.equivalence_adder import add_equivalent_conditions
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 from snuba.web import QueryResult
 
 

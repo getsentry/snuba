@@ -12,8 +12,8 @@ from snuba.pipeline.query_pipeline import (
     QueryPlanner,
 )
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
-from snuba.request.request_settings import QuerySettings
 from snuba.web import QueryResult
 
 

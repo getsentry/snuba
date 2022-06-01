@@ -17,8 +17,8 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
-from snuba.request.request_settings import HTTPQuerySettings
 
 
 def test_iterate_over_query() -> None:

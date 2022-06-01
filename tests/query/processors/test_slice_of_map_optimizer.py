@@ -14,7 +14,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 tests = [
     pytest.param(

@@ -12,7 +12,7 @@ from snuba.query.dsl import divide, multiply, plus
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.performance_expressions import apdex_processor
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def test_apdex_format_expressions() -> None:

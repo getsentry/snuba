@@ -16,7 +16,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 
 

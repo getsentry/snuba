@@ -15,7 +15,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.processors.tuple_elementer import TupleElementer
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 

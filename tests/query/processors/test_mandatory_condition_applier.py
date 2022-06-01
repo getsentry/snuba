@@ -15,7 +15,7 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 test_data = [
     pytest.param(

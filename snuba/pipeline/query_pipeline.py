@@ -7,8 +7,8 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.query.logical import Query
+from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
-from snuba.request.request_settings import QuerySettings
 from snuba.web import QueryResult
 
 TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])

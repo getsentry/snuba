@@ -3,7 +3,7 @@ from dataclasses import replace
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 
 class TagsExpanderProcessor(QueryProcessor):

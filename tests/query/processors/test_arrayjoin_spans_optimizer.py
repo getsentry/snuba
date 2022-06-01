@@ -26,7 +26,7 @@ from snuba.query.processors.abstract_array_join_optimizer import (
 )
 from snuba.query.processors.arrayjoin_optimizer import ArrayJoinOptimizer
 from snuba.query.processors.bloom_filter_optimizer import BloomFilterOptimizer
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 
 spans_ops = Column(None, None, "spans.op")

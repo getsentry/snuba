@@ -18,7 +18,7 @@ from snuba.query.matchers import Column, FunctionCall, Or, Param, String
 from snuba.query.processors.abstract_array_join_optimizer import (
     AbstractArrayJoinOptimizer,
 )
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 
 class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):

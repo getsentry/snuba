@@ -6,9 +6,9 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.processors import QueryProcessor
+from snuba.query.query_settings import QuerySettings
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import ParamType, SignatureValidator
-from snuba.request.request_settings import QuerySettings
 
 
 class InvalidCustomFunctionCall(InvalidExpressionException):

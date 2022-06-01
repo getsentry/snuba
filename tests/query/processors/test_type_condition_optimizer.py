@@ -9,7 +9,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Literal
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def test_type_condition_optimizer() -> None:

@@ -30,9 +30,9 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     get_filtered_mapping_keys,
     zip_columns,
 )
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
-from snuba.request.request_settings import HTTPQuerySettings
 
 
 def build_query(

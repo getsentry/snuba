@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from snuba.query.logical import Query
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 
 class QueryProcessor(ABC):

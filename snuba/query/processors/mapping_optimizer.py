@@ -25,7 +25,7 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, AnyOptionalString
 from snuba.query.matchers import Column as ColumnMatcher
 from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 

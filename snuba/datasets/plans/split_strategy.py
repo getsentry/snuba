@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
 from snuba.clickhouse.query import Query
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 from snuba.web import QueryResult
 
 SplitQueryRunner = Callable[[Query, QuerySettings], QueryResult]

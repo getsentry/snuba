@@ -10,7 +10,7 @@ from snuba.query.dsl import literals_tuple, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.processors.tuple_elementer import TupleElementer
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 

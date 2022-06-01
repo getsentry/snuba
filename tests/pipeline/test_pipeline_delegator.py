@@ -15,10 +15,10 @@ from snuba.pipeline.pipeline_delegator import (
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.state import delete_config, set_config
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult

@@ -4,7 +4,7 @@ from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 #: Granularities for which a materialized view exist, in ascending order
 GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)

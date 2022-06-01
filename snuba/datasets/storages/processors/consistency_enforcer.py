@@ -2,7 +2,7 @@ from dataclasses import replace
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 
 class ConsistencyEnforcerProcessor(QueryProcessor):

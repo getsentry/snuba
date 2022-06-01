@@ -22,7 +22,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them

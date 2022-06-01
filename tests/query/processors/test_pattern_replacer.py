@@ -10,7 +10,7 @@ from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import MatchResult, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.processors.pattern_replacer import PatternReplacer
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 test_data = [
     pytest.param(

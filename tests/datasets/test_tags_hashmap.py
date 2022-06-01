@@ -3,8 +3,8 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column, FunctionCall, NoopVisitor
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
-from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer

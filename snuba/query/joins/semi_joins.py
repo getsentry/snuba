@@ -13,7 +13,7 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 
 class SemiJoinOptimizer(CompositeQueryProcessor):

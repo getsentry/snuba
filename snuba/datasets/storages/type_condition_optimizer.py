@@ -3,7 +3,7 @@ from snuba.clickhouse.query import Query
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Literal, String
-from snuba.request.request_settings import QuerySettings
+from snuba.query.query_settings import QuerySettings
 
 
 class TypeConditionOptimizer(QueryProcessor):
