@@ -5,6 +5,7 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.sessions import raw_schema, read_schema
@@ -37,12 +38,12 @@ def test_sessions_processing() -> None:
     sessions = get_dataset("sessions")
     query, snql_anonymized = parse_snql_query(query_body["query"], sessions)
     request = Request(
-        id="",
-        body=query_body,
+        id="a",
+        original_body=query_body,
         query=query,
-        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=HTTPQuerySettings(referrer=""),
+        query_settings=HTTPQuerySettings(referrer=""),
+        attribution_info=AttributionInfo(get_app_id("default"), "", None, None, None),
     )
 
     def query_runner(
@@ -201,13 +202,16 @@ def test_select_storage(
     subscription_settings = (
         SubscriptionQuerySettings if is_subscription else HTTPQuerySettings
     )
+
     request = Request(
-        id="",
-        body=query_body,
+        id="a",
+        original_body=query_body,
         query=query,
-        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=subscription_settings(referrer=""),
+        query_settings=subscription_settings(referrer=""),
+        attribution_info=AttributionInfo(
+            get_app_id("default"), "blah", None, None, None
+        ),
     )
 
     def query_runner(

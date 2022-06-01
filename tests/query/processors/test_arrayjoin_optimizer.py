@@ -6,6 +6,7 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -413,11 +414,11 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     request = Request(
         id="a",
-        body=body,
+        original_body=body,
         query=query,
-        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=HTTPQuerySettings(referrer="r"),
+        query_settings=HTTPQuerySettings(referrer="r"),
+        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
     )
     entity = get_entity(query.get_from_clause().key)
     storage = entity.get_writable_storage()

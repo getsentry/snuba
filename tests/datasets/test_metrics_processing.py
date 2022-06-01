@@ -5,6 +5,7 @@ import pytest
 
 from snuba import settings
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression, Query
 from snuba.clusters import cluster
 from snuba.datasets import factory
@@ -247,11 +248,11 @@ def test_metrics_processing(
 
     request = Request(
         id="",
-        body=query_body,
+        original_body=query_body,
         query=query,
-        app_id=get_app_id("default"),
         snql_anonymized="",
-        settings=HTTPQuerySettings(referrer=""),
+        query_settings=HTTPQuerySettings(referrer=""),
+        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
     )
 
     def query_runner(

@@ -117,7 +117,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             return replace(
                 request,
                 query=query,
-                settings=RateLimiterDelegate(builder_id, request.query_settings),
+                query_settings=RateLimiterDelegate(builder_id, request.query_settings),
             )
 
         executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](
