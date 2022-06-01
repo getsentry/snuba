@@ -12,7 +12,7 @@ class TableRateLimit(QueryProcessor):
     Set a rate limiter for individual tables.
     TODO: Do this at Cluster level instead.
     """
-    
+
     def __init__(self, suffix: Optional[str] = None) -> None:
         self.__suffix = "_".join(["", suffix]) if suffix else ""
 
