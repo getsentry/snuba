@@ -52,23 +52,11 @@ class RateLimiterDelegate(QuerySettings):
     def get_debug(self) -> bool:
         return self.__delegate.get_debug()
 
-    def get_parent_api(self) -> str:
-        return self.__delegate.get_parent_api()
-
     def get_dry_run(self) -> bool:
         return self.__delegate.get_dry_run()
 
     def get_legacy(self) -> bool:
         return self.__delegate.get_legacy()
-
-    def get_team(self) -> str:
-        return self.__delegate.get_team()
-
-    def get_feature(self) -> str:
-        return self.__delegate.get_feature()
-
-    def get_app_id(self) -> str:
-        return self.__delegate.get_app_id()
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return [

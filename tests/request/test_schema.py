@@ -2,7 +2,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request.schema import RequestSchema
 
 
-def test_split_request():
+def test_split_request() -> None:
     payload = {
         "turbo": False,
         "consistent": False,

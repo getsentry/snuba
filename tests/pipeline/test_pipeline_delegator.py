@@ -3,6 +3,7 @@ from typing import List, MutableSequence, Optional, Tuple, Union
 from unittest.mock import ANY, Mock, call
 
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -105,7 +106,16 @@ def test() -> None:
     with cv:
         query_settings = HTTPQuerySettings(referrer="ref")
         delegator.build_execution_pipeline(
-            Request("", query_body, query, get_app_id("default"), "", query_settings),
+            Request(
+                id="asd",
+                original_body=query_body,
+                query=query,
+                snql_anonymized="",
+                query_settings=query_settings,
+                attribution_info=AttributionInfo(
+                    get_app_id("blah"), "blah", None, None, None
+                ),
+            ),
             query_runner,
         ).execute()
         cv.wait(timeout=5)

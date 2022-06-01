@@ -14,6 +14,8 @@ class QuerySettings(ABC):
     the formation of the query for projects, but it doesn't appear in the SQL statement.
     """
 
+    referrer: str
+
     @abstractmethod
     def get_turbo(self) -> bool:
         pass

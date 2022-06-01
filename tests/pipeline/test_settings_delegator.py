@@ -39,9 +39,6 @@ def test_delegate(
     settings = settings_class(
         referrer="test",
         consistent=False,
-        parent_api="parent",
-        team="team",
-        feature="feature",
     )
 
     settings.add_rate_limit(

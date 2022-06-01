@@ -4,6 +4,7 @@ from datetime import datetime
 
 from snuba import settings
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
@@ -80,11 +81,13 @@ def test_transform_column_names() -> None:
         dataset,
         Request(
             id="asd",
-            body={},
+            original_body={},
             query=query,
-            app_id=get_app_id("default"),
             snql_anonymized="",
-            settings=query_settings,
+            query_settings=query_settings,
+            attribution_info=AttributionInfo(
+                get_app_id("blah"), "blah", None, None, None
+            ),
         ),
         timer,
     )

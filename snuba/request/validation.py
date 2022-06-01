@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Protocol, Tuple, Type, Union
+from typing import Any, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
 
@@ -77,7 +77,7 @@ def build_request(
         try:
             request_parts = schema.validate(body)
             if settings_class == HTTPQuerySettings:
-                query_settings: Mapping[str, bool | str] = {
+                query_settings: MutableMapping[str, bool | str] = {
                     **request_parts.query_settings,
                     "consistent": _consistent_override(
                         request_parts.query_settings.get("consistent", False), referrer
@@ -105,12 +105,12 @@ def build_request(
             org_ids = get_object_ids_in_query_ast(query, "org_id")
             if org_ids is not None and len(org_ids) == 1:
                 sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
-
+            attribution_info = dict(request_parts.attribution_info)
             # TODO: clean this up
-            request_parts.attribution_info["app_id"] = get_app_id(
+            attribution_info["app_id"] = get_app_id(
                 request_parts.attribution_info["app_id"]
             )
-            request_parts.attribution_info["referrer"] = referrer
+            attribution_info["referrer"] = referrer
 
             request_id = uuid.uuid4().hex
             request = Request(
@@ -120,7 +120,7 @@ def build_request(
                 # to be careful with the change.
                 original_body=body,
                 query=query,
-                attribution_info=AttributionInfo(**request_parts.attribution_info),
+                attribution_info=AttributionInfo(**attribution_info),
                 query_settings=settings_obj,
                 snql_anonymized=snql_anonymized,
             )

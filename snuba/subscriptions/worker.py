@@ -15,7 +15,6 @@ from arroyo.backends.abstract import Producer
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
 from snuba import state
-from snuba.attribution import get_app_id
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.query_settings import SubscriptionQuerySettings
@@ -103,13 +102,14 @@ class SubscriptionWorker(
             def run_consistent() -> Result:
                 request_copy = Request(
                     id=request.id,
-                    body=copy.deepcopy(request.body),
+                    # TODO: there should be no need to copy the original body after it has been parsed
+                    original_body=copy.deepcopy(request.original_body),
                     query=copy.deepcopy(request.query),
-                    app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
-                    settings=SubscriptionQuerySettings(
+                    query_settings=SubscriptionQuerySettings(
                         referrer=request.referrer, consistent=True
                     ),
+                    attribution_info=request.attribution_info,
                 )
 
                 return parse_and_run_query(
@@ -125,13 +125,14 @@ class SubscriptionWorker(
             def run_non_consistent() -> Result:
                 request_copy = Request(
                     id=request.id,
-                    body=copy.deepcopy(request.body),
+                    # TODO: there should be no need to copy the original body after it has been parsed
+                    original_body=copy.deepcopy(request.original_body),
                     query=copy.deepcopy(request.query),
-                    app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
-                    settings=SubscriptionQuerySettings(
+                    query_settings=SubscriptionQuerySettings(
                         referrer=request.referrer, consistent=False
                     ),
+                    attribution_info=request.attribution_info,
                 )
 
                 return parse_and_run_query(
