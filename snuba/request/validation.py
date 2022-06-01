@@ -8,6 +8,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Protocol, Tuple, Type
 import sentry_sdk
 
 from snuba import state
+from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
@@ -82,6 +83,8 @@ def build_request(
                         request_parts.query_settings.get("consistent", False), referrer
                     ),
                 }
+                query_settings["referrer"] = referrer
+                # TODO: referrer probably doesn't need to be passed in, it should be from the body
                 settings_obj: Union[
                     HTTPQuerySettings, SubscriptionQuerySettings
                 ] = settings_class(
@@ -89,9 +92,9 @@ def build_request(
                 )
             elif settings_class == SubscriptionQuerySettings:
                 settings_obj = settings_class(
+                    referrer=referrer,
                     consistent=_consistent_override(True, referrer),
                 )
-
             query, snql_anonymized = parser(
                 request_parts, settings_obj, dataset, custom_processing
             )
@@ -104,15 +107,22 @@ def build_request(
             if org_ids is not None and len(org_ids) == 1:
                 sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
 
+            # TODO: clean this up
+            request_parts.attribution_info["app_id"] = get_app_id(
+                request_parts.attribution_info["app_id"]
+            )
+            request_parts.attribution_info["referrer"] = referrer
+
             request_id = uuid.uuid4().hex
             request = Request(
-                request_id,
+                id=request_id,
                 # TODO: Replace this with the actual query raw body.
                 # this can have an impact on subscriptions so we need
                 # to be careful with the change.
                 original_body=body,
-                parsed_query=query,
+                query=query,
                 attribution_info=AttributionInfo(**request_parts.attribution_info),
+                query_settings=settings_obj,
                 snql_anonymized=snql_anonymized,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:

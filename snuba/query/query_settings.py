@@ -68,6 +68,7 @@ class HTTPQuerySettings(QuerySettings):
         dry_run: bool = False,
         # TODO: is this flag still relevant?
         legacy: bool = False,
+        referrer: str = "unknown",
     ) -> None:
         super().__init__()
         self.__turbo = turbo
@@ -77,6 +78,7 @@ class HTTPQuerySettings(QuerySettings):
         self.__legacy = legacy
         self.__rate_limit_params: List[RateLimitParameters] = []
         self.__resource_quota: Optional[ResourceQuota] = None
+        self.__referrer = referrer
 
     def get_turbo(self) -> bool:
         return self.__turbo

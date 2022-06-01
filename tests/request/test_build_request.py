@@ -93,6 +93,6 @@ def test_build_request(body: MutableMapping[str, Any], condition: Expression) ->
     )
 
     assert request.referrer == "my_request"
-    assert dict(request.body) == body
+    assert dict(request.original_body) == body
     status, differences = request.query.equals(expected_query)
     assert status == True, f"Query mismatch: {differences}"

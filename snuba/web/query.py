@@ -183,7 +183,7 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    if not request.settings.get_turbo() and SampleClauseFinder().visit(
+    if not request.query_settings.get_turbo() and SampleClauseFinder().visit(
         request.query.get_from_clause()
     ):
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})

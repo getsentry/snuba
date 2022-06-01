@@ -14,7 +14,7 @@ from snuba.query.query_settings import QuerySettings
 class Request:
     id: str
     original_body: Mapping[str, Any]
-    parsed_query: Union[Query, CompositeQuery[Entity]]
+    query: Union[Query, CompositeQuery[Entity]]
     query_settings: QuerySettings
     attribution_info: AttributionInfo
 
