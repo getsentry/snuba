@@ -22,7 +22,6 @@ from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdE
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.query_settings import QuerySettings
-from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
