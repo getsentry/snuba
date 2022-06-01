@@ -6,7 +6,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.web import QueryResult
 
 
@@ -32,11 +32,11 @@ def test_events_processing() -> None:
         query=query,
         app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=HTTPRequestSettings(referrer=""),
+        settings=HTTPQuerySettings(referrer=""),
     )
 
     def query_runner(
-        query: Query, settings: RequestSettings, reader: Reader
+        query: Query, settings: QuerySettings, reader: Reader
     ) -> QueryResult:
         assert query.get_selected_columns() == [
             SelectedExpression(

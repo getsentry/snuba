@@ -15,7 +15,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.processors.tuple_elementer import TupleElementer
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 
@@ -253,7 +253,7 @@ INVALID_TEST_QUERIES = [
 @pytest.mark.parametrize("input_query,expected_query", TEST_QUERIES)
 def test_tuple_unaliaser(input_query, expected_query):
     set_config("tuple_elementer_rollout", 1)
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     TupleElementer().process_query(input_query, settings)
     assert input_query == expected_query
 
@@ -261,7 +261,7 @@ def test_tuple_unaliaser(input_query, expected_query):
 @pytest.mark.parametrize("input_query", INVALID_TEST_QUERIES)
 def test_invalid_tuples(input_query):
     set_config("tuple_elementer_rollout", 1)
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     with pytest.raises(InvalidQueryException):
         TupleElementer().process_query(input_query, settings)
 

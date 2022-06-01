@@ -18,7 +18,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.state import delete_config, set_config
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
@@ -86,11 +86,11 @@ def test() -> None:
     )
 
     runner_call_count = 0
-    runner_settings: MutableSequence[RequestSettings] = []
+    runner_settings: MutableSequence[QuerySettings] = []
 
     def query_runner(
         query: Union[Query, CompositeQuery[Table]],
-        settings: RequestSettings,
+        settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         nonlocal runner_call_count
@@ -103,7 +103,7 @@ def test() -> None:
     set_config("pipeline_split_rate_limiter", 1)
 
     with cv:
-        request_settings = HTTPRequestSettings(referrer="ref")
+        request_settings = HTTPQuerySettings(referrer="ref")
         delegator.build_execution_pipeline(
             Request("", query_body, query, get_app_id("default"), "", request_settings),
             query_runner,

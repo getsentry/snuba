@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.expressions import FunctionCall
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 ALLOWED_OPERATORS = [
@@ -50,7 +50,7 @@ class PrewhereProcessor(QueryProcessor):
         self.__omit_if_final = omit_if_final
         self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         max_prewhere_conditions: int = (
             self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
         )

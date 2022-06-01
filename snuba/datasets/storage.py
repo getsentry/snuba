@@ -17,7 +17,7 @@ from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.replacers.replacer_processor import ReplacerProcessor
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 
 
 class Storage(ABC):
@@ -211,6 +211,6 @@ class QueryStorageSelector(ABC):
 
     @abstractmethod
     def select_storage(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, request_settings: QuerySettings
     ) -> StorageAndMappers:
         raise NotImplementedError

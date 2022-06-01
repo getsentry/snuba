@@ -16,7 +16,7 @@ from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.granularity_processor import GranularityProcessor
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 
 @pytest.mark.parametrize(
@@ -61,7 +61,7 @@ def test_granularity_added(
     )
 
     try:
-        GranularityProcessor().process_query(query, HTTPRequestSettings())
+        GranularityProcessor().process_query(query, HTTPQuerySettings())
     except InvalidGranularityException:
         assert query_granularity is None
     else:

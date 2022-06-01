@@ -4,7 +4,7 @@ from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 
 #: Granularities for which a materialized view exist, in ascending order
 GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)
@@ -30,7 +30,7 @@ class GranularityProcessor(QueryProcessor):
             f"Granularity must be multiple of one of {GRANULARITIES_AVAILABLE}"
         )
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         granularity = self.__get_granularity(query)
         query.add_condition_to_ast(
             binary_condition(

@@ -30,7 +30,7 @@ from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -209,7 +209,7 @@ def _run_query_pipeline(
 
 def _dry_run_query_runner(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    request_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
     with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
@@ -233,7 +233,7 @@ def _run_and_apply_column_names(
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    request_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
     """
@@ -283,7 +283,7 @@ def _format_storage_query_and_run(
     query_metadata: SnubaQueryMetadata,
     referrer: str,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    request_settings: QuerySettings,
     reader: Reader,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge] = None,
@@ -371,7 +371,7 @@ def get_query_size_group(query_size_bytes: int) -> str:
 
 def _apply_turbo_sampling_if_needed(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    request_settings: QuerySettings,
 ) -> None:
     """
     TODO: Remove this method entirely and move the sampling logic

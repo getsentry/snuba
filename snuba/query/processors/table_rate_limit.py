@@ -1,6 +1,6 @@
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 from snuba.state import get_configs
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitParameters
 
@@ -11,7 +11,7 @@ class TableRateLimit(QueryProcessor):
     TODO: Do this at Cluster level instead.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         table_name = query.get_from_clause().table_name
         (per_second, concurr) = get_configs(
             [

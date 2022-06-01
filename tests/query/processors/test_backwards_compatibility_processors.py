@@ -10,7 +10,7 @@ from snuba.query.dsl import literals_tuple, tupleElement
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.query.processors.tuple_elementer import TupleElementer
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 
@@ -61,7 +61,7 @@ def test_processors(input_query, expected_query):
     def test_processors(i_query, processors):
         q_copy = deepcopy(i_query)
         for p in processors:
-            p.process_query(q_copy, HTTPRequestSettings())
+            p.process_query(q_copy, HTTPQuerySettings())
         assert q_copy == expected_query
 
     q_processors = [TupleElementer(), TupleUnaliaser()]

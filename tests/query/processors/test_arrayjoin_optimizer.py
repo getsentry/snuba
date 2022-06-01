@@ -32,7 +32,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 
 def build_query(
@@ -417,7 +417,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
         query=query,
         app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=HTTPRequestSettings(referrer="r"),
+        settings=HTTPQuerySettings(referrer="r"),
     )
     entity = get_entity(query.get_from_clause().key)
     storage = entity.get_writable_storage()

@@ -20,7 +20,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
 from snuba.request import Request
-from snuba.request.request_settings import SubscriptionRequestSettings
+from snuba.request.request_settings import SubscriptionQuerySettings
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     SubscriptionScheduler,
@@ -107,7 +107,7 @@ class SubscriptionWorker(
                     query=copy.deepcopy(request.query),
                     app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
-                    settings=SubscriptionRequestSettings(
+                    settings=SubscriptionQuerySettings(
                         referrer=request.referrer, consistent=True
                     ),
                 )
@@ -129,7 +129,7 @@ class SubscriptionWorker(
                     query=copy.deepcopy(request.query),
                     app_id=get_app_id("default"),
                     snql_anonymized=request.snql_anonymized,
-                    settings=SubscriptionRequestSettings(
+                    settings=SubscriptionQuerySettings(
                         referrer=request.referrer, consistent=False
                     ),
                 )

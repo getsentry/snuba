@@ -15,7 +15,7 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 test_data = [
     pytest.param(
@@ -78,7 +78,7 @@ def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> Non
 
     query_ast_copy = copy.deepcopy(query)
 
-    request_settings = HTTPRequestSettings(consistent=True)
+    request_settings = HTTPQuerySettings(consistent=True)
     processor = MandatoryConditionApplier()
     processor.process_query(query, request_settings)
 

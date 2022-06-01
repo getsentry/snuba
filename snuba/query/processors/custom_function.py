@@ -8,7 +8,7 @@ from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import ParamType, SignatureValidator
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 
 
 class InvalidCustomFunctionCall(InvalidExpressionException):
@@ -81,7 +81,7 @@ class CustomFunction(QueryProcessor):
         self.__body = body
         self.__validator = SignatureValidator(param_types)
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         def apply_function(expression: Expression) -> Expression:
             if (
                 isinstance(expression, FunctionCall)

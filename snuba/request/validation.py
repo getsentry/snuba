@@ -21,9 +21,9 @@ from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.request_settings import (
-    HTTPRequestSettings,
-    RequestSettings,
-    SubscriptionRequestSettings,
+    HTTPQuerySettings,
+    QuerySettings,
+    SubscriptionQuerySettings,
 )
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
@@ -33,7 +33,7 @@ class Parser(Protocol):
     def __call__(
         self,
         request_parts: RequestParts,
-        settings: RequestSettings,
+        settings: QuerySettings,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
     ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -42,7 +42,7 @@ class Parser(Protocol):
 
 def parse_snql_query(
     request_parts: RequestParts,
-    settings: RequestSettings,
+    settings: QuerySettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -65,7 +65,7 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
 def build_request(
     body: MutableMapping[str, Any],
     parser: Parser,
-    settings_class: Union[Type[HTTPRequestSettings], Type[SubscriptionRequestSettings]],
+    settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
     schema: RequestSchema,
     dataset: Dataset,
     timer: Timer,
@@ -75,7 +75,7 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
-            if settings_class == HTTPRequestSettings:
+            if settings_class == HTTPQuerySettings:
                 settings: Mapping[str, bool | str] = {
                     **request_parts.settings,
                     "consistent": _consistent_override(
@@ -83,13 +83,13 @@ def build_request(
                     ),
                 }
                 settings_obj: Union[
-                    HTTPRequestSettings, SubscriptionRequestSettings
+                    HTTPQuerySettings, SubscriptionQuerySettings
                 ] = settings_class(
                     referrer=referrer,
                     parent_api=request_parts.query["parent_api"],
                     **settings,
                 )
-            elif settings_class == SubscriptionRequestSettings:
+            elif settings_class == SubscriptionQuerySettings:
                 settings_obj = settings_class(
                     referrer=referrer,
                     consistent=_consistent_override(True, referrer),

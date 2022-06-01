@@ -14,9 +14,9 @@ from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import (
-    HTTPRequestSettings,
-    RequestSettings,
-    SubscriptionRequestSettings,
+    HTTPQuerySettings,
+    QuerySettings,
+    SubscriptionQuerySettings,
 )
 from snuba.web import QueryResult
 
@@ -42,11 +42,11 @@ def test_sessions_processing() -> None:
         query=query,
         app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=HTTPRequestSettings(referrer=""),
+        settings=HTTPQuerySettings(referrer=""),
     )
 
     def query_runner(
-        query: Query, settings: RequestSettings, reader: Reader
+        query: Query, settings: QuerySettings, reader: Reader
     ) -> QueryResult:
         quantiles = tuple(
             Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
@@ -199,7 +199,7 @@ def test_select_storage(
     query, snql_anonymized = parse_snql_query(str(snql_query), sessions)
     query_body = json.loads(snql_query.snuba())
     subscription_settings = (
-        SubscriptionRequestSettings if is_subscription else HTTPRequestSettings
+        SubscriptionQuerySettings if is_subscription else HTTPQuerySettings
     )
     request = Request(
         id="",
@@ -211,7 +211,7 @@ def test_select_storage(
     )
 
     def query_runner(
-        query: Query, settings: RequestSettings, reader: Reader
+        query: Query, settings: QuerySettings, reader: Reader
     ) -> QueryResult:
         assert query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})

@@ -1,11 +1,11 @@
 from typing import Optional, Sequence
 
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
 
 
-class RateLimiterDelegate(RequestSettings):
+class RateLimiterDelegate(QuerySettings):
     """
     When we run the pipeline delegator, we are running multiple queries
     at the same time. Generally they are duplicates.
@@ -23,7 +23,7 @@ class RateLimiterDelegate(RequestSettings):
     rate limiter namespace without knowing about it.
     """
 
-    def __init__(self, prefix: str, delegate: RequestSettings):
+    def __init__(self, prefix: str, delegate: QuerySettings):
         self.referrer = delegate.referrer
         self.__delegate = delegate
         self.__prefix = prefix

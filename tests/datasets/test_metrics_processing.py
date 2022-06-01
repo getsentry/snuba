@@ -19,7 +19,7 @@ from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, L
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.web import QueryResult
 
 TEST_CASES = [
@@ -251,12 +251,12 @@ def test_metrics_processing(
         query=query,
         app_id=get_app_id("default"),
         snql_anonymized="",
-        settings=HTTPRequestSettings(referrer=""),
+        settings=HTTPQuerySettings(referrer=""),
     )
 
     def query_runner(
         query: Union[Query, CompositeQuery[Table]],
-        settings: RequestSettings,
+        settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         assert query.get_selected_columns() == [

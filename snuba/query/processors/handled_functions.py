@@ -17,7 +17,7 @@ from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import SignatureValidator
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 
 
 class HandledFunctionsProcessor(QueryProcessor):
@@ -53,7 +53,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                 should_report=False,
             ) from err
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "isHandled":

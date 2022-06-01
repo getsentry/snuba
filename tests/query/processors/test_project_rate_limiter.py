@@ -9,7 +9,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state.rate_limit import PROJECT_RATE_LIMIT_NAME
 
 tests = [
@@ -67,7 +67,7 @@ def test_project_rate_limit_processor(unprocessed: Expression, project_id: int) 
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
 
     num_before = len(settings.get_rate_limit_params())
     ProjectRateLimiterProcessor("project_id").process_query(query, settings)
@@ -88,7 +88,7 @@ def test_project_rate_limit_processor_overridden(
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     state.set_config(f"project_per_second_limit_{project_id}", 5)
     state.set_config(f"project_concurrent_limit_{project_id}", 10)
 

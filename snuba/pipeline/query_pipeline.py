@@ -8,7 +8,7 @@ from snuba.datasets.plans.query_plan import (
 )
 from snuba.query.logical import Query
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 from snuba.web import QueryResult
 
 TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
@@ -73,6 +73,6 @@ class QueryPipelineBuilder(ABC, Generic[TPlan]):
 
     @abstractmethod
     def build_planner(
-        self, query: Query, settings: RequestSettings
+        self, query: Query, settings: QuerySettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
         raise NotImplementedError

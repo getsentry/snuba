@@ -14,7 +14,7 @@ from snuba.datasets.errors_replacer import ProjectsQueryFlags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -42,7 +42,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         # replacers on multiple tables. replacer_state_name is part of the redis key.
         self.__replacer_state_name = replacer_state_name
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         if request_settings.get_turbo():
             return
 
@@ -107,7 +107,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         self._set_query_final(query, set_final)
 
     def _initialize_tags(
-        self, request_settings: RequestSettings, flags: ProjectsQueryFlags
+        self, request_settings: QuerySettings, flags: ProjectsQueryFlags
     ) -> MutableMapping[str, str]:
         """
         Initialize tags dictionary for DataDog metrics.

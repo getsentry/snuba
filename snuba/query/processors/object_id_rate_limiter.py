@@ -3,7 +3,7 @@ from typing import Optional
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import QuerySettings
 from snuba.state import get_configs
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
@@ -38,7 +38,7 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         self.request_settings_field = request_settings_field
         self.default_limit = default_limit
 
-    def _is_already_applied(self, request_settings: RequestSettings) -> bool:
+    def _is_already_applied(self, request_settings: QuerySettings) -> bool:
         existing = request_settings.get_rate_limit_params()
         for ex in existing:
             if ex.rate_limit_name == self.rate_limit_name:
@@ -46,7 +46,7 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         return False
 
     def get_object_id(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, request_settings: QuerySettings
     ) -> Optional[str]:
         obj_ids = get_object_ids_in_query_ast(query, self.object_column)
         if not obj_ids:
@@ -62,17 +62,13 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
                 obj_id = f"{obj_id}_{request_settings_field_val}"
         return str(obj_id)
 
-    def get_per_second_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
+    def get_per_second_name(self, query: Query, request_settings: QuerySettings) -> str:
         return self.per_second_name
 
-    def get_concurrent_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
+    def get_concurrent_name(self, query: Query, request_settings: QuerySettings) -> str:
         return self.concurrent_name
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         # If the settings don't already have an object rate limit, add one
         if self._is_already_applied(request_settings):
             return
@@ -106,7 +102,7 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
 
 
 class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         # If the settings don't already have an object rate limit, add one
         per_second_name = self.get_per_second_name(query, request_settings)
         concurrent_name = self.get_concurrent_name(query, request_settings)
@@ -166,18 +162,14 @@ class ProjectReferrerRateLimiter(OnlyIfConfiguredRateLimitProcessor):
             request_settings_field="referrer",
         )
 
-    def get_concurrent_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
+    def get_concurrent_name(self, query: Query, request_settings: QuerySettings) -> str:
         return f"{self.concurrent_name}_{request_settings.referrer}"
 
-    def get_per_second_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
+    def get_per_second_name(self, query: Query, request_settings: QuerySettings) -> str:
         return f"{self.per_second_name}_{request_settings.referrer}"
 
     def get_object_id(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, request_settings: QuerySettings
     ) -> Optional[str]:
         obj_ids = get_object_ids_in_query_ast(query, self.object_column)
         if not obj_ids:
@@ -201,7 +193,7 @@ class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
             request_settings_field="referrer",
         )
 
-    def get_object_id(self, query: Query, request_settings: RequestSettings) -> str:
+    def get_object_id(self, query: Query, request_settings: QuerySettings) -> str:
         return request_settings.referrer
 
 
