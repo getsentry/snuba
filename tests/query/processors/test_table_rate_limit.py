@@ -64,6 +64,6 @@ def test_table_rate_limit(
 ) -> None:
     set_config(limit_to_set, 50)
     query_settings = HTTPQuerySettings(consistent=True)
-    processor.process_query(query, request_settings)
-    rate_limiters = request_settings.get_rate_limit_params()
+    processor.process_query(query, query_settings)
+    rate_limiters = query_settings.get_rate_limit_params()
     assert params in rate_limiters
