@@ -22,11 +22,13 @@ def test_split_request():
         "debug",
         "dry_run",
         "legacy",
+        "referrer",
     }
     assert set(parts.attribution_info.keys()) == {
         "team",
         "feature",
         "app_id",
         "parent_api",
+        "referrer",
     }
     assert set(parts.query.keys()) == {"query"}

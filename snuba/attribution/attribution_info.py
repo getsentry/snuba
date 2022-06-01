@@ -15,3 +15,4 @@ class AttributionInfo:
     referrer: str
     team: str | None
     feature: str | None
+    parent_api: str | None

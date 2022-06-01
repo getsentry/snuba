@@ -27,27 +27,11 @@ class QuerySettings(ABC):
         pass
 
     @abstractmethod
-    def get_parent_api(self) -> str:
-        pass
-
-    @abstractmethod
     def get_dry_run(self) -> bool:
         pass
 
     @abstractmethod
     def get_legacy(self) -> bool:
-        pass
-
-    @abstractmethod
-    def get_team(self) -> str:
-        pass
-
-    @abstractmethod
-    def get_feature(self) -> str:
-        pass
-
-    @abstractmethod
-    def get_app_id(self) -> str:
         pass
 
     @abstractmethod

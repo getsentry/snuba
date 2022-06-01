@@ -8,7 +8,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Protocol, Tuple, Type
 import sentry_sdk
 
 from snuba import state
-from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.query.composite import CompositeQuery
@@ -76,26 +76,21 @@ def build_request(
         try:
             request_parts = schema.validate(body)
             if settings_class == HTTPQuerySettings:
-                settings: Mapping[str, bool | str] = {
-                    **request_parts.settings,
+                query_settings: Mapping[str, bool | str] = {
+                    **request_parts.query_settings,
                     "consistent": _consistent_override(
-                        request_parts.settings.get("consistent", False), referrer
+                        request_parts.query_settings.get("consistent", False), referrer
                     ),
                 }
                 settings_obj: Union[
                     HTTPQuerySettings, SubscriptionQuerySettings
                 ] = settings_class(
-                    referrer=referrer,
-                    parent_api=request_parts.query["parent_api"],
-                    **settings,
+                    **query_settings,
                 )
             elif settings_class == SubscriptionQuerySettings:
                 settings_obj = settings_class(
-                    referrer=referrer,
                     consistent=_consistent_override(True, referrer),
                 )
-
-            app_id = get_app_id(settings_obj.get_app_id())
 
             query, snql_anonymized = parser(
                 request_parts, settings_obj, dataset, custom_processing
@@ -115,11 +110,10 @@ def build_request(
                 # TODO: Replace this with the actual query raw body.
                 # this can have an impact on subscriptions so we need
                 # to be careful with the change.
-                request_parts.query,
-                query,
-                app_id,
-                snql_anonymized,
-                settings_obj,
+                original_body=body,
+                parsed_query=query,
+                attribution_info=AttributionInfo(**request_parts.attribution_info),
+                snql_anonymized=snql_anonymized,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             record_invalid_request(timer, referrer)
@@ -134,14 +128,16 @@ def build_request(
         )
         span.set_data(
             "snuba_query_raw",
-            textwrap.wrap(repr(request.body), 100, break_long_words=False),
+            textwrap.wrap(repr(request.original_body), 100, break_long_words=False),
         )
         sentry_sdk.add_breadcrumb(
             category="query_info",
             level="info",
             message="snuba_query_raw",
             data={
-                "query": textwrap.wrap(repr(request.body), 100, break_long_words=False)
+                "query": textwrap.wrap(
+                    repr(request.original_body), 100, break_long_words=False
+                )
             },
         )
 
