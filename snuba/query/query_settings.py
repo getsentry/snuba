@@ -1,32 +1,182 @@
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import List
+from abc import ABC, abstractmethod
+from typing import List, Optional, Sequence
 
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
 
 
-@dataclass()
-class QuerySettings:
-    """ "The settings for a specific query, similar to compiler flags provided,
-    should be immutable
+class QuerySettings(ABC):
+    """
+    Settings that apply to how the query in the request should be run.
+    The settings provided in this class do not directly affect the SQL statement that will be created
+    (i.e. they do not directly appear in the SQL statement).
+    They can indirectly affect the SQL statement that will be formed. For example, `turbo` affects
+    the formation of the query for projects, but it doesn't appear in the SQL statement.
     """
 
-    turbo: bool = False
-    consistent: bool = False
-    debug: bool = False
-    dry_run: bool = False
-    # These mutable fields are here due to legcacy reasons
-    # the query pipeline uses them to enforce rate limits using
-    # query processors. They should not be here
-    rate_limit_params: List[RateLimitParameters] = field(default_factory=list)
-    resource_quota: ResourceQuota | None = None
+    @abstractmethod
+    def get_turbo(self) -> bool:
+        pass
 
+    @abstractmethod
+    def get_consistent(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_debug(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_parent_api(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_dry_run(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_legacy(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_team(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_feature(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_app_id(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
+        pass
+
+    @abstractmethod
+    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass
+
+    @abstractmethod
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        pass
+
+    @abstractmethod
     def set_resource_quota(self, quota: ResourceQuota) -> None:
-        # TODO: This is the thing that prevents us from making the class frozen
-        # revisit it
-        self.resource_quota = quota
+        pass
+
+
+# TODO: I don't like that there are two different classes for the same thing
+# this could probably be replaces with a `source` attribute on the class
+class HTTPQuerySettings(QuerySettings):
+    """
+    Settings that are applied to all Requests initiated via the HTTP api. Allows
+    parameters to be customized, defaults to using global rate limits and allows
+    additional rate limits to be added.
+    """
+
+    def __init__(
+        self,
+        turbo: bool = False,
+        consistent: bool = False,
+        debug: bool = False,
+        dry_run: bool = False,
+        # TODO: is this flag still relevant?
+        legacy: bool = False,
+    ) -> None:
+        super().__init__()
+        self.__turbo = turbo
+        self.__consistent = consistent
+        self.__debug = debug
+        self.__dry_run = dry_run
+        self.__legacy = legacy
+        self.__rate_limit_params: List[RateLimitParameters] = []
+        self.__resource_quota: Optional[ResourceQuota] = None
+
+    def get_turbo(self) -> bool:
+        return self.__turbo
+
+    def get_consistent(self) -> bool:
+        return self.__consistent
+
+    def get_debug(self) -> bool:
+        return self.__debug
+
+    def get_dry_run(self) -> bool:
+        return self.__dry_run
+
+    def get_legacy(self) -> bool:
+        return self.__legacy
+
+    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
+        return self.__rate_limit_params
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
-        self.rate_limit_params.append(rate_limit_param)
+        self.__rate_limit_params.append(rate_limit_param)
+
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        return self.__resource_quota
+
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
+        self.__resource_quota = quota
+
+
+class SubscriptionQuerySettings(QuerySettings):
+    """
+    Settings that are applied to Requests initiated via Subscriptions. Hard code most
+    parameters and skips all rate limiting.
+    """
+
+    def __init__(
+        self,
+        consistent: bool = True,
+        parent_api: str = "subscription",
+        team: str = "workflow",
+        feature: str = "subscription",
+        app_id: str = "default",
+    ) -> None:
+        self.__consistent = consistent
+        self.__parent_api = parent_api
+        self.__team = team
+        self.__feature = feature
+        self.__app_id = app_id
+
+    def get_turbo(self) -> bool:
+        return False
+
+    def get_consistent(self) -> bool:
+        return self.__consistent
+
+    def get_debug(self) -> bool:
+        return False
+
+    def get_parent_api(self) -> str:
+        return self.__parent_api
+
+    def get_dry_run(self) -> bool:
+        return False
+
+    def get_legacy(self) -> bool:
+        return False
+
+    def get_team(self) -> str:
+        return self.__team
+
+    def get_app_id(self) -> str:
+        return self.__app_id
+
+    def get_feature(self) -> str:
+        return self.__feature
+
+    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
+        return []
+
+    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass
+
+    def get_resource_quota(self) -> Optional[ResourceQuota]:
+        return None
+
+    def set_resource_quota(self, quota: ResourceQuota) -> None:
+        pass
