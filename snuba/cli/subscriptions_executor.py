@@ -9,6 +9,7 @@ from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
 from snuba import environment, state
+from snuba.attribution.log import flush_attribution_producer
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
@@ -147,7 +148,7 @@ def subscriptions_executor(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with executor, closing(producer), flush_querylog():
+    with executor, closing(producer), flush_querylog(), flush_attribution_producer():
         processor.run()
 
 
