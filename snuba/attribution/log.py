@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from typing import Optional
+from typing import Iterator, Optional
 
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as KafkaMessage
@@ -63,6 +64,18 @@ def _record_attribution_delivery_callback(
         logger.warning(
             "Could not record attribution due to error: %r", error, exc_info=True
         )
+
+
+@contextmanager
+def flush_attribution_producer() -> Iterator[None]:
+    global kfk
+
+    try:
+        yield
+    finally:
+        if kfk is not None:
+            messages_remaining = kfk.flush()
+            logger.debug(f"{messages_remaining} querylog messages pending delivery")
 
 
 def record_attribution(attr_data: AttributionData) -> None:

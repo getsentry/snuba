@@ -632,7 +632,7 @@ class TestSnQLApi(BaseApiTest):
         assert data["dataset"] == "events"
         assert data["entity"] == "events"
         assert len(data["queries"]) == 1
-        assert data["queries"][0]["table"].starts_with("errors_")
+        assert data["queries"][0]["table"].startswith("errors_")
         assert data["queries"][0]["bytes_scanned"] > 0
 
     def test_arbitrary_app_id_attribution(self) -> None:
