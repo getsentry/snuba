@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
 from typing import Callable, Mapping, NamedTuple, Optional, Sequence, cast
@@ -48,7 +47,6 @@ def build_scheduler_executor_consumer(
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     max_concurrent_queries: int,
-    executor: ThreadPoolExecutor,
     metrics: MetricsBackend,
 ) -> StreamProcessor[Tick]:
     dataset = get_dataset(dataset_name)
@@ -97,7 +95,6 @@ def build_scheduler_executor_consumer(
     factory = CombinedSchedulerExecutorFactory(
         dataset,
         entity_names,
-        executor,
         partitions,
         max_concurrent_queries,
         producer,
@@ -132,7 +129,6 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         self,
         dataset: Dataset,
         entity_names: Sequence[str],
-        executor: ThreadPoolExecutor,
         partitions: int,
         max_concurrent_queries: int,
         producer: Producer[KafkaPayload],
@@ -176,7 +172,6 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         )
 
         self.__executor_factory = SubscriptionExecutorProcessingFactory(
-            executor,
             max_concurrent_queries,
             dataset,
             entity_names,
