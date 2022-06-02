@@ -11,21 +11,6 @@ RUN set -ex; \
     ; \
     rm -rf /var/lib/apt/lists/*
 
-ENV GOSU_VERSION=1.12 \
-    GOSU_SHA256=0f25a21cf64e58078057adc78f38705163c1d564a959ff30a891c31917011a54
-
-RUN set -x \
-    && buildDeps=" \
-      wget \
-    " \
-    && apt-get update && apt-get install -y --no-install-recommends $buildDeps \
-    && rm -rf /var/lib/apt/lists/* \
-    # grab gosu for easy step-down from root
-    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64" \
-    && echo "$GOSU_SHA256 /usr/local/bin/gosu" | sha256sum --check --status \
-    && chmod +x /usr/local/bin/gosu \
-    && apt-get purge -y --auto-remove $buildDeps
-
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
@@ -65,8 +50,8 @@ RUN set -ex; \
 # so try not to do anything heavy beyond here.
 COPY . ./
 RUN set -ex; \
-    groupadd -r snuba; \
-    useradd -r -g snuba snuba; \
+    groupadd -r snuba --gid 1000; \
+    useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
     pip install -e .; \
     snuba --help;
@@ -81,10 +66,13 @@ ENV SNUBA_RELEASE=$SOURCE_COMMIT \
     UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
 
+USER snuba
 EXPOSE 1218
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 
 FROM application AS testing
 
+USER 0
 RUN pip install -r requirements-test.txt
+USER snuba

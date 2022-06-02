@@ -29,6 +29,8 @@ services:
       REDIS_DB: 0
       DEFAULT_BROKERS: 'kafka:9092'
     entrypoint: python
+    # override the `snuba` user to write to the /.artifacts mount
+    user: root
   zookeeper:
     image: 'confluentinc/cp-zookeeper:5.1.2'
     environment:

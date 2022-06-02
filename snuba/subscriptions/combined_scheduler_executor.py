@@ -215,6 +215,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             self.__partitions,
             self.__buffer_size,
             ForwardToExecutor(self.__schedulers, execute_step),
+            self.__metrics,
         )
 
 
