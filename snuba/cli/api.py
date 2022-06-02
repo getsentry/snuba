@@ -3,7 +3,7 @@ from typing import Optional, Union
 
 import click
 
-from snuba.attribution import flush_attribution_producer
+from snuba.attribution.log import flush_attribution_producer
 from snuba.environment import setup_logging
 
 

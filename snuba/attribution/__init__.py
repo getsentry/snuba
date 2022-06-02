@@ -22,5 +22,4 @@ def get_app_id(app_id: str) -> AppID:
 __all__ = (
     "AppID",
     "get_app_id",
-    "flush_attribution_producer",
 )
