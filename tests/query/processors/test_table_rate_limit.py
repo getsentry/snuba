@@ -19,7 +19,7 @@ test_data = [
         RateLimitParameters(
             rate_limit_name=TABLE_RATE_LIMIT_NAME,
             bucket="errors_local",
-            per_second_limit=1000,
+            per_second_limit=5000,
             concurrent_limit=1000,
         ),
         id="Set rate limiter on another table",
@@ -33,7 +33,7 @@ test_data = [
         RateLimitParameters(
             rate_limit_name=TABLE_RATE_LIMIT_NAME,
             bucket="errors_local",
-            per_second_limit=1000,
+            per_second_limit=5000,
             concurrent_limit=50,
         ),
         id="Set rate limiter on existing table",
@@ -47,7 +47,7 @@ test_data = [
         RateLimitParameters(
             rate_limit_name=TABLE_RATE_LIMIT_NAME,
             bucket="errors_local",
-            per_second_limit=1000,
+            per_second_limit=5000,
             concurrent_limit=50,
         ),
         id="Set rate limiter on table with suffix",

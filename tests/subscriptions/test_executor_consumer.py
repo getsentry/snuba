@@ -117,7 +117,6 @@ def test_executor_consumer() -> None:
         TestingMetricsBackend(),
         ThreadPoolExecutor(2),
         None,
-        override_result_topic=scheduled_result_topic_spec.topic.value,
     )
     for i in range(1, 5):
         # Give time to the executor to subscribe
