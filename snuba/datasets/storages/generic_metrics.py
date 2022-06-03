@@ -24,7 +24,7 @@ from snuba.query.processors.table_rate_limit import TableRateLimit
 
 aggregated_columns = [
     Column("org_id", UInt(64)),
-    Column("use_case_id", String(SchemaModifiers(low_cardinality=True))),
+    Column("use_case_id", String()),
     Column("project_id", UInt(64)),
     Column("metric_id", UInt(64)),
     Column("granularity", UInt(8)),
