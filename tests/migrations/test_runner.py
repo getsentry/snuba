@@ -8,7 +8,7 @@ from snuba import settings
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages import factory
+from snuba.datasets.storages import StorageKey, factory
 from snuba.datasets.storages.factory import STORAGES, get_storage
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
@@ -185,6 +185,11 @@ def test_no_schema_differences() -> None:
     runner.run_all(force=True)
 
     for storage_key in STORAGES:
+        # HACK (Volo): The code below is meant to enable a test of an
+        # experimental dataset in production. this code should not exist in this
+        # codebase after 06-05-2022
+        if storage_key == StorageKey.EXPERIMENTAL:
+            continue
         storage = get_storage(storage_key)
         conn = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.MIGRATE
