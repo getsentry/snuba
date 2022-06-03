@@ -24,15 +24,16 @@ from snuba.query.processors.table_rate_limit import TableRateLimit
 
 aggregated_columns = [
     Column("org_id", UInt(64)),
+    Column("use_case_id", String(SchemaModifiers(low_cardinality=True))),
     Column("project_id", UInt(64)),
     Column("metric_id", UInt(64)),
-    Column("granularity", UInt(32)),
+    Column("granularity", UInt(8)),
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
     Column("raw_tags", Nested([("key", UInt(64)), ("value", String())])),
     Column("_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
     Column("indexed_tags", Nested([("key", UInt(64)), ("value", String())])),
-    Column("_indexed_tags_hash", Nested([("key", UInt(64)), ("value", UInt(64))])),
+    Column("_indexed_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
 ]
 
 sets_storage = ReadableTableStorage(
