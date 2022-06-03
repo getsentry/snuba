@@ -24,4 +24,3 @@ class EntityKey(Enum):
     DISCOVER_TRANSACTIONS = "discover_transactions"
     DISCOVER_EVENTS = "discover_events"
     PROFILES = "profiles"
-    EXPERIMENTAL = "experimental"
