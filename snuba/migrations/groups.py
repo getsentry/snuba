@@ -17,7 +17,6 @@ class MigrationGroup(Enum):
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
     PROFILES = "profiles"
-    EXPERIMENTAL = "experimental"
 
 
 # Migration groups are mandatory by default, unless they are on this list
@@ -26,7 +25,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
     MigrationGroup.PROFILES,
-    MigrationGroup.EXPERIMENTAL,
 }
 
 
@@ -100,11 +98,6 @@ class EventsLoader(DirectoryLoader):
             "0015_truncate_events",
             "0016_drop_legacy_events",
         ]
-
-
-class ExperimentalLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.experimental")
 
 
 class TransactionsLoader(DirectoryLoader):
@@ -240,7 +233,6 @@ _REGISTERED_GROUPS = {
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
     MigrationGroup.PROFILES: ProfilesLoader(),
-    MigrationGroup.EXPERIMENTAL: ProfilesLoader(),
 }
 
 

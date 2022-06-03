@@ -32,7 +32,6 @@ class StorageKey(Enum):
     ERRORS_V2 = "errors_v2"
     PROFILES = "profiles"
     ERRORS_V2_RO = "errors_v2_ro"
-    EXPERIMENTAL = "experimental"
 
 
 IDENTICAL_STORAGES = frozenset(
