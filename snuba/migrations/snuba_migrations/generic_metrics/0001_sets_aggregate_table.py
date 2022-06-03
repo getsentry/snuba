@@ -22,21 +22,21 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     granularity = "2048"
     local_table_name = "generic_metric_sets_local"
+    columns: Sequence[Column[Modifiers]] = [
+        Column("use_case_id", String(Modifiers(low_cardinality=True))),
+        Column("org_id", UInt(64)),
+        Column("project_id", UInt(64)),
+        Column("metric_id", UInt(64)),
+        Column("granularity", UInt(8)),
+        Column("timestamp", DateTime()),
+        Column("retention_days", UInt(16)),
+        Column("indexed_tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
+        Column("raw_tags", Nested([("key", UInt(64)), ("value", String())])),
+        Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+        Column("timeseries_id", UInt(64)),
+    ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        self.columns = [
-            Column("use_case_id", String(Modifiers(low_cardinality=True))),
-            Column("org_id", UInt(64)),
-            Column("project_id", UInt(64)),
-            Column("metric_id", UInt(64)),
-            Column("granularity", UInt(8)),
-            Column("timestamp", DateTime()),
-            Column("retention_days", UInt(16)),
-            Column("indexed_tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
-            Column("raw_tags", Nested([("key", UInt(64)), ("value", String())])),
-            Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
-            Column("timeseries_id", UInt(64)),
-        ]
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
