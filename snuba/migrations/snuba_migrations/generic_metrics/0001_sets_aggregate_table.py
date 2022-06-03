@@ -130,7 +130,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="generic_metric_sets_aggregated_dist",
                 engine=table_engines.Distributed(
                     local_table_name=self.local_table_name,
-                    sharding_key="TBD",
+                    sharding_key="cityHash64(org_id,project_id,metric_id,granularity)",
                 ),
                 columns=[],
             )
