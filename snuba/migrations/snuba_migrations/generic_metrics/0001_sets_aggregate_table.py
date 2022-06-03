@@ -24,6 +24,19 @@ class Migration(migration.ClickhouseNodeMigration):
     local_table_name = "generic_metric_sets_local"
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
+        self.columns = [
+            Column("use_case_id", String(Modifiers(low_cardinality=True))),
+            Column("org_id", UInt(64)),
+            Column("project_id", UInt(64)),
+            Column("metric_id", UInt(64)),
+            Column("granularity", UInt(8)),
+            Column("timestamp", DateTime()),
+            Column("retention_days", UInt(16)),
+            Column("indexed_tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
+            Column("raw_tags", Nested([("key", UInt(64)), ("value", String())])),
+            Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+            Column("timeseries_id", UInt(64)),
+        ]
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
@@ -36,23 +49,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     settings={"index_granularity": self.granularity},
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
-                columns=[
-                    Column("use_case_id", String(Modifiers(low_cardinality=True))),
-                    Column("org_id", UInt(64)),
-                    Column("project_id", UInt(64)),
-                    Column("metric_id", UInt(64)),
-                    Column("granularity", UInt(8)),
-                    Column("timestamp", DateTime()),
-                    Column("retention_days", UInt(16)),
-                    Column(
-                        "indexed_tags", Nested([("key", UInt(64)), ("value", UInt(64))])
-                    ),
-                    Column(
-                        "raw_tags", Nested([("key", UInt(64)), ("value", String())])
-                    ),
-                    Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
-                    Column("timeseries_id", UInt(64)),
-                ],
+                columns=self.columns,
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
@@ -133,7 +130,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     local_table_name=self.local_table_name,
                     sharding_key="timeseries_id",
                 ),
-                columns=[],
+                columns=self.columns,
             )
         ]
 
