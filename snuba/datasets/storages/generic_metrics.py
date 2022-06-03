@@ -29,8 +29,10 @@ aggregated_columns = [
     Column("granularity", UInt(32)),
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
-    Column("tags", Nested([("key", UInt(64)), ("value", String())])),
-    Column("_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
+    Column("raw_tags", Nested([("key", UInt(64)), ("value", String())])),
+    Column("_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
+    Column("indexed_tags", Nested([("key", UInt(64)), ("value", String())])),
+    Column("_indexed_tags_hash", Nested([("key", UInt(64)), ("value", UInt(64))])),
 ]
 
 sets_storage = ReadableTableStorage(
@@ -47,5 +49,9 @@ sets_storage = ReadableTableStorage(
             ]
         ),
     ),
-    query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
+    query_processors=[
+        ArrayJoinKeyValueOptimizer("raw_tags"),
+        ArrayJoinKeyValueOptimizer("indexed_tags"),
+        TableRateLimit(),
+    ],
 )
