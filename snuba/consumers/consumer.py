@@ -655,15 +655,8 @@ def process_message(
         return None
 
     try:
-        deserialized_message = rapidjson.loads(message.payload.value)
-    except Exception as err:
-        raise InvalidMessages(
-            [__invalid_kafka_message(message, consumer_group, err)]
-        ) from err
-
-    try:
         result = processor.process_message(
-            deserialized_message,
+            rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 message.offset, message.partition.index, message.timestamp
             ),
