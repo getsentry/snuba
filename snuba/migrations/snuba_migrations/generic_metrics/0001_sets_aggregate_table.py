@@ -51,6 +51,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         "raw_tags", Nested([("key", UInt(64)), ("value", String())])
                     ),
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+                    Column("timeseries_id", UInt(64)),
                 ],
             ),
             operations.AddColumn(
@@ -130,7 +131,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="generic_metric_sets_aggregated_dist",
                 engine=table_engines.Distributed(
                     local_table_name=self.local_table_name,
-                    sharding_key="cityHash64(org_id,project_id,metric_id,granularity)",
+                    sharding_key="timeseries_id",
                 ),
                 columns=[],
             )
