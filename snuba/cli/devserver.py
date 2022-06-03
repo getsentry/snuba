@@ -134,7 +134,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--entity=events",
                     "--consumer-group=snuba-events-subscription-executor",
                     "--auto-offset-reset=latest",
-                    "--override-result-topic=events-subscription-results",
                 ],
             ),
             (
@@ -160,7 +159,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--entity=transactions",
                     "--consumer-group=snuba-transactions-subscription-executor",
                     "--auto-offset-reset=latest",
-                    "--override-result-topic=transactions-subscription-results",
                 ],
             ),
         ]
@@ -259,7 +257,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--entity=metrics_sets",
                             "--consumer-group=snuba-metrics-subscription-executor",
                             "--auto-offset-reset=latest",
-                            "--override-result-topic=metrics-subscription-results",
                         ],
                     ),
                 ]
