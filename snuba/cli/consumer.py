@@ -1,3 +1,4 @@
+import logging
 import signal
 from typing import Any, Optional, Sequence
 
@@ -16,6 +17,8 @@ from snuba.datasets.storages.factory import WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
+
+logger = logging.getLogger(__name__)
 
 
 @click.command()
@@ -62,6 +65,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     default="error",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
+)
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
 )
 @click.option(
     "--queued-max-messages-kbytes",
@@ -114,6 +122,7 @@ def consumer(
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     parallel_collect: bool,
@@ -127,7 +136,7 @@ def consumer(
 
     setup_logging(log_level)
     setup_sentry()
-
+    logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
 
     metrics = MetricsWrapper(
@@ -150,6 +159,7 @@ def consumer(
             group_id=consumer_group,
             commit_log_topic=commit_log_topic,
             auto_offset_reset=auto_offset_reset,
+            strict_offset_reset=not no_strict_offset_reset,
             queued_max_messages_kbytes=queued_max_messages_kbytes,
             queued_min_messages=queued_min_messages,
         ),

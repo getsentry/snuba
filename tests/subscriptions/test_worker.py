@@ -80,19 +80,6 @@ SUBSCRIPTION_FIXTURES = [
     SubscriptionData(
         project_id=123,
         query=(
-            """MATCH (sessions) SELECT if(greater(sessions,0),
-                divide(sessions_crashed,sessions),null)
-                AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
-                WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
-                OFFSET 0 GRANULARITY 3600"""
-        ),
-        time_window_sec=10 * 60,
-        resolution_sec=60,
-        entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
-    ),
-    SubscriptionData(
-        project_id=123,
-        query=(
             """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
                 WHERE org_id = 1 AND project_id IN array(1) AND tags[3] IN array(3,4,
                 5) AND metric_id=7"""
@@ -124,19 +111,6 @@ SUBSCRIPTION_WORKER_TEST_CASES = [
     ),
     pytest.param(
         SUBSCRIPTION_FIXTURES[1],
-        "sessions",
-        EntityKey.SESSIONS,
-        {
-            "meta": [
-                {"name": "_crash_rate_alert_aggregate", "type": "Nullable(Float64)"},
-                {"type": "UInt64", "name": "_total_sessions"},
-            ],
-            "data": [{"_crash_rate_alert_aggregate": None, "_total_sessions": 0}],
-        },
-        id="snql",
-    ),
-    pytest.param(
-        SUBSCRIPTION_FIXTURES[2],
         "metrics",
         EntityKey.METRICS_COUNTERS,
         {
@@ -150,7 +124,7 @@ SUBSCRIPTION_WORKER_TEST_CASES = [
         id="snql",
     ),
     pytest.param(
-        SUBSCRIPTION_FIXTURES[3],
+        SUBSCRIPTION_FIXTURES[2],
         "metrics",
         EntityKey.METRICS_SETS,
         {
@@ -246,7 +220,7 @@ def test_subscription_worker(
         assert message.payload == SubscriptionTaskResult(task, future_result)
         del result["profile"]
 
-        timestamp_field = "timestamp" if dataset_name != "sessions" else "started"
+        timestamp_field = "timestamp"
         from_pattern = FunctionCall(
             String(ConditionFunctions.GTE),
             (
