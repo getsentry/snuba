@@ -128,7 +128,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
                 table_name="generic_metric_sets_aggregated_dist",
                 engine=table_engines.Distributed(
-                    local_table_name=self.local_table_name
+                    local_table_name=self.local_table_name, sharding_key=None
                 ),
                 columns=self.columns,
             )
