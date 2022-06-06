@@ -1,6 +1,3 @@
-"""
-The storages defined in this file are for release-health metrics.
-"""
 from typing import Sequence
 
 from arroyo import Topic as KafkaTopic
