@@ -142,16 +142,16 @@ def run_optimize_cron_job(
         start_time=datetime.now(), max_parallel=parallel
     )
 
-    if not tracker.get_all_parts():
+    if len(tracker.get_all_partitions()) == 0:
         parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
         if len(parts) == 0:
             logger.info("No partitions need optimization")
             return 0
         part_names = [part.name for part in parts]
         logger.info(f"All partitions list: {part_names}")
-        tracker.update_all_parts(part_names)
+        tracker.update_all_partitions(part_names)
 
-    parts_to_optimize = tracker.get_parts_to_optimize()
+    parts_to_optimize = tracker.get_partitions_to_optimize()
     if parts_to_optimize is None or len(parts_to_optimize) == 0:
         logger.info("No partitions need optimization")
         return 0
@@ -327,7 +327,7 @@ def optimize_partition_runner(
         # If there are still partitions needing optimization then move on to the
         # next bucket with the parts which still need optimization.
 
-        remaining_parts = tracker.get_parts_to_optimize()
+        remaining_parts = tracker.get_partitions_to_optimize()
         if remaining_parts:
             parts = list(remaining_parts)
         else:
@@ -369,7 +369,7 @@ def optimize_partitions(
         # executing the optimization. In that case we don't want to
         # run optimization on the same partition twice.
         if tracker:
-            tracker.update_completed_parts(part_name)
+            tracker.update_completed_partitions(part_name)
 
         clickhouse.execute(query)
         metrics.timing(

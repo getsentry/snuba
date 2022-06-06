@@ -22,6 +22,7 @@ from tests.helpers import write_processed_messages
             OptimizedPartitionTracker(
                 redis_client=redis_client,
                 host="some-hostname.domain.com",
+                port=9000,
                 database="some-database",
                 table="some-table",
                 expire_time=(datetime.now() + timedelta(minutes=3)),
@@ -31,24 +32,24 @@ from tests.helpers import write_processed_messages
     ],
 )
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
-    assert tracker.get_all_parts() is None
-    assert tracker.get_completed_parts() is None
-    assert tracker.get_parts_to_optimize() is None
+    assert tracker.get_all_partitions() is None
+    assert tracker.get_completed_partitions() is None
+    assert tracker.get_partitions_to_optimize() is None
 
-    tracker.update_all_parts(["Partition 1", "Partition 2"])
-    tracker.update_completed_parts("Partition 1")
-    assert tracker.get_completed_parts() == {"Partition 1"}
-    assert tracker.get_parts_to_optimize() == {"Partition 2"}
+    tracker.update_all_partitions(["Partition 1", "Partition 2"])
+    tracker.update_completed_partitions("Partition 1")
+    assert tracker.get_completed_partitions() == {"Partition 1"}
+    assert tracker.get_partitions_to_optimize() == {"Partition 2"}
 
-    tracker.update_completed_parts("Partition 2")
-    assert tracker.get_completed_parts() == {"Partition 1", "Partition 2"}
-    parts_to_optimize = tracker.get_parts_to_optimize()
+    tracker.update_completed_partitions("Partition 2")
+    assert tracker.get_completed_partitions() == {"Partition 1", "Partition 2"}
+    parts_to_optimize = tracker.get_partitions_to_optimize()
     assert parts_to_optimize is not None
     assert len(parts_to_optimize) == 0
 
     tracker.delete_all_states()
-    assert tracker.get_all_parts() is None
-    assert tracker.get_completed_parts() is None
+    assert tracker.get_all_partitions() is None
+    assert tracker.get_completed_partitions() is None
 
 
 def test_run_optimize_with_partition_tracker() -> None:
@@ -78,7 +79,8 @@ def test_run_optimize_with_partition_tracker() -> None:
     database = cluster.get_database()
     tracker = OptimizedPartitionTracker(
         redis_client=redis_client,
-        host="localhost",
+        host=cluster.get_host(),
+        port=cluster.get_port(),
         database=database,
         table=table,
         expire_time=(datetime.now() + timedelta(minutes=3)),
@@ -101,16 +103,16 @@ def test_run_optimize_with_partition_tracker() -> None:
 
     original_num_parts = len(parts)
     assert original_num_parts > 0
-    assert tracker.get_all_parts() is None
-    assert tracker.get_completed_parts() is None
+    assert tracker.get_all_partitions() is None
+    assert tracker.get_completed_partitions() is None
 
     # Mark the parts as optimized in partition tracker to test behavior.
-    tracker.update_all_parts([part.name for part in parts])
+    tracker.update_all_partitions([part.name for part in parts])
     for part in parts:
-        tracker.update_all_parts([part.name])
-        tracker.update_completed_parts(part.name)
+        tracker.update_all_partitions([part.name])
+        tracker.update_completed_partitions(part.name)
 
-    tracker_completed_partitions = tracker.get_completed_parts()
+    tracker_completed_partitions = tracker.get_completed_partitions()
     assert tracker_completed_partitions is not None
     assert len(tracker_completed_partitions) == original_num_parts
 

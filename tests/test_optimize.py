@@ -180,6 +180,7 @@ class TestOptimize:
         tracker = OptimizedPartitionTracker(
             redis_client=redis_client,
             host="some-hostname.domain.com",
+            port=9000,
             database=database,
             table=table,
             expire_time=datetime.now() + timedelta(minutes=10),
@@ -351,6 +352,7 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     tracker = OptimizedPartitionTracker(
         redis_client=redis_client,
         host="some-hostname.domain.com",
+        port=9000,
         database=database,
         table=table,
         expire_time=datetime.now() + timedelta(minutes=10),

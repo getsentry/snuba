@@ -87,6 +87,7 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
         clickhouse_host = storage.get_cluster().get_host()
+        clickhouse_port = storage.get_cluster().get_port()
 
     # Adding 10 minutes to the current time before finding the midnight time
     # to ensure this keeps working even if the system clock of the host that
@@ -104,6 +105,7 @@ def optimize(
     tracker = OptimizedPartitionTracker(
         redis_client=redis_client,
         host=clickhouse_host,
+        port=clickhouse_port,
         database=database,
         table=table,
         expire_time=cutoff_time,
