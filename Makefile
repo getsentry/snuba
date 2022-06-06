@@ -19,7 +19,7 @@ api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
 backend-typing:
-	mypy snuba tests --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query|tests/state|tests/snapshots|tests/consumers|tests/clickhouse|tests/test_split.py|tests/test_consumer.py'
+	mypy snuba tests --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query|tests/state|tests/snapshots|tests/clickhouse|tests/test_split.py|tests/test_consumer.py'
 
 install-python-dependencies:
 	pip install -e .

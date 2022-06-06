@@ -7,9 +7,6 @@ from arroyo import Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
-    DeadLetterQueuePolicy,
-)
 from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
@@ -88,6 +85,7 @@ class ConsumerBuilder:
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
+        self.consumer_group = kafka_params.group_id
         topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
@@ -233,20 +231,13 @@ class ConsumerBuilder:
         if processor_wrapper is not None:
             processor = processor_wrapper(processor)
 
-        dead_letter_queue_policy: Optional[DeadLetterQueuePolicy] = None
-        dead_letter_queue_policy_closure = (
-            stream_loader.get_dead_letter_queue_policy_closure()
-        )
-        if dead_letter_queue_policy_closure is not None:
-            # The DLQ Policy is instantiated here so it gets the correct
-            # metrics singleton in the init function of the policy
-            dead_letter_queue_policy = dead_letter_queue_policy_closure()
-
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload
         ] = KafkaConsumerStrategyFactory(
             prefilter=stream_loader.get_pre_filter(),
-            process_message=functools.partial(process_message, processor),
+            process_message=functools.partial(
+                process_message, processor, self.consumer_group
+            ),
             collector=build_batch_writer(
                 table_writer,
                 metrics=self.metrics,
@@ -269,7 +260,7 @@ class ConsumerBuilder:
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
-            dead_letter_queue_policy=dead_letter_queue_policy,
+            dead_letter_queue_policy_closure=stream_loader.get_dead_letter_queue_policy_closure(),
             parallel_collect=self.__parallel_collect,
         )
 
