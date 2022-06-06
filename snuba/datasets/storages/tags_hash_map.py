@@ -11,18 +11,20 @@ TAGS_HASH_MAP_COLUMN = (
 )
 
 
-def hash_map_int_column_definition(column_name: str) -> str:
+def hash_map_int_column_definition(key_column_name: str, value_column_name: str) -> str:
     return (
         f"arrayMap((k, v) -> cityHash64(concat(toString(k), '=', toString(v))), "
-        f"{column_name}.key, {column_name}.value)"
+        f"{key_column_name}, {value_column_name})"
     )
 
 
-INT_TAGS_HASH_MAP_COLUMN = hash_map_int_column_definition("tags")
+INT_TAGS_HASH_MAP_COLUMN = hash_map_int_column_definition("tags.key", "tags.value")
 
 
-def hash_map_int_key_str_value_column_definition(tag_column_name: str) -> str:
+def hash_map_int_key_str_value_column_definition(
+    key_column_name: str, value_column_name: str
+) -> str:
     return (
         f"arrayMap((k, v) -> cityHash64(concat(toString(k), '=', v)), "
-        f"{tag_column_name}.key, {tag_column_name}.value)"
+        f"{key_column_name}, {value_column_name})"
     )

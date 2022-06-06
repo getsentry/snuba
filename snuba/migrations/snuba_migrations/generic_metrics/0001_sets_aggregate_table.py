@@ -30,8 +30,16 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("granularity", UInt(8)),
         Column("timestamp", DateTime()),
         Column("retention_days", UInt(16)),
-        Column("indexed_tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
-        Column("raw_tags", Nested([("key", UInt(64)), ("value", String())])),
+        Column(
+            "tags",
+            Nested(
+                [
+                    ("key", UInt(64)),
+                    ("indexed_value", UInt(64)),
+                    ("raw_value", String()),
+                ]
+            ),
+        ),
         Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
         Column("timeseries_id", UInt(64)),
     ]
@@ -43,7 +51,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.local_table_name,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=StorageSetKey.GENERIC_METRICS_SETS,
-                    order_by="(org_id, project_id, metric_id, granularity, timestamp, indexed_tags.key, indexed_tags.value, raw_tags.key, retention_days)",
+                    order_by="(org_id, project_id, metric_id, granularity, timestamp, tags.key, tags.indexed_value, tags.raw_value, retention_days, use_case_id)",
                     primary_key="(org_id, project_id, metric_id, granularity, timestamp)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": self.granularity},
@@ -59,7 +67,9 @@ class Migration(migration.ClickhouseNodeMigration):
                     Array(
                         UInt(64),
                         Modifiers(
-                            materialized=hash_map_int_column_definition("indexed_tags")
+                            materialized=hash_map_int_column_definition(
+                                "tags.key", "tags.indexed_value"
+                            )
                         ),
                     ),
                 ),
@@ -73,7 +83,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         UInt(64),
                         Modifiers(
                             materialized=hash_map_int_key_str_value_column_definition(
-                                "raw_tags"
+                                "tags.key", "tags.raw_value"
                             )
                         ),
                     ),
@@ -90,14 +100,6 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddIndex(
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
                 table_name=self.local_table_name,
-                index_name="bf_indexed_tags_key_hash",
-                index_expression="indexed_tags.key",
-                index_type="bloom_filter()",
-                granularity=1,
-            ),
-            operations.AddIndex(
-                storage_set=StorageSetKey.GENERIC_METRICS_SETS,
-                table_name=self.local_table_name,
                 index_name="bf_raw_tags_hash",
                 index_expression="_raw_tags_hash",
                 index_type="bloom_filter()",
@@ -106,8 +108,8 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddIndex(
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
                 table_name=self.local_table_name,
-                index_name="bf_raw_tags_key_hash",
-                index_expression="raw_tags.key",
+                index_name="bf_tags_key_hash",
+                index_expression="tags.key",
                 index_type="bloom_filter()",
                 granularity=1,
             ),
