@@ -23,7 +23,6 @@ class Migration(migration.ClickhouseNodeMigration):
     granularity = "2048"
     local_table_name = "generic_metric_sets_local"
     columns: Sequence[Column[Modifiers]] = [
-        Column("use_case_id", String(Modifiers(low_cardinality=True))),
         Column("org_id", UInt(64)),
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
@@ -41,7 +40,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ),
         Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
-        Column("timeseries_id", UInt(64)),
+        Column("use_case_id", String(Modifiers(low_cardinality=True))),
     ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
@@ -129,8 +128,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
                 table_name="generic_metric_sets_aggregated_dist",
                 engine=table_engines.Distributed(
-                    local_table_name=self.local_table_name,
-                    sharding_key="timeseries_id",
+                    local_table_name=self.local_table_name
                 ),
                 columns=self.columns,
             )
