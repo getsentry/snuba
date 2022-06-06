@@ -27,7 +27,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
         Column("granularity", UInt(8)),
-        Column("timestamp", DateTime()),
+        Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
         Column(
             "tags",
