@@ -65,6 +65,7 @@ from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
+from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
@@ -434,16 +435,6 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         assert False, "unexpected fallthrough"
 
 
-# These codes are from:
-# https://github.com/ClickHouse/ClickHouse/blob/1c0b731ea6b86ce3bf7f88bd3ec27df7b218454d/src/Common/ErrorCodes.cpp
-ILLEGAL_TYPE_OF_ARGUMENT = 43
-TYPE_MISMATCH = 53
-CLICKHOUSE_TYPING_ERROR_CODES = {
-    ILLEGAL_TYPE_OF_ARGUMENT,
-    TYPE_MISMATCH,
-}
-
-
 @with_span()
 def dataset_query(
     dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
@@ -488,12 +479,7 @@ def dataset_query(
                 exc_info=True,
             )
         elif isinstance(cause, ClickhouseError):
-            # Since the query validator doesn't have a typing system, queries containing type errors are run on
-            # Clickhouse and generate ClickhouseErrors. Return a 400 status code for such requests because the problem
-            # lies with the query, not Snuba.
-            if cause.code in CLICKHOUSE_TYPING_ERROR_CODES:
-                status = 400
-
+            status = get_http_status_for_clickhouse_error(cause)
             details = {
                 "type": "clickhouse",
                 "message": str(cause),
@@ -654,7 +640,9 @@ if application.debug or application.testing:
             stream_loader = table_writer.get_stream_loader()
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
-                functools.partial(process_message, stream_loader.get_processor()),
+                functools.partial(
+                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
                 max_batch_time=1.0,
