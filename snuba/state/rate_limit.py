@@ -44,6 +44,19 @@ class RateLimitExceeded(SerializableException):
     Exception thrown when the rate limit is exceeded
     """
 
+    def __init__(self, message: str, scope: str = "", name: str = ""):
+        super().__init__(message=message)
+        self.__scope = scope
+        self.__name = name
+
+    @property
+    def scope(self) -> str:
+        return self.__scope
+
+    @property
+    def name(self) -> str:
+        return self.__name
+
 
 @dataclass(frozen=True)
 class RateLimitStats:
@@ -222,9 +235,10 @@ def rate_limit(
             logger.exception(ex)
 
         raise RateLimitExceeded(
-            "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
-                r=reason
-            )
+            message="{r.scope} {r.name} of {r.val:.0f} exceeds limit of {"
+            "r.limit:.0f}".format(r=reason),
+            scope=reason.scope,
+            name=reason.name,
         )
 
     rate_limited = False
@@ -280,7 +294,7 @@ def _record_metrics(
     exception since we want to know whether we exceeded the concurrent
     or per second limit.
     """
-    scope, name = exc.message.split()[:2]
+    scope, name = exc.scope, exc.name
     if scope == GLOBAL_RATE_LIMIT_NAME or scope == TABLE_RATE_LIMIT_NAME:
         tags = {"scope": scope, "type": name}
         if scope == TABLE_RATE_LIMIT_NAME:
