@@ -30,9 +30,13 @@ aggregated_columns = [
     Column("granularity", UInt(8)),
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
-    Column("raw_tags", Nested([("key", UInt(64)), ("value", String())])),
+    Column(
+        "tags",
+        Nested(
+            [("key", UInt(64)), ("indexed_value", UInt(64)), ("raw_value", String())]
+        ),
+    ),
     Column("_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
-    Column("indexed_tags", Nested([("key", UInt(64)), ("value", String())])),
     Column("_indexed_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
 ]
 
