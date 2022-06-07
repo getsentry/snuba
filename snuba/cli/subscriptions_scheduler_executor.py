@@ -14,6 +14,7 @@ from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.combined_scheduler_executor import (
     build_scheduler_executor_consumer,
 )
+from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -70,6 +71,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--override-partition-mode",
+    type=click.Choice(["partition", "global"]),
+    help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
+)
 def subscriptions_scheduler_executor(
     *,
     dataset_name: str,
@@ -83,6 +89,10 @@ def subscriptions_scheduler_executor(
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     log_level: Optional[str],
+    # TODO: Temporarily overrides a partition mode.
+    # Required for single tenant since some partitions may be empty.
+    # To be removed once transactions is no longer semantically partitioned.
+    override_partition_mode: Optional[str],
 ) -> None:
     """
     Combined subscriptions scheduler and executor. Alternative to the separate scheduler and executor processes.
@@ -131,6 +141,9 @@ def subscriptions_scheduler_executor(
         max_concurrent_queries,
         executor,
         metrics,
+        SchedulingWatermarkMode(override_partition_mode)
+        if override_partition_mode is not None
+        else None,
     )
 
     def handler(signum: int, frame: Any) -> None:
