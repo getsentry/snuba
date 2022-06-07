@@ -32,8 +32,9 @@ from tests.helpers import write_processed_messages
     ],
 )
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
-    assert tracker.get_all_partitions() is None
-    assert tracker.get_completed_partitions() is None
+    assert len(tracker.get_all_partitions()) == 0
+    assert len(tracker.get_completed_partitions()) == 0
+    # Check for None here since we haven't updated the all partitions bucket.
     assert tracker.get_partitions_to_optimize() is None
 
     tracker.update_all_partitions(["Partition 1", "Partition 2"])
@@ -44,12 +45,14 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
     tracker.update_completed_partitions("Partition 2")
     assert tracker.get_completed_partitions() == {"Partition 1", "Partition 2"}
     parts_to_optimize = tracker.get_partitions_to_optimize()
+    # Check that we don't return None but a set whose length is 0 indicating
+    # that all optimizations have been run.
     assert parts_to_optimize is not None
     assert len(parts_to_optimize) == 0
 
     tracker.delete_all_states()
-    assert tracker.get_all_partitions() is None
-    assert tracker.get_completed_partitions() is None
+    assert len(tracker.get_all_partitions()) == 0
+    assert len(tracker.get_completed_partitions()) == 0
 
 
 def test_run_optimize_with_partition_tracker() -> None:
@@ -103,8 +106,8 @@ def test_run_optimize_with_partition_tracker() -> None:
 
     original_num_parts = len(parts)
     assert original_num_parts > 0
-    assert tracker.get_all_partitions() is None
-    assert tracker.get_completed_partitions() is None
+    assert len(tracker.get_all_partitions()) == 0
+    assert len(tracker.get_completed_partitions()) == 0
 
     # Mark the parts as optimized in partition tracker to test behavior.
     tracker.update_all_partitions([part.name for part in parts])

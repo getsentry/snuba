@@ -36,6 +36,9 @@ class OptimizedPartitionTracker:
         self.__key_expire_time = expire_time
 
     def __get_partitions(self, bucket: str) -> Set[str]:
+        """
+        Get the partitions from a given bucket.
+        """
         partitions_set: Set[str] = set()
         partitions = self.__redis_client.smembers(bucket)
         if partitions:
@@ -47,7 +50,7 @@ class OptimizedPartitionTracker:
 
     def get_all_partitions(self) -> Set[str]:
         """
-        Get a set of all partitions which need to be optimized.
+        Get a set of partitions which need to be optimized.
         """
         return self.__get_partitions(self.__all_bucket)
 
@@ -60,6 +63,9 @@ class OptimizedPartitionTracker:
     def __update_partitions(
         self, bucket: str, encoded_part_names: Sequence[bytes]
     ) -> None:
+        """
+        Update the partitions in the bucket.
+        """
         pipe = self.__redis_client.pipeline()
         pipe.sadd(bucket, *encoded_part_names)
         pipe.expireat(bucket, self.__key_expire_time)
