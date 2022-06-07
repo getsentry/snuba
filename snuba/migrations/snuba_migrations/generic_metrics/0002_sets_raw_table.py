@@ -38,6 +38,8 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("set_values", Array(UInt(64))),
         Column("count_value", Float(64)),
         Column("distribution_values", Array(Float(64))),
+        Column("metric_type", String(Modifiers(low_cardinality=True))),
+        Column("materialization_version", UInt(8)),
         Column("timeseries_id", UInt(32)),
     ]
 
