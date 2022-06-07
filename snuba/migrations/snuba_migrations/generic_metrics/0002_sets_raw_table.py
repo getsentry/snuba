@@ -50,7 +50,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.CreateTable(
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
                 table_name=self.local_table_name,
-                engine=table_engines.AggregatingMergeTree(
+                engine=table_engines.MergeTree(
                     storage_set=StorageSetKey.GENERIC_METRICS_SETS,
                     order_by="(use_case_id, org_id, project_id, metric_id, timestamp)",
                     partition_by="(toStartOfInterval(timestamp, toIntervalDay(3)))",
