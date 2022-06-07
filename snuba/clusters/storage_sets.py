@@ -32,6 +32,7 @@ class StorageSetKey(Enum):
     ERRORS_V2_RO = "errors_v2_ro"
     PROFILES = "profiles"
     REPLAYS = "replays"
+    GENERIC_METRICS_SETS = "generic_metrics_sets"
 
 
 # Storage sets enabled only when development features are enabled.

@@ -74,6 +74,11 @@ logger = logging.getLogger(__name__)
     help="Kafka consumer auto offset reset.",
 )
 @click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
+@click.option(
     "--bootstrap-server",
     "bootstrap_servers",
     multiple=True,
@@ -128,6 +133,7 @@ def subscriptions(
     commit_log_groups: Sequence[str],
     consumer_group: str,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     bootstrap_servers: Sequence[str],
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -195,6 +201,7 @@ def subscriptions(
                     commit_log_topic_spec.topic,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
+                    strict_offset_reset=not no_strict_offset_reset,
                     bootstrap_servers=bootstrap_servers,
                 ),
             ),

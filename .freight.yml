@@ -37,11 +37,11 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
-    name: events-subscriptions-verifier
+    name: profiles-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
-    name: transactions-subscriptions-consumer
+    name: transactions-subscriptions-scheduler
   - image: us.gcr.io/sentryio/snuba:{sha}
-    name: sessions-subscriptions-consumer
+    name: transactions-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: metrics-counters-subscriptions-scheduler
   - image: us.gcr.io/sentryio/snuba:{sha}

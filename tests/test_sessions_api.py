@@ -1,8 +1,6 @@
 import itertools
-import uuid
 from datetime import datetime, timedelta
 from typing import Any, Callable, Mapping, Sequence, Tuple, Union
-from unittest.mock import patch
 
 import pytest
 import pytz
@@ -415,75 +413,3 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
         result = json.loads(response.data)
         assert len(result["data"]) > 0
         assert "bucketed_started" in result["data"][0]
-
-
-class TestCreateSubscriptionApi(BaseApiTest):
-    dataset_name = "sessions"
-    entity_key = "sessions"
-
-    def test_snql_with_sessions_entity_subscription(self) -> None:
-        expected_uuid = uuid.uuid1()
-
-        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
-            uuid4.return_value = expected_uuid
-            resp = self.app.post(
-                f"{self.dataset_name}/{self.entity_key}/subscriptions",
-                data=json.dumps(
-                    {
-                        "project_id": 1,
-                        "time_window": int(timedelta(minutes=10).total_seconds()),
-                        "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": (
-                            """
-                            MATCH (sessions) SELECT if(greater(sessions,0),
-                            divide(sessions_crashed,sessions),null)
-                            AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
-                            WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
-                            OFFSET 0 GRANULARITY 3600
-                            """
-                        ),
-                        "organization": 1,
-                    }
-                ).encode("utf-8"),
-            )
-
-        assert resp.status_code == 202
-        data = json.loads(resp.data)
-        assert data == {
-            "subscription_id": f"0/{expected_uuid.hex}",
-        }
-
-    def test_bad_snql_with_sessions_entity_subscription(self) -> None:
-        expected_uuid = uuid.uuid1()
-
-        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
-            uuid4.return_value = expected_uuid
-            resp = self.app.post(
-                "{}/{}/subscriptions".format(self.dataset_name, self.entity_key),
-                data=json.dumps(
-                    {
-                        "project_id": 1,
-                        "time_window": int(timedelta(minutes=10).total_seconds()),
-                        "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": (
-                            """
-                            MATCH (sessions) SELECT if(greater(sessions,0),
-                            divide(sessions_crashed,sessions),null)
-                            AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions,
-                            identity(sessions_crashed)
-                            WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
-                            OFFSET 0 GRANULARITY 3600
-                            """
-                        ),
-                        "organization": 1,
-                    }
-                ).encode("utf-8"),
-            )
-            assert resp.status_code == 400
-            data = json.loads(resp.data)
-            assert data == {
-                "error": {
-                    "message": "A maximum of 2 aggregations are allowed in the select",
-                    "type": "invalid_query",
-                }
-            }
