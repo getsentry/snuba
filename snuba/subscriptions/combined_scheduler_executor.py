@@ -142,7 +142,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         stale_threshold_seconds: Optional[int],
         result_topic: str,
         schedule_ttl: int,
-        override_partition_mode: Optional[SchedulingWatermarkMode],
+        override_partition_mode: Optional[SchedulingWatermarkMode] = None,
     ) -> None:
         # TODO: self.__partitions might not be the same for each entity
         self.__partitions = partitions
