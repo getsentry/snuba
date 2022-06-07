@@ -88,7 +88,6 @@ def test_combined_scheduler_and_executor() -> None:
                 timestamps=Interval(epoch, epoch + timedelta(seconds=60)),
             ),
             epoch,
-            5,
         )
         strategy.submit(message)
 

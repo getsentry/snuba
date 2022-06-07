@@ -336,7 +336,6 @@ def test_dead_letter_step() -> None:
         0,
         (storage_key, None),
         datetime.now(),
-        1,
     )
     dead_letter_step.submit(none_message)
     assert not dead_letter_step._DeadLetterStep__futures
@@ -349,7 +348,6 @@ def test_dead_letter_step() -> None:
         1,
         (storage_key, insert_payload),
         datetime.now(),
-        2,
     )
     dead_letter_step.submit(insert_message)
     assert len(dead_letter_step._DeadLetterStep__futures) == 1
