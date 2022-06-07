@@ -213,7 +213,7 @@ def generate_message(
             )
         )
 
-        yield Message(Partition(Topic("test"), 0), i, payload, epoch, i + 1)
+        yield Message(Partition(Topic("test"), 0), i, payload, epoch)
         i += 1
 
 
@@ -363,7 +363,6 @@ def test_produce_result() -> None:
             (request, result),
         ),
         epoch,
-        2,
     )
 
     strategy.submit(message)

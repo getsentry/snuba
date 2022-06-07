@@ -336,7 +336,6 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
             timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
         ),
         now,
-        5,
     )
     strategy.submit(message_0_0)
 
