@@ -20,7 +20,10 @@ columns = ColumnSet(
         ("replay_id", UUID()),
         ("sequence_id", UInt(16)),
         ("timestamp", DateTime()),
-        ("trace_ids", Array(UUID())),
+        (
+            "trace_ids",
+            Array(UUID()),
+        ),  # TODO: create bloom filter index / materialize column
         ("title", String(Modifiers(readonly=True))),
         ### common sentry event columns
         ("project_id", UInt(64)),
