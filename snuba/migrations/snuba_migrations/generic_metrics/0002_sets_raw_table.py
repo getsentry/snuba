@@ -41,6 +41,8 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("metric_type", String(Modifiers(low_cardinality=True))),
         Column("materialization_version", UInt(8)),
         Column("timeseries_id", UInt(32)),
+        Column("partition", UInt(16)),
+        Column("offset", UInt(64)),
     ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
