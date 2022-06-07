@@ -1,5 +1,4 @@
 import signal
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
 
@@ -115,8 +114,6 @@ def subscriptions_scheduler_executor(
         )
     )
 
-    executor = ThreadPoolExecutor(max_concurrent_queries)
-
     processor = build_scheduler_executor_consumer(
         dataset_name,
         entity_names,
@@ -129,7 +126,6 @@ def subscriptions_scheduler_executor(
         delay_seconds,
         stale_threshold_seconds,
         max_concurrent_queries,
-        executor,
         metrics,
     )
 
@@ -139,7 +135,7 @@ def subscriptions_scheduler_executor(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with executor, closing(producer), flush_querylog():
+    with closing(producer), flush_querylog():
         processor.run()
 
 
