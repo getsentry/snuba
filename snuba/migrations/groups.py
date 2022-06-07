@@ -230,7 +230,7 @@ class GenericMetricsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.generic_metrics")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_sets_aggregate_table"]
+        return ["0001_sets_aggregate_table", "0002_sets_raw_table"]
 
 
 _REGISTERED_GROUPS = {
