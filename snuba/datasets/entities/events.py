@@ -11,11 +11,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.clickhouse_upgrade import (
-    Option,
-    RolloutSelector,
-    comparison_callback,
-)
+from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
@@ -193,7 +189,6 @@ class BaseEventsEntity(Entity, ABC):
             selector_func=v2_selector_function,
             split_rate_limiter=True,
             ignore_secondary_exceptions=True,
-            callback_func=comparison_callback,
         )
 
         # TODO: entity data model is using ClickHouse columns/schema, should be corrected
