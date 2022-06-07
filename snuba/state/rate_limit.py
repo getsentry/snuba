@@ -44,19 +44,6 @@ class RateLimitExceeded(SerializableException):
     Exception thrown when the rate limit is exceeded
     """
 
-    def __init__(self, message: str, scope: str = "", name: str = ""):
-        super().__init__(message=message)
-        self.__scope = scope
-        self.__name = name
-
-    @property
-    def scope(self) -> str:
-        return self.__scope
-
-    @property
-    def name(self) -> str:
-        return self.__name
-
 
 @dataclass(frozen=True)
 class RateLimitStats:
@@ -235,10 +222,9 @@ def rate_limit(
             logger.exception(ex)
 
         raise RateLimitExceeded(
-            message="{r.scope} {r.name} of {r.val:.0f} exceeds limit of {"
-            "r.limit:.0f}".format(r=reason),
-            scope=reason.scope,
-            name=reason.name,
+            "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
+                r=reason
+            )
         )
 
     rate_limited = False
@@ -281,28 +267,6 @@ def get_global_rate_limit_params() -> RateLimitParameters:
     )
 
 
-def _record_metrics(
-    exc: RateLimitExceeded, rate_limit_param: RateLimitParameters
-) -> None:
-    """
-    Record rate limit metrics if needed.
-
-    We only record the metrics for global and table rate limits since
-    those indicate capacity of clickhouse clusters.
-
-    We get the scope and name from the message of RateLimitExceeded
-    exception since we want to know whether we exceeded the concurrent
-    or per second limit.
-    """
-    scope, name = exc.scope, exc.name
-    if scope == GLOBAL_RATE_LIMIT_NAME or scope == TABLE_RATE_LIMIT_NAME:
-        tags = {"scope": scope, "type": name}
-        if scope == TABLE_RATE_LIMIT_NAME:
-            tags["table"] = rate_limit_param.bucket
-
-        metrics.increment("rate-limited", tags=tags)
-
-
 class RateLimitAggregator(AbstractContextManager):  # type: ignore
     """
     Runs the rate limits provided by the `rate_limit_params` configuration object.
@@ -329,7 +293,6 @@ class RateLimitAggregator(AbstractContextManager):  # type: ignore
                 # these exit functions to be called so we can roll back any limits that were set
                 # earlier in the stack.
                 self.__exit__(*sys.exc_info())
-                _record_metrics(e, rate_limit_param)
                 raise e
 
         return stats
