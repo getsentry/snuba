@@ -1,8 +1,6 @@
 from enum import Enum
 from typing import Mapping
 
-from snuba import settings
-
 
 # These are the default topic names, they can be changed via settings
 class Topic(Enum):
@@ -15,20 +13,19 @@ class Topic(Enum):
     METRICS = "snuba-metrics"
     OUTCOMES = "outcomes"
     SESSIONS = "ingest-sessions"
-    SESSIONS_COMMIT_LOG = "snuba-sessions-commit-log"
     METRICS_COMMIT_LOG = "snuba-metrics-commit-log"
     SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
     SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
-    SUBSCRIPTION_SCHEDULED_SESSIONS = "scheduled-subscriptions-sessions"
     SUBSCRIPTION_SCHEDULED_METRICS = "scheduled-subscriptions-metrics"
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
-    SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
     REPLAYEVENTS = "snuba-replay-events"
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
+    DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
+    DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
@@ -39,6 +36,4 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
         Topic.REPLAYEVENTS: {"message.timestamp.type": "LogAppendTime"},
     }
-    if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
-        config.update({Topic.SESSIONS: {"message.timestamp.type": "LogAppendTime"}})
     return config.get(topic, {})

@@ -1322,7 +1322,7 @@ class TestApi(SimpleAPITest):
             ).data
         )
         formatted = sorted([f"'{t}'" for t in tags])
-        tag_phrase = f"in(tupleElement(pair, 1), tuple({', '.join(formatted)})"
+        tag_phrase = f"in(tupleElement(pair, 1), ({', '.join(formatted)})"
         assert tag_phrase in result["sql"]
 
     def test_unicode_condition(self) -> None:

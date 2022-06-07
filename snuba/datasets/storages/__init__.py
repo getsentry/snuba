@@ -33,6 +33,7 @@ class StorageKey(Enum):
     PROFILES = "profiles"
     REPLAYS = "replays"
     ERRORS_V2_RO = "errors_v2_ro"
+    GENERIC_METRICS_SETS = "generic_metrics_sets"
 
 
 IDENTICAL_STORAGES = frozenset(

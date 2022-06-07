@@ -65,6 +65,7 @@ from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
+from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
@@ -108,12 +109,20 @@ else:
             return False
 
 
-def check_clickhouse() -> bool:
+def check_clickhouse(ignore_experimental: bool = True) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+        if ignore_experimental:
+            datasets = [
+                get_dataset(name)
+                for name in get_enabled_dataset_names()
+                if not get_dataset(name).is_experimental()
+            ]
+        else:
+            datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+
         entities = itertools.chain(
             *[dataset.get_all_entities() for dataset in datasets]
         )
@@ -130,7 +139,6 @@ def check_clickhouse() -> bool:
                 connection_grouped_table_names[cluster.get_connection_id()].add(
                     cast(TableSchema, storage.get_schema()).get_table_name()
                 )
-
         # De-dupe clusters by host:TCP port:HTTP port:database
         unique_clusters = {
             storage.get_cluster().get_connection_id(): storage.get_cluster()
@@ -357,7 +365,7 @@ def config_changes() -> RespTuple:
 def health() -> Response:
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
-    clickhouse_health = check_clickhouse() if thorough else True
+    clickhouse_health = check_clickhouse(ignore_experimental=True) if thorough else True
 
     body: Mapping[str, Union[str, bool]]
     if not down_file_exists and clickhouse_health:
@@ -427,16 +435,6 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         assert False, "unexpected fallthrough"
 
 
-# These codes are from:
-# https://github.com/ClickHouse/ClickHouse/blob/1c0b731ea6b86ce3bf7f88bd3ec27df7b218454d/src/Common/ErrorCodes.cpp
-ILLEGAL_TYPE_OF_ARGUMENT = 43
-TYPE_MISMATCH = 53
-CLICKHOUSE_TYPING_ERROR_CODES = {
-    ILLEGAL_TYPE_OF_ARGUMENT,
-    TYPE_MISMATCH,
-}
-
-
 @with_span()
 def dataset_query(
     dataset: Dataset, body: MutableMapping[str, Any], timer: Timer
@@ -481,12 +479,7 @@ def dataset_query(
                 exc_info=True,
             )
         elif isinstance(cause, ClickhouseError):
-            # Since the query validator doesn't have a typing system, queries containing type errors are run on
-            # Clickhouse and generate ClickhouseErrors. Return a 400 status code for such requests because the problem
-            # lies with the query, not Snuba.
-            if cause.code in CLICKHOUSE_TYPING_ERROR_CODES:
-                status = 400
-
+            status = get_http_status_for_clickhouse_error(cause)
             details = {
                 "type": "clickhouse",
                 "message": str(cause),
@@ -539,6 +532,8 @@ def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> Re
     entity_key = ENTITY_NAME_LOOKUP[entity]
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
+
+    metrics.increment("subscription_created", tags={"entity": entity_key.value})
     return (
         json.dumps({"subscription_id": str(identifier)}),
         202,
@@ -559,6 +554,8 @@ def delete_subscription(
         )
     entity_key = ENTITY_NAME_LOOKUP[entity]
     SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
+    metrics.increment("subscription_deleted", tags={"entity": entity_key.value})
+
     return "ok", 202, {"Content-Type": "text/plain"}
 
 
@@ -643,7 +640,9 @@ if application.debug or application.testing:
             stream_loader = table_writer.get_stream_loader()
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
-                functools.partial(process_message, stream_loader.get_processor()),
+                functools.partial(
+                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
                 max_batch_time=1.0,

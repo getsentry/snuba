@@ -1,8 +1,8 @@
 import pytest
 
 from snuba import state
-from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -33,6 +33,15 @@ tests = [
     ),
     pytest.param(
         binary_condition(
+            ConditionFunctions.IN,
+            Column("_snuba_project_id", None, "project_id"),
+            FunctionCall(None, "array", (Literal(None, 2), Literal(None, 2))),
+        ),
+        2,
+        id="array project column",
+    ),
+    pytest.param(
+        binary_condition(
             "and",
             binary_condition(
                 ConditionFunctions.EQ,
@@ -42,7 +51,7 @@ tests = [
             binary_condition(
                 ConditionFunctions.IN,
                 Column("_snuba_project_id", None, "project_id"),
-                FunctionCall(None, "array", (Literal(None, 4), Literal(None, 5))),
+                FunctionCall(None, "array", (Literal(None, 3), Literal(None, 5))),
             ),
         ),
         3,
@@ -54,7 +63,7 @@ tests = [
 @pytest.mark.parametrize("unprocessed, project_id", tests)
 def test_project_rate_limit_processor(unprocessed: Expression, project_id: int) -> None:
     query = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
@@ -75,7 +84,7 @@ def test_project_rate_limit_processor_overridden(
     unprocessed: Expression, project_id: int
 ) -> None:
     query = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )

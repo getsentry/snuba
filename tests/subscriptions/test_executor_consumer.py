@@ -79,6 +79,7 @@ def test_executor_consumer() -> None:
             scheduled_result_topic_spec.topic,
             str(uuid.uuid1().hex),
             auto_offset_reset="latest",
+            strict_offset_reset=False,
         )
     )
     assigned = False
@@ -104,6 +105,7 @@ def test_executor_consumer() -> None:
 
     consumer_group = str(uuid.uuid1().hex)
     auto_offset_reset = "latest"
+    strict_offset_reset = False
     executor = build_executor_consumer(
         dataset_name,
         [entity_name],
@@ -111,10 +113,10 @@ def test_executor_consumer() -> None:
         result_producer,
         2,
         auto_offset_reset,
+        strict_offset_reset,
         TestingMetricsBackend(),
         ThreadPoolExecutor(2),
         None,
-        override_result_topic=scheduled_result_topic_spec.topic.value,
     )
     for i in range(1, 5):
         # Give time to the executor to subscribe

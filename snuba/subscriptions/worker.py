@@ -229,22 +229,24 @@ class SubscriptionWorker(
         max_validity_latency = state.get_config("subscriptions_max_latency_sec", 0)
         assert isinstance(max_validity_latency, int)
 
-        if max_validity_latency == 0:
-            tasks: Iterator[ScheduledSubscriptionTask] = self.__schedulers[
-                message.partition.index
-            ].find(tick)
-        else:
-            tasks = (
-                t
-                for t in self.__schedulers[message.partition.index].find(tick)
-                if datetime.timestamp(t.timestamp) > time.time() - max_validity_latency
+        if (
+            max_validity_latency != 0
+            and time.time() - datetime.timestamp(tick.timestamps.lower)
+            > max_validity_latency
+        ):
+            self.__metrics.increment(
+                "skipping_tick_subscriptions", tags={"dataset": self.__dataset_name}
             )
+            tasks: Iterator[ScheduledSubscriptionTask] = iter([])
+        else:
+            tasks = self.__schedulers[message.partition.index].find(tick)
 
         return [
             SubscriptionTaskResultFuture(
                 task, self.__executor.submit(self.__execute, task, tick)
             )
             for task in tasks
+            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
     def flush_batch(
@@ -258,7 +260,6 @@ class SubscriptionWorker(
         results = [
             SubscriptionTaskResult(task, future.result())
             for task, future in itertools.chain.from_iterable(batch)
-            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
         # Produce all of the subscription results asynchronously and wait for

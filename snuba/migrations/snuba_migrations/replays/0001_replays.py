@@ -83,7 +83,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=raw_columns,
                 engine=table_engines.Distributed(
                     local_table_name="replays_local",
-                    sharding_key="project_id",
+                    sharding_key="cityHash64(toString(replay_id))",
                 ),
             ),
         ]

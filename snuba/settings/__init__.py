@@ -53,6 +53,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "errors_v2_ro",
             "profiles",
             "replays",
+            "generic_metrics_sets",
         },
         "single_node": True,
     },
@@ -185,11 +186,11 @@ CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
 ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
 
 # Metric Alerts Subscription Options
-ENABLE_SESSIONS_SUBSCRIPTIONS = os.environ.get("ENABLE_SESSIONS_SUBSCRIPTIONS", False)
 ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
 
-# Use the subscriptions pipeline in devserver
-ENABLE_NEW_SUBSCRIPTIONS = os.environ.get("ENABLE_NEW_SUBSCRIPTIONS", False)
+SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
+    "SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV", False
+)
 
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
@@ -209,7 +210,7 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 
 # Place the actual time we start ingesting on the new version.
-ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 3, 23, 0, 0, 0)
 TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
     2022, 2, 18, 0, 0, 0
 )

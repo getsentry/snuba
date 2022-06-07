@@ -4,15 +4,12 @@ from typing import Optional, Type, Union
 import pytest
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
-from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import SubscriptionData
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
-from tests.test_sessions_api import BaseSessionsMockTest
 
 TESTS = [
     pytest.param(
@@ -65,29 +62,6 @@ TESTS = [
     ),
 ]
 
-TESTS_OVER_SESSIONS = [
-    pytest.param(
-        SubscriptionData(
-            project_id=1,
-            query=(
-                """
-                MATCH (sessions) SELECT if(greater(sessions,0),
-                divide(sessions_crashed,sessions),null)
-                AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions,
-                identity(sessions_crashed)
-                WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
-                OFFSET 0 GRANULARITY 3600
-                """
-            ),
-            time_window_sec=120 * 60,
-            resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.SESSIONS, 1),
-        ),
-        InvalidQueryException,
-        id="Snql subscription",
-    ),
-]
-
 
 class TestBuildRequestBase:
     dataset: Dataset
@@ -128,17 +102,3 @@ class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
         self, subscription: SubscriptionData, exception: Optional[Type[Exception]]
     ) -> None:
         self.compare_conditions(subscription, exception, "count", 10)
-
-
-class TestBuildRequestSessions(BaseSessionsMockTest, TestBuildRequestBase):
-    def setup_method(self) -> None:
-        self.dataset = get_dataset("sessions")
-        self.generate_manual_session_events(1)
-
-    @pytest.mark.parametrize("subscription, exception", TESTS_OVER_SESSIONS)
-    def test_conditions(
-        self, subscription: SubscriptionData, exception: Optional[Type[Exception]]
-    ) -> None:
-        self.compare_conditions(
-            subscription, exception, "_crash_rate_alert_aggregate", 0.05
-        )
