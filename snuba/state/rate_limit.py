@@ -225,7 +225,9 @@ def rate_limit(
         raise RateLimitExceeded(
             "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
                 r=reason
-            )
+            ),
+            scope=reason.scope,
+            name=reason.name,
         )
 
     rate_limited = False
@@ -281,8 +283,8 @@ def _record_metrics(
     exception since we want to know whether we exceeded the concurrent
     or per second limit.
     """
-    scope = exc.extra_data.get("scope", "")
-    name = exc.extra_data.get("name", "")
+    scope = str(exc.extra_data.get("scope", ""))
+    name = str(exc.extra_data.get("name", ""))
     if scope == GLOBAL_RATE_LIMIT_NAME or scope == TABLE_RATE_LIMIT_NAME:
         tags = {"scope": scope, "type": name}
         if scope == TABLE_RATE_LIMIT_NAME:
@@ -317,6 +319,7 @@ class RateLimitAggregator(AbstractContextManager):  # type: ignore
                 # these exit functions to be called so we can roll back any limits that were set
                 # earlier in the stack.
                 self.__exit__(*sys.exc_info())
+                _record_metrics(e, rate_limit_param)
                 raise e
 
         return stats
