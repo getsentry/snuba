@@ -41,7 +41,8 @@ class RateLimitParameters:
 
 class RateLimitExceeded(SerializableException):
     """
-    Exception thrown when the rate limit is exceeded
+    Exception thrown when the rate limit is exceeded. scope and name are
+    additional parameters which are provided when the exception is raised.
     """
 
 
@@ -265,6 +266,29 @@ def get_global_rate_limit_params() -> RateLimitParameters:
         per_second_limit=per_second,
         concurrent_limit=concurr,
     )
+
+
+def _record_metrics(
+    exc: RateLimitExceeded, rate_limit_param: RateLimitParameters
+) -> None:
+    """
+    Record rate limit metrics if needed.
+
+    We only record the metrics for global and table rate limits since
+    those indicate capacity of clickhouse clusters.
+
+    We get the scope and name from the message of RateLimitExceeded
+    exception since we want to know whether we exceeded the concurrent
+    or per second limit.
+    """
+    scope = exc.extra_data.get("scope", "")
+    name = exc.extra_data.get("name", "")
+    if scope == GLOBAL_RATE_LIMIT_NAME or scope == TABLE_RATE_LIMIT_NAME:
+        tags = {"scope": scope, "type": name}
+        if scope == TABLE_RATE_LIMIT_NAME:
+            tags["table"] = rate_limit_param.bucket
+
+        metrics.increment("rate-limited", tags=tags)
 
 
 class RateLimitAggregator(AbstractContextManager):  # type: ignore
