@@ -26,7 +26,7 @@ from typing import (
 
 import sentry_sdk
 
-from redis.cluster import ClusterPipeline as StrictClusterPipeline  # type: ignore
+from redis.cluster import ClusterPipeline as StrictClusterPipeline
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
