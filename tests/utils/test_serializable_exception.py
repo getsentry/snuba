@@ -16,15 +16,16 @@ exc_message = "I am an exception beep boop"
 
 def test_exception() -> None:
     try:
-        raise MyException(exc_message, extra="data")
+        raise MyException(exc_message, kwarg1="value1", kwarg2="value2")
     except MyException as e:
         assert e.message == exc_message
-        assert e.extra_data["extra"] == "data"
+        assert e.extra_data["kwarg1"] == "value1"
+        assert e.extra_data["kwarg2"] == "value2"
         edict = e.to_dict()
         resurfaced_e = SerializableException.from_dict(edict)
         assert isinstance(resurfaced_e, MyException)
         assert resurfaced_e.message == exc_message
-        assert resurfaced_e.extra_data == {"extra": "data"}
+        assert resurfaced_e.extra_data == {"kwarg1": "value1", "kwarg2": "value2"}
         assert resurfaced_e.should_report
 
 
