@@ -72,9 +72,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
-    "--override-partition-mode",
+    "--scheduling-mode",
     type=click.Choice(["partition", "global"]),
-    help="Skip scheduling if timestamp is beyond this threshold compared to the system time",
+    help="Overrides the partition scheduling mode associated with the dataset.",
 )
 def subscriptions_scheduler_executor(
     *,
@@ -89,10 +89,10 @@ def subscriptions_scheduler_executor(
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     log_level: Optional[str],
-    # TODO: Temporarily overrides a partition mode.
+    # TODO: Temporarily overrides the scheduling mode.
     # Required for single tenant since some partitions may be empty.
     # To be removed once transactions is no longer semantically partitioned.
-    override_partition_mode: Optional[str],
+    scheduling_mode: Optional[str],
 ) -> None:
     """
     Combined subscriptions scheduler and executor. Alternative to the separate scheduler and executor processes.
@@ -141,8 +141,8 @@ def subscriptions_scheduler_executor(
         max_concurrent_queries,
         executor,
         metrics,
-        SchedulingWatermarkMode(override_partition_mode)
-        if override_partition_mode is not None
+        SchedulingWatermarkMode(scheduling_mode)
+        if scheduling_mode is not None
         else None,
     )
 
