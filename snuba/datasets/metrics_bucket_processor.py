@@ -34,9 +34,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _process_values(
-        self, message: Mapping[str, Any]
-    ) -> Optional[Mapping[str, Any]]:
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
 
     def process_message(
@@ -70,10 +68,6 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         except EventTooOld:
             return None
 
-        processed_values = self._process_values(message)
-        if processed_values is None:
-            return None
-
         processed = {
             "org_id": message["org_id"],
             "project_id": message["project_id"],
@@ -81,7 +75,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             "timestamp": timestamp,
             "tags.key": keys,
             "tags.value": values,
-            **processed_values,
+            **self._process_values(message),
             "materialization_version": mat_version,
             "retention_days": retention_days,
             "partition": metadata.partition,
@@ -94,9 +88,7 @@ class SetsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "s"
 
-    def _process_values(
-        self, message: Mapping[str, Any]
-    ) -> Optional[Mapping[str, Any]]:
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]
         for value in values:
             assert isinstance(
@@ -109,9 +101,7 @@ class CounterMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "c"
 
-    def _process_values(
-        self, message: Mapping[str, Any]
-    ) -> Optional[Mapping[str, Any]]:
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         value = message["value"]
         assert isinstance(
             value, (int, float)
@@ -123,9 +113,7 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] is not None and message["type"] == "d"
 
-    def _process_values(
-        self, message: Mapping[str, Any]
-    ) -> Optional[Mapping[str, Any]]:
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]
         for value in values:
             assert isinstance(
@@ -148,9 +136,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             METRICS_DISTRIBUTIONS_TYPE,
         }
 
-    def _process_values(
-        self, message: Mapping[str, Any]
-    ) -> Optional[Mapping[str, Any]]:
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         if message["type"] == METRICS_SET_TYPE:
             values = message["value"]
             for value in values:

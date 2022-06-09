@@ -1,7 +1,6 @@
 import json
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Iterator, Mapping, Optional
 from unittest import mock
@@ -115,7 +114,6 @@ def test_executor_consumer() -> None:
         auto_offset_reset,
         strict_offset_reset,
         TestingMetricsBackend(),
-        ThreadPoolExecutor(2),
         None,
     )
     for i in range(1, 5):
@@ -222,7 +220,6 @@ def test_execute_query_strategy() -> None:
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
-    executor = ThreadPoolExecutor(max_concurrent_queries)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
     commit = mock.Mock()
@@ -230,7 +227,6 @@ def test_execute_query_strategy() -> None:
     strategy = ExecuteQuery(
         dataset,
         entity_names,
-        executor,
         max_concurrent_queries,
         None,
         metrics,
@@ -264,14 +260,11 @@ def test_too_many_concurrent_queries() -> None:
     state.set_config("executor_queue_size_factor", 1)
     dataset = get_dataset("events")
     entity_names = ["events"]
-    executor = ThreadPoolExecutor(2)
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
     commit = mock.Mock()
 
-    strategy = ExecuteQuery(
-        dataset, entity_names, executor, 4, None, metrics, next_step, commit
-    )
+    strategy = ExecuteQuery(dataset, entity_names, 4, None, metrics, next_step, commit)
 
     make_message = generate_message(EntityKey.EVENTS)
 
@@ -292,14 +285,11 @@ def test_skip_execution_for_entity() -> None:
     # Skips execution if the entity name is not on the list
     dataset = get_dataset("metrics")
     entity_names = ["metrics_sets"]
-    executor = ThreadPoolExecutor()
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
     commit = mock.Mock()
 
-    strategy = ExecuteQuery(
-        dataset, entity_names, executor, 4, None, metrics, next_step, commit
-    )
+    strategy = ExecuteQuery(dataset, entity_names, 4, None, metrics, next_step, commit)
 
     metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
     strategy.submit(metrics_sets_message)
@@ -389,7 +379,6 @@ def test_execute_and_produce_result() -> None:
     state.set_config("subscription_mode_events", "new")
     dataset = get_dataset("events")
     entity_names = ["events"]
-    executor = ThreadPoolExecutor()
     max_concurrent_queries = 2
     metrics = TestingMetricsBackend()
 
@@ -407,7 +396,6 @@ def test_execute_and_produce_result() -> None:
     strategy = ExecuteQuery(
         dataset,
         entity_names,
-        executor,
         max_concurrent_queries,
         None,
         metrics,
@@ -437,7 +425,6 @@ def test_execute_and_produce_result() -> None:
 def test_skip_stale_message() -> None:
     dataset = get_dataset("events")
     entity_names = ["events"]
-    executor = ThreadPoolExecutor()
     max_concurrent_queries = 2
     metrics = TestingMetricsBackend()
 
@@ -457,7 +444,6 @@ def test_skip_stale_message() -> None:
     strategy = ExecuteQuery(
         dataset,
         entity_names,
-        executor,
         max_concurrent_queries,
         stale_threshold_seconds,
         metrics,
