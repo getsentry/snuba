@@ -54,7 +54,7 @@ RUN set -ex; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
     pip install -e .; \
-    REDIS_HOST=redis1 snuba --help;
+    REDIS_HOST=redis snuba --help;
 
 ARG SOURCE_COMMIT
 ENV SNUBA_RELEASE=$SOURCE_COMMIT \
