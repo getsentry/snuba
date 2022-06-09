@@ -27,7 +27,7 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
-from snuba.subscriptions.utils import Tick, run_legacy_pipeline
+from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -246,7 +246,6 @@ class SubscriptionWorker(
                 task, self.__executor.submit(self.__execute, task, tick)
             )
             for task in tasks
-            if run_legacy_pipeline(task.task.entity, task.timestamp)
         ]
 
     def flush_batch(
