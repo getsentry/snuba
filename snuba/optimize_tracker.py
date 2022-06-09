@@ -1,9 +1,18 @@
 from datetime import datetime
-from typing import Optional, Sequence, Set
+from typing import Sequence, Set
 
 from snuba.redis import RedisClientType
 
 OPTIMIZE_PREFIX = "snuba-optimize"
+
+
+class NoOptimizedStateException(Exception):
+    """
+    This exception indicates that there is no state stored in the optimized
+    tracker.
+    """
+
+    pass
 
 
 class OptimizedPartitionTracker:
@@ -87,25 +96,27 @@ class OptimizedPartitionTracker:
         """
         self.__update_partitions(self.__completed_bucket, [part_name.encode("utf-8")])
 
-    def get_partitions_to_optimize(self) -> Optional[Set[str]]:
+    def get_partitions_to_optimize(self) -> Set[str]:
         """
         Get a set of partition names which need optimization.
 
-        When None is returned it means that no state was found and we need to
-        start from scratch. This would happen when the optimization is run
-        for the first time on a given day. On all other cases a set object is
-        returned.
+        When getting the partitions to optimize, NoOptimizedStateException
+        exception can be raised to indicate that there is no state
+        information and we need to populate the state. The exception is
+        returned when the optimization is run for the first time on a given
+        day. In all other cases a set object is returned.
+
         """
         all_partitions = self.get_all_partitions()
         completed_partitions = self.get_completed_partitions()
 
-        if all_partitions:
-            if not completed_partitions:
-                return all_partitions
-            else:
-                return all_partitions - completed_partitions
+        if not all_partitions:
+            raise NoOptimizedStateException
 
-        return None
+        if not completed_partitions:
+            return all_partitions
+        else:
+            return all_partitions - completed_partitions
 
     def delete_all_states(self) -> None:
         """

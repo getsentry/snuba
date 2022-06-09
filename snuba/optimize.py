@@ -10,7 +10,7 @@ from snuba import environment, settings, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.optimize_tracker import OptimizedPartitionTracker
+from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -144,7 +144,11 @@ def run_optimize_cron_job(
         start_time=datetime.now(), max_parallel=parallel
     )
 
-    if len(tracker.get_all_partitions()) == 0:
+    try:
+        partitions_to_optimize = tracker.get_partitions_to_optimize()
+    except NoOptimizedStateException:
+        # We don't have any recorded state of partitions needing optimization
+        # for today. So we need to build it.
         partitions = get_partitions_to_optimize(
             clickhouse, storage, database, table, before
         )
@@ -152,13 +156,14 @@ def run_optimize_cron_job(
             logger.info("No partitions need optimization")
             return 0
         partition_names = [partition.name for partition in partitions]
-        logger.info(f"All partitions list: {partition_names}")
         tracker.update_all_partitions(partition_names)
+        partitions_to_optimize = set(partition_names)
 
-    partitions_to_optimize = tracker.get_partitions_to_optimize()
-    if partitions_to_optimize is None or len(partitions_to_optimize) == 0:
+    if len(partitions_to_optimize) == 0:
         logger.info("No partitions need optimization")
         return 0
+
+    logger.info(f"All partitions list: {partitions_to_optimize}")
 
     optimize_partition_runner(
         clickhouse=clickhouse,
@@ -331,7 +336,7 @@ def optimize_partition_runner(
         # If there are still partitions needing optimization then move on to the
         # next bucket with the partitions which still need optimization.
         remaining_partitions = tracker.get_partitions_to_optimize()
-        if remaining_partitions:
+        if len(remaining_partitions) > 0:
             partitions = list(remaining_partitions)
         else:
             return

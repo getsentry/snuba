@@ -9,7 +9,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize_cron_job
-from snuba.optimize_tracker import OptimizedPartitionTracker
+from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
 from snuba.processor import InsertBatch
 from snuba.redis import redis_client
 from tests.helpers import write_processed_messages
@@ -34,8 +34,8 @@ from tests.helpers import write_processed_messages
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
     assert len(tracker.get_all_partitions()) == 0
     assert len(tracker.get_completed_partitions()) == 0
-    # Check for None here since we haven't updated the all partitions bucket.
-    assert tracker.get_partitions_to_optimize() is None
+    with pytest.raises(NoOptimizedStateException):
+        tracker.get_partitions_to_optimize()
 
     tracker.update_all_partitions(["Partition 1", "Partition 2"])
     tracker.update_completed_partitions("Partition 1")

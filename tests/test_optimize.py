@@ -186,6 +186,7 @@ class TestOptimize:
             expire_time=datetime.now() + timedelta(minutes=10),
         )
 
+        tracker.update_all_partitions([part.name for part in partitions])
         optimize.optimize_partition_runner(
             clickhouse=clickhouse,
             database=database,
