@@ -13,7 +13,7 @@ from snuba.optimize import (
     OptimizationBucket,
     _build_optimization_buckets,
     _get_metrics_tags,
-    _subdivide_parts,
+    _subdivide_partitions,
     optimize_partitions,
 )
 from snuba.optimize_tracker import OptimizedPartitionTracker
@@ -113,36 +113,36 @@ class TestOptimize:
         database = cluster.get_database()
 
         # no data, 0 partitions to optimize
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert parts == []
+        assert partitions == []
 
         base = datetime(1999, 12, 26)  # a sunday
         base_monday = base - timedelta(days=base.weekday())
 
-        # 1 event, 0 unoptimized parts
+        # 1 event, 0 unoptimized partitions
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert parts == []
+        assert partitions == []
 
         # 2 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
-        # 3 events in one part, 2 in another, 2 unoptimized parts
+        # 3 events in one part, 2 in another, 2 unoptimized partitions
         a_month_earlier = base_monday - timedelta(days=31)
         a_month_earlier_monday = a_month_earlier - timedelta(
             days=a_month_earlier.weekday()
@@ -153,10 +153,10 @@ class TestOptimize:
         write_processed_messages(
             storage, [create_event_row_for_date(a_month_earlier_monday)]
         )
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert [(p.date, p.retention_days) for p in parts] == [
+        assert [(p.date, p.retention_days) for p in partitions] == [
             (base_monday, 90),
             (a_month_earlier_monday, 90),
         ]
@@ -190,17 +190,17 @@ class TestOptimize:
             clickhouse=clickhouse,
             database=database,
             table=table,
-            parts=[part.name for part in parts],
+            partitions=[part.name for part in partitions],
             optimization_buckets=optimization_bucket,
             tracker=tracker,
             clickhouse_host="some-hostname.domain.com",
         )
 
-        # all parts should be optimized
-        parts = optimize.get_partitions_to_optimize(
+        # all partitions should be optimized
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert parts == []
+        assert partitions == []
 
         tracker.delete_all_states()
 
@@ -225,7 +225,7 @@ class TestOptimize:
         assert _get_metrics_tags(table, host) == expected
 
     @pytest.mark.parametrize(
-        "parts,subdivisions,expected",
+        "partitions,subdivisions,expected",
         [
             pytest.param(
                 ["(90,'2022-03-28')"],
@@ -243,7 +243,7 @@ class TestOptimize:
                     ["(90,'2022-03-28')"],
                     ["(90,'2022-03-21')"],
                 ],
-                id="two parts",
+                id="two partitions",
             ),
             pytest.param(
                 [
@@ -261,7 +261,7 @@ class TestOptimize:
                         "(30,'2022-03-28')",
                     ],
                 ],
-                id="three parts",
+                id="three partitions",
             ),
             pytest.param(
                 [
@@ -281,7 +281,7 @@ class TestOptimize:
                         "(30,'2022-03-21')",
                     ],
                 ],
-                id="four parts",
+                id="four partitions",
             ),
             pytest.param(
                 [
@@ -307,7 +307,7 @@ class TestOptimize:
                         "(90,'2022-03-07')",
                     ],
                 ],
-                id="six parts",
+                id="six partitions",
             ),
             pytest.param(
                 [
@@ -329,14 +329,17 @@ class TestOptimize:
                         "(90,'2022-03-07')",
                     ]
                 ],
-                id="six parts non-sorted",
+                id="six partitions non-sorted",
             ),
         ],
     )
-    def test_subdivide_parts(
-        self, parts: Sequence[str], subdivisions: int, expected: Sequence[Sequence[str]]
+    def test_subdivide_partitions(
+        self,
+        partitions: Sequence[str],
+        subdivisions: int,
+        expected: Sequence[Sequence[str]],
     ) -> None:
-        assert _subdivide_parts(parts, subdivisions) == expected
+        assert _subdivide_partitions(partitions, subdivisions) == expected
 
 
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
@@ -358,13 +361,13 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
         expire_time=datetime.now() + timedelta(minutes=10),
     )
 
-    parts = [util.Part("1", datetime.now(), 90)]
+    partitions = [util.Part("1", datetime.now(), 90)]
     with pytest.raises(JobTimeoutException):
         optimize_partitions(
             clickhouse=clickhouse_pool,
             database=database,
             table=table,
-            parts=[part.name for part in parts],
+            partitions=[partition.name for partition in partitions],
             cutoff_time=datetime.now(),
             tracker=tracker,
             clickhouse_host="some-hostname.domain.com",

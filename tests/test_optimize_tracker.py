@@ -44,11 +44,11 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
 
     tracker.update_completed_partitions("Partition 2")
     assert tracker.get_completed_partitions() == {"Partition 1", "Partition 2"}
-    parts_to_optimize = tracker.get_partitions_to_optimize()
+    partitions_to_optimize = tracker.get_partitions_to_optimize()
     # Check that we don't return None but a set whose length is 0 indicating
     # that all optimizations have been run.
-    assert parts_to_optimize is not None
-    assert len(parts_to_optimize) == 0
+    assert partitions_to_optimize is not None
+    assert len(partitions_to_optimize) == 0
 
     tracker.delete_all_states()
     assert len(tracker.get_all_partitions()) == 0
@@ -100,24 +100,24 @@ def test_run_optimize_with_partition_tracker() -> None:
             time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
         )
 
-    parts = optimize.get_partitions_to_optimize(
+    partitions = optimize.get_partitions_to_optimize(
         clickhouse_pool, storage, database, table
     )
 
-    original_num_parts = len(parts)
-    assert original_num_parts > 0
+    original_num_partitions = len(partitions)
+    assert original_num_partitions > 0
     assert len(tracker.get_all_partitions()) == 0
     assert len(tracker.get_completed_partitions()) == 0
 
-    # Mark the parts as optimized in partition tracker to test behavior.
-    tracker.update_all_partitions([part.name for part in parts])
-    for part in parts:
-        tracker.update_all_partitions([part.name])
-        tracker.update_completed_partitions(part.name)
+    # Mark the partitions as optimized in partition tracker to test behavior.
+    tracker.update_all_partitions([partition.name for partition in partitions])
+    for partition in partitions:
+        tracker.update_all_partitions([partition.name])
+        tracker.update_completed_partitions(partition.name)
 
     tracker_completed_partitions = tracker.get_completed_partitions()
     assert tracker_completed_partitions is not None
-    assert len(tracker_completed_partitions) == original_num_parts
+    assert len(tracker_completed_partitions) == original_num_partitions
 
     num_optimized = run_optimize_cron_job(
         clickhouse=clickhouse_pool,
@@ -140,4 +140,4 @@ def test_run_optimize_with_partition_tracker() -> None:
         clickhouse_host="localhost",
         tracker=tracker,
     )
-    assert num_optimized == original_num_parts
+    assert num_optimized == original_num_partitions

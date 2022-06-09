@@ -102,17 +102,19 @@ def run_optimize(
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
 
-    parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-    part_names = [part.name for part in parts]
+    partitions = get_partitions_to_optimize(
+        clickhouse, storage, database, table, before
+    )
+    partition_names = [partition.name for partition in partitions]
 
     optimize_partitions(
         clickhouse=clickhouse,
         database=database,
         table=table,
-        parts=part_names,
+        partitions=partition_names,
     )
 
-    return len(parts)
+    return len(partitions)
 
 
 def run_optimize_cron_job(
@@ -143,16 +145,18 @@ def run_optimize_cron_job(
     )
 
     if len(tracker.get_all_partitions()) == 0:
-        parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
-        if len(parts) == 0:
+        partitions = get_partitions_to_optimize(
+            clickhouse, storage, database, table, before
+        )
+        if len(partitions) == 0:
             logger.info("No partitions need optimization")
             return 0
-        part_names = [part.name for part in parts]
-        logger.info(f"All partitions list: {part_names}")
-        tracker.update_all_partitions(part_names)
+        partition_names = [partition.name for partition in partitions]
+        logger.info(f"All partitions list: {partition_names}")
+        tracker.update_all_partitions(partition_names)
 
-    parts_to_optimize = tracker.get_partitions_to_optimize()
-    if parts_to_optimize is None or len(parts_to_optimize) == 0:
+    partitions_to_optimize = tracker.get_partitions_to_optimize()
+    if partitions_to_optimize is None or len(partitions_to_optimize) == 0:
         logger.info("No partitions need optimization")
         return 0
 
@@ -160,7 +164,7 @@ def run_optimize_cron_job(
         clickhouse=clickhouse,
         database=database,
         table=table,
-        parts=list(parts_to_optimize),
+        partitions=list(partitions_to_optimize),
         optimization_buckets=optimization_bucket,
         tracker=tracker,
         clickhouse_host=clickhouse_host,
@@ -171,7 +175,7 @@ def run_optimize_cron_job(
         time.time() - start,
         tags=_get_metrics_tags(table, clickhouse_host),
     )
-    return len(parts_to_optimize)
+    return len(partitions_to_optimize)
 
 
 def get_partitions_to_optimize(
@@ -244,12 +248,12 @@ def get_partitions_to_optimize(
     return parts
 
 
-def _subdivide_parts(
-    parts: Sequence[str], number_of_subdivisions: int
+def _subdivide_partitions(
+    partitions: Sequence[str], number_of_subdivisions: int
 ) -> Sequence[Sequence[str]]:
     """
-    Subdivide a list of parts into number_of_subdivisions lists of parts
-    so that optimize can be executed on different parts list by different
+    Subdivide a list of partitions into number_of_subdivisions lists of partitions
+    so that optimize can be executed on different partitions list by different
     threads.
     """
 
@@ -262,11 +266,11 @@ def _subdivide_parts(
 
         return partition_name
 
-    sorted_parts = sorted(parts, key=sort_partitions, reverse=True)
+    sorted_partitions = sorted(partitions, key=sort_partitions, reverse=True)
     output: MutableSequence[Sequence[str]] = []
 
     for i in range(number_of_subdivisions):
-        output.append(sorted_parts[i::number_of_subdivisions])
+        output.append(sorted_partitions[i::number_of_subdivisions])
 
     return output
 
@@ -275,7 +279,7 @@ def optimize_partition_runner(
     clickhouse: ClickhousePool,
     database: str,
     table: str,
-    parts: Sequence[str],
+    partitions: Sequence[str],
     optimization_buckets: Sequence[OptimizationBucket],
     tracker: OptimizedPartitionTracker,
     clickhouse_host: str,
@@ -295,7 +299,7 @@ def optimize_partition_runner(
     """
     for bucket in optimization_buckets:
         parallel, cutoff_time = bucket.parallel, bucket.cutoff_time
-        divided_parts = _subdivide_parts(parts, parallel)
+        divided_partitions = _subdivide_partitions(partitions, parallel)
         threads: MutableSequence[threading.Thread] = []
         for i in range(0, parallel):
             threads.append(
@@ -305,7 +309,7 @@ def optimize_partition_runner(
                         clickhouse,
                         database,
                         table,
-                        divided_parts[i],
+                        divided_partitions[i],
                         cutoff_time,
                         tracker,
                         clickhouse_host,
@@ -325,11 +329,10 @@ def optimize_partition_runner(
                 pass
 
         # If there are still partitions needing optimization then move on to the
-        # next bucket with the parts which still need optimization.
-
-        remaining_parts = tracker.get_partitions_to_optimize()
-        if remaining_parts:
-            parts = list(remaining_parts)
+        # next bucket with the partitions which still need optimization.
+        remaining_partitions = tracker.get_partitions_to_optimize()
+        if remaining_partitions:
+            partitions = list(remaining_partitions)
         else:
             return
 
@@ -338,7 +341,7 @@ def optimize_partitions(
     clickhouse: ClickhousePool,
     database: str,
     table: str,
-    parts: Sequence[str],
+    partitions: Sequence[str],
     cutoff_time: Optional[datetime] = None,
     tracker: Optional[OptimizedPartitionTracker] = None,
     clickhouse_host: Optional[str] = None,
@@ -348,7 +351,7 @@ def optimize_partitions(
         PARTITION %(partition)s FINAL
     """
 
-    for part_name in parts:
+    for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
             raise JobTimeoutException(
                 "Optimize job is running past the cutoff time. Abandoning."
@@ -357,11 +360,11 @@ def optimize_partitions(
         args = {
             "database": database,
             "table": table,
-            "partition": part_name,
+            "partition": partition,
         }
 
         query = (query_template % args).strip()
-        logger.info(f"Optimizing partition: {part_name}")
+        logger.info(f"Optimizing partition: {partition}")
         start = time.time()
 
         # Update tracker before running clickhouse.execute since its possible
@@ -369,7 +372,7 @@ def optimize_partitions(
         # executing the optimization. In that case we don't want to
         # run optimization on the same partition twice.
         if tracker:
-            tracker.update_completed_partitions(part_name)
+            tracker.update_completed_partitions(partition)
 
         clickhouse.execute(query)
         metrics.timing(
