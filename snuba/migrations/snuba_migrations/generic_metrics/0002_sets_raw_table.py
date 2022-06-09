@@ -74,7 +74,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.GENERIC_METRICS_SETS,
                 table_name=self.dist_table_name,
                 engine=table_engines.Distributed(
-                    local_table_name=self.local_table_name, sharding_key="timeseries_id"
+                    local_table_name=self.local_table_name,
+                    sharding_key="cityHash64(timeseries_id)",
                 ),
                 columns=self.columns,
             )
