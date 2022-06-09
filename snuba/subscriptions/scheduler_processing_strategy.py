@@ -105,7 +105,6 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
                 message.offset,
                 CommittableTick(message.payload, offset_to_commit),
                 message.timestamp,
-                message.next_offset,
             )
         )
         if should_commit:
