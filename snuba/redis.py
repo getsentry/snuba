@@ -74,6 +74,8 @@ def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]
 
 @_retry(max_retries=settings.REDIS_INIT_MAX_RETRIES)
 def _initialize_redis_cluster() -> RedisClientType:
+    print("REDIS CLUSTER", settings.USE_REDIS_CLUSTER)
+    print("REDIS_HOST", settings.REDIS_HOST)
     if settings.USE_REDIS_CLUSTER:
         startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
         if startup_nodes is None:
