@@ -19,6 +19,10 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "parser")
 
 
+class BadRequestSchemaException(Exception):
+    pass
+
+
 class RequestParts(NamedTuple):
     query: Mapping[str, Any]
     query_settings: Mapping[str, Any]
@@ -62,11 +66,9 @@ class RequestSchema:
             for property_name, property_schema in schema["properties"].items():
                 comp_schema = self.__composite_schema["properties"].get(property_name)
                 if comp_schema is not None and comp_schema != property_schema:
-                    import pdb
-
-                    pdb.set_trace()
-                    # TODO: make a proper exception
-                    raise Exception("subschema cannot redefine property")
+                    raise BadRequestSchemaException(
+                        "subschema cannot redefine property"
+                    )
                 self.__composite_schema["properties"][property_name] = property_schema
 
             for definition_name, definition_schema in schema.get(
