@@ -256,6 +256,56 @@ def test_execute_query_strategy() -> None:
     strategy.join()
 
 
+def test_execute_query_strategy_with_partitions() -> None:
+    state.set_config("subscription_mode_events", "new")
+    state.set_config("use_calculated_max_concurrent_queries", True)
+    dataset = get_dataset("events")
+    entity_names = ["events"]
+    max_concurrent_queries = 2
+    metrics = TestingMetricsBackend()
+    next_step = mock.Mock()
+    commit = mock.Mock()
+
+    partitions = {
+        Partition(Topic("test"), 0): 0,
+        Partition(Topic("test"), 1): 0,
+        Partition(Topic("test"), 2): 0,
+        Partition(Topic("test"), 3): 0,
+    }
+
+    strategy = ExecuteQuery(
+        dataset,
+        entity_names,
+        max_concurrent_queries,
+        None,
+        metrics,
+        next_step,
+        commit,
+        partitions,
+    )
+
+    make_message = generate_message(EntityKey.EVENTS)
+    message = next(make_message)
+
+    assert strategy._ExecuteQuery__executor._max_workers == 4
+    strategy.submit(message)
+
+    # next_step.submit should be called eventually
+    while next_step.submit.call_count == 0:
+        time.sleep(0.1)
+        strategy.poll()
+
+    assert next_step.submit.call_args[0][0].timestamp == message.timestamp
+    assert next_step.submit.call_args[0][0].offset == message.offset
+
+    result = next_step.submit.call_args[0][0].payload.result
+    assert result[1]["data"] == [{"count()": 0}]
+    assert result[1]["meta"] == [{"name": "count()", "type": "UInt64"}]
+
+    strategy.close()
+    strategy.join()
+
+
 def test_too_many_concurrent_queries() -> None:
     state.set_config("subscription_mode_events", "new")
     state.set_config("executor_queue_size_factor", 1)
