@@ -31,15 +31,11 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: outcomes-billing-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
-    name: events-subscriptions-consumer
-  - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-scheduler
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-executor
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: profiles-consumer
-  - image: us.gcr.io/sentryio/snuba:{sha}
-    name: transactions-subscriptions-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-subscriptions-scheduler
   - image: us.gcr.io/sentryio/snuba:{sha}

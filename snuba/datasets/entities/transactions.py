@@ -11,11 +11,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.clickhouse_upgrade import (
-    Option,
-    RolloutSelector,
-    comparison_callback,
-)
+from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import (
@@ -185,7 +181,6 @@ class BaseTransactionsEntity(Entity, ABC):
             selector_func=v2_selector_function,
             split_rate_limiter=True,
             ignore_secondary_exceptions=True,
-            callback_func=comparison_callback,
         )
 
         super().__init__(

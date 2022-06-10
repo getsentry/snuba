@@ -24,6 +24,7 @@ CLUSTERS = [
             "errors_v2",
             "errors_v2_ro",
             "profiles",
+            "generic_metrics_sets",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
