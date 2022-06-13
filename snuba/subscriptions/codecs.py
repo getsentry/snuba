@@ -46,7 +46,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
                     "version": 3,
                     "payload": {
                         "subscription_id": subscription_id,
-                        "request": {**request.original_body},
+                        "request": {**request.body},
                         "result": result,
                         "timestamp": value.task.timestamp.isoformat(),
                         "entity": entity.value,
