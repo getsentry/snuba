@@ -32,9 +32,9 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
+from snuba.query.query_settings import SubscriptionQuerySettings
 from snuba.reader import Result
 from snuba.request import Request
-from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.entity_subscription import (
@@ -151,12 +151,12 @@ class SubscriptionData:
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
-        schema = RequestSchema.build(SubscriptionRequestSettings)
+        schema = RequestSchema.build(SubscriptionQuerySettings)
 
         request = build_request(
             {"query": self.query},
             parse_snql_query,
-            SubscriptionRequestSettings,
+            SubscriptionQuerySettings,
             schema,
             dataset,
             timer,

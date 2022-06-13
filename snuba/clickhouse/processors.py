@@ -22,7 +22,7 @@ class QueryProcessor(ABC):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # TODO: Consider making the Query immutable.
         raise NotImplementedError
 
@@ -40,6 +40,6 @@ class CompositeQueryProcessor(ABC):
 
     @abstractmethod
     def process_query(
-        self, query: CompositeQuery[Table], request_settings: QuerySettings
+        self, query: CompositeQuery[Table], query_settings: QuerySettings
     ) -> None:
         raise NotImplementedError

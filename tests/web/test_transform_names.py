@@ -13,9 +13,9 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Column as MetaColumn
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.helpers import write_unprocessed_events
@@ -72,7 +72,7 @@ def test_transform_column_names() -> None:
             ),
         ],
     )
-    query_settings = HTTPRequestSettings(referrer="asd")
+    query_settings = HTTPQuerySettings(referrer="asd")
 
     dataset = get_dataset("events")
     timer = Timer("test")

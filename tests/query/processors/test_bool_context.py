@@ -12,7 +12,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def test_events_promoted_boolean_context() -> None:
@@ -74,7 +74,7 @@ def test_events_promoted_boolean_context() -> None:
         ],
     )
 
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     MappingColumnPromoter(
         {"contexts": {"device.charging": "device_charging"}}, cast_to_string=True
     ).process_query(query, settings)
@@ -149,7 +149,7 @@ def test_events_boolean_context() -> None:
         ],
     )
 
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     EventsBooleanContextsProcessor().process_query(query, settings)
 
     assert query.get_selected_columns() == expected.get_selected_columns()
