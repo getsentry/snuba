@@ -10,11 +10,11 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.processors.abstract_array_join_optimizer import (
     AbstractArrayJoinOptimizer,
 )
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 
 
 class BloomFilterOptimizer(AbstractArrayJoinOptimizer):
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         single_filtered, multiple_filtered = self.get_filtered_arrays(
             query, self.key_columns
         )

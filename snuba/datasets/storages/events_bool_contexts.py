@@ -8,7 +8,7 @@ from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Literal, Or, String
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 
 
 class EventsPromotedBooleanContextsProcessor(QueryProcessor):
@@ -30,7 +30,7 @@ class EventsPromotedBooleanContextsProcessor(QueryProcessor):
     patch to the events storage for as long as it exists.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # We care only of promoted contexts, so we do not need to match
         # the original nested expression.
         matcher = FunctionCall(
@@ -80,7 +80,7 @@ class EventsBooleanContextsProcessor(QueryProcessor):
     from the errors and events storages.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         matcher = FunctionCall(
             String("arrayElement"),
             (

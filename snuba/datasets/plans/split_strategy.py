@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
 from snuba.clickhouse.query import Query
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
-SplitQueryRunner = Callable[[Query, QuerySettings], QueryResult]
+SplitQueryRunner = Callable[[Query, RequestSettings], QueryResult]
 
 
 class QuerySplitStrategy(ABC):
@@ -31,7 +31,7 @@ class QuerySplitStrategy(ABC):
     def execute(
         self,
         query: Query,
-        request_settings: QuerySettings,
+        request_settings: RequestSettings,
         runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """

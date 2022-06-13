@@ -6,7 +6,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.functions import AGGREGATION_FUNCTIONS
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 
 
 def _col_is_nullable(col: FlattenedColumn) -> bool:
@@ -83,7 +83,7 @@ class NullColumnCaster(QueryProcessor):
     def mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
         return self.__mismatched_null_columns
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def cast_column_to_nullable(exp: Expression) -> Expression:
             if isinstance(exp, Column):
                 if exp.column_name in self.mismatched_null_columns:

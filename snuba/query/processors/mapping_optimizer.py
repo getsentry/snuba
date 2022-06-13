@@ -25,7 +25,7 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, AnyOptionalString
 from snuba.query.matchers import Column as ColumnMatcher
 from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -284,7 +284,7 @@ class MappingOptimizer(QueryProcessor):
         else:
             return clause, cond_class
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         if not get_config(self.__killswitch, 1):
             return
         condition, cond_class = self.__get_reduced_and_classified_query_clause(

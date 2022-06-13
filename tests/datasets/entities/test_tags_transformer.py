@@ -5,7 +5,7 @@ from snuba.query import SelectedExpression
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.logical import Query
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 
 def build_query(tag_key: Literal) -> Query:
@@ -24,7 +24,7 @@ def build_query(tag_key: Literal) -> Query:
 
 def test_transformer() -> None:
     query = build_query(Literal(None, "10"))
-    TagsTypeTransformer().process_query(query, HTTPQuerySettings())
+    TagsTypeTransformer().process_query(query, HTTPRequestSettings())
 
     assert query.get_selected_columns()[0].expression == SubscriptableReference(
         "_snuba_tags[10]", Column(None, None, "tags"), Literal(None, 10)
@@ -34,5 +34,5 @@ def test_transformer() -> None:
 def test_broken_query() -> None:
     with pytest.raises(InvalidExpressionException):
         TagsTypeTransformer().process_query(
-            build_query(Literal(None, "asdasd")), HTTPQuerySettings()
+            build_query(Literal(None, "asdasd")), HTTPRequestSettings()
         )

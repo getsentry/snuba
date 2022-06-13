@@ -6,7 +6,7 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.array_has_optimizer import ArrayHasOptimizer
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 from tests.query.processors.query_builders import build_query
 
 spans_ops = Column(None, None, "spans.op")
@@ -205,7 +205,7 @@ def test_array_has_optimizer(
     query: ClickhouseQuery,
     expected_conditions: Optional[Expression],
 ) -> None:
-    request_settings = HTTPQuerySettings()
+    request_settings = HTTPRequestSettings()
     array_has_processor = ArrayHasOptimizer(["spans.op", "spans.group"])
     array_has_processor.process_query(query, request_settings)
     assert query.get_condition() == expected_conditions

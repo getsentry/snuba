@@ -3,13 +3,12 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, MutableMapping, Optional, Protocol, Tuple, Type, Union
+from typing import Any, Mapping, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
 
 from snuba import state
 from snuba.attribution import get_app_id
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.query.composite import CompositeQuery
@@ -22,9 +21,9 @@ from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.request_settings import (
-    HTTPQuerySettings,
-    QuerySettings,
-    SubscriptionQuerySettings,
+    HTTPRequestSettings,
+    RequestSettings,
+    SubscriptionRequestSettings,
 )
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
@@ -34,7 +33,7 @@ class Parser(Protocol):
     def __call__(
         self,
         request_parts: RequestParts,
-        settings: QuerySettings,
+        settings: RequestSettings,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
     ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -43,7 +42,7 @@ class Parser(Protocol):
 
 def parse_snql_query(
     request_parts: RequestParts,
-    settings: QuerySettings,
+    settings: RequestSettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -66,7 +65,7 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
 def build_request(
     body: MutableMapping[str, Any],
     parser: Parser,
-    settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
+    settings_class: Union[Type[HTTPRequestSettings], Type[SubscriptionRequestSettings]],
     schema: RequestSchema,
     dataset: Dataset,
     timer: Timer,
@@ -76,24 +75,28 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
-            if settings_class == HTTPQuerySettings:
-                query_settings: MutableMapping[str, bool | str] = {
-                    **request_parts.query_settings,
+            if settings_class == HTTPRequestSettings:
+                settings: Mapping[str, bool | str] = {
+                    **request_parts.settings,
                     "consistent": _consistent_override(
-                        request_parts.query_settings.get("consistent", False), referrer
+                        request_parts.settings.get("consistent", False), referrer
                     ),
                 }
-                query_settings["referrer"] = referrer
-                # TODO: referrer probably doesn't need to be passed in, it should be from the body
                 settings_obj: Union[
-                    HTTPQuerySettings, SubscriptionQuerySettings
+                    HTTPRequestSettings, SubscriptionRequestSettings
                 ] = settings_class(
-                    **query_settings,
+                    referrer=referrer,
+                    parent_api=request_parts.query["parent_api"],
+                    **settings,
                 )
-            elif settings_class == SubscriptionQuerySettings:
+            elif settings_class == SubscriptionRequestSettings:
                 settings_obj = settings_class(
+                    referrer=referrer,
                     consistent=_consistent_override(True, referrer),
                 )
+
+            app_id = get_app_id(settings_obj.get_app_id())
+
             query, snql_anonymized = parser(
                 request_parts, settings_obj, dataset, custom_processing
             )
@@ -105,24 +108,18 @@ def build_request(
             org_ids = get_object_ids_in_query_ast(query, "org_id")
             if org_ids is not None and len(org_ids) == 1:
                 sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
-            attribution_info = dict(request_parts.attribution_info)
-            # TODO: clean this up
-            attribution_info["app_id"] = get_app_id(
-                request_parts.attribution_info["app_id"]
-            )
-            attribution_info["referrer"] = referrer
 
             request_id = uuid.uuid4().hex
             request = Request(
-                id=request_id,
+                request_id,
                 # TODO: Replace this with the actual query raw body.
                 # this can have an impact on subscriptions so we need
                 # to be careful with the change.
-                original_body=body,
-                query=query,
-                attribution_info=AttributionInfo(**attribution_info),
-                query_settings=settings_obj,
-                snql_anonymized=snql_anonymized,
+                request_parts.query,
+                query,
+                app_id,
+                snql_anonymized,
+                settings_obj,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             record_invalid_request(timer, referrer)
@@ -137,16 +134,14 @@ def build_request(
         )
         span.set_data(
             "snuba_query_raw",
-            textwrap.wrap(repr(request.original_body), 100, break_long_words=False),
+            textwrap.wrap(repr(request.body), 100, break_long_words=False),
         )
         sentry_sdk.add_breadcrumb(
             category="query_info",
             level="info",
             message="snuba_query_raw",
             data={
-                "query": textwrap.wrap(
-                    repr(request.original_body), 100, break_long_words=False
-                )
+                "query": textwrap.wrap(repr(request.body), 100, break_long_words=False)
             },
         )
 

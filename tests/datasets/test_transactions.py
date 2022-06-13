@@ -9,7 +9,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 RO_REFERRER = "RO_REFERRER"
 RW_REFERRER = "RW_REFERRER"
@@ -25,13 +25,13 @@ def test_storage_selector_global_config() -> None:
     query = Query(Entity(EntityKey.TRANSACTIONS, ColumnSet([])), selected_columns=[])
 
     assert (
-        STORAGE_SELECTOR.select_storage(query, HTTPQuerySettings()).storage
+        STORAGE_SELECTOR.select_storage(query, HTTPRequestSettings()).storage
         == STORAGE_RO
     )
 
     state.set_config("enable_transactions_readonly_table", False)
     assert (
-        STORAGE_SELECTOR.select_storage(query, HTTPQuerySettings()).storage == STORAGE
+        STORAGE_SELECTOR.select_storage(query, HTTPRequestSettings()).storage == STORAGE
     )
 
 
@@ -42,13 +42,13 @@ def test_storage_selector_query_settings() -> None:
 
     assert (
         STORAGE_SELECTOR.select_storage(
-            query, HTTPQuerySettings(referrer=RO_REFERRER)
+            query, HTTPRequestSettings(referrer=RO_REFERRER)
         ).storage
         == STORAGE_RO
     )
     assert (
         STORAGE_SELECTOR.select_storage(
-            query, HTTPQuerySettings(referrer=RW_REFERRER)
+            query, HTTPRequestSettings(referrer=RW_REFERRER)
         ).storage
         == STORAGE
     )

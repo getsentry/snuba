@@ -12,7 +12,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal, NoopVisitor
 from snuba.reader import Reader
-from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -72,12 +72,12 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
 
     dataset = get_dataset(dataset_name)
 
-    schema = RequestSchema.build(HTTPQuerySettings)
+    schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         query_body,
         parse_snql_query,
-        HTTPQuerySettings,
+        HTTPRequestSettings,
         schema,
         dataset,
         Timer(name="bloop"),
@@ -87,7 +87,7 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
 
     def query_verifier(
         query: Union[Query, CompositeQuery[Table]],
-        settings: QuerySettings,
+        settings: RequestSettings,
         reader: Reader,
     ) -> QueryResult:
         assert isinstance(query, Query)

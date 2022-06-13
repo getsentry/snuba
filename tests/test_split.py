@@ -18,7 +18,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
-from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
@@ -59,7 +59,7 @@ def test_no_split(
 
     def do_query(
         query: ClickhouseQuery,
-        request_settings: QuerySettings,
+        request_settings: RequestSettings,
         reader: Reader,
     ) -> QueryResult:
         assert query == query
@@ -78,7 +78,7 @@ def test_no_split(
         ],
     )
 
-    strategy.execute(query, HTTPQuerySettings(), do_query)
+    strategy.execute(query, HTTPRequestSettings(), do_query)
 
 
 def test_set_limit_on_split_query():
@@ -175,7 +175,7 @@ def test_col_split(
 ) -> None:
     def do_query(
         query: ClickhouseQuery,
-        request_settings: QuerySettings,
+        request_settings: RequestSettings,
         reader: Reader,
     ) -> QueryResult:
         selected_col_names = [
@@ -211,7 +211,7 @@ def test_col_split(
         ],
     )
 
-    strategy.execute(query, HTTPQuerySettings(), do_query)
+    strategy.execute(query, HTTPRequestSettings(), do_query)
 
 
 column_set = ColumnSet(
@@ -377,7 +377,7 @@ def test_col_split_conditions(
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
 
     def do_query(
-        query: ClickhouseQuery, request_settings: QuerySettings = None
+        query: ClickhouseQuery, request_settings: RequestSettings = None
     ) -> QueryResult:
         return QueryResult(
             {
@@ -393,7 +393,7 @@ def test_col_split_conditions(
         )
 
     assert (
-        splitter.execute(query, HTTPQuerySettings(), do_query) is not None
+        splitter.execute(query, HTTPRequestSettings(), do_query) is not None
     ) == expected_result
 
 
@@ -406,7 +406,7 @@ def test_time_split_ast() -> None:
 
     def do_query(
         query: ClickhouseQuery,
-        request_settings: QuerySettings,
+        request_settings: RequestSettings,
     ) -> QueryResult:
         from_date_ast, to_date_ast = get_time_range(query, "timestamp")
         assert from_date_ast is not None and isinstance(from_date_ast, datetime)
@@ -428,7 +428,7 @@ def test_time_split_ast() -> None:
 
     query, _ = parse_snql_query(body, get_dataset("events"))
     entity = get_entity(query.get_from_clause().key)
-    settings = HTTPQuerySettings()
+    settings = HTTPRequestSettings()
     for p in entity.get_query_processors():
         p.process_query(query, settings)
 

@@ -17,7 +17,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.snql.parser import parse_snql_query
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
     (
@@ -287,7 +287,7 @@ def test_prewhere(
     query = identity_translate(query)
     query.set_from_clause(Table("my_table", all_columns, final=final))
 
-    request_settings = HTTPQuerySettings()
+    request_settings = HTTPRequestSettings()
     processor = PrewhereProcessor(keys, omit_if_final=omit_if_final_keys)
     processor.process_query(query, request_settings)
 

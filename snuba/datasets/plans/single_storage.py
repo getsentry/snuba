@@ -22,7 +22,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -47,11 +47,11 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
     def execute(
         self,
         query: Query,
-        request_settings: QuerySettings,
+        request_settings: RequestSettings,
         runner: QueryRunner,
     ) -> QueryResult:
         def process_and_run_query(
-            query: Query, request_settings: QuerySettings
+            query: Query, request_settings: RequestSettings
         ) -> QueryResult:
             for processor in self.__query_processors:
                 with sentry_sdk.start_span(
@@ -117,7 +117,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     @with_span()
     def build_and_rank_plans(
-        self, query: LogicalQuery, settings: QuerySettings
+        self, query: LogicalQuery, settings: RequestSettings
     ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
             op="build_plan.single_storage", description="translate"
@@ -178,7 +178,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     @with_span()
     def build_and_rank_plans(
-        self, query: LogicalQuery, settings: QuerySettings
+        self, query: LogicalQuery, settings: RequestSettings
     ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
             op="build_plan.selected_storage", description="select_storage"

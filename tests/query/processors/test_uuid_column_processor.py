@@ -17,7 +17,7 @@ from snuba.query.processors.type_converters import ColumnTypeError
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 tests = [
     pytest.param(
@@ -253,7 +253,7 @@ def test_uuid_column_processor(
     )
 
     UUIDColumnProcessor(set(["column1", "column2"])).process_query(
-        unprocessed_query, HTTPQuerySettings()
+        unprocessed_query, HTTPRequestSettings()
     )
     assert unprocessed_query.get_selected_columns() == [
         SelectedExpression(
@@ -311,5 +311,5 @@ def test_invalid_uuid(unprocessed: Expression) -> None:
 
     with pytest.raises(ColumnTypeError):
         UUIDColumnProcessor(set(["column1", "column2"])).process_query(
-            unprocessed_query, HTTPQuerySettings()
+            unprocessed_query, HTTPRequestSettings()
         )

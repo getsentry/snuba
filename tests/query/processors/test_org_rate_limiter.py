@@ -11,7 +11,7 @@ from snuba.query.logical import Query
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
 )
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 from snuba.state.rate_limit import ORGANIZATION_RATE_LIMIT_NAME
 
 tests = [
@@ -69,7 +69,7 @@ def test_org_rate_limit_processor(unprocessed: Expression, org_id: int) -> None:
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
-    settings = HTTPQuerySettings()
+    settings = HTTPRequestSettings()
 
     num_before = len(settings.get_rate_limit_params())
     OrganizationRateLimiterProcessor("org_id").process_query(query, settings)
@@ -90,7 +90,7 @@ def test_org_rate_limit_processor_overridden(
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
-    settings = HTTPQuerySettings()
+    settings = HTTPRequestSettings()
     state.set_config(f"org_per_second_limit_{org_id}", 5)
     state.set_config(f"org_concurrent_limit_{org_id}", 10)
 

@@ -22,7 +22,7 @@ from snuba.query.exceptions import ValidationException
 from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdEnforcer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
@@ -105,7 +105,7 @@ materialized_view_schema = TableSchema(
 
 
 class MinuteResolutionProcessor(QueryProcessor):
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # NOTE: the product side is restricted to a 6h window, however it rounds
         # outwards, which extends the window to 7h.
         from_date, to_date = get_time_range(query, "started")

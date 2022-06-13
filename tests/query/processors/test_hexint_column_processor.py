@@ -10,7 +10,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 tests = [
     pytest.param(
@@ -54,7 +54,7 @@ def test_hexint_column_processor(unprocessed: Expression, formatted_value: str) 
     )
 
     HexIntColumnProcessor(set(["column1"])).process_query(
-        unprocessed_query, HTTPQuerySettings()
+        unprocessed_query, HTTPRequestSettings()
     )
     assert unprocessed_query.get_selected_columns() == [
         SelectedExpression(

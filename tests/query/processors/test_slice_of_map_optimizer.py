@@ -14,7 +14,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 tests = [
     pytest.param(
@@ -99,7 +99,7 @@ def test_uuid_array_column_processor(
         condition=expected,
     )
 
-    SliceOfMapOptimizer().process_query(unprocessed_query, HTTPQuerySettings())
+    SliceOfMapOptimizer().process_query(unprocessed_query, HTTPRequestSettings())
 
     assert expected_query.get_condition() == unprocessed_query.get_condition()
     condition = unprocessed_query.get_condition()

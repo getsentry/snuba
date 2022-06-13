@@ -3,7 +3,6 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 
 from snuba.attribution import get_app_id
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -20,7 +19,7 @@ from snuba.querylog.query_metadata import (
     SnubaQueryMetadata,
 )
 from snuba.request import Request
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
 
@@ -40,14 +39,12 @@ def test_simple() -> None:
     )
 
     request = Request(
-        id=uuid.UUID("a" * 32).hex,
-        original_body=request_body,
-        query=query,
-        snql_anonymized="",
-        query_settings=HTTPQuerySettings(referrer="search"),
-        attribution_info=AttributionInfo(
-            get_app_id("default"), "search", None, None, None
-        ),
+        uuid.UUID("a" * 32).hex,
+        request_body,
+        query,
+        get_app_id("default"),
+        "",
+        HTTPRequestSettings(referrer="search"),
     )
 
     time = TestingClock()
@@ -153,14 +150,12 @@ def test_missing_fields() -> None:
     )
 
     request = Request(
-        id=uuid.UUID("a" * 32).hex,
-        original_body=request_body,
-        query=query,
-        snql_anonymized="",
-        query_settings=HTTPQuerySettings(referrer="search"),
-        attribution_info=AttributionInfo(
-            get_app_id("default"), "search", None, None, None
-        ),
+        uuid.UUID("a" * 32).hex,
+        request_body,
+        query,
+        get_app_id("default"),
+        "",
+        HTTPRequestSettings(referrer="search"),
     )
 
     time = TestingClock()

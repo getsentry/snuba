@@ -3,7 +3,7 @@ from dataclasses import replace
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 
 
 class TagsExpanderProcessor(QueryProcessor):
@@ -14,7 +14,7 @@ class TagsExpanderProcessor(QueryProcessor):
     valid column name.
     """
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             # This is intentionally not configurable in order to discourage creating
             # a special syntax for expressions that should be function calls.

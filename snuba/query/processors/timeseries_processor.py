@@ -11,7 +11,7 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param, String
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.util import parse_datetime
 
 
@@ -176,7 +176,7 @@ class TimeSeriesProcessor(QueryProcessor):
 
         return exp
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # Use time_group_columns to map the old column names to the new column names, and
         # map the time_group_columns into functions based on the query granularity.
         granularity = query.get_granularity()

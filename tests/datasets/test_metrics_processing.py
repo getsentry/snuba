@@ -5,7 +5,6 @@ import pytest
 
 from snuba import settings
 from snuba.attribution import get_app_id
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression, Query
 from snuba.clusters import cluster
 from snuba.datasets import factory
@@ -20,7 +19,7 @@ from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, L
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
 TEST_CASES = [
@@ -248,16 +247,16 @@ def test_metrics_processing(
 
     request = Request(
         id="",
-        original_body=query_body,
+        body=query_body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized="",
-        query_settings=HTTPQuerySettings(referrer=""),
-        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
+        settings=HTTPRequestSettings(referrer=""),
     )
 
     def query_runner(
         query: Union[Query, CompositeQuery[Table]],
-        settings: QuerySettings,
+        settings: RequestSettings,
         reader: Reader,
     ) -> QueryResult:
         assert query.get_selected_columns() == [

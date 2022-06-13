@@ -1,5 +1,4 @@
 from snuba.attribution import get_app_id
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
@@ -7,7 +6,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
 
@@ -29,15 +28,15 @@ def test_events_processing() -> None:
     query, snql_anonymized = parse_snql_query(query_body["query"], events_dataset)
     request = Request(
         id="",
-        original_body=query_body,
+        body=query_body,
         query=query,
+        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        query_settings=HTTPQuerySettings(referrer=""),
-        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
+        settings=HTTPRequestSettings(referrer=""),
     )
 
     def query_runner(
-        query: Query, settings: QuerySettings, reader: Reader
+        query: Query, settings: RequestSettings, reader: Reader
     ) -> QueryResult:
         assert query.get_selected_columns() == [
             SelectedExpression(

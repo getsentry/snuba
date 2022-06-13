@@ -32,7 +32,7 @@ from snuba.querylog.query_metadata import (
 )
 from snuba.reader import Reader, Result
 from snuba.redis import redis_client
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.state.cache.abstract import (
     Cache,
     ExecutionTimeoutError,
@@ -230,7 +230,7 @@ def execute_query(
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
@@ -329,7 +329,7 @@ def _record_rate_limit_metrics(
 @with_span(op="db")
 def execute_query_with_rate_limits(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
@@ -421,7 +421,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
 @with_span(op="db")
 def execute_query_with_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
@@ -477,7 +477,7 @@ def execute_query_with_caching(
 @with_span(op="db")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,
@@ -558,7 +558,7 @@ def raw_query(
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: QuerySettings,
+    request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
     timer: Timer,

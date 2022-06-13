@@ -12,11 +12,11 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.reader import Reader
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 QueryRunner = Callable[
-    [Union[Query, CompositeQuery[Table]], QuerySettings, Reader], QueryResult
+    [Union[Query, CompositeQuery[Table]], RequestSettings, Reader], QueryResult
 ]
 
 TQuery = TypeVar("TQuery", bound=AbstractQuery)
@@ -160,7 +160,7 @@ class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
     def execute(
         self,
         query: TQuery,
-        request_settings: QuerySettings,
+        request_settings: RequestSettings,
         runner: QueryRunner,
     ) -> QueryResult:
         """
@@ -182,7 +182,7 @@ class ClickhouseQueryPlanBuilder(ABC):
 
     @abstractmethod
     def build_and_rank_plans(
-        self, query: LogicalQuery, request_settings: QuerySettings
+        self, query: LogicalQuery, request_settings: RequestSettings
     ) -> Sequence[ClickhouseQueryPlan]:
         """
         Returns all the valid plans for this query sorted in ranking
@@ -191,7 +191,7 @@ class ClickhouseQueryPlanBuilder(ABC):
         raise NotImplementedError
 
     def build_best_plan(
-        self, query: LogicalQuery, request_settings: QuerySettings
+        self, query: LogicalQuery, request_settings: RequestSettings
     ) -> ClickhouseQueryPlan:
         plans = self.build_and_rank_plans(query, request_settings)
         assert plans, "Query planner did not produce a plan"

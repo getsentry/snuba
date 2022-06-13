@@ -1,7 +1,7 @@
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.state.quota import ResourceQuota
 
@@ -17,7 +17,7 @@ class ResourceQuotaProcessor(QueryProcessor):
     def __init__(self, project_field: str):
         self.__project_field = project_field
 
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         enabled = get_config(ENABLED_CONFIG, 1)
         if not enabled:
             return

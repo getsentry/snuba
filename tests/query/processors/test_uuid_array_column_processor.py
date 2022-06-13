@@ -18,7 +18,7 @@ from snuba.query.expressions import (
 from snuba.query.processors.type_converters.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 tests = [
     pytest.param(
@@ -113,7 +113,7 @@ def test_uuid_array_column_processor(
     )
 
     UUIDArrayColumnProcessor(set(["column1", "column2"])).process_query(
-        unprocessed_query, HTTPQuerySettings()
+        unprocessed_query, HTTPRequestSettings()
     )
     assert unprocessed_query.get_selected_columns() == [
         SelectedExpression(

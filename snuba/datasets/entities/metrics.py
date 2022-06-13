@@ -52,11 +52,11 @@ from snuba.query.validation.validators import (
     GranularityValidator,
     QueryValidator,
 )
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 
 
 class TagsTypeTransformer(QueryProcessor):
-    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             if not isinstance(exp, SubscriptableReference):
                 return exp

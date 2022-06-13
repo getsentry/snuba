@@ -15,7 +15,7 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.request.request_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -63,12 +63,12 @@ TESTS = [
 def test_build_request(body: MutableMapping[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
     entity = dataset.get_default_entity()
-    schema = RequestSchema.build(HTTPQuerySettings)
+    schema = RequestSchema.build(HTTPRequestSettings)
 
     request = build_request(
         body,
         parse_snql_query,
-        HTTPQuerySettings,
+        HTTPRequestSettings,
         schema,
         dataset,
         Timer("test"),

@@ -1,12 +1,12 @@
 import copy
 from typing import Optional, Sequence
 
-from snuba.request.request_settings import QuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
 
 
-class RateLimiterDelegate(QuerySettings):
+class RateLimiterDelegate(RequestSettings):
     """
     When we run the pipeline delegator, we are running multiple queries
     at the same time. Generally they are duplicates.
@@ -30,7 +30,7 @@ class RateLimiterDelegate(QuerySettings):
     the rate limits to the same list if a deepcopy is not created.
     """
 
-    def __init__(self, prefix: str, delegate: QuerySettings):
+    def __init__(self, prefix: str, delegate: RequestSettings):
         self.referrer = delegate.referrer
         self.__delegate = copy.deepcopy(delegate)
         self.__prefix = prefix
