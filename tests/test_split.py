@@ -94,9 +94,7 @@ def test_set_limit_on_split_query():
 
     query_run_count = 0
 
-    def do_query(
-        query: ClickhouseQuery, request_settings: RequestSettings
-    ) -> QueryResult:
+    def do_query(query: ClickhouseQuery, query_settings: QuerySettings) -> QueryResult:
         nonlocal query_run_count
         query_run_count += 1
         if query_run_count == 1:
@@ -125,7 +123,7 @@ def test_set_limit_on_split_query():
         id_column="event_id",
         project_column="project_id",
         timestamp_column="timestamp",
-    ).execute(query, HTTPRequestSettings(), do_query)
+    ).execute(query, HTTPQuerySettings(), do_query)
     assert query_run_count == 2
 
 

@@ -7,7 +7,7 @@ from snuba.request.request_settings import RequestSettings
 class QueryProcessor(ABC):
     """
     A transformation applied to a Query. This depends on the query structure and
-    on the request settings. No additional context is provided.
+    on the request.query_settings. No additional context is provided.
     This transformation mutates the Query object in place.
 
     These processors tweak the query and are developed independently from each other,

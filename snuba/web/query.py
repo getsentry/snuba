@@ -147,7 +147,7 @@ def parse_and_run_query(
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
         _set_query_final(request, result.extra)
-        if not request.settings.get_dry_run():
+        if not request.query_settings.get_dry_run():
             record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
         _set_query_final(request, error.extra)
@@ -183,12 +183,12 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    if not request.settings.get_turbo() and SampleClauseFinder().visit(
+    if not request.query_settings.get_turbo() and SampleClauseFinder().visit(
         request.query.get_from_clause()
     ):
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    if request.settings.get_dry_run():
+    if request.query_settings.get_dry_run():
         query_runner = _dry_run_query_runner
     else:
         query_runner = partial(

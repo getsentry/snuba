@@ -82,4 +82,6 @@ class DatasetQueryPipelineBuilder:
                 request, runner
             )
         else:
-            return CompositeExecutionPipeline(request.query, request.settings, runner)
+            return CompositeExecutionPipeline(
+                request.query, request.query_settings, runner
+            )

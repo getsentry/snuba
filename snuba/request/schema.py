@@ -6,33 +6,40 @@ from typing import Any, Mapping, MutableMapping, NamedTuple, Type
 import jsonschema
 
 from snuba import environment
+from snuba.query.query_settings import (
+    HTTPQuerySettings,
+    QuerySettings,
+    SubscriptionQuerySettings,
+)
 from snuba.query.schema import SNQL_QUERY_SCHEMA
 from snuba.request.exceptions import JsonSchemaValidationException
-from snuba.request.request_settings import (
-    HTTPRequestSettings,
-    RequestSettings,
-    SubscriptionRequestSettings,
-)
 from snuba.schemas import Schema, validate_jsonschema
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "parser")
 
 
+class BadRequestSchemaException(Exception):
+    pass
+
+
 class RequestParts(NamedTuple):
     query: Mapping[str, Any]
-    settings: Mapping[str, Any]
+    query_settings: Mapping[str, Any]
+    attribution_info: Mapping[str, Any]
 
 
 class RequestSchema:
     def __init__(
         self,
         query_schema: Schema,
-        settings_schema: Schema,
-        settings_class: Type[RequestSettings] = HTTPRequestSettings,
+        query_settings_schema: Schema,
+        attribution_info_schema: Schema,
+        settings_class: Type[QuerySettings] = HTTPQuerySettings,
     ):
         self.__query_schema = query_schema
-        self.__settings_schema = settings_schema
+        self.__query_settings_schema = query_settings_schema
+        self.__attribution_info_schema = attribution_info_schema
 
         self.__composite_schema: MutableMapping[str, Any] = {
             "type": "object",
@@ -43,7 +50,13 @@ class RequestSchema:
         }
         self.__setting_class = settings_class
 
-        for schema in itertools.chain([self.__query_schema, self.__settings_schema]):
+        for schema in itertools.chain(
+            [
+                self.__query_schema,
+                self.__query_settings_schema,
+                self.__attribution_info_schema,
+            ]
+        ):
             assert schema["type"] == "object", "subschema must be object"
             assert (
                 schema["additionalProperties"] is False
@@ -51,9 +64,11 @@ class RequestSchema:
             self.__composite_schema["required"].extend(schema.get("required", []))
 
             for property_name, property_schema in schema["properties"].items():
-                assert (
-                    property_name not in self.__composite_schema["properties"]
-                ), "subschema cannot redefine property"
+                comp_schema = self.__composite_schema["properties"].get(property_name)
+                if comp_schema is not None and comp_schema != property_schema:
+                    raise BadRequestSchemaException(
+                        "subschema cannot redefine property"
+                    )
                 self.__composite_schema["properties"][property_name] = property_schema
 
             for definition_name, definition_schema in schema.get(
@@ -69,10 +84,12 @@ class RequestSchema:
         self.__composite_schema["required"] = set(self.__composite_schema["required"])
 
     @classmethod
-    def build(cls, settings_class: Type[RequestSettings]) -> RequestSchema:
+    def build(cls, settings_class: Type[QuerySettings]) -> RequestSchema:
         generic_schema = SNQL_QUERY_SCHEMA
         settings_schema = SETTINGS_SCHEMAS[settings_class]
-        return cls(generic_schema, settings_schema, settings_class)
+        return cls(
+            generic_schema, settings_schema, ATTRIBUTION_INFO_SCHEMA, settings_class
+        )
 
     def validate(self, value: MutableMapping[str, Any]) -> RequestParts:
         try:
@@ -81,17 +98,27 @@ class RequestSchema:
             raise JsonSchemaValidationException(str(error)) from error
 
         query_body = {
-            key: value.pop(key)
+            key: value.get(key)
             for key in self.__query_schema["properties"].keys()
             if key in value
         }
-        settings = {
-            key: value.pop(key)
-            for key in self.__settings_schema["properties"].keys()
+        query_settings = {
+            key: value.get(key)
+            for key in self.__query_settings_schema["properties"].keys()
             if key in value
         }
 
-        return RequestParts(query=query_body, settings=settings)
+        attribution_info = {
+            key: value.get(key)
+            for key in self.__attribution_info_schema["properties"].keys()
+            if key in value
+        }
+
+        return RequestParts(
+            query=query_body,
+            query_settings=query_settings,
+            attribution_info=attribution_info,
+        )
 
     def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
         """
@@ -117,8 +144,21 @@ class RequestSchema:
         return self.__generate_template_impl(self.__composite_schema)
 
 
-SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
-    HTTPRequestSettings: {
+ATTRIBUTION_INFO_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "team": {"type": "string", "default": "<unknown>"},
+        "feature": {"type": "string", "default": "<unknown>"},
+        "app_id": {"type": "string", "default": "default"},
+        "parent_api": {"type": "string", "default": "<unknown>"},
+        "referrer": {"type": "string", "default": "<unknown>"},
+    },
+    "additionalProperties": False,
+}
+
+
+SETTINGS_SCHEMAS: Mapping[Type[QuerySettings], Schema] = {
+    HTTPQuerySettings: {
         "type": "object",
         "properties": {
             # Never add FINAL to queries, enable sampling
@@ -132,16 +172,15 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
             # and return it.
             "dry_run": {"type": "boolean", "default": False},
             # Flags if this a legacy query that was automatically generated by the SnQL SDK
+            # TODO: move this to attribution
             "legacy": {"type": "boolean", "default": False},
-            # Team and feature are used for resource attribution
-            "team": {"type": "string", "default": "<unknown>"},
-            "feature": {"type": "string", "default": "<unknown>"},
-            "app_id": {"type": "string", "default": "default"},
+            "referrer": {"type": "string", "default": "<unknown>"},
         },
         "additionalProperties": False,
     },
     # Subscriptions have no customizable settings.
-    SubscriptionRequestSettings: {
+    # TODO: Add app-id to the subscription settings
+    SubscriptionQuerySettings: {
         "type": "object",
         "properties": {},
         "additionalProperties": False,

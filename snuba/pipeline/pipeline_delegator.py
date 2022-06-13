@@ -91,7 +91,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             partial(
                 callback_func,
                 self.__request.query,
-                self.__request.settings,
+                self.__request.query_settings,
                 self.__request.referrer,
             )
             if callback_func
@@ -107,7 +107,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             """
             query = (
                 request.query
-                if _is_query_copying_disallowed(request.settings.referrer)
+                if _is_query_copying_disallowed(request.query_settings.referrer)
                 else copy.deepcopy(request.query)
             )
 
@@ -117,7 +117,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             return replace(
                 request,
                 query=query,
-                settings=RateLimiterDelegate(builder_id, request.settings),
+                query_settings=RateLimiterDelegate(builder_id, request.query_settings),
             )
 
         executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](

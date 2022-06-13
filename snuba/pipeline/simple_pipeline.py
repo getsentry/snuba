@@ -67,7 +67,7 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
         self.__query_planner = query_planner
 
     def execute(self) -> QueryResult:
-        settings = self.__request.settings
+        settings = self.__request.query_settings
         query_plan = self.__query_planner.build_best_plan()
         execute_plan_processors(query_plan, settings)
 
@@ -87,7 +87,7 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
         return SimpleExecutionPipeline(
             request,
             runner,
-            self.build_planner(request.query, request.settings),
+            self.build_planner(request.query, request.query_settings),
         )
 
     def build_planner(
