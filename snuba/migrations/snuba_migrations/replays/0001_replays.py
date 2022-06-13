@@ -19,6 +19,10 @@ raw_columns: Sequence[Column[Modifiers]] = [
     Column("replay_id", UUID()),
     Column("sequence_id", UInt(16)),
     Column("trace_ids", Array(UUID())),
+    Column(
+        "_trace_ids_hashed",
+        UInt(64, Modifiers(materialized="arrayMap(t -> cityHash64(t), trace_ids)")),
+    ),
     Column("title", String()),
     ### columns used by other sentry events
     Column("project_id", UInt(64)),
@@ -64,6 +68,14 @@ class Migration(migration.ClickhouseNodeMigration):
                     settings={"index_granularity": "8192"},
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
+            ),
+            operations.AddIndex(
+                storage_set=StorageSetKey.REPLAYS,
+                table_name="replays_local",
+                index_name="bf_trace_ids_hashed",
+                index_expression="_trace_ids_hashed",
+                index_type="bloom_filter()",
+                granularity=1,
             ),
         ]
 
