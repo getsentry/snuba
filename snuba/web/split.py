@@ -84,7 +84,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
     def execute(
         self,
         query: Query,
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
@@ -149,7 +149,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             # At every iteration we only append the "data" key from the results returned by
             # the runner. The "extra" key is only populated at the first iteration of the
             # loop and never changed.
-            result = runner(split_query, query_settings)
+            result = runner(split_query, request_settings)
 
             if overall_result is None:
                 overall_result = result
@@ -209,7 +209,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
     def execute(
         self,
         query: Query,
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
@@ -304,7 +304,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
                 metrics.increment("column_splitter.orderby_has_a_function")
                 return None
 
-        result = runner(minimal_query, query_settings)
+        result = runner(minimal_query, request_settings)
         del minimal_query
 
         if not result.result["data"]:
@@ -362,4 +362,4 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             ),
         )
 
-        return runner(query, query_settings)
+        return runner(query, request_settings)

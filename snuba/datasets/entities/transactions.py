@@ -110,10 +110,10 @@ class TransactionsQueryStorageSelector(QueryStorageSelector):
         self.__mappers = mappers
 
     def select_storage(
-        self, query: Query, query_settings: QuerySettings
+        self, query: Query, request_settings: QuerySettings
     ) -> StorageAndMappers:
         readonly_referrer = (
-            query_settings.referrer
+            request_settings.referrer
             in settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS
         )
         use_readonly_storage = readonly_referrer or state.get_config(

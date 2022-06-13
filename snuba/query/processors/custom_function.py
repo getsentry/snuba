@@ -81,7 +81,7 @@ class CustomFunction(QueryProcessor):
         self.__body = body
         self.__validator = SignatureValidator(param_types)
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         def apply_function(expression: Expression) -> Expression:
             if (
                 isinstance(expression, FunctionCall)

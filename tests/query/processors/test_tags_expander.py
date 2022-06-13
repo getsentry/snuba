@@ -27,8 +27,8 @@ def test_tags_expander() -> None:
     query, _ = parse_snql_query(query_body, events)
 
     processor = TagsExpanderProcessor()
-    query_settings = HTTPQuerySettings()
-    processor.process_query(query, query_settings)
+    request_settings = HTTPQuerySettings()
+    processor.process_query(query, request_settings)
 
     assert query.get_selected_columns() == [
         SelectedExpression(

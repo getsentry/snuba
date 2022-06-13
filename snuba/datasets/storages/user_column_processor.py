@@ -11,7 +11,7 @@ class UserColumnProcessor(QueryProcessor):
     that it will be properly applied to the promoted sentry:user tag.
     """
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         def process_column(exp: Expression) -> Expression:
             if isinstance(exp, Column):
                 if exp.column_name == "user":

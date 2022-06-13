@@ -84,7 +84,7 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
 
         return alias
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         array_joins_in_query = self.__get_array_joins_in_query(query)
 
         tuple_alias = self.__get_unused_alias(query)

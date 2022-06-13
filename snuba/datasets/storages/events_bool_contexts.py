@@ -30,7 +30,7 @@ class EventsPromotedBooleanContextsProcessor(QueryProcessor):
     patch to the events storage for as long as it exists.
     """
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         # We care only of promoted contexts, so we do not need to match
         # the original nested expression.
         matcher = FunctionCall(
@@ -80,7 +80,7 @@ class EventsBooleanContextsProcessor(QueryProcessor):
     from the errors and events storages.
     """
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         matcher = FunctionCall(
             String("arrayElement"),
             (

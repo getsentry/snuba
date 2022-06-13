@@ -3,7 +3,6 @@ from typing import List, MutableSequence, Optional, Tuple, Union
 from unittest.mock import ANY, Mock, call
 
 from snuba.attribution import get_app_id
-from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -104,18 +103,9 @@ def test() -> None:
     set_config("pipeline_split_rate_limiter", 1)
 
     with cv:
-        query_settings = HTTPQuerySettings(referrer="ref")
+        request_settings = HTTPQuerySettings(referrer="ref")
         delegator.build_execution_pipeline(
-            Request(
-                id="asd",
-                original_body=query_body,
-                query=query,
-                snql_anonymized="",
-                query_settings=query_settings,
-                attribution_info=AttributionInfo(
-                    get_app_id("ref"), "ref", None, None, None
-                ),
-            ),
+            Request("", query_body, query, get_app_id("default"), "", request_settings),
             query_runner,
         ).execute()
         cv.wait(timeout=5)
@@ -128,7 +118,7 @@ def test() -> None:
 
     assert mock_callback.call_args == call(
         query,
-        query_settings,
+        request_settings,
         "ref",
         Result("errors", query_result, ANY),
         [Result("errors_ro", query_result, ANY)],

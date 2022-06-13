@@ -287,9 +287,9 @@ def test_prewhere(
     query = identity_translate(query)
     query.set_from_clause(Table("my_table", all_columns, final=final))
 
-    query_settings = HTTPQuerySettings()
+    request_settings = HTTPQuerySettings()
     processor = PrewhereProcessor(keys, omit_if_final=omit_if_final_keys)
-    processor.process_query(query, query_settings)
+    processor.process_query(query, request_settings)
 
     # HACK until we migrate these tests to SnQL
     def verify_expressions(top_level: Expression, expected: Expression) -> bool:

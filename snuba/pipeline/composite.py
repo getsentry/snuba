@@ -299,8 +299,8 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
     CompositeQueryPlan.
     """
 
-    def __init__(self, query_settings: QuerySettings) -> None:
-        self.__settings = query_settings
+    def __init__(self, request_settings: QuerySettings) -> None:
+        self.__settings = request_settings
 
     def _visit_simple_source(self, data_source: Entity) -> CompositeDataSourcePlan:
         # We are never supposed to get here.
@@ -356,11 +356,11 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
         self,
         root_processors: Sequence[QueryProcessor],
         aliased_processors: Mapping[str, Sequence[QueryProcessor]],
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
     ) -> None:
         self.__root_processors = root_processors
         self.__aliased_processors = aliased_processors
-        self.__settings = query_settings
+        self.__settings = request_settings
 
     def __process_simple_query(
         self, clickhouse_query: ClickhouseQuery, processors: Sequence[QueryProcessor]
@@ -422,17 +422,17 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
     def execute(
         self,
         query: CompositeQuery[Table],
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         runner: QueryRunner,
     ) -> QueryResult:
         ProcessorsExecutor(
-            self.__root_processors, self.__aliased_processors, query_settings
+            self.__root_processors, self.__aliased_processors, request_settings
         ).visit(query)
 
         for p in self.__composite_processors:
-            p.process_query(query, query_settings)
+            p.process_query(query, request_settings)
 
-        return runner(query, query_settings, self.__cluster.get_reader())
+        return runner(query, request_settings, self.__cluster.get_reader())
 
 
 class CompositeExecutionPipeline(QueryExecutionPipeline):
@@ -445,11 +445,11 @@ class CompositeExecutionPipeline(QueryExecutionPipeline):
     def __init__(
         self,
         query: CompositeQuery[Entity],
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         runner: QueryRunner,
     ):
         self.__query = query
-        self.__settings = query_settings
+        self.__settings = request_settings
         self.__runner = runner
 
     def execute(self) -> QueryResult:

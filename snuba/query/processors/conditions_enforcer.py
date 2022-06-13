@@ -83,7 +83,7 @@ class MandatoryConditionEnforcer(QueryProcessor):
     def __init__(self, condition_checkers: Sequence[ConditionChecker]) -> None:
         self.__condition_checkers = condition_checkers
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         missing_checkers = {checker for checker in self.__condition_checkers}
 
         def inspect_expression(condition: Expression) -> None:

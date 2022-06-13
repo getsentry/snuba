@@ -47,18 +47,18 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
     def execute(
         self,
         query: Query,
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         runner: QueryRunner,
     ) -> QueryResult:
         def process_and_run_query(
-            query: Query, query_settings: QuerySettings
+            query: Query, request_settings: QuerySettings
         ) -> QueryResult:
             for processor in self.__query_processors:
                 with sentry_sdk.start_span(
                     description=type(processor).__name__, op="processor"
                 ):
-                    processor.process_query(query, query_settings)
-            return runner(query, query_settings, self.__cluster.get_reader())
+                    processor.process_query(query, request_settings)
+            return runner(query, request_settings, self.__cluster.get_reader())
 
         use_split = state.get_config("use_split", 1)
         if use_split:
@@ -67,12 +67,12 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                     description=type(splitter).__name__, op="splitter"
                 ):
                     result = splitter.execute(
-                        query, query_settings, process_and_run_query
+                        query, request_settings, process_and_run_query
                     )
                     if result is not None:
                         return result
 
-        return process_and_run_query(query, query_settings)
+        return process_and_run_query(query, request_settings)
 
 
 def get_query_data_source(

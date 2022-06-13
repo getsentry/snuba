@@ -39,7 +39,7 @@ class _ExpressionOrAliasMatcher(NoopVisitor):
 
 
 class UniqInSelectAndHavingProcessor(QueryProcessor):
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         having_clause = query.get_having()
         if not having_clause:
             return None

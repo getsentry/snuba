@@ -176,7 +176,7 @@ class TimeSeriesProcessor(QueryProcessor):
 
         return exp
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         # Use time_group_columns to map the old column names to the new column names, and
         # map the time_group_columns into functions based on the query granularity.
         granularity = query.get_granularity()

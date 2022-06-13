@@ -140,7 +140,7 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
     def __init__(self, column_name: str) -> None:
         self.__column_name = column_name
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         arrayjoin_pattern = FunctionCall(
             String("arrayJoin"),
             (

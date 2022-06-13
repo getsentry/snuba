@@ -30,7 +30,7 @@ class EmptyTagConditionProcessor(QueryProcessor):
     the `has` function.
     """
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         def process_condition(exp: Expression) -> Expression:
             result = CONDITION_PATTERN.match(exp)
             if result is not None:

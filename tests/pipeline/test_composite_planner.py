@@ -537,7 +537,7 @@ def test_composite_planner(
 
     def runner(
         query: Union[ClickhouseQuery, CompositeQuery[Table]],
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         report = query.equals(processed_query)

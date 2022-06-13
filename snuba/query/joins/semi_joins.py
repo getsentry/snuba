@@ -40,11 +40,11 @@ class SemiJoinOptimizer(CompositeQueryProcessor):
     """
 
     def process_query(
-        self, query: CompositeQuery[Table], query_settings: QuerySettings
+        self, query: CompositeQuery[Table], request_settings: QuerySettings
     ) -> None:
         from_clause = query.get_from_clause()
         if isinstance(from_clause, CompositeQuery):
-            self.process_query(from_clause, query_settings)
+            self.process_query(from_clause, request_settings)
             return
         elif isinstance(from_clause, ProcessableQuery):
             return

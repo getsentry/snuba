@@ -160,7 +160,7 @@ class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
     def execute(
         self,
         query: TQuery,
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         runner: QueryRunner,
     ) -> QueryResult:
         """
@@ -182,7 +182,7 @@ class ClickhouseQueryPlanBuilder(ABC):
 
     @abstractmethod
     def build_and_rank_plans(
-        self, query: LogicalQuery, query_settings: QuerySettings
+        self, query: LogicalQuery, request_settings: QuerySettings
     ) -> Sequence[ClickhouseQueryPlan]:
         """
         Returns all the valid plans for this query sorted in ranking
@@ -191,8 +191,8 @@ class ClickhouseQueryPlanBuilder(ABC):
         raise NotImplementedError
 
     def build_best_plan(
-        self, query: LogicalQuery, query_settings: QuerySettings
+        self, query: LogicalQuery, request_settings: QuerySettings
     ) -> ClickhouseQueryPlan:
-        plans = self.build_and_rank_plans(query, query_settings)
+        plans = self.build_and_rank_plans(query, request_settings)
         assert plans, "Query planner did not produce a plan"
         return plans[0]

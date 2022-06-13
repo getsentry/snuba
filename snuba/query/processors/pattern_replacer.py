@@ -21,7 +21,7 @@ class PatternReplacer(QueryProcessor):
         self.__matcher = matcher
         self.__transformation_fn = transformation_fn
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         def apply_matcher(expression: Expression) -> Expression:
             result = self.__matcher.match(expression)
             if result is not None:

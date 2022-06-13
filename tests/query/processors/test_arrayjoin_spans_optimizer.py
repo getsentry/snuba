@@ -757,14 +757,14 @@ def test_spans_processor(
     expected_selected_columns: List[SelectedExpression],
     expected_conditions: Optional[Expression],
 ) -> None:
-    query_settings = HTTPQuerySettings()
+    request_settings = HTTPQuerySettings()
     bloom_filter_processor = BloomFilterOptimizer(
         "spans", ["op", "group"], ["exclusive_time"]
     )
-    bloom_filter_processor.process_query(query, query_settings)
+    bloom_filter_processor.process_query(query, request_settings)
     array_join_processor = ArrayJoinOptimizer(
         "spans", ["op", "group"], ["exclusive_time"]
     )
-    array_join_processor.process_query(query, query_settings)
+    array_join_processor.process_query(query, request_settings)
     assert query.get_selected_columns() == expected_selected_columns
     assert query.get_condition() == expected_conditions

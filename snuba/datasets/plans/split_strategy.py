@@ -31,7 +31,7 @@ class QuerySplitStrategy(ABC):
     def execute(
         self,
         query: Query,
-        query_settings: QuerySettings,
+        request_settings: QuerySettings,
         runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """

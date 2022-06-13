@@ -209,7 +209,7 @@ def _run_query_pipeline(
 
 def _dry_run_query_runner(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
+    request_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
     with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
@@ -233,7 +233,7 @@ def _run_and_apply_column_names(
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
+    request_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
     """
@@ -250,7 +250,7 @@ def _run_and_apply_column_names(
         query_metadata,
         referrer,
         clickhouse_query,
-        query_settings,
+        request_settings,
         reader,
         robust,
         concurrent_queries_gauge,
@@ -283,7 +283,7 @@ def _format_storage_query_and_run(
     query_metadata: SnubaQueryMetadata,
     referrer: str,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
+    request_settings: QuerySettings,
     reader: Reader,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge] = None,
@@ -296,7 +296,7 @@ def _format_storage_query_and_run(
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
-        _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
+        _apply_turbo_sampling_if_needed(clickhouse_query, request_settings)
 
         formatted_query = format_query(clickhouse_query)
         query_size_bytes = len(formatted_query.get_sql().encode("utf-8"))
@@ -333,7 +333,7 @@ def _format_storage_query_and_run(
         def execute() -> QueryResult:
             return raw_query(
                 clickhouse_query,
-                query_settings,
+                request_settings,
                 formatted_query,
                 reader,
                 timer,
@@ -371,7 +371,7 @@ def get_query_size_group(query_size_bytes: int) -> str:
 
 def _apply_turbo_sampling_if_needed(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
+    request_settings: QuerySettings,
 ) -> None:
     """
     TODO: Remove this method entirely and move the sampling logic
@@ -379,7 +379,7 @@ def _apply_turbo_sampling_if_needed(
     """
     if isinstance(clickhouse_query, Query):
         if (
-            query_settings.get_turbo()
+            request_settings.get_turbo()
             and not clickhouse_query.get_from_clause().sampling_rate
         ):
             clickhouse_query.set_from_clause(

@@ -53,7 +53,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                 should_report=False,
             ) from err
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+    def process_query(self, query: Query, request_settings: QuerySettings) -> None:
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "isHandled":
