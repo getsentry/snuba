@@ -58,6 +58,8 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.REPLAYS,
 )
 
+# TODO: set up deadletter queue for bad messages.
+
 storage = WritableTableStorage(
     storage_key=StorageKey.REPLAYS,
     storage_set_key=StorageSetKey.REPLAYS,

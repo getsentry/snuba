@@ -51,9 +51,6 @@ class ReplaysProcessor(MessageProcessor):
 
         event = message
         data = event["data"]
-        event_type = data.get("type")
-        if event_type != "replay_event":
-            return None
 
         try:
             # We are purposely using a naive datetime here to work with the
