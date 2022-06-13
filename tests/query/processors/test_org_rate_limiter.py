@@ -11,7 +11,7 @@ from snuba.query.logical import Query
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state.rate_limit import ORGANIZATION_RATE_LIMIT_NAME
 
 tests = [

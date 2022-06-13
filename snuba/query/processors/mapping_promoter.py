@@ -10,7 +10,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     mapping_pattern,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 
 
 class SubscriptableMatch(NamedTuple):

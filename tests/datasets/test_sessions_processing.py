@@ -11,14 +11,14 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.sessions import raw_schema, read_schema
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.query_settings import (
+from snuba.query.snql.parser import parse_snql_query
+from snuba.reader import Reader
+from snuba.request import Request
+from snuba.request.request_settings import (
     HTTPQuerySettings,
     QuerySettings,
     SubscriptionQuerySettings,
 )
-from snuba.query.snql.parser import parse_snql_query
-from snuba.reader import Reader
-from snuba.request import Request
 from snuba.web import QueryResult
 
 

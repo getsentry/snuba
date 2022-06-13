@@ -4,10 +4,10 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
+from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.web import QueryResult
 
 

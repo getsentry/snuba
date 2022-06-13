@@ -18,7 +18,7 @@ from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 
 
 def key_column(col_name: str) -> str:

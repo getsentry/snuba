@@ -8,7 +8,7 @@ from snuba.query.processors.uniq_in_select_and_having import (
     MismatchedAggregationException,
     UniqInSelectAndHavingProcessor,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 

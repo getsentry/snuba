@@ -13,7 +13,7 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 
 """
 This optimizer is necessary because SnQL does not permit conditions like

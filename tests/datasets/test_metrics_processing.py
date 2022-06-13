@@ -17,10 +17,10 @@ from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
+from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.web import QueryResult
 
 TEST_CASES = [

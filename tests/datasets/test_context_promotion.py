@@ -11,8 +11,8 @@ from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal, NoopVisitor
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
+from snuba.request.request_settings import HTTPQuerySettings, QuerySettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer

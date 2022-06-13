@@ -8,7 +8,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import (
     build_query,

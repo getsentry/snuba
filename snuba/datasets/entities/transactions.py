@@ -41,8 +41,8 @@ from snuba.query.processors.performance_expressions import (
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.request.request_settings import QuerySettings
 
 transaction_translator = TranslationMappers(
     columns=[

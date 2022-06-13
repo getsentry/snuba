@@ -8,7 +8,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 
 
 class BasicFunctionsProcessor(QueryProcessor):

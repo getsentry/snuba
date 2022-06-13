@@ -15,7 +15,7 @@ from snuba.query.processors.quota_processor import (
     REFERRER_PROJECT_CONFIG,
     ResourceQuotaProcessor,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state.quota import ResourceQuota
 
 tests = [

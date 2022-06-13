@@ -11,7 +11,7 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param, String
 from snuba.query.processors import QueryProcessor
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 from snuba.util import parse_datetime
 
 

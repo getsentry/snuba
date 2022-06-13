@@ -9,7 +9,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 RO_REFERRER = "RO_REFERRER"
 RW_REFERRER = "RW_REFERRER"

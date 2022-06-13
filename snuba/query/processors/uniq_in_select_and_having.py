@@ -15,7 +15,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Expression, FunctionCall, NoopVisitor
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Param, String
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 from snuba.state import get_config
 
 

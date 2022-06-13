@@ -40,11 +40,11 @@ from snuba.query.processors.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
-from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityRequiredColumnValidator,
 )
+from snuba.request.request_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api.sessions")

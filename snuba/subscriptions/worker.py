@@ -17,9 +17,9 @@ from arroyo.processing.strategies.batching import AbstractBatchWorker
 from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.query.query_settings import SubscriptionQuerySettings
 from snuba.reader import Result
 from snuba.request import Request
+from snuba.request.request_settings import SubscriptionQuerySettings
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     SubscriptionScheduler,

@@ -14,7 +14,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 from tests.query.joins.join_structures import (
     clickhouse_assignees_node,
     clickhouse_events_node,

@@ -12,7 +12,6 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     ClickhouseQueryProfile,
@@ -21,6 +20,7 @@ from snuba.querylog.query_metadata import (
     SnubaQueryMetadata,
 )
 from snuba.request import Request
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
 

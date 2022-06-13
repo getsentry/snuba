@@ -18,7 +18,7 @@ from snuba.query.processors.conditions_enforcer import (
     OrgIdEnforcer,
     ProjectIdEnforcer,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 from snuba.state import set_config
 
 test_data = [

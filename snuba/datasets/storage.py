@@ -16,8 +16,8 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerProcessor
+from snuba.request.request_settings import QuerySettings
 
 
 class Storage(ABC):

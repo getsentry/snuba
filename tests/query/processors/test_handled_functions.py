@@ -14,7 +14,7 @@ from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Argument, Column, FunctionCall, Lambda, Literal
 from snuba.query.logical import Query
 from snuba.query.processors import handled_functions
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 
 def test_handled_processor() -> None:

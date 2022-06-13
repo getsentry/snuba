@@ -9,7 +9,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.type_converters.fixedstring_array_column_processor import (
     FixedStringArrayColumnProcessor,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 tests = [
     pytest.param(

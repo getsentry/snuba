@@ -21,8 +21,8 @@ from sentry_sdk import set_tag
 
 from snuba import environment, settings
 from snuba.query.logical import Query
-from snuba.query.query_settings import QuerySettings
 from snuba.reader import Row
+from snuba.request.request_settings import QuerySettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.threaded_function_delegator import Result

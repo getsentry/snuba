@@ -12,7 +12,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 
 def test_events_promoted_boolean_context() -> None:

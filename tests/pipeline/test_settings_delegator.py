@@ -3,7 +3,7 @@ from typing import Sequence, Type, Union
 import pytest
 
 from snuba.pipeline.settings_delegator import RateLimiterDelegate
-from snuba.query.query_settings import HTTPQuerySettings, SubscriptionQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings, SubscriptionQuerySettings
 from snuba.state.rate_limit import RateLimitParameters
 
 test_cases = [

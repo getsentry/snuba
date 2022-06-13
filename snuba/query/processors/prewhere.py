@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.expressions import FunctionCall
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 ALLOWED_OPERATORS = [

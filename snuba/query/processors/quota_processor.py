@@ -1,7 +1,7 @@
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 from snuba.state import get_config
 from snuba.state.quota import ResourceQuota
 

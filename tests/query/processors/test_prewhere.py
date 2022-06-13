@@ -16,8 +16,8 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
+from snuba.request.request_settings import HTTPQuerySettings
 
 test_data = [
     (

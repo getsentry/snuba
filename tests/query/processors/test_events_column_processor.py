@@ -5,7 +5,7 @@ from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProce
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 
 def test_events_column_format_expressions() -> None:

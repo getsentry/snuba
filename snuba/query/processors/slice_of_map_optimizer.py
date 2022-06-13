@@ -1,7 +1,7 @@
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 
 
 class SliceOfMapOptimizer(QueryProcessor):

@@ -7,7 +7,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request.request_settings import HTTPQuerySettings
 
 
 def test_event_id_column_format_expressions() -> None:

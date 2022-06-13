@@ -13,8 +13,8 @@ from snuba.query.processors.custom_function import (
     partial_function,
     simple_function,
 )
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.validation.signature import Column as ColType
+from snuba.request.request_settings import HTTPQuerySettings
 
 QUERY_ENTITY = QueryEntity(
     EntityKey.EVENTS,

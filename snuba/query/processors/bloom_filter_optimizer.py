@@ -10,7 +10,7 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.processors.abstract_array_join_optimizer import (
     AbstractArrayJoinOptimizer,
 )
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 
 
 class BloomFilterOptimizer(AbstractArrayJoinOptimizer):

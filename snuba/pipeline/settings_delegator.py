@@ -1,7 +1,7 @@
 import copy
 from typing import Optional, Sequence
 
-from snuba.query.query_settings import QuerySettings
+from snuba.request.request_settings import QuerySettings
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
 
