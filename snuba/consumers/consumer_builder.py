@@ -85,6 +85,7 @@ class ConsumerBuilder:
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
+        self.consumer_group = kafka_params.group_id
         topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
@@ -234,7 +235,9 @@ class ConsumerBuilder:
             KafkaPayload
         ] = KafkaConsumerStrategyFactory(
             prefilter=stream_loader.get_pre_filter(),
-            process_message=functools.partial(process_message, processor),
+            process_message=functools.partial(
+                process_message, processor, self.consumer_group
+            ),
             collector=build_batch_writer(
                 table_writer,
                 metrics=self.metrics,
@@ -257,7 +260,7 @@ class ConsumerBuilder:
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
-            dead_letter_queue_policy_closure=stream_loader.get_dead_letter_queue_policy_closure(),
+            dead_letter_queue_policy_creator=stream_loader.get_dead_letter_queue_policy_creator(),
             parallel_collect=self.__parallel_collect,
         )
 

@@ -116,7 +116,7 @@ def override_and_enforce_retention(
 def enforce_retention(
     retention_days: Optional[int], timestamp: Optional[datetime]
 ) -> int:
-    if retention_days is None:
+    if not isinstance(retention_days, int):
         retention_days = settings.DEFAULT_RETENTION_DAYS
 
     if settings.ENFORCE_RETENTION:

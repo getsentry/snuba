@@ -74,7 +74,7 @@ def test_streaming_consumer_strategy() -> None:
 
     factory = KafkaConsumerStrategyFactory(
         None,
-        functools.partial(process_message, processor),
+        functools.partial(process_message, processor, "consumer_group"),
         write_step,
         max_batch_size=10,
         max_batch_time=60,
@@ -193,7 +193,7 @@ def test_multistorage_strategy(
     now = datetime.now()
 
     messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
+        Message(Partition(Topic("topic"), 0), offset, payload, now)
         for offset, payload in enumerate(payloads)
     ]
 
@@ -291,7 +291,7 @@ def test_multistorage_strategy_dead_letter_step(
     now = datetime.now()
 
     messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
+        Message(Partition(Topic("topic"), 0), offset, payload, now)
         for offset, payload in enumerate(payloads)
     ]
 
@@ -336,7 +336,6 @@ def test_dead_letter_step() -> None:
         0,
         (storage_key, None),
         datetime.now(),
-        1,
     )
     dead_letter_step.submit(none_message)
     assert not dead_letter_step._DeadLetterStep__futures
@@ -349,7 +348,6 @@ def test_dead_letter_step() -> None:
         1,
         (storage_key, insert_payload),
         datetime.now(),
-        2,
     )
     dead_letter_step.submit(insert_message)
     assert len(dead_letter_step._DeadLetterStep__futures) == 1
@@ -394,7 +392,7 @@ def test_metrics_writing_e2e() -> None:
     payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
     now = datetime.now()
     messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now, offset + 1)
+        Message(Partition(Topic("topic"), 0), offset, payload, now)
         for offset, payload in enumerate(payloads)
     ]
 

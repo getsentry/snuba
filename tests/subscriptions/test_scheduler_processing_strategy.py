@@ -56,7 +56,6 @@ def test_tick_buffer_immediate() -> None:
             timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
         ),
         epoch,
-        5,
     )
 
     strategy.submit(message)
@@ -87,7 +86,6 @@ def test_tick_buffer_wait_slowest() -> None:
             timestamps=Interval(epoch, epoch + timedelta(seconds=5)),
         ),
         now,
-        5,
     )
     strategy.submit(message_0_0)
 
@@ -105,7 +103,6 @@ def test_tick_buffer_wait_slowest() -> None:
             ),
         ),
         now,
-        6,
     )
     strategy.submit(message_0_1)
 
@@ -121,7 +118,6 @@ def test_tick_buffer_wait_slowest() -> None:
             timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
         ),
         now,
-        7,
     )
     strategy.submit(message_1_0)
 
@@ -142,7 +138,6 @@ def test_tick_buffer_wait_slowest() -> None:
             ),
         ),
         now,
-        8,
     )
     strategy.submit(message_1_1)
 
@@ -168,7 +163,6 @@ def test_tick_buffer_wait_slowest() -> None:
             ),
         ),
         now,
-        8,
     )
     strategy.submit(message_1_2)
 
@@ -197,7 +191,6 @@ def test_tick_buffer_wait_slowest() -> None:
                 ),
             ),
             now + timedelta(seconds=i),
-            9 + i,
         )
         messages.append(message)
         strategy.submit(message)
@@ -214,7 +207,6 @@ def make_message_for_next_step(
         message.offset,
         CommittableTick(message.payload, offset_to_commit),
         message.timestamp,
-        message.next_offset,
     )
 
 
@@ -238,7 +230,6 @@ def test_provide_commit_strategy() -> None:
             ),
         ),
         epoch,
-        2,
     )
 
     strategy.submit(message_0_0)
@@ -260,7 +251,6 @@ def test_provide_commit_strategy() -> None:
             ),
         ),
         epoch,
-        3,
     )
 
     strategy.submit(message_1_0)
@@ -283,7 +273,6 @@ def test_provide_commit_strategy() -> None:
             ),
         ),
         epoch,
-        4,
     )
 
     strategy.submit(message_1_1)
@@ -307,7 +296,6 @@ def test_provide_commit_strategy() -> None:
             ),
         ),
         epoch,
-        5,
     )
 
     strategy.submit(message_0_1)
@@ -348,7 +336,6 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
             timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
         ),
         now,
-        5,
     )
     strategy.submit(message_0_0)
 
@@ -370,7 +357,6 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
             ),
         ),
         now,
-        6,
     )
     strategy.submit(message_1_0)
 
@@ -393,7 +379,6 @@ def test_tick_buffer_with_commit_strategy_partition() -> None:
             ),
         ),
         now,
-        7,
     )
     strategy.submit(message_0_1)
 
@@ -431,7 +416,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             timestamps=Interval(epoch, epoch + timedelta(seconds=4)),
         ),
         now,
-        5,
     )
     strategy.submit(message_0_0)
 
@@ -449,7 +433,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             ),
         ),
         now,
-        6,
     )
     strategy.submit(message_0_1)
 
@@ -466,7 +449,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             timestamps=Interval(epoch, epoch + timedelta(seconds=3)),
         ),
         now,
-        7,
     )
     strategy.submit(message_1_0)
 
@@ -491,7 +473,6 @@ def test_tick_buffer_with_commit_strategy_global() -> None:
             ),
         ),
         now,
-        8,
     )
     strategy.submit(message_1_1)
 
@@ -524,7 +505,6 @@ def test_scheduled_subscription_queue() -> None:
             1,
         ),
         epoch,
-        2,
     )
 
     futures: Sequence[Future[Message[KafkaPayload]]] = [Future(), Future()]
@@ -622,7 +602,6 @@ def test_produce_scheduled_subscription_message() -> None:
             True,
         ),
         epoch,
-        2,
     )
 
     strategy.submit(message)
@@ -727,7 +706,6 @@ def test_produce_stale_message() -> None:
             True,
         ),
         now,
-        2,
     )
 
     strategy.submit(stale_message)
@@ -754,7 +732,6 @@ def test_produce_stale_message() -> None:
             True,
         ),
         now,
-        3,
     )
 
     strategy.submit(non_stale_message)

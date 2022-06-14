@@ -51,6 +51,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "errors_v2",
             "errors_v2_ro",
             "profiles",
+            "replays",
+            "generic_metrics_sets",
         },
         "single_node": True,
     },
@@ -167,7 +169,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "replays"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -185,6 +187,10 @@ ENABLE_SENTRY_METRICS_DEV = os.environ.get("ENABLE_SENTRY_METRICS_DEV", False)
 # Metric Alerts Subscription Options
 ENABLE_METRICS_SUBSCRIPTIONS = os.environ.get("ENABLE_METRICS_SUBSCRIPTIONS", False)
 
+SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
+    "SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV", False
+)
+
 # Subscriptions scheduler buffer size
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}  # (entity name, buffer size)
@@ -200,7 +206,7 @@ ENABLED_MATERIALIZATION_VERSION = 4
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
 # Place the actual time we start ingesting on the new version.
-ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 2, 23, 0, 0, 0)
+ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 3, 23, 0, 0, 0)
 TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
     2022, 2, 18, 0, 0, 0
 )

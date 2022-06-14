@@ -1,6 +1,5 @@
 import logging
 import signal
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
 
@@ -115,8 +114,6 @@ def subscriptions_executor(
         )
     )
 
-    executor = ThreadPoolExecutor(max_concurrent_queries)
-
     # TODO: Consider removing and always passing via CLI.
     # If a value provided via config, it overrides the one provided via CLI.
     # This is so we can quickly change this in an emergency.
@@ -133,7 +130,6 @@ def subscriptions_executor(
         auto_offset_reset,
         not no_strict_offset_reset,
         metrics,
-        executor,
         stale_threshold_seconds,
         cooperative_rebalancing,
     )
@@ -148,7 +144,7 @@ def subscriptions_executor(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with executor, closing(producer), flush_querylog(), flush_attribution_producer():
+    with closing(producer), flush_querylog(), flush_attribution_producer():
         processor.run()
 
 

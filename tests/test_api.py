@@ -2138,7 +2138,7 @@ class TestApi(SimpleAPITest):
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from rediscluster.utils import ClusterDownError
+        from redis.cluster import ClusterDownError
 
         pipeline_mock.side_effect = ClusterDownError("stuff")
         response = self.post(
