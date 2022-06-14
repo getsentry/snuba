@@ -4,7 +4,7 @@ black==22.3.0
 certifi==2018.4.16
 chardet==3.0.4
 click==8.0.4
-clickhouse-driver==0.2.2
+clickhouse-driver==0.2.4
 colorama==0.3.9
 confluent-kafka==1.7.0
 coverage==5.0
@@ -13,7 +13,7 @@ deprecation==2.0.3
 docopt==0.6.2
 flake8==3.7.8
 Flask==1.0.2
-future==0.16.0
+future==0.18.2
 honcho==1.0.1
 idna==2.7
 isort==5.8.0
@@ -29,7 +29,7 @@ mypy>=0.812,<0.900
 packaging==17.1
 parsimonious==0.8.1
 py==1.10.0
-pyparsing==2.2.0
+pyparsing==3.0.9
 pytest==6.2.0
 pytest-cov==2.10.1
 pytest-watch==4.2.0
