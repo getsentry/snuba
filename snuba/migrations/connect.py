@@ -52,5 +52,5 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
     ver = ver.replace(".testingarm", "")
     if version.parse(ver) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
         raise InvalidClickhouseVersion(
-            f"Snuba requires Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION}"
+            f"Snuba requires Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver})"
         )
