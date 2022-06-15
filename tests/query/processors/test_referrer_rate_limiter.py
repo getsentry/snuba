@@ -7,7 +7,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.object_id_rate_limiter import ReferrerRateLimiterProcessor
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state.rate_limit import REFERRER_RATE_LIMIT_NAME
 
 conditions = [
@@ -48,7 +48,7 @@ queries = [
 
 def test_project_rate_limit_processor() -> None:
 
-    settings = HTTPRequestSettings(referrer="foo")
+    settings = HTTPQuerySettings(referrer="foo")
 
     num_before = len(settings.get_rate_limit_params())
     for query in queries:
@@ -59,7 +59,7 @@ def test_project_rate_limit_processor() -> None:
 
 def test_project_rate_limit_processor_overridden() -> None:
     referrer_name = "foo"
-    settings = HTTPRequestSettings(referrer="foo")
+    settings = HTTPQuerySettings(referrer="foo")
     state.set_config(f"referrer_per_second_limit_{referrer_name}", 5)
     state.set_config(f"referrer_concurrent_limit_{referrer_name}", 10)
 
@@ -76,7 +76,7 @@ def test_project_rate_limit_processor_overridden() -> None:
 
 def test_project_rate_limit_processor_overridden_only_one() -> None:
     referrer_name = "foo"
-    settings = HTTPRequestSettings(referrer="foo")
+    settings = HTTPQuerySettings(referrer="foo")
     state.set_config(f"referrer_concurrent_limit_{referrer_name}", 10)
 
     num_before = len(settings.get_rate_limit_params())

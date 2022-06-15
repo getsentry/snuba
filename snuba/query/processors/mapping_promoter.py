@@ -10,7 +10,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     mapping_pattern,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class SubscriptableMatch(NamedTuple):
@@ -90,7 +90,7 @@ class MappingColumnPromoter(QueryProcessor):
         self.__specs = mapping_specs
         self.__cast_to_string = cast_to_string
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_nested_column(exp: Expression) -> Expression:
             subscript = match_subscriptable_reference(exp)
             if subscript is None:

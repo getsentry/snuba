@@ -2,7 +2,7 @@ from dataclasses import replace
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class ConsistencyEnforcerProcessor(QueryProcessor):
@@ -14,5 +14,5 @@ class ConsistencyEnforcerProcessor(QueryProcessor):
     like the CDC tables.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         query.set_from_clause(replace(query.get_from_clause(), final=True))
