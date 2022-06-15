@@ -9,7 +9,7 @@ colorama==0.3.9
 confluent-kafka==1.7.0
 coverage==5.0
 datadog==0.21.0
-deprecation==2.0.3
+deprecation==2.1.0
 docopt==0.6.2
 flake8==3.7.8
 Flask==1.0.2
