@@ -270,7 +270,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                         result_future.task, result_future.future.result()
                     ),
                     message.timestamp,
-                    message.next_offset,
                 )
             )
 
@@ -372,7 +371,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                     message.offset,
                     subscription_task_result,
                     message.timestamp,
-                    message.next_offset,
                 )
             )
 

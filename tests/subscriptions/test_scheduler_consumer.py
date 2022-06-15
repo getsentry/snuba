@@ -204,7 +204,6 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
             time_shift
         ),
         epoch,
-        2,
     )
 
     assert consumer.tell() == {
@@ -219,7 +218,6 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
             time_shift
         ),
         epoch,
-        3,
     )
 
     assert consumer.tell() == {
@@ -261,7 +259,6 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
             time_shift
         ),
         epoch,
-        3,
     )
 
     assert consumer.tell() == {
@@ -327,7 +324,6 @@ def test_tick_consumer_non_monotonic() -> None:
                 timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
             ),
             epoch + timedelta(seconds=1),
-            2,
         )
 
     clock.sleep(-1)
@@ -361,7 +357,6 @@ def test_tick_consumer_non_monotonic() -> None:
                 ),
             ),
             epoch + timedelta(seconds=2),
-            4,
         )
 
 

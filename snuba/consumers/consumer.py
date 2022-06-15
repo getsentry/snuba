@@ -532,7 +532,6 @@ class MultistorageCollector(
                 message.offset,
                 payload,
                 message.timestamp,
-                message.next_offset,
             )
             self.__steps[storage_key].submit(writer_message)
 
@@ -545,7 +544,6 @@ class MultistorageCollector(
                 message.offset,
                 (storage_key, payload),
                 message.timestamp,
-                message.next_offset,
             )
 
             self.__messages[storage_key].append(other_message)
