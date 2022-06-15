@@ -111,6 +111,7 @@ def test_executor_consumer() -> None:
         consumer_group,
         result_producer,
         2,
+        2,
         auto_offset_reset,
         strict_offset_reset,
         TestingMetricsBackend(),
@@ -220,6 +221,7 @@ def test_execute_query_strategy() -> None:
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
+    total_concurrent_queries = 2
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
     commit = mock.Mock()
@@ -228,6 +230,7 @@ def test_execute_query_strategy() -> None:
         dataset,
         entity_names,
         max_concurrent_queries,
+        total_concurrent_queries,
         None,
         metrics,
         next_step,
@@ -264,7 +267,18 @@ def test_too_many_concurrent_queries() -> None:
     next_step = mock.Mock()
     commit = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, entity_names, 4, None, metrics, next_step, commit)
+    total_concurrent_queries = 4
+
+    strategy = ExecuteQuery(
+        dataset,
+        entity_names,
+        4,
+        total_concurrent_queries,
+        None,
+        metrics,
+        next_step,
+        commit,
+    )
 
     make_message = generate_message(EntityKey.EVENTS)
 
@@ -289,7 +303,18 @@ def test_skip_execution_for_entity() -> None:
     next_step = mock.Mock()
     commit = mock.Mock()
 
-    strategy = ExecuteQuery(dataset, entity_names, 4, None, metrics, next_step, commit)
+    total_concurrent_queries = 4
+
+    strategy = ExecuteQuery(
+        dataset,
+        entity_names,
+        4,
+        total_concurrent_queries,
+        None,
+        metrics,
+        next_step,
+        commit,
+    )
 
     metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
     strategy.submit(metrics_sets_message)
@@ -380,6 +405,7 @@ def test_execute_and_produce_result() -> None:
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
+    total_concurrent_queries = 2
     metrics = TestingMetricsBackend()
 
     scheduled_topic = Topic("scheduled-subscriptions-events")
@@ -397,6 +423,7 @@ def test_execute_and_produce_result() -> None:
         dataset,
         entity_names,
         max_concurrent_queries,
+        total_concurrent_queries,
         None,
         metrics,
         ProduceResult(producer, result_topic.name, commit),
@@ -426,6 +453,7 @@ def test_skip_stale_message() -> None:
     dataset = get_dataset("events")
     entity_names = ["events"]
     max_concurrent_queries = 2
+    total_concurrent_queries = 2
     metrics = TestingMetricsBackend()
 
     scheduled_topic = Topic("scheduled-subscriptions-events")
@@ -445,6 +473,7 @@ def test_skip_stale_message() -> None:
         dataset,
         entity_names,
         max_concurrent_queries,
+        total_concurrent_queries,
         stale_threshold_seconds,
         metrics,
         ProduceResult(producer, result_topic.name, commit),
