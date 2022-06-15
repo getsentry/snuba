@@ -295,6 +295,19 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 ],
             ),
         ]
+    if settings.ENABLE_REPLAYS_CONSUMER:
+        daemons += [
+            (
+                "replays-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--storage=replays",
+                ],
+            ),
+        ]
 
     manager = Manager()
     for name, cmd in daemons:

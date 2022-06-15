@@ -41,6 +41,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "metrics-subscription-results",
         "snuba-dead-letter-inserts",
         "processed-profiles",
+        "snuba-replay-events",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
