@@ -26,11 +26,11 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -147,7 +147,7 @@ def parse_and_run_query(
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
         _set_query_final(request, result.extra)
-        if not request.settings.get_dry_run():
+        if not request.query_settings.get_dry_run():
             record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
         _set_query_final(request, error.extra)
@@ -183,12 +183,12 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    if not request.settings.get_turbo() and SampleClauseFinder().visit(
+    if not request.query_settings.get_turbo() and SampleClauseFinder().visit(
         request.query.get_from_clause()
     ):
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    if request.settings.get_dry_run():
+    if request.query_settings.get_dry_run():
         query_runner = _dry_run_query_runner
     else:
         query_runner = partial(
@@ -209,7 +209,7 @@ def _run_query_pipeline(
 
 def _dry_run_query_runner(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    query_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
     with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
@@ -233,7 +233,7 @@ def _run_and_apply_column_names(
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    query_settings: QuerySettings,
     reader: Reader,
 ) -> QueryResult:
     """
@@ -250,7 +250,7 @@ def _run_and_apply_column_names(
         query_metadata,
         referrer,
         clickhouse_query,
-        request_settings,
+        query_settings,
         reader,
         robust,
         concurrent_queries_gauge,
@@ -283,7 +283,7 @@ def _format_storage_query_and_run(
     query_metadata: SnubaQueryMetadata,
     referrer: str,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    query_settings: QuerySettings,
     reader: Reader,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge] = None,
@@ -296,7 +296,7 @@ def _format_storage_query_and_run(
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
-        _apply_turbo_sampling_if_needed(clickhouse_query, request_settings)
+        _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
 
         formatted_query = format_query(clickhouse_query)
         query_size_bytes = len(formatted_query.get_sql().encode("utf-8"))
@@ -333,7 +333,7 @@ def _format_storage_query_and_run(
         def execute() -> QueryResult:
             return raw_query(
                 clickhouse_query,
-                request_settings,
+                query_settings,
                 formatted_query,
                 reader,
                 timer,
@@ -371,7 +371,7 @@ def get_query_size_group(query_size_bytes: int) -> str:
 
 def _apply_turbo_sampling_if_needed(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
-    request_settings: RequestSettings,
+    query_settings: QuerySettings,
 ) -> None:
     """
     TODO: Remove this method entirely and move the sampling logic
@@ -379,7 +379,7 @@ def _apply_turbo_sampling_if_needed(
     """
     if isinstance(clickhouse_query, Query):
         if (
-            request_settings.get_turbo()
+            query_settings.get_turbo()
             and not clickhouse_query.get_from_clause().sampling_rate
         ):
             clickhouse_query.set_from_clause(

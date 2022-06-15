@@ -4,8 +4,8 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_get_time_range() -> None:
@@ -27,7 +27,7 @@ def test_get_time_range() -> None:
     processors = events.get_default_entity().get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
-            processor.process_query(query, HTTPRequestSettings())
+            processor.process_query(query, HTTPQuerySettings())
 
     from_date_ast, to_date_ast = get_time_range(identity_translate(query), "timestamp")
     assert (

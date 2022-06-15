@@ -1,11 +1,11 @@
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class GroupIdColumnProcessor(QueryProcessor):
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def process_column(exp: Expression) -> Expression:
             if isinstance(exp, Column):
                 if exp.column_name == "group_id":

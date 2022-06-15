@@ -2060,6 +2060,7 @@ class TestApi(SimpleAPITest):
         assert result["data"] == []
 
         # make sure redis has _something_ before we go about dropping all the keys in it
+        time.sleep(1)
         assert self.redis_db_size() > 0
 
         storage = get_writable_storage(StorageKey.ERRORS)

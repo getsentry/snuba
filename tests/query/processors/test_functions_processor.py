@@ -9,7 +9,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 test_data = [
     (
@@ -201,7 +201,7 @@ test_data = [
 @pytest.mark.parametrize("pre_format, expected_query", test_data)
 def test_format_expressions(pre_format: Query, expected_query: Query) -> None:
     copy = deepcopy(pre_format)
-    BasicFunctionsProcessor().process_query(copy, HTTPRequestSettings())
+    BasicFunctionsProcessor().process_query(copy, HTTPQuerySettings())
     assert copy.get_selected_columns() == expected_query.get_selected_columns()
     assert copy.get_groupby() == expected_query.get_groupby()
     assert copy.get_condition() == expected_query.get_condition()
