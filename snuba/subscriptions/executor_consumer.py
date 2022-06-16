@@ -52,6 +52,7 @@ def build_executor_consumer(
     consumer_group: str,
     producer: Producer[KafkaPayload],
     max_concurrent_queries: int,
+    total_concurrent_queries: int,
     auto_offset_reset: str,
     strict_offset_reset: Optional[bool],
     metrics: MetricsBackend,
@@ -134,6 +135,7 @@ def build_executor_consumer(
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
             max_concurrent_queries,
+            total_concurrent_queries,
             dataset,
             entity_names,
             producer,
@@ -148,6 +150,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
     def __init__(
         self,
         max_concurrent_queries: int,
+        total_concurrent_queries: int,
         dataset: Dataset,
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
@@ -156,6 +159,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         result_topic: str,
     ) -> None:
         self.__max_concurrent_queries = max_concurrent_queries
+        self.__total_concurrent_queries = total_concurrent_queries
         self.__dataset = dataset
         self.__entity_names = entity_names
         self.__producer = producer
@@ -170,6 +174,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__dataset,
             self.__entity_names,
             self.__max_concurrent_queries,
+            self.__total_concurrent_queries,
             self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
@@ -188,6 +193,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         dataset: Dataset,
         entity_names: Sequence[str],
         max_concurrent_queries: int,
+        total_concurrent_queries: int,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
@@ -199,6 +205,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
         self.__max_concurrent_queries = max_concurrent_queries
+        self.__total_concurrent_queries = total_concurrent_queries
         self.__executor = ThreadPoolExecutor(self.__max_concurrent_queries)
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
