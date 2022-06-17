@@ -31,7 +31,7 @@ parsimonious==0.8.1
 py==1.10.0
 pyparsing==3.0.9
 pytest==6.2.0
-pytest-cov==2.10.1
+pytest-cov==3.0.0
 pytest-watch==4.2.0
 pathtools==0.1.2
 pluggy==0.13.0
