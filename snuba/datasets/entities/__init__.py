@@ -24,3 +24,4 @@ class EntityKey(Enum):
     DISCOVER_TRANSACTIONS = "discover_transactions"
     DISCOVER_EVENTS = "discover_events"
     PROFILES = "profiles"
+    GENERIC_METRICS_SETS = "generic_metrics_sets"

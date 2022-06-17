@@ -25,6 +25,7 @@ class Topic(Enum):
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
     DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
+    GENERIC_METRICS = "snuba-generic-metrics"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
