@@ -34,7 +34,6 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
-from snuba.subscriptions.utils import run_new_pipeline
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -306,9 +305,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         entity = task.task.entity
         entity_name = entity.value
 
-        should_execute = entity_name in self.__entity_names and run_new_pipeline(
-            entity, task.timestamp
-        )
+        should_execute = entity_name in self.__entity_names
 
         # Don't execute stale subscriptions
         if (
