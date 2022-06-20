@@ -1,13 +1,13 @@
 atomicwrites==1.4.0
 blinker==1.4
 black==22.3.0
-certifi==2018.4.16
+certifi==2022.6.15
 chardet==4.0.0
 click==8.0.4
 clickhouse-driver==0.2.4
 colorama==0.3.9
 confluent-kafka==1.7.0
-coverage==5.0
+coverage==6.4.1
 datadog==0.21.0
 deprecation==2.0.3
 docopt==0.6.2
@@ -31,7 +31,7 @@ parsimonious==0.8.1
 py==1.10.0
 pyparsing==3.0.9
 pytest==6.2.0
-pytest-cov==2.10.1
+pytest-cov==3.0.0
 pytest-watch==4.2.0
 pathtools==0.1.2
 pluggy==0.13.0
@@ -47,4 +47,4 @@ simplejson==3.15.0
 urllib3==1.26.9
 uWSGI==2.0.20
 wcwidth==0.1.7
-Werkzeug==0.16.1
+Werkzeug==2.0.3
