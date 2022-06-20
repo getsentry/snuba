@@ -109,6 +109,9 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=self.storage_set, table_name=self.local_materialized_table
             ),
+            operations.DropTable(
+                storage_set=self.storage_set, table_name=self.local_view_table
+            ),
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
