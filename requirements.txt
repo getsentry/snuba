@@ -47,4 +47,4 @@ simplejson==3.15.0
 urllib3==1.26.9
 uWSGI==2.0.20
 wcwidth==0.1.7
-Werkzeug==0.16.1
+Werkzeug==2.1.2
