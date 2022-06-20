@@ -130,7 +130,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.dist_materialized_table,
                 columns=agg_columns,
                 engine=table_engines.Distributed(
-                    local_table_name=self.dist_materialized_table,
+                    local_table_name=self.local_materialized_table,
                     sharding_key=None,
                 ),
             ),
