@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
@@ -92,6 +93,31 @@ class Migration(migration.ClickhouseNodeMigration):
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
             ),
+            operations.AddColumn(
+                storage_set=self.storage_set,
+                table_name=self.local_materialized_table,
+                column=Column(
+                    "_tags_hash",
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
+                ),
+                after="tags.value",
+            ),
+            operations.AddIndex(
+                storage_set=self.storage_set,
+                table_name=self.local_materialized_table,
+                index_name="bf_tags_hash",
+                index_expression="_tags_hash",
+                index_type="bloom_filter()",
+                granularity=1,
+            ),
+            operations.AddIndex(
+                storage_set=self.storage_set,
+                table_name=self.local_materialized_table,
+                index_name="bf_tags__key_hash",
+                index_expression="tags.key",
+                index_type="bloom_filter()",
+                granularity=1,
+            ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set,
                 view_name=self.local_view_table,
@@ -133,6 +159,15 @@ class Migration(migration.ClickhouseNodeMigration):
                     local_table_name=self.local_materialized_table,
                     sharding_key=None,
                 ),
+            ),
+            operations.AddColumn(
+                storage_set=self.storage_set,
+                table_name=self.dist_materialized_table,
+                column=Column(
+                    "_tags_hash",
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
+                ),
+                after="tags.value",
             ),
         ]
 
