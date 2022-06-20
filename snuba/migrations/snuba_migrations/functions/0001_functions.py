@@ -16,7 +16,6 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 common_columns: List[Column[Modifiers]] = [
-    Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("transaction_name", String()),
     Column("timestamp", DateTime()),
@@ -75,9 +74,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=raw_columns,
                 engine=table_engines.MergeTree(
                     storage_set=self.storage_set,
-                    order_by="(org_id, project_id, transaction_name, timestamp)",
+                    order_by="(project_id, transaction_name, timestamp)",
                     partition_by="(toStartOfInterval(timestamp, INTERVAL 3 day))",
-                    ttl="timestamp + toIntervalDay(7)",
+                    ttl="timestamp + toIntervalDay(1)",
                 ),
             ),
             operations.CreateTable(
@@ -86,8 +85,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=agg_columns,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set,
-                    order_by="(org_id, project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint, symbol, image, filename, is_application, tags.key, tags.value, retention_days)",
-                    primary_key="(org_id, project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint)",
+                    order_by="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint, symbol, image, filename, is_application, tags.key, tags.value, retention_days)",
+                    primary_key="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": self.index_granularity},
                     ttl="timestamp + toIntervalDay(retention_days)",
@@ -148,7 +147,6 @@ class Migration(migration.ClickhouseNodeMigration):
     def __MATVIEW_STATEMENT(self) -> str:
         return f"""
             SELECT
-                org_id,
                 project_id,
                 transaction_name,
                 symbol,
@@ -172,7 +170,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 groupUniqArrayState(5)(profile_id) as examples
             FROM {self.local_raw_table}
             GROUP BY
-                org_id,
                 project_id,
                 transaction_name,
                 symbol,
