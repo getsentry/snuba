@@ -79,7 +79,7 @@ def clickhouse_queries() -> Response:
 def clickhouse_system_query() -> Response:
     req = request.get_json()
     try:
-        if req is None:
+        if req is None:  # required for typing
             req = {}
 
         host = req["host"]
