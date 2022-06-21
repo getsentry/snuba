@@ -3,7 +3,7 @@ import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
@@ -22,7 +22,38 @@ INT_EXPECTED = "Int expected"
 
 logger = logging.getLogger(__name__)
 
-# {"org_id":1,"project_id":2,"use_case_id":"perf","name":"sentry.transactions.transaction.duration","unit":"ms","type":"s","value":[21,76,116,142,179],"timestamp":1655244629,"tags":{"6":91,"9":134,"4":159,"5":34}, "raw_tag_values":["prod","customer","flag_b","flag_a"], "metric_id":8,"retention_days":90}
+"""
+{
+    "org_id":1,
+    "project_id":2,
+    "use_case_id":"perf",
+    "name":"sentry.transactions.transaction.duration",
+    "unit":"ms",
+    "type":"s",
+    "value":[21,76,116,142,179],
+    "timestamp":1655244629,
+    "tags":{"6":91,"9":134,"4":159,"5":34},
+    "metric_id":8,
+    "retention_days":90,
+    "mapping_meta": {
+        "h": {
+            "8": "duration",
+            "6": "tag1",
+            "91": "value1",
+            "9": "tag2",
+            "134": "value2"
+        },
+        "c": {
+            "4": "error_type",
+            "159": "exception",
+            "5": "tag3"
+        },
+        "d": {
+            "34": "value3"
+        }
+    }
+}
+"""
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -44,6 +75,14 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             bytearray(f"{use_case_id},{org_id},{project_id},{metric_id}", "utf-8")
         )
 
+    def _get_raw_values_index(self, message: Mapping[str, Any]) -> Mapping[str, str]:
+        acc: MutableMapping[str, str] = dict()
+        for _, values in message["mapping_meta"].items():
+            assert isinstance(values, Mapping), "Invalid tags type"
+            acc.update(values)
+
+        return acc
+
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -55,28 +94,23 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         assert timestamp is not None, "Invalid timestamp"
 
         keys = []
-        values = []
+        indexed_values = []
         tags = message["tags"]
         assert isinstance(tags, Mapping), "Invalid tags type"
+
+        raw_values_index = self._get_raw_values_index(message)
+
         for key, value in sorted(tags.items()):
             assert key.isdigit() and isinstance(value, int), "Tag key/value invalid"
             keys.append(int(key))
-            values.append(value)
+            indexed_values.append(value)
 
         try:
             retention_days = enforce_retention(message["retention_days"], timestamp)
         except EventTooOld:
             return None
 
-        raw_values = (
-            ["" for _ in range(0, len(values))]
-            if not message["raw_tag_values"]
-            else message["raw_tag_values"]
-        )
-
-        assert len(raw_values) == len(
-            values
-        ), "Raw and indexed tag values must have the same length"
+        raw_values = [raw_values_index.get(str(v), "") for v in indexed_values]
 
         logger.debug(f"timeseries_id = {self._hash_timeseries_id(message)}")
         processed = {
@@ -87,7 +121,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             "timestamp": timestamp,
             "tags.key": keys,
             "tags.raw_value": raw_values,
-            "tags.indexed_value": values,
+            "tags.indexed_value": indexed_values,
             **self._process_values(message),
             "materialization_version": 1,
             "retention_days": retention_days,
