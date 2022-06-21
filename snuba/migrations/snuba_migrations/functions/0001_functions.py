@@ -56,7 +56,7 @@ class Migration(migration.ClickhouseNodeMigration):
     index_granularity = "2048"
     storage_set = StorageSetKey.FUNCTIONS
 
-    data_granularity = 60 * 60
+    data_granularity = 60 * 60  # 1 hour buckets
 
     local_raw_table = "functions_raw_local"
     dist_raw_table = "functions_raw_dist"
@@ -65,7 +65,6 @@ class Migration(migration.ClickhouseNodeMigration):
     dist_materialized_table = "functions_mv_dist"
 
     local_view_table = "functions_local"
-    dist_view_table = "functions_dist"
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
@@ -76,7 +75,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 engine=table_engines.MergeTree(
                     storage_set=self.storage_set,
                     order_by="(project_id, transaction_name, timestamp)",
-                    partition_by="(toStartOfInterval(timestamp, INTERVAL 3 day))",
+                    partition_by="(toStartOfInterval(timestamp, INTERVAL 12 HOUR))",
                     ttl="timestamp + toIntervalDay(1)",
                 ),
             ),
