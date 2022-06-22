@@ -21,7 +21,7 @@ itsdangerous==0.24
 Jinja2==2.11.3
 jsonschema==3.0.1
 lz4==2.0.0
-Markdown==2.6.11
+Markdown==3.3.7
 MarkupSafe==1.1.1
 mywsgi==1.0.3
 more-itertools==4.2.0
