@@ -2,7 +2,6 @@ import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
-from enum import Enum
 from typing import Any, Mapping, MutableMapping, Optional
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -114,9 +113,3 @@ class SetsMetricsProcessor(MetricsBucketProcessor):
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_set_message(message)
-
-
-class OutputType(Enum):
-    SET = "set"
-    COUNTER = "counter"
-    DIST = "distribution"

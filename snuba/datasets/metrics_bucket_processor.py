@@ -1,7 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from enum import Enum
 from typing import Any, Mapping, Optional
 
 from snuba import settings
@@ -12,7 +11,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     METRICS_DISTRIBUTIONS_TYPE,
     METRICS_SET_TYPE,
 )
-from snuba.datasets.metrics_messages import values_for_set_message
+from snuba.datasets.metrics_messages import OutputType, values_for_set_message
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -121,12 +120,6 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
                 value, (int, float)
             ), f"{ILLEGAL_VALUE_IN_SET} {INT_FLOAT_EXPECTED}: {value}"
         return {"values": values}
-
-
-class OutputType(Enum):
-    SET = "set"
-    COUNTER = "counter"
-    DIST = "distribution"
 
 
 class PolymorphicMetricsProcessor(MetricsBucketProcessor):
