@@ -16,7 +16,7 @@ Flask==1.0.2
 future==0.18.2
 honcho==1.0.1
 idna==3.3
-isort==5.8.0
+isort==5.10.1
 itsdangerous==0.24
 Jinja2==2.11.3
 jsonschema==3.0.1
