@@ -922,5 +922,8 @@ class MultistorageConsumerProcessingStrategyFactory(
     ) -> ProcessingStrategy[KafkaPayload]:
         return TransformStep(
             partial(find_destination_storages, self.__storages),
-            FilterStep(has_destination_storages, self.__inner_factory.create(commit)),
+            FilterStep(
+                has_destination_storages,
+                self.__inner_factory.create_with_partitions(commit, partitions),
+            ),
         )

@@ -217,7 +217,9 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         commit: Callable[[Mapping[Partition, Position]], None],
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
-        execute_step = self.__executor_factory.create(commit)
+        execute_step = self.__executor_factory.create_with_partitions(
+            commit, partitions
+        )
         return TickBuffer(
             self.__mode,
             self.__partitions,
