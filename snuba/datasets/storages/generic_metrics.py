@@ -22,7 +22,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.generic_metrics_processor import SetsMetricsProcessor
+from snuba.datasets.generic_metrics_processor import GenericSetsMetricsProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -108,7 +108,7 @@ sets_bucket_storage = WritableTableStorage(
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=SetsMetricsProcessor(),
+        processor=GenericSetsMetricsProcessor(),
         default_topic=Topic.GENERIC_METRICS,
         # commit_log_topic=Topic.METRICS_COMMIT_LOG,
         # subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,

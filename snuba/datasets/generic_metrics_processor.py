@@ -16,16 +16,13 @@ from snuba.processor import (
 
 logger = logging.getLogger(__name__)
 
-# test message:
-# {"org_id": 1, "project_id": 2, "use_case_id": "perf", "name": "sentry.transactions.transaction.duration", "unit": "ms", "type": "s", "value": [21, 76, 116, 142, 179], "timestamp": 1655244629, "tags": {"6": 91, "9": 134, "4": 159, "5": 34}, "metric_id": 8, "retention_days": 90, "mapping_meta": {"h": {"8": "duration", "6": "tag1", "91": "value1", "9": "tag2", "134": "value2"}, "c": {"4": "error_type", "159": "exception", "5": "tag3"}, "d": {"34": "value3"}}}
-
 # These are the hardcoded values from the materialized view
 GRANULARITY_ONE_MINUTE = 1
 GRANULARITY_ONE_HOUR = 2
 GRANULARITY_ONE_DAY = 3
 
 
-class MetricsBucketProcessor(MessageProcessor, ABC):
+class GenericMetricsBucketProcessor(MessageProcessor, ABC):
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         raise NotImplementedError
@@ -35,6 +32,12 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         raise NotImplementedError
 
     def _hash_timeseries_id(self, message: Mapping[str, Any]) -> int:
+        """
+        _hash_timeseries_id should return a UInt32 whose distribution should shard
+        as evenly as possible while ensuring that an average query will not have to
+        cross shards to read a results (so for the same org, project, metric, and tags
+        ClickHouse should not have to aggregate results from multiple nodes).
+        """
         use_case_id: str = message.get("use_case_id") or ""
         org_id: str = message["org_id"]
         project_id: str = message["project_id"]
@@ -70,8 +73,6 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         tags = message["tags"]
         assert isinstance(tags, Mapping), "Invalid tags type"
 
-        raw_values_index = self._get_raw_values_index(message)
-
         for key, value in sorted(tags.items()):
             assert key.isdigit() and isinstance(value, int), "Tag key/value invalid"
             keys.append(int(key))
@@ -82,9 +83,9 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         except EventTooOld:
             return None
 
+        raw_values_index = self._get_raw_values_index(message)
         raw_values = [raw_values_index.get(str(v), "") for v in indexed_values]
 
-        logger.debug(f"timeseries_id = {self._hash_timeseries_id(message)}")
         processed = {
             "use_case_id": message["use_case_id"],
             "org_id": message["org_id"],
@@ -107,7 +108,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         return InsertBatch([processed], None)
 
 
-class SetsMetricsProcessor(MetricsBucketProcessor):
+class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return is_set_message(message)
 
