@@ -2,6 +2,8 @@
 The storages defined in this file are for the generic metrics system,
 initially built to handle metrics-enhanced performance.
 """
+from typing import Sequence
+
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
 from arroyo.processing.strategies.dead_letter_queue import (
@@ -47,7 +49,7 @@ def produce_policy_creator() -> DeadLetterQueuePolicy:
     )
 
 
-aggregated_columns = [
+aggregated_columns: Sequence[Column[SchemaModifiers]] = [
     Column("org_id", UInt(64)),
     Column("use_case_id", String()),
     Column("project_id", UInt(64)),
