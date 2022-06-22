@@ -11,7 +11,11 @@ from snuba.datasets.metrics_aggregate_processor import (
     METRICS_DISTRIBUTIONS_TYPE,
     METRICS_SET_TYPE,
 )
-from snuba.datasets.metrics_messages import OutputType, values_for_set_message
+from snuba.datasets.metrics_messages import (
+    OutputType,
+    is_set_message,
+    values_for_set_message,
+)
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -86,7 +90,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
 
 class SetsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "s"
+        return is_set_message(message)
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]

@@ -12,6 +12,10 @@ ILLEGAL_VALUE_IN_SET = "Illegal value in set."
 INT_EXPECTED = "Int expected"
 
 
+def is_set_message(message: Mapping[str, Any]) -> bool:
+    return message["type"] is not None and message["type"] == "s"
+
+
 def values_for_set_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     values = message["value"]
     for value in values:

@@ -6,7 +6,7 @@ from typing import Any, Mapping, MutableMapping, Optional
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
-from snuba.datasets.metrics_messages import values_for_set_message
+from snuba.datasets.metrics_messages import is_set_message, values_for_set_message
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -109,7 +109,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
 
 class SetsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "s"
+        return is_set_message(message)
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         return values_for_set_message(message)
