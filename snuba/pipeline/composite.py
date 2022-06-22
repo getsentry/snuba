@@ -27,7 +27,7 @@ from snuba.query.joins.equivalence_adder import add_equivalent_conditions
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.web import QueryResult
 
 
@@ -54,7 +54,7 @@ class CompositeQueryPlanner(QueryPlanner[CompositeQueryPlan]):
     def __init__(
         self,
         query: CompositeQuery[Entity],
-        settings: RequestSettings,
+        settings: QuerySettings,
     ) -> None:
         self.__query = query
         self.__settings = settings
@@ -69,7 +69,7 @@ class CompositeQueryPlanner(QueryPlanner[CompositeQueryPlan]):
 
 
 def _plan_composite_query(
-    query: CompositeQuery[Entity], settings: RequestSettings
+    query: CompositeQuery[Entity], settings: QuerySettings
 ) -> CompositeQueryPlan:
     """
     Produces a composite query plan out of a composite query.
@@ -123,7 +123,7 @@ class JoinPlansRanker(JoinVisitor[Mapping[str, Sequence[ClickhouseQueryPlan]], E
     in the join.
     """
 
-    def __init__(self, settings: RequestSettings) -> None:
+    def __init__(self, settings: QuerySettings) -> None:
         self.__settings = settings
 
     def visit_individual_node(
@@ -180,7 +180,7 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
     """
 
     def __init__(
-        self, settings: RequestSettings, plans: Mapping[str, ClickhouseQueryPlan]
+        self, settings: QuerySettings, plans: Mapping[str, ClickhouseQueryPlan]
     ) -> None:
         self.__settings = settings
         self.__plans = plans
@@ -299,8 +299,8 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
     CompositeQueryPlan.
     """
 
-    def __init__(self, request_settings: RequestSettings) -> None:
-        self.__settings = request_settings
+    def __init__(self, query_settings: QuerySettings) -> None:
+        self.__settings = query_settings
 
     def _visit_simple_source(self, data_source: Entity) -> CompositeDataSourcePlan:
         # We are never supposed to get here.
@@ -356,11 +356,11 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
         self,
         root_processors: Sequence[QueryProcessor],
         aliased_processors: Mapping[str, Sequence[QueryProcessor]],
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
     ) -> None:
         self.__root_processors = root_processors
         self.__aliased_processors = aliased_processors
-        self.__settings = request_settings
+        self.__settings = query_settings
 
     def __process_simple_query(
         self, clickhouse_query: ClickhouseQuery, processors: Sequence[QueryProcessor]
@@ -422,17 +422,17 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
     def execute(
         self,
         query: CompositeQuery[Table],
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
         runner: QueryRunner,
     ) -> QueryResult:
         ProcessorsExecutor(
-            self.__root_processors, self.__aliased_processors, request_settings
+            self.__root_processors, self.__aliased_processors, query_settings
         ).visit(query)
 
         for p in self.__composite_processors:
-            p.process_query(query, request_settings)
+            p.process_query(query, query_settings)
 
-        return runner(query, request_settings, self.__cluster.get_reader())
+        return runner(query, query_settings, self.__cluster.get_reader())
 
 
 class CompositeExecutionPipeline(QueryExecutionPipeline):
@@ -445,11 +445,11 @@ class CompositeExecutionPipeline(QueryExecutionPipeline):
     def __init__(
         self,
         query: CompositeQuery[Entity],
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
         runner: QueryRunner,
     ):
         self.__query = query
-        self.__settings = request_settings
+        self.__settings = query_settings
         self.__runner = runner
 
     def execute(self) -> QueryResult:

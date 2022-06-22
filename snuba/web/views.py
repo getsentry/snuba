@@ -50,9 +50,9 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import redis_client
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.state import MismatchedTypeException
@@ -403,7 +403,7 @@ def _trace_transaction(dataset: Dataset) -> None:
             scope.transaction = f"{scope.transaction.name}__{get_dataset_name(dataset)}__{http_request.referrer}"
 
 
-@application.route("/query", methods=["GET", "POST"])
+@application.route("/query", methods=["GET", "POST"])  # type: ignore
 @util.time_request("query")
 def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
     if http_request.method == "GET":
@@ -422,7 +422,7 @@ def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "GET":
-        schema = RequestSchema.build(HTTPRequestSettings)
+        schema = RequestSchema.build(HTTPQuerySettings)
         return render_template(
             "query.html",
             query_template=json.dumps(schema.generate_template(), indent=4),
@@ -455,10 +455,10 @@ def dataset_query(
             metrics.timing("post.shutdown.query.delay", diff, tags=tags)
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
-        schema = RequestSchema.build(HTTPRequestSettings)
+        schema = RequestSchema.build(HTTPQuerySettings)
 
     request = build_request(
-        body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer
+        body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
 
     try:
@@ -506,7 +506,7 @@ def dataset_query(
 
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
-    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+    if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
     return Response(json.dumps(payload), 200, {"Content-Type": "application/json"})

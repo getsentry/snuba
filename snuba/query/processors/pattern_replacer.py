@@ -5,7 +5,7 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.matchers import MatchResult, Pattern, TMatchedType
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class PatternReplacer(QueryProcessor):
@@ -21,7 +21,7 @@ class PatternReplacer(QueryProcessor):
         self.__matcher = matcher
         self.__transformation_fn = transformation_fn
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def apply_matcher(expression: Expression) -> Expression:
             result = self.__matcher.match(expression)
             if result is not None:

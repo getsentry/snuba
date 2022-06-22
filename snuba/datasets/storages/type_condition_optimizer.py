@@ -3,7 +3,7 @@ from snuba.clickhouse.query import Query
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Literal, String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class TypeConditionOptimizer(QueryProcessor):
@@ -14,7 +14,7 @@ class TypeConditionOptimizer(QueryProcessor):
     required for compatibility with the events storage.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def replace_exp(exp: Expression) -> Expression:
             matcher = FunctionCall(
                 String("notEquals"),

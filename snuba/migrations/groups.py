@@ -242,7 +242,13 @@ class GenericMetricsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.generic_metrics")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_sets_aggregate_table", "0002_sets_raw_table", "0003_sets_mv"]
+        return [
+            "0001_sets_aggregate_table",
+            "0002_sets_raw_table",
+            "0003_sets_mv",
+            "0004_sets_raw_add_granularities",
+            "0005_sets_replace_mv",
+        ]
 
 
 _REGISTERED_GROUPS = {

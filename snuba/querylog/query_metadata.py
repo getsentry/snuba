@@ -113,11 +113,11 @@ class SnubaQueryMetadata:
         return {
             "request": {
                 "id": self.request.id,
-                "body": self.request.body,
+                "body": self.request.original_body,
                 "referrer": self.request.referrer,
-                "team": self.request.settings.get_team(),
-                "feature": self.request.settings.get_feature(),
-                "app_id": self.request.app_id.key,
+                "team": self.request.attribution_info.team,
+                "feature": self.request.attribution_info.feature,
+                "app_id": self.request.attribution_info.app_id.key,
             },
             "dataset": self.dataset,
             "entity": self.entity,

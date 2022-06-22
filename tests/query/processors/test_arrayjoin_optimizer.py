@@ -6,6 +6,7 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -30,9 +31,9 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     get_filtered_mapping_keys,
     zip_columns,
 )
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings
 
 
 def build_query(
@@ -413,24 +414,24 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     request = Request(
         id="a",
-        body=body,
+        original_body=body,
         query=query,
-        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=HTTPRequestSettings(referrer="r"),
+        query_settings=HTTPQuerySettings(referrer="r"),
+        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
     )
     entity = get_entity(query.get_from_clause().key)
     storage = entity.get_writable_storage()
     assert storage is not None
     for p in entity.get_query_processors():
-        p.process_query(query, request.settings)
+        p.process_query(query, request.query_settings)
 
-    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.settings)
+    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.query_settings)
 
     query_plan = SingleStorageQueryPlanBuilder(
         storage=storage,
         mappers=transaction_translator,
-    ).build_and_rank_plans(query, request.settings)[0]
+    ).build_and_rank_plans(query, request.query_settings)[0]
 
     return query_plan.query
 

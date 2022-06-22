@@ -8,7 +8,7 @@ from snuba.query.processors.uniq_in_select_and_having import (
     MismatchedAggregationException,
     UniqInSelectAndHavingProcessor,
 )
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 
@@ -83,15 +83,13 @@ VALID_QUERY_CASES = [
 def test_invalid_uniq_queries(input_query: ClickhouseQuery) -> None:
     set_config("throw_on_uniq_select_and_having", True)
     with pytest.raises(MismatchedAggregationException):
-        UniqInSelectAndHavingProcessor().process_query(
-            input_query, HTTPRequestSettings()
-        )
+        UniqInSelectAndHavingProcessor().process_query(input_query, HTTPQuerySettings())
 
 
 @pytest.mark.parametrize("input_query", deepcopy(VALID_QUERY_CASES))
 def test_valid_uniq_queries(input_query: ClickhouseQuery) -> None:
     set_config("throw_on_uniq_select_and_having", True)
     og_query = deepcopy(input_query)
-    UniqInSelectAndHavingProcessor().process_query(input_query, HTTPRequestSettings())
+    UniqInSelectAndHavingProcessor().process_query(input_query, HTTPQuerySettings())
     # query should not change
     assert og_query == input_query
