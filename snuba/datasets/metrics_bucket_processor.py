@@ -12,6 +12,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     METRICS_DISTRIBUTIONS_TYPE,
     METRICS_SET_TYPE,
 )
+from snuba.datasets.metrics_messages import values_for_set_message
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -138,12 +139,7 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         if message["type"] == METRICS_SET_TYPE:
-            values = message["value"]
-            for value in values:
-                assert isinstance(
-                    value, int
-                ), f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
-            return {"metric_type": OutputType.SET.value, "set_values": values}
+            return values_for_set_message(message)
         elif message["type"] == METRICS_COUNTERS_TYPE:
             value = message["value"]
             assert isinstance(

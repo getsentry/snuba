@@ -7,6 +7,7 @@ from typing import Any, Mapping, MutableMapping, Optional
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
+from snuba.datasets.metrics_messages import values_for_set_message
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -14,16 +15,15 @@ from snuba.processor import (
     _ensure_valid_date,
 )
 
-DISABLED_MATERIALIZATION_VERSION = 1
-ILLEGAL_VALUE_IN_SET = "Illegal value in set."
-ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
-INT_FLOAT_EXPECTED = "Int/Float expected"
-INT_EXPECTED = "Int expected"
-
 logger = logging.getLogger(__name__)
 
 # test message:
 # {"org_id": 1, "project_id": 2, "use_case_id": "perf", "name": "sentry.transactions.transaction.duration", "unit": "ms", "type": "s", "value": [21, 76, 116, 142, 179], "timestamp": 1655244629, "tags": {"6": 91, "9": 134, "4": 159, "5": 34}, "metric_id": 8, "retention_days": 90, "mapping_meta": {"h": {"8": "duration", "6": "tag1", "91": "value1", "9": "tag2", "134": "value2"}, "c": {"4": "error_type", "159": "exception", "5": "tag3"}, "d": {"34": "value3"}}}
+
+# These are the hardcoded values from the materialized view
+GRANULARITY_ONE_MINUTE = 1
+GRANULARITY_ONE_HOUR = 2
+GRANULARITY_ONE_DAY = 3
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -40,9 +40,13 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
         org_id: str = message["org_id"]
         project_id: str = message["project_id"]
         metric_id: str = message["metric_id"]
+        tag_keys_comma_sep: str = ",".join(message["tags"].keys())
 
         return zlib.adler32(
-            bytearray(f"{use_case_id},{org_id},{project_id},{metric_id}", "utf-8")
+            bytearray(
+                f"{use_case_id},{org_id},{project_id},{metric_id},{tag_keys_comma_sep}",
+                "utf-8",
+            )
         )
 
     def _get_raw_values_index(self, message: Mapping[str, Any]) -> Mapping[str, str]:
@@ -94,9 +98,12 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             **self._process_values(message),
             "materialization_version": 1,
             "retention_days": retention_days,
-            # "partition": metadata.partition,
-            # "offset": metadata.offset,
             "timeseries_id": self._hash_timeseries_id(message),
+            "granularities": [
+                GRANULARITY_ONE_MINUTE,
+                GRANULARITY_ONE_HOUR,
+                GRANULARITY_ONE_DAY,
+            ],
         }
         return InsertBatch([processed], None)
 
@@ -106,12 +113,7 @@ class SetsMetricsProcessor(MetricsBucketProcessor):
         return message["type"] is not None and message["type"] == "s"
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        values = message["value"]
-        for value in values:
-            assert isinstance(
-                value, int
-            ), f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
-        return {"metric_type": OutputType.SET.value, "set_values": values}
+        return values_for_set_message(message)
 
 
 class OutputType(Enum):
