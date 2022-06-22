@@ -26,7 +26,7 @@ MarkupSafe==1.1.1
 mywsgi==1.0.3
 more-itertools==4.2.0
 mypy==0.812
-packaging==20.4
+packaging==21.3
 parsimonious==0.8.1
 py==1.11.0
 pyparsing==3.0.9
