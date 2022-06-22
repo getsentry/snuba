@@ -208,6 +208,9 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 # Enable replays ingestion
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 
+# Used to tag consumers as experimental to avoid them crash looping in production
+EXPERIMENTAL_CONSUMER_GROUPS: Set[str] = set()
+
 # Place the actual time we start ingesting on the new version.
 ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 3, 23, 0, 0, 0)
 TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(

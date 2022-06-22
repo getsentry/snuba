@@ -1,5 +1,6 @@
 import logging
 import signal
+import time
 from typing import Any, Optional, Sequence
 
 import click
@@ -133,56 +134,77 @@ def consumer(
     profile_path: Optional[str] = None,
     cooperative_rebalancing: bool = False,
 ) -> None:
+    try:
+        setup_logging(log_level)
+        setup_sentry()
+        logger.info("Consumer Starting")
+        storage_key = StorageKey(storage_name)
 
-    setup_logging(log_level)
-    setup_sentry()
-    logger.info("Consumer Starting")
-    storage_key = StorageKey(storage_name)
+        metrics = MetricsWrapper(
+            environment.metrics,
+            "consumer",
+            tags={"group": consumer_group, "storage": storage_key.value},
+        )
+        configure_metrics(StreamMetricsAdapter(metrics))
 
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={"group": consumer_group, "storage": storage_key.value},
-    )
-    configure_metrics(StreamMetricsAdapter(metrics))
+        def stats_callback(stats_json: str) -> None:
+            stats = rapidjson.loads(stats_json)
+            metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
-    def stats_callback(stats_json: str) -> None:
-        stats = rapidjson.loads(stats_json)
-        metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
+        consumer_builder = ConsumerBuilder(
+            storage_key=storage_key,
+            kafka_params=KafkaParameters(
+                raw_topic=raw_events_topic,
+                replacements_topic=replacements_topic,
+                bootstrap_servers=bootstrap_server,
+                group_id=consumer_group,
+                commit_log_topic=commit_log_topic,
+                auto_offset_reset=auto_offset_reset,
+                strict_offset_reset=not no_strict_offset_reset,
+                queued_max_messages_kbytes=queued_max_messages_kbytes,
+                queued_min_messages=queued_min_messages,
+            ),
+            processing_params=ProcessingParameters(
+                processes=processes,
+                input_block_size=input_block_size,
+                output_block_size=output_block_size,
+            ),
+            max_batch_size=max_batch_size,
+            max_batch_time_ms=max_batch_time_ms,
+            metrics=metrics,
+            profile_path=profile_path,
+            stats_callback=stats_callback,
+            parallel_collect=parallel_collect,
+            cooperative_rebalancing=cooperative_rebalancing,
+        )
 
-    consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
-        kafka_params=KafkaParameters(
-            raw_topic=raw_events_topic,
-            replacements_topic=replacements_topic,
-            bootstrap_servers=bootstrap_server,
-            group_id=consumer_group,
-            commit_log_topic=commit_log_topic,
-            auto_offset_reset=auto_offset_reset,
-            strict_offset_reset=not no_strict_offset_reset,
-            queued_max_messages_kbytes=queued_max_messages_kbytes,
-            queued_min_messages=queued_min_messages,
-        ),
-        processing_params=ProcessingParameters(
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-        ),
-        max_batch_size=max_batch_size,
-        max_batch_time_ms=max_batch_time_ms,
-        metrics=metrics,
-        profile_path=profile_path,
-        stats_callback=stats_callback,
-        parallel_collect=parallel_collect,
-        cooperative_rebalancing=cooperative_rebalancing,
-    )
+        consumer = consumer_builder.build_base_consumer()
 
-    consumer = consumer_builder.build_base_consumer()
+        def handler(signum: int, frame: Any) -> None:
+            consumer.signal_shutdown()
 
-    def handler(signum: int, frame: Any) -> None:
-        consumer.signal_shutdown()
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
 
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
+        consumer.run()
 
-    consumer.run()
+    except Exception:
+        if consumer_group not in settings.EXPERIMENTAL_CONSUMER_GROUPS:
+            raise
+
+        logger.exception(
+            "An experimental consumer crashed!",
+            extra={"consumer_group": consumer_group, "storage": storage_key.value},
+        )
+
+        logger.info(f"Experimental consumer for {consumer_group} has crashed!")
+        logger.info("Keeping process alive to avoid crash loop...")
+
+        def handler(signum: int, frame: Any) -> None:
+            exit()
+
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        while True:
+            time.sleep(10000)
