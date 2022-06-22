@@ -41,7 +41,6 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("metric_type", String(Modifiers(low_cardinality=True))),
         Column("materialization_version", UInt(8)),
         Column("timeseries_id", UInt(32)),
-        Column("granularities", Array(UInt(8))),
         Column("partition", UInt(16)),
         Column("offset", UInt(64)),
     ]
