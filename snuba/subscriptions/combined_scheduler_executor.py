@@ -212,8 +212,10 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         assert mode is not None, "Entity is not subscriptable"
         return mode
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
         execute_step = self.__executor_factory.create(commit)
         return TickBuffer(
