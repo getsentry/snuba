@@ -58,8 +58,6 @@ aggregated_columns = [
             [("key", UInt(64)), ("indexed_value", UInt(64)), ("raw_value", String())]
         ),
     ),
-    Column("_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
-    Column("_indexed_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
     Column("timeseries_id", UInt(32)),
 ]
 
@@ -73,6 +71,13 @@ sets_storage = ReadableTableStorage(
         columns=ColumnSet(
             [
                 *aggregated_columns,
+                Column(
+                    "_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))
+                ),
+                Column(
+                    "_indexed_tags_hash",
+                    Array(UInt(64), SchemaModifiers(readonly=True)),
+                ),
                 Column("granularity", UInt(8)),
                 Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
             ]
@@ -91,6 +96,7 @@ sets_bucket_storage = WritableTableStorage(
         columns=ColumnSet(
             [
                 *aggregated_columns,
+                Column("granularities", Array(UInt(8))),
                 Column("count_value", Float(64)),
                 Column("set_values", Array(UInt(64))),
                 Column("distribution_values", Array(Float(64))),
