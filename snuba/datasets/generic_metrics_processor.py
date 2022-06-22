@@ -22,38 +22,8 @@ INT_EXPECTED = "Int expected"
 
 logger = logging.getLogger(__name__)
 
-"""
-{
-    "org_id":1,
-    "project_id":2,
-    "use_case_id":"perf",
-    "name":"sentry.transactions.transaction.duration",
-    "unit":"ms",
-    "type":"s",
-    "value":[21,76,116,142,179],
-    "timestamp":1655244629,
-    "tags":{"6":91,"9":134,"4":159,"5":34},
-    "metric_id":8,
-    "retention_days":90,
-    "mapping_meta": {
-        "h": {
-            "8": "duration",
-            "6": "tag1",
-            "91": "value1",
-            "9": "tag2",
-            "134": "value2"
-        },
-        "c": {
-            "4": "error_type",
-            "159": "exception",
-            "5": "tag3"
-        },
-        "d": {
-            "34": "value3"
-        }
-    }
-}
-"""
+# test message:
+# {"org_id": 1, "project_id": 2, "use_case_id": "perf", "name": "sentry.transactions.transaction.duration", "unit": "ms", "type": "s", "value": [21, 76, 116, 142, 179], "timestamp": 1655244629, "tags": {"6": 91, "9": 134, "4": 159, "5": 34}, "metric_id": 8, "retention_days": 90, "mapping_meta": {"h": {"8": "duration", "6": "tag1", "91": "value1", "9": "tag2", "134": "value2"}, "c": {"4": "error_type", "159": "exception", "5": "tag3"}, "d": {"34": "value3"}}}
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -78,7 +48,7 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
     def _get_raw_values_index(self, message: Mapping[str, Any]) -> Mapping[str, str]:
         acc: MutableMapping[str, str] = dict()
         for _, values in message["mapping_meta"].items():
-            assert isinstance(values, Mapping), "Invalid tags type"
+            assert isinstance(values, Mapping), "Invalid mapping metadata"
             acc.update(values)
 
         return acc
@@ -86,7 +56,6 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        # TODO: Support messages with multiple buckets
         if not self._should_process(message):
             return None
 
