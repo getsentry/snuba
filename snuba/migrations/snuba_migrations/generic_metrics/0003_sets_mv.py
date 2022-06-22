@@ -50,13 +50,13 @@ class Migration(migration.ClickhouseNodeMigration):
                     org_id,
                     project_id,
                     metric_id,
-                    arrayJoin([0,1,2,3]) as granularity,
+                    arrayJoin(granularities) as granularity,
                     tags.key,
                     tags.indexed_value,
                     tags.raw_value,
                     toDateTime(multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1) *
                       intDiv(toUnixTimestamp(timestamp),
-                             multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as timestamp,
+                        multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as timestamp,
                     retention_days,
                     uniqCombined64State(arrayJoin(set_values)) as value
                 FROM generic_metric_sets_raw_local
