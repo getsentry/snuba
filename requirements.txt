@@ -46,5 +46,5 @@ sentry-sdk==1.5.10
 simplejson==3.15.0
 urllib3==1.26.9
 uWSGI==2.0.20
-wcwidth==0.1.7
+wcwidth==0.2.5
 Werkzeug==2.0.3
