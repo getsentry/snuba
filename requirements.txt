@@ -14,7 +14,7 @@ docopt==0.6.2
 flake8==4.0.1
 Flask==1.0.2
 future==0.18.2
-honcho==1.0.1
+honcho==1.1.0
 idna==3.3
 isort==5.8.0
 itsdangerous==0.24
