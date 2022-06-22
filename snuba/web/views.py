@@ -403,7 +403,7 @@ def _trace_transaction(dataset: Dataset) -> None:
             scope.transaction = f"{scope.transaction.name}__{get_dataset_name(dataset)}__{http_request.referrer}"
 
 
-@application.route("/query", methods=["GET", "POST"])
+@application.route("/query", methods=["GET", "POST"])  # type: ignore
 @util.time_request("query")
 def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
     if http_request.method == "GET":
