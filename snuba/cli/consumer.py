@@ -186,6 +186,11 @@ def consumer(
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
 
+        # TODO: Remove block after experimental consumer deploy test
+        if consumer_group == "experimental-consumers":
+            logger.info("Breaking experimental consumer...")
+            raise Exception("Testing broken consumer fallback logic")
+
         consumer.run()
 
     except Exception:
