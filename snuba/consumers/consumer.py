@@ -915,10 +915,15 @@ class MultistorageConsumerProcessingStrategyFactory(
             parallel_collect=parallel_collect,
         )
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
         return TransformStep(
             partial(find_destination_storages, self.__storages),
-            FilterStep(has_destination_storages, self.__inner_factory.create(commit)),
+            FilterStep(
+                has_destination_storages,
+                self.__inner_factory.create_with_partitions(commit, partitions),
+            ),
         )

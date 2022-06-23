@@ -51,6 +51,7 @@ def test_combined_scheduler_and_executor() -> None:
     metrics = TestingMetricsBackend()
 
     commit = mock.Mock()
+    partitions = mock.Mock()
 
     topic = Topic("snuba-commit-log")
     partition = Partition(topic, 0)
@@ -76,7 +77,7 @@ def test_combined_scheduler_and_executor() -> None:
             schedule_ttl,
         )
 
-        strategy = factory.create(commit)
+        strategy = factory.create_with_partitions(commit, partitions)
 
         message = Message(
             partition,

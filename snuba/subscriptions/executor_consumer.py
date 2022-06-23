@@ -166,8 +166,10 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__result_topic = result_topic
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
         return ExecuteQuery(
             self.__dataset,

@@ -40,7 +40,7 @@ python-dateutil==2.7.3
 pytz==2022.1
 python-rapidjson==1.4
 redis==4.3.3
-sentry-arroyo==0.1.0
+sentry-arroyo==0.2.0
 sentry-relay==0.8.12
 sentry-sdk==1.5.10
 simplejson==3.15.0
