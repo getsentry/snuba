@@ -34,6 +34,7 @@ common_columns: List[Column[Modifiers]] = [
 raw_columns: List[Column[Modifiers]] = common_columns + [
     Column("durations", Array(Float(64))),
     Column("profile_id", UUID()),
+    Column("materialization_version", UInt(8)),
 ]
 
 agg_columns: List[Column[Modifiers]] = common_columns + [
@@ -206,6 +207,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 argMaxState(profile_id, duration) as worst,
                 groupUniqArrayState(5)(profile_id) as examples
             FROM {self.local_raw_table}
+            WHERE materialization_version = 0
             GROUP BY
                 project_id,
                 transaction_name,
