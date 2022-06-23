@@ -5,6 +5,7 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
+from snuba.datasets.metrics_messages import is_set_message
 from snuba.processor import (
     AggregateInsertBatch,
     MessageProcessor,
@@ -34,7 +35,6 @@ def _call(function_name: str, arguments: Tuple[Expression, ...]) -> FunctionCall
     return FunctionCall(None, function_name, arguments)
 
 
-METRICS_SET_TYPE = "s"
 METRICS_DISTRIBUTIONS_TYPE = "d"
 METRICS_COUNTERS_TYPE = "c"
 
@@ -110,11 +110,7 @@ class MetricsAggregateProcessor(MessageProcessor, ABC):
 
 class SetsAggregateProcessor(MetricsAggregateProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return (
-            settings.WRITE_METRICS_AGG_DIRECTLY
-            and message["type"] is not None
-            and message["type"] == METRICS_SET_TYPE
-        )
+        return settings.WRITE_METRICS_AGG_DIRECTLY and is_set_message(message)
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]

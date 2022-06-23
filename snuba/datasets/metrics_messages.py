@@ -2,6 +2,12 @@ from enum import Enum
 from typing import Any, Mapping
 
 
+class InputType(Enum):
+    SET = "s"
+    COUNTER = "c"
+    DISTRIBUTION = "d"
+
+
 class OutputType(Enum):
     SET = "set"
     COUNTER = "counter"
@@ -13,7 +19,7 @@ INT_EXPECTED = "Int expected"
 
 
 def is_set_message(message: Mapping[str, Any]) -> bool:
-    return message["type"] is not None and message["type"] == "s"
+    return message["type"] is not None and message["type"] == InputType.SET.value
 
 
 def values_for_set_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
