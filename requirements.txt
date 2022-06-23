@@ -38,7 +38,7 @@ pluggy==0.13.0
 progressbar2==4.0.0
 python-dateutil==2.7.3
 pytz==2022.1
-python-rapidjson==1.4
+python-rapidjson==1.6
 redis==4.3.3
 sentry-arroyo==0.2.0
 sentry-relay==0.8.12
