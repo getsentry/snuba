@@ -10,7 +10,7 @@ from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import MatchResult, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.processors.pattern_replacer import PatternReplacer
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 test_data = [
     pytest.param(
@@ -87,5 +87,5 @@ def test_pattern_replacer_format_expressions(
     PatternReplacer(
         Param("column", ColumnMatch(None, StringMatch("column1"))),
         transform,
-    ).process_query(unprocessed, HTTPRequestSettings())
+    ).process_query(unprocessed, HTTPQuerySettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()

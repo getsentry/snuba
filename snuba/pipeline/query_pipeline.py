@@ -7,8 +7,8 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.query.logical import Query
+from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
@@ -17,7 +17,7 @@ TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
 class QueryPlanner(ABC, Generic[TPlan]):
     """
     A QueryPlanner contains a series of steps that, given a logical
-    query and request settings, executes all the logical query processing
+    query and request.query_settings, executes all the logical query processing
     translates the query and compiles a query plan that can be used
     to execute the query.
 
@@ -73,6 +73,6 @@ class QueryPipelineBuilder(ABC, Generic[TPlan]):
 
     @abstractmethod
     def build_planner(
-        self, query: Query, settings: RequestSettings
+        self, query: Query, settings: QuerySettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
         raise NotImplementedError

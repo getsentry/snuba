@@ -2059,9 +2059,6 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["data"] == []
 
-        # make sure redis has _something_ before we go about dropping all the keys in it
-        assert self.redis_db_size() > 0
-
         storage = get_writable_storage(StorageKey.ERRORS)
         clickhouse = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.QUERY

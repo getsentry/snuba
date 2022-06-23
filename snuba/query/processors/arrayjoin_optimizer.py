@@ -18,7 +18,7 @@ from snuba.query.matchers import Column, FunctionCall, Or, Param, String
 from snuba.query.processors.abstract_array_join_optimizer import (
     AbstractArrayJoinOptimizer,
 )
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
@@ -84,7 +84,7 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
 
         return alias
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         array_joins_in_query = self.__get_array_joins_in_query(query)
 
         tuple_alias = self.__get_unused_alias(query)

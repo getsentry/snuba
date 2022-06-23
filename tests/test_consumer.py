@@ -84,7 +84,8 @@ def test_streaming_consumer_strategy() -> None:
     )
 
     commit_function = Mock()
-    strategy = factory.create(commit_function)
+    partitions = Mock()
+    strategy = factory.create_with_partitions(commit_function, partitions)
 
     for i in range(3):
         strategy.poll()
@@ -160,6 +161,7 @@ def test_multistorage_strategy(
     from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
 
     commit = Mock()
+    partitions = Mock()
 
     storages = [groupassignees.storage, groupedmessages.storage]
 
@@ -174,7 +176,7 @@ def test_multistorage_strategy(
         TestingMetricsBackend(),
         None,
         None,
-    ).create(commit)
+    ).create_with_partitions(commit, partitions)
 
     payloads = [
         KafkaPayload(None, b"{}", [("table", b"ignored")]),
@@ -246,6 +248,7 @@ def test_multistorage_strategy_dead_letter_step(
     mock_close.side_effect = ClickhouseWriterError("oops", code=500, row=None)
 
     commit = Mock()
+    partitions = Mock()
     storage_keys = [StorageKey.ERRORS_V2, StorageKey.TRANSACTIONS_V2]
 
     storages = [get_writable_storage(key) for key in storage_keys]
@@ -261,7 +264,7 @@ def test_multistorage_strategy_dead_letter_step(
         TestingMetricsBackend(),
         producer,
         topic,
-    ).create(commit)
+    ).create_with_partitions(commit, partitions)
 
     payloads = [
         KafkaPayload(
@@ -382,12 +385,13 @@ def test_metrics_writing_e2e() -> None:
     )
 
     commit = Mock()
+    partitions = Mock()
 
     storages = [polymorphic_bucket]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
         storages, 10, 10, False, None, None, None, TestingMetricsBackend(), None, None
-    ).create(commit)
+    ).create_with_partitions(commit, partitions)
 
     payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
     now = datetime.now()

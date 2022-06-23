@@ -11,7 +11,7 @@ from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param, String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class ColumnTypeError(ValidationException):
@@ -96,7 +96,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
             ]
         )
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         query.transform_expressions(
             self._process_expressions, skip_transform_condition=True
         )

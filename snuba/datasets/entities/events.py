@@ -36,8 +36,8 @@ from snuba.query.processors.object_id_rate_limiter import (
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
-from snuba.request.request_settings import RequestSettings
 
 event_translator = TranslationMappers(
     columns=[
@@ -103,11 +103,11 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         self.__mappers = mappers
 
     def select_storage(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
         use_readonly_storage = (
             state.get_config("enable_events_readonly_table", False)
-            and not request_settings.get_consistent()
+            and not query_settings.get_consistent()
         )
 
         storage = (
@@ -123,9 +123,9 @@ class ErrorsV2QueryStorageSelector(QueryStorageSelector):
         self.__mappers = mappers
 
     def select_storage(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
-        use_readonly_storage = not request_settings.get_consistent()
+        use_readonly_storage = not query_settings.get_consistent()
 
         storage = (
             self.__errors_ro_table if use_readonly_storage else self.__errors_table
