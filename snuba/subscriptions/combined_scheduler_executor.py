@@ -180,6 +180,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         self.__executor_factory = SubscriptionExecutorProcessingFactory(
             max_concurrent_queries,
             total_concurrent_queries,
+            self.__partitions,
             dataset,
             entity_names,
             producer,

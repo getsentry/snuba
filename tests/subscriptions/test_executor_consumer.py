@@ -14,7 +14,7 @@ from arroyo.processing.strategies import MessageRejected
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
-from snuba import state
+from snuba import settings, state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -58,6 +58,8 @@ def test_executor_consumer() -> None:
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS])
+
+    settings.TOPIC_PARTITION_COUNTS = {"scheduled-subscriptions-events": 2}
 
     dataset_name = "events"
     entity_name = "events"
@@ -171,6 +173,8 @@ def test_executor_consumer() -> None:
 
     result_producer.close()
 
+    settings.TOPIC_PARTITION_COUNTS = {}
+
 
 def generate_message(
     entity_key: EntityKey,
@@ -225,12 +229,14 @@ def test_execute_query_strategy() -> None:
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
     commit = mock.Mock()
+    partition_count = 1
 
     strategy = ExecuteQuery(
         dataset,
         entity_names,
         max_concurrent_queries,
         total_concurrent_queries,
+        partition_count,
         None,
         metrics,
         next_step,
@@ -268,12 +274,14 @@ def test_too_many_concurrent_queries() -> None:
     commit = mock.Mock()
 
     total_concurrent_queries = 4
+    partition_count = 1
 
     strategy = ExecuteQuery(
         dataset,
         entity_names,
         4,
         total_concurrent_queries,
+        partition_count,
         None,
         metrics,
         next_step,
@@ -304,12 +312,14 @@ def test_skip_execution_for_entity() -> None:
     commit = mock.Mock()
 
     total_concurrent_queries = 4
+    partition_count = 1
 
     strategy = ExecuteQuery(
         dataset,
         entity_names,
         4,
         total_concurrent_queries,
+        partition_count,
         None,
         metrics,
         next_step,
@@ -418,12 +428,14 @@ def test_execute_and_produce_result() -> None:
     producer = broker.get_producer()
 
     commit = mock.Mock()
+    partition_count = 1
 
     strategy = ExecuteQuery(
         dataset,
         entity_names,
         max_concurrent_queries,
         total_concurrent_queries,
+        partition_count,
         None,
         metrics,
         ProduceResult(producer, result_topic.name, commit),
@@ -466,6 +478,7 @@ def test_skip_stale_message() -> None:
     producer = broker.get_producer()
 
     commit = mock.Mock()
+    partition_count = 1
 
     stale_threshold_seconds = 60
 
@@ -474,6 +487,7 @@ def test_skip_stale_message() -> None:
         entity_names,
         max_concurrent_queries,
         total_concurrent_queries,
+        partition_count,
         stale_threshold_seconds,
         metrics,
         ProduceResult(producer, result_topic.name, commit),

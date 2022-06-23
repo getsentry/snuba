@@ -129,12 +129,15 @@ def build_executor_consumer(
     if cooperative_rebalancing is True:
         consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
+    partition_count = scheduled_topic_spec.partitions_number
+
     return StreamProcessor(
         KafkaConsumer(consumer_configuration),
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
             max_concurrent_queries,
             total_concurrent_queries,
+            partition_count,
             dataset,
             entity_names,
             producer,
@@ -150,6 +153,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self,
         max_concurrent_queries: int,
         total_concurrent_queries: int,
+        partition_count: int,
         dataset: Dataset,
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
@@ -159,6 +163,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
     ) -> None:
         self.__max_concurrent_queries = max_concurrent_queries
         self.__total_concurrent_queries = total_concurrent_queries
+        self.__partition_count = partition_count
         self.__dataset = dataset
         self.__entity_names = entity_names
         self.__producer = producer
@@ -176,6 +181,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__entity_names,
             self.__max_concurrent_queries,
             self.__total_concurrent_queries,
+            self.__partition_count,
             self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
@@ -195,6 +201,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         entity_names: Sequence[str],
         max_concurrent_queries: int,
         total_concurrent_queries: int,
+        partition_count: int,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
@@ -207,6 +214,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__entity_names = set(entity_names)
         self.__max_concurrent_queries = max_concurrent_queries
         self.__total_concurrent_queries = total_concurrent_queries
+        self.__partition_count = partition_count
         self.__executor = ThreadPoolExecutor(self.__max_concurrent_queries)
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
