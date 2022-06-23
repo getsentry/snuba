@@ -5,7 +5,7 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
-from snuba.datasets.metrics_messages import is_set_message
+from snuba.datasets.metrics_messages import InputType, is_set_message
 from snuba.processor import (
     AggregateInsertBatch,
     MessageProcessor,
@@ -33,10 +33,6 @@ def _array_literal(values: Sequence[OptionalScalarType]) -> FunctionCall:
 
 def _call(function_name: str, arguments: Tuple[Expression, ...]) -> FunctionCall:
     return FunctionCall(None, function_name, arguments)
-
-
-METRICS_DISTRIBUTIONS_TYPE = "d"
-METRICS_COUNTERS_TYPE = "c"
 
 
 def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
@@ -131,7 +127,7 @@ class CounterAggregateProcessor(MetricsAggregateProcessor):
         return (
             settings.WRITE_METRICS_AGG_DIRECTLY
             and message["type"] is not None
-            and message["type"] == METRICS_COUNTERS_TYPE
+            and message["type"] == InputType.COUNTER.value
         )
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -156,7 +152,7 @@ class DistributionsAggregateProcessor(MetricsAggregateProcessor):
         return (
             settings.WRITE_METRICS_AGG_DIRECTLY
             and message["type"] is not None
-            and message["type"] == METRICS_DISTRIBUTIONS_TYPE
+            and message["type"] == InputType.DISTRIBUTION.value
         )
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:

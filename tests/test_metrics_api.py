@@ -10,11 +10,7 @@ from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.metrics_aggregate_processor import (
-    METRICS_COUNTERS_TYPE,
-    METRICS_DISTRIBUTIONS_TYPE,
-    timestamp_to_bucket,
-)
+from snuba.datasets.metrics_aggregate_processor import timestamp_to_bucket
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
@@ -103,7 +99,7 @@ class TestMetricsApiCounters(BaseApiTest):
                                 "org_id": self.org_id,
                                 "project_id": p,
                                 "unit": "ms",
-                                "type": METRICS_COUNTERS_TYPE,
+                                "type": InputType.COUNTER.value,
                                 "value": 1.0,
                                 "timestamp": self.base_time.timestamp() + n,
                                 "tags": self.default_tags,
@@ -250,7 +246,7 @@ class TestOrgMetricsApiCounters(BaseApiTest):
                                     "org_id": org_id,
                                     "project_id": project_id,
                                     "unit": "ms",
-                                    "type": METRICS_COUNTERS_TYPE,
+                                    "type": InputType.COUNTER.value,
                                     "value": 1.0,
                                     "tags": {},
                                     "timestamp": self.base_time.timestamp() + n,
@@ -482,7 +478,7 @@ class TestMetricsApiDistributions(BaseApiTest):
                 msg = {
                     "org_id": self.org_id,
                     "project_id": p,
-                    "type": METRICS_DISTRIBUTIONS_TYPE,
+                    "type": InputType.DISTRIBUTION.value,
                     "value": value_array,
                     "timestamp": self.base_time.timestamp() + n,
                     "tags": self.default_tags,
