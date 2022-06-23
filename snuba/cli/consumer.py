@@ -192,19 +192,25 @@ def consumer(
         if consumer_group not in settings.EXPERIMENTAL_CONSUMER_GROUPS:
             raise
 
+        tags = {"consumer_group": consumer_group, "storage": storage_key.value}
+        KEEPALIVE_METRIC = "broken_consumer_keepalive"
+
         logger.exception(
             "An experimental consumer crashed!",
-            extra={"consumer_group": consumer_group, "storage": storage_key.value},
+            extra=tags,
         )
 
         logger.info(f"Experimental consumer for {consumer_group} has crashed!")
         logger.info("Keeping process alive to avoid crash loop...")
 
         def handler(signum: int, frame: Any) -> None:
+            metrics.increment(KEEPALIVE_METRIC, -1, tags)
             exit()
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
+
+        metrics.increment(KEEPALIVE_METRIC, 1, tags)
 
         while True:
             time.sleep(10000)
