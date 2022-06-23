@@ -114,10 +114,6 @@ sets_bucket_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=GenericSetsMetricsProcessor(),
         default_topic=Topic.GENERIC_METRICS,
-        # commit_log_topic=Topic.METRICS_COMMIT_LOG,
-        # subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
-        # subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
-        # subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
     ),
 )
