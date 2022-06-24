@@ -12,18 +12,18 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger("snuba.optimize")
 metrics = MetricsWrapper(environment.metrics, "optimize")
 
 
-class JobTimeoutException(SerializableException):
+class JobTimeoutException(Exception):
     """
     Signals that the job is past the cutoff time
     """
 
-    pass
+    def __init__(self, cutoff_time: datetime):
+        self.cutoff_time = cutoff_time
 
 
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
@@ -331,6 +331,7 @@ def optimize_partition_runner(
             try:
                 threads[i].join()
             except JobTimeoutException:
+
                 pass
 
         # If there are still partitions needing optimization then move on to the
@@ -359,7 +360,8 @@ def optimize_partitions(
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
             raise JobTimeoutException(
-                "Optimize job is running past the cutoff time. Abandoning."
+                "Optimize job is running past the cutoff time. Abandoning.",
+                cutoff_time=cutoff_time,
             )
 
         args = {
