@@ -31,13 +31,10 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
 
-    def _hash_timeseries_id(self, message: Mapping[str, Any]) -> int:
-        """
-        _hash_timeseries_id should return a UInt32 whose distribution should shard
-        as evenly as possible while ensuring that an average query will not have to
-        cross shards to read a results (so for the same org, project, metric, and tags
-        ClickHouse should not have to aggregate results from multiple nodes).
-        """
+    #
+    # This is mainly split out from _hash_timeseries_id for unit-testing purposes
+    #
+    def _timeseries_id_token(self, message: Mapping[str, Any]) -> bytearray:
         field_separator: int = ord(";")
         kv_separator: int = ord(",")
         kv_assign: int = ord("=")
@@ -48,16 +45,25 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
 
         buffer = bytearray()
         for field in [org_id, project_id, metric_id]:
-            buffer.extend(field.to_bytes(length=8, byteorder="little"))
+            buffer.extend(field.to_bytes(length=4, byteorder="little"))
             buffer.append(field_separator)
-
         for (key, value) in sorted_tag_items:
             buffer.extend(bytes(key, "utf-8"))
             buffer.append(kv_assign)
-            buffer.append(value)
+            buffer.extend(value.to_bytes(length=4, byteorder="little"))
             buffer.append(kv_separator)
 
-        return zlib.adler32(buffer)
+        return buffer
+
+    def _hash_timeseries_id(self, message: Mapping[str, Any]) -> int:
+        """
+        _hash_timeseries_id should return a UInt32 whose distribution should shard
+        as evenly as possible while ensuring that an average query will not have to
+        cross shards to read a results (so for the same org, project, metric, and tags
+        ClickHouse should not have to aggregate results from multiple nodes).
+        """
+        token = self._timeseries_id_token(message)
+        return zlib.adler32(token)
 
     def _get_raw_values_index(self, message: Mapping[str, Any]) -> Mapping[str, str]:
         acc: MutableMapping[str, str] = dict()
