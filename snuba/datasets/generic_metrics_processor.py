@@ -2,7 +2,7 @@ import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
@@ -38,18 +38,26 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         cross shards to read a results (so for the same org, project, metric, and tags
         ClickHouse should not have to aggregate results from multiple nodes).
         """
-        use_case_id: str = message.get("use_case_id") or ""
-        org_id: str = message["org_id"]
-        project_id: str = message["project_id"]
-        metric_id: str = message["metric_id"]
-        tag_keys_comma_sep: str = ",".join(message["tags"].keys())
+        field_separator: int = ord(";")
+        kv_separator: int = ord(",")
+        kv_assign: int = ord("=")
+        org_id: int = message["org_id"]
+        project_id: int = message["project_id"]
+        metric_id: int = message["metric_id"]
+        sorted_tag_items: Sequence[Tuple[str, int]] = sorted(message["tags"].items())
 
-        return zlib.adler32(
-            bytearray(
-                f"{use_case_id},{org_id},{project_id},{metric_id},{tag_keys_comma_sep}",
-                "utf-8",
-            )
-        )
+        buffer = bytearray()
+        for field in [org_id, project_id, metric_id]:
+            buffer.extend(field.to_bytes(length=8, byteorder="little"))
+            buffer.append(field_separator)
+
+        for (key, value) in sorted_tag_items:
+            buffer.extend(bytes(key, "utf-8"))
+            buffer.append(kv_assign)
+            buffer.append(value)
+            buffer.append(kv_separator)
+
+        return zlib.adler32(buffer)
 
     def _get_raw_values_index(self, message: Mapping[str, Any]) -> Mapping[str, str]:
         acc: MutableMapping[str, str] = dict()
