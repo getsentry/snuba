@@ -23,10 +23,12 @@ class Topic(Enum):
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
     REPLAYEVENTS = "snuba-replay-events"
+    GENERIC_METRICS = "snuba-generic-metrics"
 
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
     DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
+    DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
@@ -36,5 +38,6 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
         Topic.REPLAYEVENTS: {"message.timestamp.type": "LogAppendTime"},
+        Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
     }
     return config.get(topic, {})
