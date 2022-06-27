@@ -39,9 +39,6 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         message: Mapping[str, Any],
         sorted_tag_items: Iterable[Tuple[str, int]],
     ) -> bytearray:
-        field_separator: int = ord(";")
-        kv_separator: int = ord(",")
-        kv_assign: int = ord("=")
         org_id: int = message["org_id"]
         project_id: int = message["project_id"]
         metric_id: int = message["metric_id"]
@@ -49,12 +46,9 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         buffer = bytearray()
         for field in [org_id, project_id, metric_id]:
             buffer.extend(field.to_bytes(length=4, byteorder="little"))
-            buffer.append(field_separator)
         for (key, value) in sorted_tag_items:
             buffer.extend(bytes(key, "utf-8"))
-            buffer.append(kv_assign)
             buffer.extend(value.to_bytes(length=4, byteorder="little"))
-            buffer.append(kv_separator)
 
         return buffer
 
