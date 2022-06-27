@@ -2,7 +2,7 @@ import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Iterable, Mapping, MutableMapping, Optional, Tuple
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
@@ -34,14 +34,17 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
     #
     # This is mainly split out from _hash_timeseries_id for unit-testing purposes
     #
-    def _timeseries_id_token(self, message: Mapping[str, Any]) -> bytearray:
+    def _timeseries_id_token(
+        self,
+        message: Mapping[str, Any],
+        sorted_tag_items: Iterable[Tuple[str, int]],
+    ) -> bytearray:
         field_separator: int = ord(";")
         kv_separator: int = ord(",")
         kv_assign: int = ord("=")
         org_id: int = message["org_id"]
         project_id: int = message["project_id"]
         metric_id: int = message["metric_id"]
-        sorted_tag_items: Sequence[Tuple[str, int]] = sorted(message["tags"].items())
 
         buffer = bytearray()
         for field in [org_id, project_id, metric_id]:
@@ -55,14 +58,16 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
 
         return buffer
 
-    def _hash_timeseries_id(self, message: Mapping[str, Any]) -> int:
+    def _hash_timeseries_id(
+        self, message: Mapping[str, Any], sorted_tag_items: Iterable[Tuple[str, int]]
+    ) -> int:
         """
         _hash_timeseries_id should return a UInt32 whose distribution should shard
         as evenly as possible while ensuring that an average query will not have to
         cross shards to read a results (so for the same org, project, metric, and tags
         ClickHouse should not have to aggregate results from multiple nodes).
         """
-        token = self._timeseries_id_token(message)
+        token = self._timeseries_id_token(message, sorted_tag_items)
         return zlib.adler32(token)
 
     def _get_raw_values_index(self, message: Mapping[str, Any]) -> Mapping[str, str]:
@@ -87,7 +92,8 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         tags = message["tags"]
         assert isinstance(tags, Mapping), "Invalid tags type"
 
-        for key, value in sorted(tags.items()):
+        sorted_tag_items = sorted(tags.items())
+        for key, value in sorted_tag_items:
             assert key.isdigit() and isinstance(value, int), "Tag key/value invalid"
             keys.append(int(key))
             indexed_values.append(value)
@@ -112,7 +118,7 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
             **self._process_values(message),
             "materialization_version": 1,
             "retention_days": retention_days,
-            "timeseries_id": self._hash_timeseries_id(message),
+            "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
             "granularities": [
                 GRANULARITY_ONE_MINUTE,
                 GRANULARITY_ONE_HOUR,

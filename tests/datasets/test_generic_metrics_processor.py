@@ -1,5 +1,6 @@
 from copy import deepcopy
 from datetime import datetime, timezone
+from typing import Any, Iterable, Mapping, Tuple
 
 import pytest
 
@@ -30,7 +31,6 @@ BASE_MESSAGE = {
     "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": [324234, 345345, 456456, 567567],
-    # test enforce retention days of 30
     "retention_days": 22,
     "mapping_meta": MAPPING_META_COMMON,
 }
@@ -41,13 +41,35 @@ def processor() -> GenericMetricsBucketProcessor:
     return GenericSetsMetricsProcessor()
 
 
+def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[Tuple[str, int]]:
+    tags = message["tags"]
+    return sorted(tags.items())
+
+
+def assert_invariant_timeseries_id(
+    processor: GenericMetricsBucketProcessor,
+    m1: Mapping[str, Any],
+    m2: Mapping[str, Any],
+) -> None:
+    token = processor._timeseries_id_token(m1, sorted_tag_items(m1))
+    token2 = processor._timeseries_id_token(m2, sorted_tag_items(m2))
+    assert token == token2
+
+
+def assert_variant_timeseries_id(
+    processor: GenericMetricsBucketProcessor,
+    m1: Mapping[str, Any],
+    m2: Mapping[str, Any],
+) -> None:
+    token = processor._timeseries_id_token(m1, sorted_tag_items(m1))
+    token2 = processor._timeseries_id_token(m2, sorted_tag_items(m2))
+    assert token != token2
+
+
 def test_timeseries_id_token_is_deterministic(
     processor: GenericMetricsBucketProcessor,
 ) -> None:
-    token = processor._timeseries_id_token(BASE_MESSAGE)
-    token2 = processor._timeseries_id_token(BASE_MESSAGE)
-
-    assert token == token2
+    assert_invariant_timeseries_id(processor, BASE_MESSAGE, BASE_MESSAGE)
 
 
 def test_timeseries_id_token_varies_with_org_id(
@@ -56,10 +78,7 @@ def test_timeseries_id_token_varies_with_org_id(
     message_2 = deepcopy(BASE_MESSAGE)
     message_2["org_id"] = 2
 
-    token = processor._timeseries_id_token(BASE_MESSAGE)
-    token2 = processor._timeseries_id_token(message_2)
-
-    assert token != token2
+    assert_variant_timeseries_id(processor, BASE_MESSAGE, message_2)
 
 
 def test_timeseries_id_token_varies_with_metric_id(
@@ -68,10 +87,7 @@ def test_timeseries_id_token_varies_with_metric_id(
     message_2 = deepcopy(BASE_MESSAGE)
     message_2["metric_id"] = 5
 
-    token = processor._timeseries_id_token(BASE_MESSAGE)
-    token2 = processor._timeseries_id_token(message_2)
-
-    assert token != token2
+    assert_variant_timeseries_id(processor, BASE_MESSAGE, message_2)
 
 
 def test_timeseries_id_token_varies_with_indexed_tag_values(
@@ -80,10 +96,7 @@ def test_timeseries_id_token_varies_with_indexed_tag_values(
     message_2 = deepcopy(BASE_MESSAGE)
     message_2["tags"]["10"] = 666
 
-    token = processor._timeseries_id_token(BASE_MESSAGE)
-    token2 = processor._timeseries_id_token(message_2)
-
-    assert token != token2
+    assert_variant_timeseries_id(processor, BASE_MESSAGE, message_2)
 
 
 def test_timeseries_id_token_invariant_to_raw_tag_values(
@@ -92,7 +105,4 @@ def test_timeseries_id_token_invariant_to_raw_tag_values(
     message_2 = deepcopy(BASE_MESSAGE)
     message_2["mapping_meta"]["c"]["10"] = "a-new-tag-value"
 
-    token = processor._timeseries_id_token(BASE_MESSAGE)
-    token2 = processor._timeseries_id_token(message_2)
-
-    assert token == token2
+    assert_invariant_timeseries_id(processor, BASE_MESSAGE, message_2)
