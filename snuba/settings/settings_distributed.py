@@ -24,6 +24,7 @@ CLUSTERS = [
             "errors_v2",
             "errors_v2_ro",
             "profiles",
+            "functions",
             "replays",
             "generic_metrics_sets",
         },
