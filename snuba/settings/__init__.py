@@ -51,6 +51,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "errors_v2",
             "errors_v2_ro",
             "profiles",
+            "functions",
             "replays",
             "generic_metrics_sets",
         },
@@ -169,7 +170,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "replays"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions", "replays"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 

@@ -17,6 +17,7 @@ class MigrationGroup(Enum):
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
     PROFILES = "profiles"
+    FUNCTIONS = "functions"
     REPLAYS = "replays"
     GENERIC_METRICS = "generic_metrics"
 
@@ -27,6 +28,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
     MigrationGroup.PROFILES,
+    MigrationGroup.FUNCTIONS,
     MigrationGroup.REPLAYS,
     MigrationGroup.GENERIC_METRICS,
 }
@@ -237,6 +239,14 @@ class ProfilesLoader(DirectoryLoader):
         return ["0001_profiles"]
 
 
+class FunctionsLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.functions")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_functions"]
+
+
 class GenericMetricsLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.migrations.snuba_migrations.generic_metrics")
@@ -261,6 +271,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
     MigrationGroup.PROFILES: ProfilesLoader(),
+    MigrationGroup.FUNCTIONS: FunctionsLoader(),
     MigrationGroup.REPLAYS: ReplaysLoader(),
     MigrationGroup.GENERIC_METRICS: GenericMetricsLoader(),
 }
