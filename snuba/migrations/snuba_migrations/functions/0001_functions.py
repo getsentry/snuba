@@ -7,12 +7,10 @@ from snuba.clickhouse.columns import (
     Column,
     DateTime,
     Float,
-    Nested,
     String,
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
@@ -27,7 +25,11 @@ common_columns: List[Column[Modifiers]] = [
     Column("image", String()),
     Column("filename", String()),
     Column("is_application", UInt(8)),
-    Column("tags", Nested([Column("key", String()), Column("value", String())])),
+    Column("platform", String(Modifiers(low_cardinality=True))),
+    Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("os_name", String(Modifiers(low_cardinality=True))),
+    Column("os_version", String(Modifiers(low_cardinality=True))),
     Column("retention_days", UInt(16)),
 ]
 
@@ -86,37 +88,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=agg_columns,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set,
-                    order_by="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint, symbol, image, filename, is_application, tags.key, tags.value, retention_days)",
+                    order_by="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint, symbol, image, filename, is_application, platform, environment, release, os_name, os_version, retention_days)",
                     primary_key="(project_id, transaction_name, timestamp, depth, parent_fingerprint, fingerprint)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": self.index_granularity},
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
-            ),
-            operations.AddColumn(
-                storage_set=self.storage_set,
-                table_name=self.local_materialized_table,
-                column=Column(
-                    "_tags_hash",
-                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
-                ),
-                after="tags.value",
-            ),
-            operations.AddIndex(
-                storage_set=self.storage_set,
-                table_name=self.local_materialized_table,
-                index_name="bf_tags_hash",
-                index_expression="_tags_hash",
-                index_type="bloom_filter()",
-                granularity=1,
-            ),
-            operations.AddIndex(
-                storage_set=self.storage_set,
-                table_name=self.local_materialized_table,
-                index_name="bf_tags__key_hash",
-                index_expression="tags.key",
-                index_type="bloom_filter()",
-                granularity=1,
             ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set,
@@ -160,15 +137,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     sharding_key=None,
                 ),
             ),
-            operations.AddColumn(
-                storage_set=self.storage_set,
-                table_name=self.dist_materialized_table,
-                column=Column(
-                    "_tags_hash",
-                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
-                ),
-                after="tags.value",
-            ),
         ]
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
@@ -194,8 +162,11 @@ class Migration(migration.ClickhouseNodeMigration):
                 parent_fingerprint,
                 depth,
                 is_application,
-                tags.key,
-                tags.value,
+                platform,
+                environment,
+                release,
+                os_name,
+                os_version,
                 toDateTime({self.data_granularity} * intDiv(toUnixTimestamp(timestamp), {self.data_granularity})) AS timestamp,
                 retention_days,
                 countState(arrayJoin(durations) AS duration) AS count,
