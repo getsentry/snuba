@@ -28,7 +28,7 @@ def get_partition_count(topic: Topic) -> int:
                     topic=topic, override_params=override_params
                 )
             )
-            cluster_metadata = client.list_topics(topic=topic.value, timeout=1.0)
+            cluster_metadata = client.list_topics(topic=topic.value, timeout=2.0)
             break
         except KafkaException as err:
             logger.debug(
@@ -42,14 +42,12 @@ def get_partition_count(topic: Topic) -> int:
 
     logger.info(f"Checking topic metadata for {topic.value}...")
     topic_metadata = cluster_metadata.topics.get(topic.value)
+
     if not topic_metadata:
         raise InvalidTopicName(f"Topic {topic.value} was not found")
 
-    if topic_metadata.error:
-        # (TODO) handle if there is a topic error, value is KafkaError object
-        # although not sure if this is necessary give the KafkaException
-        # handling above.
-        pass
+    if topic_metadata.error is not None:
+        raise KafkaException(topic_metadata.error)
 
     total_partition_count = len(topic_metadata.partitions.keys())
     logger.info(f"Total of {total_partition_count} partition(s) for {topic.value}.")
