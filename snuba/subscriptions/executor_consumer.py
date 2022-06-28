@@ -17,7 +17,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
 from snuba import state
-from snuba.consumers.utils import get_partition_count_from_kafka_admin
+from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
@@ -108,9 +108,7 @@ def build_executor_consumer(
     )
 
     try:
-        partition_count = get_partition_count_from_kafka_admin(
-            scheduled_topic_spec.topic, logger
-        )
+        partition_count = get_partition_count(scheduled_topic_spec.topic, logger)
     except Exception:
         logger.error("partition count unavailable..", exc_info=True)
         partition_count = 0

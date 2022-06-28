@@ -8,8 +8,7 @@ from snuba.utils.streams.configuration_builder import get_default_kafka_configur
 from snuba.utils.streams.topics import Topic
 
 
-def get_partition_count_from_kafka_admin(topic: Topic, logger: Logger) -> int:
-
+def get_partition_count(topic: Topic, logger: Logger) -> int:
     override_params = {
         # Default is 60s, do we need that long?
         "socket.timeout.ms": 2000,
