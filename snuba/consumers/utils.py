@@ -1,5 +1,5 @@
+import logging
 import time
-from logging import Logger
 
 from confluent_kafka import KafkaException
 from confluent_kafka.admin import AdminClient
@@ -7,8 +7,14 @@ from confluent_kafka.admin import AdminClient
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 
+logger = logging.getLogger("snuba.consumer.utils")
 
-def get_partition_count(topic: Topic, logger: Logger) -> int:
+
+class InvalidTopicName(Exception):
+    pass
+
+
+def get_partition_count(topic: Topic) -> int:
     override_params = {
         # Default is 60s, do we need that long?
         "socket.timeout.ms": 2000,
@@ -34,11 +40,10 @@ def get_partition_count(topic: Topic, logger: Logger) -> int:
                 raise
             time.sleep(1)
 
-    try:
-        logger.info(f"Getting topic metadata for {topic.value}...")
-        topic_metadata = cluster_metadata.topics[topic.value]
-    except KeyError:
-        logger.info(f"No topic found for: {topic.value}")
+    logger.info(f"Checking topic metadata for {topic.value}...")
+    topic_metadata = cluster_metadata.topics.get(topic.value)
+    if not topic_metadata:
+        raise InvalidTopicName(f"Topic {topic.value} was not found")
 
     if topic_metadata.error:
         # (TODO) handle if there is a topic error, value is KafkaError object

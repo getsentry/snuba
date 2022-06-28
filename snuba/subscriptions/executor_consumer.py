@@ -108,7 +108,7 @@ def build_executor_consumer(
     )
 
     try:
-        partition_count = get_partition_count(scheduled_topic_spec.topic, logger)
+        partition_count = get_partition_count(scheduled_topic_spec.topic)
     except Exception:
         logger.error("partition count unavailable..", exc_info=True)
         partition_count = 0
