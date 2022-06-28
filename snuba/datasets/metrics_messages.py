@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 
 class InputType(Enum):
@@ -24,6 +24,7 @@ def is_set_message(message: Mapping[str, Any]) -> bool:
 
 def values_for_set_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
     values = message["value"]
+    assert isinstance(values, Iterable), "expected iterable of values for set"
     for value in values:
         assert isinstance(value, int), f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
     return {"metric_type": OutputType.SET.value, "set_values": values}
