@@ -24,6 +24,8 @@ def get_partition_count(topic: Topic) -> int:
             logger.info("Attempting to connect to Kafka (attempt %d)...", attempts)
             client = AdminClient(get_default_kafka_configuration(topic=topic))
             cluster_metadata = client.list_topics(timeout=2.0)
+            logger.info(f"Checking topic metadata for {topic.value}...")
+            topic_metadata = cluster_metadata.topics.get(topic.value)
             break
         except KafkaException as err:
             logger.debug(
@@ -34,9 +36,6 @@ def get_partition_count(topic: Topic) -> int:
             if attempts == 3:
                 raise
             time.sleep(1)
-
-    logger.info(f"Checking topic metadata for {topic.value}...")
-    topic_metadata = cluster_metadata.topics.get(topic.value)
 
     if not topic_metadata:
         raise InvalidTopicName(f"Topic {topic.value} was not found.")
