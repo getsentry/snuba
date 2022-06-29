@@ -136,4 +136,4 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
-        assert data["data"]["unique_values"] == self.unique_values
+        assert data["data"][0]["unique_values"] == self.unique_values
