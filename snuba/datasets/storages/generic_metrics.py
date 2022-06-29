@@ -62,7 +62,6 @@ aggregated_columns: Sequence[Column[SchemaModifiers]] = [
             [("key", UInt(64)), ("indexed_value", UInt(64)), ("raw_value", String())]
         ),
     ),
-    Column("timeseries_id", UInt(32)),
 ]
 
 sets_storage = ReadableTableStorage(
@@ -104,6 +103,7 @@ sets_bucket_storage = WritableTableStorage(
                 Column("count_value", Float(64)),
                 Column("set_values", Array(UInt(64))),
                 Column("distribution_values", Array(Float(64))),
+                Column("timeseries_id", UInt(32)),
             ]
         ),
         local_table_name="generic_metric_sets_raw_local",
