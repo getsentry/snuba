@@ -189,8 +189,11 @@ class Migration(migration.ClickhouseNodeMigration):
                 parent_fingerprint,
                 depth,
                 is_application,
-                tags.key,
-                tags.value,
+                platform,
+                environment,
+                release,
+                os_name,
+                os_version,
                 timestamp,
                 retention_days
         """
