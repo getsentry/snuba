@@ -122,7 +122,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         query_str = f"""MATCH (generic_metrics_sets)
                     SELECT uniq(value) AS unique_values BY project_id, org_id
                     WHERE org_id = {self.org_id}
-                    AND project_id = 1
+                    AND project_id = {self.project_id}
                     AND metric_id = {self.metric_id}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
@@ -133,8 +133,6 @@ class TestGenericMetricsApiSets(BaseApiTest):
             data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
         )
         data = json.loads(response.data)
-        print(query_str)
-        print(response)
 
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
