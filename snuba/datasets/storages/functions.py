@@ -8,9 +8,9 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     Float,
-    String,
-    UInt,
 )
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.functions_processor import FunctionsMessageProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -18,9 +18,10 @@ from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.utils.schemas import SchemaModifiers
 from snuba.utils.streams.topics import Topic
 
-common_columns: List[Column] = [
+common_columns: List[Column[SchemaModifiers]] = [
     Column("project_id", UInt(64)),
     Column("transaction_name", String()),
     Column("timestamp", DateTime()),
@@ -32,8 +33,8 @@ common_columns: List[Column] = [
     Column("filename", String()),
     Column("is_application", UInt(8)),
     Column("platform", String()),
-    Column("environment", String()),
-    Column("release", String()),
+    Column("environment", String(Modifiers(nullable=True))),
+    Column("release", String(Modifiers(nullable=True))),
     Column("os_name", String()),
     Column("os_version", String()),
     Column("retention_days", UInt(16)),
