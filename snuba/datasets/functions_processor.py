@@ -30,7 +30,7 @@ class FunctionsMessageProcessor(MessageProcessor):
                         "is_application": 1 if frame["is_application"] else 0,
                         "platform": message["platform"],
                         "environment": message.get("environment"),
-                        "release": message["release"],
+                        "release": message.get("release"),
                         "os_name": message["os_name"],
                         "os_version": message["os_version"],
                         "retention_days": message["retention_days"],
