@@ -12,7 +12,7 @@ from snuba.utils.streams.topics import Topic
 
 
 def test_get_partition_count() -> None:
-    entity = get_entity(EntityKey("transactions"))
+    entity = get_entity(EntityKey("events"))
     storage = entity.get_writable_storage()
 
     assert storage is not None
