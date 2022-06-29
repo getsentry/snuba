@@ -10,20 +10,17 @@ from snuba.utils.streams.topics import Topic
 logger = logging.getLogger("snuba.consumer.utils")
 
 
-class InvalidTopicName(Exception):
+class TopicNotFound(Exception):
     pass
 
 
-def get_partition_count(topic: Topic) -> int:
-    if not isinstance(topic, Topic):
-        raise InvalidTopicName("Must provide a valid Topic.")
-
+def get_partition_count(topic: Topic, timeout: float = 2.0) -> int:
     attempts = 0
     while True:
         try:
             logger.info("Attempting to connect to Kafka (attempt %d)...", attempts)
             client = AdminClient(get_default_kafka_configuration(topic=topic))
-            cluster_metadata = client.list_topics(timeout=2.0)
+            cluster_metadata = client.list_topics(timeout=timeout)
             logger.info(f"Checking topic metadata for {topic.value}...")
             topic_metadata = cluster_metadata.topics.get(topic.value)
             break
@@ -38,7 +35,7 @@ def get_partition_count(topic: Topic) -> int:
             time.sleep(1)
 
     if not topic_metadata:
-        raise InvalidTopicName(f"Topic {topic.value} was not found.")
+        raise TopicNotFound(f"Topic {topic.value} was not found.")
 
     if topic_metadata.error is not None:
         raise KafkaException(topic_metadata.error)

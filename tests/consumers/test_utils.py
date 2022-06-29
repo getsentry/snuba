@@ -1,8 +1,11 @@
+from unittest.mock import Mock, patch
+
 import pytest
 from confluent_kafka import KafkaException
+from confluent_kafka.admin import ClusterMetadata
 
 from snuba import settings
-from snuba.consumers.utils import InvalidTopicName, get_partition_count
+from snuba.consumers.utils import TopicNotFound, get_partition_count
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.utils.streams.topics import Topic
@@ -21,12 +24,11 @@ def test_get_partition_count() -> None:
     assert get_partition_count(scheduled_topic_spec.topic) == 1
 
 
-def test_invalid_topic() -> None:
-    with pytest.raises(InvalidTopicName):
-        get_partition_count("blah")  # type: ignore
-
-    with pytest.raises(InvalidTopicName):
-        get_partition_count(None)  # type: ignore
+@patch("snuba.consumers.utils.AdminClient.list_topics")
+def test_topic_not_found(mock_fn: Mock) -> None:
+    mock_fn.return_value = ClusterMetadata()
+    with pytest.raises(TopicNotFound):
+        get_partition_count(Topic.TRANSACTIONS)
 
 
 def test_invalid_broker_config() -> None:
@@ -36,4 +38,4 @@ def test_invalid_broker_config() -> None:
         }
     }
     with pytest.raises(KafkaException):
-        assert get_partition_count(Topic.TRANSACTIONS)
+        assert get_partition_count(Topic.TRANSACTIONS, 0.2)
