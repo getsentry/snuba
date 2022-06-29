@@ -22,6 +22,7 @@ def get_partition_count(topic: Topic, timeout: float = 2.0) -> int:
             client = AdminClient(get_default_kafka_configuration(topic=topic))
             cluster_metadata = client.list_topics(timeout=timeout)
             logger.info(f"Checking topic metadata for {topic.value}...")
+            logger.debug(f"All topics: {t for t in cluster_metadata.topics.keys()}")
             topic_metadata = cluster_metadata.topics.get(topic.value)
             break
         except KafkaException as err:
