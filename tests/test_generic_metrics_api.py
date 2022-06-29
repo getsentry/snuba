@@ -1,3 +1,4 @@
+import itertools
 import json
 from datetime import datetime, timedelta
 from typing import Any, Callable, Tuple, Union
@@ -7,9 +8,6 @@ import pytz
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
-
-# from snuba.datasets.entities import EntityKey
-# from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.generic_metrics import sets_bucket_storage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
@@ -85,7 +83,9 @@ class TestGenericMetricsApiSets(BaseApiTest):
                 "9223372036854776031": self.placeholder(),
             },
         }
-        self.set_values = [50, 100, 150]
+        self.unique_values = 5
+        self.set_values = range(0, self.unique_values)
+        self.set_cycle = itertools.cycle(self.set_values)
         self.use_case_id = "performance"
         self.start_time = self.base_time
         self.end_time = (
@@ -104,7 +104,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     "project_id": self.project_id,
                     "unit": "ms",
                     "type": InputType.SET.value,
-                    "value": self.set_values,
+                    "value": list(itertools.islice(self.set_cycle, 3)),
                     "timestamp": self.base_time.timestamp() + n,
                     "tags": self.default_tags,
                     "metric_id": self.metric_id,
@@ -136,3 +136,4 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
+        assert data["data"]["unique_values"] == self.unique_values
