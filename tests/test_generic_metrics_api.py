@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 from typing import Any, Callable, Tuple, Union
 
@@ -14,6 +15,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 RETENTION_DAYS = 90
+SNQL_ROUTE = "/generic_metrics/snql"
 
 
 def utc_yesterday_12_15() -> datetime:
@@ -85,6 +87,10 @@ class TestGenericMetricsApiSets(BaseApiTest):
         }
         self.set_values = [50, 100, 150]
         self.use_case_id = "performance"
+        self.start_time = self.base_time
+        self.end_time = (
+            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
+        )
         self.generate_sets()
 
     def generate_sets(self) -> None:
@@ -112,5 +118,23 @@ class TestGenericMetricsApiSets(BaseApiTest):
         ]
         write_processed_messages(self.write_storage, [row for row in rows if row])
 
-    def test_who_cares(self) -> None:
-        pass
+    def test_retrieval_basic(self) -> None:
+        query_str = f"""MATCH (generic_metrics_sets)
+                    SELECT uniq(value) AS unique_values BY project_id, org_id
+                    WHERE org_id = {self.org_id}
+                    AND project_id = 1
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{self.start_time}')
+                    AND timestamp < toDateTime('{self.end_time}')
+                    GRANULARITY 1
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+        print(query_str)
+        print(response)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
