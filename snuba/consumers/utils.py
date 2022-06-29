@@ -15,20 +15,15 @@ class InvalidTopicName(Exception):
 
 
 def get_partition_count(topic: Topic) -> int:
-    override_params = {
-        # Default is 60s, do we need that long?
-        "socket.timeout.ms": 2000,
-    }
+    if not isinstance(topic, Topic):
+        raise InvalidTopicName("Must provide a valid Topic.")
+
     attempts = 0
     while True:
         try:
             logger.info("Attempting to connect to Kafka (attempt %d)...", attempts)
-            client = AdminClient(
-                get_default_kafka_configuration(
-                    topic=topic, override_params=override_params
-                )
-            )
-            cluster_metadata = client.list_topics(topic=topic.value, timeout=2.0)
+            client = AdminClient(get_default_kafka_configuration(topic=topic))
+            cluster_metadata = client.list_topics(timeout=2.0)
             break
         except KafkaException as err:
             logger.debug(
@@ -44,7 +39,7 @@ def get_partition_count(topic: Topic) -> int:
     topic_metadata = cluster_metadata.topics.get(topic.value)
 
     if not topic_metadata:
-        raise InvalidTopicName(f"Topic {topic.value} was not found")
+        raise InvalidTopicName(f"Topic {topic.value} was not found.")
 
     if topic_metadata.error is not None:
         raise KafkaException(topic_metadata.error)
