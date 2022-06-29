@@ -69,7 +69,7 @@ sets_storage = ReadableTableStorage(
     storage_set_key=StorageSetKey.GENERIC_METRICS_SETS,
     schema=TableSchema(
         local_table_name="generic_metric_sets_local",
-        dist_table_name="generic_metric_sets_dist",
+        dist_table_name="generic_metric_sets_aggregated_dist",
         storage_set_key=StorageSetKey.GENERIC_METRICS_SETS,
         columns=ColumnSet(
             [
