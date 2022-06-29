@@ -1,4 +1,17 @@
-from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, IPv4, IPv6
+from arroyo import Topic as KafkaTopic
+from arroyo.backends.kafka import KafkaProducer
+from arroyo.processing.strategies.dead_letter_queue import (
+    DeadLetterQueuePolicy,
+    ProduceInvalidMessagePolicy,
+)
+from snuba.clickhouse.columns import (
+    UUID,
+    Array,
+    ColumnSet,
+    DateTime,
+    IPv4,
+    IPv6,
+)
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -10,6 +23,9 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.utils.schemas import Nested
+from snuba.utils.streams.configuration_builder import (
+    build_kafka_producer_configuration,
+)
 from snuba.utils.streams.topics import Topic
 
 LOCAL_TABLE_NAME = "replays_local"
@@ -58,7 +74,16 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.REPLAYS,
 )
 
-# TODO: set up deadletter queue for bad messages.
+
+def produce_policy_creator() -> DeadLetterQueuePolicy:
+    """Produce all bad messages to dead-letter topic."""
+    return ProduceInvalidMessagePolicy(
+        KafkaProducer(
+            build_kafka_producer_configuration(Topic.DEAD_LETTER_METRICS)
+        ),
+        KafkaTopic(Topic.DEAD_LETTER_METRICS.value),
+    )
+
 
 storage = WritableTableStorage(
     storage_key=StorageKey.REPLAYS,
@@ -69,5 +94,6 @@ storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=ReplaysProcessor(),
         default_topic=Topic.REPLAYEVENTS,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
 )
