@@ -36,7 +36,7 @@ def get_partition_count(topic: Topic, timeout: float = 2.0) -> int:
 
     if not topic_metadata:
         raise TopicNotFound(
-            f"Topic {topic.value} was not found in topics: {cluster_metadata.topics.keys()}"
+            f"Topic metadata {topic.value} was not found in topics: {cluster_metadata.topics.keys()}"
         )
 
     if topic_metadata.error is not None:

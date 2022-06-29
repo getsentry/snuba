@@ -2,17 +2,22 @@ from unittest.mock import Mock, patch
 
 import pytest
 from confluent_kafka import KafkaException
-from confluent_kafka.admin import ClusterMetadata
+from confluent_kafka.admin import AdminClient, ClusterMetadata
 
 from snuba import settings
 from snuba.consumers.utils import TopicNotFound, get_partition_count
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 
 
 def test_get_partition_count() -> None:
-    entity = get_entity(EntityKey("events"))
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS])
+
+    entity = get_entity(EntityKey("transactions"))
     storage = entity.get_writable_storage()
 
     assert storage is not None
