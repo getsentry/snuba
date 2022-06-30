@@ -79,9 +79,9 @@ def produce_policy_creator() -> DeadLetterQueuePolicy:
     """Produce all bad messages to dead-letter topic."""
     return ProduceInvalidMessagePolicy(
         KafkaProducer(
-            build_kafka_producer_configuration(Topic.DEAD_LETTER_METRICS)
+            build_kafka_producer_configuration(Topic.DEAD_LETTER_REPLAYS)
         ),
-        KafkaTopic(Topic.DEAD_LETTER_METRICS.value),
+        KafkaTopic(Topic.DEAD_LETTER_REPLAYS.value),
     )
 
 
