@@ -45,10 +45,10 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
 
         buffer = bytearray()
         for field in [org_id, project_id, metric_id]:
-            buffer.extend(field.to_bytes(length=4, byteorder="little"))
+            buffer.extend(field.to_bytes(length=8, byteorder="little"))
         for (key, value) in sorted_tag_items:
             buffer.extend(bytes(key, "utf-8"))
-            buffer.extend(value.to_bytes(length=4, byteorder="little"))
+            buffer.extend(value.to_bytes(length=8, byteorder="little"))
 
         return buffer
 

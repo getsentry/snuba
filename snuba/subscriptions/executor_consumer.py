@@ -17,6 +17,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
 from snuba import state
+from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
@@ -104,6 +105,20 @@ def build_executor_consumer(
         consumer_group,
         auto_offset_reset=auto_offset_reset,
         strict_offset_reset=strict_offset_reset,
+    )
+
+    try:
+        partition_count = get_partition_count(scheduled_topic_spec.topic)
+    except Exception:
+        logger.error("partition count unavailable..", exc_info=True)
+        partition_count = 0
+
+    # XXX: for now verify that the partition_counts are correct for
+    # the executors.
+    metrics.gauge(
+        "executor.partition_count",
+        partition_count,
+        tags={"topic": scheduled_topic_spec.topic_name},
     )
 
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
