@@ -28,7 +28,9 @@ class MetricsWrapper(MetricsBackend):
         elif tags is None:
             return self.__tags
         else:
-            return ChainMap(tags, self.__tags)
+            # TODO: ChainMap takes a MutableMapping, but both snuba and arroyo type tags as a Mapping.
+            # Fixing this requires updating both packages.
+            return ChainMap(tags, self.__tags)  # type: ignore
 
     def increment(
         self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None

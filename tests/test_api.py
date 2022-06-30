@@ -150,7 +150,7 @@ class SimpleAPITest(BaseApiTest):
     def redis_db_size(self) -> int:
         # dbsize could be an integer for a single node cluster or a dictionary
         # with one key value pair per node for a multi node cluster
-        dbsize = redis_client.dbsize()
+        dbsize: int = redis_client.dbsize()
         if isinstance(dbsize, dict):
             return sum(dbsize.values())
         else:

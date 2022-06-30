@@ -85,10 +85,11 @@ def build_request(
                 }
                 query_settings["referrer"] = referrer
                 # TODO: referrer probably doesn't need to be passed in, it should be from the body
+                # this should fix the typing problem
                 settings_obj: Union[
                     HTTPQuerySettings, SubscriptionQuerySettings
                 ] = settings_class(
-                    **query_settings,
+                    **query_settings,  # type: ignore # https://github.com/python/mypy/issues/12977
                 )
             elif settings_class == SubscriptionQuerySettings:
                 settings_obj = settings_class(

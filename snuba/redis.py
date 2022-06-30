@@ -5,8 +5,8 @@ from functools import wraps
 from typing import Any, Callable, Union, cast
 
 from redis.client import StrictRedis
-from redis.cluster import ClusterNode, NodesManager, RedisCluster, RedisClusterException
-from redis.exceptions import BusyLoadingError, ConnectionError
+from redis.cluster import ClusterNode, NodesManager, RedisCluster
+from redis.exceptions import BusyLoadingError, ConnectionError, RedisClusterException
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
 

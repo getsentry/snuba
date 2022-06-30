@@ -23,7 +23,8 @@ backend-typing:
 
 install-python-dependencies:
 	pip install -e .
-	pip install -r requirements-test.txt
+	pip install -r test-requirements.txt
+	pip install -r lint-requirements.txt
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt

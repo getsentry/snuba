@@ -5,7 +5,16 @@ from collections import ChainMap
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any as AnyType
-from typing import Generic, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union
+from typing import (
+    Generic,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
@@ -28,7 +37,7 @@ class MatchResult:
     identified when a valid match is found.
     """
 
-    results: Mapping[str, MatchType] = field(default_factory=dict)
+    results: MutableMapping[str, MatchType] = field(default_factory=dict)
 
     def contains(self, name: str) -> bool:
         return name in self.results and self.results[name] is not None

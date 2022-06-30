@@ -7,7 +7,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
 from typing import ChainMap as TypingChainMap
-from typing import Iterator, Mapping, MutableMapping, Optional, Sequence, Type
+from typing import Iterator, MutableMapping, Optional, Sequence, Type
 
 from snuba import environment, state
 from snuba.redis import redis_client as rds
@@ -73,7 +73,7 @@ class RateLimitStatsContainer:
 
     def __format_single_dict(
         self, name: str, stats: RateLimitStats
-    ) -> Mapping[str, float]:
+    ) -> MutableMapping[str, float]:
         return {
             f"{name}_rate": stats.rate,
             f"{name}_concurrent": stats.concurrent,

@@ -68,7 +68,11 @@ class BytesInsertBatch(NamedTuple):
     rows: Sequence[bytes]
     origin_timestamp: Optional[datetime]
 
-    def __reduce_ex__(
+    # TODO: Argument 1 of "__reduce_ex__" is incompatible with supertype "object"; supertype defines the argument type as "SupportsIndex"
+    # This is coming from the type hints builtins.pyi:
+    # if sys.version_info >= (3, 8):
+    #    def __reduce_ex__(self, __protocol: SupportsIndex) -> str | tuple[Any, ...]: ...
+    def __reduce_ex__(  # type: ignore
         self, protocol: int
     ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime]]]:
         if protocol >= 5:

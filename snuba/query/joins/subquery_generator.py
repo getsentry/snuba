@@ -78,7 +78,7 @@ class SubqueriesInitializer(JoinVisitor[Mapping[str, SubqueryDraft], Entity]):
     def visit_join_clause(
         self, node: JoinClause[Entity]
     ) -> Mapping[str, SubqueryDraft]:
-        combined = {**node.left_node.accept(self), **node.right_node.accept(self)}
+        combined = {**node.left_node.accept(self), **node.right_node.accept(self)}  # type: ignore # https://github.com/python/mypy/issues/12977
         for condition in node.keys:
             combined[condition.left.table_alias].add_select_expression(
                 SelectedExpression(

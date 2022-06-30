@@ -334,7 +334,7 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)
-        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(  # type: ignore
+        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
             queries_list, 0, max_redis_queries - 1
         ).execute()
         producer.poll(0)  # trigger queued delivery callbacks

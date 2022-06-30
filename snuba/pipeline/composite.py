@@ -147,7 +147,7 @@ class JoinPlansRanker(JoinVisitor[Mapping[str, Sequence[ClickhouseQueryPlan]], E
     ) -> Mapping[str, Sequence[ClickhouseQueryPlan]]:
         return {
             **node.left_node.accept(self),
-            **node.right_node.accept(self),
+            **node.right_node.accept(self),  # type: ignore # https://github.com/python/mypy/issues/12977
         }
 
 
