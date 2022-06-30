@@ -31,7 +31,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "metrics_counters"
+        return "generic_metrics_sets"
 
     @pytest.fixture(autouse=True)
     def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
