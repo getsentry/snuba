@@ -279,6 +279,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         stack_values = []
         stack_mechanism_types = []
         stack_mechanism_handled = []
+        stack_level = 0
 
         frame_abs_paths = []
         frame_filenames = []
@@ -291,7 +292,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         frame_stack_levels = []
 
         if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
-            stack_level = 0
             for stack in stacks:
                 if stack is None:
                     continue
