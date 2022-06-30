@@ -27,6 +27,7 @@ CLUSTERS = [
             "functions",
             "replays",
             "generic_metrics_sets",
+            "generic_metrics_distributions",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
