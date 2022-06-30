@@ -67,6 +67,15 @@ def _record_attribution_delivery_callback(
         )
 
 
+def _attribution_producer() -> Producer:
+    global kfk
+
+    if kfk is None:
+        kfk = Producer(build_default_kafka_producer_configuration())
+
+    return kfk
+
+
 @contextmanager
 def flush_attribution_producer() -> Iterator[None]:
     global kfk
@@ -80,8 +89,6 @@ def flush_attribution_producer() -> Iterator[None]:
 
 
 def record_attribution(attr_data: AttributionData) -> None:
-    global kfk
-
     log_attribution_to_metrics(attr_data)
 
     try:
@@ -95,11 +102,9 @@ def record_attribution(attr_data: AttributionData) -> None:
         if randint(1, 10000) == 1:
             logger.info(data_str)
 
-        if kfk is None:
-            kfk = Producer(build_default_kafka_producer_configuration())
-
-        kfk.poll(0)  # trigger queued delivery callbacks
-        kfk.produce(
+        producer = _attribution_producer()
+        producer.poll(0)  # trigger queued delivery callbacks
+        producer.produce(
             settings.KAFKA_TOPIC_MAP.get(
                 Topic.ATTRIBUTION.value, Topic.ATTRIBUTION.value
             ),
