@@ -12,37 +12,45 @@ class FunctionsMessageProcessor(MessageProcessor):
     ) -> Optional[ProcessedMessage]:
         functions = {}
 
-        for root_frame in message["call_trees"]:
-            stack = [root_frame]
-            while stack:
-                frame = stack.pop()
-                if frame["fingerprint"] not in functions:
-                    functions[frame["fingerprint"]] = {
-                        "project_id": message["project_id"],
-                        "transaction_name": message["transaction_name"],
-                        "timestamp": datetime.utcfromtimestamp(message["timestamp"]),
-                        "depth": frame["depth"],
-                        "parent_fingerprint": int(frame["parent_fingerprint"], 16),
-                        "fingerprint": int(frame["fingerprint"], 16),
-                        "symbol": frame["symbol"],
-                        "image": frame["image"],
-                        "filename": frame["filename"],
-                        "is_application": 1 if frame["is_application"] else 0,
-                        "platform": message["platform"],
-                        "environment": message.get("environment"),
-                        "release": message.get("release"),
-                        "os_name": message["os_name"],
-                        "os_version": message["os_version"],
-                        "retention_days": message["retention_days"],
-                        "durations": [frame["duration"]],
-                        "profile_id": str(uuid.UUID(message["profile_id"])),
-                        "materialization_version": 0,
-                    }
-                else:
-                    functions[frame["fingerprint"]]["durations"].append(
-                        frame["duration"]
-                    )
+        for thread, root_frames in message["call_trees"].items():
+            for root_frame in root_frames:
+                stack = [(root_frame, 0, 0)]
+                while stack:
+                    frame, depth, parent_fingerprint = stack.pop()
+                    if frame["id"] not in functions:
+                        functions[frame["id"]] = {
+                            "project_id": message["project_id"],
+                            "transaction_name": message["transaction_name"],
+                            "timestamp": datetime.utcfromtimestamp(
+                                message["timestamp"]
+                            ),
+                            "depth": depth,
+                            "parent_fingerprint": parent_fingerprint,
+                            "fingerprint": frame["id"],
+                            "symbol": frame["name"],
+                            "image": frame["package"],
+                            "filename": frame.get("path", ""),
+                            "is_application": 1
+                            if frame.get("is_application", True)
+                            else 0,
+                            "platform": message["platform"],
+                            "environment": message.get("environment"),
+                            "release": message.get("release"),
+                            "os_name": message["os_name"],
+                            "os_version": message["os_version"],
+                            "retention_days": message["retention_days"],
+                            "durations": [frame["duration_ns"]],
+                            "profile_id": str(uuid.UUID(message["profile_id"])),
+                            "materialization_version": 0,
+                        }
+                    else:
+                        functions[frame["id"]]["durations"].append(frame["duration_ns"])
 
-                stack.extend(frame["children"])
+                    stack.extend(
+                        [
+                            (child, depth + 1, frame["id"])
+                            for child in frame.get("children", [])
+                        ]
+                    )
 
         return InsertBatch(list(functions.values()), None)
