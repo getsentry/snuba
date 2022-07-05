@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from snuba.clickhouse.query import Query
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class QueryProcessor(ABC):
@@ -22,7 +22,7 @@ class QueryProcessor(ABC):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # TODO: Consider making the Query immutable.
         raise NotImplementedError
 
@@ -40,6 +40,6 @@ class CompositeQueryProcessor(ABC):
 
     @abstractmethod
     def process_query(
-        self, query: CompositeQuery[Table], request_settings: RequestSettings
+        self, query: CompositeQuery[Table], query_settings: QuerySettings
     ) -> None:
         raise NotImplementedError

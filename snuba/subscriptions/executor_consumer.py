@@ -17,6 +17,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
 from snuba import state
+from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
@@ -34,7 +35,6 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
-from snuba.subscriptions.utils import run_new_pipeline
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -52,6 +52,7 @@ def build_executor_consumer(
     consumer_group: str,
     producer: Producer[KafkaPayload],
     max_concurrent_queries: int,
+    total_concurrent_queries: int,
     auto_offset_reset: str,
     strict_offset_reset: Optional[bool],
     metrics: MetricsBackend,
@@ -106,6 +107,20 @@ def build_executor_consumer(
         strict_offset_reset=strict_offset_reset,
     )
 
+    try:
+        partition_count = get_partition_count(scheduled_topic_spec.topic)
+    except Exception:
+        logger.error("partition count unavailable..", exc_info=True)
+        partition_count = 0
+
+    # XXX: for now verify that the partition_counts are correct for
+    # the executors.
+    metrics.gauge(
+        "executor.partition_count",
+        partition_count,
+        tags={"topic": scheduled_topic_spec.topic_name},
+    )
+
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
     # for the consumer group, or use the default.
     stats_collection_frequency_ms = get_config(
@@ -134,6 +149,7 @@ def build_executor_consumer(
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
             max_concurrent_queries,
+            total_concurrent_queries,
             dataset,
             entity_names,
             producer,
@@ -148,6 +164,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
     def __init__(
         self,
         max_concurrent_queries: int,
+        total_concurrent_queries: int,
         dataset: Dataset,
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
@@ -156,6 +173,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         result_topic: str,
     ) -> None:
         self.__max_concurrent_queries = max_concurrent_queries
+        self.__total_concurrent_queries = total_concurrent_queries
         self.__dataset = dataset
         self.__entity_names = entity_names
         self.__producer = producer
@@ -163,13 +181,16 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__result_topic = result_topic
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
         return ExecuteQuery(
             self.__dataset,
             self.__entity_names,
             self.__max_concurrent_queries,
+            self.__total_concurrent_queries,
             self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
@@ -188,6 +209,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         dataset: Dataset,
         entity_names: Sequence[str],
         max_concurrent_queries: int,
+        total_concurrent_queries: int,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
@@ -199,6 +221,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
         self.__max_concurrent_queries = max_concurrent_queries
+        self.__total_concurrent_queries = total_concurrent_queries
         self.__executor = ThreadPoolExecutor(self.__max_concurrent_queries)
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
@@ -299,9 +322,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         entity = task.task.entity
         entity_name = entity.value
 
-        should_execute = entity_name in self.__entity_names and run_new_pipeline(
-            entity, task.timestamp
-        )
+        should_execute = entity_name in self.__entity_names
 
         # Don't execute stale subscriptions
         if (

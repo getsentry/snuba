@@ -349,8 +349,10 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             for index in range(self.__partitions)
         }
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
         schedule_step = ProduceScheduledSubscriptionMessage(
             self.__schedulers,

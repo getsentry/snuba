@@ -18,9 +18,12 @@ Storage = TypedDict(
 
 
 def _get_local_table_name(storage_key: StorageKey) -> str:
-    schema = get_storage(storage_key).get_schema()
-    assert isinstance(schema, TableSchema)
-    return schema.get_table_name()
+    try:
+        schema = get_storage(storage_key).get_schema()
+        assert isinstance(schema, TableSchema)
+        return schema.get_table_name()
+    except UndefinedClickhouseCluster:
+        return "badcluster"
 
 
 def _get_local_nodes(storage_key: StorageKey) -> Sequence[Node]:

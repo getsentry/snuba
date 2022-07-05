@@ -15,7 +15,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 
 
@@ -111,7 +111,7 @@ class TupleUnaliaser(QueryProcessor):
         except ValueError:
             return False
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         if not self.should_run():
             return None
         visitor = _TupleUnaliasVisitor()

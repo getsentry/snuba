@@ -12,8 +12,8 @@ from snuba.pipeline.query_pipeline import (
     QueryPlanner,
 )
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 
@@ -31,7 +31,7 @@ class EntityQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
     def __init__(
         self,
         query: LogicalQuery,
-        settings: RequestSettings,
+        settings: QuerySettings,
         query_plan_builder: ClickhouseQueryPlanBuilder,
     ) -> None:
         self.__query = query
@@ -67,7 +67,7 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
         self.__query_planner = query_planner
 
     def execute(self) -> QueryResult:
-        settings = self.__request.settings
+        settings = self.__request.query_settings
         query_plan = self.__query_planner.build_best_plan()
         execute_plan_processors(query_plan, settings)
 
@@ -87,12 +87,12 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
         return SimpleExecutionPipeline(
             request,
             runner,
-            self.build_planner(request.query, request.settings),
+            self.build_planner(request.query, request.query_settings),
         )
 
     def build_planner(
         self,
         query: LogicalQuery,
-        settings: RequestSettings,
+        settings: QuerySettings,
     ) -> EntityQueryPlanner:
         return EntityQueryPlanner(query, settings, self.__query_plan_builder)

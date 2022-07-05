@@ -13,8 +13,8 @@ from snuba.clickhouse.query_dsl.accessors import (
 from snuba.datasets.errors_replacer import ProjectsQueryFlags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -42,8 +42,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         # replacers on multiple tables. replacer_state_name is part of the redis key.
         self.__replacer_state_name = replacer_state_name
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        if request_settings.get_turbo():
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        if query_settings.get_turbo():
             return
 
         project_ids = get_object_ids_in_query_ast(query, self.__project_column)
@@ -64,7 +64,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             self._set_query_final(query, False)
             return
 
-        tags = self._initialize_tags(request_settings, flags)
+        tags = self._initialize_tags(query_settings, flags)
         set_final = False
 
         if flags.needs_final:
@@ -107,7 +107,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         self._set_query_final(query, set_final)
 
     def _initialize_tags(
-        self, request_settings: RequestSettings, flags: ProjectsQueryFlags
+        self, query_settings: QuerySettings, flags: ProjectsQueryFlags
     ) -> MutableMapping[str, str]:
         """
         Initialize tags dictionary for DataDog metrics.
@@ -115,8 +115,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         tags = {
             replacement_type: "True" for replacement_type in flags.replacement_types
         }
-        tags["referrer"] = request_settings.referrer
-        tags["parent_api"] = request_settings.get_parent_api()
+        tags["referrer"] = query_settings.referrer
         return tags
 
     def _set_query_final(self, query: Query, final: bool) -> None:

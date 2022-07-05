@@ -3,8 +3,8 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column, FunctionCall, NoopVisitor
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -36,12 +36,12 @@ def test_tags_hashmap_optimization() -> None:
 
     dataset = get_dataset(dataset_name)
 
-    schema = RequestSchema.build(HTTPRequestSettings)
+    schema = RequestSchema.build(HTTPQuerySettings)
 
     request = build_request(
         query_body,
         parse_snql_query,
-        HTTPRequestSettings,
+        HTTPQuerySettings,
         schema,
         dataset,
         Timer(name="bloop"),
@@ -49,7 +49,7 @@ def test_tags_hashmap_optimization() -> None:
     )
     # --------------------------------------------------------------------
 
-    def query_verifier(query: Query, settings: RequestSettings, reader: Reader) -> None:
+    def query_verifier(query: Query, settings: QuerySettings, reader: Reader) -> None:
         class ConditionVisitor(NoopVisitor):
             def __init__(self) -> None:
                 self.found_hashmap_condition = False

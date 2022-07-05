@@ -8,8 +8,8 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
-from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_tags_expander() -> None:
@@ -27,8 +27,8 @@ def test_tags_expander() -> None:
     query, _ = parse_snql_query(query_body, events)
 
     processor = TagsExpanderProcessor()
-    request_settings = HTTPRequestSettings()
-    processor.process_query(query, request_settings)
+    query_settings = HTTPQuerySettings()
+    processor.process_query(query, query_settings)
 
     assert query.get_selected_columns() == [
         SelectedExpression(

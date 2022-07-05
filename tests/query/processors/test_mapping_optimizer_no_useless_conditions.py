@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 
 
@@ -254,7 +254,7 @@ def test_recursive_useless_condition(
         column_name="tags",
         hash_map_name="_tags_hash_map",
         killswitch="tags_hash_map_enabled",
-    ).process_query(input_query, HTTPRequestSettings())
+    ).process_query(input_query, HTTPQuerySettings())
     assert input_query == expected_query
 
 
@@ -269,14 +269,14 @@ def test_useless_has_condition(
 
     # change the existence expression to be a has(tags, 'my_tag') expression for boh queries
     # this allows reuse of the previous test cases
-    EmptyTagConditionProcessor().process_query(input_query, HTTPRequestSettings())
-    EmptyTagConditionProcessor().process_query(expected_query, HTTPRequestSettings())
+    EmptyTagConditionProcessor().process_query(input_query, HTTPQuerySettings())
+    EmptyTagConditionProcessor().process_query(expected_query, HTTPQuerySettings())
 
     MappingOptimizer(
         column_name="tags",
         hash_map_name="_tags_hash_map",
         killswitch="tags_hash_map_enabled",
-    ).process_query(input_query, HTTPRequestSettings())
+    ).process_query(input_query, HTTPQuerySettings())
     assert input_query == expected_query
 
 
@@ -331,5 +331,5 @@ def test_having_special_case(
         column_name="tags",
         hash_map_name="_tags_hash_map",
         killswitch="tags_hash_map_enabled",
-    ).process_query(input_query, HTTPRequestSettings())
+    ).process_query(input_query, HTTPQuerySettings())
     assert input_query == expected_query
