@@ -10,6 +10,12 @@ from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
 from snuba.datasets.storages.errors_v2 import storage as errors_v2_storage
 from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
 from snuba.datasets.storages.generic_metrics import (
+    distributions_bucket_storage as gen_metrics_dists_bucket_storage,
+)
+from snuba.datasets.storages.generic_metrics import (
+    distributions_storage as gen_metrics_dists_aggregate_storage,
+)
+from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage as generic_metrics_sets_bucket_storage,
 )
 from snuba.datasets.storages.generic_metrics import (
@@ -83,6 +89,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             profiles_writable_storage,
             generic_metrics_sets_bucket_storage,
             replays_storage,
+            gen_metrics_dists_bucket_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
@@ -96,6 +103,7 @@ METRICS_NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
     metrics_org_counters_storage.get_storage_key(): metrics_org_counters_storage,
     metrics_sets_storage.get_storage_key(): metrics_sets_storage,
     gen_metrics_sets_aggregate_storage.get_storage_key(): gen_metrics_sets_aggregate_storage,
+    gen_metrics_dists_aggregate_storage.get_storage_key(): gen_metrics_dists_aggregate_storage,
 }
 
 NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {

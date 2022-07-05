@@ -7,9 +7,14 @@ from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
+    ILLEGAL_VALUE_IN_DIST,
+    ILLEGAL_VALUE_IN_SET,
+    INT_EXPECTED,
+    INT_FLOAT_EXPECTED,
     InputType,
     OutputType,
     is_set_message,
+    values_for_distribution_message,
     values_for_set_message,
 )
 from snuba.processor import (
@@ -20,10 +25,7 @@ from snuba.processor import (
 )
 
 DISABLED_MATERIALIZATION_VERSION = 1
-ILLEGAL_VALUE_IN_SET = "Illegal value in set."
 ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
-INT_FLOAT_EXPECTED = "Int/Float expected"
-INT_EXPECTED = "Int expected"
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +120,7 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
         for value in values:
             assert isinstance(
                 value, (int, float)
-            ), f"{ILLEGAL_VALUE_IN_SET} {INT_FLOAT_EXPECTED}: {value}"
+            ), f"{ILLEGAL_VALUE_IN_DIST} {INT_FLOAT_EXPECTED}: {value}"
         return {"values": values}
 
 
@@ -140,9 +142,4 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             ), f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
             return {"metric_type": OutputType.COUNTER.value, "count_value": value}
         else:  # message["type"] == InputType.DISTRIBUTION.value
-            values = message["value"]
-            for value in values:
-                assert isinstance(
-                    value, (int, float)
-                ), f"{ILLEGAL_VALUE_IN_SET} {INT_FLOAT_EXPECTED}: {value}"
-            return {"metric_type": OutputType.DIST.value, "distribution_values": values}
+            return values_for_distribution_message(message)
