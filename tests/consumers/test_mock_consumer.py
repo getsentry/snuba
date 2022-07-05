@@ -24,7 +24,7 @@ def test_mock_consumer() -> None:
         input_block_size=None,
         output_block_size=None,
         initialize_parallel_transform=None,
-    ).create(lambda message: None)
+    ).create_with_partitions(lambda message: None, {})
 
     strategy.submit(
         Message(
