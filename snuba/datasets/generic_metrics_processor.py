@@ -9,6 +9,7 @@ from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
     is_distribution_message,
     is_set_message,
+    values_for_distribution_message,
     values_for_set_message,
 )
 from snuba.processor import (
@@ -139,4 +140,4 @@ class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
         return is_distribution_message(message)
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return values_for_set_message(message)
+        return values_for_distribution_message(message)
