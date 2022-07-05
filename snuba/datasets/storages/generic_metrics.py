@@ -49,7 +49,7 @@ def produce_policy_creator() -> DeadLetterQueuePolicy:
     )
 
 
-aggregated_columns: Sequence[Column[SchemaModifiers]] = [
+common_columns: Sequence[Column[SchemaModifiers]] = [
     Column("org_id", UInt(64)),
     Column("use_case_id", String()),
     Column("project_id", UInt(64)),
@@ -64,6 +64,14 @@ aggregated_columns: Sequence[Column[SchemaModifiers]] = [
     ),
 ]
 
+bucket_columns: Sequence[Column[SchemaModifiers]] = [
+    Column("granularities", Array(UInt(8))),
+    Column("count_value", Float(64)),
+    Column("set_values", Array(UInt(64))),
+    Column("distribution_values", Array(Float(64))),
+    Column("timeseries_id", UInt(32)),
+]
+
 sets_storage = ReadableTableStorage(
     storage_key=StorageKey.GENERIC_METRICS_SETS,
     storage_set_key=StorageSetKey.GENERIC_METRICS_SETS,
@@ -73,7 +81,7 @@ sets_storage = ReadableTableStorage(
         storage_set_key=StorageSetKey.GENERIC_METRICS_SETS,
         columns=ColumnSet(
             [
-                *aggregated_columns,
+                *common_columns,
                 Column(
                     "_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))
                 ),
@@ -96,16 +104,7 @@ sets_bucket_storage = WritableTableStorage(
     storage_key=StorageKey.GENERIC_METRICS_SETS_RAW,
     storage_set_key=StorageSetKey.GENERIC_METRICS_SETS,
     schema=WritableTableSchema(
-        columns=ColumnSet(
-            [
-                *aggregated_columns,
-                Column("granularities", Array(UInt(8))),
-                Column("count_value", Float(64)),
-                Column("set_values", Array(UInt(64))),
-                Column("distribution_values", Array(Float(64))),
-                Column("timeseries_id", UInt(32)),
-            ]
-        ),
+        columns=ColumnSet([*common_columns, *bucket_columns]),
         local_table_name="generic_metric_sets_raw_local",
         dist_table_name="generic_metric_sets_raw_dist",
         storage_set_key=StorageSetKey.GENERIC_METRICS_SETS,

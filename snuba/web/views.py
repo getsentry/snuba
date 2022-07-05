@@ -649,7 +649,7 @@ if application.debug or application.testing:
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
-            ).create(lambda offsets: None)
+            ).create_with_partitions(lambda offsets: None, {})
             strategy.submit(message)
             strategy.close()
             strategy.join()
