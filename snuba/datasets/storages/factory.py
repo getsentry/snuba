@@ -14,6 +14,9 @@ from snuba.datasets.storages.functions import raw_storage as functions_storage
 from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage as generic_metrics_sets_bucket_storage,
 )
+from snuba.datasets.storages.generic_metrics import (
+    sets_storage as gen_metrics_sets_aggregate_storage,
+)
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
 from snuba.datasets.storages.metrics import counters_storage as metrics_counters_storage
@@ -95,6 +98,7 @@ METRICS_NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
     metrics_distributions_storage.get_storage_key(): metrics_distributions_storage,
     metrics_org_counters_storage.get_storage_key(): metrics_org_counters_storage,
     metrics_sets_storage.get_storage_key(): metrics_sets_storage,
+    gen_metrics_sets_aggregate_storage.get_storage_key(): gen_metrics_sets_aggregate_storage,
 }
 
 NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {

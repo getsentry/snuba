@@ -22,6 +22,7 @@ DATASET_NAMES: Set[str] = {
     "transactions",
     "profiles",
     "functions",
+    "generic_metrics",
     *(DEV_DATASET_NAMES if settings.ENABLE_DEV_FEATURES else set()),
 }
 
@@ -46,6 +47,7 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.events import EventsDataset
     from snuba.datasets.functions import FunctionsDataset
+    from snuba.datasets.generic_metrics import GenericMetricsDataset
     from snuba.datasets.metrics import MetricsDataset
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
@@ -65,6 +67,7 @@ def get_dataset(name: str) -> Dataset:
         "transactions": TransactionsDataset,
         "profiles": ProfilesDataset,
         "functions": FunctionsDataset,
+        "generic_metrics": GenericMetricsDataset,
     }
 
     try:

@@ -258,6 +258,10 @@ class GenericMetricsLoader(DirectoryLoader):
             "0003_sets_mv",
             "0004_sets_raw_add_granularities",
             "0005_sets_replace_mv",
+            "0006_sets_raw_add_granularities_dist_table",
+            "0007_distributions_aggregate_table",
+            "0008_distributions_raw_table",
+            "0009_distributions_mv",
         ]
 
 
