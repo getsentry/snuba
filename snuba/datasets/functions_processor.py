@@ -5,6 +5,8 @@ from typing import Any, Mapping, Optional
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 
+MAX_DEPTH = 1024
+
 
 class FunctionsMessageProcessor(MessageProcessor):
     def process_message(
@@ -46,11 +48,12 @@ class FunctionsMessageProcessor(MessageProcessor):
                     else:
                         functions[frame["id"]]["durations"].append(frame["duration_ns"])
 
-                    stack.extend(
-                        [
-                            (child, depth + 1, frame["id"])
-                            for child in frame.get("children", [])
-                        ]
-                    )
+                    if depth < MAX_DEPTH:
+                        stack.extend(
+                            [
+                                (child, depth + 1, frame["id"])
+                                for child in frame.get("children", [])
+                            ]
+                        )
 
         return InsertBatch(list(functions.values()), None)
