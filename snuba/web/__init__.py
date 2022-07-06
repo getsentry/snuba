@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, NamedTuple
-
-from mypy_extensions import TypedDict
+from typing import Any, Mapping, NamedTuple, TypedDict
 
 from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import SerializableException

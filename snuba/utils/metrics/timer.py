@@ -6,7 +6,7 @@ from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
 
 if TYPE_CHECKING:
-    from mypy_extensions import TypedDict
+    from typing import TypedDict
 
     class TimerData(TypedDict):
         timestamp: int
