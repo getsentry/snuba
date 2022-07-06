@@ -22,8 +22,7 @@ class JobTimeoutException(Exception):
     Signals that the job is past the cutoff time
     """
 
-    def __init__(self, cutoff_time: datetime):
-        self.cutoff_time = cutoff_time
+    pass
 
 
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
@@ -302,7 +301,7 @@ def optimize_partition_runner(
     1. All optimizations are done.
     2. The final optimization bucket id done.
     """
-    for bucket in optimization_buckets:
+    for bucket_index, bucket in enumerate(optimization_buckets):
         parallel, cutoff_time = bucket.parallel, bucket.cutoff_time
         divided_partitions = _subdivide_partitions(partitions, parallel)
         threads: MutableSequence[threading.Thread] = []
@@ -326,18 +325,18 @@ def optimize_partition_runner(
 
         # Wait for all threads to finish. Any thread can raise
         # JobTimeoutException. Its an indication that not all partitions
-        # could be optimized in the given amount of threaded_cutoff_time.
+        # could be optimized in the given amount of cutoff_time.
         for i in range(0, parallel):
-            try:
-                threads[i].join()
-            except JobTimeoutException:
-
-                pass
+            threads[i].join()
 
         # If there are still partitions needing optimization then move on to the
         # next bucket with the partitions which still need optimization.
         remaining_partitions = tracker.get_partitions_to_optimize()
         if len(remaining_partitions) > 0:
+            if bucket_index == len(optimization_buckets) - 1:
+                raise JobTimeoutException(
+                    "Could not optimize all partitions in the given amount of time."
+                )
             partitions = list(remaining_partitions)
         else:
             return
@@ -360,8 +359,8 @@ def optimize_partitions(
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
             raise JobTimeoutException(
-                "Optimize job is running past the cutoff time. Abandoning.",
-                cutoff_time=cutoff_time,
+                f"Optimize job is running past provided cutoff time"
+                f" {cutoff_time}. Abandoning.",
             )
 
         args = {

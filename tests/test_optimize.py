@@ -4,7 +4,7 @@ from typing import Callable, Mapping, Sequence
 
 import pytest
 
-from snuba import optimize, settings, util
+from snuba import optimize, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -14,6 +14,7 @@ from snuba.optimize import (
     _build_optimization_buckets,
     _get_metrics_tags,
     _subdivide_partitions,
+    optimize_partition_runner,
     optimize_partitions,
 )
 from snuba.optimize_tracker import OptimizedPartitionTracker
@@ -362,13 +363,25 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
         expire_time=datetime.now() + timedelta(minutes=10),
     )
 
-    partitions = [util.Part("1", datetime.now(), 90)]
+    dummy_partition = "(90,'2022-03-28')"
+    tracker.update_all_partitions([dummy_partition])
+    with pytest.raises(JobTimeoutException):
+        optimize_partition_runner(
+            clickhouse=clickhouse_pool,
+            database=database,
+            table=table,
+            partitions=[dummy_partition],
+            optimization_buckets=[OptimizationBucket(1, datetime.now())],
+            tracker=tracker,
+            clickhouse_host="some-hostname.domain.com",
+        )
+
     with pytest.raises(JobTimeoutException):
         optimize_partitions(
             clickhouse=clickhouse_pool,
             database=database,
             table=table,
-            partitions=[partition.name for partition in partitions],
+            partitions=[dummy_partition],
             cutoff_time=datetime.now(),
             tracker=tracker,
             clickhouse_host="some-hostname.domain.com",
