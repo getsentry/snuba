@@ -82,6 +82,9 @@ class GenericMetricsEntity(Entity, ABC):
             required_time_column="timestamp",
         )
 
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return []
+
 
 class GenericMetricsSetsEntity(GenericMetricsEntity):
     READABLE_STORAGE = sets_storage
@@ -104,9 +107,6 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
                 ],
             ),
         )
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return []
 
 
 class GenericMetricsDistributionsEntity(GenericMetricsEntity):
