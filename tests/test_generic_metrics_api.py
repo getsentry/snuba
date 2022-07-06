@@ -5,6 +5,7 @@ from typing import Any, Callable, Tuple, Union
 
 import pytest
 import pytz
+from pytest import approx
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
@@ -213,14 +214,15 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
             )
             for n in range(self.count)
         ]
-        print(rows)
         write_processed_messages(self.write_storage, [row for row in rows if row])
 
     def test_retrieval_basic(self) -> None:
         query_str = f"""MATCH (generic_metrics_distributions)
-                    SELECT min(value) as dist_min,
-                           max(value) as dist_max,
-                           avg(value) as dist_avg,
+                    SELECT min(value) AS dist_min,
+                           max(value) AS dist_max,
+                           avg(value) AS dist_avg,
+                           sum(value) AS dist_sum,
+                           count(value) AS dist_count
                     BY project_id, org_id
                     WHERE org_id = {self.org_id}
                     AND project_id = {self.project_id}
@@ -237,6 +239,34 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
-        assert data["data"][0]["min"] == 0.0
-        assert data["data"][0]["max"] == 4.0
-        assert data["data"][0]["avg"] == 2.0
+        assert data["data"][0]["dist_min"] == 0.0
+        assert data["data"][0]["dist_max"] == 4.0
+        assert data["data"][0]["dist_avg"] == 2.0
+        assert data["data"][0]["dist_sum"] == 200.0
+        assert data["data"][0]["dist_count"] == 100.0
+
+    def test_retrieval_percentiles(self) -> None:
+        query_str = f"""MATCH (generic_metrics_distributions)
+                    SELECT quantiles(0.5,0.9,0.95,0.99)(value) AS quants
+                    BY project_id, org_id
+                    WHERE org_id = {self.org_id}
+                    AND project_id = {self.project_id}
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{self.start_time}')
+                    AND timestamp < toDateTime('{self.end_time}')
+                    GRANULARITY 1
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+
+        aggregation = data["data"][0]
+
+        assert aggregation["org_id"] == self.org_id
+        assert aggregation["project_id"] == self.project_id
+        assert aggregation["quants"] == [2.0, approx(4.0), approx(4.0), approx(4.0)]
