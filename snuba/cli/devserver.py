@@ -302,7 +302,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                     "--no-strict-offset-reset",
                     "--log-level=debug",
-                    "--storage=functions-raw",
+                    "--storage=functions_raw",
                 ],
             ),
         ]
