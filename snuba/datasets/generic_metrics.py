@@ -15,5 +15,5 @@ class GenericMetricsDataset(Dataset):
     def get_all_entities(self) -> Sequence[Entity]:
         return [
             get_entity(EntityKey.GENERIC_METRICS_SETS),
-            get_entity(EntityKey.GENERIC_METRICS_DISTIRBUTIONS),
+            get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS),
         ]

@@ -22,6 +22,8 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.generic_metrics import (  # distributions_bucket_storage,; distributions_storage,
+    distributions_bucket_storage,
+    distributions_storage,
     sets_bucket_storage,
     sets_storage,
 )
@@ -108,8 +110,8 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
 
 
 class GenericMetricsDistributionsEntity(GenericMetricsEntity):
-    READABLE_STORAGE = sets_storage
-    WRITABLE_STORAGE = sets_bucket_storage
+    READABLE_STORAGE = distributions_storage
+    WRITABLE_STORAGE = distributions_bucket_storage
 
     def __init__(self) -> None:
         super().__init__(
