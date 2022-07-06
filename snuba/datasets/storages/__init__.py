@@ -37,6 +37,8 @@ class StorageKey(Enum):
     ERRORS_V2_RO = "errors_v2_ro"
     GENERIC_METRICS_SETS_RAW = "generic_metrics_sets_raw"
     GENERIC_METRICS_SETS = "generic_metrics_sets"
+    GENERIC_METRICS_DISTRIBUTIONS_RAW = "generic_metrics_distributions_raw"
+    GENERIC_METRICS_DISTRIBUTIONS = "generic_metrics_distributions"
 
 
 IDENTICAL_STORAGES = frozenset(
