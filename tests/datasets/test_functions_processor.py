@@ -12,25 +12,29 @@ class CallTree:
     depth: int
     parent_fingerprint: str
     fingerprint: str
-    symbol: str
-    image: str
-    filename: str
+    name: str
+    package: str
+    path: str
     is_application: bool
     duration: float
     children: Sequence["CallTree"]
 
     def serialize(self) -> Mapping[str, Any]:
-        return {
-            "depth": self.depth,
-            "parent_fingerprint": self.parent_fingerprint,
-            "fingerprint": self.fingerprint,
-            "symbol": self.symbol,
-            "image": self.image,
-            "filename": self.filename,
+        serialized = {
+            "id": int(self.fingerprint, 16),
+            "name": self.name,
+            "package": self.package,
             "is_application": self.is_application,
-            "duration": self.duration,
-            "children": [ct.serialize() for ct in self.children],
+            "duration_ns": self.duration,
         }
+
+        if self.path:
+            serialized["path"] = self.path
+
+        if self.children:
+            serialized["children"] = [c.serialize() for c in self.children]
+
+        return serialized
 
 
 @dataclass
@@ -39,7 +43,7 @@ class ProfileCallTreeEvent:
     profile_id: str
     transaction_name: str
     timestamp: int
-    call_trees: Sequence[CallTree]
+    call_trees: Mapping[str, Sequence[CallTree]]
     platform: str
     environment: Optional[str]
     release: Optional[str]
@@ -53,7 +57,9 @@ class ProfileCallTreeEvent:
             "profile_id": self.profile_id,
             "transaction_name": self.transaction_name,
             "timestamp": self.timestamp,
-            "call_trees": [ct.serialize() for ct in self.call_trees],
+            "call_trees": {
+                k: [v.serialize() for v in vs] for k, vs in self.call_trees.items()
+            },
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
@@ -74,65 +80,67 @@ class TestFunctionsProcessor:
             profile_id="a" * 32,
             timestamp=0,
             transaction_name="vroom-vroom",
-            call_trees=[
-                CallTree(
-                    depth=0,
-                    parent_fingerprint="0" * 16,
-                    fingerprint="a" * 16,
-                    symbol="foo",
-                    image="",
-                    filename="",
-                    is_application=True,
-                    duration=10,
-                    children=[
-                        CallTree(
-                            depth=1,
-                            parent_fingerprint="a" * 16,
-                            fingerprint="c" * 16,
-                            symbol="bar",
-                            image="",
-                            filename="",
-                            is_application=False,
-                            duration=5,
-                            children=[],
-                        ),
-                    ],
-                ),
-                CallTree(
-                    depth=0,
-                    parent_fingerprint="0" * 16,
-                    fingerprint="b" * 16,
-                    symbol="baz",
-                    image="",
-                    filename="",
-                    is_application=True,
-                    duration=5,
-                    children=[],
-                ),
-                CallTree(
-                    depth=0,
-                    parent_fingerprint="0" * 16,
-                    fingerprint="a" * 16,
-                    symbol="foo",
-                    image="",
-                    filename="",
-                    is_application=True,
-                    duration=20,
-                    children=[
-                        CallTree(
-                            depth=1,
-                            parent_fingerprint="a" * 16,
-                            fingerprint="c" * 16,
-                            symbol="bar",
-                            image="",
-                            filename="",
-                            is_application=True,
-                            duration=10,
-                            children=[],
-                        ),
-                    ],
-                ),
-            ],
+            call_trees={
+                "259": [
+                    CallTree(
+                        depth=0,
+                        parent_fingerprint="0" * 16,
+                        fingerprint="a" * 16,
+                        name="foo",
+                        package="",
+                        path="",
+                        is_application=True,
+                        duration=10,
+                        children=[
+                            CallTree(
+                                depth=1,
+                                parent_fingerprint="a" * 16,
+                                fingerprint="c" * 16,
+                                name="bar",
+                                package="",
+                                path="",
+                                is_application=False,
+                                duration=5,
+                                children=[],
+                            ),
+                        ],
+                    ),
+                    CallTree(
+                        depth=0,
+                        parent_fingerprint="0" * 16,
+                        fingerprint="b" * 16,
+                        name="baz",
+                        package="",
+                        path="",
+                        is_application=True,
+                        duration=5,
+                        children=[],
+                    ),
+                    CallTree(
+                        depth=0,
+                        parent_fingerprint="0" * 16,
+                        fingerprint="a" * 16,
+                        name="foo",
+                        package="",
+                        path="",
+                        is_application=True,
+                        duration=20,
+                        children=[
+                            CallTree(
+                                depth=1,
+                                parent_fingerprint="a" * 16,
+                                fingerprint="c" * 16,
+                                name="bar",
+                                package="",
+                                path="",
+                                is_application=True,
+                                duration=10,
+                                children=[],
+                            ),
+                        ],
+                    ),
+                ],
+            },
             platform="cocoa",
             environment="prod",
             release="7.14.0 (1)",
@@ -160,9 +168,9 @@ class TestFunctionsProcessor:
                 "depth": 0,
                 "parent_fingerprint": 0,
                 "fingerprint": int("a" * 16, 16),
-                "symbol": "foo",
-                "image": "",
-                "filename": "",
+                "name": "foo",
+                "package": "",
+                "path": "",
                 "is_application": 1,
                 "durations": [10, 20],
                 **base,
@@ -171,9 +179,9 @@ class TestFunctionsProcessor:
                 "depth": 1,
                 "parent_fingerprint": int("a" * 16, 16),
                 "fingerprint": int("c" * 16, 16),
-                "symbol": "bar",
-                "image": "",
-                "filename": "",
+                "name": "bar",
+                "package": "",
+                "path": "",
                 "is_application": 0,
                 "durations": [5, 10],
                 **base,
@@ -182,9 +190,9 @@ class TestFunctionsProcessor:
                 "depth": 0,
                 "parent_fingerprint": 0,
                 "fingerprint": int("b" * 16, 16),
-                "symbol": "baz",
-                "image": "",
-                "filename": "",
+                "name": "baz",
+                "package": "",
+                "path": "",
                 "is_application": 1,
                 "durations": [5],
                 **base,

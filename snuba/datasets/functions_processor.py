@@ -27,9 +27,9 @@ class FunctionsMessageProcessor(MessageProcessor):
                             "depth": depth,
                             "parent_fingerprint": parent_fingerprint,
                             "fingerprint": frame["id"],
-                            "symbol": frame["name"],
-                            "image": frame["package"],
-                            "filename": frame.get("path", ""),
+                            "name": frame["name"],
+                            "package": frame["package"],
+                            "path": frame.get("path", ""),
                             "is_application": 1
                             if frame.get("is_application", True)
                             else 0,
