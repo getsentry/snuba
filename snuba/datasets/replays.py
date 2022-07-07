@@ -8,4 +8,4 @@ class ReplaysDataset(Dataset):
 
     @classmethod
     def is_experimental(cls) -> bool:
-        return False
+        return True
