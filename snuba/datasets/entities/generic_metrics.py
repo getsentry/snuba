@@ -17,6 +17,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.metrics import (
     AggregateCurriedFunctionMapper,
     AggregateFunctionMapper,
+    TagsTypeTransformer,
 )
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -85,7 +86,7 @@ class GenericMetricsEntity(Entity, ABC):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return []
+        return [TagsTypeTransformer()]
 
 
 class GenericMetricsSetsEntity(GenericMetricsEntity):
