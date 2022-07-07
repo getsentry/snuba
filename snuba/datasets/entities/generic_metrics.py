@@ -72,7 +72,18 @@ class GenericMetricsEntity(Entity, ABC):
                     mappers=TranslationMappers(
                         subscriptables=[
                             SubscriptableMapper(
-                                None, "tags", None, "tags", "indexed_value"
+                                from_column_table=None,
+                                from_column_name="tags_raw",
+                                to_nested_col_table=None,
+                                to_nested_col_name="tags",
+                                value_subcolumn_name="raw_value",
+                            ),
+                            SubscriptableMapper(
+                                from_column_table=None,
+                                from_column_name="tags",
+                                to_nested_col_table=None,
+                                to_nested_col_name="tags",
+                                value_subcolumn_name="indexed_value",
                             ),
                         ],
                     ).concat(mappers),
