@@ -70,7 +70,9 @@ class GenericMetricsEntity(Entity, ABC):
                     readable_storage,
                     mappers=TranslationMappers(
                         subscriptables=[
-                            SubscriptableMapper(None, "tags", None, "tags"),
+                            SubscriptableMapper(
+                                None, "tags", None, "tags", "indexed_value"
+                            ),
                         ],
                     ).concat(mappers),
                 )

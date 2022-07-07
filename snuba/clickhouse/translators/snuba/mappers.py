@@ -135,6 +135,7 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_nested_col_table: Optional[str]
     to_nested_col_name: str
+    value_subcolumn_name: str = "value"
     nullable: bool = False
 
     def attempt_map(
@@ -153,6 +154,7 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
                     self.to_nested_col_table,
                     self.to_nested_col_name,
                     key,
+                    self.value_subcolumn_name,
                 )
                 if not self.nullable
                 else build_nullable_mapping_expr(
@@ -160,6 +162,7 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
                     self.to_nested_col_table,
                     self.to_nested_col_name,
                     key,
+                    self.value_subcolumn_name,
                 )
             )
         else:
@@ -185,6 +188,7 @@ class ColumnToMapping(ColumnToExpression):
                 self.to_nested_col_table_name,
                 self.to_nested_col_name,
                 LiteralExpr(None, self.to_nested_mapping_key),
+                "value",
             )
         else:
             return build_nullable_mapping_expr(
@@ -192,6 +196,7 @@ class ColumnToMapping(ColumnToExpression):
                 self.to_nested_col_table_name,
                 self.to_nested_col_name,
                 LiteralExpr(None, self.to_nested_mapping_key),
+                "value",
             )
 
 
@@ -200,10 +205,11 @@ def build_mapping_expr(
     table_name: Optional[str],
     col_name: str,
     mapping_key: Expression,
+    value_subcolumn_name: str,
 ) -> FunctionCallExpr:
     return arrayElement(
         alias,
-        ColumnExpr(None, table_name, f"{col_name}.value"),
+        ColumnExpr(None, table_name, f"{col_name}.{value_subcolumn_name}"),
         FunctionCallExpr(
             None,
             "indexOf",
@@ -217,6 +223,7 @@ def build_nullable_mapping_expr(
     table_name: Optional[str],
     col_name: str,
     mapping_key: Expression,
+    value_subcolumn_name: str,
 ) -> FunctionCallExpr:
     # TODO: Add a pattern for this expression if we need it.
     return FunctionCallExpr(
@@ -228,7 +235,9 @@ def build_nullable_mapping_expr(
                 "has",
                 (ColumnExpr(None, table_name, f"{col_name}.key"), mapping_key),
             ),
-            build_mapping_expr(None, table_name, col_name, mapping_key),
+            build_mapping_expr(
+                None, table_name, col_name, mapping_key, value_subcolumn_name
+            ),
             LiteralExpr(None, None),
         ),
     )
