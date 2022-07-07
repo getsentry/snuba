@@ -21,7 +21,7 @@ class CallTree:
 
     def serialize(self) -> Mapping[str, Any]:
         serialized = {
-            "id": int(self.fingerprint, 16),
+            "fingerprint": int(self.fingerprint, 16),
             "name": self.name,
             "package": self.package,
             "is_application": self.is_application,

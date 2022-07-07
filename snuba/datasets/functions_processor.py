@@ -52,7 +52,9 @@ class FunctionsMessageProcessor(MessageProcessor):
                             "materialization_version": 0,
                         }
                     else:
-                        functions[frame["id"]]["durations"].append(frame["duration_ns"])
+                        functions[frame["fingerprint"]]["durations"].append(
+                            frame["duration_ns"]
+                        )
 
                     children = frame.get("children", [])
 
