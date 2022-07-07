@@ -25,7 +25,9 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.RunSql(
                 storage_set=StorageSetKey.PROFILES,
-                statement=("ALTER TABLE RESET SETTING enable_vertical_merge_algorithm"),
+                statement=(
+                    "ALTER TABLE profiles_local RESET SETTING enable_vertical_merge_algorithm"
+                ),
             )
         ]
 
