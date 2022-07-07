@@ -22,7 +22,12 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return []
+        return [
+            operations.RunSql(
+                storage_set=StorageSetKey.PROFILES,
+                statement=("ALTER TABLE RESET SETTING enable_vertical_merge_algorithm"),
+            )
+        ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
