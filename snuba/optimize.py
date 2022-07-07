@@ -1,15 +1,14 @@
 import logging
-import re
 import threading
 import time
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Mapping, MutableSequence, Optional, Sequence
 
-from snuba import environment, settings, util
+from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
+from snuba.optimize_scheduler import OptimizeScheduler
 from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -31,57 +30,6 @@ def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str
         if clickhouse_host
         else {"table": table}
     )
-
-
-@dataclass(frozen=True)
-class OptimizationBucket:
-    parallel: int
-    cutoff_time: datetime
-
-
-def _build_optimization_buckets(
-    start_time: datetime, max_parallel: int
-) -> Sequence[OptimizationBucket]:
-    """
-    Build buckets of optimization jobs.
-
-    Each bucket represents the number of threads that can run the
-    optimization and the time till the job can be run with that many threads.
-    """
-    last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-
-    if max_parallel == 1:
-        return [
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
-            )
-        ]
-    else:
-        parallel_start_time = last_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
-        parallel_end_time = last_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME
-        full_job_end_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
-        pre_parallel_bucket = OptimizationBucket(
-            parallel=1,
-            cutoff_time=parallel_start_time,
-        )
-        parallel_bucket = OptimizationBucket(
-            parallel=max_parallel,
-            cutoff_time=parallel_end_time,
-        )
-        final_bucket = OptimizationBucket(
-            parallel=1,
-            cutoff_time=full_job_end_time,
-        )
-
-        if start_time < parallel_start_time:
-            return [pre_parallel_bucket, parallel_bucket, final_bucket]
-        elif start_time < parallel_end_time:
-            return [parallel_bucket, final_bucket]
-        else:
-            return [final_bucket]
 
 
 def run_optimize(
@@ -138,10 +86,7 @@ def run_optimize_cron_job(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
-
-    optimization_bucket = _build_optimization_buckets(
-        start_time=datetime.now(), max_parallel=parallel
-    )
+    optimize_scheduler = OptimizeScheduler(parallel=parallel)
 
     try:
         partitions_to_optimize = tracker.get_partitions_to_optimize()
@@ -169,8 +114,8 @@ def run_optimize_cron_job(
         database=database,
         table=table,
         partitions=list(partitions_to_optimize),
-        optimization_buckets=optimization_bucket,
         tracker=tracker,
+        scheduler=optimize_scheduler,
         clickhouse_host=clickhouse_host,
     )
 
@@ -252,60 +197,33 @@ def get_partitions_to_optimize(
     return parts
 
 
-def _subdivide_partitions(
-    partitions: Sequence[str], number_of_subdivisions: int
-) -> Sequence[Sequence[str]]:
-    """
-    Subdivide a list of partitions into number_of_subdivisions lists of partitions
-    so that optimize can be executed on different partitions list by different
-    threads.
-    """
-
-    def sort_partitions(partition_name: str) -> str:
-        date_regex = re.compile("\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])")
-
-        match = re.search(date_regex, partition_name)
-        if match is not None:
-            return match.group()
-
-        return partition_name
-
-    sorted_partitions = sorted(partitions, key=sort_partitions, reverse=True)
-    output: MutableSequence[Sequence[str]] = []
-
-    for i in range(number_of_subdivisions):
-        output.append(sorted_partitions[i::number_of_subdivisions])
-
-    return output
-
-
 def optimize_partition_runner(
     clickhouse: ClickhousePool,
     database: str,
     table: str,
     partitions: Sequence[str],
-    optimization_buckets: Sequence[OptimizationBucket],
+    scheduler: OptimizeScheduler,
     tracker: OptimizedPartitionTracker,
     clickhouse_host: str,
 ) -> None:
     """
-    Run optimize jobs in threads based on the optimization buckets.
+    Run optimize jobs in threads based on the optimization scheduler.
 
-    It subdivides the partitions into number of threads which are needed
-    to be run. Each thread then runs the optimize job on the list of
-    partitions assigned to it.
+    The scheduler provides the schedule for running the optimization. Based
+    on the schedule, this method executes the schedule.
 
-    The threads run the optimization job based on the optimization bucket.
-
-    We traverse through all the optimization buckets until
-    1. All optimizations are done.
-    2. The final optimization bucket id done.
+    The execution continues until one of the following conditions is met:
+    1. There are no more partitions which need optimization.
+    2. The final cutoff time is reached. In this case, the scheduler will
+    raise an exception which would be propagated to the caller.
     """
-    for bucket_index, bucket in enumerate(optimization_buckets):
-        parallel, cutoff_time = bucket.parallel, bucket.cutoff_time
-        divided_partitions = _subdivide_partitions(partitions, parallel)
+    remaining_partitions = partitions
+
+    while remaining_partitions:
+        schedule = scheduler.get_next_schedule(remaining_partitions)
+        num_threads = len(schedule.partitions)
         threads: MutableSequence[threading.Thread] = []
-        for i in range(0, parallel):
+        for i in range(0, num_threads):
             threads.append(
                 threading.Thread(
                     target=optimize_partitions,
@@ -313,8 +231,8 @@ def optimize_partition_runner(
                         clickhouse,
                         database,
                         table,
-                        divided_partitions[i],
-                        cutoff_time,
+                        schedule.partitions[i],
+                        schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
                     ),
@@ -323,22 +241,16 @@ def optimize_partition_runner(
 
             threads[i].start()
 
-        # Wait for all threads to finish. Any thread can raise
-        # JobTimeoutException. Its an indication that not all partitions
-        # could be optimized in the given amount of cutoff_time.
-        for i in range(0, parallel):
+        # Wait for all threads to finish. They would finish either because all
+        # work is done or because a cutoff time was reached. We won't know the
+        # reason why the threads finished.
+        for i in range(0, num_threads):
             threads[i].join()
 
         # If there are still partitions needing optimization then move on to the
         # next bucket with the partitions which still need optimization.
-        remaining_partitions = tracker.get_partitions_to_optimize()
-        if len(remaining_partitions) > 0:
-            if bucket_index == len(optimization_buckets) - 1:
-                raise JobTimeoutException(
-                    "Could not optimize all partitions in the given amount of time."
-                )
-            partitions = list(remaining_partitions)
-        else:
+        remaining_partitions = list(tracker.get_partitions_to_optimize())
+        if len(remaining_partitions) == 0:
             return
 
 

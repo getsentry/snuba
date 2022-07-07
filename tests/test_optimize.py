@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Mapping
 
 import pytest
+from freezegun import freeze_time
 
 from snuba import optimize, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -10,17 +11,18 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import (
     JobTimeoutException,
-    OptimizationBucket,
-    _build_optimization_buckets,
     _get_metrics_tags,
-    _subdivide_partitions,
     optimize_partition_runner,
     optimize_partitions,
 )
+from snuba.optimize_scheduler import OptimizedSchedulerTimeout, OptimizeScheduler
 from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.processor import InsertBatch
 from snuba.redis import redis_client
 from tests.helpers import write_processed_messages
+
+last_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
 
 test_data = [
     pytest.param(
@@ -38,7 +40,7 @@ test_data = [
             ],
             None,
         ),
-        1,
+        last_midnight + timedelta(minutes=30),
         id="errors non-parallel",
     ),
     pytest.param(
@@ -56,7 +58,9 @@ test_data = [
             ],
             None,
         ),
-        2,
+        last_midnight
+        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(minutes=30),
         id="errors parallel",
     ),
     pytest.param(
@@ -73,7 +77,7 @@ test_data = [
             ],
             None,
         ),
-        1,
+        last_midnight + timedelta(minutes=30),
         id="transactions non-parallel",
     ),
     pytest.param(
@@ -90,7 +94,9 @@ test_data = [
             ],
             None,
         ),
-        2,
+        last_midnight
+        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(minutes=30),
         id="transactions parallel",
     ),
 ]
@@ -98,14 +104,14 @@ test_data = [
 
 class TestOptimize:
     @pytest.mark.parametrize(
-        "storage_key, create_event_row_for_date, parallel",
+        "storage_key, create_event_row_for_date, current_time",
         test_data,
     )
     def test_optimize(
         self,
         storage_key: StorageKey,
         create_event_row_for_date: Callable[[datetime], InsertBatch],
-        parallel: int,
+        current_time: datetime,
     ) -> None:
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()
@@ -172,11 +178,7 @@ class TestOptimize:
             )
         ] == [(a_month_earlier_monday, 90)]
 
-        optimization_bucket = [
-            OptimizationBucket(
-                parallel=parallel, cutoff_time=(datetime.now() + timedelta(minutes=10))
-            )
-        ]
+        scheduler = OptimizeScheduler(2)
 
         tracker = OptimizedPartitionTracker(
             redis_client=redis_client,
@@ -188,15 +190,16 @@ class TestOptimize:
         )
 
         tracker.update_all_partitions([part.name for part in partitions])
-        optimize.optimize_partition_runner(
-            clickhouse=clickhouse,
-            database=database,
-            table=table,
-            partitions=[part.name for part in partitions],
-            optimization_buckets=optimization_bucket,
-            tracker=tracker,
-            clickhouse_host="some-hostname.domain.com",
-        )
+        with freeze_time(current_time):
+            optimize.optimize_partition_runner(
+                clickhouse=clickhouse,
+                database=database,
+                table=table,
+                partitions=[part.name for part in partitions],
+                scheduler=scheduler,
+                tracker=tracker,
+                clickhouse_host="some-hostname.domain.com",
+            )
 
         # all partitions should be optimized
         partitions = optimize.get_partitions_to_optimize(
@@ -226,123 +229,6 @@ class TestOptimize:
     ) -> None:
         assert _get_metrics_tags(table, host) == expected
 
-    @pytest.mark.parametrize(
-        "partitions,subdivisions,expected",
-        [
-            pytest.param(
-                ["(90,'2022-03-28')"],
-                2,
-                [["(90,'2022-03-28')"], []],
-                id="one part",
-            ),
-            pytest.param(
-                [
-                    "(90,'2022-03-28')",
-                    "(90,'2022-03-21')",
-                ],
-                2,
-                [
-                    ["(90,'2022-03-28')"],
-                    ["(90,'2022-03-21')"],
-                ],
-                id="two partitions",
-            ),
-            pytest.param(
-                [
-                    "(90,'2022-03-28')",
-                    "(90,'2022-03-21')",
-                    "(30,'2022-03-28')",
-                ],
-                2,
-                [
-                    [
-                        "(90,'2022-03-28')",
-                        "(90,'2022-03-21')",
-                    ],
-                    [
-                        "(30,'2022-03-28')",
-                    ],
-                ],
-                id="three partitions",
-            ),
-            pytest.param(
-                [
-                    "(90,'2022-03-28')",
-                    "(90,'2022-03-21')",
-                    "(30,'2022-03-28')",
-                    "(30,'2022-03-21')",
-                ],
-                2,
-                [
-                    [
-                        "(90,'2022-03-28')",
-                        "(90,'2022-03-21')",
-                    ],
-                    [
-                        "(30,'2022-03-28')",
-                        "(30,'2022-03-21')",
-                    ],
-                ],
-                id="four partitions",
-            ),
-            pytest.param(
-                [
-                    "(90,'2022-03-28')",
-                    "(90,'2022-03-21')",
-                    "(30,'2022-03-28')",
-                    "(30,'2022-03-21')",
-                    "(90,'2022-03-14')",
-                    "(90,'2022-03-07')",
-                ],
-                3,
-                [
-                    [
-                        "(90,'2022-03-28')",
-                        "(30,'2022-03-21')",
-                    ],
-                    [
-                        "(30,'2022-03-28')",
-                        "(90,'2022-03-14')",
-                    ],
-                    [
-                        "(90,'2022-03-21')",
-                        "(90,'2022-03-07')",
-                    ],
-                ],
-                id="six partitions",
-            ),
-            pytest.param(
-                [
-                    "(90,'2022-03-07')",
-                    "(90,'2022-03-28')",
-                    "(90,'2022-03-21')",
-                    "(30,'2022-03-28')",
-                    "(90,'2022-03-14')",
-                    "(30,'2022-03-21')",
-                ],
-                1,
-                [
-                    [
-                        "(90,'2022-03-28')",
-                        "(30,'2022-03-28')",
-                        "(90,'2022-03-21')",
-                        "(30,'2022-03-21')",
-                        "(90,'2022-03-14')",
-                        "(90,'2022-03-07')",
-                    ]
-                ],
-                id="six partitions non-sorted",
-            ),
-        ],
-    )
-    def test_subdivide_partitions(
-        self,
-        partitions: Sequence[str],
-        subdivisions: int,
-        expected: Sequence[Sequence[str]],
-    ) -> None:
-        assert _subdivide_partitions(partitions, subdivisions) == expected
-
 
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
@@ -365,16 +251,7 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
 
     dummy_partition = "(90,'2022-03-28')"
     tracker.update_all_partitions([dummy_partition])
-    with pytest.raises(JobTimeoutException):
-        optimize_partition_runner(
-            clickhouse=clickhouse_pool,
-            database=database,
-            table=table,
-            partitions=[dummy_partition],
-            optimization_buckets=[OptimizationBucket(1, datetime.now())],
-            tracker=tracker,
-            clickhouse_host="some-hostname.domain.com",
-        )
+    scheduler = OptimizeScheduler(2)
 
     with pytest.raises(JobTimeoutException):
         optimize_partitions(
@@ -387,75 +264,18 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
             clickhouse_host="some-hostname.domain.com",
         )
 
-    tracker.delete_all_states()
-
-
-prev_midnight = (datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-
-build_optimization_test_data = [
-    pytest.param(
-        prev_midnight,
-        1,
-        [
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
+    with freeze_time(
+        last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(minutes=15)
+    ):
+        with pytest.raises(OptimizedSchedulerTimeout):
+            optimize_partition_runner(
+                clickhouse=clickhouse_pool,
+                database=database,
+                table=table,
+                partitions=[dummy_partition],
+                scheduler=scheduler,
+                tracker=tracker,
+                clickhouse_host="some-hostname.domain.com",
             )
-        ],
-        id="non-parallel",
-    ),
-    pytest.param(
-        prev_midnight,
-        2,
-        [
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME,
-            ),
-            OptimizationBucket(
-                parallel=2,
-                cutoff_time=prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME,
-            ),
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
-            ),
-        ],
-        id="parallel start from midnight",
-    ),
-    pytest.param(
-        prev_midnight
-        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
-        + timedelta(minutes=10),
-        2,
-        [
-            OptimizationBucket(
-                parallel=2,
-                cutoff_time=prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME,
-            ),
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
-            ),
-        ],
-        id="parallel start after parallel start threshold",
-    ),
-    pytest.param(
-        prev_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME + timedelta(minutes=10),
-        2,
-        [
-            OptimizationBucket(
-                parallel=1,
-                cutoff_time=prev_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
-            ),
-        ],
-        id="parallel start after parallel end threshold",
-    ),
-]
 
-
-@pytest.mark.parametrize("start_time, parallel, expected", build_optimization_test_data)
-def test_build_optimization_buckets(
-    start_time: datetime, parallel: int, expected: Sequence[OptimizationBucket]
-) -> None:
-    assert _build_optimization_buckets(start_time, parallel) == expected
+    tracker.delete_all_states()
