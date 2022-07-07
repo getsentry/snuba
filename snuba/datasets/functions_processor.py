@@ -20,6 +20,9 @@ class FunctionsMessageProcessor(MessageProcessor):
 
         functions = {}
 
+        profile_id = str(uuid.UUID(message["profile_id"]))
+        timestamp = datetime.utcfromtimestamp(message["timestamp"])
+
         for thread, root_frames in message["call_trees"].items():
             for root_frame in root_frames:
                 stack = [(root_frame, 0, 0)]
@@ -29,9 +32,7 @@ class FunctionsMessageProcessor(MessageProcessor):
                         functions[frame["fingerprint"]] = {
                             "project_id": message["project_id"],
                             "transaction_name": message["transaction_name"],
-                            "timestamp": datetime.utcfromtimestamp(
-                                message["timestamp"]
-                            ),
+                            "timestamp": timestamp,
                             "depth": depth,
                             "parent_fingerprint": parent_fingerprint,
                             "fingerprint": frame["fingerprint"],
@@ -48,7 +49,7 @@ class FunctionsMessageProcessor(MessageProcessor):
                             "os_version": message["os_version"],
                             "retention_days": message["retention_days"],
                             "durations": [frame["duration_ns"]],
-                            "profile_id": str(uuid.UUID(message["profile_id"])),
+                            "profile_id": profile_id,
                             "materialization_version": 0,
                         }
                     else:
