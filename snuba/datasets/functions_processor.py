@@ -2,8 +2,12 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "functions.processor")
 
 MAX_DEPTH = 1024
 
@@ -12,6 +16,8 @@ class FunctionsMessageProcessor(MessageProcessor):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
+        max_depth_reached = False
+
         functions = {}
 
         for thread, root_frames in message["call_trees"].items():
@@ -19,8 +25,8 @@ class FunctionsMessageProcessor(MessageProcessor):
                 stack = [(root_frame, 0, 0)]
                 while stack:
                     frame, depth, parent_fingerprint = stack.pop()
-                    if frame["id"] not in functions:
-                        functions[frame["id"]] = {
+                    if frame["fingerprint"] not in functions:
+                        functions[frame["fingerprint"]] = {
                             "project_id": message["project_id"],
                             "transaction_name": message["transaction_name"],
                             "timestamp": datetime.utcfromtimestamp(
@@ -28,7 +34,7 @@ class FunctionsMessageProcessor(MessageProcessor):
                             ),
                             "depth": depth,
                             "parent_fingerprint": parent_fingerprint,
-                            "fingerprint": frame["id"],
+                            "fingerprint": frame["fingerprint"],
                             "name": frame["name"],
                             "package": frame["package"],
                             "path": frame.get("path", ""),
@@ -48,12 +54,19 @@ class FunctionsMessageProcessor(MessageProcessor):
                     else:
                         functions[frame["id"]]["durations"].append(frame["duration_ns"])
 
+                    children = frame.get("children", [])
+
                     if depth < MAX_DEPTH:
                         stack.extend(
                             [
-                                (child, depth + 1, frame["id"])
-                                for child in frame.get("children", [])
+                                (child, depth + 1, frame["fingerprint"])
+                                for child in children
                             ]
                         )
+                    elif children:
+                        max_depth_reached = True
+
+        if max_depth_reached:
+            metrics.increment("max_depth_reached")
 
         return InsertBatch(list(functions.values()), None)
