@@ -26,7 +26,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.RunSql(
                 storage_set=StorageSetKey.PROFILES,
                 statement=(
-                    "ALTER TABLE profiles_local SETTING enable_vertical_merge_algorithm=1"
+                    "ALTER TABLE profiles_local MODIFY SETTING enable_vertical_merge_algorithm=1"
                 ),
             )
         ]
