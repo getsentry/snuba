@@ -21,7 +21,7 @@ from snuba.datasets.entities.metrics import (
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-from snuba.datasets.storages.generic_metrics import (  # distributions_bucket_storage,; distributions_storage,
+from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage,
     distributions_storage,
     sets_bucket_storage,
