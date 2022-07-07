@@ -28,7 +28,10 @@ def get_entity(name: EntityKey) -> Entity:
     )
     from snuba.datasets.entities.events import EventsEntity
     from snuba.datasets.entities.functions import FunctionsEntity
-    from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
+    from snuba.datasets.entities.generic_metrics import (
+        GenericMetricsDistributionsEntity,
+        GenericMetricsSetsEntity,
+    )
     from snuba.datasets.entities.metrics import (
         MetricsCountersEntity,
         MetricsDistributionsEntity,
@@ -64,6 +67,7 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.FUNCTIONS: FunctionsEntity,
         EntityKey.REPLAYS: ReplaysEntity,
         EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsEntity,
+        EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity,
         **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
     }
 
