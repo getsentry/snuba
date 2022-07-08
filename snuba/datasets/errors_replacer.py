@@ -550,7 +550,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         if processed is not None:
             bypass_projects = get_config("replacements_project_bypass", "")
             projects = (
-                [int(project_id) for project_id in bypass_projects]
+                [int(project_id) for project_id in bypass_projects.split("|")]
                 if bypass_projects
                 else []
             )
