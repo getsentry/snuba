@@ -186,7 +186,7 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
 )
 def test_get_next_schedule(
     parallel: int,
-    partitions: Sequence[Sequence[str]],
+    partitions: Sequence[str],
     current_time: datetime,
     expected: OptimizationSchedule,
 ) -> None:
