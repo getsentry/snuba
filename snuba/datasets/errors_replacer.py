@@ -547,6 +547,25 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
+        if processed is not None:
+            bypass_projects = get_config("replacements_project_bypass", "")
+            projects = (
+                [int(project_id) for project_id in bypass_projects]
+                if bypass_projects
+                else []
+            )
+            if processed.get_project_id() in projects:
+                # For a persistent non rate limited logger
+                logger.info(
+                    f"Skipping replacement for project. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",
+                )
+                # For sentry tracking
+                logger.error(
+                    "Skipping replacement for project",
+                    extra={"project_id": processed.get_project_id(), "data": message},
+                )
+                return None
+
         return processed
 
     def get_state(self) -> ReplacerState:
@@ -1132,13 +1151,6 @@ def process_delete_tag(
     use_promoted_prewhere: bool,
     schema: WritableTableSchema,
 ) -> Optional[Replacement]:
-    # bypass logic
-    project_id = message.data["project_id"]
-    bypass_project = get_config("tag_replacement_bypass")
-    if bypass_project and bypass_project == project_id:
-        logger.error("Skipping tag replacement")
-        return None
-
     tag = message.data["tag"]
     if not tag:
         return None
