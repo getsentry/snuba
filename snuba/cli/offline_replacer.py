@@ -67,12 +67,24 @@ def offline_replacer(
     """
     Executes a list of replacements taken from a file instead of taking
     them from Kafka.
+
+    Example of the format:
+    [
+        2,
+        "start_delete_tag",
+        {
+            "transaction_id":"34b07c124e964f5b9e510edb.....",
+            "project_id":123123123,
+            "tag":"tag_name",
+            "datetime":"2022-07-08T08:28:21.537918Z"
+        }
+    ]
     """
     logger = logging.getLogger(__name__)
     setup_logging(log_level)
     setup_sentry()
 
-    metrics = MetricsWrapper(environment.metrics, "errors.replacer")
+    metrics = MetricsWrapper(environment.metrics, "errors.offline_replacer")
 
     storage_key = StorageKey(storage_name)
     storage = get_writable_storage(storage_key)
