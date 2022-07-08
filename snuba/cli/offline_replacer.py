@@ -101,6 +101,7 @@ def offline_replacer(
             )
             replacement = worker.process_message(kafka_msg)
             if replacement is not None:
+                logger.debug(f"Replacement to process {replacement}")
                 if not dry_run:
                     worker.flush_batch([replacement])
                     logger.info(
