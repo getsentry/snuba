@@ -24,7 +24,7 @@ Markdown==3.3.7
 MarkupSafe==2.1.1
 mywsgi==1.0.3
 more-itertools==8.13.0
-mypy==0.812
+mypy==0.961
 packaging==21.3
 # Do not update parsimonious, there is a performance issue in newer versions
 parsimonious==0.8.1
