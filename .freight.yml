@@ -57,6 +57,10 @@ steps:
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: metrics-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
+    name: generic-metrics-sets-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
+    name: generic-metrics-distributions-consumer
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: loadtest-errors-consumer
   - image: us.gcr.io/sentryio/snuba:{sha}
     name: loadtest-sessions-consumer

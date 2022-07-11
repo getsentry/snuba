@@ -217,6 +217,29 @@ test_data = [
     ),
     pytest.param(
         TranslationMappers(
+            subscriptables=[
+                SubscriptableMapper(None, "tags", "table", "tags", "special_value")
+            ]
+        ),
+        SubscriptableReference(
+            "tags[release]", Column(None, None, "tags"), Literal(None, "release")
+        ),
+        FunctionCall(
+            "tags[release]",
+            "arrayElement",
+            (
+                Column(None, "table", "tags.special_value"),
+                FunctionCall(
+                    None,
+                    "indexOf",
+                    (Column(None, "table", "tags.key"), Literal(None, "release")),
+                ),
+            ),
+        ),
+        id="tag mapper, custom value subcolumn",
+    ),
+    pytest.param(
+        TranslationMappers(
             subscriptables=[SubscriptableMapper(None, "tags", None, "tags")],
             columns=[
                 ColumnToColumn(None, "col", None, "col2"),

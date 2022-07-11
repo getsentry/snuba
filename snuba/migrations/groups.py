@@ -236,7 +236,10 @@ class ProfilesLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.profiles")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_profiles"]
+        return [
+            "0001_profiles",
+            "0002_disable_vertical_merge_algorithm",
+        ]
 
 
 class FunctionsLoader(DirectoryLoader):
@@ -259,6 +262,9 @@ class GenericMetricsLoader(DirectoryLoader):
             "0004_sets_raw_add_granularities",
             "0005_sets_replace_mv",
             "0006_sets_raw_add_granularities_dist_table",
+            "0007_distributions_aggregate_table",
+            "0008_distributions_raw_table",
+            "0009_distributions_mv",
         ]
 
 
