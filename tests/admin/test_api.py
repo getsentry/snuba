@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
@@ -11,13 +9,13 @@ from snuba.datasets.factory import get_enabled_dataset_names
 
 
 @pytest.fixture
-def admin_api() -> FlaskClient[Any]:
+def admin_api() -> FlaskClient:
     from snuba.admin.views import application
 
     return application.test_client()
 
 
-def test_get_configs(admin_api: FlaskClient[Any]) -> None:
+def test_get_configs(admin_api: FlaskClient) -> None:
     response = admin_api.get("/configs")
     assert response.status_code == 200
     assert json.loads(response.data) == []
@@ -45,7 +43,7 @@ def test_get_configs(admin_api: FlaskClient[Any]) -> None:
     ]
 
 
-def test_post_configs(admin_api: FlaskClient[Any]) -> None:
+def test_post_configs(admin_api: FlaskClient) -> None:
     # int
     response = admin_api.post(
         "/configs",
@@ -99,7 +97,7 @@ def test_post_configs(admin_api: FlaskClient[Any]) -> None:
     assert response.status_code == 400
 
 
-def test_delete_configs(admin_api: FlaskClient[Any]) -> None:
+def test_delete_configs(admin_api: FlaskClient) -> None:
     # delete a config and its description
     state.set_config("delete_this", "1")
     state.set_config_description("delete_this", "description for this config")
@@ -125,7 +123,7 @@ def test_delete_configs(admin_api: FlaskClient[Any]) -> None:
     assert state.get_config_description("delete_this") == "description for this config"
 
 
-def test_config_descriptions(admin_api: FlaskClient[Any]) -> None:
+def test_config_descriptions(admin_api: FlaskClient) -> None:
     state.set_config_description("desc_test", "description test")
     state.set_config_description("another_test", "another description")
     response = admin_api.get("/all_config_descriptions")
@@ -137,7 +135,7 @@ def test_config_descriptions(admin_api: FlaskClient[Any]) -> None:
 
 
 def get_node_for_table(
-    admin_api: FlaskClient[Any], storage_name: str
+    admin_api: FlaskClient, storage_name: str
 ) -> tuple[str, str, int]:
     response = admin_api.get("/clickhouse_nodes")
     assert response.status_code == 200, response
@@ -152,7 +150,7 @@ def get_node_for_table(
     raise Exception(f"{storage_name} does not have a local node")
 
 
-def test_system_query(admin_api: FlaskClient[Any]) -> None:
+def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
         "/run_clickhouse_system_query",
@@ -172,7 +170,7 @@ def test_system_query(admin_api: FlaskClient[Any]) -> None:
     assert data["rows"] == []
 
 
-def test_query_trace(admin_api: FlaskClient[Any]) -> None:
+def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
@@ -186,7 +184,7 @@ def test_query_trace(admin_api: FlaskClient[Any]) -> None:
     assert "<Debug> executeQuery" in data["trace_output"]
 
 
-def test_query_trace_bad_query(admin_api: FlaskClient[Any]) -> None:
+def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
@@ -201,7 +199,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient[Any]) -> None:
     assert "clickhouse" == data["error"]["type"]
 
 
-def test_query_trace_invalid_query(admin_api: FlaskClient[Any]) -> None:
+def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_trace_query",
@@ -216,14 +214,14 @@ def test_query_trace_invalid_query(admin_api: FlaskClient[Any]) -> None:
     assert "validation" == data["error"]["type"]
 
 
-def test_get_snuba_datasets(admin_api: FlaskClient[Any]) -> None:
+def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     response = admin_api.get("/snuba_datasets")
     assert response.status_code == 200
     data = json.loads(response.data)
     assert set(data) == set(get_enabled_dataset_names())
 
 
-def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient[Any]) -> None:
+def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/snql_to_sql", data=json.dumps({"dataset": "", "query": ""})
     )
@@ -232,7 +230,7 @@ def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient[Any]) -> Non
     assert data["error"]["message"] == "dataset '' is not available"
 
 
-def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient[Any]) -> None:
+def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/snql_to_sql", data=json.dumps({"dataset": "sessions", "query": ""})
     )
@@ -244,7 +242,7 @@ def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient[Any]) -> None:
     )
 
 
-def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient[Any]) -> None:
+def test_convert_SnQL_to_SQL_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (sessions)
     SELECT sessions_crashed

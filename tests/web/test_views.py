@@ -29,6 +29,6 @@ def test_handle_invalid_query(
 ) -> None:
     with caplog.at_level(logging.INFO):
         caplog.clear()
-        _ = handle_invalid_query(exception=exception)
+        _ = handle_invalid_query(exception)
         for record in caplog.records:
             assert record.levelname == expected_log_level
