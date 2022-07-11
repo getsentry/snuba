@@ -1,8 +1,7 @@
 import logging
 import zlib
-from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Iterable, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Callable, Iterable, Mapping, MutableMapping, Optional, Tuple
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
@@ -26,15 +25,18 @@ GRANULARITY_ONE_MINUTE = 1
 GRANULARITY_ONE_HOUR = 2
 GRANULARITY_ONE_DAY = 3
 
+MessageTypeAlias = Mapping[str, Any]
 
-class GenericMetricsBucketProcessor(MessageProcessor, ABC):
-    @abstractmethod
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        raise NotImplementedError
 
-    @abstractmethod
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        raise NotImplementedError
+class GenericMetricsBucketProcessor(MessageProcessor):
+    def __init__(
+        self,
+        process_filter: Callable[[MessageTypeAlias], bool],
+        process_execute: Callable[[MessageTypeAlias], MessageTypeAlias],
+    ) -> None:
+        super().__init__()
+        self.__process_filter = process_filter
+        self.__process_execute = process_execute
 
     #
     # This is mainly split out from _hash_timeseries_id for unit-testing purposes
@@ -80,7 +82,7 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        if not self._should_process(message):
+        if not self.__process_filter(message):
             return None
 
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(message["timestamp"]))
@@ -114,7 +116,7 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
             "tags.key": keys,
             "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
-            **self._process_values(message),
+            **self.__process_execute(message),
             "materialization_version": 1,
             "retention_days": retention_days,
             "timeseries_id": self._hash_timeseries_id(message, sorted_tag_items),
@@ -127,17 +129,11 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         return InsertBatch([processed], None)
 
 
-class GenericSetsMetricsProcessor(GenericMetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return is_set_message(message)
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return values_for_set_message(message)
+def GenericSetsMetricsProcessor() -> GenericMetricsBucketProcessor:
+    return GenericMetricsBucketProcessor(is_set_message, values_for_set_message)
 
 
-class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return is_distribution_message(message)
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return values_for_distribution_message(message)
+def GenericDistributionsMetricsProcessor() -> GenericMetricsBucketProcessor:
+    return GenericMetricsBucketProcessor(
+        is_distribution_message, values_for_distribution_message
+    )
