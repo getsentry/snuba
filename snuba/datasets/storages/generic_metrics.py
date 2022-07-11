@@ -119,6 +119,7 @@ sets_bucket_storage = WritableTableStorage(
         processor=GenericSetsMetricsProcessor(),
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
+        commit_log_topic=Topic.GENERIC_METRICS_SETS_COMMIT_LOG,
     ),
 )
 
@@ -167,5 +168,6 @@ distributions_bucket_storage = WritableTableStorage(
         processor=GenericDistributionsMetricsProcessor(),
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
+        commit_log_topic=Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG,
     ),
 )
