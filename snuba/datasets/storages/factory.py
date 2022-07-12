@@ -9,6 +9,8 @@ from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
 from snuba.datasets.storages.errors_v2 import storage as errors_v2_storage
 from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
+from snuba.datasets.storages.functions import agg_storage as functions_ro_storage
+from snuba.datasets.storages.functions import raw_storage as functions_storage
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage as gen_metrics_dists_bucket_storage,
 )
@@ -87,6 +89,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             transactions_v2_storage,
             errors_v2_storage,
             profiles_writable_storage,
+            functions_storage,
             generic_metrics_sets_bucket_storage,
             replays_storage,
             gen_metrics_dists_bucket_storage,
@@ -118,6 +121,7 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
             org_sessions_hourly_storage,
             transactions_ro_storage,
             profiles_writable_storage,
+            functions_ro_storage,
             errors_v2_ro_storage,
         ]
     },

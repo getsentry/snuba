@@ -22,6 +22,7 @@ class Topic(Enum):
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
+    PROFILES_FUNCTIONS = "profiles-call-tree"
     REPLAYEVENTS = "snuba-replay-events"
     GENERIC_METRICS = "snuba-generic-metrics"
 
