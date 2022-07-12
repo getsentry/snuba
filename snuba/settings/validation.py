@@ -35,6 +35,8 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "scheduled-subscriptions-transactions",
         "scheduled-subscriptions-sessions",
         "scheduled-subscriptions-metrics",
+        "scheduled-subscriptions-generic-metrics-distributions",
+        "scheduled-subscriptions-generic-metrics-sets",
         "events-subscription-results",
         "transactions-subscription-results",
         "sessions-subscription-results",
