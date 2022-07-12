@@ -29,6 +29,7 @@ from snuba.datasets.generic_metrics_processor import (
     GenericSetsMetricsProcessor,
 )
 from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -120,7 +121,7 @@ sets_bucket_storage = WritableTableStorage(
         processor=GenericSetsMetricsProcessor(),
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
-        pre_filter=KafkaHeaderFilter("metric_type", "s"),
+        pre_filter=KafkaHeaderFilter("metric_type", InputType.SET.value),
     ),
 )
 
@@ -169,6 +170,6 @@ distributions_bucket_storage = WritableTableStorage(
         processor=GenericDistributionsMetricsProcessor(),
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
-        pre_filter=KafkaHeaderFilter("metric_type", "d"),
+        pre_filter=KafkaHeaderFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )
