@@ -68,23 +68,6 @@ TEST_CASES = [
     pytest.param(
         [
             ClickhouseNode("query_node", 9000, None, None),
-            ClickhouseNode("storage-0-0", 9000, 1, 1),
-            ClickhouseNode("storage-0-1", 9000, 1, 2),
-            ClickhouseNode("storage-0-2", 9000, 1, 3),
-            ClickhouseNode("storage-0-3", 9000, 1, 4),
-        ],
-        {
-            1: [
-                ClickhouseNode("storage-0-0", 9000, 1, 1),
-                ClickhouseNode("storage-0-1", 9000, 1, 2),
-                ClickhouseNode("storage-0-2", 9000, 1, 3),
-            ],
-        },
-        id="Full wrap around. Replicaset higher than 3",
-    ),
-    pytest.param(
-        [
-            ClickhouseNode("query_node", 9000, None, None),
             ClickhouseNode("storage-1-1", 9000, 2, 2),
             ClickhouseNode("storage-0-1", 9000, 1, 2),
             ClickhouseNode("storage-0-0", 9000, 1, 1),

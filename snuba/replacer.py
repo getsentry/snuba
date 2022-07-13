@@ -95,13 +95,24 @@ class InOrderConnectionPool(ShardedConnectionPool):
             all_nodes = self.__cluster.get_local_nodes()
 
             self.__nodes = defaultdict(list)
-            # We pick up the first three replicas for each shard
+
+            # We need to sort the nodes by replica id as there is no guarantee
+            # that `get_local_nodes` will return them sorted. So that we can
+            # always hit the same node (the first replica) except during failover.
+            valid_nodes = filter(
+                lambda node: node.replica is not None and node.shard is not None,
+                all_nodes,
+            )
             sorted_nodes = sorted(
-                all_nodes, key=lambda n: n.replica if n.replica is not None else -1
+                valid_nodes,
+                # Need to assign a value ro replica if that is None because
+                # mypy does not know replica cannot be None at this point.
+                key=lambda n: n.replica if n.replica is not None else -1,
             )
             for n in sorted_nodes:
-                if n.replica is not None and n.replica <= 3 and n.shard is not None:
-                    self.__nodes[n.shard].append(n)
+                # mypy does not know we filtered out None values
+                assert n.shard is not None
+                self.__nodes[n.shard].append(n)
 
             self.__nodes_refreshed_at = now
         return self.__nodes
