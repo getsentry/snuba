@@ -5,6 +5,8 @@ from typing import MutableSequence, Sequence
 
 from snuba import settings
 
+CLICKHOUSE_PARTITION_RE = re.compile("\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])")
+
 
 class OptimizedSchedulerTimeout(Exception):
     """
@@ -66,9 +68,7 @@ class OptimizeScheduler:
         """
 
         def sort_partitions(partition_name: str) -> str:
-            date_regex = re.compile("\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])")
-
-            match = re.search(date_regex, partition_name)
+            match = re.search(CLICKHOUSE_PARTITION_RE, partition_name)
             if match is not None:
                 return match.group()
 
