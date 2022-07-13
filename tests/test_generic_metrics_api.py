@@ -143,7 +143,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     AND metric_id = {self.metric_id}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -180,7 +180,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     AND tags_raw[{tag_key}] = '{value_as_string}'
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -217,7 +217,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     AND tags[{tag_key}] = {tag_idx_value}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -308,7 +308,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     AND metric_id = {self.metric_id}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -333,7 +333,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     AND metric_id = {self.metric_id}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,

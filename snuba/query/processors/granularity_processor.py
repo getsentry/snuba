@@ -39,3 +39,37 @@ class GranularityProcessor(QueryProcessor):
                 Literal(None, granularity),
             )
         )
+
+
+class MappedGranularityProcessor(QueryProcessor):
+    DEFAULT_GRANULARITY_ENUM = 1
+    PERFORMANCE_GRANULARITIES = [(60, 1), (3600, 2), (86400, 3)]
+    """Use the granularity set on the query to filter on the granularity column"""
+
+    def __get_granularity(self, query: Query) -> int:
+        """Find the best fitting granularity for this query"""
+        requested_granularity = query.get_granularity()
+
+        if requested_granularity is None:
+            return self.DEFAULT_GRANULARITY_ENUM
+        elif requested_granularity > 0:
+            for (granularity, mapped_value) in reversed(self.PERFORMANCE_GRANULARITIES):
+                if (
+                    requested_granularity % granularity == 0
+                    or requested_granularity == mapped_value
+                ):
+                    return mapped_value
+
+        raise InvalidGranularityException(
+            f"Granularity must be multiple of one of {GRANULARITIES_AVAILABLE}"
+        )
+
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        granularity = self.__get_granularity(query)
+        query.add_condition_to_ast(
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "granularity"),
+                Literal(None, granularity),
+            )
+        )
