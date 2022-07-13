@@ -1,7 +1,7 @@
 import itertools
 import json
 from datetime import datetime, timedelta
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Iterable, Mapping, Tuple, Union
 
 import pytest
 import pytz
@@ -35,7 +35,7 @@ def gen_string() -> str:
     return "placeholder{:04d}".format(placeholder_counter)
 
 
-SHARED_TAGS = {
+SHARED_TAGS: Mapping[str, int] = {
     "65546": 65536,
     "9223372036854776010": 65593,
     "9223372036854776016": 109333,
@@ -46,7 +46,7 @@ SHARED_TAGS = {
     "9223372036854776026": 9223372036854776031,
 }
 
-SHARED_MAPPING_META = {
+SHARED_MAPPING_META: Mapping[str, Mapping[str, str]] = {
     "c": {
         "65536": gen_string(),
         "65539": gen_string(),
@@ -103,9 +103,14 @@ class TestGenericMetricsApiSets(BaseApiTest):
         self.end_time = (
             self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         )
-        self.generate_sets()
+        self.generate_sets(self.default_tags, self.mapping_meta, self.set_cycle)
 
-    def generate_sets(self) -> None:
+    def generate_sets(
+        self,
+        tags: Mapping[str, int],
+        mapping_meta: Mapping[str, Mapping[str, str]],
+        int_source: Iterable[int],
+    ) -> None:
         rows = [
             self.write_storage.get_table_writer()
             .get_stream_loader()
@@ -116,12 +121,12 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     "project_id": self.project_id,
                     "unit": "ms",
                     "type": InputType.SET.value,
-                    "value": list(itertools.islice(self.set_cycle, 3)),
+                    "value": list(itertools.islice(int_source, 3)),
                     "timestamp": self.base_time.timestamp() + n,
-                    "tags": self.default_tags,
+                    "tags": tags,
                     "metric_id": self.metric_id,
                     "retention_days": RETENTION_DAYS,
-                    "mapping_meta": self.mapping_meta,
+                    "mapping_meta": mapping_meta,
                     "use_case_id": self.use_case_id,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
@@ -149,6 +154,80 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
         assert data["data"][0]["unique_values"] == self.unique_values
+
+    def test_raw_tags(self) -> None:
+        tag_key = 1337
+        tag_idx_value = 123456
+        new_set_unique_count = 10
+        new_tag_values = {str(tag_key): tag_idx_value}
+        value_as_string = gen_string()
+        new_mapping_meta = {
+            "d": {str(tag_key): gen_string(), str(tag_idx_value): value_as_string}
+        }
+        new_set_values = itertools.cycle(range(0, new_set_unique_count))
+
+        self.generate_sets(
+            tags=new_tag_values,
+            mapping_meta=new_mapping_meta,
+            int_source=new_set_values,
+        )
+
+        query_str = f"""MATCH (generic_metrics_sets)
+                    SELECT uniq(value) AS unique_values BY project_id, org_id
+                    WHERE org_id = {self.org_id}
+                    AND project_id = {self.project_id}
+                    AND metric_id = {self.metric_id}
+                    AND tags_raw[{tag_key}] = '{value_as_string}'
+                    AND timestamp >= toDateTime('{self.start_time}')
+                    AND timestamp < toDateTime('{self.end_time}')
+                    GRANULARITY 1
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["unique_values"] == new_set_unique_count
+
+    def test_indexed_tags(self) -> None:
+        tag_key = 1337
+        tag_idx_value = 123456
+        new_set_unique_count = 12
+        new_tag_values = {str(tag_key): tag_idx_value}
+        value_as_string = gen_string()
+        new_mapping_meta = {
+            "d": {str(tag_key): gen_string(), str(tag_idx_value): value_as_string}
+        }
+        new_set_values = itertools.cycle(range(0, new_set_unique_count))
+
+        self.generate_sets(
+            tags=new_tag_values,
+            mapping_meta=new_mapping_meta,
+            int_source=new_set_values,
+        )
+
+        query_str = f"""MATCH (generic_metrics_sets)
+                    SELECT uniq(value) AS unique_values BY project_id, org_id
+                    WHERE org_id = {self.org_id}
+                    AND project_id = {self.project_id}
+                    AND metric_id = {self.metric_id}
+                    AND tags[{tag_key}] = {tag_idx_value}
+                    AND timestamp >= toDateTime('{self.start_time}')
+                    AND timestamp < toDateTime('{self.end_time}')
+                    GRANULARITY 1
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["unique_values"] == new_set_unique_count
 
 
 class TestGenericMetricsApiDistributions(BaseApiTest):

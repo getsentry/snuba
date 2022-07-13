@@ -55,10 +55,7 @@ test_cases = [
                     binary_condition(
                         ConditionFunctions.EQ,
                         build_mapping_expr(
-                            "tags[asd]",
-                            None,
-                            "tags",
-                            Literal(None, "asd"),
+                            "tags[asd]", None, "tags", Literal(None, "asd"), "value"
                         ),
                         Literal(None, "sdf"),
                     ),
@@ -152,10 +149,7 @@ test_cases = [
                         binary_condition(
                             ConditionFunctions.EQ,
                             build_mapping_expr(
-                                "tags[asd]",
-                                None,
-                                "tags",
-                                Literal(None, "asd"),
+                                "tags[asd]", None, "tags", Literal(None, "asd"), "value"
                             ),
                             Literal(None, "sdf"),
                         ),

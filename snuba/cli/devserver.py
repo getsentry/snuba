@@ -294,7 +294,19 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=profiles",
                 ],
             ),
+            (
+                "functions",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--storage=functions_raw",
+                ],
+            ),
         ]
+
     if settings.ENABLE_REPLAYS_CONSUMER:
         daemons += [
             (
