@@ -236,7 +236,10 @@ class ProfilesLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.profiles")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_profiles"]
+        return [
+            "0001_profiles",
+            "0002_disable_vertical_merge_algorithm",
+        ]
 
 
 class FunctionsLoader(DirectoryLoader):

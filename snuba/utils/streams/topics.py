@@ -22,8 +22,13 @@ class Topic(Enum):
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
+    PROFILES_FUNCTIONS = "profiles-call-tree"
     REPLAYEVENTS = "snuba-replay-events"
     GENERIC_METRICS = "snuba-generic-metrics"
+    GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
+    GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = (
+        "snuba-generic-metrics-distributions-commit-log"
+    )
 
     DEAD_LETTER_QUEUE_INSERTS = "snuba-dead-letter-inserts"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"

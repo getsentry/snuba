@@ -24,7 +24,12 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.generic_metrics_processor import GenericSetsMetricsProcessor
+from snuba.datasets.generic_metrics_processor import (
+    GenericDistributionsMetricsProcessor,
+    GenericSetsMetricsProcessor,
+)
+from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -64,6 +69,15 @@ common_columns: Sequence[Column[SchemaModifiers]] = [
     ),
 ]
 
+aggregate_common_columns: Sequence[Column[SchemaModifiers]] = [
+    Column("_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
+    Column(
+        "_indexed_tags_hash",
+        Array(UInt(64), SchemaModifiers(readonly=True)),
+    ),
+    Column("granularity", UInt(8)),
+]
+
 bucket_columns: Sequence[Column[SchemaModifiers]] = [
     Column("granularities", Array(UInt(8))),
     Column("count_value", Float(64)),
@@ -82,14 +96,7 @@ sets_storage = ReadableTableStorage(
         columns=ColumnSet(
             [
                 *common_columns,
-                Column(
-                    "_raw_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))
-                ),
-                Column(
-                    "_indexed_tags_hash",
-                    Array(UInt(64), SchemaModifiers(readonly=True)),
-                ),
-                Column("granularity", UInt(8)),
+                *aggregate_common_columns,
                 Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
             ]
         ),
@@ -114,5 +121,57 @@ sets_bucket_storage = WritableTableStorage(
         processor=GenericSetsMetricsProcessor(),
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
+        commit_log_topic=Topic.GENERIC_METRICS_SETS_COMMIT_LOG,
+        pre_filter=KafkaHeaderFilter("metric_type", InputType.SET.value),
+    ),
+)
+
+distributions_storage = ReadableTableStorage(
+    storage_key=StorageKey.GENERIC_METRICS_DISTRIBUTIONS,
+    storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
+    schema=TableSchema(
+        local_table_name="generic_metric_distributions_aggregated_local",
+        dist_table_name="generic_metric_distributions_aggregated_dist",
+        storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
+        columns=ColumnSet(
+            [
+                *common_columns,
+                *aggregate_common_columns,
+                Column(
+                    "percentiles",
+                    AggregateFunction(
+                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]
+                    ),
+                ),
+                Column("min", AggregateFunction("min", [Float(64)])),
+                Column("max", AggregateFunction("max", [Float(64)])),
+                Column("avg", AggregateFunction("avg", [Float(64)])),
+                Column("sum", AggregateFunction("sum", [Float(64)])),
+                Column("count", AggregateFunction("count", [Float(64)])),
+                Column(
+                    "histogram_buckets",
+                    AggregateFunction("histogram(250)", [Float(64)]),
+                ),
+            ]
+        ),
+    ),
+)
+
+distributions_bucket_storage = WritableTableStorage(
+    storage_key=StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW,
+    storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
+    schema=WritableTableSchema(
+        columns=ColumnSet([*common_columns, *bucket_columns]),
+        local_table_name="generic_metric_distributions_raw_local",
+        dist_table_name="generic_metric_distributions_raw_local",
+        storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
+    ),
+    query_processors=[],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        processor=GenericDistributionsMetricsProcessor(),
+        default_topic=Topic.GENERIC_METRICS,
+        dead_letter_queue_policy_creator=produce_policy_creator,
+        commit_log_topic=Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG,
+        pre_filter=KafkaHeaderFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )

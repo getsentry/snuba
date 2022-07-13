@@ -22,6 +22,7 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import sentry_sdk
@@ -546,6 +547,21 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
+
+        if processed is not None:
+            bypass_projects = get_config("replacements_bypass_projects", "[]")
+            projects = json.loads(cast(str, bypass_projects))
+            if processed.get_project_id() in projects:
+                # For a persistent non rate limited logger
+                logger.info(
+                    f"Skipping replacement for project. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",
+                )
+                # For sentry tracking
+                logger.error(
+                    "Skipping replacement for project",
+                    extra={"project_id": processed.get_project_id(), "data": message},
+                )
+                return None
 
         return processed
 

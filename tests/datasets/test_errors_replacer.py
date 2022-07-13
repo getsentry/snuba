@@ -19,7 +19,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize
 from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
-from snuba.state import set_config
+from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
@@ -113,6 +113,31 @@ class TestReplacer:
             return None
 
         return int(data[0]["group_id"])
+
+    def test_project_bypass(self) -> None:
+        timestamp = datetime.now()
+        message = (
+            2,
+            ReplacementType.END_DELETE_GROUPS,
+            {
+                "project_id": self.project_id,
+                "group_ids": [1, 2, 3],
+                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            },
+        )
+        replacement = self.replacer.process_message(self._wrap(message))
+        assert replacement is not None
+
+        set_config("replacements_bypass_projects", f"[{self.project_id + 1}]")
+        replacement = self.replacer.process_message(self._wrap(message))
+        assert replacement is not None
+
+        set_config(
+            "replacements_bypass_projects", f"[{self.project_id + 1},{self.project_id}]"
+        )
+        replacement = self.replacer.process_message(self._wrap(message))
+        assert replacement is None
+        delete_config("replacements_bypass_projects")
 
     def test_delete_groups_process(self) -> None:
         timestamp = datetime.now()

@@ -31,10 +31,14 @@ class StorageKey(Enum):
     TRANSACTIONS_V2 = "transactions_v2"
     ERRORS_V2 = "errors_v2"
     PROFILES = "profiles"
+    FUNCTIONS = "functions"
+    FUNCTIONS_RAW = "functions_raw"
     REPLAYS = "replays"
     ERRORS_V2_RO = "errors_v2_ro"
     GENERIC_METRICS_SETS_RAW = "generic_metrics_sets_raw"
     GENERIC_METRICS_SETS = "generic_metrics_sets"
+    GENERIC_METRICS_DISTRIBUTIONS_RAW = "generic_metrics_distributions_raw"
+    GENERIC_METRICS_DISTRIBUTIONS = "generic_metrics_distributions"
 
 
 IDENTICAL_STORAGES = frozenset(
