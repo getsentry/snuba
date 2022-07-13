@@ -224,7 +224,6 @@ def test_execute_query_strategy() -> None:
     total_concurrent_queries = 2
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
-    commit = mock.Mock()
 
     strategy = ExecuteQuery(
         dataset,
@@ -234,7 +233,6 @@ def test_execute_query_strategy() -> None:
         None,
         metrics,
         next_step,
-        commit,
     )
 
     make_message = generate_message(EntityKey.EVENTS)
@@ -265,7 +263,6 @@ def test_too_many_concurrent_queries() -> None:
     entity_names = ["events"]
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
-    commit = mock.Mock()
 
     total_concurrent_queries = 4
 
@@ -277,7 +274,6 @@ def test_too_many_concurrent_queries() -> None:
         None,
         metrics,
         next_step,
-        commit,
     )
 
     make_message = generate_message(EntityKey.EVENTS)
@@ -301,7 +297,6 @@ def test_skip_execution_for_entity() -> None:
     entity_names = ["metrics_sets"]
     metrics = TestingMetricsBackend()
     next_step = mock.Mock()
-    commit = mock.Mock()
 
     total_concurrent_queries = 4
 
@@ -313,7 +308,6 @@ def test_skip_execution_for_entity() -> None:
         None,
         metrics,
         next_step,
-        commit,
     )
 
     metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
@@ -427,7 +421,6 @@ def test_execute_and_produce_result() -> None:
         None,
         metrics,
         ProduceResult(producer, result_topic.name, commit),
-        commit,
     )
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
@@ -477,7 +470,6 @@ def test_skip_stale_message() -> None:
         stale_threshold_seconds,
         metrics,
         ProduceResult(producer, result_topic.name, commit),
-        commit,
     )
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
