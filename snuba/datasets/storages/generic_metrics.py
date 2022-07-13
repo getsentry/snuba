@@ -122,6 +122,7 @@ sets_bucket_storage = WritableTableStorage(
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
         commit_log_topic=Topic.GENERIC_METRICS_SETS_COMMIT_LOG,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS,
         pre_filter=KafkaHeaderFilter("metric_type", InputType.SET.value),
     ),
 )
@@ -172,6 +173,7 @@ distributions_bucket_storage = WritableTableStorage(
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
         commit_log_topic=Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS,
         pre_filter=KafkaHeaderFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )
