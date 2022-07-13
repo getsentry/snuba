@@ -30,7 +30,11 @@ from snuba.datasets.storages.generic_metrics import (
 )
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.granularity_processor import MappedGranularityProcessor
+from snuba.query.processors.granularity_processor import (
+    DEFAULT_MAPPED_GRANULARITY_ENUM,
+    PERFORMANCE_GRANULARITIES,
+    MappedGranularityProcessor,
+)
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
@@ -101,7 +105,10 @@ class GenericMetricsEntity(Entity, ABC):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             TagsTypeTransformer(),
-            MappedGranularityProcessor(),
+            MappedGranularityProcessor(
+                accepted_granularities=PERFORMANCE_GRANULARITIES,
+                default_granularity_enum=DEFAULT_MAPPED_GRANULARITY_ENUM,
+            ),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
         ]
 

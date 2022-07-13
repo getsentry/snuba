@@ -1,3 +1,5 @@
+from typing import Sequence, Tuple
+
 from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidGranularityException
@@ -41,19 +43,35 @@ class GranularityProcessor(QueryProcessor):
         )
 
 
+PERFORMANCE_GRANULARITIES = [(60, 1), (3600, 2), (86400, 3)]
+DEFAULT_MAPPED_GRANULARITY_ENUM = 1
+
+
 class MappedGranularityProcessor(QueryProcessor):
-    DEFAULT_GRANULARITY_ENUM = 1
-    PERFORMANCE_GRANULARITIES = [(60, 1), (3600, 2), (86400, 3)]
-    """Use the granularity set on the query to filter on the granularity column"""
+    """
+    Use the granularity set on the query to filter on the granularity column,
+    supporting generic-metrics style enum mapping
+    """
+
+    def __init__(
+        self,
+        accepted_granularities: Sequence[Tuple[int, int]],
+        default_granularity_enum: int,
+    ):
+        self._accepted_granularities = accepted_granularities
+        self._available_granularities_values = [
+            x[0] for x in self._accepted_granularities
+        ]
+        self._default_granularity_enum = default_granularity_enum
 
     def __get_granularity(self, query: Query) -> int:
         """Find the best fitting granularity for this query"""
         requested_granularity = query.get_granularity()
 
         if requested_granularity is None:
-            return self.DEFAULT_GRANULARITY_ENUM
+            return self._default_granularity_enum
         elif requested_granularity > 0:
-            for (granularity, mapped_value) in reversed(self.PERFORMANCE_GRANULARITIES):
+            for (granularity, mapped_value) in reversed(self._accepted_granularities):
                 if (
                     requested_granularity % granularity == 0
                     or requested_granularity == mapped_value
@@ -61,7 +79,7 @@ class MappedGranularityProcessor(QueryProcessor):
                     return mapped_value
 
         raise InvalidGranularityException(
-            f"Granularity must be multiple of one of {GRANULARITIES_AVAILABLE}"
+            f"Granularity must be multiple of one of {self._available_granularities_values}"
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
