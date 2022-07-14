@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import NamedTuple, Sequence
 
 from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -43,7 +43,16 @@ class GranularityProcessor(QueryProcessor):
         )
 
 
-PERFORMANCE_GRANULARITIES = [(60, 1), (3600, 2), (86400, 3)]
+class GranularityMapping(NamedTuple):
+    raw: int
+    enum_value: int
+
+
+PERFORMANCE_GRANULARITIES: Sequence[GranularityMapping] = [
+    GranularityMapping(60, 1),
+    GranularityMapping(3600, 2),
+    GranularityMapping(86400, 3),
+]
 DEFAULT_MAPPED_GRANULARITY_ENUM = 1
 
 
@@ -55,12 +64,14 @@ class MappedGranularityProcessor(QueryProcessor):
 
     def __init__(
         self,
-        accepted_granularities: Sequence[Tuple[int, int]],
+        accepted_granularities: Sequence[GranularityMapping],
         default_granularity_enum: int,
     ):
-        self._accepted_granularities = accepted_granularities
+        self._accepted_granularities = sorted(
+            accepted_granularities, key=lambda mapping: mapping.raw, reverse=True
+        )
         self._available_granularities_values = [
-            x[0] for x in self._accepted_granularities
+            mapping.raw for mapping in self._accepted_granularities
         ]
         self._default_granularity_enum = default_granularity_enum
 
@@ -71,12 +82,9 @@ class MappedGranularityProcessor(QueryProcessor):
         if requested_granularity is None:
             return self._default_granularity_enum
         elif requested_granularity > 0:
-            for (granularity, mapped_value) in reversed(self._accepted_granularities):
-                if (
-                    requested_granularity % granularity == 0
-                    or requested_granularity == mapped_value
-                ):
-                    return mapped_value
+            for mapping in self._accepted_granularities:
+                if requested_granularity % mapping.raw == 0:
+                    return mapping.enum_value
 
         raise InvalidGranularityException(
             f"Granularity must be multiple of one of {self._available_granularities_values}"

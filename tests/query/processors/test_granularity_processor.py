@@ -113,8 +113,6 @@ def test_granularity_added(
         (48 * 60 * 60, 3),
         (13, None),
         (0, None),
-        # valid enum values are pass-through
-        (2, 2),
     ],
 )
 def test_granularity_enum_mapping(
