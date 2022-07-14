@@ -74,5 +74,5 @@ CMD [ "api" ]
 FROM application AS testing
 
 USER 0
-RUN pip install -r test-requirements.txt
+RUN pip install -r requirements-test.txt
 USER snuba

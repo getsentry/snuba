@@ -23,11 +23,11 @@ backend-typing:
 
 install-python-dependencies:
 	pip install -e .
-	pip install -r test-requirements.txt
-	pip install -r lint-requirements.txt
+	pip install -r requirements-test.txt
+	pip install -r requirements-lint.txt
 
 snubadocs:
-	pip install -U -r ./docs-requirements.txt
+	pip install -U -r ./requirements-docs.txt
 	sphinx-build -W -b html docs/source docs/build
 
 build-admin:
