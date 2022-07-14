@@ -47,6 +47,28 @@ class KafkaHeaderFilter(StreamMessageFilter[KafkaPayload]):
 
 
 @dataclass
+class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
+    """
+    A filter over messages coming from a stream which matches whether the given message
+    has the provided header key and if it matches the provided header value. If there is
+    a match, the message gets processed. (This is the inverse of KafkaHeaderFilter)
+    """
+
+    header_key: str
+    header_value: str
+
+    def should_drop(self, message: Message[KafkaPayload]) -> bool:
+        for key, value in message.payload.headers:
+            if key != self.header_key:
+                continue
+
+            str_value = value.decode("utf-8")
+            return False if str_value == self.header_value else True
+
+        return True
+
+
+@dataclass
 class KafkaHeaderFilterWithBypass(KafkaHeaderFilter):
     """
     A special case filter which is similar to KafkaHeaderFilter but allows a message to
