@@ -63,7 +63,7 @@ class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
                 continue
 
             str_value = value.decode("utf-8")
-            return False if str_value == self.header_value else True
+            return str_value != self.header_value
 
         return True
 
