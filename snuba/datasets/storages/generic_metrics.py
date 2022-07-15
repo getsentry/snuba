@@ -28,7 +28,7 @@ from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
-from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
@@ -126,7 +126,7 @@ sets_bucket_storage = WritableTableStorage(
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS,
-        pre_filter=KafkaHeaderFilter("metric_type", InputType.SET.value),
+        pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.SET.value),
     ),
 )
 
@@ -179,6 +179,6 @@ distributions_bucket_storage = WritableTableStorage(
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_DISTRIBUTIONS,
-        pre_filter=KafkaHeaderFilter("metric_type", InputType.DISTRIBUTION.value),
+        pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )

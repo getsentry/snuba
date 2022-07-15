@@ -22,9 +22,9 @@ from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.replacer import (
+    InOrderConnectionPool,
     QueryNodeExecutor,
     ReplacerWorker,
-    RoundRobinConnectionPool,
     ShardedExecutor,
 )
 from snuba.replacers.replacer_processor import ReplacementMessageMetadata
@@ -255,12 +255,9 @@ def test_load_balancing(
             "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
             "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
         ],
-        "storage-0-0": [LOCAL_QUERY],
-        "storage-0-1": [LOCAL_QUERY],
-        "storage-1-0": [LOCAL_QUERY],
-        "storage-1-1": [LOCAL_QUERY],
-        "storage-2-0": [LOCAL_QUERY],
-        "storage-2-1": [LOCAL_QUERY],
+        "storage-0-0": [LOCAL_QUERY, LOCAL_QUERY],
+        "storage-1-0": [LOCAL_QUERY, LOCAL_QUERY],
+        "storage-2-0": [LOCAL_QUERY, LOCAL_QUERY],
     }
 
 
@@ -388,7 +385,7 @@ def test_local_executor(
         cluster=cluster,
         runner=run_query,
         thread_pool=ThreadPoolExecutor(),
-        main_connection_pool=RoundRobinConnectionPool(cluster),
+        main_connection_pool=InOrderConnectionPool(cluster),
         local_table_name="errors_local",
         backup_executor=QueryNodeExecutor(
             runner=run_query,

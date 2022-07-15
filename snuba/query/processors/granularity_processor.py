@@ -1,3 +1,5 @@
+from typing import NamedTuple, Sequence
+
 from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidGranularityException
@@ -28,6 +30,64 @@ class GranularityProcessor(QueryProcessor):
 
         raise InvalidGranularityException(
             f"Granularity must be multiple of one of {GRANULARITIES_AVAILABLE}"
+        )
+
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        granularity = self.__get_granularity(query)
+        query.add_condition_to_ast(
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "granularity"),
+                Literal(None, granularity),
+            )
+        )
+
+
+class GranularityMapping(NamedTuple):
+    raw: int
+    enum_value: int
+
+
+PERFORMANCE_GRANULARITIES: Sequence[GranularityMapping] = [
+    GranularityMapping(60, 1),
+    GranularityMapping(3600, 2),
+    GranularityMapping(86400, 3),
+]
+DEFAULT_MAPPED_GRANULARITY_ENUM = 1
+
+
+class MappedGranularityProcessor(QueryProcessor):
+    """
+    Use the granularity set on the query to filter on the granularity column,
+    supporting generic-metrics style enum mapping
+    """
+
+    def __init__(
+        self,
+        accepted_granularities: Sequence[GranularityMapping],
+        default_granularity_enum: int,
+    ):
+        self._accepted_granularities = sorted(
+            accepted_granularities, key=lambda mapping: mapping.raw, reverse=True
+        )
+        self._available_granularities_values = [
+            mapping.raw for mapping in self._accepted_granularities
+        ]
+        self._default_granularity_enum = default_granularity_enum
+
+    def __get_granularity(self, query: Query) -> int:
+        """Find the best fitting granularity for this query"""
+        requested_granularity = query.get_granularity()
+
+        if requested_granularity is None:
+            return self._default_granularity_enum
+        elif requested_granularity > 0:
+            for mapping in self._accepted_granularities:
+                if requested_granularity % mapping.raw == 0:
+                    return mapping.enum_value
+
+        raise InvalidGranularityException(
+            f"Granularity must be multiple of one of {self._available_granularities_values}"
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
