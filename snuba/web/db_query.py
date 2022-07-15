@@ -64,7 +64,7 @@ metrics = MetricsWrapper(environment.metrics, "db_query")
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
     def encode(self, value: Result) -> bytes:
-        return cast(str, rapidjson.dumps(value)).encode("utf-8")
+        return cast(str, rapidjson.dumps(value, default=str)).encode("utf-8")
 
     def decode(self, value: bytes) -> Result:
         ret = rapidjson.loads(value)

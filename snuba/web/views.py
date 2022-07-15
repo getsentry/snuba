@@ -508,7 +508,9 @@ def dataset_query(
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
-    return Response(json.dumps(payload), 200, {"Content-Type": "application/json"})
+    return Response(
+        json.dumps(payload, default=str), 200, {"Content-Type": "application/json"}
+    )
 
 
 @application.errorhandler(InvalidSubscriptionError)
