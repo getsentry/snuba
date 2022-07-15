@@ -1159,16 +1159,23 @@ def process_delete_tag(
     tag_column_name = tag_column_map["tags"].get(tag, tag)
     is_promoted = tag in promoted_tags["tags"]
 
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
+    # We cannot put the tag condition (which is what we are mutating) in the
+    # prewhere clause. This is because the prewhere clause is processed before
+    # the FINAL clause.
+    # So if we are trying to mutate a row that was mutated before but not merged
+    # yet, the PREWHERE would return the old row that has already been
+    # replaced.
+    prewhere = " PREWHERE project_id = %(project_id)s"
+
+    where_base = """\
+        WHERE received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
     if is_promoted and use_promoted_prewhere:
-        prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
+        where = where_base + " AND %(tag_column)s IS NOT NULL "
     else:
-        prewhere = " PREWHERE has(`tags.key`, %(tag_str)s) "
+        where = where_base + " AND has(`tags.key`, %(tag_str)s) "
 
     insert_query_template = (
         """\
