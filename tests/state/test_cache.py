@@ -213,7 +213,7 @@ def test_get_readthrough_set_wait_timeout(
     with pytest.raises(TimeoutError):
         waiter_fast.result()
 
-    with pytest.raises(Exception):
+    with pytest.raises((ExecutionTimeoutError, TigerExecutionTimeoutError)):
         waiter_slow.result()
 
 
