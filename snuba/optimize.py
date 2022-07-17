@@ -226,7 +226,7 @@ def optimize_partitions(
         query = (query_template % args).strip()
         logger.info(f"Optimizing partition: {part.name}")
         start = time.time()
-        clickhouse.execute(query)
+        clickhouse.execute(query, retryable=False)
         metrics.timing(
             "optimized_part",
             time.time() - start,

@@ -136,6 +136,7 @@ class ClickhousePool(object):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
+        retryable: bool = True,
     ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a single quick retry in case of
@@ -150,7 +151,11 @@ class ClickhousePool(object):
         try:
             conn = self.pool.get(block=True)
 
-            attempts_remaining = 3 + (1 if self.fallback_pool_enabled() else 0)
+            if retryable:
+                attempts_remaining = 3 + (1 if self.fallback_pool_enabled() else 0)
+            else:
+                attempts_remaining = 1
+
             while attempts_remaining > 0:
                 attempts_remaining -= 1
                 # Lazily create connection instances

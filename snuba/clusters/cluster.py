@@ -45,7 +45,7 @@ class ClickhouseClientSettings(Enum):
     MIGRATE = ClickhouseClientSettingsType(
         {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
     )
-    OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
+    OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(

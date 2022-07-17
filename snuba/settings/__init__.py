@@ -219,6 +219,7 @@ TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
+OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
