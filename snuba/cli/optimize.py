@@ -1,12 +1,18 @@
+from datetime import timedelta
 from typing import Optional
 
 import click
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.environment import setup_logging, setup_sentry
+from snuba.optimize import run_optimize_cron_job
+from snuba.optimize_tracker import OptimizedPartitionTracker
+from snuba.redis import redis_client
 
 
 @click.command()
@@ -44,7 +50,7 @@ def optimize(
     from datetime import datetime
 
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.optimize import logger, run_optimize
+    from snuba.optimize import logger
 
     setup_logging(log_level)
     setup_sentry()
@@ -80,13 +86,40 @@ def optimize(
         connection = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.OPTIMIZE
         )
+        clickhouse_host = storage.get_cluster().get_host()
+        clickhouse_port = storage.get_cluster().get_port()
 
-    num_dropped = run_optimize(
-        connection,
-        storage,
-        database,
-        before=today,
+    # Adding 10 minutes to the current time before finding the midnight time
+    # to ensure this keeps working even if the system clock of the host that
+    # starts the pod is slightly ahead of the system clock of the host running
+    # the job. This prevents us from getting the wrong midnight.
+    last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    cutoff_time = last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME
+    logger.info("Cutoff time: %s", str(cutoff_time))
+
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+    table = schema.get_local_table_name()
+    tracker = OptimizedPartitionTracker(
+        redis_client=redis_client,
+        host=clickhouse_host,
+        port=clickhouse_port,
+        database=database,
+        table=table,
+        expire_time=cutoff_time,
+    )
+
+    num_dropped = run_optimize_cron_job(
+        clickhouse=connection,
+        storage=storage,
+        database=database,
         parallel=parallel,
         clickhouse_host=clickhouse_host,
+        tracker=tracker,
+        before=today,
     )
+
+    tracker.delete_all_states()
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

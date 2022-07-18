@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import textwrap
 from dataclasses import replace
 from functools import partial
 from math import floor
@@ -299,8 +300,11 @@ def _format_storage_query_and_run(
         _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
 
         formatted_query = format_query(clickhouse_query)
-        query_size_bytes = len(formatted_query.get_sql().encode("utf-8"))
-        span.set_data("query", formatted_query.structured())
+        formatted_sql = formatted_query.get_sql()
+        query_size_bytes = len(formatted_sql.encode("utf-8"))
+        span.set_data(
+            "query", textwrap.wrap(formatted_sql, 100, break_long_words=False)
+        )  # To avoid the query being truncated
         span.set_data("query_size_bytes", query_size_bytes)
         sentry_sdk.set_tag("query_size_group", get_query_size_group(query_size_bytes))
         metrics.increment("execute")
@@ -318,7 +322,7 @@ def _format_storage_query_and_run(
         raise QueryException(
             extra=QueryExtraData(
                 stats=stats,
-                sql=formatted_query.get_sql(),
+                sql=formatted_sql,
                 experiments=clickhouse_query.get_experiments(),
             )
         ) from QueryTooLongException(
@@ -327,7 +331,7 @@ def _format_storage_query_and_run(
             f"Max size is {MAX_QUERY_SIZE_BYTES} bytes."
         )
 
-    with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
+    with sentry_sdk.start_span(description=formatted_sql, op="db") as span:
         span.set_tag("table", table_names)
 
         def execute() -> QueryResult:
