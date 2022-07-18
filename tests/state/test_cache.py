@@ -14,6 +14,7 @@ import rapidjson
 from snuba.redis import RedisClientType, redis_client
 from snuba.state.cache.abstract import (
     Cache,
+    ExecutionError,
     ExecutionTimeoutError,
     TigerExecutionTimeoutError,
 )
@@ -168,11 +169,10 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.parametrize(
-    "backend, exc",
+    "backend",
     [
         pytest.param(
             RedisCache(redis_client, "test", PassthroughCodec(), ThreadPoolExecutor()),
-            ExecutionTimeoutError,
             id="regular cluster",
         ),
         pytest.param(
@@ -183,14 +183,11 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
                 ThreadPoolExecutor(),
                 TigerExecutionTimeoutError,
             ),
-            TigerExecutionTimeoutError,
             id="tiger cluster",
         ),
     ],
 )
-def test_get_readthrough_set_wait_timeout(
-    backend: Cache[bytes], exc: Exception
-) -> None:
+def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
 
@@ -213,7 +210,9 @@ def test_get_readthrough_set_wait_timeout(
     with pytest.raises(TimeoutError):
         waiter_fast.result()
 
-    with pytest.raises((ExecutionTimeoutError, TigerExecutionTimeoutError)):
+    with pytest.raises(
+        (ExecutionError, ExecutionTimeoutError, TigerExecutionTimeoutError)
+    ):
         waiter_slow.result()
 
 
