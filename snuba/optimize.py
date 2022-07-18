@@ -222,6 +222,10 @@ def optimize_partition_runner(
     while remaining_partitions:
         schedule = scheduler.get_next_schedule(remaining_partitions)
         num_threads = len(schedule.partitions)
+        logger.info(
+            f"Running schedule with cutoff time: "
+            f"{schedule.cutoff_time} with {num_threads} threads"
+        )
         threads: MutableSequence[threading.Thread] = []
         for i in range(0, num_threads):
             threads.append(
