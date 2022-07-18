@@ -66,7 +66,7 @@ def calculate_max_concurrent_queries(
     went wrong trying to fetch that from the kafka admin. In that case we
     fall back to 1 replica (meaning the max concurrent queries == the total)
     """
-    replicas = math.ceil(total_partition_count / assigned_partition_count) or 1
+    replicas = total_partition_count / assigned_partition_count
     return math.ceil((total_concurrent_queries / replicas))
 
 
