@@ -48,7 +48,7 @@ COMMIT_FREQUENCY_SEC = 1
 
 
 def calculate_max_concurrent_queries(
-    curr_partition_count: int,
+    assigned_partition_count: int,
     total_partition_count: int,
     total_concurrent_queries: int,
 ) -> int:
@@ -57,7 +57,7 @@ def calculate_max_concurrent_queries(
     change accordingly per replica. Fewer replicas means each replica
     can have more max_concurrent_queries and vice versa.
 
-    We use the total_partition_count and curr_partition_count to estimate
+    We use the total_partition_count and assigned_partition_count to estimate
     how many total replicas there are, which in turn lets us calc the
     max_concurrent_queries for the given replica.
 
@@ -66,7 +66,7 @@ def calculate_max_concurrent_queries(
     went wrong trying to fetch that from the kafka admin. In that case we
     fall back to 1 replica (meaning the max concurrent queries == the total)
     """
-    replicas = math.ceil(total_partition_count / curr_partition_count) or 1
+    replicas = math.ceil(total_partition_count / assigned_partition_count) or 1
     return math.ceil((total_concurrent_queries / replicas))
 
 

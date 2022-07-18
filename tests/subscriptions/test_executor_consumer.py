@@ -495,17 +495,17 @@ max_concurrent_queries_tests = [
 
 
 @pytest.mark.parametrize(
-    "curr_partition_count, total_partition_count, total_concurrent_queries, expected_max_concurrent_queries",
+    "assigned_partition_count, total_partition_count, total_concurrent_queries, expected_max_concurrent_queries",
     max_concurrent_queries_tests,
 )
 def test_max_concurrent_queries(
-    curr_partition_count: int,
+    assigned_partition_count: int,
     total_partition_count: int,
     total_concurrent_queries: int,
     expected_max_concurrent_queries: int,
 ) -> None:
 
     calculated = calculate_max_concurrent_queries(
-        curr_partition_count, total_partition_count, total_concurrent_queries
+        assigned_partition_count, total_partition_count, total_concurrent_queries
     )
     assert calculated == expected_max_concurrent_queries
