@@ -285,6 +285,7 @@ class ClickhousePool(object):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
+        retryable: bool = True,
     ) -> ClickhouseResult:
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
@@ -295,7 +296,7 @@ class ClickhousePool(object):
         query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
-        total_attempts = 3
+        total_attempts = 3 if retryable else 1
         attempts_remaining = total_attempts
 
         while True:

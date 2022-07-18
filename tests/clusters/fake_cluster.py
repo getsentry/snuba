@@ -28,6 +28,7 @@ class FakeClickhousePool(ClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
+        retryable: bool = True,
     ) -> ClickhouseResult:
         self.__queries.append(query)
         return ClickhouseResult([[1]])
@@ -51,6 +52,7 @@ class FakeFailingClickhousePool(FakeClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
+        retryable: bool = True,
     ) -> ClickhouseResult:
         raise ServerExplodedException("The server exploded")
 
