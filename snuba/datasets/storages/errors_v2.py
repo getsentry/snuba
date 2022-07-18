@@ -121,6 +121,5 @@ storage = WritableTableStorage(
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
         promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
         state_name=ReplacerState.ERRORS_V2,
-        use_promoted_prewhere=False,
     ),
 )

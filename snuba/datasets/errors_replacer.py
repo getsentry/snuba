@@ -80,7 +80,6 @@ class ReplacementContext:
 
     tag_column_map: Mapping[str, Mapping[str, str]]
     promoted_tags: Mapping[str, Sequence[str]]
-    use_promoted_prewhere: bool
     schema: WritableTableSchema
 
 
@@ -468,7 +467,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
         state_name: ReplacerState,
-        use_promoted_prewhere: bool,
     ) -> None:
         super().__init__(schema=schema)
         self.__required_columns = required_columns
@@ -479,13 +477,11 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
-        self.__use_promoted_prewhere = use_promoted_prewhere
         self.__schema = schema
         self.__replacement_context = ReplacementContext(
             all_columns=self.__all_columns,
             state_name=self.__state_name,
             required_columns=self.__required_columns,
-            use_promoted_prewhere=self.__use_promoted_prewhere,
             schema=self.__schema,
             tag_column_map=self.__tag_column_map,
             promoted_tags=self.__promoted_tags,
@@ -530,7 +526,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__all_columns,
                 self.__tag_column_map,
                 self.__promoted_tags,
-                self.__use_promoted_prewhere,
                 self.__schema,
             )
         elif type_ == ReplacementType.TOMBSTONE_EVENTS:
@@ -1145,7 +1140,6 @@ def process_delete_tag(
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
-    use_promoted_prewhere: bool,
     schema: WritableTableSchema,
 ) -> Optional[Replacement]:
     tag = message.data["tag"]
@@ -1165,17 +1159,12 @@ def process_delete_tag(
     # So if we are trying to mutate a row that was mutated before but not merged
     # yet, the PREWHERE would return the old row that has already been
     # replaced.
-    prewhere = " PREWHERE project_id = %(project_id)s"
-
-    where_base = """\
-        WHERE received <= CAST('%(timestamp)s' AS DateTime)
+    where = """\
+        WHERE project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
+        AND has(`tags.key`, %(tag_str)s)
     """
-
-    if is_promoted and use_promoted_prewhere:
-        where = where_base + " AND %(tag_column)s IS NOT NULL "
-    else:
-        where = where_base + " AND has(`tags.key`, %(tag_str)s) "
 
     insert_query_template = (
         """\
@@ -1183,7 +1172,6 @@ def process_delete_tag(
         SELECT %(select_columns)s
         FROM %(table_name)s FINAL
     """
-        + prewhere
         + where
     )
 
@@ -1228,7 +1216,6 @@ def process_delete_tag(
         SELECT count()
         FROM %(table_name)s FINAL
     """
-        + prewhere
         + where
     )
 
