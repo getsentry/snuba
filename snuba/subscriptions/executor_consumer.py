@@ -46,6 +46,29 @@ logger = logging.getLogger(__name__)
 COMMIT_FREQUENCY_SEC = 1
 
 
+def calculate_max_concurrent_queries(
+    curr_partition_count: int,
+    total_partition_count: int,
+    total_concurrent_queries: int,
+) -> int:
+    """
+    As consumers are scaled up or down, max_concurrent_queries should
+    change accordingly per replica. Fewer replicas means each replica
+    can have more max_concurrent_queries and vice versa.
+
+    We use the total_partition_count and curr_partition_count to estimate
+    how many total replicas there are, which in turn lets us calc the
+    max_concurrent_queries for the given replica.
+
+    Round up since .5 of a replica doesnt really
+    make sense. total_partition_count could be 0 though if something
+    went wrong trying to fetch that from the kafka admin. In that case we
+    fall back to 1 replica (meaning the max concurrent queries == the total)
+    """
+    replicas = math.ceil(total_partition_count / curr_partition_count) or 1
+    return math.ceil((total_concurrent_queries / replicas))
+
+
 def build_executor_consumer(
     dataset_name: str,
     entity_names: Sequence[str],
@@ -186,6 +209,22 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         commit: Callable[[Mapping[Partition, Position]], None],
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+
+        calculated_max_concurrent_queries = calculate_max_concurrent_queries(
+            len(partitions),
+            self.__total_partition_count,
+            self.__total_concurrent_queries,
+        )
+        # XXX(meredith): temporarily log both the calculated and passed in
+        # max concurrent queries
+        self.__metrics.gauge(
+            "calculated_max_concurrent_queries", calculated_max_concurrent_queries
+        )
+        self.__metrics.gauge("max_concurrent_queries", self.__max_concurrent_queries)
+
+        if state.get_config("use_calculated_max_concurrent_queries", False):
+            self.__max_concurrent_queries = calculated_max_concurrent_queries
+
         return ExecuteQuery(
             self.__dataset,
             self.__entity_names,

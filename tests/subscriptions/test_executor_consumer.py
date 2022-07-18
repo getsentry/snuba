@@ -37,6 +37,7 @@ from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
     ProduceResult,
     build_executor_consumer,
+    calculate_max_concurrent_queries,
 )
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.metrics.timer import Timer
@@ -532,3 +533,66 @@ def test_skip_stale_message() -> None:
     strategy.poll()
     assert broker_storage.consume(Partition(result_topic, 0), 0) is None
     assert Increment("skipped_execution", 1, {"entity": "events"}) in metrics.calls
+
+
+# Formula for the max_concurrent_queries found in executor_consumer.py:
+# math.ceil(total_concurrent_queries / (math.ceil(partition_count / len(partitions)) or 1)
+max_concurrent_queries_tests = [
+    # 1. 6 / (12/4) == 6/3 ==> 2 max concurrent queries
+    pytest.param(
+        4,
+        12,
+        6,
+        2,
+        id="len(partitions) == 4",
+    ),
+    # 2. 6 / (12/2) == 6/6 ==> 1 max concurrent queries
+    pytest.param(
+        2,
+        12,
+        6,
+        1,
+        id="len(partitions) == 2",
+    ),
+    # 3. 6 / (12/1) == 6/12 ==> 1 max concurrent queries
+    pytest.param(
+        1,
+        12,
+        6,
+        1,
+        id="len(partitions) == 1",
+    ),
+    # 3. 6 / (0/1) == 6/1 ==> 6 max concurrent queries
+    pytest.param(
+        1,
+        0,
+        6,
+        6,
+        id="partition_count is 0",
+    ),
+    # 3. 6 / (1/2) == 6/1 ==> 6 max concurrent queries
+    pytest.param(
+        2,
+        1,
+        6,
+        6,
+        id="partition_count higher than partitions",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "curr_partition_count, total_partition_count, total_concurrent_queries, expected_max_concurrent_queries",
+    max_concurrent_queries_tests,
+)
+def test_max_concurrent_queries(
+    curr_partition_count: int,
+    total_partition_count: int,
+    total_concurrent_queries: int,
+    expected_max_concurrent_queries: int,
+) -> None:
+
+    calculated = calculate_max_concurrent_queries(
+        curr_partition_count, total_partition_count, total_concurrent_queries
+    )
+    assert calculated == expected_max_concurrent_queries
