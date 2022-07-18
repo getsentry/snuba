@@ -80,9 +80,7 @@ class TestReplacer:
         redis_client.flushdb()
         cluster = self.storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
-        run_optimize(
-            clickhouse, self.storage, cluster.get_database(), ignore_cutoff=True
-        )
+        run_optimize(clickhouse, self.storage, cluster.get_database())
 
     def _issue_count(self, project_id: int, group_id: Optional[int] = None) -> Any:
         args = {
