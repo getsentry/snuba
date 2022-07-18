@@ -219,76 +219,20 @@ def generate_message(
 
 def test_execute_query_strategy() -> None:
     state.set_config("subscription_mode_events", "new")
-    dataset = get_dataset("events")
-    entity_names = ["events"]
-    max_concurrent_queries = 2
-    total_concurrent_queries = 2
-    metrics = TestingMetricsBackend()
     next_step = mock.Mock()
 
     strategy = ExecuteQuery(
-        dataset,
-        entity_names,
-        max_concurrent_queries,
-        total_concurrent_queries,
-        None,
-        metrics,
-        next_step,
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        max_concurrent_queries=2,
+        stale_threshold_seconds=None,
+        metrics=TestingMetricsBackend(),
+        next_step=next_step,
     )
 
     make_message = generate_message(EntityKey.EVENTS)
     message = next(make_message)
 
-    strategy.submit(message)
-
-    # next_step.submit should be called eventually
-    while next_step.submit.call_count == 0:
-        time.sleep(0.1)
-        strategy.poll()
-
-    assert next_step.submit.call_args[0][0].timestamp == message.timestamp
-    assert next_step.submit.call_args[0][0].offset == message.offset
-
-    result = next_step.submit.call_args[0][0].payload.result
-    assert result[1]["data"] == [{"count()": 0}]
-    assert result[1]["meta"] == [{"name": "count()", "type": "UInt64"}]
-
-    strategy.close()
-    strategy.join()
-
-
-def test_execute_query_strategy_with_partitions() -> None:
-    state.set_config("subscription_mode_events", "new")
-    state.set_config("use_calculated_max_concurrent_queries", True)
-    dataset = get_dataset("events")
-    entity_names = ["events"]
-    max_concurrent_queries = 2
-    metrics = TestingMetricsBackend()
-    next_step = mock.Mock()
-    commit = mock.Mock()
-
-    partitions = {
-        Partition(Topic("test"), 0): 0,
-        Partition(Topic("test"), 1): 0,
-        Partition(Topic("test"), 2): 0,
-        Partition(Topic("test"), 3): 0,
-    }
-
-    strategy = ExecuteQuery(
-        dataset,
-        entity_names,
-        max_concurrent_queries,
-        None,
-        metrics,
-        next_step,
-        commit,
-        partitions,
-    )
-
-    make_message = generate_message(EntityKey.EVENTS)
-    message = next(make_message)
-
-    assert strategy._ExecuteQuery__executor._max_workers == 4
     strategy.submit(message)
 
     # next_step.submit should be called eventually
@@ -310,21 +254,14 @@ def test_execute_query_strategy_with_partitions() -> None:
 def test_too_many_concurrent_queries() -> None:
     state.set_config("subscription_mode_events", "new")
     state.set_config("executor_queue_size_factor", 1)
-    dataset = get_dataset("events")
-    entity_names = ["events"]
-    metrics = TestingMetricsBackend()
-    next_step = mock.Mock()
-
-    total_concurrent_queries = 4
 
     strategy = ExecuteQuery(
-        dataset,
-        entity_names,
-        4,
-        total_concurrent_queries,
-        None,
-        metrics,
-        next_step,
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        max_concurrent_queries=4,
+        stale_threshold_seconds=None,
+        metrics=TestingMetricsBackend(),
+        next_step=mock.Mock(),
     )
 
     make_message = generate_message(EntityKey.EVENTS)
@@ -342,23 +279,16 @@ def test_too_many_concurrent_queries() -> None:
 def test_skip_execution_for_entity() -> None:
     state.set_config("subscription_mode_metrics_sets", "new")
     state.set_config("subscription_mode_metrics_counter", "new")
-
-    # Skips execution if the entity name is not on the list
-    dataset = get_dataset("metrics")
-    entity_names = ["metrics_sets"]
     metrics = TestingMetricsBackend()
-    next_step = mock.Mock()
-
-    total_concurrent_queries = 4
 
     strategy = ExecuteQuery(
-        dataset,
-        entity_names,
-        4,
-        total_concurrent_queries,
-        None,
-        metrics,
-        next_step,
+        # Skips execution if the entity name is not on the list
+        dataset=get_dataset("metrics"),
+        entity_names=["metrics_sets"],
+        max_concurrent_queries=4,
+        stale_threshold_seconds=None,
+        metrics=metrics,
+        next_step=mock.Mock(),
     )
 
     metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
@@ -447,12 +377,6 @@ def test_produce_result() -> None:
 
 def test_execute_and_produce_result() -> None:
     state.set_config("subscription_mode_events", "new")
-    dataset = get_dataset("events")
-    entity_names = ["events"]
-    max_concurrent_queries = 2
-    total_concurrent_queries = 2
-    metrics = TestingMetricsBackend()
-
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
     clock = TestingClock()
@@ -465,13 +389,12 @@ def test_execute_and_produce_result() -> None:
     commit = mock.Mock()
 
     strategy = ExecuteQuery(
-        dataset,
-        entity_names,
-        max_concurrent_queries,
-        total_concurrent_queries,
-        None,
-        metrics,
-        ProduceResult(producer, result_topic.name, commit),
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        max_concurrent_queries=2,
+        stale_threshold_seconds=None,
+        metrics=TestingMetricsBackend(),
+        next_step=ProduceResult(producer, result_topic.name, commit),
     )
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
@@ -494,12 +417,6 @@ def test_execute_and_produce_result() -> None:
 
 
 def test_skip_stale_message() -> None:
-    dataset = get_dataset("events")
-    entity_names = ["events"]
-    max_concurrent_queries = 2
-    total_concurrent_queries = 2
-    metrics = TestingMetricsBackend()
-
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
     clock = TestingClock()
@@ -509,18 +426,14 @@ def test_skip_stale_message() -> None:
     broker.create_topic(result_topic, partitions=1)
     producer = broker.get_producer()
 
-    commit = mock.Mock()
-
-    stale_threshold_seconds = 60
-
+    metrics = TestingMetricsBackend()
     strategy = ExecuteQuery(
-        dataset,
-        entity_names,
-        max_concurrent_queries,
-        total_concurrent_queries,
-        stale_threshold_seconds,
-        metrics,
-        ProduceResult(producer, result_topic.name, commit),
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        max_concurrent_queries=2,
+        stale_threshold_seconds=60,
+        metrics=metrics,
+        next_step=ProduceResult(producer, result_topic.name, mock.Mock()),
     )
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
