@@ -62,23 +62,22 @@ class ShardedConnectionPool(ABC):
         raise NotImplementedError
 
 
-class RoundRobinConnectionPool(ShardedConnectionPool):
+class InOrderConnectionPool(ShardedConnectionPool):
     """
     Sharded connection pool that loads the valid nodes from the
     Clickhouse system.clusters table, then provides up to three
     connections for each shard picking them with a round robin
     policy.
 
-    TODO: Consider moving this logic and the executor to the
-          Clickhouse native module.
+    The list of connections provided is always the same so that
+    we send all writes to the first node of the shard and only
+    use the others as a fallback.
 
-    The goal is to evenly distribute the queries across the
-    nodes.
-
-    The sequence of connections for each shard is a sliding
-    window over the list of available connections. This window
-    wrap around when it reaches the end of the list and moves
-    by one node each time `get_connections` is invoked.
+    The rationale is to guarantee in order delivery. If all
+    queries are applied on the same node, they are guaranteed to
+    be applied in order. If they are applied on random nodes,
+    instead, the replication delay can make clickhouse apply
+    the updates out of order.
     """
 
     def __init__(
@@ -86,45 +85,37 @@ class RoundRobinConnectionPool(ShardedConnectionPool):
         cluster: ClickhouseCluster,
     ) -> None:
         self.__cluster = cluster
-        self.__counter = 0
         self.__nodes: Mapping[int, List[ClickhouseNode]] = defaultdict(list)
         self.__nodes_refreshed_at = time.time()
 
-    def __get_nodes(self) -> Mapping[int, Sequence[ClickhouseNode]]:
+    def get_connections(self) -> Mapping[int, Sequence[ClickhouseNode]]:
         now = time.time()
+
         if not self.__nodes or now - self.__nodes_refreshed_at > NODES_REFRESH_PERIOD:
             all_nodes = self.__cluster.get_local_nodes()
 
             self.__nodes = defaultdict(list)
-            # We pick up to three replicas per shard. The order will be the
-            # one provided by the get_local_nodes. For the correctness the order
-            # in which these nodes are tried does not matter.
-            for n in all_nodes:
-                if n.replica is not None and n.shard is not None:
-                    self.__nodes[n.shard].append(n)
+
+            # We need to sort the nodes by replica id as there is no guarantee
+            # that `get_local_nodes` will return them sorted. So that we can
+            # always hit the same node (the first replica) except during failover.
+            valid_nodes = filter(
+                lambda node: node.replica is not None and node.shard is not None,
+                all_nodes,
+            )
+            sorted_nodes = sorted(
+                valid_nodes,
+                # Need to assign a value ro replica if that is None because
+                # mypy does not know replica cannot be None at this point.
+                key=lambda n: n.replica if n.replica is not None else -1,
+            )
+            for n in sorted_nodes:
+                # mypy does not know we filtered out None values
+                assert n.shard is not None
+                self.__nodes[n.shard].append(n)
 
             self.__nodes_refreshed_at = now
         return self.__nodes
-
-    def get_connections(self) -> Mapping[int, Sequence[ClickhouseNode]]:
-        def wrapping_slice(
-            lst: Sequence[ClickhouseNode], offset: int, size: int
-        ) -> Sequence[ClickhouseNode]:
-            if len(lst) >= offset + size:
-                return lst[offset : offset + size]
-            else:
-                return [*lst[offset:], *lst[: offset + size - len(lst)]]
-
-        all_nodes = self.__get_nodes()
-
-        ret = {
-            shard: wrapping_slice(
-                shard_nodes, self.__counter % len(shard_nodes), min(3, len(shard_nodes))
-            )
-            for shard, shard_nodes in all_nodes.items()
-        }
-        self.__counter += 1
-        return ret
 
 
 class InsertExecutor(ABC):
@@ -286,7 +277,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
 
-        self.__sharded_pool = RoundRobinConnectionPool(self.__storage.get_cluster())
+        self.__sharded_pool = InOrderConnectionPool(self.__storage.get_cluster())
         self.__rate_limiter = RateLimiter("replacements")
 
         self.__last_offset_processed_per_partition: MutableMapping[str, int] = dict()

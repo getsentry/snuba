@@ -28,7 +28,7 @@ from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
-from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
@@ -38,6 +38,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -122,7 +123,10 @@ sets_bucket_storage = WritableTableStorage(
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
         commit_log_topic=Topic.GENERIC_METRICS_SETS_COMMIT_LOG,
-        pre_filter=KafkaHeaderFilter("metric_type", InputType.SET.value),
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS,
+        pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.SET.value),
     ),
 )
 
@@ -172,6 +176,9 @@ distributions_bucket_storage = WritableTableStorage(
         default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
         commit_log_topic=Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG,
-        pre_filter=KafkaHeaderFilter("metric_type", InputType.DISTRIBUTION.value),
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_DISTRIBUTIONS,
+        pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )

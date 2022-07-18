@@ -1,9 +1,9 @@
-from typing import Mapping, MutableSequence, Sequence
+from typing import Mapping, Sequence
 
 import pytest
 
 from snuba.clusters.cluster import ClickhouseNode
-from snuba.replacer import RoundRobinConnectionPool
+from snuba.replacer import InOrderConnectionPool
 from tests.clusters.fake_cluster import FakeClickhouseCluster
 
 TEST_CASES = [
@@ -15,19 +15,16 @@ TEST_CASES = [
             ClickhouseNode("storage-1-0", 9000, 2, 1),
             ClickhouseNode("storage-1-1", 9000, 2, 2),
         ],
-        1,
-        [
-            {
-                1: [
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                ],
-                2: [
-                    ClickhouseNode("storage-1-0", 9000, 2, 1),
-                    ClickhouseNode("storage-1-1", 9000, 2, 2),
-                ],
-            }
-        ],
+        {
+            1: [
+                ClickhouseNode("storage-0-0", 9000, 1, 1),
+                ClickhouseNode("storage-0-1", 9000, 1, 2),
+            ],
+            2: [
+                ClickhouseNode("storage-1-0", 9000, 2, 1),
+                ClickhouseNode("storage-1-1", 9000, 2, 2),
+            ],
+        },
         id="1 call to load balancer on 2 shards",
     ),
     pytest.param(
@@ -38,29 +35,16 @@ TEST_CASES = [
             ClickhouseNode("storage-1-0", 9000, 2, 1),
             ClickhouseNode("storage-1-1", 9000, 2, 2),
         ],
-        2,
-        [
-            {
-                1: [
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                ],
-                2: [
-                    ClickhouseNode("storage-1-0", 9000, 2, 1),
-                    ClickhouseNode("storage-1-1", 9000, 2, 2),
-                ],
-            },
-            {
-                1: [
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                ],
-                2: [
-                    ClickhouseNode("storage-1-1", 9000, 2, 2),
-                    ClickhouseNode("storage-1-0", 9000, 2, 1),
-                ],
-            },
-        ],
+        {
+            1: [
+                ClickhouseNode("storage-0-0", 9000, 1, 1),
+                ClickhouseNode("storage-0-1", 9000, 1, 2),
+            ],
+            2: [
+                ClickhouseNode("storage-1-0", 9000, 2, 1),
+                ClickhouseNode("storage-1-1", 9000, 2, 2),
+            ],
+        },
         id="2 calls to load balancer test wrap around",
     ),
     pytest.param(
@@ -71,91 +55,46 @@ TEST_CASES = [
             ClickhouseNode("storage-0-2", 9000, 1, 3),
             ClickhouseNode("storage-1-0", 9000, 2, 1),
         ],
-        3,
-        [
-            {
-                1: [
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                    ClickhouseNode("storage-0-2", 9000, 1, 3),
-                ],
-                2: [ClickhouseNode("storage-1-0", 9000, 2, 1)],
-            },
-            {
-                1: [
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                    ClickhouseNode("storage-0-2", 9000, 1, 3),
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                ],
-                2: [ClickhouseNode("storage-1-0", 9000, 2, 1)],
-            },
-            {
-                1: [
-                    ClickhouseNode("storage-0-2", 9000, 1, 3),
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                ],
-                2: [ClickhouseNode("storage-1-0", 9000, 2, 1)],
-            },
-        ],
+        {
+            1: [
+                ClickhouseNode("storage-0-0", 9000, 1, 1),
+                ClickhouseNode("storage-0-1", 9000, 1, 2),
+                ClickhouseNode("storage-0-2", 9000, 1, 3),
+            ],
+            2: [ClickhouseNode("storage-1-0", 9000, 2, 1)],
+        },
         id="Unbalanced cluster",
     ),
     pytest.param(
         [
             ClickhouseNode("query_node", 9000, None, None),
-            ClickhouseNode("storage-0-0", 9000, 1, 1),
+            ClickhouseNode("storage-1-1", 9000, 2, 2),
             ClickhouseNode("storage-0-1", 9000, 1, 2),
-            ClickhouseNode("storage-0-2", 9000, 1, 3),
-            ClickhouseNode("storage-0-3", 9000, 1, 4),
+            ClickhouseNode("storage-0-0", 9000, 1, 1),
+            ClickhouseNode("storage-1-0", 9000, 2, 1),
         ],
-        5,
-        [
-            {
-                1: [
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                    ClickhouseNode("storage-0-2", 9000, 1, 3),
-                ],
-            },
-            {
-                1: [
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                    ClickhouseNode("storage-0-2", 9000, 1, 3),
-                    ClickhouseNode("storage-0-3", 9000, 1, 4),
-                ],
-            },
-            {
-                1: [
-                    ClickhouseNode("storage-0-2", 9000, 1, 3),
-                    ClickhouseNode("storage-0-3", 9000, 1, 4),
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                ],
-            },
-            {
-                1: [
-                    ClickhouseNode("storage-0-3", 9000, 1, 4),
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                ],
-            },
-            {
-                1: [
-                    ClickhouseNode("storage-0-0", 9000, 1, 1),
-                    ClickhouseNode("storage-0-1", 9000, 1, 2),
-                    ClickhouseNode("storage-0-2", 9000, 1, 3),
-                ],
-            },
-        ],
-        id="Full wrap around. Replicaset higher than 3",
+        {
+            1: [
+                ClickhouseNode("storage-0-0", 9000, 1, 1),
+                ClickhouseNode("storage-0-1", 9000, 1, 2),
+            ],
+            2: [
+                ClickhouseNode("storage-1-0", 9000, 2, 1),
+                ClickhouseNode("storage-1-1", 9000, 2, 2),
+            ],
+        },
+        id="Out of order nodes",
     ),
 ]
 
 
-@pytest.mark.parametrize("cluster_nodes, iterations, expected_results", TEST_CASES)
+@pytest.mark.parametrize(
+    "cluster_nodes, expected_inorder_results",
+    TEST_CASES,
+)
 def test_load_balancer(
     cluster_nodes: Sequence[ClickhouseNode],
-    iterations: int,
-    expected_results: Sequence[Mapping[int, Sequence[ClickhouseNode]]],
+    expected_inorder_results: Mapping[int, Sequence[ClickhouseNode]],
 ) -> None:
     cluster = FakeClickhouseCluster(
         host="query_node",
@@ -171,9 +110,7 @@ def test_load_balancer(
         nodes=[(node, True) for node in cluster_nodes],
     )
 
-    load_balancer = RoundRobinConnectionPool(cluster)
-    results: MutableSequence[Mapping[int, Sequence[ClickhouseNode]]] = []
-    for i in range(iterations):
-        results.append(load_balancer.get_connections())
+    in_order_load_balancer = InOrderConnectionPool(cluster)
+    in_order_results = in_order_load_balancer.get_connections()
 
-    assert results == expected_results
+    assert in_order_results == expected_inorder_results

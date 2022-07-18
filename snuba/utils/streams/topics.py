@@ -17,9 +17,21 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
     SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
     SUBSCRIPTION_SCHEDULED_METRICS = "scheduled-subscriptions-metrics"
+    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS = (
+        "scheduled-subscriptions-generic-metrics-sets"
+    )
+    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS = (
+        "scheduled-subscriptions-generic-metrics-distributions"
+    )
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
+    SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS = (
+        "generic-metrics-sets-subscription-results"
+    )
+    SUBSCRIPTION_RESULTS_GENERIC_METRICS_DISTRIBUTIONS = (
+        "generic-metrics-distributions-subscription-results"
+    )
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
     PROFILES_FUNCTIONS = "profiles-call-tree"

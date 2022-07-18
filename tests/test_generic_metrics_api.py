@@ -143,7 +143,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     AND metric_id = {self.metric_id}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -180,7 +180,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     AND tags_raw[{tag_key}] = '{value_as_string}'
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -217,7 +217,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     AND tags[{tag_key}] = {tag_idx_value}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -268,6 +268,9 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         self.end_time = (
             self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         )
+        self.hour_before_start_time = self.start_time - timedelta(hours=1)
+        self.hour_after_start_time = self.start_time + timedelta(hours=1)
+
         self.generate_dists()
 
     def generate_dists(self) -> None:
@@ -308,7 +311,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     AND metric_id = {self.metric_id}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -333,7 +336,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     AND metric_id = {self.metric_id}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 1
+                    GRANULARITY 60
                     """
         response = self.app.post(
             SNQL_ROUTE,
@@ -349,3 +352,30 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert aggregation["org_id"] == self.org_id
         assert aggregation["project_id"] == self.project_id
         assert aggregation["quants"] == [2.0, approx(4.0), approx(4.0), approx(4.0)]
+
+    def test_arbitrary_granularity(self) -> None:
+        query_str = f"""MATCH (generic_metrics_distributions)
+                    SELECT quantiles(0.5,0.9,0.95,0.99)(value) AS quants, min(bucketed_time) AS min_time
+                    BY project_id, org_id
+                    WHERE org_id = {self.org_id}
+                    AND project_id = {self.project_id}
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{self.hour_before_start_time}')
+                    AND timestamp < toDateTime('{self.hour_after_start_time}')
+                    GRANULARITY 3600
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps({"query": query_str, "dataset": "generic_metrics"}),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+
+        aggregation = data["data"][0]
+        smallest_time_bucket = datetime.strptime(
+            aggregation["min_time"], "%Y-%m-%dT%H:%M:%S+00:00"
+        )
+        assert smallest_time_bucket.hour == 12
+        assert smallest_time_bucket.minute == 0
