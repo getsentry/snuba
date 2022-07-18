@@ -1,7 +1,9 @@
-import threading
-from typing import Callable, Mapping, Optional, Sequence, Union
+from __future__ import annotations
 
-from datadog import DogStatsd
+import threading
+from typing import Callable, Mapping, Optional, Union
+
+from datadog.dogstatsd.base import DogStatsd
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
@@ -36,9 +38,11 @@ class DatadogMetricsBackend(MetricsBackend):
             client = self.__thread_state.client
         except AttributeError:
             client = self.__thread_state.client = self.__client_factory()
+
+        assert isinstance(client, DogStatsd)  # for typing
         return client
 
-    def __normalize_tags(self, tags: Optional[Tags]) -> Optional[Sequence[str]]:
+    def __normalize_tags(self, tags: Optional[Tags]) -> Optional[list[str]]:
         if tags is None:
             return None
         else:

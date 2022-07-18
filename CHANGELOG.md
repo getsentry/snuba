@@ -1,5 +1,98 @@
 # Changelog
 
+## 22.7.0
+
+### Various fixes & improvements
+
+- feat(mep): support time bucketing in queries (#2937) by @onewland
+- add new subscription-related generic-metrics topics to settings/validation (#2935) by @onewland
+- feat(mep): fix header filter error (#2938) by @onewland
+- build(deps): bump jsonschema from 4.6.0 to 4.7.1 (#2926) by @dependabot
+- ref: Remove temporary subscriptions rollout code (#2934) by @lynnagara
+- ref: Fix TypedDict import (#2933) by @lynnagara
+- feat(mep): add commit log config to generic metrics storages (#2931) by @onewland
+- build(deps): bump @types/react-dom from 18.0.5 to 18.0.6 in /snuba/admin (#2924) by @dependabot
+- build(deps): bump urllib3 from 1.26.9 to 1.26.10 (#2922) by @dependabot
+- feat(mep): do kafka-header filtering to avoid JSON overhead for generic-metrics (#2929) by @onewland
+- build(deps): bump @types/react from 18.0.14 to 18.0.15 in /snuba/admin (#2923) by @dependabot
+- feat(mep): add commit log topics config (#2928) by @onewland
+- feat(profiling): Add functions consumer and dataset (#2894) by @Zylphrex
+- build(deps): bump redis from 4.3.3 to 4.3.4 (#2905) by @dependabot
+- build(deps): bump python-rapidjson from 1.6 to 1.8 (#2920) by @dependabot
+- ref(subscriptions): Remove legacy tick consumer (#2838) by @lynnagara
+- chore(deps): Bump sentry-sdk to 1.7.0 to enable baggage propagation (#2927) by @sl0thentr0py
+- feat(mep): subscript fix for multiple value arrays (#2914) by @onewland
+- fix: Update Flask (#2880) by @evanh
+- feat(replacements) Reimplement bypass properly (#2917) by @fpacifici
+- fix(build): remove atomicwrites from requirements.txt (#2919) by @onewland
+- feat(replacements) Script to execute batches of replacements (#2916) by @fpacifici
+- fix(profiling): Disable vertical merge algorithm (#2912) by @phacops
+- feat(replays): add replays dataset to dataset factory (#2913) by @JoshFerge
+
+_Plus 41 more_
+
+## 22.6.0
+
+### Various fixes & improvements
+
+- ref(attribution): Split RequestSettings into QuerySetings and attribution (#2808) by @volokluev
+- feat: Print the ClickHouse host, port and version if invalid version (#2816) by @lynnagara
+- enforce retention_days is int type (#2809) by @MeredithAnya
+- fix: Update to latest version of Redis (4.3.3) (#2801) by @evanh
+- Update clickhouse-driver from 0.2.2 to 0.2.4 (#2805) by @evanh
+- fix: Update frontend packages (#2802) by @evanh
+- feat(replays): initial replays clickhouse migration (#2681) by @JoshFerge
+- feat: Bump arroyo (#2796) by @lynnagara
+- feat(metrics) - raw input table and materialized view for generic metrics sets (#2793) by @onewland
+- feat: Remove legacy events subscriptions consumer from Freight (#2798) by @lynnagara
+- feat: Don't pass next_offset to message (#2792) by @lynnagara
+- fix(rate-limit): Don't override SerializableException constructor (#2797) by @nikhars
+- feat(subscriptions): Allow scheduling watermark mode to be overridden (#2791) by @lynnagara
+- refactor(metrics): Undo Optional in value processors #2794 (#2794) by @rahul-kumar-saini
+- Revert "feat(rate-limit): Add rate limit metrics (#2784)" (#2795) by @nikhars
+- ref(subscriptions): Executor created within strategy (#2762) by @MeredithAnya
+- feat(rate-limit): Add rate limit metrics (#2784) by @nikhars
+- build(deps): bump typescript from 4.7.2 to 4.7.3 in /snuba/admin (#2785) by @dependabot
+- build(deps): bump @types/react from 18.0.9 to 18.0.10 in /snuba/admin (#2778) by @dependabot
+- feat(subscriptions): Remove legacy transactions subscriptions from Freight (#2728) by @lynnagara
+- feat(metrics): create generic sets aggregate table + indices (#2782) by @onewland
+- refactor(dlq): Rename policy "closure" to "creator" (#2743) by @rahul-kumar-saini
+- chore(tiger): Remove comparing results (#2787) by @nikhars
+- Revert "fix(tiger): Implement tupleElement function in snuba (#2687)" (#2786) by @volokluev
+
+_Plus 59 more_
+
+## 22.5.0
+
+### Various fixes & improvements
+
+- fix(tiger): don't call the explicit tuple function in clickhouse (#2699) by @volokluev
+- fix(dlq): Metrics ignored messages should be Sentry Errors (#2698) by @rahul-kumar-saini
+- fix: Allow arbitrary AppIDs (#2692) by @evanh
+- dlq(metrics): Metrics produce policy + basic validation replaced with DLQ stuff (#2614) by @rahul-kumar-saini
+- feat(devserver): Force latest offset in devserver (#2573) by @mitsuhiko
+- fix(querylog): fix the kafka config, add test for producer (#2695) by @volokluev
+- fix kafka config option (#2694) by @volokluev
+- fix(querylog): compress, allow larger messages on the querylog producer (#2682) by @volokluev
+- ref: try building the arm64 image using linux builders (#2688) by @asottile-sentry
+- fix(tiger): Implement tupleElement function in snuba (#2687) by @volokluev
+- fix: Support array as well as tuple in condition (#2686) by @evanh
+- feat(arroyo): Upgrade Arroyo for new Parallel Transform Step (#2679) by @rahul-kumar-saini
+- feat(subscriptions): Deploy transactions scheduler and executor (#2690) by @lynnagara
+- Bring in CLA Lite (#2667) by @chadwhitacre
+- feat(subscriptions): Record a metric on subscription creation and deletion (#2689) by @lynnagara
+- feat(subscriptions): Combined scheduler and executor (#2666) by @volokluev
+- chore(tiger): Raise a different timeout exception from tiger clusters (#2680) by @nikhars
+- feat(subscriptions): Remove verifier from Freight (#2684) by @lynnagara
+- feat(subscriptions): Debug producer shutdown (#2685) by @lynnagara
+- feat(subscriptions): Add logging for skipped subscriptions (#2678) by @lynnagara
+- ref(dev-tooling): Enable commit tracking attempt II (#2677) by @MeredithAnya
+- feat(subscriptions): Add config to skip stale subscriptions in executor (#2676) by @lynnagara
+- Skip old subscriptions (#2675) by @fpacifici
+- Add logging (#2674) by @fpacifici
+
+_Plus 57 more_
+
 ## 22.4.0
 
 ### Various fixes & improvements

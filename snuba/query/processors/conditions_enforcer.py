@@ -14,7 +14,7 @@ from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import Or, Param, Pattern, String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ class MandatoryConditionEnforcer(QueryProcessor):
     def __init__(self, condition_checkers: Sequence[ConditionChecker]) -> None:
         self.__condition_checkers = condition_checkers
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         missing_checkers = {checker for checker in self.__condition_checkers}
 
         def inspect_expression(condition: Expression) -> None:

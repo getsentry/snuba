@@ -15,7 +15,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Expression, FunctionCall, NoopVisitor
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Param, String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 
 
@@ -39,7 +39,7 @@ class _ExpressionOrAliasMatcher(NoopVisitor):
 
 
 class UniqInSelectAndHavingProcessor(QueryProcessor):
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         having_clause = query.get_having()
         if not having_clause:
             return None

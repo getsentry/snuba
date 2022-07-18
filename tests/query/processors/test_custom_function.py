@@ -13,8 +13,8 @@ from snuba.query.processors.custom_function import (
     partial_function,
     simple_function,
 )
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.validation.signature import Column as ColType
-from snuba.request.request_settings import HTTPRequestSettings
 
 QUERY_ENTITY = QueryEntity(
     EntityKey.EVENTS,
@@ -156,7 +156,7 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
     )
     # We cannot just run == on the query objects. The content of the two
     # objects is different, being one the AST and the ont the AST + raw body
-    processor.process_query(query, HTTPRequestSettings())
+    processor.process_query(query, HTTPQuerySettings())
     assert query.get_selected_columns() == expected_query.get_selected_columns()
     assert query.get_groupby() == expected_query.get_groupby()
     assert query.get_condition() == expected_query.get_condition()
@@ -212,4 +212,4 @@ def test_invalid_call(query: Query) -> None:
         simple_function("f_call_impl(param1, inner_call(param2))"),
     )
     with pytest.raises(InvalidCustomFunctionCall):
-        processor.process_query(query, HTTPRequestSettings())
+        processor.process_query(query, HTTPQuerySettings())

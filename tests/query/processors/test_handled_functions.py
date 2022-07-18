@@ -14,7 +14,7 @@ from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Argument, Column, FunctionCall, Lambda, Literal
 from snuba.query.logical import Query
 from snuba.query.processors import handled_functions
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def test_handled_processor() -> None:
@@ -68,7 +68,7 @@ def test_handled_processor() -> None:
     processor = handled_functions.HandledFunctionsProcessor(
         "exception_stacks.mechanism_handled"
     )
-    processor.process_query(unprocessed, HTTPRequestSettings())
+    processor.process_query(unprocessed, HTTPQuerySettings())
 
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
@@ -98,7 +98,7 @@ def test_handled_processor_invalid() -> None:
         "exception_stacks.mechanism_handled",
     )
     with pytest.raises(InvalidExpressionException):
-        processor.process_query(unprocessed, HTTPRequestSettings())
+        processor.process_query(unprocessed, HTTPQuerySettings())
 
 
 def test_not_handled_processor() -> None:
@@ -152,7 +152,7 @@ def test_not_handled_processor() -> None:
     processor = handled_functions.HandledFunctionsProcessor(
         "exception_stacks.mechanism_handled",
     )
-    processor.process_query(unprocessed, HTTPRequestSettings())
+    processor.process_query(unprocessed, HTTPQuerySettings())
 
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
@@ -183,4 +183,4 @@ def test_not_handled_processor_invalid() -> None:
         "exception_stacks.mechanism_handled",
     )
     with pytest.raises(InvalidExpressionException):
-        processor.process_query(unprocessed, HTTPRequestSettings())
+        processor.process_query(unprocessed, HTTPQuerySettings())

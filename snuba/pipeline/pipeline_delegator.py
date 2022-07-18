@@ -12,8 +12,8 @@ from snuba.pipeline.query_pipeline import (
 )
 from snuba.pipeline.settings_delegator import RateLimiterDelegate
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.utils.threaded_function_delegator import Result, ThreadedFunctionDelegator
 from snuba.web import QueryResult
@@ -24,7 +24,7 @@ QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryP
 QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[LogicalQuery, str], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[
-    [LogicalQuery, RequestSettings, str, Optional[Result[QueryResult]], QueryResults],
+    [LogicalQuery, QuerySettings, str, Optional[Result[QueryResult]], QueryResults],
     None,
 ]
 
@@ -91,7 +91,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             partial(
                 callback_func,
                 self.__request.query,
-                self.__request.settings,
+                self.__request.query_settings,
                 self.__request.referrer,
             )
             if callback_func
@@ -107,7 +107,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             """
             query = (
                 request.query
-                if _is_query_copying_disallowed(request.settings.referrer)
+                if _is_query_copying_disallowed(request.query_settings.referrer)
                 else copy.deepcopy(request.query)
             )
 
@@ -117,7 +117,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             return replace(
                 request,
                 query=query,
-                settings=RateLimiterDelegate(builder_id, request.settings),
+                query_settings=RateLimiterDelegate(builder_id, request.query_settings),
             )
 
         executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](
@@ -171,7 +171,7 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
         )
 
     def build_planner(
-        self, query: LogicalQuery, settings: RequestSettings
+        self, query: LogicalQuery, settings: QuerySettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
         # For composite queries, we just build the primary pipeline / query plan;
         # running multiple concurrent composite queries is not currently supported.

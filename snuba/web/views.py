@@ -50,9 +50,9 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import redis_client
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.state import MismatchedTypeException
@@ -65,6 +65,7 @@ from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
+from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
@@ -108,12 +109,20 @@ else:
             return False
 
 
-def check_clickhouse() -> bool:
+def check_clickhouse(ignore_experimental: bool = True) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+        if ignore_experimental:
+            datasets = [
+                get_dataset(name)
+                for name in get_enabled_dataset_names()
+                if not get_dataset(name).is_experimental()
+            ]
+        else:
+            datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
+
         entities = itertools.chain(
             *[dataset.get_all_entities() for dataset in datasets]
         )
@@ -130,7 +139,6 @@ def check_clickhouse() -> bool:
                 connection_grouped_table_names[cluster.get_connection_id()].add(
                     cast(TableSchema, storage.get_schema()).get_table_name()
                 )
-
         # De-dupe clusters by host:TCP port:HTTP port:database
         unique_clusters = {
             storage.get_cluster().get_connection_id(): storage.get_cluster()
@@ -357,7 +365,7 @@ def config_changes() -> RespTuple:
 def health() -> Response:
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
-    clickhouse_health = check_clickhouse() if thorough else True
+    clickhouse_health = check_clickhouse(ignore_experimental=True) if thorough else True
 
     body: Mapping[str, Union[str, bool]]
     if not down_file_exists and clickhouse_health:
@@ -397,14 +405,13 @@ def _trace_transaction(dataset: Dataset) -> None:
 
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
-def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
+def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResponse]:
     if http_request.method == "GET":
         return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
         _trace_transaction(dataset)
-        # Not sure what language to pass into dataset_query here
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
@@ -414,7 +421,7 @@ def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "GET":
-        schema = RequestSchema.build(HTTPRequestSettings)
+        schema = RequestSchema.build(HTTPQuerySettings)
         return render_template(
             "query.html",
             query_template=json.dumps(schema.generate_template(), indent=4),
@@ -425,16 +432,6 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
-
-
-# These codes are from:
-# https://github.com/ClickHouse/ClickHouse/blob/1c0b731ea6b86ce3bf7f88bd3ec27df7b218454d/src/Common/ErrorCodes.cpp
-ILLEGAL_TYPE_OF_ARGUMENT = 43
-TYPE_MISMATCH = 53
-CLICKHOUSE_TYPING_ERROR_CODES = {
-    ILLEGAL_TYPE_OF_ARGUMENT,
-    TYPE_MISMATCH,
-}
 
 
 @with_span()
@@ -457,10 +454,10 @@ def dataset_query(
             metrics.timing("post.shutdown.query.delay", diff, tags=tags)
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
-        schema = RequestSchema.build(HTTPRequestSettings)
+        schema = RequestSchema.build(HTTPQuerySettings)
 
     request = build_request(
-        body, parse_snql_query, HTTPRequestSettings, schema, dataset, timer, referrer
+        body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
     )
 
     try:
@@ -481,12 +478,7 @@ def dataset_query(
                 exc_info=True,
             )
         elif isinstance(cause, ClickhouseError):
-            # Since the query validator doesn't have a typing system, queries containing type errors are run on
-            # Clickhouse and generate ClickhouseErrors. Return a 400 status code for such requests because the problem
-            # lies with the query, not Snuba.
-            if cause.code in CLICKHOUSE_TYPING_ERROR_CODES:
-                status = 400
-
+            status = get_http_status_for_clickhouse_error(cause)
             details = {
                 "type": "clickhouse",
                 "message": str(cause),
@@ -513,7 +505,7 @@ def dataset_query(
 
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
-    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+    if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
     return Response(json.dumps(payload), 200, {"Content-Type": "application/json"})
@@ -647,14 +639,16 @@ if application.debug or application.testing:
             stream_loader = table_writer.get_stream_loader()
             strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
-                functools.partial(process_message, stream_loader.get_processor()),
+                functools.partial(
+                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                ),
                 build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
                 max_batch_time=1.0,
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
-            ).create(lambda offsets: None)
+            ).create_with_partitions(lambda offsets: None, {})
             strategy.submit(message)
             strategy.close()
             strategy.join()

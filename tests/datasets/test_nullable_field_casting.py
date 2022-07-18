@@ -10,8 +10,8 @@ from snuba.datasets.factory import get_dataset
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal, StringifyVisitor
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -51,12 +51,12 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
 
     dataset = get_dataset(dataset_name)
 
-    schema = RequestSchema.build(HTTPRequestSettings)
+    schema = RequestSchema.build(HTTPQuerySettings)
 
     request = build_request(
         query_body,
         parse_snql_query,
-        HTTPRequestSettings,
+        HTTPQuerySettings,
         schema,
         dataset,
         Timer(name="bloop"),
@@ -66,7 +66,7 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
 
     def query_verifier(
         query: Union[Query, CompositeQuery[Table]],
-        settings: RequestSettings,
+        settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         # The only reason this extends StringifyVisitor is because it has all the other

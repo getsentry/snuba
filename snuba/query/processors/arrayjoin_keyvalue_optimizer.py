@@ -18,7 +18,7 @@ from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 def key_column(col_name: str) -> str:
@@ -70,7 +70,7 @@ def _get_mapping_keys_in_condition(
 
         match = is_in_condition_pattern(array_join_pattern(column_name)).match(c)
         if match is not None:
-            function = match.expression("tuple")
+            function = match.expression("sequence")
             assert isinstance(function, FunctionCallExpr)
             keys_found |= {
                 lit.value
@@ -140,7 +140,7 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
     def __init__(self, column_name: str) -> None:
         self.__column_name = column_name
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         arrayjoin_pattern = FunctionCall(
             String("arrayJoin"),
             (

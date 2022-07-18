@@ -43,6 +43,16 @@ class Dataset:
     def __init__(self, *, default_entity: EntityKey) -> None:
         self.__default_entity = default_entity
 
+    @classmethod
+    def is_experimental(cls) -> bool:
+        """Marks the dataset as experimental. Healthchecks failing on this
+        dataset:
+            * do not block deploys
+            * affect the snuba server's SLO
+            * still have metrics reported
+        """
+        return False
+
     # TODO: Remove once entity selection moves to Sentry
     def select_entity(self, query: Query) -> EntityKey:
         return self.__default_entity
@@ -72,4 +82,6 @@ class DatasetQueryPipelineBuilder:
                 request, runner
             )
         else:
-            return CompositeExecutionPipeline(request.query, request.settings, runner)
+            return CompositeExecutionPipeline(
+                request.query, request.query_settings, runner
+            )

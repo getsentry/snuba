@@ -15,7 +15,7 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -63,12 +63,12 @@ TESTS = [
 def test_build_request(body: MutableMapping[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
     entity = dataset.get_default_entity()
-    schema = RequestSchema.build(HTTPRequestSettings)
+    schema = RequestSchema.build(HTTPQuerySettings)
 
     request = build_request(
         body,
         parse_snql_query,
-        HTTPRequestSettings,
+        HTTPQuerySettings,
         schema,
         dataset,
         Timer("test"),
@@ -93,6 +93,6 @@ def test_build_request(body: MutableMapping[str, Any], condition: Expression) ->
     )
 
     assert request.referrer == "my_request"
-    assert dict(request.body) == body
+    assert dict(request.original_body) == body
     status, differences = request.query.equals(expected_query)
     assert status == True, f"Query mismatch: {differences}"

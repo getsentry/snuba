@@ -1,15 +1,21 @@
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from enum import Enum
 from typing import Any, Mapping, Optional
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
-from snuba.datasets.metrics_aggregate_processor import (
-    METRICS_COUNTERS_TYPE,
-    METRICS_DISTRIBUTIONS_TYPE,
-    METRICS_SET_TYPE,
+from snuba.datasets.metrics_messages import (
+    ILLEGAL_VALUE_IN_DIST,
+    ILLEGAL_VALUE_IN_SET,
+    INT_EXPECTED,
+    INT_FLOAT_EXPECTED,
+    InputType,
+    OutputType,
+    is_set_message,
+    values_for_distribution_message,
+    values_for_set_message,
 )
 from snuba.processor import (
     InsertBatch,
@@ -19,6 +25,9 @@ from snuba.processor import (
 )
 
 DISABLED_MATERIALIZATION_VERSION = 1
+ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
+
+logger = logging.getLogger(__name__)
 
 
 class MetricsBucketProcessor(MessageProcessor, ABC):
@@ -39,16 +48,15 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
             return None
 
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(message["timestamp"]))
-        assert timestamp is not None
+        assert timestamp is not None, "Invalid timestamp"
 
         keys = []
         values = []
         tags = message["tags"]
-        assert isinstance(tags, Mapping)
+        assert isinstance(tags, Mapping), "Invalid tags type"
         for key, value in sorted(tags.items()):
-            assert key.isdigit()
+            assert key.isdigit() and isinstance(value, int), "Tag key/value invalid"
             keys.append(int(key))
-            assert isinstance(value, int)
             values.append(value)
 
         mat_version = (
@@ -80,12 +88,14 @@ class MetricsBucketProcessor(MessageProcessor, ABC):
 
 class SetsMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "s"
+        return is_set_message(message)
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]
-        for v in values:
-            assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
+        for value in values:
+            assert isinstance(
+                value, int
+            ), f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
         return {"set_values": values}
 
 
@@ -97,7 +107,7 @@ class CounterMetricsProcessor(MetricsBucketProcessor):
         value = message["value"]
         assert isinstance(
             value, (int, float)
-        ), "Illegal value for counter value. Int/Float expected {value}"
+        ), f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
         return {"value": value}
 
 
@@ -107,43 +117,29 @@ class DistributionsMetricsProcessor(MetricsBucketProcessor):
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
         values = message["value"]
-        for v in values:
+        for value in values:
             assert isinstance(
-                v, (int, float)
-            ), "Illegal value in set. Int expected: {v}"
+                value, (int, float)
+            ), f"{ILLEGAL_VALUE_IN_DIST} {INT_FLOAT_EXPECTED}: {value}"
         return {"values": values}
-
-
-class OutputType(Enum):
-    SET = "set"
-    COUNTER = "counter"
-    DIST = "distribution"
 
 
 class PolymorphicMetricsProcessor(MetricsBucketProcessor):
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         return message["type"] in {
-            METRICS_SET_TYPE,
-            METRICS_COUNTERS_TYPE,
-            METRICS_DISTRIBUTIONS_TYPE,
+            InputType.SET.value,
+            InputType.COUNTER.value,
+            InputType.DISTRIBUTION.value,
         }
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        if message["type"] == METRICS_SET_TYPE:
-            values = message["value"]
-            for v in values:
-                assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
-            return {"metric_type": OutputType.SET.value, "set_values": values}
-        elif message["type"] == METRICS_COUNTERS_TYPE:
+        if message["type"] == InputType.SET.value:
+            return values_for_set_message(message)
+        elif message["type"] == InputType.COUNTER.value:
             value = message["value"]
             assert isinstance(
                 value, (int, float)
-            ), "Illegal value for counter value. Int/Float expected {value}"
+            ), f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
             return {"metric_type": OutputType.COUNTER.value, "count_value": value}
-        else:  # METRICS_DISTRIBUTIONS_TYPE
-            values = message["value"]
-            for v in values:
-                assert isinstance(
-                    v, (int, float)
-                ), "Illegal value in set. Int expected: {v}"
-            return {"metric_type": OutputType.DIST.value, "distribution_values": values}
+        else:  # message["type"] == InputType.DISTRIBUTION.value
+            return values_for_distribution_message(message)

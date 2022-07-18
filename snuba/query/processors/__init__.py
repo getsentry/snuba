@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 
 from snuba.query.logical import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class QueryProcessor(ABC):
     """
     A transformation applied to a Query. This depends on the query structure and
-    on the request settings. No additional context is provided.
+    on the request.query_settings. No additional context is provided.
     This transformation mutates the Query object in place.
 
     These processors tweak the query and are developed independently from each other,
@@ -21,7 +21,7 @@ class QueryProcessor(ABC):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
         # we cannot reassign it.

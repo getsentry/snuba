@@ -307,7 +307,7 @@ class TestSnQLApi(BaseApiTest):
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from rediscluster.utils import ClusterDownError
+        from redis.cluster import ClusterDownError
 
         hsh = "0" * 32
         group_id = int(hsh[:16], 16)
@@ -621,8 +621,7 @@ class TestSnQLApi(BaseApiTest):
         assert metric_calls[0].tags["entity"] == "events"
         assert metric_calls[0].tags["table"].startswith("errors")
 
-    def test_invalid_app_id_attribution(self) -> None:
-        state.set_config("use_attribution", 1)
+    def test_arbitrary_app_id_attribution(self) -> None:
         response = self.post(
             "/events/snql",
             data=json.dumps(
@@ -633,7 +632,7 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     AND project_id IN tuple({self.project_id})
                     """,
-                    "app_id": "unregistered",
+                    "app_id": "something-cool",
                 }
             ),
         )
@@ -642,14 +641,7 @@ class TestSnQLApi(BaseApiTest):
         assert metric_calls is not None
         assert len(metric_calls) == 1
         assert metric_calls[0].value > 0
-        assert metric_calls[0].tags["app_id"] == "invalid"
-
-        metric_calls = get_recorded_metric_calls(
-            "increment", "snuba.attribution.invalid_app_id"
-        )
-        assert metric_calls is not None
-        assert len(metric_calls) == 1
-        assert metric_calls[0].tags["app_id"] == "unregistered"
+        assert metric_calls[0].tags["app_id"] == "something-cool"
 
     def test_missing_alias_bug(self) -> None:
         response = self.post(

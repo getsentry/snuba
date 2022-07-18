@@ -24,7 +24,7 @@ from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryResult
 
@@ -84,7 +84,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
     def execute(
         self,
         query: Query,
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
         runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
@@ -149,7 +149,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             # At every iteration we only append the "data" key from the results returned by
             # the runner. The "extra" key is only populated at the first iteration of the
             # loop and never changed.
-            result = runner(split_query, request_settings)
+            result = runner(split_query, query_settings)
 
             if overall_result is None:
                 overall_result = result
@@ -209,7 +209,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
     def execute(
         self,
         query: Query,
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
         runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
@@ -304,7 +304,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
                 metrics.increment("column_splitter.orderby_has_a_function")
                 return None
 
-        result = runner(minimal_query, request_settings)
+        result = runner(minimal_query, query_settings)
         del minimal_query
 
         if not result.result["data"]:
@@ -331,10 +331,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             )
         )
         query.set_offset(0)
-        # TODO: This is technically wrong. Event ids are unique per project, not globally.
-        # So, if the minimal query only returned the same event_id from two projects, we
-        # would be underestimating the limit here.
-        query.set_limit(len(event_ids))
+        query.set_limit(len(result.result["data"]))
 
         project_ids = list(
             set([event[self.__project_column] for event in result.result["data"]])
@@ -365,4 +362,4 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             ),
         )
 
-        return runner(query, request_settings)
+        return runner(query, query_settings)

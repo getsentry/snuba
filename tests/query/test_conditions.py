@@ -14,7 +14,7 @@ from snuba.query.conditions import (
     is_unary_condition,
     unary_condition,
 )
-from snuba.query.dsl import literals_tuple
+from snuba.query.dsl import literals_array, literals_tuple
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import Literal as LiteralPattern
@@ -163,7 +163,25 @@ def test_in_condition() -> None:
         in_condition
     )
     assert match is not None
-    assert match.expression("tuple") == literals_tuple(
+    assert match.expression("sequence") == literals_tuple(
+        None, [Literal(None, "t1"), Literal(None, "t2")]
+    )
+    assert match.expression("lhs") == Column(None, None, "tags_key")
+
+
+def test_in_condition_with_array() -> None:
+    in_condition = binary_condition(
+        ConditionFunctions.IN,
+        Column(None, None, "tags_key"),
+        literals_array(None, [Literal(None, "t1"), Literal(None, "t2")]),
+    )
+    assert is_in_condition(in_condition)
+
+    match = is_in_condition_pattern(ColumnPattern(None, String("tags_key"))).match(
+        in_condition
+    )
+    assert match is not None
+    assert match.expression("sequence") == literals_array(
         None, [Literal(None, "t1"), Literal(None, "t2")]
     )
     assert match.expression("lhs") == Column(None, None, "tags_key")
@@ -181,7 +199,7 @@ def test_not_in_condition() -> None:
         not_in_condition
     )
     assert match is not None
-    assert match.expression("tuple") == literals_tuple(
+    assert match.expression("sequence") == literals_tuple(
         None, [Literal(None, "t1"), Literal(None, "t2")]
     )
     assert match.expression("lhs") == Column(None, None, "tags_key")

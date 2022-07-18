@@ -24,9 +24,7 @@ from confluent_kafka import Producer
 from snuba import environment, settings
 from snuba.redis import redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.configuration_builder import (
-    build_default_kafka_producer_configuration,
-)
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
 metrics = MetricsWrapper(environment.metrics, "snuba.state")
@@ -50,6 +48,34 @@ queries_list = "snuba-queries"
 max_query_duration_s = 60
 # Window for determining query rate
 rate_lookback_s = 60
+
+
+def _kafka_producer() -> Producer:
+    global kfk
+    if kfk is None:
+        kfk = Producer(
+            build_kafka_producer_configuration(
+                topic=None,
+                override_params={
+                    # at time of writing (2022-05-09) lz4 was chosen because it
+                    # compresses quickly. If more compression is needed at the cost of
+                    # performance, zstd can be used instead. Recording the query
+                    # is part of the API request, therefore speed is important
+                    # perf-testing: https://indico.fnal.gov/event/16264/contributions/36466/attachments/22610/28037/Zstd__LZ4.pdf
+                    # by default a topic is configured to use whatever compression method the producer used
+                    # https://docs.confluent.io/platform/current/installation/configuration/topic-configs.html#topicconfigs_compression.type
+                    "compression.type": "lz4",
+                    # the querylog payloads can get really large so we allow larger messages
+                    # (double the default)
+                    # The performance is not business critical and therefore we accept the tradeoffs
+                    # in more bandwidth for more observability/debugability
+                    # for this to be meaningful, the following setting has to be at least as large on the broker
+                    # message.max.bytes=2000000
+                    "message.max.bytes": 2000000,
+                },
+            )
+        )
+    return kfk
 
 
 @dataclass(frozen=True)
@@ -304,19 +330,15 @@ def _record_query_delivery_callback(
 
 
 def record_query(query_metadata: Mapping[str, Any]) -> None:
-    global kfk
     max_redis_queries = 200
     try:
+        producer = _kafka_producer()
         data = safe_dumps(query_metadata)
         rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(  # type: ignore
             queries_list, 0, max_redis_queries - 1
         ).execute()
-
-        if kfk is None:
-            kfk = Producer(build_default_kafka_producer_configuration())
-
-        kfk.poll(0)  # trigger queued delivery callbacks
-        kfk.produce(
+        producer.poll(0)  # trigger queued delivery callbacks
+        producer.produce(
             settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),
             data.encode("utf-8"),
             on_delivery=_record_query_delivery_callback,

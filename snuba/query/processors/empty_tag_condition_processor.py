@@ -11,7 +11,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 CONDITION_PATTERN = condition_pattern(
     {ConditionFunctions.EQ, ConditionFunctions.NEQ},
@@ -30,7 +30,7 @@ class EmptyTagConditionProcessor(QueryProcessor):
     the `has` function.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def process_condition(exp: Expression) -> Expression:
             result = CONDITION_PATTERN.match(exp)
             if result is not None:

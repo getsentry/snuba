@@ -137,6 +137,13 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             # and work when they are passed as [1, 2, 3]
             return self._alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
 
+        if exp.function_name == "tuple" and len(exp.parameters) > 1:
+            # Some distributed queries fail when tuples are passed as tuple(1,2,3)
+            # and work when they are passed as (1, 2, 3)
+            # to be safe, only do this for when a tuple has more than one element otherwise clickhouse
+            # will interpret (1) -> 1 which will break things like 1 IN tuple(1)
+            return self._alias(f"({self.__visit_params(exp.parameters)})", exp.alias)
+
         elif exp.function_name == BooleanFunctions.AND:
             formatted = (c.accept(self) for c in get_first_level_and_conditions(exp))
             return " AND ".join(formatted)

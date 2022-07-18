@@ -36,7 +36,6 @@ class ProducerEncodingWrapper(Producer[TDecoded]):
                         message.offset,
                         payload,
                         message.timestamp,
-                        message.next_offset,
                     )
                 )
 

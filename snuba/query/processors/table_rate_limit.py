@@ -1,6 +1,8 @@
+from typing import Optional
+
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_configs
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitParameters
 
@@ -11,12 +13,15 @@ class TableRateLimit(QueryProcessor):
     TODO: Do this at Cluster level instead.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def __init__(self, suffix: Optional[str] = None) -> None:
+        self.__suffix = "_".join(["", suffix]) if suffix else ""
+
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         table_name = query.get_from_clause().table_name
         (per_second, concurr) = get_configs(
             [
-                (f"table_per_second_limit_{table_name}", 1000),
-                (f"table_concurrent_limit_{table_name}", 1000),
+                (f"table_per_second_limit_{table_name}{self.__suffix}", 5000),
+                (f"table_concurrent_limit_{table_name}{self.__suffix}", 1000),
             ]
         )
 
@@ -27,4 +32,4 @@ class TableRateLimit(QueryProcessor):
             concurrent_limit=concurr,
         )
 
-        request_settings.add_rate_limit(rate_limit)
+        query_settings.add_rate_limit(rate_limit)

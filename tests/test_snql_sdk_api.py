@@ -427,3 +427,22 @@ class TestSDKSnQLApi(BaseApiTest):
         response = self.post("/events/snql", data=query.snuba())
         resp = json.loads(response.data)
         assert response.status_code == 400, resp
+
+    def test_tags_raw_access(self) -> None:
+        query = (
+            Query("generic_metrics", Entity("generic_metrics_distributions"))
+            .set_select([Function("count", [], "count")])
+            .set_where(
+                conditions=[
+                    Condition(Column("tags_raw[1234]"), Op.EQ, "condition-value"),
+                    Condition(Column("org_id"), Op.EQ, self.org_id),
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.base_time),
+                    Condition(Column("timestamp"), Op.LT, self.next_time),
+                ]
+            )
+        )
+
+        response = self.post("/generic_metrics/snql", data=query.snuba())
+        resp = json.loads(response.data)
+        assert response.status_code == 200, resp

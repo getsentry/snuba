@@ -9,7 +9,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.object_id_rate_limiter import ProjectReferrerRateLimiter
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state.rate_limit import PROJECT_REFERRER_RATE_LIMIT_NAME
 
 tests = [
@@ -35,7 +35,7 @@ def test_referrer_unspecified_project(unprocessed: Expression, project_id: int) 
     state.set_config("project_referrer_per_second_limit_abusive_delivery", 1000)
     state.set_config("project_referrer_concurrent_limit_abusive_delivery", 1000)
     referrer = "abusive_delivery"
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     settings.referrer = referrer
 
     num_before = len(settings.get_rate_limit_params())
@@ -58,7 +58,7 @@ def test_referrer_specified_project(unprocessed: Expression, project_id: int) ->
     state.set_config("project_referrer_per_second_limit_abusive_delivery_1", 10)
     state.set_config("project_referrer_concurrent_limit_abusive_delivery_1", 10)
     referrer = "abusive_delivery"
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     settings.referrer = referrer
 
     num_before = len(settings.get_rate_limit_params())
@@ -82,7 +82,7 @@ def test_referrer_rate_limit_processor_no_config(
     )
     # don't configure it, rate limit shouldn't fire
     referrer = "abusive_delivery"
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     settings.referrer = referrer
 
     num_before = len(settings.get_rate_limit_params())

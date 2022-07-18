@@ -12,7 +12,7 @@ from snuba.query.dsl import count, divide
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.performance_expressions import failure_rate_processor
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def test_failure_rate_format_expressions() -> None:
@@ -53,7 +53,7 @@ def test_failure_rate_format_expressions() -> None:
         ],
     )
 
-    failure_rate_processor().process_query(unprocessed, HTTPRequestSettings())
+    failure_rate_processor().process_query(unprocessed, HTTPQuerySettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
     ret = unprocessed.get_selected_columns()[1].expression.accept(

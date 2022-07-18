@@ -13,7 +13,7 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class SemiJoinOptimizer(CompositeQueryProcessor):
@@ -40,11 +40,11 @@ class SemiJoinOptimizer(CompositeQueryProcessor):
     """
 
     def process_query(
-        self, query: CompositeQuery[Table], request_settings: RequestSettings
+        self, query: CompositeQuery[Table], query_settings: QuerySettings
     ) -> None:
         from_clause = query.get_from_clause()
         if isinstance(from_clause, CompositeQuery):
-            self.process_query(from_clause, request_settings)
+            self.process_query(from_clause, query_settings)
             return
         elif isinstance(from_clause, ProcessableQuery):
             return

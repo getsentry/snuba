@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
 from typing import Callable, Mapping, NamedTuple, Optional, Sequence, cast
@@ -43,12 +42,14 @@ def build_scheduler_executor_consumer(
     followed_consumer_group: str,
     producer: Producer[KafkaPayload],
     auto_offset_reset: str,
+    strict_offset_reset: bool,
     schedule_ttl: int,
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     max_concurrent_queries: int,
-    executor: ThreadPoolExecutor,
+    total_concurrent_queries: int,
     metrics: MetricsBackend,
+    scheduling_mode: Optional[SchedulingWatermarkMode],
 ) -> StreamProcessor[Tick]:
     dataset = get_dataset(dataset_name)
 
@@ -84,6 +85,7 @@ def build_scheduler_executor_consumer(
                 commit_log_topic.topic,
                 consumer_group,
                 auto_offset_reset=auto_offset_reset,
+                strict_offset_reset=strict_offset_reset,
             ),
         ),
         followed_consumer_group=followed_consumer_group,
@@ -95,14 +97,15 @@ def build_scheduler_executor_consumer(
     factory = CombinedSchedulerExecutorFactory(
         dataset,
         entity_names,
-        executor,
         partitions,
         max_concurrent_queries,
+        total_concurrent_queries,
         producer,
         metrics,
         stale_threshold_seconds,
         result_topic.topic_name,
         schedule_ttl,
+        scheduling_mode,
     )
 
     return StreamProcessor(
@@ -130,14 +133,15 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         self,
         dataset: Dataset,
         entity_names: Sequence[str],
-        executor: ThreadPoolExecutor,
         partitions: int,
         max_concurrent_queries: int,
+        total_concurrent_queries: int,
         producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
         stale_threshold_seconds: Optional[int],
         result_topic: str,
         schedule_ttl: int,
+        scheduling_mode: Optional[SchedulingWatermarkMode] = None,
     ) -> None:
         # TODO: self.__partitions might not be the same for each entity
         self.__partitions = partitions
@@ -174,8 +178,8 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         )
 
         self.__executor_factory = SubscriptionExecutorProcessingFactory(
-            executor,
             max_concurrent_queries,
+            total_concurrent_queries,
             dataset,
             entity_names,
             producer,
@@ -184,15 +188,19 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             result_topic,
         )
 
-        modes = {
-            self._get_entity_watermark_mode(entity_key) for entity_key in entity_keys
-        }
+        if scheduling_mode is not None:
+            self.__mode = scheduling_mode
+        else:
+            modes = {
+                self._get_entity_watermark_mode(entity_key)
+                for entity_key in entity_keys
+            }
 
-        mode = modes.pop()
+            mode = modes.pop()
 
-        assert len(modes) == 0, "Entities provided do not share the same mode"
+            assert len(modes) == 0, "Entities provided do not share the same mode"
 
-        self.__mode = mode
+            self.__mode = mode
 
     def _get_entity_watermark_mode(
         self, entity_key: EntityKey
@@ -204,15 +212,20 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         assert mode is not None, "Entity is not subscriptable"
         return mode
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
-        execute_step = self.__executor_factory.create(commit)
+        execute_step = self.__executor_factory.create_with_partitions(
+            commit, partitions
+        )
         return TickBuffer(
             self.__mode,
             self.__partitions,
             self.__buffer_size,
             ForwardToExecutor(self.__schedulers, execute_step),
+            self.__metrics,
         )
 
 

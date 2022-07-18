@@ -6,7 +6,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 
 test_data = [
@@ -156,7 +156,7 @@ test_data = [
 
 @pytest.mark.parametrize("query, expected", test_data)  # type: ignore
 def test_empty_tag_condition(query: Query, expected: Expression) -> None:
-    request_settings = HTTPRequestSettings()
+    query_settings = HTTPQuerySettings()
     processor = EmptyTagConditionProcessor()
-    processor.process_query(query, request_settings)
+    processor.process_query(query, query_settings)
     assert query.get_condition() == expected

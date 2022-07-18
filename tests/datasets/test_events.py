@@ -11,7 +11,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
 
@@ -61,13 +61,13 @@ def test_storage_selector() -> None:
     storage_selector = ErrorsQueryStorageSelector(mappers=errors_translators)
     assert (
         storage_selector.select_storage(
-            query, HTTPRequestSettings(consistent=False)
+            query, HTTPQuerySettings(consistent=False)
         ).storage
         == storage_ro
     )
     assert (
         storage_selector.select_storage(
-            query, HTTPRequestSettings(consistent=True)
+            query, HTTPQuerySettings(consistent=True)
         ).storage
         == storage
     )

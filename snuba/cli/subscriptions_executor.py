@@ -1,6 +1,5 @@
 import logging
 import signal
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
 
@@ -23,7 +22,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions", "sessions", "metrics"]),
+    type=click.Choice(["events", "transactions", "metrics"]),
     help="The dataset to target.",
 )
 @click.option(
@@ -31,9 +30,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "entity_names",
     required=True,
     multiple=True,
-    type=click.Choice(
-        ["events", "transactions", "sessions", "metrics_counters", "metrics_sets"]
-    ),
+    type=click.Choice(["events", "transactions", "metrics_counters", "metrics_sets"]),
     help="The entity to target.",
 )
 @click.option(
@@ -41,11 +38,19 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     default="snuba-subscription-executor",
     help="Consumer group used for consuming the scheduled subscription topic/s.",
 )
+# TODO: Once we are using the --total-concurrent-queries to calculate the max
+# concurrent queries we can remove this cli arg.
 @click.option(
     "--max-concurrent-queries",
     default=20,
     type=int,
-    help="Max concurrent ClickHouse queries",
+    help="Max concurrent ClickHouse queries.",
+)
+@click.option(
+    "--total-concurrent-queries",
+    default=64,
+    type=int,
+    help="Total max number of concurrent queries for all replicas. Used to calculate max_concurrent_queries.",
 )
 @click.option(
     "--auto-offset-reset",
@@ -53,23 +58,16 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--stale-threshold-seconds",
     type=int,
     help="Skip execution if timestamp is beyond this threshold compared to the system time",
-)
-# This option allows us to reroute the produced subscription results to a different
-# topic temporarily while we are testing and running the old and new subscription
-# pipeline concurrently. It is currently (temporarily) required to reduce the chance
-# of inadvertently writing to the actual result topics while we are still validating
-# results and running the old subscriptions pipeline. Eventaully we can just get it
-# from stream_loader.get_subscription_result_topic_spec()
-@click.option(
-    "--override-result-topic",
-    type=str,
-    required=True,
-    help="Override the result topic for testing",
 )
 # TODO: For testing alternate rebalancing strategies. To be eventually removed.
 @click.option(
@@ -84,10 +82,11 @@ def subscriptions_executor(
     entity_names: Sequence[str],
     consumer_group: str,
     max_concurrent_queries: int,
+    total_concurrent_queries: int,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     log_level: Optional[str],
     stale_threshold_seconds: Optional[int],
-    override_result_topic: str,
     cooperative_rebalancing: bool,
 ) -> None:
     """
@@ -113,7 +112,7 @@ def subscriptions_executor(
     storage = get_entity(entity_key).get_writable_storage()
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
-    result_topic_spec = stream_loader.get_subscription_scheduled_topic_spec()
+    result_topic_spec = stream_loader.get_subscription_result_topic_spec()
     assert result_topic_spec is not None
 
     producer = KafkaProducer(
@@ -122,8 +121,6 @@ def subscriptions_executor(
             override_params={"partitioner": "consistent"},
         )
     )
-
-    executor = ThreadPoolExecutor(max_concurrent_queries)
 
     # TODO: Consider removing and always passing via CLI.
     # If a value provided via config, it overrides the one provided via CLI.
@@ -138,11 +135,11 @@ def subscriptions_executor(
         consumer_group,
         producer,
         max_concurrent_queries,
+        total_concurrent_queries,
         auto_offset_reset,
+        not no_strict_offset_reset,
         metrics,
-        executor,
         stale_threshold_seconds,
-        override_result_topic,
         cooperative_rebalancing,
     )
 
@@ -152,15 +149,11 @@ def subscriptions_executor(
         logger.setLevel(logging.DEBUG)
 
         processor.signal_shutdown()
-        logger.debug("Flushing querylog producer")
-        # Ensure the querylog producer is flushed
-        state.flush_producer()
-        logger.debug("Flushed querylog producer")
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    with executor, closing(producer):
+    with closing(producer), flush_querylog():
         processor.run()
 
 
@@ -170,3 +163,11 @@ def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
         yield producer
     finally:
         producer.close().result()
+
+
+@contextmanager
+def flush_querylog() -> Iterator[None]:
+    try:
+        yield
+    finally:
+        state.flush_producer()

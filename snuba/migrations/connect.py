@@ -50,7 +50,8 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
     # The newer versions of altinity on arm add this to the version
     # and it breaks this check
     ver = ver.replace(".testingarm", "")
+    ver = ver.replace(".altinitystable", "")
     if version.parse(ver) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
         raise InvalidClickhouseVersion(
-            f"Snuba requires Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION}"
+            f"Snuba requires Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {ver})"
         )

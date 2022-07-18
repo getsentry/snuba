@@ -57,7 +57,7 @@ def get_object_ids_in_query_ast(
             Column(column_name=String(object_column))
         ).match(condition)
         if match is not None:
-            objects = match.expression("tuple")
+            objects = match.expression("sequence")
             assert isinstance(objects, FunctionCallExpr)
             return {
                 lit.value

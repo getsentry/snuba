@@ -78,7 +78,7 @@ class KafkaStreamLoader:
         subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
         subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
-        dead_letter_queue_policy_closure: Optional[
+        dead_letter_queue_policy_creator: Optional[
             Callable[[], DeadLetterQueuePolicy]
         ] = None,
     ) -> None:
@@ -96,7 +96,7 @@ class KafkaStreamLoader:
         self.__subscription_scheduled_topic_spec = subscription_scheduled_topic_spec
         self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
-        self.__dead_letter_queue_policy_closure = dead_letter_queue_policy_closure
+        self.__dead_letter_queue_policy_creator = dead_letter_queue_policy_creator
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
@@ -126,10 +126,10 @@ class KafkaStreamLoader:
     def get_subscription_result_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__subscription_result_topic_spec
 
-    def get_dead_letter_queue_policy_closure(
+    def get_dead_letter_queue_policy_creator(
         self,
     ) -> Optional[Callable[[], DeadLetterQueuePolicy]]:
-        return self.__dead_letter_queue_policy_closure
+        return self.__dead_letter_queue_policy_creator
 
 
 def build_kafka_stream_loader_from_settings(
@@ -141,7 +141,7 @@ def build_kafka_stream_loader_from_settings(
     subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
     subscription_scheduled_topic: Optional[Topic] = None,
     subscription_result_topic: Optional[Topic] = None,
-    dead_letter_queue_policy_closure: Optional[
+    dead_letter_queue_policy_creator: Optional[
         Callable[[], DeadLetterQueuePolicy]
     ] = None,
 ) -> KafkaStreamLoader:
@@ -181,7 +181,7 @@ def build_kafka_stream_loader_from_settings(
         subscription_scheduler_mode=subscription_scheduler_mode,
         subscription_scheduled_topic_spec=subscription_scheduled_topic_spec,
         subscription_result_topic_spec=subscription_result_topic_spec,
-        dead_letter_queue_policy_closure=dead_letter_queue_policy_closure,
+        dead_letter_queue_policy_creator=dead_letter_queue_policy_creator,
     )
 
 

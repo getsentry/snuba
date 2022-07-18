@@ -14,7 +14,7 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.null_column_caster import NullColumnCaster
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 columns1 = ColumnSet(
     [
@@ -213,5 +213,5 @@ def test_caster(input_q, expected_q):
         NullColumnCaster([Storage1, Storage2]),
     ):
         input_query = deepcopy(input_q)
-        caster.process_query(input_query, HTTPRequestSettings())
+        caster.process_query(input_query, HTTPQuerySettings())
         assert input_query == expected_q

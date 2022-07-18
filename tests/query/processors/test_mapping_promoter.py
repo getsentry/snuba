@@ -8,7 +8,7 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 columns = ColumnSet(
     [
@@ -110,7 +110,7 @@ def test_format_expressions(
     name: str, query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
     MappingColumnPromoter({"tags": {"promoted_tag": "promoted"}}).process_query(
-        query, HTTPRequestSettings()
+        query, HTTPQuerySettings()
     )
 
     assert query.get_selected_columns() == expected_query.get_selected_columns()

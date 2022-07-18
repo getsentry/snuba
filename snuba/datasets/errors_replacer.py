@@ -22,11 +22,12 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import sentry_sdk
-from rediscluster.pipeline import StrictClusterPipeline
 
+from redis.cluster import ClusterPipeline as StrictClusterPipeline
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
@@ -192,15 +193,19 @@ def set_project_exclude_groups(
     )
     p = redis_client.pipeline()
 
-    group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
-    p.zadd(key, **group_id_data)
+    group_id_data: Mapping[str | bytes, bytes | float | int | str] = {
+        str(group_id): now for group_id in group_ids
+    }
+    p.zadd(key, group_id_data)
     # remove group id deletions that should have been merged by now
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
     # store the replacement type data
-    replacement_type_data: Mapping[str, float] = {replacement_type: now}
-    p.zadd(type_key, **replacement_type_data)
+    replacement_type_data: Mapping[str | bytes, bytes | float | int | str] = {
+        replacement_type: now
+    }
+    p.zadd(type_key, replacement_type_data)
     p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
@@ -542,6 +547,21 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
+
+        if processed is not None:
+            bypass_projects = get_config("replacements_bypass_projects", "[]")
+            projects = json.loads(cast(str, bypass_projects))
+            if processed.get_project_id() in projects:
+                # For a persistent non rate limited logger
+                logger.info(
+                    f"Skipping replacement for project. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",
+                )
+                # For sentry tracking
+                logger.error(
+                    "Skipping replacement for project",
+                    extra={"project_id": processed.get_project_id(), "data": message},
+                )
+                return None
 
         return processed
 

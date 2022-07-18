@@ -10,6 +10,7 @@ from typing import (
     Any,
     Callable,
     Deque,
+    Dict,
     List,
     Mapping,
     MutableMapping,
@@ -30,6 +31,10 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
 from arroyo.processing.strategies import ProcessingStrategyFactory
+from arroyo.processing.strategies.dead_letter_queue import (
+    InvalidKafkaMessage,
+    InvalidMessages,
+)
 from arroyo.processing.strategies.streaming import FilterStep, TransformStep
 from arroyo.processing.strategies.streaming.factory import (
     ConsumerStrategyFactory,
@@ -50,6 +55,7 @@ from snuba.processor import (
     MessageProcessor,
     ReplacementBatch,
 )
+from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -526,7 +532,6 @@ class MultistorageCollector(
                 message.offset,
                 payload,
                 message.timestamp,
-                message.next_offset,
             )
             self.__steps[storage_key].submit(writer_message)
 
@@ -539,7 +544,6 @@ class MultistorageCollector(
                 message.offset,
                 (storage_key, payload),
                 message.timestamp,
-                message.next_offset,
             )
 
             self.__messages[storage_key].append(other_message)
@@ -601,15 +605,65 @@ MultistorageProcessedMessage = Sequence[
 ]
 
 
-def process_message(
-    processor: MessageProcessor, message: Message[KafkaPayload]
-) -> Union[None, BytesInsertBatch, ReplacementBatch]:
-    result = processor.process_message(
-        rapidjson.loads(message.payload.value),
-        KafkaMessageMetadata(
-            message.offset, message.partition.index, message.timestamp
-        ),
+def __message_to_dict(
+    message: Message[KafkaPayload],
+) -> Dict[str, Any]:
+    return {
+        "message_payload_value": message.payload.value,
+        "message_offset": message.offset,
+        "message_partition": message.partition.index,
+        "message_topic": message.partition.topic.name,
+    }
+
+
+def skip_kafka_message(message: Message[KafkaPayload]) -> bool:
+    # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
+    messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
+    return (
+        f"{message.partition.topic.name}:{message.partition.index}:{message.offset}"
+        in messages_to_skip
     )
+
+
+def __invalid_kafka_message(
+    message: Message[KafkaPayload], consumer_group: str, err: Exception
+) -> InvalidKafkaMessage:
+    return InvalidKafkaMessage(
+        payload=message.payload.value,
+        timestamp=message.timestamp,
+        topic=message.partition.topic.name,
+        consumer_group=consumer_group,
+        partition=message.partition.index,
+        offset=message.offset,
+        headers=message.payload.headers,
+        key=message.payload.key,
+        reason=f"{err.__class__.__name__}: {err}",
+    )
+
+
+def process_message(
+    processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
+) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+
+    if skip_kafka_message(message):
+        logger.warning(
+            f"A consumer for {message.partition.topic.name} skipped a message!",
+            extra=__message_to_dict(message),
+        )
+        return None
+
+    try:
+        result = processor.process_message(
+            rapidjson.loads(message.payload.value),
+            KafkaMessageMetadata(
+                message.offset, message.partition.index, message.timestamp
+            ),
+        )
+    except Exception as err:
+        logger.error(err, exc_info=True)
+        raise InvalidMessages(
+            [__invalid_kafka_message(message, consumer_group, err)]
+        ) from err
 
     if isinstance(result, InsertBatch):
         return BytesInsertBatch(
@@ -861,10 +915,15 @@ class MultistorageConsumerProcessingStrategyFactory(
             parallel_collect=parallel_collect,
         )
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
         return TransformStep(
             partial(find_destination_storages, self.__storages),
-            FilterStep(has_destination_storages, self.__inner_factory.create(commit)),
+            FilterStep(
+                has_destination_storages,
+                self.__inner_factory.create_with_partitions(commit, partitions),
+            ),
         )

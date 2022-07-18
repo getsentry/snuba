@@ -15,7 +15,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
-class TestOutcomesApi(BaseApiTest):
+class TestLegacyOutcomesApi(BaseApiTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
         return "outcomes"
@@ -297,3 +297,128 @@ class TestOutcomesApi(BaseApiTest):
             },
         ]
         assert data["data"] == correct_data
+
+
+class TestOutcomesAPI(BaseApiTest):
+    def post(self, url: str, data: str) -> Any:
+        return self.app.post(url, data=data, headers={"referer": "test"})
+
+    @pytest.fixture(scope="class")
+    def get_project_id(self, request: object) -> Callable[[], int]:
+        id_iter = itertools.count()
+        next(id_iter)  # skip 0
+        return lambda: next(id_iter)
+
+    def generate_outcomes(
+        self,
+        org_id: int,
+        project_id: int,
+        num_outcomes: int,
+        outcome: int,
+        time_since_base: timedelta,
+        category: Optional[int],
+        quantity: Optional[int] = None,
+    ) -> None:
+        outcomes = []
+        for _ in range(num_outcomes):
+            message = {
+                "project_id": project_id,
+                "event_id": uuid.uuid4().hex,
+                "timestamp": (self.base_time + time_since_base).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                ),
+                "org_id": org_id,
+                "reason": None,
+                "key_id": 1,
+                "outcome": outcome,
+                "category": category,
+                "quantity": quantity,
+            }
+            if message["category"] is None:
+                del message["category"]  # for testing None category case
+            if message["quantity"] is None:
+                del message["quantity"]  # for testing None quantity case
+            processed = (
+                self.storage.get_table_writer()
+                .get_stream_loader()
+                .get_processor()
+                .process_message(
+                    message,
+                    KafkaMessageMetadata(0, 0, self.base_time),
+                )
+            )
+            if processed:
+                outcomes.append(processed)
+
+        write_processed_messages(self.storage, outcomes)
+
+    def format_time(self, time: datetime) -> str:
+        return time.replace(tzinfo=pytz.utc).isoformat()
+
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
+        super().setup_method(test_method)
+        self.skew = timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(minutes=180)
+        self.next_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0
+        ) + timedelta(minutes=180)
+        self.storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
+
+    def test_virtual_time_column(self, get_project_id: Callable[[], int]) -> None:
+        project_id = get_project_id()
+        self.generate_outcomes(
+            org_id=2,
+            project_id=project_id,
+            num_outcomes=5,
+            outcome=0,
+            time_since_base=timedelta(minutes=1),
+            category=DataCategory.ERROR,
+        )
+        self.generate_outcomes(
+            org_id=2,
+            project_id=project_id,
+            num_outcomes=5,
+            outcome=0,
+            time_since_base=timedelta(minutes=30),
+            category=DataCategory.TRANSACTION,
+        )
+        self.generate_outcomes(
+            org_id=2,
+            project_id=project_id,
+            num_outcomes=10,
+            outcome=0,
+            time_since_base=timedelta(minutes=61),
+            category=None,
+        )
+        self.generate_outcomes(
+            org_id=2,
+            project_id=project_id,
+            num_outcomes=1,
+            outcome=1,
+            time_since_base=timedelta(minutes=1),
+            category=DataCategory.ERROR,
+        )
+
+        response = self.post(
+            "/outcomes/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (outcomes )
+                    SELECT sum(times_seen) AS aggregate BY time
+                    WHERE org_id = 2
+                    AND project_id IN tuple({project_id})
+                    AND outcome = 0
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    GRANULARITY 60
+                    """,
+                    "dataset": "outcomes",
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 2
+        assert all([row["aggregate"] == 10 for row in data["data"]])

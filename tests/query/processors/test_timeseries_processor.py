@@ -21,7 +21,7 @@ from snuba.query.processors.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.util import parse_datetime
 
 tests = [
@@ -201,7 +201,7 @@ def test_timeseries_format_expressions(
     processors = entity.get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
-            processor.process_query(unprocessed, HTTPRequestSettings())
+            processor.process_query(unprocessed, HTTPQuerySettings())
 
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
     assert expected.get_condition() == unprocessed.get_condition()
@@ -239,4 +239,4 @@ def test_invalid_datetime() -> None:
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
             with pytest.raises(InvalidQueryException):
-                processor.process_query(unprocessed, HTTPRequestSettings())
+                processor.process_query(unprocessed, HTTPQuerySettings())

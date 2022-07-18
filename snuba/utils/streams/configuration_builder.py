@@ -37,6 +37,7 @@ def build_kafka_consumer_configuration(
     queued_min_messages: Optional[int] = None,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
+    strict_offset_reset: Optional[bool] = None,
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic)
 
@@ -48,6 +49,7 @@ def build_kafka_consumer_configuration(
         queued_min_messages,
         bootstrap_servers,
         override_params,
+        strict_offset_reset,
     )
 
 

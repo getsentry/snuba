@@ -6,13 +6,13 @@ from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.logical import Query as LogicalQuery
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 def _execute_clickhouse_processors(
     processors: Callable[[ClickhouseQueryPlan], Sequence[QueryProcessor]],
     query_plan: ClickhouseQueryPlan,
-    settings: RequestSettings,
+    settings: QuerySettings,
 ) -> None:
     """
     Executes the Clickhouse query processors for the query. These
@@ -32,7 +32,7 @@ def _execute_clickhouse_processors(
 
 def execute_plan_processors(
     query_plan: ClickhouseQueryPlan,
-    settings: RequestSettings,
+    settings: QuerySettings,
 ) -> None:
     """
     Executes the plan query processors but not the db ones (those
@@ -47,7 +47,7 @@ def execute_plan_processors(
 
 def execute_all_clickhouse_processors(
     query_plan: ClickhouseQueryPlan,
-    settings: RequestSettings,
+    settings: QuerySettings,
 ) -> None:
     """
     Executes all Clickhouse query processing including the plan processors
@@ -63,7 +63,7 @@ def execute_all_clickhouse_processors(
     )
 
 
-def execute_entity_processors(query: LogicalQuery, settings: RequestSettings) -> None:
+def execute_entity_processors(query: LogicalQuery, settings: QuerySettings) -> None:
     """
     Executes the entity query processors for the query. These are taken
     from the entity.

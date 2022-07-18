@@ -3,15 +3,12 @@ from typing import Sequence, Type, Union
 import pytest
 
 from snuba.pipeline.settings_delegator import RateLimiterDelegate
-from snuba.request.request_settings import (
-    HTTPRequestSettings,
-    SubscriptionRequestSettings,
-)
+from snuba.query.query_settings import HTTPQuerySettings, SubscriptionQuerySettings
 from snuba.state.rate_limit import RateLimitParameters
 
 test_cases = [
     pytest.param(
-        HTTPRequestSettings,
+        HTTPQuerySettings,
         [
             RateLimitParameters(
                 rate_limit_name="rate_name",
@@ -28,21 +25,20 @@ test_cases = [
         ],
         id="HTTP Request Settings",
     ),
-    pytest.param(SubscriptionRequestSettings, [], id="Subscriptions request settings"),
+    pytest.param(
+        SubscriptionQuerySettings, [], id="Subscriptions request.query_settings"
+    ),
 ]
 
 
 @pytest.mark.parametrize("settings_class, expected_rate_limiters", test_cases)
 def test_delegate(
-    settings_class: Type[Union[HTTPRequestSettings, SubscriptionRequestSettings]],
+    settings_class: Type[Union[HTTPQuerySettings, SubscriptionQuerySettings]],
     expected_rate_limiters: Sequence[RateLimitParameters],
 ) -> None:
     settings = settings_class(
         referrer="test",
         consistent=False,
-        parent_api="parent",
-        team="team",
-        feature="feature",
     )
 
     settings.add_rate_limit(

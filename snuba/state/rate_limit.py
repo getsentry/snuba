@@ -9,8 +9,9 @@ from types import TracebackType
 from typing import ChainMap as TypingChainMap
 from typing import Iterator, Mapping, MutableMapping, Optional, Sequence, Type
 
-from snuba import state
+from snuba import environment, state
 from snuba.redis import redis_client as rds
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger("snuba.state.rate_limit")
@@ -21,6 +22,8 @@ PROJECT_REFERRER_RATE_LIMIT_NAME = "project_referrer"
 REFERRER_RATE_LIMIT_NAME = "referrer"
 GLOBAL_RATE_LIMIT_NAME = "global"
 TABLE_RATE_LIMIT_NAME = "table"
+
+metrics = MetricsWrapper(environment.metrics, "api")
 
 
 @dataclass(frozen=True)
@@ -38,7 +41,8 @@ class RateLimitParameters:
 
 class RateLimitExceeded(SerializableException):
     """
-    Exception thrown when the rate limit is exceeded
+    Exception thrown when the rate limit is exceeded. scope and name are
+    additional parameters which are provided when the exception is raised.
     """
 
 
@@ -116,7 +120,7 @@ def rate_limit(
     """
 
     bucket = "{}{}".format(state.ratelimit_prefix, rate_limit_params.bucket)
-    query_id = uuid.uuid4()
+    query_id = str(uuid.uuid4())
 
     now = time.time()
     bypass_rate_limit, rate_history_s = state.get_configs(
@@ -131,7 +135,10 @@ def rate_limit(
 
     pipe = rds.pipeline(transaction=False)
     # cleanup old query timestamps past our retention window
-    pipe.zremrangebyscore(bucket, "-inf", "({:f}".format(now - rate_history_s))
+    stale_queries = pipe.zremrangebyscore(
+        bucket, "-inf", "({:f}".format(now - rate_history_s)
+    )
+    metrics.increment("rate_limit.stale", stale_queries, tags={"bucket": bucket})
 
     # Now for the tricky bit:
     # ======================
@@ -161,8 +168,7 @@ def rate_limit(
     #                                   running concurrently; in this case 3)
     #              ^
     #              | current time
-
-    pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # type: ignore
+    pipe.zadd(bucket, {query_id: now + state.max_query_duration_s})
     if rate_limit_params.per_second_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need per-second
     else:
@@ -218,7 +224,9 @@ def rate_limit(
         raise RateLimitExceeded(
             "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
                 r=reason
-            )
+            ),
+            scope=reason.scope,
+            name=reason.name,
         )
 
     rate_limited = False
@@ -239,7 +247,7 @@ def rate_limit(
         try:
             # return the query to its start time, if the query_id was actually added.
             if not rate_limited:
-                rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
+                rds.zincrby(bucket, -float(state.max_query_duration_s), query_id)
         except Exception as ex:
             logger.exception(ex)
 
@@ -259,6 +267,29 @@ def get_global_rate_limit_params() -> RateLimitParameters:
         per_second_limit=per_second,
         concurrent_limit=concurr,
     )
+
+
+def _record_metrics(
+    exc: RateLimitExceeded, rate_limit_param: RateLimitParameters
+) -> None:
+    """
+    Record rate limit metrics if needed.
+
+    We only record the metrics for global and table rate limits since
+    those indicate capacity of clickhouse clusters.
+
+    We get the scope and name from the message of RateLimitExceeded
+    exception since we want to know whether we exceeded the concurrent
+    or per second limit.
+    """
+    scope = str(exc.extra_data.get("scope", ""))
+    name = str(exc.extra_data.get("name", ""))
+    if scope == GLOBAL_RATE_LIMIT_NAME or scope == TABLE_RATE_LIMIT_NAME:
+        tags = {"scope": scope, "type": name}
+        if scope == TABLE_RATE_LIMIT_NAME:
+            tags["table"] = rate_limit_param.bucket
+
+        metrics.increment("rate-limited", tags=tags)
 
 
 class RateLimitAggregator(AbstractContextManager):  # type: ignore
@@ -287,6 +318,7 @@ class RateLimitAggregator(AbstractContextManager):  # type: ignore
                 # these exit functions to be called so we can roll back any limits that were set
                 # earlier in the stack.
                 self.__exit__(*sys.exc_info())
+                _record_metrics(e, rate_limit_param)
                 raise e
 
         return stats

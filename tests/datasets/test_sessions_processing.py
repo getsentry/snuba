@@ -5,19 +5,20 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.sessions import raw_schema, read_schema
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
+from snuba.query.query_settings import (
+    HTTPQuerySettings,
+    QuerySettings,
+    SubscriptionQuerySettings,
+)
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import (
-    HTTPRequestSettings,
-    RequestSettings,
-    SubscriptionRequestSettings,
-)
 from snuba.web import QueryResult
 
 
@@ -37,16 +38,16 @@ def test_sessions_processing() -> None:
     sessions = get_dataset("sessions")
     query, snql_anonymized = parse_snql_query(query_body["query"], sessions)
     request = Request(
-        id="",
-        body=query_body,
+        id="a",
+        original_body=query_body,
         query=query,
-        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=HTTPRequestSettings(referrer=""),
+        query_settings=HTTPQuerySettings(referrer=""),
+        attribution_info=AttributionInfo(get_app_id("default"), "", None, None, None),
     )
 
     def query_runner(
-        query: Query, settings: RequestSettings, reader: Reader
+        query: Query, settings: QuerySettings, reader: Reader
     ) -> QueryResult:
         quantiles = tuple(
             Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
@@ -199,19 +200,22 @@ def test_select_storage(
     query, snql_anonymized = parse_snql_query(str(snql_query), sessions)
     query_body = json.loads(snql_query.snuba())
     subscription_settings = (
-        SubscriptionRequestSettings if is_subscription else HTTPRequestSettings
+        SubscriptionQuerySettings if is_subscription else HTTPQuerySettings
     )
+
     request = Request(
-        id="",
-        body=query_body,
+        id="a",
+        original_body=query_body,
         query=query,
-        app_id=get_app_id("default"),
         snql_anonymized=snql_anonymized,
-        settings=subscription_settings(referrer=""),
+        query_settings=subscription_settings(referrer=""),
+        attribution_info=AttributionInfo(
+            get_app_id("default"), "blah", None, None, None
+        ),
     )
 
     def query_runner(
-        query: Query, settings: RequestSettings, reader: Reader
+        query: Query, settings: QuerySettings, reader: Reader
     ) -> QueryResult:
         assert query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
@@ -244,7 +246,10 @@ class TestReplacer:
         group_id_data_asc: MutableMapping[str, float] = {"1": now.timestamp()}
         for exclude_groups_key, _ in exclude_groups_keys:
             group_id_data_asc["1"] += 10
-            p.zadd(exclude_groups_key, **group_id_data_asc)
+            to_insert: Mapping[str | bytes, bytes | int | float | str] = {
+                "1": group_id_data_asc["1"],
+            }  # typing error fix
+            p.zadd(exclude_groups_key, to_insert)
         p.execute()
         expected_time = now + timedelta(seconds=30)
         flags = ProjectsQueryFlags.load_from_redis(project_ids, ReplacerState.ERRORS)
@@ -262,7 +267,11 @@ class TestReplacer:
         for exclude_groups_key, _ in exclude_groups_keys:
             group_id_data_multiple["1"] -= 10
             group_id_data_multiple["2"] -= 10
-            p.zadd(exclude_groups_key, **group_id_data_multiple)
+            to_insert = {
+                "1": group_id_data_multiple["1"],
+                "2": group_id_data_multiple["2"],
+            }  # typing error fix
+            p.zadd(exclude_groups_key, to_insert)
         p.execute()
         expected_time = now
         flags = ProjectsQueryFlags.load_from_redis(project_ids, ReplacerState.ERRORS)

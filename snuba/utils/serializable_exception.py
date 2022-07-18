@@ -86,6 +86,14 @@ def _get_registry() -> _ExceptionRegistry:
 
 
 class SerializableException(Exception):
+    """
+    NOTE: If an exception subclasses SerializableException, ensure that
+    you don't provide its own constructor. Use the extra_data keyword
+    arguments to pass any additional arguments instead. If you provide your
+    own constructor then it would have problems re-creating the exception
+    from a serialized version.
+    """
+
     def __init__(
         self,
         message: Optional[str] = None,

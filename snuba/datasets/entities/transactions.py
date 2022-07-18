@@ -11,11 +11,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.clickhouse_upgrade import (
-    Option,
-    RolloutSelector,
-    comparison_callback,
-)
+from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import (
@@ -45,8 +41,8 @@ from snuba.query.processors.performance_expressions import (
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
-from snuba.request.request_settings import RequestSettings
 
 transaction_translator = TranslationMappers(
     columns=[
@@ -114,10 +110,10 @@ class TransactionsQueryStorageSelector(QueryStorageSelector):
         self.__mappers = mappers
 
     def select_storage(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
         readonly_referrer = (
-            request_settings.referrer
+            query_settings.referrer
             in settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS
         )
         use_readonly_storage = readonly_referrer or state.get_config(
@@ -185,7 +181,6 @@ class BaseTransactionsEntity(Entity, ABC):
             selector_func=v2_selector_function,
             split_rate_limiter=True,
             ignore_secondary_exceptions=True,
-            callback_func=comparison_callback,
         )
 
         super().__init__(

@@ -1,31 +1,21 @@
 from __future__ import annotations
 
-from snuba import environment, state
+from datetime import datetime
+
+from snuba import environment
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 from .appid import AppID
-from .default import APPIDS as DEFAULT_APPIDS
 
 metrics = MetricsWrapper(environment.metrics, "snuba.attribution")
 
 
-APPIDS: dict[str, AppID] = {}
-DEFAULT_APPID = AppID.from_dict(DEFAULT_APPIDS[0])
-INVALID_APPID = AppID.from_dict(DEFAULT_APPIDS[1])
-for obj in DEFAULT_APPIDS:
-    app_id = AppID.from_dict(obj)
-    APPIDS[app_id.key] = app_id
+DEFAULT_APPID = AppID("default", "sns", datetime(2022, 3, 24))
+INVALID_APPID = AppID("invalid", "sns", datetime(2022, 3, 25))
 
 
-def get_app_id(key: str) -> AppID:
-    if state.get_config("use_attribution", 0):
-        app_id = APPIDS.get(key)
-        if not app_id:
-            metrics.increment("invalid_app_id", tags={"app_id": key})
-            app_id = INVALID_APPID
-        return app_id
-    else:
-        return DEFAULT_APPID
+def get_app_id(app_id: str) -> AppID:
+    return AppID(app_id) if app_id else INVALID_APPID
 
 
 __all__ = (

@@ -13,7 +13,7 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 """
 This optimizer is necessary because SnQL does not permit conditions like
@@ -49,7 +49,7 @@ class ArrayHasOptimizer(QueryProcessor):
             ),
         )
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def replace_expression(expr: Expression) -> Expression:
             match = self.__array_has_pattern.match(expr)
 

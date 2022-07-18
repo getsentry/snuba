@@ -5,12 +5,9 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
     all_columns,
     mandatory_conditions,
-    query_processors,
     query_splitters,
 )
-from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
-
-v2_query_processors = [*query_processors, TupleUnaliaser()]
+from snuba.datasets.storages.errors_v2 import query_processors
 
 schema = TableSchema(
     columns=all_columns,
@@ -24,6 +21,6 @@ storage = ReadableTableStorage(
     storage_key=StorageKey.ERRORS_V2_RO,
     storage_set_key=StorageSetKey.ERRORS_V2_RO,
     schema=schema,
-    query_processors=v2_query_processors,
+    query_processors=query_processors,
     query_splitters=query_splitters,
 )

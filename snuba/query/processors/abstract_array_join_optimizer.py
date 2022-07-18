@@ -271,7 +271,7 @@ def string_literal_in_condition_extractor(
         if match is None:
             return set()
 
-        function = match.expression("tuple")
+        function = match.expression("sequence")
         assert isinstance(function, FunctionCallExpr)
 
         return {
@@ -322,10 +322,10 @@ def tuple_literal_in_condition_extractor(
         if match is None:
             return set()
 
-        function = match.expression("tuple")
-        if (
-            not isinstance(function, FunctionCallExpr)
-            or function.function_name != "tuple"
+        function = match.expression("sequence")
+        if not isinstance(function, FunctionCallExpr) or function.function_name not in (
+            "tuple",
+            "array",
         ):
             return set()
 

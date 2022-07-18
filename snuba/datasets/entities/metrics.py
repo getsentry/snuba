@@ -47,16 +47,16 @@ from snuba.query.processors.object_id_rate_limiter import (
 )
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     GranularityValidator,
     QueryValidator,
 )
-from snuba.request.request_settings import RequestSettings
 
 
 class TagsTypeTransformer(QueryProcessor):
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             if not isinstance(exp, SubscriptableReference):
                 return exp

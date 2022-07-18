@@ -40,7 +40,7 @@ class TestSubscriptionScheduler:
         )
 
     def build_tick(self, lower: timedelta, upper: timedelta) -> Tick:
-        return Tick(None, Interval(1, 5), Interval(self.now + lower, self.now + upper))
+        return Tick(1, Interval(1, 5), Interval(self.now + lower, self.now + upper))
 
     def sort_key(self, task: ScheduledSubscriptionTask) -> Tuple[datetime, uuid.UUID]:
         return task.timestamp, task.task.subscription.identifier.uuid

@@ -22,7 +22,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -47,18 +47,18 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
     def execute(
         self,
         query: Query,
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
         runner: QueryRunner,
     ) -> QueryResult:
         def process_and_run_query(
-            query: Query, request_settings: RequestSettings
+            query: Query, query_settings: QuerySettings
         ) -> QueryResult:
             for processor in self.__query_processors:
                 with sentry_sdk.start_span(
                     description=type(processor).__name__, op="processor"
                 ):
-                    processor.process_query(query, request_settings)
-            return runner(query, request_settings, self.__cluster.get_reader())
+                    processor.process_query(query, query_settings)
+            return runner(query, query_settings, self.__cluster.get_reader())
 
         use_split = state.get_config("use_split", 1)
         if use_split:
@@ -67,12 +67,12 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                     description=type(splitter).__name__, op="splitter"
                 ):
                     result = splitter.execute(
-                        query, request_settings, process_and_run_query
+                        query, query_settings, process_and_run_query
                     )
                     if result is not None:
                         return result
 
-        return process_and_run_query(query, request_settings)
+        return process_and_run_query(query, query_settings)
 
 
 def get_query_data_source(
@@ -117,7 +117,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     @with_span()
     def build_and_rank_plans(
-        self, query: LogicalQuery, settings: RequestSettings
+        self, query: LogicalQuery, settings: QuerySettings
     ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
             op="build_plan.single_storage", description="translate"
@@ -178,7 +178,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     @with_span()
     def build_and_rank_plans(
-        self, query: LogicalQuery, settings: RequestSettings
+        self, query: LogicalQuery, settings: QuerySettings
     ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
             op="build_plan.selected_storage", description="select_storage"

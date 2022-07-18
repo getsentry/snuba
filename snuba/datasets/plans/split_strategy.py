@@ -2,16 +2,16 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
 from snuba.clickhouse.query import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.web import QueryResult
 
-SplitQueryRunner = Callable[[Query, RequestSettings], QueryResult]
+SplitQueryRunner = Callable[[Query, QuerySettings], QueryResult]
 
 
 class QuerySplitStrategy(ABC):
     """
     Implements a query split algorithm. It works in a similar way as a
-    QueryExecutionStrategy, it takes a query, request settings and a query runner
+    QueryExecutionStrategy, it takes a query, request.query_settings and a query runner
     and decides if it should split the query into more efficient parts.
     If it can split the query, it uses the SplitQueryRunner to execute every chunk,
     otherwise it returns None immediately.
@@ -31,7 +31,7 @@ class QuerySplitStrategy(ABC):
     def execute(
         self,
         query: Query,
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
         runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """

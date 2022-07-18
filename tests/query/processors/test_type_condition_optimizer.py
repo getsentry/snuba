@@ -9,7 +9,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Literal
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def test_type_condition_optimizer() -> None:
@@ -33,7 +33,7 @@ def test_type_condition_optimizer() -> None:
         Table("errors", ColumnSet([])),
         condition=binary_condition(BooleanFunctions.AND, Literal(None, 1), cond1),
     )
-    TypeConditionOptimizer().process_query(unprocessed_query, HTTPRequestSettings())
+    TypeConditionOptimizer().process_query(unprocessed_query, HTTPQuerySettings())
 
     assert expected_query.get_condition() == unprocessed_query.get_condition()
     condition = unprocessed_query.get_condition()

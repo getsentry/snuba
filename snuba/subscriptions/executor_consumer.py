@@ -10,13 +10,14 @@ from typing import Callable, Deque, Mapping, MutableMapping, Optional, Sequence,
 import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
-from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
 from snuba import state
+from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
@@ -34,7 +35,6 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
-from snuba.subscriptions.utils import run_new_pipeline
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -52,12 +52,11 @@ def build_executor_consumer(
     consumer_group: str,
     producer: Producer[KafkaPayload],
     max_concurrent_queries: int,
+    total_concurrent_queries: int,
     auto_offset_reset: str,
+    strict_offset_reset: Optional[bool],
     metrics: MetricsBackend,
-    executor: ThreadPoolExecutor,
     stale_threshold_seconds: Optional[int],
-    # TODO: Should be removed once testing is done
-    override_result_topic: str,
     cooperative_rebalancing: bool = False,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
@@ -105,6 +104,21 @@ def build_executor_consumer(
         scheduled_topic_spec.topic,
         consumer_group,
         auto_offset_reset=auto_offset_reset,
+        strict_offset_reset=strict_offset_reset,
+    )
+
+    try:
+        partition_count = get_partition_count(scheduled_topic_spec.topic)
+    except Exception:
+        logger.error("partition count unavailable..", exc_info=True)
+        partition_count = 0
+
+    # XXX: for now verify that the partition_counts are correct for
+    # the executors.
+    metrics.gauge(
+        "executor.partition_count",
+        partition_count,
+        tags={"topic": scheduled_topic_spec.topic_name},
     )
 
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
@@ -134,14 +148,14 @@ def build_executor_consumer(
         KafkaConsumer(consumer_configuration),
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
-            executor,
             max_concurrent_queries,
+            total_concurrent_queries,
             dataset,
             entity_names,
             producer,
             metrics,
             stale_threshold_seconds,
-            override_result_topic,
+            result_topic_spec.topic_name,
         ),
     )
 
@@ -149,8 +163,8 @@ def build_executor_consumer(
 class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
-        executor: ThreadPoolExecutor,
         max_concurrent_queries: int,
+        total_concurrent_queries: int,
         dataset: Dataset,
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
@@ -158,8 +172,8 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         stale_threshold_seconds: Optional[int],
         result_topic: str,
     ) -> None:
-        self.__executor = executor
         self.__max_concurrent_queries = max_concurrent_queries
+        self.__total_concurrent_queries = total_concurrent_queries
         self.__dataset = dataset
         self.__entity_names = entity_names
         self.__producer = producer
@@ -167,18 +181,19 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__result_topic = result_topic
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
         return ExecuteQuery(
             self.__dataset,
             self.__entity_names,
-            self.__executor,
             self.__max_concurrent_queries,
+            self.__total_concurrent_queries,
             self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
-            commit,
         )
 
 
@@ -192,26 +207,21 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self,
         dataset: Dataset,
         entity_names: Sequence[str],
-        executor: ThreadPoolExecutor,
         max_concurrent_queries: int,
+        total_concurrent_queries: int,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
-        # TODO: To be removed once executor is fully rolled out
-        # Commit is only passed here because we are temporarily
-        # skipping executions during the transition phase.
-        commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
-        self.__executor = executor
         self.__max_concurrent_queries = max_concurrent_queries
+        self.__total_concurrent_queries = total_concurrent_queries
+        self.__executor = ThreadPoolExecutor(self.__max_concurrent_queries)
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__next_step = next_step
 
-        self.__commit = commit
-        self.__commit_data: MutableMapping[Partition, Position] = {}
         self.__last_committed: Optional[float] = None
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
@@ -276,7 +286,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                         result_future.task, result_future.future.result()
                     ),
                     message.timestamp,
-                    message.next_offset,
                 )
             )
 
@@ -306,9 +315,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         entity = task.task.entity
         entity_name = entity.value
 
-        should_execute = entity_name in self.__entity_names and run_new_pipeline(
-            entity, task.timestamp
-        )
+        should_execute = entity_name in self.__entity_names
 
         # Don't execute stale subscriptions
         if (
@@ -332,21 +339,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
         else:
             self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
-
-            # Periodically commit offsets if we haven't started rollout yet
-            self.__commit_data[message.partition] = Position(
-                message.offset, message.timestamp
-            )
-
-            now = time.time()
-
-            if (
-                self.__last_committed is None
-                or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
-            ):
-                self.__commit(self.__commit_data)
-                self.__last_committed = now
-                self.__commit_data = {}
 
     def close(self) -> None:
         self.__closed = True
@@ -378,11 +370,11 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                     message.offset,
                     subscription_task_result,
                     message.timestamp,
-                    message.next_offset,
                 )
             )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
+        self.__executor.shutdown()
 
         self.__next_step.close()
         self.__next_step.join(remaining)
@@ -444,7 +436,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__queue.popleft()
 
             self.__commit_data[message.partition] = Position(
-                message.offset, message.timestamp
+                message.next_offset, message.timestamp
             )
         self.__throttled_commit()
 
@@ -484,12 +476,3 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             self.__commit(
                 {message.partition: Position(message.offset, message.timestamp)}
             )
-
-        # Flush producer
-        if isinstance(self.__producer, KafkaProducer):
-            remaining = timeout - (time.time() - start) if timeout is not None else None
-            # TODO: This is just for testing. If it works expose a flush method on KafkaProducer
-            producer = self.__producer._KafkaProducer__producer  # type: ignore
-            logger.debug("Flushing executor producer")
-            messages = producer.flush(*[remaining] if remaining is not None else [])
-            logger.debug(f"{messages} executor messages pending delivery")

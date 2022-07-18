@@ -40,11 +40,11 @@ from snuba.query.processors.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
+from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityRequiredColumnValidator,
 )
-from snuba.request.request_settings import RequestSettings, SubscriptionRequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api.sessions")
@@ -221,10 +221,10 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         self.raw_storage = get_storage(StorageKey.SESSIONS_RAW)
 
     def select_storage(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
 
-        # If the passed in `request_settings` arg is an instance of `SubscriptionRequestSettings`,
+        # If the passed in `query_settings` arg is an instance of `SubscriptionQuerySettings`,
         # then it is a crash rate alert subscription, and hence we decide on whether to use the
         # materialized storage or the raw storage by examining the time_window.
         # If the `time_window` <=1h, then select the raw storage otherwise select materialized
@@ -232,7 +232,7 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         # NOTE: If we were to support other types of subscriptions over the sessions dataset that
         # do not follow this method used to identify which storage to use, we would need to
         # find a different way to distinguish them.
-        if isinstance(request_settings, SubscriptionRequestSettings):
+        if isinstance(query_settings, SubscriptionQuerySettings):
             from_date, to_date = get_time_range(query, "started")
             if from_date and to_date:
                 use_materialized_storage = to_date - from_date > timedelta(hours=1)

@@ -44,8 +44,8 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
 events_ent = Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
@@ -147,6 +147,7 @@ TEST_CASES = [
                                                 None,
                                                 "tags",
                                                 Literal(None, "environment"),
+                                                "value",
                                             ),
                                         ),
                                     ),
@@ -319,6 +320,7 @@ TEST_CASES = [
                                                 None,
                                                 "tags",
                                                 Literal(None, "sentry:release"),
+                                                "value",
                                             ),
                                         ),
                                     ),
@@ -502,7 +504,7 @@ def test_composite_planner(
         ]
 
     plan = CompositeQueryPlanner(
-        deepcopy(logical_query), HTTPRequestSettings()
+        deepcopy(logical_query), HTTPQuerySettings()
     ).build_best_plan()
     report = plan.query.equals(composite_plan.query)
     assert report[0], f"Mismatch: {report[1]}"
@@ -537,7 +539,7 @@ def test_composite_planner(
 
     def runner(
         query: Union[ClickhouseQuery, CompositeQuery[Table]],
-        request_settings: RequestSettings,
+        query_settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         report = query.equals(processed_query)
@@ -547,4 +549,4 @@ def test_composite_planner(
             {"stats": {}, "sql": "", "experiments": {}},
         )
 
-    CompositeExecutionPipeline(logical_query, HTTPRequestSettings(), runner).execute()
+    CompositeExecutionPipeline(logical_query, HTTPQuerySettings(), runner).execute()

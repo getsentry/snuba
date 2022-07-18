@@ -14,7 +14,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.joins.join_structures import (
     clickhouse_assignees_node,
     clickhouse_events_node,
@@ -239,7 +239,7 @@ def test_subquery_generator(
         if isinstance(clause.left_node, JoinClause):
             assert_transformation(clause.left_node, expected)
 
-    SemiJoinOptimizer().process_query(query, HTTPRequestSettings())
+    SemiJoinOptimizer().process_query(query, HTTPQuerySettings())
     assert_transformation(
         cast(JoinClause[Table], query.get_from_clause()), expected_semi_join
     )

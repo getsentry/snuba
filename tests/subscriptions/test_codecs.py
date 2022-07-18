@@ -30,7 +30,6 @@ from snuba.subscriptions.entity_subscription import (
     EventsSubscription,
     MetricsCountersSubscription,
     MetricsSetsSubscription,
-    SessionsSubscription,
 )
 from snuba.utils.metrics.timer import Timer
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
@@ -55,12 +54,6 @@ SNQL_CASES = [
         build_snql_subscription_data,
         None,
         EntityKey.EVENTS,
-        id="snql",
-    ),
-    pytest.param(
-        build_snql_subscription_data,
-        1,
-        EntityKey.SESSIONS,
         id="snql",
     ),
     pytest.param(
@@ -190,73 +183,10 @@ def test_subscription_task_result_encoder() -> None:
     assert payload["subscription_id"] == str(
         task_result.task.task.subscription.identifier
     )
-    assert payload["request"] == request.body
+    assert payload["request"] == request.original_body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == EntityKey.EVENTS.value
-
-
-def test_sessions_subscription_task_result_encoder() -> None:
-    codec = SubscriptionTaskResultEncoder()
-
-    timestamp = datetime.now()
-
-    entity_subscription = SessionsSubscription(data_dict={"organization": 1})
-    subscription_data = SubscriptionData(
-        project_id=1,
-        query=(
-            """
-            MATCH (sessions) SELECT if(greater(sessions,0),
-            divide(sessions_crashed,sessions),null)
-            AS _crash_rate_alert_aggregate, identity(sessions) AS _total_sessions
-            WHERE org_id = 1 AND project_id IN tuple(1) LIMIT 1
-            OFFSET 0 GRANULARITY 3600
-            """
-        ),
-        time_window_sec=60,
-        resolution_sec=60,
-        entity_subscription=entity_subscription,
-    )
-
-    # XXX: This seems way too coupled to the dataset.
-    request = subscription_data.build_request(
-        get_dataset("sessions"), timestamp, None, Timer("timer")
-    )
-    result: Result = {
-        "meta": [
-            {"type": "UInt64", "name": "_total_sessions"},
-            {"name": "_crash_rate_alert_aggregate", "type": "Nullable(Float64)"},
-        ],
-        "data": [{"_crash_rate_alert_aggregate": 0.0, "_total_sessions": 25}],
-    }
-
-    task_result = SubscriptionTaskResult(
-        ScheduledSubscriptionTask(
-            timestamp,
-            SubscriptionWithMetadata(
-                EntityKey.SESSIONS,
-                Subscription(
-                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
-                    subscription_data,
-                ),
-                5,
-            ),
-        ),
-        (request, result),
-    )
-
-    message = codec.encode(task_result)
-    data = json.loads(message.value.decode("utf-8"))
-    assert data["version"] == 3
-    payload = data["payload"]
-
-    assert payload["subscription_id"] == str(
-        task_result.task.task.subscription.identifier
-    )
-    assert payload["request"] == request.body
-    assert payload["result"] == result
-    assert payload["timestamp"] == task_result.task.timestamp.isoformat()
-    assert payload["entity"] == EntityKey.SESSIONS.value
 
 
 METRICS_CASES = [
@@ -334,7 +264,7 @@ def test_metrics_subscription_task_result_encoder(
     assert payload["subscription_id"] == str(
         task_result.task.task.subscription.identifier
     )
-    assert payload["request"] == request.body
+    assert payload["request"] == request.original_body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == entity_key.value

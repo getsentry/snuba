@@ -25,7 +25,7 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, AnyOptionalString
 from snuba.query.matchers import Column as ColumnMatcher
 from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -78,10 +78,17 @@ class MappingOptimizer(QueryProcessor):
     - IN conditions. TODO
     """
 
-    def __init__(self, column_name: str, hash_map_name: str, killswitch: str) -> None:
+    def __init__(
+        self,
+        column_name: str,
+        hash_map_name: str,
+        killswitch: str,
+        value_subcolumn_name: str = "value",
+    ) -> None:
         self.__column_name = column_name
         self.__hash_map_name = hash_map_name
         self.__killswitch = killswitch
+        self.__value_subcolumn_name = value_subcolumn_name
 
         # TODO: Add the support for IN conditions.
         self.__optimizable_pattern = FunctionCall(
@@ -168,7 +175,7 @@ class MappingOptimizer(QueryProcessor):
             for exp in condition:
                 if isinstance(exp, Column) and exp.column_name in (
                     f"{self.__column_name}.key",
-                    f"{self.__column_name}.value",
+                    f"{self.__column_name}.{self.__value_subcolumn_name}",
                 ):
                     return ConditionClass.NOT_OPTIMIZABLE
             return ConditionClass.IRRELEVANT
@@ -284,7 +291,7 @@ class MappingOptimizer(QueryProcessor):
         else:
             return clause, cond_class
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         if not get_config(self.__killswitch, 1):
             return
         condition, cond_class = self.__get_reduced_and_classified_query_clause(

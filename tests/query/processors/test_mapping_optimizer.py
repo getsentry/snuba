@@ -8,7 +8,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import (
     build_query,
@@ -198,6 +198,6 @@ def test_tags_hash_map(
         column_name="tags",
         hash_map_name="_tags_hash_map",
         killswitch="tags_hash_map_enabled",
-    ).process_query(query, HTTPRequestSettings())
+    ).process_query(query, HTTPQuerySettings())
 
     assert query.get_condition() == expected_condition

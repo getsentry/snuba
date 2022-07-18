@@ -17,8 +17,8 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
-from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_iterate_over_query() -> None:
@@ -330,7 +330,7 @@ def test_alias_validation(
     events = get_dataset("events")
     snql_query = json_to_snql(query_body, "events")
     query, _ = parse_snql_query(str(snql_query), events)
-    settings = HTTPRequestSettings()
+    settings = HTTPQuerySettings()
     query_plan = (
         events.get_default_entity()
         .get_query_pipeline_builder()

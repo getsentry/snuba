@@ -3,22 +3,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Union
 
-from snuba.attribution import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 @dataclass(frozen=True)
 class Request:
     id: str
-    body: Mapping[str, Any]
+    original_body: Mapping[str, Any]
     query: Union[Query, CompositeQuery[Entity]]
-    app_id: AppID
+    query_settings: QuerySettings
+    attribution_info: AttributionInfo
+
+    # TODO: This should maybe not live on the request
     snql_anonymized: str
-    settings: RequestSettings  # settings provided by the request
 
     @property
     def referrer(self) -> str:
-        return self.settings.referrer
+        return self.attribution_info.referrer

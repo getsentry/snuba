@@ -8,8 +8,8 @@ from typing import Any
 @dataclass(frozen=True)
 class AppID:
     key: str
-    created_by: str
-    date_created: datetime
+    created_by: str = "unknown"
+    date_created: datetime = datetime.utcnow()
 
     @staticmethod
     def from_dict(obj: dict[str, Any]) -> AppID:

@@ -3,6 +3,7 @@ from typing import List, MutableSequence, Optional, Tuple, Union
 from unittest.mock import ANY, Mock, call
 
 from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -15,10 +16,10 @@ from snuba.pipeline.pipeline_delegator import (
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.state import delete_config, set_config
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
@@ -86,11 +87,11 @@ def test() -> None:
     )
 
     runner_call_count = 0
-    runner_settings: MutableSequence[RequestSettings] = []
+    runner_settings: MutableSequence[QuerySettings] = []
 
     def query_runner(
         query: Union[Query, CompositeQuery[Table]],
-        settings: RequestSettings,
+        settings: QuerySettings,
         reader: Reader,
     ) -> QueryResult:
         nonlocal runner_call_count
@@ -103,9 +104,18 @@ def test() -> None:
     set_config("pipeline_split_rate_limiter", 1)
 
     with cv:
-        request_settings = HTTPRequestSettings(referrer="ref")
+        query_settings = HTTPQuerySettings(referrer="ref")
         delegator.build_execution_pipeline(
-            Request("", query_body, query, get_app_id("default"), "", request_settings),
+            Request(
+                id="asd",
+                original_body=query_body,
+                query=query,
+                snql_anonymized="",
+                query_settings=query_settings,
+                attribution_info=AttributionInfo(
+                    get_app_id("ref"), "ref", None, None, None
+                ),
+            ),
             query_runner,
         ).execute()
         cv.wait(timeout=5)
@@ -118,7 +128,7 @@ def test() -> None:
 
     assert mock_callback.call_args == call(
         query,
-        request_settings,
+        query_settings,
         "ref",
         Result("errors", query_result, ANY),
         [Result("errors_ro", query_result, ANY)],

@@ -1,7 +1,7 @@
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import combine_and_conditions
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 
 
 class MandatoryConditionApplier(QueryProcessor):
@@ -11,7 +11,7 @@ class MandatoryConditionApplier(QueryProcessor):
     and applies them to the query.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
 
         mandatory_conditions = query.get_from_clause().mandatory_conditions
 

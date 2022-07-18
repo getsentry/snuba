@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from snuba import settings
 from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
@@ -22,8 +21,7 @@ from snuba.query.exceptions import ValidationException
 from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdEnforcer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.request.request_settings import RequestSettings
-from snuba.subscriptions.utils import SchedulingWatermarkMode
+from snuba.query.query_settings import QuerySettings
 from snuba.utils.streams.topics import Topic
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
@@ -105,7 +103,7 @@ materialized_view_schema = TableSchema(
 
 
 class MinuteResolutionProcessor(QueryProcessor):
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # NOTE: the product side is restricted to a 6h window, however it rounds
         # outwards, which extends the window to 7h.
         from_date, to_date = get_time_range(query, "started")
@@ -115,21 +113,9 @@ class MinuteResolutionProcessor(QueryProcessor):
             )
 
 
-# The raw table we write onto, and that potentially we could
-# query.
-if settings.ENABLE_SESSIONS_SUBSCRIPTIONS:
-    kafka_stream_loader = build_kafka_stream_loader_from_settings(
-        processor=SessionsProcessor(),
-        default_topic=Topic.SESSIONS,
-        commit_log_topic=Topic.SESSIONS_COMMIT_LOG,
-        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
-        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_SESSIONS,
-        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_SESSIONS,
-    )
-else:
-    kafka_stream_loader = build_kafka_stream_loader_from_settings(
-        processor=SessionsProcessor(), default_topic=Topic.SESSIONS
-    )
+kafka_stream_loader = build_kafka_stream_loader_from_settings(
+    processor=SessionsProcessor(), default_topic=Topic.SESSIONS
+)
 
 raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,

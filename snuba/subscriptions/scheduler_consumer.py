@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
+import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
@@ -16,6 +17,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import redis_client
+from snuba.state import get_config
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
@@ -121,8 +123,16 @@ class CommitLogTickConsumer(Consumer[Tick]):
         if message is None:
             return None
 
-        commit = commit_codec.decode(message.payload)
-        assert commit.orig_message_ts is not None
+        try:
+            commit = commit_codec.decode(message.payload)
+            assert commit.orig_message_ts is not None
+        except Exception:
+            logger.error(
+                f"Error decoding commit log message for followed group: {self.__followed_consumer_group}.",
+                extra={"payload": str(message.payload), "offset": message.offset},
+                exc_info=True,
+            )
+            return None
 
         if commit.group != self.__followed_consumer_group:
             return None
@@ -202,6 +212,7 @@ class SchedulerBuilder:
         followed_consumer_group: str,
         producer: Producer[KafkaPayload],
         auto_offset_reset: str,
+        strict_offset_reset: Optional[bool],
         schedule_ttl: int,
         delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
@@ -236,6 +247,7 @@ class SchedulerBuilder:
         self.__followed_consumer_group = followed_consumer_group
         self.__producer = producer
         self.__auto_offset_reset = auto_offset_reset
+        self.__strict_offset_reset = strict_offset_reset
         self.__schedule_ttl = schedule_ttl
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
@@ -261,14 +273,37 @@ class SchedulerBuilder:
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
+        consumer_configuration = build_kafka_consumer_configuration(
+            self.__commit_log_topic_spec.topic,
+            self.__consumer_group,
+            auto_offset_reset=self.__auto_offset_reset,
+            strict_offset_reset=self.__strict_offset_reset,
+        )
+
+        # Collect metrics from librdkafka if we have stats_collection_freq_ms set
+        # for the consumer group, or use the default.
+        stats_collection_frequency_ms = get_config(
+            f"stats_collection_freq_ms_{self.__consumer_group}",
+            get_config("stats_collection_freq_ms", 0),
+        )
+
+        if stats_collection_frequency_ms and stats_collection_frequency_ms > 0:
+
+            def stats_callback(stats_json: str) -> None:
+                stats = rapidjson.loads(stats_json)
+                self.__metrics.gauge(
+                    "librdkafka.total_queue_size", stats.get("replyq", 0)
+                )
+
+            consumer_configuration.update(
+                {
+                    "statistics.interval.ms": stats_collection_frequency_ms,
+                    "stats_cb": stats_callback,
+                }
+            )
+
         return CommitLogTickConsumer(
-            KafkaConsumer(
-                build_kafka_consumer_configuration(
-                    self.__commit_log_topic_spec.topic,
-                    self.__consumer_group,
-                    auto_offset_reset=self.__auto_offset_reset,
-                ),
-            ),
+            KafkaConsumer(consumer_configuration),
             followed_consumer_group=self.__followed_consumer_group,
             time_shift=(
                 timedelta(seconds=self.__delay_seconds * -1)
@@ -314,8 +349,10 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             for index in range(self.__partitions)
         }
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, Position]], None]
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
         schedule_step = ProduceScheduledSubscriptionMessage(
             self.__schedulers,
@@ -331,4 +368,5 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
             self.__partitions,
             self.__buffer_size,
             ProvideCommitStrategy(self.__partitions, schedule_step, self.__metrics),
+            self.__metrics,
         )

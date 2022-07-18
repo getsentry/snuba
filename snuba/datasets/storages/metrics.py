@@ -1,8 +1,13 @@
+"""
+The storages defined in this file are for release-health metrics.
+"""
 from typing import Sequence
 
-from arroyo.processing.strategies.dead_letter_queue import IgnoreInvalidMessagePolicy
-from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
+from arroyo import Topic as KafkaTopic
+from arroyo.backends.kafka import KafkaProducer
+from arroyo.processing.strategies.dead_letter_queue import (
     DeadLetterQueuePolicy,
+    ProduceInvalidMessagePolicy,
 )
 
 from snuba.clickhouse.columns import (
@@ -33,6 +38,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.subscriptions.utils import SchedulingWatermarkMode
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
 PRE_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
@@ -51,8 +57,14 @@ POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
 ]
 
 
-def ignore_policy_closure() -> DeadLetterQueuePolicy:
-    return IgnoreInvalidMessagePolicy()
+def produce_policy_creator() -> DeadLetterQueuePolicy:
+    """
+    Produce all bad messages to dead-letter topic.
+    """
+    return ProduceInvalidMessagePolicy(
+        KafkaProducer(build_kafka_producer_configuration(Topic.DEAD_LETTER_METRICS)),
+        KafkaTopic(Topic.DEAD_LETTER_METRICS.value),
+    )
 
 
 polymorphic_bucket = WritableTableStorage(
@@ -81,7 +93,7 @@ polymorphic_bucket = WritableTableStorage(
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
         subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
         subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
 )
 
@@ -115,7 +127,7 @@ sets_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         SetsAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -138,7 +150,7 @@ counters_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         CounterAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
 )
@@ -192,7 +204,7 @@ distributions_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         DistributionsAggregateProcessor(),
         default_topic=Topic.METRICS,
-        dead_letter_queue_policy_closure=ignore_policy_closure,
+        dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
 )

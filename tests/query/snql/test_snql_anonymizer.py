@@ -68,7 +68,7 @@ test_cases = [
         (
             "MATCH Entity(events) "
             "SELECT a, `b[c]` "
-            "WHERE in(project_id, tuple(-1337, -1337)) "
+            "WHERE in(project_id, (-1337, -1337)) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "
             "LIMIT 1000 OFFSET 0"
@@ -83,7 +83,7 @@ test_cases = [
             "MATCH Entity(events) "
             "SELECT (minus(-1337, -1337) AS `4-5`), (multiply(-1337, (foo(c) AS foo)) AS `3*foo(c) AS foo`), c "
             "WHERE equals((equals(arrayExists(a, '$S', '$S'), -1337) "
-            "OR equals(arrayAll(b, '$S', tuple('$S', '$S')), -1337)), -1337) "
+            "OR equals(arrayAll(b, '$S', ('$S', '$S')), -1337)), -1337) "
             "AND equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "

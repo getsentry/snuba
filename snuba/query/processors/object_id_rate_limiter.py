@@ -3,7 +3,7 @@ from typing import Optional
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.request.request_settings import RequestSettings
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_configs
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
@@ -28,25 +28,25 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
         rate_limit_name: str,
         per_second_name: str,
         concurrent_name: str,
-        request_settings_field: Optional[str] = None,
+        query_settings_field: Optional[str] = None,
         default_limit: int = DEFAULT_LIMIT,
     ) -> None:
         self.object_column = object_column
         self.rate_limit_name = rate_limit_name
         self.per_second_name = per_second_name
         self.concurrent_name = concurrent_name
-        self.request_settings_field = request_settings_field
+        self.query_settings_field = query_settings_field
         self.default_limit = default_limit
 
-    def _is_already_applied(self, request_settings: RequestSettings) -> bool:
-        existing = request_settings.get_rate_limit_params()
+    def _is_already_applied(self, query_settings: QuerySettings) -> bool:
+        existing = query_settings.get_rate_limit_params()
         for ex in existing:
             if ex.rate_limit_name == self.rate_limit_name:
                 return True
         return False
 
     def get_object_id(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, query_settings: QuerySettings
     ) -> Optional[str]:
         obj_ids = get_object_ids_in_query_ast(query, self.object_column)
         if not obj_ids:
@@ -54,37 +54,33 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
 
         # TODO: Add logic for multiple IDs
         obj_id = str(obj_ids.pop())
-        if self.request_settings_field is not None:
-            request_settings_field_val = getattr(
-                request_settings, self.request_settings_field, None
+        if self.query_settings_field is not None:
+            query_settings_field_val = getattr(
+                query_settings, self.query_settings_field, None
             )
-            if request_settings_field_val is not None:
-                obj_id = f"{obj_id}_{request_settings_field_val}"
+            if query_settings_field_val is not None:
+                obj_id = f"{obj_id}_{query_settings_field_val}"
         return str(obj_id)
 
-    def get_per_second_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
+    def get_per_second_name(self, query: Query, query_settings: QuerySettings) -> str:
         return self.per_second_name
 
-    def get_concurrent_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
+    def get_concurrent_name(self, query: Query, query_settings: QuerySettings) -> str:
         return self.concurrent_name
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # If the settings don't already have an object rate limit, add one
-        if self._is_already_applied(request_settings):
+        if self._is_already_applied(query_settings):
             return
-        per_second_name = self.get_per_second_name(query, request_settings)
-        concurrent_name = self.get_concurrent_name(query, request_settings)
+        per_second_name = self.get_per_second_name(query, query_settings)
+        concurrent_name = self.get_concurrent_name(query, query_settings)
         object_rate_limit, object_concurrent_limit = get_configs(
             [
                 (per_second_name, self.default_limit),
                 (concurrent_name, self.default_limit),
             ]
         )
-        obj_id = self.get_object_id(query, request_settings)
+        obj_id = self.get_object_id(query, query_settings)
         if obj_id is None:
             return
         # Specific objects can have their rate limits overridden
@@ -102,21 +98,21 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
             concurrent_limit=concurr,
         )
 
-        request_settings.add_rate_limit(rate_limit)
+        query_settings.add_rate_limit(rate_limit)
 
 
 class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # If the settings don't already have an object rate limit, add one
-        per_second_name = self.get_per_second_name(query, request_settings)
-        concurrent_name = self.get_concurrent_name(query, request_settings)
+        per_second_name = self.get_per_second_name(query, query_settings)
+        concurrent_name = self.get_concurrent_name(query, query_settings)
 
-        if self._is_already_applied(request_settings):
+        if self._is_already_applied(query_settings):
             return
         object_rate_limit, object_concurrent_limit = get_configs(
             [(per_second_name, None), (concurrent_name, None)]
         )
-        obj_id = self.get_object_id(query, request_settings)
+        obj_id = self.get_object_id(query, query_settings)
         if obj_id is None:
             return
         # don't enforce any limit that isn't specified
@@ -137,7 +133,7 @@ class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
             concurrent_limit=concurr,
         )
 
-        request_settings.add_rate_limit(rate_limit)
+        query_settings.add_rate_limit(rate_limit)
 
 
 class OrganizationRateLimiterProcessor(ObjectIDRateLimiterProcessor):
@@ -163,21 +159,17 @@ class ProjectReferrerRateLimiter(OnlyIfConfiguredRateLimitProcessor):
             PROJECT_REFERRER_RATE_LIMIT_NAME,
             "project_referrer_per_second_limit",
             "project_referrer_concurrent_limit",
-            request_settings_field="referrer",
+            query_settings_field="referrer",
         )
 
-    def get_concurrent_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
-        return f"{self.concurrent_name}_{request_settings.referrer}"
+    def get_concurrent_name(self, query: Query, query_settings: QuerySettings) -> str:
+        return f"{self.concurrent_name}_{query_settings.referrer}"
 
-    def get_per_second_name(
-        self, query: Query, request_settings: RequestSettings
-    ) -> str:
-        return f"{self.per_second_name}_{request_settings.referrer}"
+    def get_per_second_name(self, query: Query, query_settings: QuerySettings) -> str:
+        return f"{self.per_second_name}_{query_settings.referrer}"
 
     def get_object_id(
-        self, query: Query, request_settings: RequestSettings
+        self, query: Query, query_settings: QuerySettings
     ) -> Optional[str]:
         obj_ids = get_object_ids_in_query_ast(query, self.object_column)
         if not obj_ids:
@@ -198,11 +190,11 @@ class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
             REFERRER_RATE_LIMIT_NAME,
             "referrer_per_second_limit",
             "referrer_concurrent_limit",
-            request_settings_field="referrer",
+            query_settings_field="referrer",
         )
 
-    def get_object_id(self, query: Query, request_settings: RequestSettings) -> str:
-        return request_settings.referrer
+    def get_object_id(self, query: Query, query_settings: QuerySettings) -> str:
+        return query_settings.referrer
 
 
 class ProjectRateLimiterProcessor(ObjectIDRateLimiterProcessor):

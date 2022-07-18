@@ -1322,7 +1322,7 @@ class TestApi(SimpleAPITest):
             ).data
         )
         formatted = sorted([f"'{t}'" for t in tags])
-        tag_phrase = f"in(tupleElement(pair, 1), tuple({', '.join(formatted)})"
+        tag_phrase = f"in(tupleElement(pair, 1), ({', '.join(formatted)})"
         assert tag_phrase in result["sql"]
 
     def test_unicode_condition(self) -> None:
@@ -2059,9 +2059,6 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["data"] == []
 
-        # make sure redis has _something_ before we go about dropping all the keys in it
-        assert self.redis_db_size() > 0
-
         storage = get_writable_storage(StorageKey.ERRORS)
         clickhouse = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.QUERY
@@ -2138,7 +2135,7 @@ class TestApi(SimpleAPITest):
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from rediscluster.utils import ClusterDownError
+        from redis.cluster import ClusterDownError
 
         pipeline_mock.side_effect = ClusterDownError("stuff")
         response = self.post(

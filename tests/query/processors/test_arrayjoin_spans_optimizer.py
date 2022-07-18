@@ -26,7 +26,7 @@ from snuba.query.processors.abstract_array_join_optimizer import (
 )
 from snuba.query.processors.arrayjoin_optimizer import ArrayJoinOptimizer
 from snuba.query.processors.bloom_filter_optimizer import BloomFilterOptimizer
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 
 spans_ops = Column(None, None, "spans.op")
@@ -757,14 +757,14 @@ def test_spans_processor(
     expected_selected_columns: List[SelectedExpression],
     expected_conditions: Optional[Expression],
 ) -> None:
-    request_settings = HTTPRequestSettings()
+    query_settings = HTTPQuerySettings()
     bloom_filter_processor = BloomFilterOptimizer(
         "spans", ["op", "group"], ["exclusive_time"]
     )
-    bloom_filter_processor.process_query(query, request_settings)
+    bloom_filter_processor.process_query(query, query_settings)
     array_join_processor = ArrayJoinOptimizer(
         "spans", ["op", "group"], ["exclusive_time"]
     )
-    array_join_processor.process_query(query, request_settings)
+    array_join_processor.process_query(query, query_settings)
     assert query.get_selected_columns() == expected_selected_columns
     assert query.get_condition() == expected_conditions
