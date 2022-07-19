@@ -55,6 +55,17 @@ class OptimizeScheduler:
         )
 
     @staticmethod
+    def sort_partitions(partitions: Sequence[str]) -> Sequence[str]:
+        def sort_ordering_key(partition_name: str) -> str:
+            match = re.search(CLICKHOUSE_PARTITION_RE, partition_name)
+            if match is not None:
+                return match.group()
+
+            return partition_name
+
+        return sorted(partitions, key=sort_ordering_key, reverse=True)
+
+    @staticmethod
     def subdivide_partitions(
         partitions: Sequence[str], number_of_subdivisions: int
     ) -> Sequence[Sequence[str]]:
@@ -67,14 +78,7 @@ class OptimizeScheduler:
         replacements.
         """
 
-        def sort_partitions(partition_name: str) -> str:
-            match = re.search(CLICKHOUSE_PARTITION_RE, partition_name)
-            if match is not None:
-                return match.group()
-
-            return partition_name
-
-        sorted_partitions = sorted(partitions, key=sort_partitions, reverse=True)
+        sorted_partitions = OptimizeScheduler.sort_partitions(partitions)
         output: MutableSequence[Sequence[str]] = []
 
         for i in range(number_of_subdivisions):
@@ -95,13 +99,14 @@ class OptimizeScheduler:
 
         if self.__parallel == 1:
             return OptimizationSchedule(
-                partitions=[partitions],
+                partitions=[self.sort_partitions(partitions)],
                 cutoff_time=self.__last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
             )
         else:
             if current_time < self.__parallel_start_time:
                 return OptimizationSchedule(
-                    partitions=[partitions], cutoff_time=self.__parallel_start_time
+                    partitions=[self.sort_partitions(partitions)],
+                    cutoff_time=self.__parallel_start_time,
                 )
             elif current_time < self.__parallel_end_time:
                 return OptimizationSchedule(
@@ -110,5 +115,6 @@ class OptimizeScheduler:
                 )
             else:
                 return OptimizationSchedule(
-                    partitions=[partitions], cutoff_time=self.__full_job_end_time
+                    partitions=[self.sort_partitions(partitions)],
+                    cutoff_time=self.__full_job_end_time,
                 )
