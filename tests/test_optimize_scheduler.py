@@ -140,22 +140,46 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
     [
         pytest.param(
             1,
-            ["(90,'2022-03-28')", "(90,'2022-03-21')"],
+            [
+                "(90,'2022-06-13')",
+                "(90,'2022-06-08')",
+                "(90,'2022-06-20')",
+                "(90,'2022-06-27')",
+            ],
             last_midnight + timedelta(minutes=30),
             OptimizationSchedule(
-                [["(90,'2022-03-28')", "(90,'2022-03-21')"]],
+                [
+                    [
+                        "(90,'2022-06-27')",
+                        "(90,'2022-06-20')",
+                        "(90,'2022-06-13')",
+                        "(90,'2022-06-08')",
+                    ]
+                ],
                 last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME,
             ),
             id="non parallel",
         ),
         pytest.param(
             2,
-            ["(90,'2022-03-28')", "(90,'2022-03-21')"],
+            [
+                "(90,'2022-06-13')",
+                "(30,'2022-06-08')",
+                "(30,'2022-06-20')",
+                "(90,'2022-06-27')",
+            ],
             last_midnight
             + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
             - timedelta(minutes=30),
             OptimizationSchedule(
-                [["(90,'2022-03-28')", "(90,'2022-03-21')"]],
+                [
+                    [
+                        "(90,'2022-06-27')",
+                        "(30,'2022-06-20')",
+                        "(90,'2022-06-13')",
+                        "(30,'2022-06-08')",
+                    ]
+                ],
                 last_midnight + settings.PARALLEL_OPTIMIZE_JOB_START_TIME,
             ),
             id="parallel before parallel start",
