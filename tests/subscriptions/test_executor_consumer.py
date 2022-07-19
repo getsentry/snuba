@@ -475,22 +475,6 @@ max_concurrent_queries_tests = [
         1,
         id="len(partitions) == 1",
     ),
-    # 3. 6 / (0/1) == 6/1 ==> 6 max concurrent queries
-    pytest.param(
-        1,
-        0,
-        6,
-        6,
-        id="partition_count is 0",
-    ),
-    # 3. 6 / (1/2) == 6/1 ==> 6 max concurrent queries
-    pytest.param(
-        2,
-        1,
-        6,
-        6,
-        id="partition_count higher than partitions",
-    ),
 ]
 
 
