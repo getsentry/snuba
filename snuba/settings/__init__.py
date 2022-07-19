@@ -229,6 +229,7 @@ PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
+OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

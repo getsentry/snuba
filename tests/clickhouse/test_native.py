@@ -133,3 +133,29 @@ def test_fallback_logic() -> None:
 def teardown_function(_: Callable[..., Any]) -> None:
     state.delete_config("use_fallback_host_in_native_connection_pool")
     state.delete_config(f"fallback_hosts:{CLUSTER_HOST}:{CLUSTER_PORT}")
+
+
+@pytest.mark.parametrize(
+    "retryable, expected",
+    [
+        pytest.param(True, 3, id="retries"),
+        pytest.param(False, 1, id="no retries"),
+    ],
+)
+def test_execute_retries(retryable: bool, expected: int) -> None:
+    socket_timeout_connection = mock.Mock()
+    socket_timeout_connection.execute.side_effect = errors.SocketTimeoutError
+
+    pool = ClickhousePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
+
+    with mock.patch.object(
+        pool, "_create_conn", lambda x, y=False: socket_timeout_connection
+    ):
+        pool.pool = queue.LifoQueue(1)
+        pool.pool.put(socket_timeout_connection, block=False)
+        with pytest.raises(ClickhouseError):
+            pool.execute("SELECT something", retryable=retryable)
+
+    assert (
+        socket_timeout_connection.execute.call_count == expected
+    ), f"Expected {expected} (failed) attempts with main connection pool"
