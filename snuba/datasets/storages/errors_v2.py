@@ -86,7 +86,7 @@ query_processors = [
         # merged together by the final.
         omit_if_final=["environment", "release", "group_id"],
     ),
-    TableRateLimit(suffix="errors_tiger"),
+    TableRateLimit(),
 ]
 
 schema = WritableTableSchema(
