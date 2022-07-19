@@ -169,6 +169,7 @@ class ReplaysLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_replays",
+            "0002_add_url",
         ]
 
 
