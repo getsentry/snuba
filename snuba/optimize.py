@@ -296,7 +296,7 @@ def optimize_partitions(
         if tracker:
             tracker.update_completed_partitions(partition)
 
-        clickhouse.execute(query)
+        clickhouse.execute(query, retryable=False)
         metrics.timing(
             "optimized_part",
             time.time() - start,
