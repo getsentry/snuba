@@ -524,7 +524,7 @@ def execute_query_with_readthrough_caching(
             robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
-        timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
+        timeout=clickhouse_query_settings.get("max_execution_time", 30),
         timer=timer,
     )
 
