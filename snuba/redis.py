@@ -2,12 +2,17 @@ from __future__ import absolute_import
 
 import time
 from functools import wraps
-from typing import Any, Callable, Union, cast
+from typing import Any, Callable, Mapping, MutableMapping, Sequence, Union, cast
 
 from redis.client import StrictRedis
 from redis.cluster import ClusterNode, NodesManager, RedisCluster, RedisClusterException
 from redis.exceptions import BusyLoadingError, ConnectionError
 from snuba import settings
+from snuba.redis_multi.configuration import (
+    ClusterFunction,
+    ConnectionDescriptor,
+    NodeDescriptor,
+)
 from snuba.utils.serializable_exception import SerializableException
 
 RedisClientType = Union[StrictRedis, RedisCluster]
@@ -43,19 +48,19 @@ class RetryingStrictRedisCluster(RedisCluster):  # type: ignore #  Missing type 
 RANDOM_SLEEP_MAX = 50
 KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE = "All slots are not"
 
-RedisInitFunction = Callable[[], RedisClientType]
+RedisInitFunction = Callable[[ConnectionDescriptor], RedisClientType]
 
 
 def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]:
     def _retry_inner(
-        func: Callable[[], RedisClientType]
-    ) -> Callable[[], RedisClientType]:
+        func: Callable[[ConnectionDescriptor], RedisClientType]
+    ) -> Callable[[ConnectionDescriptor], RedisClientType]:
         @wraps(func)
-        def wrapper() -> RedisClientType:
+        def wrapper(connection_desc: ConnectionDescriptor) -> RedisClientType:
             retry_counter = 0
             while retry_counter < max_retries:
                 try:
-                    return func()
+                    return func(connection_desc)
                 except RedisClusterException as e:
                     if KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE in str(e):
                         # Exponentially increase the sleep starting from
@@ -72,29 +77,78 @@ def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]
     return _retry_inner
 
 
+_EXISTING_CLIENTS_BY_FUNCTION: MutableMapping[ClusterFunction, RedisClientType] = {}
+_EXISTING_CLIENTS_BY_CONNECTION_PARAMS: MutableMapping[
+    ConnectionDescriptor, RedisClientType
+] = {}
+
+_cluster_list_initialized = False
+
+
 @_retry(max_retries=settings.REDIS_INIT_MAX_RETRIES)
-def _initialize_redis_cluster() -> RedisClientType:
-    if settings.USE_REDIS_CLUSTER:
-        startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
-        if startup_nodes is None:
-            startup_nodes = [{"host": settings.REDIS_HOST, "port": settings.REDIS_PORT}]
-        startup_cluster_nodes = [
-            ClusterNode(n["host"], n["port"]) for n in startup_nodes
-        ]
-        return RetryingStrictRedisCluster(
-            startup_nodes=startup_cluster_nodes,
-            socket_keepalive=True,
-            password=settings.REDIS_PASSWORD,
-            max_connections_per_node=True,
-        )
-    else:
-        return StrictRedis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            password=settings.REDIS_PASSWORD,
-            db=settings.REDIS_DB,
-            socket_keepalive=True,
-        )
+def _build_single_node_client(
+    connection_descriptor: ConnectionDescriptor,
+) -> RedisClientType:
+    assert isinstance(connection_descriptor, NodeDescriptor)
+    return StrictRedis(
+        host=connection_descriptor.host,
+        port=connection_descriptor.port,
+        password=connection_descriptor.password,
+        db=connection_descriptor.db,
+        socket_keepalive=True,
+    )
 
 
-redis_client: RedisClientType = _initialize_redis_cluster()
+@_retry(max_retries=settings.REDIS_INIT_MAX_RETRIES)
+def _build_cluster_client(
+    connection_descriptor: ConnectionDescriptor,
+) -> RedisClientType:
+    assert isinstance(connection_descriptor, Sequence)
+    assert len(connection_descriptor) > 0
+    assert isinstance(connection_descriptor[0], NodeDescriptor)
+    client = RetryingStrictRedisCluster(
+        startup_nodes=[
+            ClusterNode(host=node.host, port=node.port)
+            for node in connection_descriptor
+        ],
+        db=connection_descriptor[0].db,
+        password=connection_descriptor[0].password,
+        max_connections_per_node=True,
+    )
+
+    return client
+
+
+def _initialize_isolated_clusters(
+    redis_cluster_map: Mapping[ClusterFunction, ConnectionDescriptor]
+) -> None:
+    global _cluster_list_initialized
+    if _cluster_list_initialized:
+        return
+    for func in ClusterFunction:
+        assert (
+            redis_cluster_map[func] is not None
+        ), f"no cluster defined for cluster function {func}"
+        connection_descriptor = redis_cluster_map[func]
+        if connection_descriptor not in _EXISTING_CLIENTS_BY_CONNECTION_PARAMS:
+            if isinstance(connection_descriptor, NodeDescriptor):
+                client = _build_single_node_client(connection_descriptor)
+                _EXISTING_CLIENTS_BY_CONNECTION_PARAMS[connection_descriptor] = client
+                _EXISTING_CLIENTS_BY_FUNCTION[func] = client
+            elif isinstance(connection_descriptor, Sequence):
+                client = _build_cluster_client(connection_descriptor)
+                _EXISTING_CLIENTS_BY_CONNECTION_PARAMS[connection_descriptor] = client
+                _EXISTING_CLIENTS_BY_FUNCTION[func] = client
+        else:
+            _EXISTING_CLIENTS_BY_FUNCTION[
+                func
+            ] = _EXISTING_CLIENTS_BY_CONNECTION_PARAMS[connection_descriptor]
+    _cluster_list_initialized = True
+
+
+def get_redis_client(func: ClusterFunction) -> RedisClientType:
+    _initialize_isolated_clusters(settings.REDIS_CLUSTER_MAP)
+    return _EXISTING_CLIENTS_BY_FUNCTION[func]
+
+
+redis_client: RedisClientType = get_redis_client(ClusterFunction.CACHE)

@@ -2,6 +2,11 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
+from snuba.redis_multi.configuration import (
+    ClusterFunction,
+    ConnectionDescriptor,
+    NodeDescriptor,
+)
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -87,6 +92,17 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
+
+# Use different redis clusters for different functions
+REDIS_SINGLE_NODE_DESCRIPTOR = NodeDescriptor(
+    REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
+)
+REDIS_CLUSTER_MAP: Mapping[ClusterFunction, ConnectionDescriptor] = {
+    ClusterFunction.CACHE: REDIS_SINGLE_NODE_DESCRIPTOR,
+    ClusterFunction.RATE_LIMITING: REDIS_SINGLE_NODE_DESCRIPTOR,
+    ClusterFunction.REPLACEMENT_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
+    ClusterFunction.SUBSCRIPTION_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
+}
 
 USE_RESULT_CACHE = True
 
