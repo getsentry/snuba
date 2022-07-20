@@ -220,7 +220,7 @@ MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 # Start time from UTC 00:00:00 after which we are allowed to run optimize
 # jobs in parallel.
-PARALLEL_OPTIMIZE_JOB_START_TIME = timedelta(hours=3)
+PARALLEL_OPTIMIZE_JOB_START_TIME = timedelta(hours=0)
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs in
 # parallel to avoid running in parallel when peak traffic starts.
