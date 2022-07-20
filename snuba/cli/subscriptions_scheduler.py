@@ -24,7 +24,16 @@ logger = logging.getLogger(__name__)
     "--entity",
     "entity_name",
     required=True,
-    type=click.Choice(["events", "transactions", "metrics_sets", "metrics_counters"]),
+    type=click.Choice(
+        [
+            "events",
+            "transactions",
+            "metrics_sets",
+            "metrics_counters",
+            "generic_metrics_sets",
+            "generic_metrics_distributions",
+        ]
+    ),
     help="The entity to target",
 )
 @click.option(
