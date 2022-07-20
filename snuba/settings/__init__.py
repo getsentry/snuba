@@ -93,7 +93,9 @@ REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
 
-# Use different redis clusters for different functions
+# Set self-hosted users up with the default setup where everything is
+# on one redis. Users who want to multiplex to multiple customers should
+# fill in the values of REDIS_CLUSTER_MAP with lists of NodeDescriptor[s]
 REDIS_SINGLE_NODE_DESCRIPTOR = NodeDescriptor(
     REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
 )

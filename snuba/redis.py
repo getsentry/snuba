@@ -151,4 +151,7 @@ def get_redis_client(func: ClusterFunction) -> RedisClientType:
     return _EXISTING_CLIENTS_BY_FUNCTION[func]
 
 
+# TODO This no-function-specified redis client should be deprecated but
+# until we actually have separate clusters we can leave it in so we don't
+# have to blow everything up in one PR.
 redis_client: RedisClientType = get_redis_client(ClusterFunction.CACHE)
