@@ -20,6 +20,7 @@ def _record_timer_metrics(
 ) -> None:
     final = str(request.query.get_final())
     referrer = request.referrer or "none"
+    app_id = request.attribution_info.app_id.key or "none"
     timer.send_metrics_to(
         metrics,
         tags={
@@ -27,6 +28,7 @@ def _record_timer_metrics(
             "referrer": referrer,
             "final": final,
             "dataset": query_metadata.dataset,
+            "app_id": app_id,
         },
         mark_tags={
             "final": final,
