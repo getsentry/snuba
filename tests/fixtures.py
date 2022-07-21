@@ -284,48 +284,52 @@ def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
     )
 
     return {
-        "datetime": now,
-        "organization_id": ORG_ID,
-        "platform": "python",
-        "project_id": PROJECT_ID,
+        "type": "replay_event",
+        "start_time": now,
         "replay_id": replay_id,
-        "message": "/organizations/:orgId/issues/",
-        "retention_days": 23,
-        "sequence_id": 0,
-        "trace_ids": [
-            "36e980a9-c602-4cde-9f5d-089f15b83b5f",
-            "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
-        ],
-        "data": {
-            "replay_id": replay_id,
-            "environment": "prod",
-            "project_id": PROJECT_ID,
-            "release": "34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            "dist": "",
-            "sdk": {
-                "version": "0.9.0",
-                "name": "sentry.python",
-                "packages": [{"version": "0.9.0", "name": "pypi:sentry-sdk"}],
-            },
-            "platform": "python",
-            "version": "7",
-            "location": "/organizations/:orgId/issues/",
+        "project_id": 1,
+        "retention_days": 30,
+        "payload": {
             "type": "replay_event",
-            "datetime": now,
-            "timestamp": now,
-            "tags": [
-                ["sentry:release", "34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a"],
-                ["sentry:user", "232"],
-                ["environment", "prod"],
-                ["we|r=d", "tag"],
-            ],
-            "user": {
-                "username": "me",
-                "ip_address": "127.0.0.1",
-                "id": "232",
-                "email": "test@test.com",
+            "replay_id": replay_id,
+            "sequence_id": 0,
+            "tags": {
+                "customtag": "is_set",
+                "transaction": "/organizations/:orgId/issues/",
             },
-            "title": "/organizations/:orgId/issues/",
+            "trace_ids": [
+                "36e980a9-c602-4cde-9f5d-089f15b83b5f",
+                "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
+            ],
+            "dist": "",
+            "platform": "python",
+            "timestamp": now,
+            "environment": "prod",
+            "release": "34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+            "user": {
+                "id": "232",
+                "username": "me",
+                "email": "test@test.com",
+                "ip_address": "127.0.0.1",
+            },
+            "sdk": {
+                "name": "sentry.python",
+                "version": "7",
+            },
+            "contexts": {
+                "trace": {
+                    "op": "pageload",
+                    "span_id": "affa5649681a1eeb",
+                    "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
+                }
+            },
+            "request": {
+                "url": "http://localhost:3000/",
+                "headers": {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+                },
+            },
+            "extra": {},
         },
     }
 
