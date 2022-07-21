@@ -1,6 +1,13 @@
 import os
 from datetime import timedelta
-from typing import Set
+from typing import Mapping, Set
+
+from snuba.redis_multi.configuration import (
+    ClusterFunction,
+    ConnectionDescriptor,
+    NodeDescriptor,
+)
+from snuba.settings import REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
 
 TESTING = True
 
@@ -30,3 +37,13 @@ ENFORCE_RETENTION = True
 
 # Ignore optimize job cut off time for tests
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(days=1)
+
+REDIS_SINGLE_NODE_DESCRIPTOR = NodeDescriptor(
+    REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
+)
+REDIS_CLUSTER_MAP: Mapping[ClusterFunction, ConnectionDescriptor] = {
+    ClusterFunction.CACHE: REDIS_SINGLE_NODE_DESCRIPTOR,
+    ClusterFunction.RATE_LIMITING: REDIS_SINGLE_NODE_DESCRIPTOR,
+    ClusterFunction.REPLACEMENT_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
+    ClusterFunction.SUBSCRIPTION_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
+}
