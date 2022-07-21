@@ -83,6 +83,8 @@ CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
 CLICKHOUSE_TRACE_USER = os.environ.get("CLICKHOUSE_TRACE_USER", "default")
 CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASS", "")
 
+USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
+
 # Redis Options
 REDIS_CLUSTER_STARTUP_NODES = None
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")

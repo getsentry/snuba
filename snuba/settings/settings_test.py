@@ -7,7 +7,7 @@ from snuba.redis_multi.configuration import (
     ConnectionDescriptor,
     NodeDescriptor,
 )
-from snuba.settings import REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
+from snuba.settings import REDIS_HOST, REDIS_PASSWORD, REDIS_PORT, USE_REDIS_CLUSTER
 
 TESTING = True
 
@@ -41,9 +41,18 @@ OPTIMIZE_JOB_CUTOFF_TIME = timedelta(days=1)
 REDIS_SINGLE_NODE_DESCRIPTOR = NodeDescriptor(
     REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
 )
-REDIS_CLUSTER_MAP: Mapping[ClusterFunction, ConnectionDescriptor] = {
-    ClusterFunction.CACHE: REDIS_SINGLE_NODE_DESCRIPTOR,
-    ClusterFunction.RATE_LIMITING: REDIS_SINGLE_NODE_DESCRIPTOR,
-    ClusterFunction.REPLACEMENT_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
-    ClusterFunction.SUBSCRIPTION_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
-}
+REDIS_CLUSTER_MAP: Mapping[ClusterFunction, ConnectionDescriptor] = (
+    {
+        ClusterFunction.CACHE: (REDIS_SINGLE_NODE_DESCRIPTOR,),
+        ClusterFunction.RATE_LIMITING: (REDIS_SINGLE_NODE_DESCRIPTOR,),
+        ClusterFunction.REPLACEMENT_STORAGE: (REDIS_SINGLE_NODE_DESCRIPTOR,),
+        ClusterFunction.SUBSCRIPTION_STORAGE: (REDIS_SINGLE_NODE_DESCRIPTOR,),
+    }
+    if USE_REDIS_CLUSTER
+    else {
+        ClusterFunction.CACHE: REDIS_SINGLE_NODE_DESCRIPTOR,
+        ClusterFunction.RATE_LIMITING: REDIS_SINGLE_NODE_DESCRIPTOR,
+        ClusterFunction.REPLACEMENT_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
+        ClusterFunction.SUBSCRIPTION_STORAGE: REDIS_SINGLE_NODE_DESCRIPTOR,
+    }
+)

@@ -111,7 +111,6 @@ def _build_cluster_client(
             ClusterNode(host=node.host, port=node.port)
             for node in connection_descriptor
         ],
-        db=connection_descriptor[0].db,
         password=connection_descriptor[0].password,
         max_connections_per_node=True,
     )
