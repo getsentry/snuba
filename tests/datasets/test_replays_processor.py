@@ -31,46 +31,46 @@ class ReplayEvent:
 
     def serialize(self) -> Mapping[Any, Any]:
         return {
-            "datetime": "2019-08-08T22:29:53.917000Z",
-            "organization_id": 1,
-            "platform": self.platform,
-            "project_id": 1,
+            "type": "replay_event",
+            "start_time": self.timestamp,
             "replay_id": self.replay_id,
-            "message": "/organizations/:orgId/issues/",
-            "retention_days": 23,
-            "sequence_id": self.sequence_id,
-            "trace_ids": self.trace_ids,
-            "data": {
-                "replay_id": self.replay_id,
-                "environment": self.environment,
-                "project_id": 1,
-                "release": self.release,
-                "dist": self.dist,
-                "sdk": {
-                    "version": self.sdk_version,
-                    "name": self.sdk_name,
-                    "packages": [{"version": "0.9.0", "name": "pypi:sentry-sdk"}],
-                },
-                "platform": self.platform,
-                "version": "7",
-                "location": "/organizations/:orgId/issues/",
+            "project_id": 1,
+            "retention_days": 30,
+            "payload": {
                 "type": "replay_event",
-                "datetime": datetime.utcfromtimestamp(self.timestamp),
+                "replay_id": self.replay_id,
+                "sequence_id": self.sequence_id,
+                "tags": {"customtag": "is_set", "transaction": self.title},
+                "trace_ids": self.trace_ids,
+                "dist": self.dist,
+                "platform": self.platform,
                 "timestamp": self.timestamp,
-                "tags": [
-                    ["sentry:release", self.release],
-                    ["sentry:user", self.user_id],
-                    ["environment", self.environment],
-                    ["we|r=d", "tag"],
-                ],
+                "environment": self.environment,
+                "release": self.release,
                 "user": {
-                    "username": self.user_name,
-                    "ip_address": self.ipv4 or self.ipv6,
                     "id": self.user_id,
+                    "username": self.user_name,
                     "email": self.user_email,
-                    # "geo": self.geo,
+                    "ip_address": self.ipv4,
                 },
-                "title": self.title,
+                "sdk": {
+                    "name": self.sdk_name,
+                    "version": self.sdk_version,
+                },
+                "contexts": {
+                    "trace": {
+                        "op": "pageload",
+                        "span_id": "affa5649681a1eeb",
+                        "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
+                    }
+                },
+                "request": {
+                    "url": "http://localhost:3000/",
+                    "headers": {
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+                    },
+                },
+                "extra": {},
             },
         }
 
@@ -89,11 +89,13 @@ class ReplayEvent:
             "user_id": self.user_id,
             "user_name": self.user_name,
             "user_email": self.user_email,
-            "tags.key": ["environment", "sentry:release", "sentry:user", "we|r=d"],
-            "tags.value": [self.environment, self.release, self.user_id, "tag"],
+            "tags.key": ["customtag"],
+            "tags.value": ["is_set"],
+            "title": self.title,
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
             "retention_days": 30,
+            "url": "http://localhost:3000/",
             "offset": meta.offset,
             "partition": meta.partition,
         }
