@@ -11,7 +11,7 @@ from snuba.settings import REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
 
 TESTING = True
 
-REDIS_DB = 2
+REDIS_DB = int(os.environ.get("REDIS_DB", 2))
 STATS_IN_RESPONSE = True
 CONFIG_MEMOIZE_TIMEOUT = 0
 
