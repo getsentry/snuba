@@ -10,7 +10,6 @@ from snuba.processor import InsertBatch
 @dataclass
 class CallTree:
     depth: int
-    parent_fingerprint: str
     fingerprint: str
     name: str
     package: str
@@ -84,7 +83,6 @@ class TestFunctionsProcessor:
                 "259": [
                     CallTree(
                         depth=0,
-                        parent_fingerprint="0" * 16,
                         fingerprint="a" * 16,
                         name="foo",
                         package="",
@@ -94,7 +92,6 @@ class TestFunctionsProcessor:
                         children=[
                             CallTree(
                                 depth=1,
-                                parent_fingerprint="a" * 16,
                                 fingerprint="c" * 16,
                                 name="bar",
                                 package="",
@@ -107,7 +104,6 @@ class TestFunctionsProcessor:
                     ),
                     CallTree(
                         depth=0,
-                        parent_fingerprint="0" * 16,
                         fingerprint="b" * 16,
                         name="baz",
                         package="",
@@ -118,7 +114,6 @@ class TestFunctionsProcessor:
                     ),
                     CallTree(
                         depth=0,
-                        parent_fingerprint="0" * 16,
                         fingerprint="a" * 16,
                         name="foo",
                         package="",
@@ -128,7 +123,6 @@ class TestFunctionsProcessor:
                         children=[
                             CallTree(
                                 depth=1,
-                                parent_fingerprint="a" * 16,
                                 fingerprint="c" * 16,
                                 name="bar",
                                 package="",
