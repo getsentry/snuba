@@ -403,16 +403,15 @@ def _trace_transaction(dataset: Dataset) -> None:
             scope.transaction = f"{scope.transaction.name}__{get_dataset_name(dataset)}__{http_request.referrer}"
 
 
-@application.route("/query", methods=["GET", "POST"])  # type: ignore
+@application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
-def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
+def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResponse]:
     if http_request.method == "GET":
         return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
         _trace_transaction(dataset)
-        # Not sure what language to pass into dataset_query here
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
@@ -509,7 +508,9 @@ def dataset_query(
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
-    return Response(json.dumps(payload), 200, {"Content-Type": "application/json"})
+    return Response(
+        json.dumps(payload, default=str), 200, {"Content-Type": "application/json"}
+    )
 
 
 @application.errorhandler(InvalidSubscriptionError)
@@ -649,7 +650,7 @@ if application.debug or application.testing:
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
-            ).create(lambda offsets: None)
+            ).create_with_partitions(lambda offsets: None, {})
             strategy.submit(message)
             strategy.close()
             strategy.join()

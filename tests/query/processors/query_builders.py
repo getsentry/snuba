@@ -37,6 +37,7 @@ def nested_expression(column: str, key: str) -> FunctionCall:
         table_name=None,
         col_name=column,
         mapping_key=Literal(None, key),
+        value_subcolumn_name="value",
     )
 
 

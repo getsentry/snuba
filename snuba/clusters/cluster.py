@@ -45,7 +45,7 @@ class ClickhouseClientSettings(Enum):
     MIGRATE = ClickhouseClientSettingsType(
         {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
     )
-    OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
+    OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
@@ -209,6 +209,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         cache_partition_id: Optional[str] = None,
     ):
         super().__init__(storage_sets)
+        self.__host = host
+        self.__port = port
         self.__query_node = ClickhouseNode(host, port)
         self.__user = user
         self.__password = password
@@ -337,6 +339,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             )
             .results
         ]
+
+    def get_host(self) -> str:
+        return self.__host
+
+    def get_port(self) -> int:
+        return self.__port
 
 
 CLUSTERS = [

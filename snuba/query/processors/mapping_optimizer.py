@@ -78,10 +78,17 @@ class MappingOptimizer(QueryProcessor):
     - IN conditions. TODO
     """
 
-    def __init__(self, column_name: str, hash_map_name: str, killswitch: str) -> None:
+    def __init__(
+        self,
+        column_name: str,
+        hash_map_name: str,
+        killswitch: str,
+        value_subcolumn_name: str = "value",
+    ) -> None:
         self.__column_name = column_name
         self.__hash_map_name = hash_map_name
         self.__killswitch = killswitch
+        self.__value_subcolumn_name = value_subcolumn_name
 
         # TODO: Add the support for IN conditions.
         self.__optimizable_pattern = FunctionCall(
@@ -168,7 +175,7 @@ class MappingOptimizer(QueryProcessor):
             for exp in condition:
                 if isinstance(exp, Column) and exp.column_name in (
                     f"{self.__column_name}.key",
-                    f"{self.__column_name}.value",
+                    f"{self.__column_name}.{self.__value_subcolumn_name}",
                 ):
                     return ConditionClass.NOT_OPTIMIZABLE
             return ConditionClass.IRRELEVANT

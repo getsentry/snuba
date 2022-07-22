@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pytest
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.generic_metrics_processor import GenericSetsMetricsProcessor
 from snuba.datasets.metrics_aggregate_processor import (
     CounterAggregateProcessor,
     DistributionsAggregateProcessor,
@@ -30,8 +31,19 @@ timestamp = int(datetime.now(timezone.utc).timestamp())
 # expects that test is run in utc local time
 expected_timestamp = datetime.utcfromtimestamp(timestamp)
 
+MAPPING_META_COMMON = {
+    "c": {
+        "10": "tag-1",
+        "20": "tag-2",
+        "11": "value-1",
+        "22": "value-2",
+        "30": "tag-3",
+    },
+    "d": {"33": "value-3"},
+}
 
 SET_MESSAGE_SHARED = {
+    "use_case_id": "release-health",
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
@@ -41,9 +53,11 @@ SET_MESSAGE_SHARED = {
     "value": [324234, 345345, 456456, 567567],
     # test enforce retention days of 30
     "retention_days": 22,
+    "mapping_meta": MAPPING_META_COMMON,
 }
 
 COUNTER_MESSAGE_SHARED = {
+    "use_case_id": "release-health",
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
@@ -53,10 +67,12 @@ COUNTER_MESSAGE_SHARED = {
     "value": 123.123,
     # test enforce retention days of 30
     "retention_days": 23,
+    "mapping_meta": MAPPING_META_COMMON,
 }
 
 DIST_VALUES = [324.12, 345.23, 4564.56, 567567]
 DIST_MESSAGE_SHARED = {
+    "use_case_id": "release-health",
     "org_id": 1,
     "project_id": 2,
     "metric_id": 1232341,
@@ -66,6 +82,7 @@ DIST_MESSAGE_SHARED = {
     "value": DIST_VALUES,
     # test enforce retention days of 90
     "retention_days": 50,
+    "mapping_meta": MAPPING_META_COMMON,
 }
 
 TEST_CASES_BUCKETS = [
@@ -451,3 +468,46 @@ def test_metrics_polymorphic_processor(
             PolymorphicMetricsProcessor().process_message(message, meta)
             == expected_polymorphic_result
         )
+
+
+TEST_CASES_GENERIC = [
+    pytest.param(
+        SET_MESSAGE_SHARED,
+        [
+            {
+                "use_case_id": "release-health",
+                "org_id": 1,
+                "project_id": 2,
+                "metric_id": 1232341,
+                "timestamp": expected_timestamp,
+                "tags.key": [10, 20, 30],
+                "tags.indexed_value": [11, 22, 33],
+                "tags.raw_value": ["value-1", "value-2", "value-3"],
+                "metric_type": "set",
+                "set_values": [324234, 345345, 456456, 567567],
+                "materialization_version": 1,
+                "timeseries_id": ANY,
+                "retention_days": 30,
+                "granularities": [1, 2, 3],
+            }
+        ],
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "message, expected_output",
+    TEST_CASES_GENERIC,
+)
+def test_generic_metrics_sets_processor(
+    message: Mapping[str, Any], expected_output: Optional[Sequence[Mapping[str, Any]]]
+) -> None:
+    meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
+
+    expected_polymorphic_result = (
+        InsertBatch(expected_output, None) if expected_output is not None else None
+    )
+    assert (
+        GenericSetsMetricsProcessor().process_message(message, meta)
+        == expected_polymorphic_result
+    )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -17,6 +18,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.types import Position
 
 from snuba import state
+from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
@@ -43,6 +45,29 @@ from snuba.web.query import parse_and_run_query
 logger = logging.getLogger(__name__)
 
 COMMIT_FREQUENCY_SEC = 1
+
+
+def calculate_max_concurrent_queries(
+    assigned_partition_count: int,
+    total_partition_count: int,
+    total_concurrent_queries: int,
+) -> int:
+    """
+    As consumers are scaled up or down, max_concurrent_queries should
+    change accordingly per replica. Fewer replicas means each replica
+    can have more max_concurrent_queries and vice versa.
+
+    We use the total_partition_count and assigned_partition_count to estimate
+    how many total replicas there are, which in turn lets us calc the
+    max_concurrent_queries for the given replica.
+
+    Round up since .5 of a replica doesnt really
+    make sense. total_partition_count could be 0 though if something
+    went wrong trying to fetch that from the kafka admin. In that case we
+    fall back to 1 replica (meaning the max concurrent queries == the total)
+    """
+    replicas = total_partition_count / assigned_partition_count
+    return math.ceil((total_concurrent_queries / replicas))
 
 
 def build_executor_consumer(
@@ -106,6 +131,16 @@ def build_executor_consumer(
         strict_offset_reset=strict_offset_reset,
     )
 
+    total_partition_count = get_partition_count(scheduled_topic_spec.topic)
+
+    # XXX: for now verify that the partition_counts are correct for
+    # the executors.
+    metrics.gauge(
+        "executor.partition_count",
+        total_partition_count,
+        tags={"topic": scheduled_topic_spec.topic_name},
+    )
+
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
     # for the consumer group, or use the default.
     stats_collection_frequency_ms = get_config(
@@ -135,6 +170,7 @@ def build_executor_consumer(
         SubscriptionExecutorProcessingFactory(
             max_concurrent_queries,
             total_concurrent_queries,
+            total_partition_count,
             dataset,
             entity_names,
             producer,
@@ -150,6 +186,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self,
         max_concurrent_queries: int,
         total_concurrent_queries: int,
+        total_partition_count: int,
         dataset: Dataset,
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
@@ -159,6 +196,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
     ) -> None:
         self.__max_concurrent_queries = max_concurrent_queries
         self.__total_concurrent_queries = total_concurrent_queries
+        self.__total_partition_count = total_partition_count
         self.__dataset = dataset
         self.__entity_names = entity_names
         self.__producer = producer
@@ -171,15 +209,29 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         commit: Callable[[Mapping[Partition, Position]], None],
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+
+        calculated_max_concurrent_queries = calculate_max_concurrent_queries(
+            len(partitions),
+            self.__total_partition_count,
+            self.__total_concurrent_queries,
+        )
+        # XXX(meredith): temporarily log both the calculated and passed in
+        # max concurrent queries
+        self.__metrics.gauge(
+            "calculated_max_concurrent_queries", calculated_max_concurrent_queries
+        )
+        self.__metrics.gauge("max_concurrent_queries", self.__max_concurrent_queries)
+
+        if state.get_config("use_calculated_max_concurrent_queries", False):
+            self.__max_concurrent_queries = calculated_max_concurrent_queries
+
         return ExecuteQuery(
             self.__dataset,
             self.__entity_names,
             self.__max_concurrent_queries,
-            self.__total_concurrent_queries,
             self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
-            commit,
         )
 
 
@@ -194,26 +246,18 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         dataset: Dataset,
         entity_names: Sequence[str],
         max_concurrent_queries: int,
-        total_concurrent_queries: int,
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
         next_step: ProcessingStrategy[SubscriptionTaskResult],
-        # TODO: To be removed once executor is fully rolled out
-        # Commit is only passed here because we are temporarily
-        # skipping executions during the transition phase.
-        commit: Callable[[Mapping[Partition, Position]], None],
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
         self.__max_concurrent_queries = max_concurrent_queries
-        self.__total_concurrent_queries = total_concurrent_queries
         self.__executor = ThreadPoolExecutor(self.__max_concurrent_queries)
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__next_step = next_step
 
-        self.__commit = commit
-        self.__commit_data: MutableMapping[Partition, Position] = {}
         self.__last_committed: Optional[float] = None
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
@@ -332,27 +376,13 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         else:
             self.__metrics.increment("skipped_execution", tags={"entity": entity_name})
 
-            # Periodically commit offsets if we haven't started rollout yet
-            self.__commit_data[message.partition] = Position(
-                message.next_offset, message.timestamp
-            )
-
-            now = time.time()
-
-            if (
-                self.__last_committed is None
-                or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
-            ):
-                self.__commit(self.__commit_data)
-                self.__last_committed = now
-                self.__commit_data = {}
-
     def close(self) -> None:
         self.__closed = True
 
     def terminate(self) -> None:
         self.__closed = True
 
+        self.__executor.shutdown()
         self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:

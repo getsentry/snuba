@@ -86,7 +86,7 @@ query_processors = [
         # merged together by the final.
         omit_if_final=["environment", "release", "group_id"],
     ),
-    TableRateLimit(suffix="errors_tiger"),
+    TableRateLimit(),
 ]
 
 schema = WritableTableSchema(
@@ -121,6 +121,5 @@ storage = WritableTableStorage(
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
         promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
         state_name=ReplacerState.ERRORS_V2,
-        use_promoted_prewhere=False,
     ),
 )

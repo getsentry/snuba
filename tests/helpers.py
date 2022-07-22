@@ -41,3 +41,20 @@ def write_unprocessed_events(
         processed_messages.append(processed_message)
 
     write_processed_messages(storage, processed_messages)
+
+
+def write_raw_unprocessed_events(
+    storage: WritableStorage, events: Sequence[Union[InsertEvent, Mapping[str, Any]]]
+) -> None:
+
+    processor = storage.get_table_writer().get_stream_loader().get_processor()
+
+    processed_messages = []
+    for i, event in enumerate(events):
+        processed_message = processor.process_message(
+            event, KafkaMessageMetadata(i, 0, datetime.now())
+        )
+        assert processed_message is not None
+        processed_messages.append(processed_message)
+
+    write_processed_messages(storage, processed_messages)

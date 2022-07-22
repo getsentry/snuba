@@ -19,7 +19,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.optimize import run_optimize
 from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
-from snuba.state import set_config
+from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
@@ -80,9 +80,7 @@ class TestReplacer:
         redis_client.flushdb()
         cluster = self.storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
-        run_optimize(
-            clickhouse, self.storage, cluster.get_database(), ignore_cutoff=True
-        )
+        run_optimize(clickhouse, self.storage, cluster.get_database())
 
     def _issue_count(self, project_id: int, group_id: Optional[int] = None) -> Any:
         args = {
@@ -115,6 +113,31 @@ class TestReplacer:
             return None
 
         return int(data[0]["group_id"])
+
+    def test_project_bypass(self) -> None:
+        timestamp = datetime.now()
+        message = (
+            2,
+            ReplacementType.END_DELETE_GROUPS,
+            {
+                "project_id": self.project_id,
+                "group_ids": [1, 2, 3],
+                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            },
+        )
+        replacement = self.replacer.process_message(self._wrap(message))
+        assert replacement is not None
+
+        set_config("replacements_bypass_projects", f"[{self.project_id + 1}]")
+        replacement = self.replacer.process_message(self._wrap(message))
+        assert replacement is not None
+
+        set_config(
+            "replacements_bypass_projects", f"[{self.project_id + 1},{self.project_id}]"
+        )
+        replacement = self.replacer.process_message(self._wrap(message))
+        assert replacement is None
+        delete_config("replacements_bypass_projects")
 
     def test_delete_groups_process(self) -> None:
         timestamp = datetime.now()
@@ -399,11 +422,11 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND has(`tags.key`, %(tag_str)s)"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND has(`tags.key`, %(tag_str)s)"
         )
         assert replacement.query_args == {
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, hierarchical_hashes, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, sdk_integrations, modules.name, modules.version",
@@ -434,11 +457,11 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND has(`tags.key`, %(tag_str)s)"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND has(`tags.key`, %(tag_str)s)"
         )
 
         assert replacement.query_args == {

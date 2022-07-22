@@ -51,8 +51,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "errors_v2",
             "errors_v2_ro",
             "profiles",
+            "functions",
             "replays",
             "generic_metrics_sets",
+            "generic_metrics_distributions",
         },
         "single_node": True,
     },
@@ -169,7 +171,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "replays"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions", "replays"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
@@ -216,7 +218,18 @@ TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
+# Start time from UTC 00:00:00 after which we are allowed to run optimize
+# jobs in parallel.
+PARALLEL_OPTIMIZE_JOB_START_TIME = timedelta(hours=0)
+
+# Cutoff time from UTC 00:00:00 to stop running optimize jobs in
+# parallel to avoid running in parallel when peak traffic starts.
+PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
+
+# Cutoff time from UTC 00:00:00 to stop running optimize jobs to
+# avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
+OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

@@ -635,6 +635,31 @@ class TestSnQLApi(BaseApiTest):
         assert data["queries"][0]["table"].startswith("errors_")
         assert data["queries"][0]["bytes_scanned"] > 0
 
+    def test_timing_metrics_tags(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS count
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                    "app_id": "something-good",
+                }
+            ),
+        )
+        assert response.status_code == 200
+        metric_calls = get_recorded_metric_calls("timing", "api.query")
+        assert metric_calls is not None
+        assert len(metric_calls) == 1
+        assert metric_calls[0].tags["status"] == "success"
+        assert metric_calls[0].tags["referrer"] == "test"
+        assert metric_calls[0].tags["final"] == "False"
+        assert metric_calls[0].tags["dataset"] == "events"
+        assert metric_calls[0].tags["app_id"] == "something-good"
+
     def test_arbitrary_app_id_attribution(self) -> None:
         response = self.post(
             "/events/snql",

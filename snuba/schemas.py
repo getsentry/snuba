@@ -51,7 +51,6 @@ def validate_jsonschema(
 
     validator_cls(
         schema,
-        types={"array": (list, tuple)},
         format_checker=jsonschema.FormatChecker(),
     ).validate(value, schema)
 

@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.7.0
+
+### Various fixes & improvements
+
+- feat(mep): support time bucketing in queries (#2937) by @onewland
+- add new subscription-related generic-metrics topics to settings/validation (#2935) by @onewland
+- feat(mep): fix header filter error (#2938) by @onewland
+- build(deps): bump jsonschema from 4.6.0 to 4.7.1 (#2926) by @dependabot
+- ref: Remove temporary subscriptions rollout code (#2934) by @lynnagara
+- ref: Fix TypedDict import (#2933) by @lynnagara
+- feat(mep): add commit log config to generic metrics storages (#2931) by @onewland
+- build(deps): bump @types/react-dom from 18.0.5 to 18.0.6 in /snuba/admin (#2924) by @dependabot
+- build(deps): bump urllib3 from 1.26.9 to 1.26.10 (#2922) by @dependabot
+- feat(mep): do kafka-header filtering to avoid JSON overhead for generic-metrics (#2929) by @onewland
+- build(deps): bump @types/react from 18.0.14 to 18.0.15 in /snuba/admin (#2923) by @dependabot
+- feat(mep): add commit log topics config (#2928) by @onewland
+- feat(profiling): Add functions consumer and dataset (#2894) by @Zylphrex
+- build(deps): bump redis from 4.3.3 to 4.3.4 (#2905) by @dependabot
+- build(deps): bump python-rapidjson from 1.6 to 1.8 (#2920) by @dependabot
+- ref(subscriptions): Remove legacy tick consumer (#2838) by @lynnagara
+- chore(deps): Bump sentry-sdk to 1.7.0 to enable baggage propagation (#2927) by @sl0thentr0py
+- feat(mep): subscript fix for multiple value arrays (#2914) by @onewland
+- fix: Update Flask (#2880) by @evanh
+- feat(replacements) Reimplement bypass properly (#2917) by @fpacifici
+- fix(build): remove atomicwrites from requirements.txt (#2919) by @onewland
+- feat(replacements) Script to execute batches of replacements (#2916) by @fpacifici
+- fix(profiling): Disable vertical merge algorithm (#2912) by @phacops
+- feat(replays): add replays dataset to dataset factory (#2913) by @JoshFerge
+
+_Plus 41 more_
+
 ## 22.6.0
 
 ### Various fixes & improvements

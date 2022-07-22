@@ -215,6 +215,30 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--consumer-group=snuba-metrics-consumers",
                 ],
             ),
+            (
+                "generic-metrics-distributions-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--storage=generic_metrics_distributions_raw",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--consumer-group=snuba-gen-metrics-distributions-consumers",
+                ],
+            ),
+            (
+                "generic-metrics-sets-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--storage=generic_metrics_sets_raw",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--consumer-group=snuba-gen-metrics-sets-consumers",
+                ],
+            ),
         ]
         if settings.ENABLE_METRICS_SUBSCRIPTIONS:
             if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
@@ -294,7 +318,19 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--storage=profiles",
                 ],
             ),
+            (
+                "functions",
+                [
+                    "snuba",
+                    "consumer",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--storage=functions_raw",
+                ],
+            ),
         ]
+
     if settings.ENABLE_REPLAYS_CONSUMER:
         daemons += [
             (

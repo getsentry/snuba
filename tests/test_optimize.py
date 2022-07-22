@@ -1,17 +1,28 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Mapping
 
 import pytest
+from freezegun import freeze_time
 
-from snuba import optimize, settings, util
+from snuba import optimize, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.optimize import _get_metrics_tags, _subdivide_parts
+from snuba.optimize import (
+    JobTimeoutException,
+    _get_metrics_tags,
+    optimize_partition_runner,
+    optimize_partitions,
+)
+from snuba.optimize_scheduler import OptimizedSchedulerTimeout, OptimizeScheduler
+from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.processor import InsertBatch
-from snuba.util import Part
+from snuba.redis import redis_client
 from tests.helpers import write_processed_messages
+
+last_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
 
 test_data = [
     pytest.param(
@@ -29,7 +40,7 @@ test_data = [
             ],
             None,
         ),
-        1,
+        last_midnight + timedelta(minutes=30),
         id="errors non-parallel",
     ),
     pytest.param(
@@ -47,7 +58,9 @@ test_data = [
             ],
             None,
         ),
-        2,
+        last_midnight
+        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(minutes=30),
         id="errors parallel",
     ),
     pytest.param(
@@ -64,7 +77,7 @@ test_data = [
             ],
             None,
         ),
-        1,
+        last_midnight + timedelta(minutes=30),
         id="transactions non-parallel",
     ),
     pytest.param(
@@ -81,7 +94,9 @@ test_data = [
             ],
             None,
         ),
-        2,
+        last_midnight
+        + settings.PARALLEL_OPTIMIZE_JOB_START_TIME
+        + timedelta(minutes=30),
         id="transactions parallel",
     ),
 ]
@@ -89,14 +104,14 @@ test_data = [
 
 class TestOptimize:
     @pytest.mark.parametrize(
-        "storage_key, create_event_row_for_date, parallel",
+        "storage_key, create_event_row_for_date, current_time",
         test_data,
     )
     def test_optimize(
         self,
         storage_key: StorageKey,
         create_event_row_for_date: Callable[[datetime], InsertBatch],
-        parallel: int,
+        current_time: datetime,
     ) -> None:
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()
@@ -105,36 +120,36 @@ class TestOptimize:
         database = cluster.get_database()
 
         # no data, 0 partitions to optimize
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert parts == []
+        assert partitions == []
 
         base = datetime(1999, 12, 26)  # a sunday
         base_monday = base - timedelta(days=base.weekday())
 
-        # 1 event, 0 unoptimized parts
+        # 1 event, 0 unoptimized partitions
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert parts == []
+        assert partitions == []
 
         # 2 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
-        # 3 events in one part, 2 in another, 2 unoptimized parts
+        # 3 events in one part, 2 in another, 2 unoptimized partitions
         a_month_earlier = base_monday - timedelta(days=31)
         a_month_earlier_monday = a_month_earlier - timedelta(
             days=a_month_earlier.weekday()
@@ -145,10 +160,10 @@ class TestOptimize:
         write_processed_messages(
             storage, [create_event_row_for_date(a_month_earlier_monday)]
         )
-        parts = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert [(p.date, p.retention_days) for p in parts] == [
+        assert [(p.date, p.retention_days) for p in partitions] == [
             (base_monday, 90),
             (a_month_earlier_monday, 90),
         ]
@@ -163,15 +178,36 @@ class TestOptimize:
             )
         ] == [(a_month_earlier_monday, 90)]
 
-        optimize.optimize_partition_runner(
-            clickhouse, database, table, parts, True, parallel
+        scheduler = OptimizeScheduler(2)
+
+        tracker = OptimizedPartitionTracker(
+            redis_client=redis_client,
+            host="some-hostname.domain.com",
+            port=9000,
+            database=database,
+            table=table,
+            expire_time=datetime.now() + timedelta(minutes=10),
         )
 
-        # all parts should be optimized
-        parts = optimize.get_partitions_to_optimize(
+        tracker.update_all_partitions([part.name for part in partitions])
+        with freeze_time(current_time):
+            optimize.optimize_partition_runner(
+                clickhouse=clickhouse,
+                database=database,
+                table=table,
+                partitions=[part.name for part in partitions],
+                scheduler=scheduler,
+                tracker=tracker,
+                clickhouse_host="some-hostname.domain.com",
+            )
+
+        # all partitions should be optimized
+        partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        assert parts == []
+        assert partitions == []
+
+        tracker.delete_all_states()
 
     @pytest.mark.parametrize(
         "table,host,expected",
@@ -193,95 +229,53 @@ class TestOptimize:
     ) -> None:
         assert _get_metrics_tags(table, host) == expected
 
-    @pytest.mark.parametrize(
-        "parts,subdivisions,expected",
-        [
-            pytest.param(
-                [Part("1", datetime(2022, 3, 28), 90)],
-                2,
-                [[Part("1", datetime(2022, 3, 28), 90)], []],
-                id="one part",
-            ),
-            pytest.param(
-                [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
-                ],
-                2,
-                [
-                    [Part("1", datetime(2022, 3, 28), 90)],
-                    [Part("2", datetime(2022, 3, 21), 90)],
-                ],
-                id="two parts",
-            ),
-            pytest.param(
-                [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
-                    Part("3", datetime(2022, 3, 28), 30),
-                ],
-                2,
-                [
-                    [
-                        Part("1", datetime(2022, 3, 28), 90),
-                        Part("2", datetime(2022, 3, 21), 90),
-                    ],
-                    [Part("3", datetime(2022, 3, 28), 30)],
-                ],
-                id="three parts",
-            ),
-            pytest.param(
-                [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
-                    Part("3", datetime(2022, 3, 28), 30),
-                    Part("4", datetime(2022, 3, 21), 30),
-                ],
-                2,
-                [
-                    [
-                        Part("1", datetime(2022, 3, 28), 90),
-                        Part("2", datetime(2022, 3, 21), 90),
-                    ],
-                    [
-                        Part("3", datetime(2022, 3, 28), 30),
-                        Part("4", datetime(2022, 3, 21), 30),
-                    ],
-                ],
-                id="four parts",
-            ),
-            pytest.param(
-                [
-                    Part("1", datetime(2022, 3, 28), 90),
-                    Part("2", datetime(2022, 3, 21), 90),
-                    Part("3", datetime(2022, 3, 28), 30),
-                    Part("4", datetime(2022, 3, 21), 30),
-                    Part("5", datetime(2022, 3, 14), 90),
-                    Part("6", datetime(2022, 3, 7), 90),
-                ],
-                3,
-                [
-                    [
-                        Part("1", datetime(2022, 3, 28), 90),
-                        Part("4", datetime(2022, 3, 21), 30),
-                    ],
-                    [
-                        Part("3", datetime(2022, 3, 28), 30),
-                        Part("5", datetime(2022, 3, 14), 90),
-                    ],
-                    [
-                        Part("2", datetime(2022, 3, 21), 90),
-                        Part("6", datetime(2022, 3, 7), 90),
-                    ],
-                ],
-                id="six parts",
-            ),
-        ],
+
+def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
+    """
+    Tests that a JobTimeoutException is raised when a cutoff time is reached.
+    """
+    storage = get_writable_storage(StorageKey.ERRORS)
+    cluster = storage.get_cluster()
+    clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+    table = storage.get_table_writer().get_schema().get_local_table_name()
+    database = cluster.get_database()
+
+    tracker = OptimizedPartitionTracker(
+        redis_client=redis_client,
+        host="some-hostname.domain.com",
+        port=9000,
+        database=database,
+        table=table,
+        expire_time=datetime.now() + timedelta(minutes=10),
     )
-    def test_subdivide_parts(
-        self,
-        parts: Sequence[util.Part],
-        subdivisions: int,
-        expected: Sequence[Sequence[util.Part]],
-    ) -> None:
-        assert _subdivide_parts(parts, subdivisions) == expected
+
+    dummy_partition = "(90,'2022-03-28')"
+    tracker.update_all_partitions([dummy_partition])
+    scheduler = OptimizeScheduler(2)
+
+    with pytest.raises(JobTimeoutException):
+        optimize_partitions(
+            clickhouse=clickhouse_pool,
+            database=database,
+            table=table,
+            partitions=[dummy_partition],
+            cutoff_time=datetime.now(),
+            tracker=tracker,
+            clickhouse_host="some-hostname.domain.com",
+        )
+
+    with freeze_time(
+        last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(minutes=15)
+    ):
+        with pytest.raises(OptimizedSchedulerTimeout):
+            optimize_partition_runner(
+                clickhouse=clickhouse_pool,
+                database=database,
+                table=table,
+                partitions=[dummy_partition],
+                scheduler=scheduler,
+                tracker=tracker,
+                clickhouse_host="some-hostname.domain.com",
+            )
+
+    tracker.delete_all_states()

@@ -25,6 +25,7 @@ columns = ColumnSet(
             Array(UUID()),
         ),  # TODO: create bloom filter index / materialize column
         ("title", String(Modifiers(readonly=True))),
+        ("url", String()),
         ### common sentry event columns
         ("project_id", UInt(64)),
         # release/environment info
