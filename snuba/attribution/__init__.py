@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from snuba import environment
@@ -8,7 +9,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from .appid import AppID
 
 metrics = MetricsWrapper(environment.metrics, "snuba.attribution")
-
+logger = logging.getLogger("snuba.attribution")
 
 DEFAULT_APPID = AppID("default", "sns", datetime(2022, 3, 24))
 INVALID_APPID = AppID("invalid", "sns", datetime(2022, 3, 25))

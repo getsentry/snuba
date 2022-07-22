@@ -4,7 +4,11 @@ import sentry_sdk
 from sentry_sdk import Hub
 
 from snuba import environment, settings, state
-from snuba.attribution.log import AttributionData, QueryAttributionData, log_attribution
+from snuba.attribution.log import (
+    AttributionData,
+    QueryAttributionData,
+    record_attribution,
+)
 from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
@@ -41,11 +45,15 @@ def _record_timer_metrics(
 def _record_attribution_metrics(
     request: Request, query_metadata: SnubaQueryMetadata, extra_data: Mapping[str, Any]
 ) -> None:
+    timing_data = query_metadata.timer.for_json()
     attr_data = AttributionData(
         app_id=request.attribution_info.app_id,
         referrer=request.referrer,
+        request_id=request.id,
         dataset=query_metadata.dataset,
         entity=query_metadata.entity,
+        timestamp=timing_data["timestamp"],
+        duration_ms=timing_data["duration_ms"],
         queries=[],
     )
     for q in query_metadata.query_list:
@@ -58,7 +66,7 @@ def _record_attribution_metrics(
         )
         attr_data.queries.append(attr_query)
 
-    log_attribution(attr_data)
+    record_attribution(attr_data)
 
 
 def record_query(

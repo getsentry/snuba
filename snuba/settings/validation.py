@@ -45,6 +45,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "generic-metrics-distributions-subscription-results",
         "snuba-dead-letter-inserts",
         "processed-profiles",
+        "snuba-attribution",
         "profiles-call-tree",
         "snuba-replay-events",
         "snuba-generic-metrics",
