@@ -19,7 +19,7 @@ isort==5.10.1
 itsdangerous==2.1.2
 Jinja2==3.1.2
 jsonschema==4.7.1
-lz4==4.0.1
+lz4==4.0.2
 Markdown==3.3.7
 MarkupSafe==2.1.1
 mywsgi==1.0.3
