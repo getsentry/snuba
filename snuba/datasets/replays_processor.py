@@ -41,7 +41,7 @@ class ReplaysProcessor(MessageProcessor):
             timestamp = datetime.utcnow()
         return timestamp
 
-def _get_url(self, replay_event: ReplayEventDict) -> Optional[str]:
+    def _get_url(self, replay_event: ReplayEventDict) -> Optional[str]:
         if "request" in replay_event:
             if "url" in replay_event["request"]:
                 return cast(str, replay_event["request"]["url"])
