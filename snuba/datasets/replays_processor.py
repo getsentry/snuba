@@ -41,16 +41,6 @@ class ReplaysProcessor(MessageProcessor):
             timestamp = datetime.utcnow()
         return timestamp
 
-    def _add_user_field_tag(
-        self, processed: Any, replay_event: ReplayEventDict
-    ) -> None:
-        if "user" not in replay_event:
-            return
-        for field in USER_FIELDS_PRECEDENCE:
-            if field in replay_event["user"]:
-                processed["user"] = replay_event["user"][field]
-                return
-
     def _get_url(self, replay_event: ReplayEventDict) -> Optional[str]:
         if "request" in replay_event:
             if "url" in replay_event["request"]:
@@ -61,24 +51,34 @@ class ReplaysProcessor(MessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         processed["replay_id"] = str(uuid.UUID(replay_event["replay_id"]))
-        processed["sequence_id"] = replay_event["sequence_id"]
-        processed["trace_ids"] = replay_event.get("trace_ids")
+        processed["segment_id"] = replay_event["segment_id"]
+        processed["trace_ids"] = replay_event.get("trace_ids") or []
         processed["timestamp"] = self.__extract_timestamp(
             replay_event["timestamp"],
         )
         processed["release"] = replay_event.get("release")
         processed["environment"] = replay_event.get("environment")
         processed["dist"] = replay_event.get("dist")
-        processed["url"] = self._get_url(replay_event)
+        # processed["url"] = self._get_url(replay_event) TODO: add this in once we have the url column
         processed["platform"] = _unicodify(replay_event["platform"])
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         tags: MutableMapping[str, Any] = _as_dict_safe(replay_event.get("tags", None))
-        processed["title"] = tags.get("transaction")
+        if "transaction" in tags:
+            processed["title"] = tags["transaction"]
         tags.pop("transaction", None)
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+
+    def _add_user_column(
+        self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
+    ) -> None:
+        # TODO: this could be optimized / removed
+        for field in USER_FIELDS_PRECEDENCE:
+            if field in replay_event["user"] and replay_event["user"][field]:
+                processed["user"] = replay_event["user"][field]
+                return
 
     def _process_user(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -97,7 +97,7 @@ class ReplaysProcessor(MessageProcessor):
             elif ip_address.version == 6:
                 processed["ip_address_v6"] = str(ip_address)
 
-        self._add_user_field_tag(processed, replay_event)
+        self._add_user_column(processed, replay_event)
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -141,9 +141,9 @@ class ReplaysProcessor(MessageProcessor):
 
             # # the following operation modifies the event_dict and is therefore *not* order-independent
             self._process_user(processed, replay_event)
-
             return InsertBatch([processed], None)
         except Exception as e:
+            raise e
             metrics.increment("consumer_error")
             capture_exception(e)
             return None

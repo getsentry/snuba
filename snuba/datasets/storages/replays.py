@@ -18,7 +18,7 @@ DIST_TABLE_NAME = "replays_dist"
 columns = ColumnSet(
     [
         ("replay_id", UUID()),
-        ("sequence_id", UInt(16)),
+        ("segment_id", UInt(16)),
         ("timestamp", DateTime()),
         (
             "trace_ids",

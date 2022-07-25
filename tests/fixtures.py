@@ -292,7 +292,7 @@ def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
         "payload": {
             "type": "replay_event",
             "replay_id": replay_id,
-            "sequence_id": 0,
+            "segment_id": 0,
             "tags": {
                 "customtag": "is_set",
                 "transaction": "/organizations/:orgId/issues/",
