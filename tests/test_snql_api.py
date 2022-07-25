@@ -594,7 +594,9 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    def test_app_id_attribution(self) -> None:
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.attribution.log.kfk")
+    def test_app_id_attribution(self, record_kfk: Any) -> None:
         state.set_config("use_attribution", 1)
         response = self.post(
             "/events/snql",
@@ -620,6 +622,18 @@ class TestSnQLApi(BaseApiTest):
         assert metric_calls[0].tags["dataset"] == "events"
         assert metric_calls[0].tags["entity"] == "events"
         assert metric_calls[0].tags["table"].startswith("errors")
+
+        record_kfk.produce.assert_called_once()
+        topic, raw_data = record_kfk.produce.call_args.args
+        assert topic == "snuba-attribution"
+        data = json.loads(raw_data)
+        assert data["app_id"] == "default"
+        assert data["referrer"] == "test"
+        assert data["dataset"] == "events"
+        assert data["entity"] == "events"
+        assert len(data["queries"]) == 1
+        assert data["queries"][0]["table"].startswith("errors_")
+        assert data["queries"][0]["bytes_scanned"] > 0
 
     def test_timing_metrics_tags(self) -> None:
         response = self.post(

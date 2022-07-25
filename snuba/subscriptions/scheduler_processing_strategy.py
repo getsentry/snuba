@@ -270,25 +270,13 @@ class TickBuffer(ProcessingStrategy[Tick]):
         # Periodically record the legnth of each buffer
         self.__record_tick_buffer_length()
 
-        # If there are any empty buffers, we can't submit anything yet.
-        # Otherwise if all the buffers have ticks then we look for the partition/s
-        # with the earliest tick (i.e. the tick with the earliest upper timestamp
-        # interval value) and submit it to the next step.
-        if len(self.__buffers[tick_partition]) > 1:
-            return
-
         while all(len(buffer) > 0 for buffer in self.__buffers.values()):
             earliest_ts = message.payload.timestamps.upper
             assert message.payload.partition is not None
             earliest_ts_partitions = {message.payload.partition}
 
             for partition_index in self.__buffers:
-                if partition_index == message.payload.partition:
-                    continue
-
                 buffer = self.__buffers[partition_index]
-                if len(buffer) == 0:
-                    return
 
                 tick = buffer[0].payload
 

@@ -17,7 +17,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 raw_columns: Sequence[Column[Modifiers]] = [
     Column("replay_id", UUID()),
-    Column("segment_id", UInt(16)),
+    Column("segment_id", UInt(16, Modifiers(nullable=True))),
     Column("trace_ids", Array(UUID())),
     Column(
         "_trace_ids_hashed",

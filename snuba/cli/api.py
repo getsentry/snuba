@@ -3,6 +3,7 @@ from typing import Optional, Union
 
 import click
 
+from snuba.attribution.log import flush_attribution_producer
 from snuba.environment import setup_logging
 
 
@@ -50,9 +51,10 @@ def api(
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
 
-        mywsgi.run(
-            "snuba.web.wsgi:application",
-            f"{host}:{port}",
-            processes=processes,
-            threads=threads,
-        )
+        with flush_attribution_producer():
+            mywsgi.run(
+                "snuba.web.wsgi:application",
+                f"{host}:{port}",
+                processes=processes,
+                threads=threads,
+            )
