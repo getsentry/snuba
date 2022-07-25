@@ -1,5 +1,4 @@
-from collections import Mapping
-from typing import Any, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional
 
 import pytest
 
