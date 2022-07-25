@@ -610,6 +610,86 @@ def test_format_clickhouse_specific_query() -> None:
     assert clickhouse_query.get_sql() == expected
 
 
+sorted_test_cases = [
+    pytest.param(
+        Query(
+            Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("c2", Column("c2", None, "column2")),
+                SelectedExpression("c1", Column("c1", None, "column1")),
+                SelectedExpression("c3", Column("c3", None, "column3")),
+            ],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    BooleanFunctions.OR,
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column("c3", None, "column3"),
+                        rhs=Literal(None, "abcd"),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column("c2", None, "column2"),
+                        rhs=Literal(None, "efgh"),
+                    ),
+                ),
+                binary_condition(
+                    BooleanFunctions.OR,
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column(None, None, "c1"),
+                        rhs=Literal(None, "ijkl"),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column(None, None, "c4"),
+                        rhs=Literal(None, "mnop"),
+                    ),
+                ),
+            ),
+        ),
+        [
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3)",
+            ["FROM", "my_table"],
+            (
+                "WHERE (equals(c3, 'abcd') AND (equals(c1, 'ijkl') OR "
+                "equals(c2, 'efgh')) OR equals(c4, 'mnop'))"
+            ),
+        ],
+        (
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3) "
+            "FROM my_table "
+            "WHERE (equals(c3, 'abcd') AND (equals(c1, 'ijkl') OR "
+            "equals(c2, 'efgh')) OR equals(c4, 'mnop'))"
+        ),
+        (
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3) "
+            "FROM my_table "
+            "WHERE (equals(c3, '$S') AND (equals(c1, '$S') OR "
+            "equals(c2, '$S')) OR equals(c4, '$S'))"
+        ),
+        id="query_complex_condition",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "query, formatted_seq, formatted_str, formatted_anonymized_str", sorted_test_cases
+)
+def test_format_sorted_expressions(
+    query: Query,
+    formatted_seq: Sequence[Any],
+    formatted_str: str,
+    formatted_anonymized_str: str,
+) -> None:
+    clickhouse_query = format_query(query, sort_fields=True)
+    clickhouse_query_anonymized = format_query_anonymized(query, sort_fields=True)
+    assert clickhouse_query.get_sql() == formatted_str
+    assert clickhouse_query.structured() == formatted_seq
+    assert clickhouse_query_anonymized.get_sql() == formatted_anonymized_str
+
+
 TEST_JOIN = [
     pytest.param(
         JoinClause(

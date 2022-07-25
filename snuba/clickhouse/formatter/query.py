@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Optional, Sequence, Type, Union
 
 from snuba.clickhouse.formatter.expression import (
@@ -28,7 +29,7 @@ from snuba.query.parsing import ParsingContext
 FormattableQuery = Union[Query, CompositeQuery[Table]]
 
 
-def format_query(query: FormattableQuery) -> FormattedQuery:
+def format_query(query: FormattableQuery, sort_fields: bool = False) -> FormattedQuery:
     """
     Formats a Clickhouse Query from the AST representation into an
     intermediate structure that can either be serialized into a string
@@ -37,11 +38,17 @@ def format_query(query: FormattableQuery) -> FormattedQuery:
     This is the entry point for any type of query, whether simple or
     composite.
     """
-    return FormattedQuery(_format_query_content(query, ClickhouseExpressionFormatter))
+    return FormattedQuery(
+        _format_query_content(query, ClickhouseExpressionFormatter, sort_fields)
+    )
 
 
-def format_query_anonymized(query: FormattableQuery) -> FormattedQuery:
-    return FormattedQuery(_format_query_content(query, ExpressionFormatterAnonymized))
+def format_query_anonymized(
+    query: FormattableQuery, sort_fields: bool = False
+) -> FormattedQuery:
+    return FormattedQuery(
+        _format_query_content(query, ExpressionFormatterAnonymized, sort_fields)
+    )
 
 
 class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
@@ -87,6 +94,7 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
 def _format_query_content(
     query: FormattableQuery,
     expression_formatter_type: Type[ExpressionFormatterBase],
+    sort_fields: bool = False,
 ) -> Sequence[FormattedNode]:
     """
     Produces the content of the formatted query.
@@ -101,7 +109,7 @@ def _format_query_content(
     return [
         v
         for v in [
-            _format_select(query, formatter),
+            _format_select(query, formatter, sort_fields),
             PaddingNode(
                 "FROM",
                 DataSourceFormatter(expression_formatter_type).visit(
@@ -109,12 +117,18 @@ def _format_query_content(
                 ),
             ),
             _format_arrayjoin(query, formatter),
-            _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
+            _build_optional_string_node(
+                "PREWHERE", query.get_prewhere_ast(), formatter, sort_fields
+            )
             if isinstance(query, Query)
             else None,
-            _build_optional_string_node("WHERE", query.get_condition(), formatter),
+            _build_optional_string_node(
+                "WHERE", query.get_condition(), formatter, sort_fields
+            ),
             _format_groupby(query, formatter),
-            _build_optional_string_node("HAVING", query.get_having(), formatter),
+            _build_optional_string_node(
+                "HAVING", query.get_having(), formatter, sort_fields
+            ),
             _format_orderby(query, formatter),
             _format_limitby(query, formatter),
             _format_limit(query, formatter),
@@ -124,11 +138,13 @@ def _format_query_content(
 
 
 def _format_select(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
+    query: AbstractQuery, formatter: ExpressionVisitor[str], sort_fields: bool = False
 ) -> StringNode:
     selected_cols = [
         e.expression.accept(formatter) for e in query.get_selected_columns()
     ]
+    if sort_fields:
+        selected_cols = sorted(selected_cols)
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
 
@@ -136,12 +152,18 @@ def _build_optional_string_node(
     name: str,
     expression: Optional[Expression],
     formatter: ExpressionVisitor[str],
+    sort_fields: bool = False,
 ) -> Optional[StringNode]:
-    return (
-        StringNode(f"{name} {expression.accept(formatter)}")
-        if expression is not None
-        else None
-    )
+    if expression is not None:
+        expression_string = expression.accept(formatter)
+        # Sorting will not work if sub-queries in expressions becomes supported in the future
+        if sort_fields:
+            expression_list = re.split("(?=AND)|(?=OR)", expression_string)
+            expression_list[1:] = sorted(expression_list[1:])
+            expression_string = "".join(expression_list)
+        return StringNode(f"{name} {expression_string}")
+    else:
+        return None
 
 
 def _format_groupby(
