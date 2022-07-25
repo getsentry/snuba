@@ -65,7 +65,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=raw_columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.REPLAYS,
-                    order_by="(project_id, toStartOfDay(timestamp), cityHash64(replay_id), timestamp)",
+                    order_by="(project_id, toStartOfDay(timestamp), cityHash64(replay_id))",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
                     ttl="timestamp + toIntervalDay(retention_days)",
