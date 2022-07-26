@@ -6,6 +6,7 @@ confluent-kafka==1.7.0
 datadog==0.44.0
 flake8==4.0.1
 Flask==2.1.2
+future==0.18.2
 jsonschema==4.7.1
 Markdown==3.3.7
 mywsgi==1.0.3
