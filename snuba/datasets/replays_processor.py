@@ -33,7 +33,7 @@ ReplayEventDict = Mapping[Any, Any]
 RetentionDays = int
 
 
-USER_FIELDS_PRECEDENCE = ("id", "username", "email", "ip_address")
+USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
 class ReplaysProcessor(MessageProcessor):
@@ -74,12 +74,15 @@ class ReplaysProcessor(MessageProcessor):
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
     def _add_user_column(
-        self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
+        self,
+        processed: MutableMapping[str, Any],
+        user_data: MutableMapping[str, Any],
     ) -> None:
         # TODO: this could be optimized / removed
+
         for field in USER_FIELDS_PRECEDENCE:
-            if field in replay_event["user"] and replay_event["user"][field]:
-                processed["user"] = replay_event["user"][field]
+            if field in user_data and user_data[field]:
+                processed["user"] = user_data[field]
                 return
 
     def _process_user(
@@ -99,7 +102,7 @@ class ReplaysProcessor(MessageProcessor):
             elif ip_address.version == 6:
                 processed["ip_address_v6"] = str(ip_address)
 
-        self._add_user_column(processed, replay_event)
+        self._add_user_column(processed, user_data)
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
