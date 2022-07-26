@@ -117,8 +117,11 @@ def build_result_transformer(
 
 
 class Reader(ABC):
-    def __init__(self, cache_partition_id: Optional[str]) -> None:
+    def __init__(
+        self, cache_partition_id: Optional[str], query_settings_prefix: Optional[str]
+    ) -> None:
         self.__cache_partition_id = cache_partition_id
+        self.__query_settings_prefix = query_settings_prefix
 
     @abstractmethod
     def execute(
@@ -144,3 +147,9 @@ class Reader(ABC):
         should go away.
         """
         return self.__cache_partition_id
+
+    def get_query_settings_prefix(self) -> Optional[str]:
+        """
+        Return the query settings prefix if there is one.
+        """
+        return self.__query_settings_prefix

@@ -553,7 +553,7 @@ def _get_cache_wait_timeout(
 
 
 def _get_query_settings_from_config(
-    cache_partition: Optional[str],
+    override_prefix: Optional[str],
 ) -> MutableMapping[str, Any]:
     """
     Helper function to get the query settings from the config.
@@ -572,13 +572,10 @@ def _get_query_settings_from_config(
         if k.startswith("query_settings/")
     }
 
-    if not cache_partition or cache_partition == DEFAULT_CACHE_PARTITION_ID:
-        return clickhouse_query_settings
-
-    # Populate the query settings with the cache partitions overrides
-    for k, v in all_confs.items():
-        if k.startswith(f"{cache_partition}/query_settings/"):
-            clickhouse_query_settings[k.split("/", 2)[2]] = v
+    if override_prefix:
+        for k, v in all_confs.items():
+            if k.startswith(f"{override_prefix}/query_settings/"):
+                clickhouse_query_settings[k.split("/", 2)[2]] = v
 
     return clickhouse_query_settings
 
@@ -605,7 +602,7 @@ def raw_query(
     query. If this function ends up depending on the dataset, something is wrong.
     """
     clickhouse_query_settings = _get_query_settings_from_config(
-        reader.cache_partition_id
+        reader.get_query_settings_prefix()
     )
 
     timer.mark("get_configs")
