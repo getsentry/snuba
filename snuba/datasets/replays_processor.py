@@ -158,7 +158,6 @@ class ReplaysProcessor(MessageProcessor):
             self._process_event_hash(processed, replay_event)
             return InsertBatch([processed], None)
         except Exception as e:
-            raise e
             metrics.increment("consumer_error")
             capture_exception(e)
             return None
