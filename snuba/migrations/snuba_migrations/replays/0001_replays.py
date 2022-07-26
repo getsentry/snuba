@@ -18,7 +18,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 raw_columns: Sequence[Column[Modifiers]] = [
     Column("replay_id", UUID()),  # the id of the encompassing replay
     Column(
-        "event_hash", UInt(64)
+        "event_hash", UUID()
     ),  # a hash that individually identifies a unique update within the replay
     Column("segment_id", UInt(16, Modifiers(nullable=True))),
     Column("trace_ids", Array(UUID())),
