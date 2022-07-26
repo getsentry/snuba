@@ -23,7 +23,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.REPLAYS,
                 table_name="replays_local",
-                column=Column("url", String(Modifiers(nullable=False))),
+                column=Column("url", String(Modifiers(nullable=False, default=""))),
             )
         ]
 
@@ -41,6 +41,6 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.REPLAYS,
                 table_name="replays_dist",
-                column=Column("url", String(Modifiers(nullable=False))),
+                column=Column("url", String(Modifiers(nullable=False, default=""))),
             )
         ]
