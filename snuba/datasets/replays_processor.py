@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime
+from hashlib import md5
 from typing import Any, Mapping, MutableMapping, Optional, cast
 
 from snuba import environment
@@ -112,6 +113,11 @@ class ReplaysProcessor(MessageProcessor):
         processed["partition"] = metadata.partition
         processed["offset"] = metadata.offset
 
+    def _process_event_hash(
+        self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
+    ) -> None:
+        processed["event_hash"] = md5(replay_event["segment_id"]).hexdigest()
+
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -141,6 +147,7 @@ class ReplaysProcessor(MessageProcessor):
 
             # # the following operation modifies the event_dict and is therefore *not* order-independent
             self._process_user(processed, replay_event)
+            self._process_event_hash(processed, replay_event)
             return InsertBatch([processed], None)
         except Exception as e:
             raise e

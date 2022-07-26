@@ -18,6 +18,7 @@ DIST_TABLE_NAME = "replays_dist"
 columns = ColumnSet(
     [
         ("replay_id", UUID()),
+        ("event_hash", UInt(64)),
         ("segment_id", UInt(16, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
         (
@@ -37,7 +38,6 @@ columns = ColumnSet(
         ("ip_address_v6", IPv6(Modifiers(nullable=True))),
         # user columns
         ("user", String()),
-        ("user_hash", UInt(64, Modifiers(readonly=True))),
         ("user_id", String(Modifiers(nullable=True))),
         ("user_name", String(Modifiers(nullable=True))),
         ("user_email", String(Modifiers(nullable=True))),
