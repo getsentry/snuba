@@ -5,16 +5,16 @@ from snuba.web.db_query import _get_cache_partition, _get_cache_wait_timeout
 
 def test_cache_partition() -> None:
     pool = ClickhousePool("localhost", 9000, "", "", "")
-    reader1 = NativeDriverReader(None, pool)
-    reader2 = NativeDriverReader(None, pool)
+    reader1 = NativeDriverReader(None, pool, None)
+    reader2 = NativeDriverReader(None, pool, None)
 
     default_cache = _get_cache_partition(reader1)
     another_default_cache = _get_cache_partition(reader2)
 
     assert id(default_cache) == id(another_default_cache)
 
-    reader3 = NativeDriverReader("non_default", pool)
-    reader4 = NativeDriverReader("non_default", pool)
+    reader3 = NativeDriverReader("non_default", pool, None)
+    reader4 = NativeDriverReader("non_default", pool, None)
     nondefault_cache = _get_cache_partition(reader3)
     another_nondefault_cache = _get_cache_partition(reader4)
 
@@ -24,9 +24,9 @@ def test_cache_partition() -> None:
 
 def test_cache_wait_timeout() -> None:
     pool = ClickhousePool("localhost", 9000, "", "", "")
-    default_reader = NativeDriverReader(None, pool)
-    tiger_errors_reader = NativeDriverReader("tiger_errors", pool)
-    tiger_transactions_reader = NativeDriverReader("tiger_transactions", pool)
+    default_reader = NativeDriverReader(None, pool, None)
+    tiger_errors_reader = NativeDriverReader("tiger_errors", pool, None)
+    tiger_transactions_reader = NativeDriverReader("tiger_transactions", pool, None)
 
     query_settings = {"max_execution_time": 30}
     assert _get_cache_wait_timeout(query_settings, default_reader) == 30
