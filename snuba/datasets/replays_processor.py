@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from datetime import datetime
@@ -133,7 +134,7 @@ class ReplaysProcessor(MessageProcessor):
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         try:
-            replay_event = message["payload"]
+            replay_event = json.loads(bytes(message["payload"]))
             try:
                 retention_days = enforce_retention(
                     message["retention_days"],

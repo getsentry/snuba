@@ -35,7 +35,7 @@ class Topic(Enum):
     QUERYLOG = "snuba-queries"
     PROFILES = "processed-profiles"
     PROFILES_FUNCTIONS = "profiles-call-tree"
-    REPLAYEVENTS = "snuba-replay-events"
+    REPLAYEVENTS = "ingest-replay-events"
     GENERIC_METRICS = "snuba-generic-metrics"
     GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
     GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = (
