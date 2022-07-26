@@ -13,7 +13,7 @@ from snuba.processor import InsertBatch
 @dataclass
 class ReplayEvent:
     replay_id: str
-    sequence_id: int
+    segment_id: int
     trace_ids: list[str]
     timestamp: float
     platform: str
@@ -38,7 +38,7 @@ class ReplayEvent:
             "replay_id": self.replay_id,
             "message": "/organizations/:orgId/issues/",
             "retention_days": 23,
-            "sequence_id": self.sequence_id,
+            "segment_id": self.segment_id,
             "trace_ids": self.trace_ids,
             "data": {
                 "replay_id": self.replay_id,
@@ -78,7 +78,7 @@ class ReplayEvent:
         ret = {
             "project_id": 1,
             "replay_id": str(uuid.UUID(self.replay_id)),
-            "sequence_id": self.sequence_id,
+            "segment_id": self.segment_id,
             "trace_ids": self.trace_ids,
             "timestamp": datetime.utcfromtimestamp(self.timestamp),
             "platform": self.platform,
@@ -118,7 +118,7 @@ class TestReplaysProcessor:
                 "36e980a9-c602-4cde-9f5d-089f15b83b5f",
                 "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
             ],
-            sequence_id=0,
+            segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             platform="python",
             dist="",

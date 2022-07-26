@@ -71,7 +71,7 @@ class ReplaysProcessor(MessageProcessor):
         processed["replay_id"] = str(uuid.UUID(event_dict["replay_id"]))
         processed["project_id"] = event_dict["project_id"]
 
-        processed["sequence_id"] = event_dict["sequence_id"]
+        processed["segment_id"] = event_dict["segment_id"]
         processed["trace_ids"] = event_dict["trace_ids"]
 
         processed["timestamp"] = self.__extract_timestamp(
