@@ -1,2 +1,10 @@
-snuba-sdk==0.1.5
+black==22.3.0
+coverage==6.4.1
+flake8==4.0.1
 freezegun==1.2.1
+isort==5.10.1
+mypy==0.812
+pytest-cov==3.0.0
+pytest-watch==4.2.0
+pytest==7.1.2
+snuba-sdk==0.1.5
