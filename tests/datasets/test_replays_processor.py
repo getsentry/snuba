@@ -17,6 +17,7 @@ class ReplayEvent:
     replay_id: str
     segment_id: int
     trace_ids: list[str]
+    error_event_ids: list[str]
     timestamp: float
     platform: str
     environment: str
@@ -44,6 +45,7 @@ class ReplayEvent:
                 "segment_id": self.segment_id,
                 "tags": {"customtag": "is_set", "transaction": self.title},
                 "trace_ids": self.trace_ids,
+                "error_event_ids": self.error_event_ids,
                 "dist": self.dist,
                 "platform": self.platform,
                 "timestamp": self.timestamp,
@@ -101,6 +103,7 @@ class ReplayEvent:
             "event_hash": event_hash,
             "segment_id": self.segment_id,
             "trace_ids": self.trace_ids,
+            "error_event_ids": self.error_event_ids,
             "timestamp": datetime.utcfromtimestamp(self.timestamp),
             "platform": self.platform,
             "environment": self.environment,
@@ -144,6 +147,10 @@ class TestReplaysProcessor:
                 "36e980a9-c602-4cde-9f5d-089f15b83b5f",
                 "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
             ],
+            error_event_ids=[
+                "36e980a9-c602-4cde-9f5d-089f15b83b5f",
+                "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
+            ],
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             platform="python",
@@ -171,6 +178,7 @@ class TestReplaysProcessor:
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             title=None,
             trace_ids=[],
+            error_event_ids=[],
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             platform="python",
