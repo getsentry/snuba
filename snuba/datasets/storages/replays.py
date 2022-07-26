@@ -18,7 +18,7 @@ DIST_TABLE_NAME = "replays_dist"
 columns = ColumnSet(
     [
         ("replay_id", UUID()),
-        ("event_hash", UInt(64)),
+        ("event_hash", UUID()),
         ("segment_id", UInt(16, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
         (
