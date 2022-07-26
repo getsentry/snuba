@@ -3,11 +3,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from hashlib import md5
 from typing import Any, Mapping
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.replays_processor import ReplaysProcessor
 from snuba.processor import InsertBatch
+from snuba.util import force_bytes
 
 
 @dataclass
@@ -88,9 +90,15 @@ class ReplayEvent:
         return None
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
+
+        segment_id_bytes = force_bytes(str((self.segment_id)))
+        segment_hash = md5(segment_id_bytes).hexdigest()
+        event_hash = str(uuid.UUID(segment_hash))
+
         ret = {
             "project_id": 1,
             "replay_id": str(uuid.UUID(self.replay_id)),
+            "event_hash": event_hash,
             "segment_id": self.segment_id,
             "trace_ids": self.trace_ids,
             "timestamp": datetime.utcfromtimestamp(self.timestamp),

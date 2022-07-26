@@ -21,6 +21,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
+from snuba.util import force_bytes
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,14 @@ class ReplaysProcessor(MessageProcessor):
     def _process_event_hash(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
-        processed["event_hash"] = md5(replay_event["segment_id"]).hexdigest()
+        # event_hash is used to uniquely identify a row within a replay
+        # for our segment updates we'll simply hash the segment_id
+        # for future additions, we'll use whatever unique identifier (e.g. event_id)
+        # as the input to the hash
+
+        segment_id_bytes = force_bytes(str((replay_event["segment_id"])))
+        segment_hash = md5(segment_id_bytes).hexdigest()
+        processed["event_hash"] = str(uuid.UUID(segment_hash))
 
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
