@@ -20,7 +20,6 @@ class TestReplaysApi(BaseApiTest):
         self.replay_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad05")
         self.event = get_replay_event(replay_id=str(self.replay_id))
         self.project_id = self.event["project_id"]
-        self.org_id = self.event["organization_id"]
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
