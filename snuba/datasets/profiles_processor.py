@@ -35,7 +35,7 @@ class ProfilesMessageProcessor(MessageProcessor):
                 "device_os_build_number": message.get("device_os_build_number"),
                 "device_os_name": message["device_os_name"],
                 "device_os_version": message["device_os_version"],
-                "architecture": message.get("architecture"),
+                "architecture": message.get("architecture", "unknown"),
                 "duration_ns": message["duration_ns"],
                 "environment": message.get("environment"),
                 "platform": message["platform"],
