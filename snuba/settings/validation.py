@@ -47,7 +47,6 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "processed-profiles",
         "snuba-attribution",
         "profiles-call-tree",
-        "snuba-replay-events",
         "ingest-replay-events",
         "snuba-generic-metrics",
         "snuba-generic-metrics-sets-commit-log",
