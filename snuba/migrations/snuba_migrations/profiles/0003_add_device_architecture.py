@@ -16,7 +16,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="profiles_local",
                 column=Column(
                     "architecture",
-                    String(Modifiers(low_cardinality=True, nullable=True)),
+                    String(Modifiers(low_cardinality=True, default="'unknown'")),
                 ),
                 after="device_os_version",
             )
