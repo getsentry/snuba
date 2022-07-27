@@ -55,7 +55,6 @@ def test_executor_consumer() -> None:
     """
     End to end integration test
     """
-    state.set_config("subscription_mode_events", "new")
     admin_client = AdminClient(get_default_kafka_configuration())
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
     create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS])
@@ -218,7 +217,6 @@ def generate_message(
 
 
 def test_execute_query_strategy() -> None:
-    state.set_config("subscription_mode_events", "new")
     next_step = mock.Mock()
 
     strategy = ExecuteQuery(
@@ -252,7 +250,6 @@ def test_execute_query_strategy() -> None:
 
 
 def test_too_many_concurrent_queries() -> None:
-    state.set_config("subscription_mode_events", "new")
     state.set_config("executor_queue_size_factor", 1)
 
     strategy = ExecuteQuery(
@@ -277,8 +274,6 @@ def test_too_many_concurrent_queries() -> None:
 
 
 def test_skip_execution_for_entity() -> None:
-    state.set_config("subscription_mode_metrics_sets", "new")
-    state.set_config("subscription_mode_metrics_counter", "new")
     metrics = TestingMetricsBackend()
 
     strategy = ExecuteQuery(
@@ -307,7 +302,6 @@ def test_skip_execution_for_entity() -> None:
 
 
 def test_produce_result() -> None:
-    state.set_config("subscription_mode_events", "new")
     epoch = datetime(1970, 1, 1)
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
@@ -376,7 +370,6 @@ def test_produce_result() -> None:
 
 
 def test_execute_and_produce_result() -> None:
-    state.set_config("subscription_mode_events", "new")
     scheduled_topic = Topic("scheduled-subscriptions-events")
     result_topic = Topic("events-subscriptions-results")
     clock = TestingClock()

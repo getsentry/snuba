@@ -10,6 +10,7 @@ from snuba import settings
 from snuba.datasets.events_processor_base import InsertEvent
 
 PROJECT_ID = 70156
+ORG_ID = 1123
 
 
 def get_raw_event() -> InsertEvent:
@@ -268,6 +269,67 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
                     "exclusive_time": 1.2,
                 }
             ],
+        },
+    }
+
+
+def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
+    replay_id = (
+        replay_id if replay_id else str(uuid.UUID("e5e062bf2e1d4afd96fd2f90b6770431"))
+    )
+    now = (
+        datetime.utcnow()
+        .replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+        .timestamp()
+    )
+
+    return {
+        "type": "replay_event",
+        "start_time": now,
+        "replay_id": replay_id,
+        "project_id": 1,
+        "retention_days": 30,
+        "payload": {
+            "type": "replay_event",
+            "replay_id": replay_id,
+            "segment_id": 0,
+            "tags": {
+                "customtag": "is_set",
+                "transaction": "/organizations/:orgId/issues/",
+            },
+            "trace_ids": [
+                "36e980a9-c602-4cde-9f5d-089f15b83b5f",
+                "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
+            ],
+            "dist": "",
+            "platform": "python",
+            "timestamp": now,
+            "environment": "prod",
+            "release": "34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+            "user": {
+                "id": "232",
+                "username": "me",
+                "email": "test@test.com",
+                "ip_address": "127.0.0.1",
+            },
+            "sdk": {
+                "name": "sentry.python",
+                "version": "7",
+            },
+            "contexts": {
+                "trace": {
+                    "op": "pageload",
+                    "span_id": "affa5649681a1eeb",
+                    "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
+                }
+            },
+            "request": {
+                "url": "http://localhost:3000/",
+                "headers": {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+                },
+            },
+            "extra": {},
         },
     }
 

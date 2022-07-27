@@ -16,8 +16,11 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 raw_columns: Sequence[Column[Modifiers]] = [
-    Column("replay_id", UUID()),
-    Column("sequence_id", UInt(16)),
+    Column("replay_id", UUID()),  # the id of the encompassing replay
+    Column(
+        "event_hash", UUID()
+    ),  # a hash that individually identifies a unique update within the replay
+    Column("segment_id", UInt(16, Modifiers(nullable=True))),
     Column("trace_ids", Array(UUID())),
     Column(
         "_trace_ids_hashed",
@@ -39,7 +42,6 @@ raw_columns: Sequence[Column[Modifiers]] = [
     Column("ip_address_v6", IPv6(Modifiers(nullable=True))),
     # user columns
     Column("user", String()),
-    Column("user_hash", UInt(64)),
     Column("user_id", String(Modifiers(nullable=True))),
     Column("user_name", String(Modifiers(nullable=True))),
     Column("user_email", String(Modifiers(nullable=True))),
@@ -65,7 +67,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=raw_columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.REPLAYS,
-                    order_by="(project_id, toStartOfDay(timestamp), cityHash64(replay_id), sequence_id)",
+                    order_by="(project_id, toStartOfDay(timestamp), cityHash64(replay_id), event_hash)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
                     ttl="timestamp + toIntervalDay(retention_days)",
@@ -97,7 +99,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=raw_columns,
                 engine=table_engines.Distributed(
                     local_table_name="replays_local",
-                    sharding_key="cityHash64(toString(replay_id))",
+                    sharding_key="cityHash64(replay_id)",
                 ),
             ),
         ]
