@@ -30,3 +30,5 @@ ENFORCE_RETENTION = True
 
 # Ignore optimize job cut off time for tests
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(days=1)
+
+OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
