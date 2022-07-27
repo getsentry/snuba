@@ -48,12 +48,14 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-attribution",
         "profiles-call-tree",
         "snuba-replay-events",
+        "ingest-replay-events",
         "snuba-generic-metrics",
         "snuba-generic-metrics-sets-commit-log",
         "snuba-generic-metrics-distributions-commit-log",
         "snuba-dead-letter-generic-metrics",
         "snuba-dead-letter-sessions",
         "snuba-dead-letter-metrics",
+        "snuba-dead-letter-replays",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
