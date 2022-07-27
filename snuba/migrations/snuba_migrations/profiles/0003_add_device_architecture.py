@@ -24,7 +24,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(
+            operations.DropColumn(
                 storage_set=StorageSetKey.PROFILES,
                 table_name="profiles_local",
                 column_name="architecture",
