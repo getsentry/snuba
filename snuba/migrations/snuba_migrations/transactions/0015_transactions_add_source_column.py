@@ -8,7 +8,9 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Add source column required for ...
+    The source column is required to query for transaction events
+    in the transaction summary when the transaction name has been
+    redacted in metrics.
     """
 
     blocking = False
