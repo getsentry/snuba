@@ -240,6 +240,7 @@ class ProfilesLoader(DirectoryLoader):
         return [
             "0001_profiles",
             "0002_disable_vertical_merge_algorithm",
+            "0003_add_device_architecture",
         ]
 
 
