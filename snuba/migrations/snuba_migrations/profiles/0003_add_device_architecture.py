@@ -32,7 +32,23 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return []
+        return [
+            operations.AddColumn(
+                storage_set=StorageSetKey.PROFILES,
+                table_name="profiles_dist",
+                column=Column(
+                    "architecture",
+                    String(Modifiers(low_cardinality=True, default="'unknown'")),
+                ),
+                after="device_os_version",
+            )
+        ]
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return []
+        return [
+            operations.DropColumn(
+                storage_set=StorageSetKey.PROFILES,
+                table_name="profiles_dist",
+                column_name="architecture",
+            )
+        ]
