@@ -1,9 +1,7 @@
-import json
 from datetime import datetime
-from typing import Any, MutableMapping, Optional, Sequence
+from typing import Optional, Sequence
 
 import pytest
-from snuba_sdk.legacy import json_to_snql
 
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
@@ -232,12 +230,14 @@ def with_required(condition: Expression) -> Expression:
 
 test_data = [
     pytest.param(
-        {
-            "aggregations": [],
-            "groupby": [],
-            "selected_columns": ["col1"],
-            "conditions": [["tags_key", "IN", ["t1", "t2"]]],
-        },
+        """
+        MATCH (transactions)
+        SELECT col1
+        WHERE tags_key IN tuple('t1', 't2')
+            AND finish_ts >= toDateTime('2021-01-01T00:00:00')
+            AND finish_ts < toDateTime('2021-01-02T00:00:00')
+            AND project_id = 1
+        """,
         ClickhouseQuery(
             None,
             selected_columns=[
@@ -255,12 +255,14 @@ test_data = [
         id="no tag in select clause",
     ),  # Individual tag, no change
     pytest.param(
-        {
-            "aggregations": [],
-            "groupby": [],
-            "selected_columns": ["tags_key", "tags_value"],
-            "conditions": [["col", "IN", ["t1", "t2"]]],
-        },
+        """
+        MATCH (transactions)
+        SELECT tags_key, tags_value
+        WHERE col IN tuple('t1', 't2')
+            AND finish_ts >= toDateTime('2021-01-01T00:00:00')
+            AND finish_ts < toDateTime('2021-01-02T00:00:00')
+            AND project_id = 1
+        """,
         ClickhouseQuery(
             None,
             selected_columns=[
@@ -303,12 +305,14 @@ test_data = [
         id="tags_key and tags_value in query no filter",
     ),  # tags_key and value in select. Zip keys and columns into an array.
     pytest.param(
-        {
-            "aggregations": [],
-            "groupby": [],
-            "selected_columns": ["tags_key"],
-            "conditions": [["tags_key", "IN", ["t1"]]],
-        },
+        """
+        MATCH (transactions)
+        SELECT tags_key
+        WHERE tags_key IN tuple('t1')
+          AND finish_ts >= toDateTime('2021-01-01T00:00:00')
+          AND finish_ts < toDateTime('2021-01-02T00:00:00')
+          AND project_id = 1
+        """,
         ClickhouseQuery(
             None,
             selected_columns=[
@@ -337,12 +341,14 @@ test_data = [
         id="filter on keys only",
     ),  # Filtering tag keys. Apply arrayFilter into the arrayJoin.
     pytest.param(
-        {
-            "aggregations": [],
-            "groupby": [],
-            "selected_columns": ["tags_key", "tags_value"],
-            "conditions": [["tags_key", "IN", ["t1"]]],
-        },
+        """
+        MATCH (transactions)
+        SELECT tags_key, tags_value
+        WHERE tags_key IN tuple('t1')
+          AND finish_ts >= toDateTime('2021-01-01T00:00:00')
+          AND finish_ts < toDateTime('2021-01-02T00:00:00')
+          AND project_id = 1
+        """,
         ClickhouseQuery(
             None,
             selected_columns=[
@@ -407,14 +413,12 @@ test_data = [
 ]
 
 
-def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
+def parse_and_process(snql_query: str) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
-    snql_query = json_to_snql(query_body, "transactions")
-    body = json.loads(snql_query.snuba())
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     request = Request(
         id="a",
-        original_body=body,
+        original_body={"query": snql_query, "dataset": "transactions"},
         query=query,
         snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer="r"),
@@ -437,19 +441,10 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
 
 
 @pytest.mark.parametrize("query_body, expected_query", test_data)
-def test_tags_processor(
-    query_body: MutableMapping[str, Any], expected_query: ClickhouseQuery
-) -> None:
+def test_tags_processor(query_body: str, expected_query: ClickhouseQuery) -> None:
     """
     Tests the whole processing in some notable cases.
     """
-    # HACK until we migrate these tests to SnQL
-    # query_body["selected_columns"] = ["project_id"]
-    query_body["conditions"] += [
-        ["finish_ts", ">=", "2021-01-01T00:00:00"],
-        ["finish_ts", "<", "2021-01-02T00:00:00"],
-        ["project_id", "=", 1],
-    ]
     processed = parse_and_process(query_body)
     assert processed.get_selected_columns() == expected_query.get_selected_columns()
     assert processed.get_condition() == expected_query.get_condition()
@@ -501,17 +496,14 @@ def test_aliasing() -> None:
     and tags_value.
     """
     processed = parse_and_process(
-        {
-            "aggregations": [],
-            "groupby": [],
-            "selected_columns": ["tags_value"],
-            "conditions": [
-                ["tags_key", "IN", ["t1", "t2"]],
-                ["project_id", "=", 1],
-                ["finish_ts", ">=", "2021-01-01T00:00:00"],
-                ["finish_ts", "<", "2021-01-02T00:00:00"],
-            ],
-        }
+        """
+        MATCH (transactions)
+        SELECT tags_value
+        WHERE tags_key IN tuple('t1', 't2')
+          AND project_id = 1
+          AND finish_ts >= toDateTime('2021-01-01T00:00:00')
+          AND finish_ts < toDateTime('2021-01-02T00:00:00')
+        """
     )
     sql = format_query(processed).get_sql()
     transactions_table_name = (
