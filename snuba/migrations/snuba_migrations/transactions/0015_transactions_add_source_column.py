@@ -23,7 +23,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 column=Column(
                     "source",
                     String(
-                        Modifiers(low_cardinality=True, materialized="'transaction'")
+                        Modifiers(
+                            low_cardinality=True, materialized="transaction_source"
+                        )
                     ),
                 ),
                 after="title",
