@@ -34,6 +34,7 @@ class TransactionEvent:
     http_referer: Optional[str]
     geo: Mapping[str, str]
     status: str
+    transaction_source: Optional[str]
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
@@ -54,6 +55,7 @@ class TransactionEvent:
                     "project_id": 1,
                     "release": self.release,
                     "dist": self.dist,
+                    "transaction_info": {"source": "url"},
                     "grouping_config": {
                         "enhancements": "eJybzDhxY05qemJypZWRgaGlroGxrqHRBABbEwcC",
                         "id": "legacy:2019-03-12",
@@ -179,6 +181,7 @@ class TransactionEvent:
             "transaction_name": self.transaction_name,
             "transaction_op": self.op,
             "transaction_status": 1 if self.status == "cancelled" else 2,
+            "transaction_source": "url",
             "start_ts": start_timestamp,
             "start_ms": int(start_timestamp.microsecond / 1000),
             "finish_ts": finish_timestamp,
@@ -269,6 +272,7 @@ class TestTransactionsProcessor:
             http_method="POST",
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            transaction_source="url",
         )
         payload = message.serialize()
         # Force an invalid event
@@ -305,6 +309,7 @@ class TestTransactionsProcessor:
             http_method="POST",
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            transaction_source="url",
         )
         payload = message.serialize()
         # Force an invalid event
@@ -344,6 +349,7 @@ class TestTransactionsProcessor:
             http_method="POST",
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            transaction_source="url",
         )
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
@@ -382,6 +388,7 @@ class TestTransactionsProcessor:
             http_method="POST",
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            transaction_source="url",
         )
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)

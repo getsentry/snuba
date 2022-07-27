@@ -110,6 +110,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["transaction_name"] = _unicodify(
             event_dict["data"].get("transaction") or ""
         )
+        processed["transaction_source"] = _unicodify(
+            event_dict["data"].get("transaction_info", {}).get("source") or ""
+        )
         processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
             event_dict["data"]["start_timestamp"],
         )
