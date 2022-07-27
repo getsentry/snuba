@@ -7,7 +7,6 @@ from unittest import mock
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaProducer
 
-from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
@@ -39,7 +38,6 @@ def create_subscription() -> None:
 
 
 def test_combined_scheduler_and_executor() -> None:
-    state.set_config("subscription_mode_events", "new")
     create_subscription()
     epoch = datetime(1970, 1, 1)
 
