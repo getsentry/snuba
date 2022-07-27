@@ -30,6 +30,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-metrics",
         "outcomes",
         "ingest-sessions",
+        "ingest-replay-events",
         "snuba-queries",
         "scheduled-subscriptions-events",
         "scheduled-subscriptions-transactions",
