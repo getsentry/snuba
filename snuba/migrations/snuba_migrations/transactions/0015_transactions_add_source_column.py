@@ -35,7 +35,7 @@ class Migration(migration.ClickhouseNodeMigration):
     ) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, table_name, "transactions_source"
+                StorageSetKey.TRANSACTIONS, table_name, "transaction_source"
             ),
         ]
 
