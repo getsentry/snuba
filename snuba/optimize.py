@@ -16,14 +16,6 @@ logger = logging.getLogger("snuba.optimize")
 metrics = MetricsWrapper(environment.metrics, "optimize")
 
 
-class JobTimeoutException(Exception):
-    """
-    Signals that the job is past the cutoff time
-    """
-
-    pass
-
-
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
     return (
         {"table": table, "host": clickhouse_host}
@@ -274,10 +266,11 @@ def optimize_partitions(
 
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
-            raise JobTimeoutException(
+            logger.info(
                 f"Optimize job is running past provided cutoff time"
-                f" {cutoff_time}. Abandoning.",
+                f" {cutoff_time}. Cancelling.",
             )
+            return
 
         args = {
             "database": database,

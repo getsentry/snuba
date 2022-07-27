@@ -54,6 +54,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-dead-letter-generic-metrics",
         "snuba-dead-letter-sessions",
         "snuba-dead-letter-metrics",
+        "snuba-dead-letter-replays",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():

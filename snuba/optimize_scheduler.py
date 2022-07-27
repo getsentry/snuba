@@ -95,7 +95,10 @@ class OptimizeScheduler:
         """
         current_time = datetime.now()
         if current_time >= self.__full_job_end_time:
-            raise OptimizedSchedulerTimeout("Optimize job cutoff time exceeded")
+            raise OptimizedSchedulerTimeout(
+                f"Optimize job cutoff time exceeded "
+                f"{self.__full_job_end_time}. Abandoning"
+            )
 
         if self.__parallel == 1:
             return OptimizationSchedule(
