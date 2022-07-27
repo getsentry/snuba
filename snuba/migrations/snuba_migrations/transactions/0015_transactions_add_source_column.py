@@ -23,7 +23,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "transactions_source",
+                    "transaction_source",
                     String(Modifiers(nullable=True, low_cardinality=True)),
                 ),
                 after="title",
