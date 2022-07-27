@@ -37,6 +37,7 @@ profile_columns = EntityColumnSet(
         Column("device_os_build_number", String(Modifiers(nullable=True))),
         Column("device_os_name", String()),
         Column("device_os_version", String()),
+        Column("architecture", String(Modifiers(nullable=True))),
         Column("duration_ns", UInt(64)),
         Column("environment", String(Modifiers(nullable=True))),
         Column("platform", String()),
