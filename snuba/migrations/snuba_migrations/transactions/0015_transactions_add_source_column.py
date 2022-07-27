@@ -21,12 +21,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "source",
-                    String(
-                        Modifiers(
-                            low_cardinality=True, materialized="transaction_source"
-                        )
-                    ),
+                    "transactions_source",
+                    String(Modifiers(nullable=True, low_cardinality=True)),
                 ),
                 after="title",
             ),
@@ -36,7 +32,9 @@ class Migration(migration.ClickhouseNodeMigration):
         self, table_name: str
     ) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(StorageSetKey.TRANSACTIONS, table_name, "source"),
+            operations.DropColumn(
+                StorageSetKey.TRANSACTIONS, table_name, "transactions_source"
+            ),
         ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
