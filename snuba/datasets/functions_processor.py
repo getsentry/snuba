@@ -24,6 +24,12 @@ class FunctionsMessageProcessor(MessageProcessor):
         timestamp = datetime.utcfromtimestamp(message["timestamp"])
 
         for thread, root_frames in message["call_trees"].items():
+            try:
+                thread_id = int(thread, base=10)
+            except Exception:
+                metrics.increment("illegal_thread_id")
+                continue
+
             for root_frame in root_frames:
                 stack = [(root_frame, 0, 0)]
                 while stack:
@@ -50,7 +56,8 @@ class FunctionsMessageProcessor(MessageProcessor):
                             "retention_days": message["retention_days"],
                             "durations": [frame["duration_ns"]],
                             "profile_id": profile_id,
-                            "materialization_version": 0,
+                            "thread_id": thread_id,
+                            "materialization_version": 1,
                         }
                     else:
                         functions[frame["fingerprint"]]["durations"].append(

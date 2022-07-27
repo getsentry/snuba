@@ -10,7 +10,7 @@ from snuba.clickhouse.columns import (
     Float,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String, UInt
+from snuba.clickhouse.columns import String, Tuple, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.functions_processor import FunctionsMessageProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -84,8 +84,16 @@ agg_storage = ReadableTableStorage(
                 Column("max", AggregateFunction("max", [Float(64)])),
                 Column("avg", AggregateFunction("avg", [Float(64)])),
                 Column("sum", AggregateFunction("sum", [Float(64)])),
-                Column("worst", AggregateFunction("argMax", [UUID(), Float(64)])),
-                Column("examples", AggregateFunction("groupUniqArray(5)", [UUID()])),
+                Column(
+                    "worst",
+                    AggregateFunction("argMax", [Tuple((UUID(), UInt(64))), Float(64)]),
+                ),
+                Column(
+                    "examples",
+                    AggregateFunction(
+                        "groupUniqArray(5)", [Tuple((UUID(), Float(64)))]
+                    ),
+                ),
             ]
         ),
     ),
