@@ -23,22 +23,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-<<<<<<< HEAD
                     "transaction_source",
                     String(Modifiers(low_cardinality=True)),
-||||||| parent of 253c718c (fixup!)
-                    "source",
-                    String(
-                        Modifiers(low_cardinality=True, materialized="'transaction'")
-                    ),
-=======
-                    "source",
-                    String(
-                        Modifiers(
-                            low_cardinality=True, materialized="transaction_source"
-                        )
-                    ),
->>>>>>> 253c718c (fixup!)
                 ),
                 after="title",
             ),
