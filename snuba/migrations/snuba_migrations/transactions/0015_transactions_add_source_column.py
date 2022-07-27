@@ -24,7 +24,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=table_name,
                 column=Column(
                     "transaction_source",
-                    String(Modifiers(nullable=True, low_cardinality=True)),
+                    String(Modifiers(low_cardinality=True)),
                 ),
                 after="title",
             ),
