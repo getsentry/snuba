@@ -26,7 +26,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
     filter_key_values,
     filter_keys,
-    get_filtered_mapping_keys,
     zip_columns,
 )
 from snuba.query.query_settings import HTTPQuerySettings
@@ -188,7 +187,8 @@ def test_get_filtered_mapping_keys(
     Test the algorithm that identifies potential tag keys we can pre-filter
     through arrayFilter.
     """
-    assert get_filtered_mapping_keys(query, "tags") == expected_result
+    optimizer = ArrayJoinKeyValueOptimizer("tags")
+    assert optimizer.get_filtered_mapping_keys(query, "tags") == expected_result
 
 
 def with_required(condition: Expression) -> Expression:
@@ -252,6 +252,7 @@ test_data = [
                 )
             ),
         ),
+        "transactions",
         id="no tag in select clause",
     ),  # Individual tag, no change
     pytest.param(
@@ -302,6 +303,7 @@ test_data = [
                 )
             ),
         ),
+        "transactions",
         id="tags_key and tags_value in query no filter",
     ),  # tags_key and value in select. Zip keys and columns into an array.
     pytest.param(
@@ -338,6 +340,7 @@ test_data = [
                 ),
             ),
         ),
+        "transactions",
         id="filter on keys only",
     ),  # Filtering tag keys. Apply arrayFilter into the arrayJoin.
     pytest.param(
@@ -407,18 +410,93 @@ test_data = [
                 ),
             ),
         ),
+        "transactions",
         id="filter on key value pars",
-    ),  # tags_key and tags_value present together with conditions. Apply
-    # arrayFilter over the zip between tags_key and tags_value
+    )
+    # ,  # tags_key and tags_value present together with conditions. Apply
+    # pytest.param(
+    #     """
+    #     MATCH (generic_metrics_sets)
+    #     SELECT tags.key, tags.raw_value
+    #     WHERE tags.key IN tuple('t1')
+    #       AND timestamp >= toDateTime('2021-01-01T00:00:00')
+    #       AND timestamp < toDateTime('2021-01-02T00:00:00')
+    #       AND org_id = 2
+    #       AND project_id = 1
+    #     """,
+    #     ClickhouseQuery(
+    #         None,
+    #         selected_columns=[
+    #             SelectedExpression(
+    #                 name="tags_key",
+    #                 expression=tupleElement(
+    #                     "_snuba_tags_key",
+    #                     arrayJoin(
+    #                         "snuba_all_tags",
+    #                         filter_key_values(
+    #                             zip_columns(
+    #                                 Column(None, None, "tags.key"),
+    #                                 Column(None, None, "tags.raw_value"),
+    #                             ),
+    #                             [Literal(None, "t1")],
+    #                         ),
+    #                     ),
+    #                     Literal(None, 1),
+    #                 ),
+    #             ),
+    #             SelectedExpression(
+    #                 name="tags_value",
+    #                 expression=tupleElement(
+    #                     "_snuba_tags_value",
+    #                     arrayJoin(
+    #                         "snuba_all_tags",
+    #                         filter_key_values(
+    #                             zip_columns(
+    #                                 Column(None, None, "tags.key"),
+    #                                 Column(None, None, "tags.raw_value"),
+    #                             ),
+    #                             [Literal(None, "t1")],
+    #                         ),
+    #                     ),
+    #                     Literal(None, 2),
+    #                 ),
+    #             ),
+    #         ],
+    #         condition=with_required(
+    #             in_condition(
+    #                 tupleElement(
+    #                     "_snuba_tags_key",
+    #                     arrayJoin(
+    #                         "snuba_all_tags",
+    #                         filter_key_values(
+    #                             zip_columns(
+    #                                 Column(None, None, "tags.key"),
+    #                                 Column(None, None, "tags.raw_value"),
+    #                             ),
+    #                             [Literal(None, "t1")],
+    #                         ),
+    #                     ),
+    #                     Literal(None, 1),
+    #                 ),
+    #                 [Literal(None, "t1")],
+    #             ),
+    #         ),
+    #     ),
+    #     "generic_metrics",
+    #     id="filter on key value pairs, custom value column",
+    # ),  # tags_key and tags.raw_value present together with conditions. Apply
+    # # arrayFilter over the zip between tags_key and tags.raw_value
 ]
 
 
-def parse_and_process(snql_query: str) -> ClickhouseQuery:
-    dataset = get_dataset("transactions")
+def parse_and_process(
+    snql_query: str, dataset_id: str = "transactions"
+) -> ClickhouseQuery:
+    dataset = get_dataset(dataset_id)
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     request = Request(
         id="a",
-        original_body={"query": snql_query, "dataset": "transactions"},
+        original_body={"query": snql_query, "dataset": dataset_id},
         query=query,
         snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer="r"),
@@ -440,12 +518,14 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
     return query_plan.query
 
 
-@pytest.mark.parametrize("query_body, expected_query", test_data)
-def test_tags_processor(query_body: str, expected_query: ClickhouseQuery) -> None:
+@pytest.mark.parametrize("query_body, expected_query, dataset", test_data)
+def test_tags_processor(
+    query_body: str, expected_query: ClickhouseQuery, dataset: str
+) -> None:
     """
     Tests the whole processing in some notable cases.
     """
-    processed = parse_and_process(query_body)
+    processed = parse_and_process(query_body, dataset)
     assert processed.get_selected_columns() == expected_query.get_selected_columns()
     assert processed.get_condition() == expected_query.get_condition()
     assert processed.get_having() == expected_query.get_having()

@@ -21,108 +21,6 @@ from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, 
 from snuba.query.query_settings import QuerySettings
 
 
-def key_column(col_name: str) -> str:
-    return f"{col_name}.key"
-
-
-def val_column(col_name: str) -> str:
-    return f"{col_name}.value"
-
-
-def array_join_pattern(column_name: str) -> FunctionCall:
-    return FunctionCall(
-        String("arrayJoin"),
-        (Column(column_name=String(key_column(column_name))),),
-    )
-
-
-def _get_mapping_keys_in_condition(
-    condition: Expression, column_name: str
-) -> Optional[Set[str]]:
-    """
-    Finds the top level conditions that include filter based on the arrayJoin.
-    This is meant to be used to find the keys the query is filtering the arrayJoin
-    on.
-    We can only apply the arrayFilter optimization to arrayJoin conditions
-    that are not in OR with other columns. To simplify the problem, we only
-    consider those conditions that are included in the first level of the query:
-    [['tagskey' '=' 'a'],['col' '=' 'b'],['col2' '=' 'c']]  works
-    [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
-
-    If we encounter an OR condition we return None, which means we cannot
-    safely apply the optimization. Empty set means we did not find any
-    suitable arrayJoin for optimization in this condition but that does
-    not disqualify the whole query in the way the OR condition does.
-    """
-    keys_found = set()
-
-    conditions = get_first_level_and_conditions(condition)
-    for c in conditions:
-        if is_any_binary_condition(c, BooleanFunctions.OR):
-            return None
-
-        match = FunctionCall(
-            String(ConditionFunctions.EQ),
-            (array_join_pattern(column_name), Literal(Param("key", Any(str)))),
-        ).match(c)
-        if match is not None:
-            keys_found.add(match.string("key"))
-
-        match = is_in_condition_pattern(array_join_pattern(column_name)).match(c)
-        if match is not None:
-            function = match.expression("sequence")
-            assert isinstance(function, FunctionCallExpr)
-            keys_found |= {
-                lit.value
-                for lit in function.parameters
-                if isinstance(lit, LiteralExpr) and isinstance(lit.value, str)
-            }
-
-    return keys_found
-
-
-def get_filtered_mapping_keys(query: Query, column_name: str) -> Sequence[str]:
-    """
-    Identifies the conditions we can apply the arrayFilter optimization
-    on.
-    Which means: if the arrayJoin is in the select clause, there
-    are one or more top level AND condition on the arrayJoin and
-    there is no OR condition in the query.
-    """
-    array_join_found = any(
-        array_join_pattern(column_name).match(f) is not None
-        for selected in query.get_selected_columns() or []
-        for f in selected.expression
-    )
-
-    if not array_join_found:
-        return list()
-
-    ast_condition = query.get_condition()
-    cond_keys = (
-        _get_mapping_keys_in_condition(ast_condition, column_name)
-        if ast_condition is not None
-        else set()
-    )
-    if cond_keys is None:
-        # This means we found an OR. Cowardly we give up even though there could
-        # be cases where this condition is still optimizable.
-        return []
-
-    ast_having = query.get_having()
-    having_keys = (
-        _get_mapping_keys_in_condition(ast_having, column_name)
-        if ast_having is not None
-        else set()
-    )
-    if having_keys is None:
-        # Same as above
-        return []
-
-    keys = cond_keys | having_keys
-    return sorted(list(keys))
-
-
 class ArrayJoinKeyValueOptimizer(QueryProcessor):
     """
     Applies two optimizations to reduce the performance impact of
@@ -140,6 +38,107 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
     def __init__(self, column_name: str) -> None:
         self.__column_name = column_name
 
+    def key_column(self, col_name: str) -> str:
+        return f"{col_name}.key"
+
+    def val_column(self, col_name: str) -> str:
+        return f"{col_name}.value"
+
+    def array_join_pattern(self, column_name: str) -> FunctionCall:
+        return FunctionCall(
+            String("arrayJoin"),
+            (Column(column_name=String(self.key_column(column_name))),),
+        )
+
+    def _get_mapping_keys_in_condition(
+        self, condition: Expression, column_name: str
+    ) -> Optional[Set[str]]:
+        """
+        Finds the top level conditions that include filter based on the arrayJoin.
+        This is meant to be used to find the keys the query is filtering the arrayJoin
+        on.
+        We can only apply the arrayFilter optimization to arrayJoin conditions
+        that are not in OR with other columns. To simplify the problem, we only
+        consider those conditions that are included in the first level of the query:
+        [['tagskey' '=' 'a'],['col' '=' 'b'],['col2' '=' 'c']]  works
+        [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
+
+        If we encounter an OR condition we return None, which means we cannot
+        safely apply the optimization. Empty set means we did not find any
+        suitable arrayJoin for optimization in this condition but that does
+        not disqualify the whole query in the way the OR condition does.
+        """
+        keys_found = set()
+
+        conditions = get_first_level_and_conditions(condition)
+        for c in conditions:
+            if is_any_binary_condition(c, BooleanFunctions.OR):
+                return None
+
+            match = FunctionCall(
+                String(ConditionFunctions.EQ),
+                (self.array_join_pattern(column_name), Literal(Param("key", Any(str)))),
+            ).match(c)
+            if match is not None:
+                keys_found.add(match.string("key"))
+
+            match = is_in_condition_pattern(self.array_join_pattern(column_name)).match(
+                c
+            )
+            if match is not None:
+                function = match.expression("sequence")
+                assert isinstance(function, FunctionCallExpr)
+                keys_found |= {
+                    lit.value
+                    for lit in function.parameters
+                    if isinstance(lit, LiteralExpr) and isinstance(lit.value, str)
+                }
+
+        return keys_found
+
+    def get_filtered_mapping_keys(
+        self, query: Query, column_name: str
+    ) -> Sequence[str]:
+        """
+        Identifies the conditions we can apply the arrayFilter optimization
+        on.
+        Which means: if the arrayJoin is in the select clause, there
+        are one or more top level AND condition on the arrayJoin and
+        there is no OR condition in the query.
+        """
+        array_join_found = any(
+            self.array_join_pattern(column_name).match(f) is not None
+            for selected in query.get_selected_columns() or []
+            for f in selected.expression
+        )
+
+        if not array_join_found:
+            return list()
+
+        ast_condition = query.get_condition()
+        cond_keys = (
+            self._get_mapping_keys_in_condition(ast_condition, column_name)
+            if ast_condition is not None
+            else set()
+        )
+        if cond_keys is None:
+            # This means we found an OR. Cowardly we give up even though there could
+            # be cases where this condition is still optimizable.
+            return []
+
+        ast_having = query.get_having()
+        having_keys = (
+            self._get_mapping_keys_in_condition(ast_having, column_name)
+            if ast_having is not None
+            else set()
+        )
+        if having_keys is None:
+            # Same as above
+            return []
+
+        keys = cond_keys | having_keys
+        return sorted(list(keys))
+
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         arrayjoin_pattern = FunctionCall(
             String("arrayJoin"),
@@ -149,8 +148,8 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
                         "col",
                         Or(
                             [
-                                String(key_column(self.__column_name)),
-                                String(val_column(self.__column_name)),
+                                String(self.key_column(self.__column_name)),
+                                String(self.val_column(self.__column_name)),
                             ]
                         ),
                     ),
@@ -166,7 +165,7 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
 
         filtered_keys = [
             LiteralExpr(None, key)
-            for key in get_filtered_mapping_keys(query, self.__column_name)
+            for key in self.get_filtered_mapping_keys(query, self.__column_name)
         ]
 
         # Ensures the alias we apply to the arrayJoin is not already taken.
@@ -187,24 +186,24 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
                 return expr
 
             if arrayjoins_in_query == {
-                key_column(self.__column_name),
-                val_column(self.__column_name),
+                self.key_column(self.__column_name),
+                self.val_column(self.__column_name),
             }:
                 # Both arrayJoin(col.key) and arrayJoin(col.value) expressions
                 # present int the query. Do the arrayJoin on key-value pairs
                 # instead of independent arrayjoin for keys and values.
                 array_index = (
                     LiteralExpr(None, 1)
-                    if match.string("col") == key_column(self.__column_name)
+                    if match.string("col") == self.key_column(self.__column_name)
                     else LiteralExpr(None, 2)
                 )
 
                 if not filtered_keys:
-                    return _unfiltered_mapping_pairs(
+                    return self._unfiltered_mapping_pairs(
                         expr.alias, self.__column_name, pair_alias, array_index
                     )
                 else:
-                    return _filtered_mapping_pairs(
+                    return self._filtered_mapping_pairs(
                         expr.alias,
                         self.__column_name,
                         pair_alias,
@@ -216,7 +215,7 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
                 # Only one between arrayJoin(col.key) and arrayJoin(col.value)
                 # is present, and it is arrayJoin(col.key) since we found
                 # filtered keys.
-                return _filtered_mapping_keys(
+                return self._filtered_mapping_keys(
                     expr.alias, self.__column_name, filtered_keys
                 )
             else:
@@ -225,64 +224,71 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
 
         query.transform_expressions(replace_expression)
 
-
-def _unfiltered_mapping_pairs(
-    alias: Optional[str], column_name: str, pair_alias: str, tuple_index: LiteralExpr
-) -> Expression:
-    # (arrayJoin(
-    #   arrayMap((x,y) -> (x,y), tags.key, tags.value)
-    #  as all_tags).1
-    return tupleElement(
-        alias,
-        arrayJoin(
-            pair_alias,
-            zip_columns(
-                ColumnExpr(None, None, key_column(column_name)),
-                ColumnExpr(None, None, val_column(column_name)),
-            ),
-        ),
-        tuple_index,
-    )
-
-
-def _filtered_mapping_pairs(
-    alias: Optional[str],
-    column_name: str,
-    pair_alias: str,
-    filtered_tags: Sequence[LiteralExpr],
-    array_index: LiteralExpr,
-) -> Expression:
-    # (arrayJoin(arrayFilter(
-    #       pair -> tupleElement(pair, 1) IN (tags),
-    #       arrayMap((x,y) -> (x,y), tags.key, tags.value)
-    #  )) as all_tags).1
-    return tupleElement(
-        alias,
-        arrayJoin(
-            pair_alias,
-            filter_key_values(
+    def _unfiltered_mapping_pairs(
+        self,
+        alias: Optional[str],
+        column_name: str,
+        pair_alias: str,
+        tuple_index: LiteralExpr,
+    ) -> Expression:
+        # (arrayJoin(
+        #   arrayMap((x,y) -> (x,y), tags.key, tags.value)
+        #  as all_tags).1
+        return tupleElement(
+            alias,
+            arrayJoin(
+                pair_alias,
                 zip_columns(
-                    ColumnExpr(None, None, key_column(column_name)),
-                    ColumnExpr(None, None, val_column(column_name)),
+                    ColumnExpr(None, None, self.key_column(column_name)),
+                    ColumnExpr(None, None, self.val_column(column_name)),
                 ),
-                filtered_tags,
             ),
-        ),
-        array_index,
-    )
+            tuple_index,
+        )
 
+    def _filtered_mapping_pairs(
+        self,
+        alias: Optional[str],
+        column_name: str,
+        pair_alias: str,
+        filtered_tags: Sequence[LiteralExpr],
+        array_index: LiteralExpr,
+    ) -> Expression:
+        # (arrayJoin(arrayFilter(
+        #       pair -> tupleElement(pair, 1) IN (tags),
+        #       arrayMap((x,y) -> (x,y), tags.key, tags.value)
+        #  )) as all_tags).1
+        return tupleElement(
+            alias,
+            arrayJoin(
+                pair_alias,
+                filter_key_values(
+                    zip_columns(
+                        ColumnExpr(None, None, self.key_column(column_name)),
+                        ColumnExpr(None, None, self.val_column(column_name)),
+                    ),
+                    filtered_tags,
+                ),
+            ),
+            array_index,
+        )
 
-def _filtered_mapping_keys(
-    alias: Optional[str], column_name: str, filtered_tags: Sequence[LiteralExpr]
-) -> Expression:
-    # arrayJoin(arrayFilter(
-    #   tag -> tag IN (tags),
-    #   tags.key
-    # ))
-    return arrayJoin(
-        alias,
-        filter_keys(ColumnExpr(None, None, key_column(column_name)), filtered_tags),
-    )
+    def _filtered_mapping_keys(
+        self,
+        alias: Optional[str],
+        column_name: str,
+        filtered_tags: Sequence[LiteralExpr],
+    ) -> Expression:
+        # arrayJoin(arrayFilter(
+        #   tag -> tag IN (tags),
+        #   tags.key
+        # ))
+        return arrayJoin(
+            alias,
+            filter_keys(
+                ColumnExpr(None, None, self.key_column(column_name)), filtered_tags
+            ),
+        )
 
 
 def zip_columns(column1: ColumnExpr, column2: ColumnExpr) -> Expression:
