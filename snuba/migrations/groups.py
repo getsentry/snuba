@@ -248,7 +248,10 @@ class FunctionsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.functions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_functions"]
+        return [
+            "0001_functions",
+            "0002_add_thread_id",
+        ]
 
 
 class GenericMetricsLoader(DirectoryLoader):

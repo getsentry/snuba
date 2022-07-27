@@ -3,18 +3,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import chain
-from typing import (
-    Generic,
-    Iterator,
-    List,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Generic, Iterator, List, MutableMapping, Optional, Sequence
+from typing import Tuple as TupleType
+from typing import Type, TypeVar, Union, cast
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.utils.constants import NESTED_COL_EXPR_RE
@@ -349,6 +340,39 @@ class Array(ColumnType[TModifiers]):
 
     def get_raw(self) -> Array[TModifiers]:
         return Array(inner_type=self.inner_type.get_raw())
+
+
+class Tuple(ColumnType[TModifiers]):
+    def __init__(
+        self,
+        inner_types: TupleType[ColumnType[TModifiers], ...],
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.inner_types = inner_types
+
+    def _repr_content(self) -> str:
+        return repr(self.inner_types)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.inner_types == cast(Tuple[TModifiers], other).inner_types
+            and self.get_modifiers() == cast(Tuple[TModifiers], other).get_modifiers()
+        )
+
+    def _for_schema_impl(self) -> str:
+        inner_schema_impl = ", ".join(
+            inner_type.for_schema() for inner_type in self.inner_types
+        )
+        return "Tuple({})".format(inner_schema_impl)
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
+        return Tuple(inner_types=self.inner_types, modifiers=modifiers)
+
+    def get_raw(self) -> Tuple[TModifiers]:
+        inner_types = tuple(inner_type.get_raw() for inner_type in self.inner_types)
+        return Tuple(inner_types=inner_types)
 
 
 class Nested(ColumnType[TModifiers]):
