@@ -1,4 +1,5 @@
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Tuple
@@ -408,3 +409,56 @@ class TestTransactionsProcessor:
             payload, meta
         ) == InsertBatch([result], None)
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
+
+    def test_missing_transaction_source(self) -> None:
+        start, finish = self.__get_timestamps()
+        message = TransactionEvent(
+            event_id="e5e062bf2e1d4afd96fd2f90b6770431",
+            trace_id="7400045b25c443b885914600aa83ad04",
+            span_id="8841662216cc598b",
+            transaction_name="/organizations/:orgId/issues/",
+            status="cancelled",
+            op="navigation",
+            timestamp=finish,
+            start_timestamp=start,
+            platform="python",
+            dist="",
+            user_name="me",
+            user_id="myself",
+            user_email="me@myself.com",
+            ipv4="127.0.0.1",
+            ipv6=None,
+            environment="prod",
+            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+            sdk_name="sentry.python",
+            sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
+            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            transaction_source="",
+        )
+
+        payload_base = message.serialize()
+        payload_wo_transaction_info = deepcopy(payload_base)
+        payload_wo_source = deepcopy(payload_base)
+        # Remove transaction_info
+        del payload_wo_transaction_info[2]["data"]["transaction_info"]
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        actual_message = TransactionsMessageProcessor().process_message(
+            payload_wo_transaction_info, meta
+        )
+        assert actual_message.rows[0]["transaction_source"] == ""
+
+        # Remove transaction_info.source
+        del payload_wo_source[2]["data"]["transaction_info"]["source"]
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        actual_message = TransactionsMessageProcessor().process_message(
+            payload_wo_source, meta
+        )
+        assert actual_message.rows[0]["transaction_source"] == ""

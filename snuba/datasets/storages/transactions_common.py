@@ -97,6 +97,7 @@ columns = ColumnSet(
         ("type", String(Modifiers(readonly=True))),
         ("message", String(Modifiers(readonly=True))),
         ("title", String(Modifiers(readonly=True))),
+        ("transaction_source", String()),
         ("timestamp", DateTime(Modifiers(readonly=True))),
     ]
 )
