@@ -231,6 +231,9 @@ def optimize_partition_runner(
                         schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
+                        schedule.start_time_jitter_minutes[i]
+                        if schedule.start_time_jitter_minutes
+                        else None,
                     ),
                 )
             )
@@ -258,11 +261,19 @@ def optimize_partitions(
     cutoff_time: Optional[datetime] = None,
     tracker: Optional[OptimizedPartitionTracker] = None,
     clickhouse_host: Optional[str] = None,
+    start_jitter: Optional[int] = None,
 ) -> None:
     query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
         PARTITION %(partition)s FINAL
     """
+
+    if start_jitter is not None:
+        logger.info(
+            f"{threading.current_thread().name}: Jittering start time by"
+            f" {start_jitter} minutes"
+        )
+        time.sleep(start_jitter * 60)
 
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
