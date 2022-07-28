@@ -73,6 +73,30 @@ TESTS = [
         ("transactions_v2", ["transactions_v1"]),
         id="In range, run both and trust the second.",
     ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.GTE,
+            Column(None, None, "finish_ts"),
+            Literal(None, datetime(2022, 1, 1, 0, 0, 0)),
+        ),
+        datetime(2021, 1, 1, 0, 0, 0),
+        1.0,
+        0.0,
+        ("transactions_v1", ["transactions_v2"]),
+        id="Using finish_ts in range, run both.",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.GTE,
+            Column(None, None, "finish_ts"),
+            Literal(None, datetime(2022, 1, 1, 0, 0, 0)),
+        ),
+        datetime(2021, 1, 1, 0, 0, 0),
+        1.0,
+        1.0,
+        ("transactions_v2", ["transactions_v1"]),
+        id="Using finsh_ts in range, run both and trust the second.",
+    ),
 ]
 
 

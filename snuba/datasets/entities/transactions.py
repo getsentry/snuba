@@ -133,8 +133,13 @@ def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
     ):
         return ("transactions_v1", [])
 
-    range = get_time_range(query, "timestamp")
-    if range[0] is None or range[0] < settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME:
+    time_range = get_time_range(query, "timestamp")
+    if time_range == (None, None):
+        time_range = get_time_range(query, "finish_ts")
+    if (
+        time_range[0] is None
+        or time_range[0] < settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME
+    ):
         return ("transactions_v1", [])
 
     mapping = {
