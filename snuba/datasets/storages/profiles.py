@@ -44,6 +44,7 @@ readable_columns = ColumnSet(
         ("device_os_build_number", String(Modifiers(nullable=True))),
         ("device_os_name", String()),
         ("device_os_version", String()),
+        ("architecture", String()),
         ("duration_ns", UInt(64)),
         ("environment", String(Modifiers(nullable=True))),
         ("platform", String()),
