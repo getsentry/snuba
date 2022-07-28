@@ -35,14 +35,15 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
         instead of doing the entire arrayJoin and filter the results.
     """
 
-    def __init__(self, column_name: str) -> None:
+    def __init__(self, column_name: str, value_subcolumn_name: str = "value") -> None:
         self.__column_name = column_name
+        self.__value_subcolumn_name = value_subcolumn_name
 
     def key_column(self, col_name: str) -> str:
         return f"{col_name}.key"
 
     def val_column(self, col_name: str) -> str:
-        return f"{col_name}.value"
+        return f"{col_name}.{self.__value_subcolumn_name}"
 
     def array_join_pattern(self, column_name: str) -> FunctionCall:
         return FunctionCall(

@@ -103,7 +103,8 @@ sets_storage = ReadableTableStorage(
         ),
     ),
     query_processors=[
-        ArrayJoinKeyValueOptimizer("tags"),
+        ArrayJoinKeyValueOptimizer("tags", "raw_value"),
+        ArrayJoinKeyValueOptimizer("tags", "indexed_value"),
         TableRateLimit(),
     ],
 )

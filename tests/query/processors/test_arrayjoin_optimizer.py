@@ -253,6 +253,7 @@ test_data = [
             ),
         ),
         "transactions",
+        "value",
         id="no tag in select clause",
     ),  # Individual tag, no change
     pytest.param(
@@ -304,6 +305,7 @@ test_data = [
             ),
         ),
         "transactions",
+        "value",
         id="tags_key and tags_value in query no filter",
     ),  # tags_key and value in select. Zip keys and columns into an array.
     pytest.param(
@@ -341,6 +343,7 @@ test_data = [
             ),
         ),
         "transactions",
+        "value",
         id="filter on keys only",
     ),  # Filtering tag keys. Apply arrayFilter into the arrayJoin.
     pytest.param(
@@ -411,86 +414,89 @@ test_data = [
             ),
         ),
         "transactions",
+        "value",
         id="filter on key value pars",
-    )
-    # ,  # tags_key and tags_value present together with conditions. Apply
-    # pytest.param(
-    #     """
-    #     MATCH (generic_metrics_sets)
-    #     SELECT tags.key, tags.raw_value
-    #     WHERE tags.key IN tuple('t1')
-    #       AND timestamp >= toDateTime('2021-01-01T00:00:00')
-    #       AND timestamp < toDateTime('2021-01-02T00:00:00')
-    #       AND org_id = 2
-    #       AND project_id = 1
-    #     """,
-    #     ClickhouseQuery(
-    #         None,
-    #         selected_columns=[
-    #             SelectedExpression(
-    #                 name="tags_key",
-    #                 expression=tupleElement(
-    #                     "_snuba_tags_key",
-    #                     arrayJoin(
-    #                         "snuba_all_tags",
-    #                         filter_key_values(
-    #                             zip_columns(
-    #                                 Column(None, None, "tags.key"),
-    #                                 Column(None, None, "tags.raw_value"),
-    #                             ),
-    #                             [Literal(None, "t1")],
-    #                         ),
-    #                     ),
-    #                     Literal(None, 1),
-    #                 ),
-    #             ),
-    #             SelectedExpression(
-    #                 name="tags_value",
-    #                 expression=tupleElement(
-    #                     "_snuba_tags_value",
-    #                     arrayJoin(
-    #                         "snuba_all_tags",
-    #                         filter_key_values(
-    #                             zip_columns(
-    #                                 Column(None, None, "tags.key"),
-    #                                 Column(None, None, "tags.raw_value"),
-    #                             ),
-    #                             [Literal(None, "t1")],
-    #                         ),
-    #                     ),
-    #                     Literal(None, 2),
-    #                 ),
-    #             ),
-    #         ],
-    #         condition=with_required(
-    #             in_condition(
-    #                 tupleElement(
-    #                     "_snuba_tags_key",
-    #                     arrayJoin(
-    #                         "snuba_all_tags",
-    #                         filter_key_values(
-    #                             zip_columns(
-    #                                 Column(None, None, "tags.key"),
-    #                                 Column(None, None, "tags.raw_value"),
-    #                             ),
-    #                             [Literal(None, "t1")],
-    #                         ),
-    #                     ),
-    #                     Literal(None, 1),
-    #                 ),
-    #                 [Literal(None, "t1")],
-    #             ),
-    #         ),
-    #     ),
-    #     "generic_metrics",
-    #     id="filter on key value pairs, custom value column",
-    # ),  # tags_key and tags.raw_value present together with conditions. Apply
-    # # arrayFilter over the zip between tags_key and tags.raw_value
+    ),  # tags_key and tags_value present together with conditions. Apply
+    pytest.param(
+        """
+        MATCH (generic_metrics_sets)
+        SELECT arrayJoin(tags.key, tags.raw_value)
+        WHERE tags.key IN tuple('t1')
+          AND timestamp >= toDateTime('2021-01-01T00:00:00')
+          AND timestamp < toDateTime('2021-01-02T00:00:00')
+          AND org_id = 2
+          AND project_id = 1
+        """,
+        ClickhouseQuery(
+            None,
+            selected_columns=[
+                SelectedExpression(
+                    name="tags_key",
+                    expression=tupleElement(
+                        "_snuba_tags_key",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            filter_key_values(
+                                zip_columns(
+                                    Column(None, None, "tags.key"),
+                                    Column(None, None, "tags.raw_value"),
+                                ),
+                                [Literal(None, "t1")],
+                            ),
+                        ),
+                        Literal(None, 1),
+                    ),
+                ),
+                SelectedExpression(
+                    name="tags_value",
+                    expression=tupleElement(
+                        "_snuba_tags_value",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            filter_key_values(
+                                zip_columns(
+                                    Column(None, None, "tags.key"),
+                                    Column(None, None, "tags.raw_value"),
+                                ),
+                                [Literal(None, "t1")],
+                            ),
+                        ),
+                        Literal(None, 2),
+                    ),
+                ),
+            ],
+            condition=with_required(
+                in_condition(
+                    tupleElement(
+                        "_snuba_tags_key",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            filter_key_values(
+                                zip_columns(
+                                    Column(None, None, "tags.key"),
+                                    Column(None, None, "tags.raw_value"),
+                                ),
+                                [Literal(None, "t1")],
+                            ),
+                        ),
+                        Literal(None, 1),
+                    ),
+                    [Literal(None, "t1")],
+                ),
+            ),
+        ),
+        "generic_metrics",
+        "raw_value",
+        id="filter on key value pairs, custom value column",
+    ),  # tags_key and tags.raw_value present together with conditions. Apply
+    # arrayFilter over the zip between tags_key and tags.raw_value
 ]
 
 
 def parse_and_process(
-    snql_query: str, dataset_id: str = "transactions"
+    snql_query: str,
+    dataset_id: str,
+    value_subcolumn_name: str = "value",
 ) -> ClickhouseQuery:
     dataset = get_dataset(dataset_id)
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
@@ -508,7 +514,9 @@ def parse_and_process(
     for p in entity.get_query_processors():
         p.process_query(query, request.query_settings)
 
-    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.query_settings)
+    ArrayJoinKeyValueOptimizer("tags", value_subcolumn_name).process_query(
+        query, request.query_settings
+    )
 
     query_plan = SingleStorageQueryPlanBuilder(
         storage=storage,
@@ -518,14 +526,19 @@ def parse_and_process(
     return query_plan.query
 
 
-@pytest.mark.parametrize("query_body, expected_query, dataset", test_data)
+@pytest.mark.parametrize(
+    "query_body, expected_query, dataset, value_subcolumn_name", test_data
+)
 def test_tags_processor(
-    query_body: str, expected_query: ClickhouseQuery, dataset: str
+    query_body: str,
+    expected_query: ClickhouseQuery,
+    dataset: str,
+    value_subcolumn_name: str,
 ) -> None:
     """
     Tests the whole processing in some notable cases.
     """
-    processed = parse_and_process(query_body, dataset)
+    processed = parse_and_process(query_body, dataset, value_subcolumn_name)
     assert processed.get_selected_columns() == expected_query.get_selected_columns()
     assert processed.get_condition() == expected_query.get_condition()
     assert processed.get_having() == expected_query.get_having()
@@ -583,7 +596,8 @@ def test_aliasing() -> None:
           AND project_id = 1
           AND finish_ts >= toDateTime('2021-01-01T00:00:00')
           AND finish_ts < toDateTime('2021-01-02T00:00:00')
-        """
+        """,
+        "transactions",
     )
     sql = format_query(processed).get_sql()
     transactions_table_name = (
