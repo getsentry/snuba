@@ -24,6 +24,7 @@ class ProfileEvent:
     device_os_build_number: str
     device_os_name: str
     device_os_version: str
+    architecture: str
     duration_ns: int
     environment: Optional[str]
     platform: str
@@ -66,6 +67,7 @@ class TestProfilesProcessor:
             device_os_build_number="13",
             device_os_name="PierreOS",
             device_os_version="47",
+            architecture="aarch64",
             duration_ns=1234567890,
             environment="production",
             platform="pierre",
@@ -101,6 +103,7 @@ class TestProfilesProcessor:
             device_os_build_number="13",
             device_os_name="PierreOS",
             device_os_version="47",
+            architecture="aarch64",
             duration_ns=1234567890,
             environment="production",
             platform="pierre",
