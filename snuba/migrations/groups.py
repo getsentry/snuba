@@ -170,6 +170,7 @@ class ReplaysLoader(DirectoryLoader):
         return [
             "0001_replays",
             "0002_add_url",
+            "0003_alter_url_allow_null",
         ]
 
 
