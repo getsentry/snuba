@@ -172,6 +172,7 @@ class ReplaysLoader(DirectoryLoader):
             "0001_replays",
             "0002_add_url",
             "0003_alter_url_allow_null",
+            "0004_add_error_ids_column",
         ]
 
 
