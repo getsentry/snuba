@@ -71,6 +71,8 @@ steps:
         name: loadtest-loadbalancer-outcomes-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: profiles-consumer
+      - image: us.gcr.io/sentryio/snuba:{sha}
+        name: replays-consumer
   - kind: KubernetesCronJob
     selector:
       label_selector: service=snuba
