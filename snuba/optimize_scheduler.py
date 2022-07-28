@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import MutableSequence, Sequence
+from typing import MutableSequence, Optional, Sequence
 
 from snuba import settings
 
@@ -21,6 +21,7 @@ class OptimizedSchedulerTimeout(Exception):
 class OptimizationSchedule:
     partitions: Sequence[Sequence[str]]
     cutoff_time: datetime
+    start_time_jitter_minutes: Optional[Sequence[int]] = None
 
 
 class OptimizeScheduler:
@@ -86,6 +87,24 @@ class OptimizeScheduler:
 
         return output
 
+    def start_time_jitter(self) -> Sequence[int]:
+        """
+        Get the start time jitter for each partition. The start time jitter
+        is the amount of time to wait before starting each thread. This is
+        required to avoid having too much load on the database with overlapping
+        optimizations ending at the same time.
+        """
+        if self.__parallel == 1:
+            return [0]
+
+        interval = int(
+            settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES / (self.__parallel - 1)
+        )
+        jitter: MutableSequence[int] = []
+        for i in range(0, self.__parallel):
+            jitter.append(i * interval)
+        return jitter
+
     def get_next_schedule(self, partitions: Sequence[str]) -> OptimizationSchedule:
         """
         Get the next schedule for optimizing partitions. The provided partitions
@@ -115,6 +134,7 @@ class OptimizeScheduler:
                 return OptimizationSchedule(
                     partitions=self.subdivide_partitions(partitions, self.__parallel),
                     cutoff_time=self.__parallel_end_time,
+                    start_time_jitter_minutes=self.start_time_jitter(),
                 )
             else:
                 return OptimizationSchedule(

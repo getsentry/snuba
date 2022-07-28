@@ -130,6 +130,35 @@ def test_subdivide_partitions(
     assert optimize_scheduler.subdivide_partitions(partitions, subdivisions) == expected
 
 
+@pytest.mark.parametrize(
+    "parallel,expected",
+    [
+        pytest.param(
+            1,
+            [0],
+            id="no parallel",
+        ),
+        pytest.param(
+            2,
+            [0, settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES],
+            id="2 parallel",
+        ),
+        pytest.param(
+            3,
+            [
+                0,
+                settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES / 2,
+                settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES,
+            ],
+            id="3 parallel",
+        ),
+    ],
+)
+def test_start_time_jitter(parallel: int, expected: Sequence[int]) -> None:
+    scheduler = OptimizeScheduler(parallel=parallel)
+    assert scheduler.start_time_jitter() == expected
+
+
 last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
     hour=0, minute=0, second=0, microsecond=0
 )
@@ -193,6 +222,7 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
             OptimizationSchedule(
                 [["(90,'2022-03-28')"], ["(90,'2022-03-21')"]],
                 last_midnight + settings.PARALLEL_OPTIMIZE_JOB_END_TIME,
+                [0, settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES],
             ),
             id="parallel before parallel end",
         ),

@@ -231,6 +231,9 @@ PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 
+# Maximum jitter to add to the scheduling of threads of an optimize job
+OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

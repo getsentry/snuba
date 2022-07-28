@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -38,42 +39,48 @@ class ReplayEvent:
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
-            "payload": {
-                "type": "replay_event",
-                "replay_id": self.replay_id,
-                "segment_id": self.segment_id,
-                "tags": {"customtag": "is_set", "transaction": self.title},
-                "trace_ids": self.trace_ids,
-                "dist": self.dist,
-                "platform": self.platform,
-                "timestamp": self.timestamp,
-                "environment": self.environment,
-                "release": self.release,
-                "user": {
-                    "id": self.user_id,
-                    "username": self.user_name,
-                    "email": self.user_email,
-                    "ip_address": self.ipv4,
-                },
-                "sdk": {
-                    "name": self.sdk_name,
-                    "version": self.sdk_version,
-                },
-                "contexts": {
-                    "trace": {
-                        "op": "pageload",
-                        "span_id": "affa5649681a1eeb",
-                        "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
-                    }
-                },
-                "request": {
-                    "url": "http://localhost:3000/",
-                    "headers": {
-                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
-                    },
-                },
-                "extra": {},
-            },
+            "payload": list(
+                bytes(
+                    json.dumps(
+                        {
+                            "type": "replay_event",
+                            "replay_id": self.replay_id,
+                            "segment_id": self.segment_id,
+                            "tags": {"customtag": "is_set", "transaction": self.title},
+                            "trace_ids": self.trace_ids,
+                            "dist": self.dist,
+                            "platform": self.platform,
+                            "timestamp": self.timestamp,
+                            "environment": self.environment,
+                            "release": self.release,
+                            "user": {
+                                "id": self.user_id,
+                                "username": self.user_name,
+                                "email": self.user_email,
+                                "ip_address": self.ipv4,
+                            },
+                            "sdk": {
+                                "name": self.sdk_name,
+                                "version": self.sdk_version,
+                            },
+                            "contexts": {
+                                "trace": {
+                                    "op": "pageload",
+                                    "span_id": "affa5649681a1eeb",
+                                    "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
+                                }
+                            },
+                            "request": {
+                                "url": "http://localhost:3000/",
+                                "headers": {
+                                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+                                },
+                            },
+                            "extra": {},
+                        }
+                    ).encode()
+                )
+            ),
         }
 
     def _user_field(self) -> str | None:

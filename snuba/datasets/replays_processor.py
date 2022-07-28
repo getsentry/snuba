@@ -4,6 +4,8 @@ from datetime import datetime
 from hashlib import md5
 from typing import Any, Mapping, MutableMapping, Optional, cast
 
+import rapidjson
+
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
@@ -133,7 +135,7 @@ class ReplaysProcessor(MessageProcessor):
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         try:
-            replay_event = message["payload"]
+            replay_event = rapidjson.loads(bytes(message["payload"]))
             try:
                 retention_days = enforce_retention(
                     message["retention_days"],
