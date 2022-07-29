@@ -59,7 +59,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", column.name)
             for column, _ in reversed(new_columns)
         ]
-        return drop_column_ops + drop_indexes
+        return drop_indexes + drop_column_ops
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
