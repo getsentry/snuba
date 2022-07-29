@@ -552,6 +552,34 @@ def _get_cache_wait_timeout(
     return cache_wait_timeout
 
 
+def _get_query_settings_from_config(
+    override_prefix: Optional[str],
+) -> MutableMapping[str, Any]:
+    """
+    Helper function to get the query settings from the config.
+
+    #TODO: Make this configurable by entity/dataset. Since we want to use
+    #      different settings across different clusters belonging to the
+    #      same entity/dataset, using cache_partition right now. This is
+    #      not ideal but it works for now.
+    """
+    all_confs = state.get_all_configs()
+
+    # Populate the query settings with the default values
+    clickhouse_query_settings: MutableMapping[str, Any] = {
+        k.split("/", 1)[1]: v
+        for k, v in all_confs.items()
+        if k.startswith("query_settings/")
+    }
+
+    if override_prefix:
+        for k, v in all_confs.items():
+            if k.startswith(f"{override_prefix}/query_settings/"):
+                clickhouse_query_settings[k.split("/", 2)[2]] = v
+
+    return clickhouse_query_settings
+
+
 def raw_query(
     # TODO: Passing the whole clickhouse query here is needed as long
     # as the execute method depends on it. Otherwise we can make this
@@ -573,12 +601,9 @@ def raw_query(
     This function is not supposed to depend on anything higher level than the clickhouse
     query. If this function ends up depending on the dataset, something is wrong.
     """
-    all_confs = state.get_all_configs()
-    clickhouse_query_settings: MutableMapping[str, Any] = {
-        k.split("/", 1)[1]: v
-        for k, v in all_confs.items()
-        if k.startswith("query_settings/")
-    }
+    clickhouse_query_settings = _get_query_settings_from_config(
+        reader.get_query_settings_prefix()
+    )
 
     timer.mark("get_configs")
 

@@ -420,9 +420,15 @@ transform_column_types = build_result_transformer(
 
 class NativeDriverReader(Reader):
     def __init__(
-        self, cache_partition_id: Optional[str], client: ClickhousePool
+        self,
+        cache_partition_id: Optional[str],
+        client: ClickhousePool,
+        query_settings_prefix: Optional[str],
     ) -> None:
-        super().__init__(cache_partition_id=cache_partition_id)
+        super().__init__(
+            cache_partition_id=cache_partition_id,
+            query_settings_prefix=query_settings_prefix,
+        )
         self.__client = client
 
     def __transform_result(self, result: ClickhouseResult, with_totals: bool) -> Result:

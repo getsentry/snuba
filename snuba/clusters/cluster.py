@@ -207,6 +207,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         cluster_name: Optional[str] = None,
         distributed_cluster_name: Optional[str] = None,
         cache_partition_id: Optional[str] = None,
+        query_settings_prefix: Optional[str] = None,
     ):
         super().__init__(storage_sets)
         self.__host = host
@@ -222,6 +223,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__reader: Optional[Reader] = None
         self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
+        self.__query_settings_prefix = query_settings_prefix
 
     def __str__(self) -> str:
         return str(self.__query_node)
@@ -265,6 +267,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__reader = NativeDriverReader(
                 cache_partition_id=self.__cache_partition_id,
                 client=self.get_query_connection(ClickhouseClientSettings.QUERY),
+                query_settings_prefix=self.__query_settings_prefix,
             )
         return self.__reader
 
@@ -362,6 +365,7 @@ CLUSTERS = [
         if "distributed_cluster_name" in cluster
         else None,
         cache_partition_id=cluster.get("cache_partition_id"),
+        query_settings_prefix=cluster.get("query_settings_prefix"),
     )
     for cluster in settings.CLUSTERS
 ]
