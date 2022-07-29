@@ -55,7 +55,6 @@ class ReplaysProcessor(MessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         processed["replay_id"] = str(uuid.UUID(replay_event["replay_id"]))
-        processed["error_ids"] = replay_event["error_ids"][:1000]  # A sane upper bound.
         processed["segment_id"] = replay_event["segment_id"]
         processed["trace_ids"] = replay_event.get("trace_ids") or []
         processed["timestamp"] = self.__extract_timestamp(
@@ -66,6 +65,13 @@ class ReplaysProcessor(MessageProcessor):
         processed["dist"] = replay_event.get("dist")
         # processed["url"] = self._get_url(replay_event) TODO: add this in once we have the url column
         processed["platform"] = _unicodify(replay_event["platform"])
+
+        # A sane upper bound of 1000 was chosen for error_ids.  If you know better, change it.
+        error_ids = replay_event["error_ids"]
+        if len(error_ids) > 1000:
+            metrics.increment("error_ids_exceeded_limit")
+
+        processed["error_ids"] = [uuid.UUID(eid) for eid in error_ids[:1000]]
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
