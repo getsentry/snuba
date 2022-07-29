@@ -241,7 +241,7 @@ def create_metrics(
             f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
         )
 
-    from datadog.dogstatsd.base import DogStatsd
+    from datadog import DogStatsd
 
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
