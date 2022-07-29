@@ -23,6 +23,7 @@ class ReplayEvent:
     environment: str
     release: str
     dist: str
+    url: str | None
     ipv4: str | None
     ipv6: str | None
     user_name: str | None
@@ -71,7 +72,7 @@ class ReplayEvent:
                                 }
                             },
                             "request": {
-                                "url": "http://localhost:3000/",
+                                "url": self.url,
                                 "headers": {
                                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
                                 },
@@ -113,6 +114,7 @@ class ReplayEvent:
             "environment": self.environment,
             "release": self.release,
             "dist": self.dist,
+            "url": self.url,
             "user_id": self.user_id,
             "user_name": self.user_name,
             "user_email": self.user_email,
@@ -155,6 +157,7 @@ class TestReplaysProcessor:
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             platform="python",
             dist="",
+            url="http://localhost:8001",
             user_name="me",
             user_id="232",
             user_email="test@test.com",
@@ -182,6 +185,7 @@ class TestReplaysProcessor:
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             platform="python",
             dist="",
+            url=None,
             user_name=None,
             user_id=None,
             user_email=None,

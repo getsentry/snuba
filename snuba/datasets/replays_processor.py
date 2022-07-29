@@ -46,10 +46,12 @@ class ReplaysProcessor(MessageProcessor):
         return timestamp
 
     def _get_url(self, replay_event: ReplayEventDict) -> Optional[str]:
-        if "request" in replay_event:
-            if "url" in replay_event["request"]:
-                return cast(str, replay_event["request"]["url"])
-        return None
+        request = replay_event.get("request", {})
+        if not isinstance(request, dict):
+            return None
+
+        url = request.get("url")
+        return cast(str, url) if url else None
 
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -63,7 +65,7 @@ class ReplaysProcessor(MessageProcessor):
         processed["release"] = replay_event.get("release")
         processed["environment"] = replay_event.get("environment")
         processed["dist"] = replay_event.get("dist")
-        # processed["url"] = self._get_url(replay_event) TODO: add this in once we have the url column
+        processed["url"] = self._get_url(replay_event)
         processed["platform"] = _unicodify(replay_event["platform"])
 
     def _process_tags(
