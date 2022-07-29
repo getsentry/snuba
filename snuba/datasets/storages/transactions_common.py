@@ -25,6 +25,7 @@ from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntArrayColumnProcessor,
     HexIntColumnProcessor,
@@ -133,6 +134,7 @@ query_processors = [
         ["event_id", "trace_id", "span_id", "transaction_name", "transaction", "title"]
     ),
     TableRateLimit(),
+    TupleUnaliaser(),
 ]
 
 query_splitters = [TimeSplitQueryStrategy(timestamp_col="finish_ts")]
