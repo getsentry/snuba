@@ -30,6 +30,14 @@ new_indexes: List[operations.SqlOperation] = [
     ),
 ]
 
+drop_indexes: List[operations.SqlOperation] = [
+    operations.DropIndex(
+        StorageSetKey.REPLAYS,
+        "replays_local",
+        "bf_error_ids_hashed",
+    )
+]
+
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
@@ -47,15 +55,11 @@ class Migration(migration.ClickhouseNodeMigration):
         return new_column_ops + new_indexes
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-
-        return [
-            operations.DropIndex(
-                StorageSetKey.REPLAYS, "replays_local", "bf_error_ids_hashed"
-            )
-        ] + [
+        drop_column_ops: List[operations.SqlOperation] = [
             operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", column.name)
             for column, _ in reversed(new_columns)
         ]
+        return drop_column_ops + drop_indexes
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
@@ -70,10 +74,6 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropIndex(
-                StorageSetKey.REPLAYS, "replays_local", "bf_error_ids_hashed"
-            )
-        ] + [
             operations.DropColumn(StorageSetKey.REPLAYS, "replays_dist", column.name)
             for column, _ in reversed(new_columns)
         ]
