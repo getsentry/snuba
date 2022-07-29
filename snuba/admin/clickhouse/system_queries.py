@@ -48,11 +48,47 @@ SYSTEM_QUERY_RE = re.compile(
     re.VERBOSE,
 )
 
+DESCRIBE_QUERY_RE = re.compile(
+    r"""
+        ^ # Start
+        (DESC|DESCRIBE)
+        \s
+        (TABLE)
+        \s
+        (?P<table_name>[\w\s]+|\*)
+        ;? # Optional semicolon
+        $ # End
+    """,
+    re.VERBOSE,
+)
+
+
+def is_query_select(sql_query: str) -> bool:
+    """
+    Simple validation to ensure query is a select command
+    """
+    match = SYSTEM_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
+def is_query_describe(sql_query: str) -> bool:
+    """
+    Simple validation to ensure query is a describe command
+    """
+    match = DESCRIBE_QUERY_RE.match(sql_query)
+    return True if match else False
+
 
 def run_system_query_on_host_with_sql(
     clickhouse_host: str, clickhouse_port: int, storage_name: str, system_query_sql: str
 ) -> ClickhouseResult:
-    validate_system_query(system_query_sql)
+    if is_query_select(system_query_sql):
+        validate_system_query(system_query_sql)
+    elif is_query_describe(system_query_sql):
+        pass
+    else:
+        raise InvalidCustomQuery("Query is invalid")
+
     try:
         return _run_sql_query_on_host(
             clickhouse_host, clickhouse_port, storage_name, system_query_sql
