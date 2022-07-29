@@ -126,6 +126,7 @@ class TransactionsLoader(DirectoryLoader):
             "0012_transactions_add_spans",
             "0013_transactions_reduce_spans_exclusive_time",
             "0014_transactions_remove_flattened_columns",
+            "0015_transactions_add_source_column",
         ]
 
 
