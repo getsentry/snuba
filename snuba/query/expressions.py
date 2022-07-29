@@ -281,6 +281,17 @@ class Literal(Expression):
             return False
         return self.value == other.value
 
+    # Only sort string literals, otherwise default
+    def __gt__(self, other: Literal) -> bool:
+        if isinstance(self.value, str) and isinstance(other.value, str):
+            return self.value > other.value
+        return True
+
+    def __lt__(self, other: Literal) -> bool:
+        if isinstance(self.value, str) and isinstance(other.value, str):
+            return self.value < other.value
+        return True
+
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class Column(Expression):
@@ -307,6 +318,13 @@ class Column(Expression):
             self.table_name == other.table_name
             and self.column_name == other.column_name
         )
+
+    # Override comparison operators for sorting SQL fields and conditions
+    def __gt__(self, other: Column) -> bool:
+        return self.column_name > other.column_name
+
+    def __lt__(self, other: Column) -> bool:
+        return self.column_name < other.column_name
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -415,6 +433,57 @@ class FunctionCall(Expression):
             params_functionally_equivalent = param.functional_eq(other_parameter)
             if not params_functionally_equivalent:
                 return False
+        return True
+
+    # Sort by Class and alphabetical: Literals < Columns < FunctionCalls (nested)
+    def __gt__(self, other: FunctionCall) -> bool:
+        if isinstance(self, Literal) and isinstance(other, Literal):
+            return self > other
+        elif isinstance(self, Literal):
+            return False
+        elif isinstance(other, Literal):
+            return True
+        elif not self.parameters:
+            return False
+        elif not other.parameters:
+            return True
+        elif isinstance(self.parameters[0], Column) and isinstance(
+            other.parameters[0], Column
+        ):
+            return self.parameters[0] > other.parameters[0]
+        elif isinstance(self.parameters[0], Column):
+            return False
+        elif isinstance(other.parameters[0], Column):
+            return True
+        elif isinstance(self.parameters[0], FunctionCall) and isinstance(
+            other.parameters[0], FunctionCall
+        ):
+            return self.parameters[0].__gt__(other.parameters[0])
+        return True
+
+    def __lt__(self, other: FunctionCall) -> bool:
+        if isinstance(self, Literal) and isinstance(other, Literal):
+            return self < other
+        elif isinstance(self, Literal):
+            return True
+        elif isinstance(other, Literal):
+            return False
+        elif not self.parameters:
+            return True
+        elif not other.parameters:
+            return False
+        elif isinstance(self.parameters[0], Column) and isinstance(
+            other.parameters[0], Column
+        ):
+            return self.parameters[0] < other.parameters[0]
+        elif isinstance(self.parameters[0], Column):
+            return True
+        elif isinstance(other.parameters[0], Column):
+            return False
+        elif isinstance(self.parameters[0], FunctionCall) and isinstance(
+            other.parameters[0], FunctionCall
+        ):
+            return self.parameters[0].__lt__(other.parameters[0])
         return True
 
 

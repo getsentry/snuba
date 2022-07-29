@@ -617,6 +617,45 @@ sorted_test_cases = [
             selected_columns=[
                 SelectedExpression("c2", Column("c2", None, "column2")),
                 SelectedExpression("c1", Column("c1", None, "column1")),
+            ],
+            condition=binary_condition(
+                "and",
+                lhs=binary_condition(
+                    ConditionFunctions.EQ,
+                    lhs=Column("c2", None, "column2"),
+                    rhs=Literal(None, "2"),
+                ),
+                rhs=binary_condition(
+                    ConditionFunctions.EQ,
+                    lhs=Column("c1", None, "column1"),
+                    rhs=Literal(None, "1"),
+                ),
+            ),
+        ),
+        [
+            "SELECT (column1 AS c1), (column2 AS c2)",
+            ["FROM", "my_table"],
+            ("WHERE equals(c1, '1') AND equals(c2, '2')"),
+        ],
+        (
+            "SELECT (column1 AS c1), (column2 AS c2) "
+            "FROM my_table "
+            "WHERE equals(c1, '1') AND equals(c2, '2')"
+        ),
+        (
+            "SELECT (column1 AS c1), (column2 AS c2) "
+            "FROM my_table "
+            "WHERE equals(c1, '$S') AND equals(c2, '$S')"
+        ),
+        id="query_simple_sort_columns_and_conditions",
+    ),
+    pytest.param(
+        Query(
+            Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("c2", Column("c2", None, "column2")),
+                SelectedExpression("c1", Column("c1", None, "column1")),
+                SelectedExpression("c3", Column("c4", None, "column4")),
                 SelectedExpression("c3", Column("c3", None, "column3")),
             ],
             condition=binary_condition(
@@ -626,50 +665,128 @@ sorted_test_cases = [
                     binary_condition(
                         ConditionFunctions.EQ,
                         lhs=Column("c3", None, "column3"),
-                        rhs=Literal(None, "abcd"),
+                        rhs=Literal(None, "3"),
                     ),
                     binary_condition(
                         ConditionFunctions.EQ,
                         lhs=Column("c2", None, "column2"),
-                        rhs=Literal(None, "efgh"),
+                        rhs=Literal(None, "2"),
                     ),
                 ),
                 binary_condition(
                     BooleanFunctions.OR,
                     binary_condition(
                         ConditionFunctions.EQ,
-                        lhs=Column(None, None, "c1"),
-                        rhs=Literal(None, "ijkl"),
+                        lhs=Column("c1", None, "column1"),
+                        rhs=Literal(None, "1"),
                     ),
                     binary_condition(
                         ConditionFunctions.EQ,
-                        lhs=Column(None, None, "c4"),
-                        rhs=Literal(None, "mnop"),
+                        lhs=Column("c4", None, "column4"),
+                        rhs=Literal(None, "4"),
                     ),
                 ),
             ),
         ),
         [
-            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3)",
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3), (column4 AS c4)",
             ["FROM", "my_table"],
             (
-                "WHERE (equals(c3, 'abcd') AND (equals(c1, 'ijkl') OR "
-                "equals(c2, 'efgh')) OR equals(c4, 'mnop'))"
+                "WHERE (equals(c1, '1') OR equals(c4, '4')) AND "
+                "(equals(c2, '2') OR equals(c3, '3'))"
             ),
         ],
         (
-            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3) "
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3), (column4 AS c4) "
             "FROM my_table "
-            "WHERE (equals(c3, 'abcd') AND (equals(c1, 'ijkl') OR "
-            "equals(c2, 'efgh')) OR equals(c4, 'mnop'))"
+            "WHERE (equals(c1, '1') OR equals(c4, '4')) AND "
+            "(equals(c2, '2') OR equals(c3, '3'))"
         ),
         (
-            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3) "
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3), (column4 AS c4) "
             "FROM my_table "
-            "WHERE (equals(c3, '$S') AND (equals(c1, '$S') OR "
-            "equals(c2, '$S')) OR equals(c4, '$S'))"
+            "WHERE (equals(c1, '$S') OR equals(c4, '$S')) AND "
+            "(equals(c2, '$S') OR equals(c3, '$S'))"
         ),
-        id="query_complex_condition",
+        id="query_nested_condition",
+    ),
+    pytest.param(
+        Query(
+            Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("c2", Column("c2", None, "column2")),
+                SelectedExpression("c1", Column("c1", None, "column1")),
+                SelectedExpression("c3", Column("c4", None, "column4")),
+                SelectedExpression("c3", Column("c3", None, "column3")),
+                SelectedExpression("c5", Column("c5", None, "column5")),
+            ],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                lhs=binary_condition(
+                    BooleanFunctions.OR,
+                    lhs=binary_condition(
+                        BooleanFunctions.OR,
+                        lhs=binary_condition(
+                            ConditionFunctions.EQ,
+                            lhs=Column("c4", None, "column4"),
+                            rhs=Literal(None, "4"),
+                        ),
+                        rhs=binary_condition(
+                            ConditionFunctions.EQ,
+                            lhs=Column("c3", None, "column3"),
+                            rhs=Literal(None, "3"),
+                        ),
+                    ),
+                    rhs=binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column("c5", None, "column5"),
+                        rhs=Literal(None, "5"),
+                    ),
+                ),
+                rhs=binary_condition(
+                    BooleanFunctions.OR,
+                    lhs=binary_condition(
+                        BooleanFunctions.OR,
+                        lhs=binary_condition(
+                            ConditionFunctions.EQ,
+                            lhs=Column("c3", None, "column3"),
+                            rhs=Literal(None, "3"),
+                        ),
+                        rhs=binary_condition(
+                            ConditionFunctions.EQ,
+                            lhs=Column("c2", None, "column2"),
+                            rhs=Literal(None, "2"),
+                        ),
+                    ),
+                    rhs=binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column("c1", None, "column1"),
+                        rhs=Literal(None, "1"),
+                    ),
+                ),
+            ),
+        ),
+        [
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3), (column4 AS c4), (column5 AS c5)",
+            ["FROM", "my_table"],
+            (
+                "WHERE (equals(c1, '1') OR equals(c2, '2') OR equals(c3, '3')) AND "
+                "(equals(c3, '3') OR equals(c4, '4') OR equals(c5, '5'))"
+            ),
+        ],
+        (
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3), (column4 AS c4), (column5 AS c5) "
+            "FROM my_table "
+            "WHERE (equals(c1, '1') OR equals(c2, '2') OR equals(c3, '3')) AND "
+            "(equals(c3, '3') OR equals(c4, '4') OR equals(c5, '5'))"
+        ),
+        (
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3), (column4 AS c4), (column5 AS c5) "
+            "FROM my_table "
+            "WHERE (equals(c1, '$S') OR equals(c2, '$S') OR equals(c3, '$S')) AND "
+            "(equals(c3, '$S') OR equals(c4, '$S') OR equals(c5, '$S'))"
+        ),
+        id="query_double_nested_condition",
     ),
 ]
 

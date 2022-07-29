@@ -392,7 +392,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 def check_sorted_sql_key_in_cache(
     formatted_query_sorted: Optional[FormattedQuery], reader: Reader
-) -> None:
+) -> bool:
     cache_partition = _get_cache_partition(reader)
     if formatted_query_sorted:
         key_sorted = get_query_cache_key(formatted_query_sorted)
@@ -404,7 +404,7 @@ def check_sorted_sql_key_in_cache(
             key_sorted_with_prefix = f"sorted:{key_sorted}"
             result = cache_partition.get(key_sorted_with_prefix)
             if result is not None:
-                write_query_cache_hit_metric("sorted", reader, key_sorted)
+                return True
             else:
                 empty_result: Result = {
                     "meta": [],
@@ -414,6 +414,8 @@ def check_sorted_sql_key_in_cache(
                     "trace_output": "",
                 }
                 cache_partition.set(key_sorted_with_prefix, empty_result)
+                return False
+    return False
 
 
 def hash_to_probability(hexadecimal: str) -> float:
@@ -491,14 +493,17 @@ def execute_query_with_caching(
         key = get_query_cache_key(formatted_query)
         clickhouse_query_settings["query_id"] = key
         if use_cache:
-            check_sorted_sql_key_in_cache(formatted_query_sorted, reader)
+            sorted_key_exists = check_sorted_sql_key_in_cache(
+                formatted_query_sorted, reader
+            )
             cache_partition = _get_cache_partition(reader)
             result = cache_partition.get(key)
             timer.mark("cache_get")
             stats["cache_hit"] = result is not None
             if result is not None:
                 span.set_tag("cache", "hit")
-                write_query_cache_hit_metric("unsorted", reader, key)
+                if sorted_key_exists:
+                    metrics.increment("sorted_and_unsorted_cache_hit")
                 return result
 
             span.set_tag("cache", "miss")
@@ -523,7 +528,7 @@ def execute_query_with_readthrough_caching(
     robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
-    check_sorted_sql_key_in_cache(formatted_query_sorted, reader)
+    sorted_key_exists = check_sorted_sql_key_in_cache(formatted_query_sorted, reader)
     clickhouse_query_settings["query_id"] = query_id
 
     span = Hub.current.scope.span
@@ -535,7 +540,8 @@ def execute_query_with_readthrough_caching(
         if hit_type == RESULT_VALUE:
             stats["cache_hit"] = 1
             span_tag = "cache_hit"
-            write_query_cache_hit_metric("unsorted", reader, query_id)
+            if sorted_key_exists:
+                metrics.increment("sorted_and_unsorted_cache_hit")
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
@@ -566,19 +572,6 @@ def execute_query_with_readthrough_caching(
         record_cache_hit_type=record_cache_hit_type,
         timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
         timer=timer,
-    )
-
-
-def write_query_cache_hit_metric(
-    is_sorted: str, reader: Reader, key_sorted: str
-) -> None:
-    metrics.increment(
-        "snuba.api.query.cache_hit",
-        tags={
-            "partition_id": reader.cache_partition_id or "default",
-            "query_info": is_sorted,
-            "key": key_sorted,
-        },
     )
 
 

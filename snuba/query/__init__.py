@@ -55,6 +55,16 @@ class SelectedExpression:
     name: Optional[str]
     expression: Expression
 
+    def __gt__(self, other: SelectedExpression) -> bool:
+        if isinstance(self.expression, Column) and isinstance(other.expression, Column):
+            return self.expression > other.expression
+        return True
+
+    def __lt__(self, other: SelectedExpression) -> bool:
+        if isinstance(self.expression, Column) and isinstance(other.expression, Column):
+            return self.expression < other.expression
+        return True
+
 
 TExp = TypeVar("TExp", bound=Expression)
 

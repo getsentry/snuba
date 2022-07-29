@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Optional, Sequence, Type, Union
 
 from snuba.clickhouse.formatter.expression import (
@@ -103,13 +102,13 @@ def _format_query_content(
     Should we have more differences going on we should break this
     method into smaller ones.
     """
-    parsing_context = ParsingContext()
+    parsing_context = ParsingContext(sort_fields=sort_fields)
     formatter = expression_formatter_type(parsing_context)
 
     return [
         v
         for v in [
-            _format_select(query, formatter, sort_fields),
+            _format_select(query, formatter),
             PaddingNode(
                 "FROM",
                 DataSourceFormatter(expression_formatter_type).visit(
@@ -117,18 +116,12 @@ def _format_query_content(
                 ),
             ),
             _format_arrayjoin(query, formatter),
-            _build_optional_string_node(
-                "PREWHERE", query.get_prewhere_ast(), formatter, sort_fields
-            )
+            _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
             if isinstance(query, Query)
             else None,
-            _build_optional_string_node(
-                "WHERE", query.get_condition(), formatter, sort_fields
-            ),
+            _build_optional_string_node("WHERE", query.get_condition(), formatter),
             _format_groupby(query, formatter),
-            _build_optional_string_node(
-                "HAVING", query.get_having(), formatter, sort_fields
-            ),
+            _build_optional_string_node("HAVING", query.get_having(), formatter),
             _format_orderby(query, formatter),
             _format_limitby(query, formatter),
             _format_limit(query, formatter),
@@ -138,13 +131,15 @@ def _format_query_content(
 
 
 def _format_select(
-    query: AbstractQuery, formatter: ExpressionVisitor[str], sort_fields: bool = False
+    query: AbstractQuery, formatter: ExpressionVisitor[str]
 ) -> StringNode:
-    selected_cols = [
-        e.expression.accept(formatter) for e in query.get_selected_columns()
-    ]
-    if sort_fields:
-        selected_cols = sorted(selected_cols)
+    selected_columns = query.get_selected_columns()
+    if (
+        isinstance(formatter, ExpressionFormatterBase)
+        and formatter._parsing_context.sort_fields
+    ):
+        selected_columns = sorted(selected_columns)
+    selected_cols = [e.expression.accept(formatter) for e in selected_columns]
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
 
@@ -152,18 +147,12 @@ def _build_optional_string_node(
     name: str,
     expression: Optional[Expression],
     formatter: ExpressionVisitor[str],
-    sort_fields: bool = False,
 ) -> Optional[StringNode]:
-    if expression is not None:
-        expression_string = expression.accept(formatter)
-        # Sorting will not work if sub-queries in expressions becomes supported in the future
-        if sort_fields:
-            expression_list = re.split("(?=AND)|(?=OR)", expression_string)
-            expression_list[1:] = sorted(expression_list[1:])
-            expression_string = "".join(expression_list)
-        return StringNode(f"{name} {expression_string}")
-    else:
-        return None
+    return (
+        StringNode(f"{name} {expression.accept(formatter)}")
+        if expression is not None
+        else None
+    )
 
 
 def _format_groupby(

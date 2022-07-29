@@ -316,7 +316,6 @@ def _format_storage_query_and_run(
         if referrer not in EXCLUDED_REFERRERS_FROM_FIELDS_SORTING:
             formatted_query_sorted = format_query(clickhouse_query, sort_fields=True)
 
-        # do modular hash algorithm
         formatted_sql = formatted_query.get_sql()
         query_size_bytes = len(formatted_sql.encode("utf-8"))
         span.set_data(
