@@ -67,11 +67,11 @@ class ReplaysProcessor(MessageProcessor):
         # processed["url"] = self._get_url(replay_event) TODO: add this in once we have the url column
         processed["platform"] = _unicodify(replay_event["platform"])
 
-        error_ids = replay_event["error_ids"]
+        error_ids = replay_event.get("error_ids") or []
         if len(error_ids) > ERROR_IDS_LIMIT:
             metrics.increment("error_ids_exceeded_limit")
 
-        processed["error_ids"] = [uuid.UUID(eid) for eid in error_ids[:ERROR_IDS_LIMIT]]
+        processed["error_ids"] = error_ids[:ERROR_IDS_LIMIT]
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
