@@ -248,7 +248,7 @@ def all_config_descriptions() -> Response:
     )
 
 
-@application.route("/configs/<config_key>", methods=["PUT", "DELETE"])
+@application.route("/configs/<path:config_key>", methods=["PUT", "DELETE"])
 def config(config_key: str) -> Response:
     if request.method == "DELETE":
         user = request.headers.get(USER_HEADER_KEY)
