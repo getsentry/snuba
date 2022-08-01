@@ -119,18 +119,3 @@ def test_tuple_unaliaser(input_query, expected_query):
     settings = HTTPQuerySettings()
     TupleUnaliaser().process_query(input_query, settings)
     assert input_query == expected_query
-
-
-def test_killswitch():
-    p = TupleUnaliaser()
-    assert not p.should_run()
-    set_config("tuple_unaliaser_rollout", 0)
-    assert not p.should_run()
-    set_config("tuple_unaliaser_rollout", 1)
-    assert p.should_run()
-
-
-def test_garbage_rollot():
-    p = TupleUnaliaser()
-    set_config("tuple_unaliaser_rollout", "garbage")
-    assert not p.should_run()
