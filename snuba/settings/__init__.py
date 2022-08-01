@@ -114,8 +114,12 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 # Processor/Writer Options
 
 BROKER_CONFIG: Mapping[str, Any] = {
-    # See snuba/utils/streams/backends/kafka.py for the supported options
+    # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
+    "security.protocol": os.environ.get("KAFKA_SECURITY_PROTOCOL", "plaintext"),
+    "ssl.ca.location": os.environ.get("KAFKA_SSL_CA_PATH", ""),
+    "ssl.certificate.location": os.environ.get("KAFKA_SSL_CERT_PATH", ""),
+    "ssl.key.location": os.environ.get("KAFKA_SSL_KEY_PATH", ""),
 }
 
 # Mapping of default Kafka topic name to custom names
