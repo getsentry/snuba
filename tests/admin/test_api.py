@@ -110,6 +110,23 @@ def test_delete_configs(admin_api: FlaskClient) -> None:
     assert state.get_uncached_config("delete_this") is None
     assert state.get_config_description("delete_this") is None
 
+    # delete a config with '/' in it and its description
+    state.set_config("delete/with/slash", "1")
+    state.set_config_description(
+        "delete/with/slash", "description for delete with slash config"
+    )
+    assert state.get_uncached_config("delete/with/slash") == 1
+    assert (
+        state.get_config_description("delete/with/slash")
+        == "description for delete with slash config"
+    )
+
+    response = admin_api.delete("configs/delete/with/slash")
+
+    assert response.status_code == 200
+    assert state.get_uncached_config("delete/with/slash") is None
+    assert state.get_config_description("delete/with/slash") is None
+
     # delete a config but not description
     state.set_config("delete_this", "1")
     state.set_config_description("delete_this", "description for this config")
