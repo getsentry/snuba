@@ -175,7 +175,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions", "replays"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
 
