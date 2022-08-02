@@ -34,7 +34,8 @@ from sentry_sdk import capture_exception
 ReplayEventDict = Mapping[Any, Any]
 RetentionDays = int
 
-
+# A sane upper bound of 1000 was chosen for error_ids. If you know better, change it.
+ERROR_IDS_LIMIT = 1000
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
@@ -67,6 +68,12 @@ class ReplaysProcessor(MessageProcessor):
         processed["dist"] = replay_event.get("dist")
         processed["url"] = self._get_url(replay_event)
         processed["platform"] = _unicodify(replay_event["platform"])
+
+        error_ids = replay_event.get("error_ids") or []
+        if len(error_ids) > ERROR_IDS_LIMIT:
+            metrics.increment("error_ids_exceeded_limit")
+
+        processed["error_ids"] = error_ids[:ERROR_IDS_LIMIT]
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict

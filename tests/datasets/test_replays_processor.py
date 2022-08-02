@@ -18,6 +18,7 @@ class ReplayEvent:
     replay_id: str
     segment_id: int
     trace_ids: list[str]
+    error_ids: list[str]
     timestamp: float
     platform: str
     environment: str
@@ -49,6 +50,7 @@ class ReplayEvent:
                             "segment_id": self.segment_id,
                             "tags": {"customtag": "is_set", "transaction": self.title},
                             "trace_ids": self.trace_ids,
+                            "error_ids": self.error_ids,
                             "dist": self.dist,
                             "platform": self.platform,
                             "timestamp": self.timestamp,
@@ -108,6 +110,7 @@ class ReplayEvent:
             "replay_id": str(uuid.UUID(self.replay_id)),
             "event_hash": event_hash,
             "segment_id": self.segment_id,
+            "error_ids": self.error_ids,
             "trace_ids": self.trace_ids,
             "timestamp": datetime.utcfromtimestamp(self.timestamp),
             "platform": self.platform,
@@ -149,6 +152,7 @@ class TestReplaysProcessor:
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             title="/organizations/:orgId/issues/",
+            error_ids=["36e980a9-c602-4cde-9f5d-089f15b83b5f"],
             trace_ids=[
                 "36e980a9-c602-4cde-9f5d-089f15b83b5f",
                 "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
@@ -180,6 +184,7 @@ class TestReplaysProcessor:
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             title=None,
+            error_ids=[],
             trace_ids=[],
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),

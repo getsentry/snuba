@@ -131,11 +131,23 @@ class MetricsSetsSubscription(SessionsSubscription):
     disallowed_aggregations = ["having", "orderby"]
 
 
+class GenericMetricsSetsSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+    disallowed_aggregations = ["having", "orderby"]
+
+
+class GenericMetricsDistributionsSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+    disallowed_aggregations = ["having", "orderby"]
+
+
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
     EventsSubscription: EntityKey.EVENTS,
     TransactionsSubscription: EntityKey.TRANSACTIONS,
     MetricsCountersSubscription: EntityKey.METRICS_COUNTERS,
     MetricsSetsSubscription: EntityKey.METRICS_SETS,
+    GenericMetricsSetsSubscription: EntityKey.GENERIC_METRICS_SETS,
+    GenericMetricsDistributionsSubscription: EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
 }
 
 ENTITY_KEY_TO_SUBSCRIPTION_MAPPER: Mapping[EntityKey, Type[EntitySubscription]] = {
