@@ -32,7 +32,11 @@ columns = ColumnSet(
         (
             "trace_ids",
             Array(UUID()),
-        ),  # TODO: create bloom filter index / materialize column
+        ),
+        (
+            "error_ids",
+            Array(UUID()),
+        ),
         ("title", String(Modifiers(readonly=True))),
         ("url", String(Modifiers(nullable=True))),
         ### common sentry event columns
