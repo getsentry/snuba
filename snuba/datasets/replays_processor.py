@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional, cast
+from typing import Any, Mapping, MutableMapping, Optional
 
 import rapidjson
 
@@ -52,7 +52,10 @@ class ReplaysProcessor(MessageProcessor):
             return None
 
         url = request.get("url")
-        return cast(str, url) if url else None
+        if url is None:
+            return None
+        else:
+            return str(url)
 
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
