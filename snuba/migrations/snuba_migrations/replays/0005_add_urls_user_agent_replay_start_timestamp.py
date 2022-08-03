@@ -1,12 +1,12 @@
 from typing import List, Sequence, Tuple
 
-from snuba.clickhouse.columns import UUID, Array, Column, DateTime, String
+from snuba.clickhouse.columns import Array, Column, DateTime, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
-    (Column("urls", Array(UUID())), "url"),
+    (Column("urls", Array(String())), "url"),
     (Column("replay_start_timestamp", DateTime(Modifiers(nullable=True))), "timestamp"),
     (Column("user_agent", String(Modifiers(nullable=True))), "user"),
 ]
