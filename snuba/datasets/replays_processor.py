@@ -46,16 +46,15 @@ class ReplaysProcessor(MessageProcessor):
             timestamp = datetime.utcnow()
         return timestamp
 
-    def _get_url(self, replay_event: ReplayEventDict) -> Optional[str]:
-        request = replay_event.get("request", {})
-        if not isinstance(request, dict):
+    def __extract_started_at(self, started_at: Optional[int]) -> datetime:
+        if started_at is None:
             return None
 
-        url = request.get("url")
-        if url is None:
-            return None
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(started_at))
+        if timestamp:
+            return timestamp
         else:
-            return str(url)
+            raise TypeError("Missing data for replay_start_timestamp column.")
 
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -66,10 +65,13 @@ class ReplaysProcessor(MessageProcessor):
         processed["timestamp"] = self.__extract_timestamp(
             replay_event["timestamp"],
         )
+        processed["replay_start_timestamp"] = self.__extract_started_at(
+            replay_event.get("replay_start_timestamp"),
+        )
+        processed["urls"] = replay_event.get("urls", [])
         processed["release"] = replay_event.get("release")
         processed["environment"] = replay_event.get("environment")
         processed["dist"] = replay_event.get("dist")
-        processed["url"] = self._get_url(replay_event)
         processed["platform"] = _unicodify(replay_event["platform"])
 
         error_ids = replay_event.get("error_ids") or []
@@ -117,6 +119,19 @@ class ReplaysProcessor(MessageProcessor):
                 processed["ip_address_v6"] = str(ip_address)
 
         self._add_user_column(processed, user_data)
+
+    def _process_request_headers(
+        self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
+    ) -> None:
+        request = replay_event.get("request", {})
+        if not isinstance(request, dict):
+            return None
+
+        headers = request.get("headers", {})
+        if not isinstance(headers, dict):
+            return None
+
+        processed["user_agent"] = headers.get("User-Agent")
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -173,6 +188,7 @@ class ReplaysProcessor(MessageProcessor):
             # # the following operation modifies the event_dict and is therefore *not* order-independent
             self._process_user(processed, replay_event)
             self._process_event_hash(processed, replay_event)
+            self._process_request_headers(processed, replay_event)
             return InsertBatch([processed], None)
         except Exception as e:
             metrics.increment("consumer_error")
