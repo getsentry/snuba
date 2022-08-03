@@ -46,7 +46,7 @@ class ReplaysProcessor(MessageProcessor):
             timestamp = datetime.utcnow()
         return timestamp
 
-    def __extract_started_at(self, started_at: Optional[int]) -> datetime:
+    def __extract_started_at(self, started_at: Optional[int]) -> Optional[datetime]:
         if started_at is None:
             return None
 
