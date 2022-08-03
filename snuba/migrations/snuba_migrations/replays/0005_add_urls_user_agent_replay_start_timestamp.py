@@ -27,7 +27,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
         drop_column_ops: List[operations.SqlOperation] = [
-            operations.DropColumn(StorageSetKey.REPLAYS, "replays_dist", "url")
+            operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", "url")
         ]
 
         return new_column_ops + drop_column_ops
