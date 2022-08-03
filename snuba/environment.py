@@ -34,7 +34,7 @@ def setup_sentry() -> None:
             RedisIntegration(),
         ],
         release=os.getenv("SNUBA_RELEASE"),
-        traces_sample_rate=0,
+        traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
     )
 
 
