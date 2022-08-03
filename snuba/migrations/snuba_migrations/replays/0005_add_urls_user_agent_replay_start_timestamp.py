@@ -75,7 +75,7 @@ class Migration(migration.ClickhouseNodeMigration):
         new_column_ops: List[operations.SqlOperation] = [
             operations.AddColumn(
                 storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
+                table_name="replays_dist",
                 column=Column("url", String(Modifiers(nullable=True))),
                 after="title",
             )
