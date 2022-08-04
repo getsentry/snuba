@@ -4,7 +4,7 @@ initially built to handle metrics-enhanced performance.
 """
 
 from dataclasses import dataclass, fields
-from typing import Any, Dict, Mapping, Sequence, Type, Union
+from typing import Any, Dict, Mapping, Optional, Sequence, Type, Union
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -224,6 +224,7 @@ class StreamLoaderConfig:
     subscription_scheduled_topic: str
     subscription_scheduler_mode: str
     subscription_result_topic: str
+    replacement_topic: Optional[str]
     pre_filter: PrefilterConfig
 
 
@@ -244,7 +245,7 @@ CONF_TO_PREFILTER: Mapping[str, Any] = {
     "kafka_header_select_filter": KafkaHeaderSelectFilter
 }
 
-dist_bucket_storage = WritableTableStorage(
+distributions_bucket_storage_new = WritableTableStorage(
     storage_key=StorageKey(conf.storage.key),
     storage_set_key=StorageSetKey(conf.storage.set_key),
     schema=WritableTableSchema(
@@ -266,10 +267,15 @@ dist_bucket_storage = WritableTableStorage(
             conf.stream_loader.subscription_scheduler_mode
         ),
         subscription_result_topic=Topic(conf.stream_loader.subscription_result_topic),
+        replacement_topic=Topic(conf.stream_loader.replacement_topic)
+        if conf.stream_loader.replacement_topic
+        else None,
         pre_filter=CONF_TO_PREFILTER[conf.stream_loader.pre_filter.type](
             *conf.stream_loader.pre_filter.kwargs
         ),
     ),
 )
 
-print(dist_bucket_storage)
+import pdb
+
+pdb.set_trace()

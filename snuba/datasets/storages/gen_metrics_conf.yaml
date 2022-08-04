@@ -13,6 +13,7 @@ stream_loader:
   subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-distributions
   subscription_scheduler_mode: global
   subscription_result_topic: generic-metrics-distributions-subscription-results
+  replacement_topic: null
   pre_filter:
     type: kafka_header_select_filter
     kwargs: [metric_type, d]
