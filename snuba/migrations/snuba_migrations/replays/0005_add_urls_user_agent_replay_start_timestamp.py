@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
-    (Column("urls", Array(String())), "url"),
+    (Column("urls", Array(String())), "title"),
     (Column("replay_start_timestamp", DateTime(Modifiers(nullable=True))), "timestamp"),
     (Column("user_agent", String(Modifiers(nullable=True))), "user"),
 ]
