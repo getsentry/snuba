@@ -36,6 +36,9 @@ RetentionDays = int
 
 # A sane upper bound of 1000 was chosen for error_ids. If you know better, change it.
 ERROR_IDS_LIMIT = 1000
+# A sane upper bound of 1000 was chosen for urls. If you know better, change it.
+URLS_LIMIT = 1000
+
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
@@ -68,7 +71,7 @@ class ReplaysProcessor(MessageProcessor):
         processed["replay_start_timestamp"] = self.__extract_started_at(
             replay_event.get("replay_start_timestamp"),
         )
-        processed["urls"] = replay_event.get("urls", [])
+        processed["urls"] = replay_event.get("urls", [])[:URLS_LIMIT]
         processed["release"] = replay_event.get("release")
         processed["environment"] = replay_event.get("environment")
         processed["dist"] = replay_event.get("dist")
