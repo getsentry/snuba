@@ -4,7 +4,7 @@ initially built to handle metrics-enhanced performance.
 """
 
 from dataclasses import dataclass, fields
-from typing import Any, Dict, Mapping, Optional, Sequence, Type, Union
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Type, Union
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -163,7 +163,7 @@ distributions_storage = ReadableTableStorage(
     query_processors=shared_query_processors,
 )
 
-distributions_bucket_storage = WritableTableStorage(
+distributions_bucket_storage_old = WritableTableStorage(
     storage_key=StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW,
     storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
     schema=WritableTableSchema(
@@ -206,26 +206,29 @@ class StorageMetadata:
 @dataclass(frozen=True)
 class SchemaConfig:
     # columns: Sequence[Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]]
+    # somehow configure this^
     columns: Sequence[str]
     local_table_name: str
     dist_table_name: str
 
 
 @dataclass(frozen=True)
-class PrefilterConfig:
+class FunctionCallConfig:
     type: str
     kwargs: Sequence[str]
 
 
 @dataclass(frozen=True)
 class StreamLoaderConfig:
+    processor: str
     default_topic: str
     commit_log_topic: str
     subscription_scheduled_topic: str
     subscription_scheduler_mode: str
     subscription_result_topic: str
     replacement_topic: Optional[str]
-    pre_filter: PrefilterConfig
+    pre_filter: FunctionCallConfig
+    dlq_policy: FunctionCallConfig
 
 
 @dataclass(frozen=True)
@@ -233,6 +236,22 @@ class StorageConfig:
     storage: StorageMetadata
     schema: SchemaConfig
     stream_loader: StreamLoaderConfig
+
+
+def policy_creator_creator(
+    dlq_policy_conf: FunctionCallConfig,
+) -> Optional[Callable[[], DeadLetterQueuePolicy]]:
+    if dlq_policy_conf.type == "produce":
+        dlq_topic = dlq_policy_conf.kwargs[0]
+
+        def produce_policy_creator2() -> DeadLetterQueuePolicy:
+            return ProduceInvalidMessagePolicy(
+                KafkaProducer(build_kafka_producer_configuration(Topic(dlq_topic))),
+                KafkaTopic(dlq_topic),
+            )
+
+        return produce_policy_creator2
+    return None
 
 
 file = open("./snuba/datasets/storages/gen_metrics_conf.yaml")
@@ -244,8 +263,11 @@ assert isinstance(conf, StorageConfig)
 CONF_TO_PREFILTER: Mapping[str, Any] = {
     "kafka_header_select_filter": KafkaHeaderSelectFilter
 }
+CONF_TO_PROCESSOR: Mapping[str, Any] = {
+    "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor
+}
 
-distributions_bucket_storage_new = WritableTableStorage(
+distributions_bucket_storage = WritableTableStorage(
     storage_key=StorageKey(conf.storage.key),
     storage_set_key=StorageSetKey(conf.storage.set_key),
     schema=WritableTableSchema(
@@ -256,9 +278,11 @@ distributions_bucket_storage_new = WritableTableStorage(
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=GenericDistributionsMetricsProcessor(),  # not config'd
+        processor=CONF_TO_PROCESSOR[conf.stream_loader.processor](),
         default_topic=Topic(conf.stream_loader.default_topic),
-        dead_letter_queue_policy_creator=produce_policy_creator,  # not config'd
+        dead_letter_queue_policy_creator=policy_creator_creator(
+            conf.stream_loader.dlq_policy
+        ),
         commit_log_topic=Topic(conf.stream_loader.commit_log_topic),
         subscription_scheduled_topic=Topic(
             conf.stream_loader.subscription_scheduled_topic
