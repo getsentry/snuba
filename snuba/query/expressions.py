@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import operator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
 
 from snuba import settings
 
@@ -84,6 +85,34 @@ class Expression(_Expression, ABC):
         operation ignoring aliases
         """
         raise NotImplementedError
+
+    # These functions are called from the FunctionClass when same class operator overrides are not available
+    def __gt__(self, other: Any) -> bool:
+        return self.compare_expressions(other, operator.gt)
+
+    def __lt__(self, other: Any) -> bool:
+        return self.compare_expressions(other, operator.lt)
+
+    # Sort by Class first and then alphabetically
+    # Class order: Literals < Columns < FunctionCalls (nested) < other
+    def compare_expressions(
+        self, other: Expression, op: Callable[[Any, Any], Any]
+    ) -> bool:
+        relate = {operator.lt: True, operator.gt: False}
+
+        if isinstance(self, Literal):
+            return relate[op]
+        elif isinstance(other, Literal):
+            return not relate[op]
+        elif isinstance(self, Column):
+            return relate[op]
+        elif isinstance(other, Column):
+            return not relate[op]
+        elif isinstance(self, FunctionCall):
+            return relate[op]
+        elif isinstance(other, FunctionCall):
+            return not relate[op]
+        return True
 
 
 class ExpressionVisitor(ABC, Generic[TVisited]):
@@ -282,15 +311,21 @@ class Literal(Expression):
         return self.value == other.value
 
     # Only sort string literals, otherwise default
-    def __gt__(self, other: Literal) -> bool:
-        if isinstance(self.value, str) and isinstance(other.value, str):
-            return self.value > other.value
-        return True
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Literal):
+            if isinstance(self.value, str) and isinstance(other.value, str):
+                return self.value > other.value
+            else:
+                return True
+        return self.compare_expressions(other, operator.gt)
 
-    def __lt__(self, other: Literal) -> bool:
-        if isinstance(self.value, str) and isinstance(other.value, str):
-            return self.value < other.value
-        return True
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Literal):
+            if isinstance(self.value, str) and isinstance(other.value, str):
+                return self.value < other.value
+            else:
+                return True
+        return self.compare_expressions(other, operator.lt)
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -320,11 +355,15 @@ class Column(Expression):
         )
 
     # Override comparison operators for sorting SQL fields and conditions
-    def __gt__(self, other: Column) -> bool:
-        return self.column_name > other.column_name
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Column):
+            return self.column_name > other.column_name
+        return self.compare_expressions(other, operator.gt)
 
-    def __lt__(self, other: Column) -> bool:
-        return self.column_name < other.column_name
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Column):
+            return self.column_name < other.column_name
+        return self.compare_expressions(other, operator.lt)
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -371,6 +410,17 @@ class SubscriptableReference(Expression):
         return self.column.functional_eq(other.column) and self.key.functional_eq(
             other.key
         )
+
+    # Sort class by the left side key (literals)
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, SubscriptableReference):
+            return self.key > other.key
+        return self.compare_expressions(other, operator.gt)
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, SubscriptableReference):
+            return self.key < other.key
+        return self.compare_expressions(other, operator.lt)
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -435,55 +485,48 @@ class FunctionCall(Expression):
                 return False
         return True
 
-    # Sort by Class and alphabetical: Literals < Columns < FunctionCalls (nested)
-    def __gt__(self, other: FunctionCall) -> bool:
-        if isinstance(self, Literal) and isinstance(other, Literal):
-            return self > other
-        elif isinstance(self, Literal):
+    def __gt__(self, other: Any) -> bool:
+        # Sort by classes if they are different
+        if not isinstance(other, FunctionCall):
+            return self.compare_expressions(other, operator.gt)
+
+        # Sort by FunctionCall function names if different
+        if self.function_name < other.function_name:
             return False
-        elif isinstance(other, Literal):
+        elif self.function_name > other.function_name:
+            return True
+
+        # Compare the Expressions in the first index in the two FunctionCalls
+        if self.parameters and other.parameters:
+            return (
+                self.parameters[0] > other.parameters[0]
+            )  # uses child class overrides or defaults to parent class compare_expressions()
+        elif self.parameters and not other.parameters:
             return True
         elif not self.parameters:
             return False
-        elif not other.parameters:
-            return True
-        elif isinstance(self.parameters[0], Column) and isinstance(
-            other.parameters[0], Column
-        ):
-            return self.parameters[0] > other.parameters[0]
-        elif isinstance(self.parameters[0], Column):
-            return False
-        elif isinstance(other.parameters[0], Column):
-            return True
-        elif isinstance(self.parameters[0], FunctionCall) and isinstance(
-            other.parameters[0], FunctionCall
-        ):
-            return self.parameters[0].__gt__(other.parameters[0])
         return True
 
-    def __lt__(self, other: FunctionCall) -> bool:
-        if isinstance(self, Literal) and isinstance(other, Literal):
-            return self < other
-        elif isinstance(self, Literal):
+    def __lt__(self, other: Any) -> bool:
+        # Sort by classes if they are different
+        if not isinstance(other, FunctionCall):
+            return self.compare_expressions(other, operator.lt)
+
+        # Sort by FunctionCall function names if different
+        if self.function_name < other.function_name:
             return True
-        elif isinstance(other, Literal):
+        elif self.function_name > other.function_name:
+            return False
+
+        # Compare the Expressions in the first index in the two FunctionCalls
+        if self.parameters and other.parameters:
+            return (
+                self.parameters[0] < other.parameters[0]
+            )  # uses child class overrides or defaults to parent class compare_expressions()
+        elif self.parameters and not other.parameters:
             return False
         elif not self.parameters:
             return True
-        elif not other.parameters:
-            return False
-        elif isinstance(self.parameters[0], Column) and isinstance(
-            other.parameters[0], Column
-        ):
-            return self.parameters[0] < other.parameters[0]
-        elif isinstance(self.parameters[0], Column):
-            return True
-        elif isinstance(other.parameters[0], Column):
-            return False
-        elif isinstance(self.parameters[0], FunctionCall) and isinstance(
-            other.parameters[0], FunctionCall
-        ):
-            return self.parameters[0].__lt__(other.parameters[0])
         return True
 
 
@@ -545,6 +588,17 @@ class CurriedFunctionCall(Expression):
                 return False
         return True
 
+    # Sort by left side of expression (FunctionCall)
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, CurriedFunctionCall):
+            return self.internal_function > other.internal_function
+        return self.compare_expressions(other, operator.gt)
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, CurriedFunctionCall):
+            return self.internal_function < other.internal_function
+        return self.compare_expressions(other, operator.lt)
+
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class Argument(Expression):
@@ -568,6 +622,16 @@ class Argument(Expression):
         if not isinstance(other, self.__class__):
             return False
         return self.name == other.name
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Argument):
+            return self.name > other.name
+        return self.compare_expressions(other, operator.gt)
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Argument):
+            return self.name < other.name
+        return self.compare_expressions(other, operator.lt)
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -609,3 +673,23 @@ class Lambda(Expression):
         if not self.transformation.functional_eq(other.transformation):
             return False
         return True
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Lambda):
+            if self.parameters and other.parameters:
+                return self.parameters[0] > other.parameters[0]
+            elif self.parameters and not other.parameters:
+                return True
+            else:
+                return False
+        return self.compare_expressions(other, operator.gt)
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Lambda):
+            if self.parameters and other.parameters:
+                return self.parameters[0] < other.parameters[0]
+            elif self.parameters and not other.parameters:
+                return False
+            else:
+                return True
+        return self.compare_expressions(other, operator.lt)

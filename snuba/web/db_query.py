@@ -59,6 +59,7 @@ from snuba.utils.serializable_exception import (
 )
 from snuba.web import QueryException, QueryResult
 
+MAX_HASH_PLUS_ONE = 16**32
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 
@@ -400,7 +401,7 @@ def check_sorted_sql_key_in_cache(
             "sort_sql_fields_and_conditions_rollout_percentage", 0
         )
         assert isinstance(percentage, int)
-        if percentage > hash_to_probability(key_sorted):
+        if hash_to_probability(key_sorted) < percentage:
             key_sorted_with_prefix = f"sorted:{key_sorted}"
             result = cache_partition.get(key_sorted_with_prefix)
             if result is not None:
@@ -419,8 +420,16 @@ def check_sorted_sql_key_in_cache(
 
 
 def hash_to_probability(hexadecimal: str) -> float:
-    MAX_HASH_PLUS_ONE = 16 ** len(hexadecimal)
     return float(int(hexadecimal, 16) / MAX_HASH_PLUS_ONE) * 100
+
+
+def write_sorted_unsorted_cache_hit_metric(
+    sorted_key_exists: bool, unsorted_key_exists: bool
+) -> None:
+    metrics.increment(
+        "sorted_and_unsorted_cache_hit",
+        tags={"sorted/unsorted": f"{sorted_key_exists}/{unsorted_key_exists}"},
+    )
 
 
 def _get_cache_partition(reader: Reader) -> Cache[Result]:
@@ -502,11 +511,11 @@ def execute_query_with_caching(
             stats["cache_hit"] = result is not None
             if result is not None:
                 span.set_tag("cache", "hit")
-                if sorted_key_exists:
-                    metrics.increment("sorted_and_unsorted_cache_hit")
+                write_sorted_unsorted_cache_hit_metric(sorted_key_exists, True)
                 return result
 
             span.set_tag("cache", "miss")
+            write_sorted_unsorted_cache_hit_metric(sorted_key_exists, False)
             result = execute()
             cache_partition.set(key, result)
             timer.mark("cache_set")
@@ -540,12 +549,12 @@ def execute_query_with_readthrough_caching(
         if hit_type == RESULT_VALUE:
             stats["cache_hit"] = 1
             span_tag = "cache_hit"
-            if sorted_key_exists:
-                metrics.increment("sorted_and_unsorted_cache_hit")
+            write_sorted_unsorted_cache_hit_metric(sorted_key_exists, True)
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
-
+        else:
+            write_sorted_unsorted_cache_hit_metric(sorted_key_exists, False)
         sentry_sdk.set_tag("cache_status", span_tag)
         if span:
             span.set_data("cache_status", span_tag)

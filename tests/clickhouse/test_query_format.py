@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Sequence
 
 import pytest
@@ -619,9 +620,47 @@ sorted_test_cases = [
                 SelectedExpression("c1", Column("c1", None, "column1")),
             ],
             condition=binary_condition(
-                "and",
+                BooleanFunctions.AND,
                 lhs=binary_condition(
+                    ConditionFunctions.NEQ,
+                    lhs=Column("c1", None, "column1"),
+                    rhs=Literal(None, "1"),
+                ),
+                rhs=binary_condition(
                     ConditionFunctions.EQ,
+                    lhs=Column("c2", None, "column2"),
+                    rhs=Literal(None, "2"),
+                ),
+            ),
+        ),
+        [
+            "SELECT (column1 AS c1), (column2 AS c2)",
+            ["FROM", "my_table"],
+            ("WHERE equals(c2, '2') AND notEquals(c1, '1')"),
+        ],
+        (
+            "SELECT (column1 AS c1), (column2 AS c2) "
+            "FROM my_table "
+            "WHERE equals(c2, '2') AND notEquals(c1, '1')"
+        ),
+        (
+            "SELECT (column1 AS c1), (column2 AS c2) "
+            "FROM my_table "
+            "WHERE equals(c2, '$S') AND notEquals(c1, '$S')"
+        ),
+        id="query_simple_sort_columns_and_conditions_by_function_name",
+    ),
+    pytest.param(
+        Query(
+            Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("c2", Column("c2", None, "column2")),
+                SelectedExpression("c1", Column("c1", None, "column1")),
+            ],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                lhs=binary_condition(
+                    ConditionFunctions.NEQ,
                     lhs=Column("c2", None, "column2"),
                     rhs=Literal(None, "2"),
                 ),
@@ -635,19 +674,19 @@ sorted_test_cases = [
         [
             "SELECT (column1 AS c1), (column2 AS c2)",
             ["FROM", "my_table"],
-            ("WHERE equals(c1, '1') AND equals(c2, '2')"),
+            ("WHERE equals(c1, '1') AND notEquals(c2, '2')"),
         ],
         (
             "SELECT (column1 AS c1), (column2 AS c2) "
             "FROM my_table "
-            "WHERE equals(c1, '1') AND equals(c2, '2')"
+            "WHERE equals(c1, '1') AND notEquals(c2, '2')"
         ),
         (
             "SELECT (column1 AS c1), (column2 AS c2) "
             "FROM my_table "
-            "WHERE equals(c1, '$S') AND equals(c2, '$S')"
+            "WHERE equals(c1, '$S') AND notEquals(c2, '$S')"
         ),
-        id="query_simple_sort_columns_and_conditions",
+        id="query_simple_sort_columns_and_conditions_by_column",
     ),
     pytest.param(
         Query(
@@ -787,6 +826,69 @@ sorted_test_cases = [
             "(equals(c3, '$S') OR equals(c4, '$S') OR equals(c5, '$S'))"
         ),
         id="query_double_nested_condition",
+    ),
+    pytest.param(
+        Query(
+            Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("c2", Column("c2", None, "column2")),
+                SelectedExpression("c1", Column("c1", None, "column1")),
+                SelectedExpression("c3", Column("c3", None, "column3")),
+            ],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    BooleanFunctions.OR,
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column("c3", None, "column3"),
+                        rhs=Literal(None, "3"),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column("c1", None, "column1"),
+                        rhs=Literal(None, "1"),
+                    ),
+                ),
+                binary_condition(
+                    BooleanFunctions.AND,
+                    lhs=binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Column("c2", None, "column2"),
+                        rhs=Literal(None, "2"),
+                    ),
+                    rhs=binary_condition(
+                        ConditionFunctions.EQ,
+                        lhs=Literal(None, datetime(2020, 4, 20, 16, 20)),
+                        rhs=Literal(None, "datetime(2020-04-20T16:20:00)"),
+                    ),
+                ),
+            ),
+        ),
+        [
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3)",
+            ["FROM", "my_table"],
+            (
+                "WHERE equals(toDateTime('2020-04-20T16:20:00', 'Universal'), 'datetime(2020-04-20T16:20:00)') AND "
+                "equals(c2, '2') AND "
+                "(equals(c1, '1') OR equals(c3, '3'))"
+            ),
+        ],
+        (
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3) "
+            "FROM my_table "
+            "WHERE equals(toDateTime('2020-04-20T16:20:00', 'Universal'), 'datetime(2020-04-20T16:20:00)') AND "
+            "equals(c2, '2') AND "
+            "(equals(c1, '1') OR equals(c3, '3'))"
+        ),
+        (
+            "SELECT (column1 AS c1), (column2 AS c2), (column3 AS c3) "
+            "FROM my_table "
+            "WHERE equals(toDateTime('2020-04-20T16:20:00', 'Universal'), '$S') AND "
+            "equals(c2, '$S') AND "
+            "(equals(c1, '$S') OR equals(c3, '$S'))"
+        ),
+        id="query_different_classes_conditions",
     ),
 ]
 

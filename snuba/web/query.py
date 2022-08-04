@@ -59,6 +59,7 @@ EXCLUDED_REFERRERS_FROM_FIELDS_SORTING = {
     "tsdb-modelid:100",
     "api.group-events",
     "tagstore.get_release_tags",
+    "group.unhandled-flag",
 }
 
 
