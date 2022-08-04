@@ -2,7 +2,9 @@
 The storages defined in this file are for the generic metrics system,
 initially built to handle metrics-enhanced performance.
 """
-from typing import Sequence
+
+from dataclasses import dataclass, fields
+from typing import Any, Dict, Mapping, Sequence, Type, Union
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -10,6 +12,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
     DeadLetterQueuePolicy,
     ProduceInvalidMessagePolicy,
 )
+from yaml import safe_load
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -181,3 +184,92 @@ distributions_bucket_storage = WritableTableStorage(
         pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )
+
+
+def dataclass_from_dict(
+    cls: Type[Any],
+    d: Dict[Any, Any],
+) -> Union[Any, Dict[Any, Any]]:
+    try:
+        fieldtypes = {f.name: f.type for f in fields(cls)}
+        return cls(**{f: dataclass_from_dict(fieldtypes[f], d[f]) for f in d})
+    except Exception:
+        return d
+
+
+@dataclass(frozen=True)
+class StorageMetadata:
+    key: str
+    set_key: str
+
+
+@dataclass(frozen=True)
+class SchemaConfig:
+    # columns: Sequence[Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]]
+    columns: Sequence[str]
+    local_table_name: str
+    dist_table_name: str
+
+
+@dataclass(frozen=True)
+class PrefilterConfig:
+    type: str
+    kwargs: Sequence[str]
+
+
+@dataclass(frozen=True)
+class StreamLoaderConfig:
+    default_topic: str
+    commit_log_topic: str
+    subscription_scheduled_topic: str
+    subscription_scheduler_mode: str
+    subscription_result_topic: str
+    pre_filter: PrefilterConfig
+
+
+@dataclass(frozen=True)
+class StorageConfig:
+    storage: StorageMetadata
+    schema: SchemaConfig
+    stream_loader: StreamLoaderConfig
+
+
+file = open("./snuba/datasets/storages/gen_metrics_conf.yaml")
+conf_yml = safe_load(file)
+assert isinstance(conf_yml, dict)
+conf = dataclass_from_dict(StorageConfig, conf_yml)
+assert isinstance(conf, StorageConfig)
+
+CONF_TO_PREFILTER: Mapping[str, Any] = {
+    "kafka_header_select_filter": KafkaHeaderSelectFilter
+}
+
+dist_bucket_storage = WritableTableStorage(
+    storage_key=StorageKey(conf.storage.key),
+    storage_set_key=StorageSetKey(conf.storage.set_key),
+    schema=WritableTableSchema(
+        columns=ColumnSet([*common_columns, *bucket_columns]),  # not config'd
+        local_table_name=conf.schema.local_table_name,
+        dist_table_name=conf.schema.dist_table_name,
+        storage_set_key=StorageSetKey(conf.storage.set_key),
+    ),
+    query_processors=[],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        processor=GenericDistributionsMetricsProcessor(),  # not config'd
+        default_topic=Topic(conf.stream_loader.default_topic),
+        dead_letter_queue_policy_creator=produce_policy_creator,  # not config'd
+        commit_log_topic=Topic(conf.stream_loader.commit_log_topic),
+        subscription_scheduled_topic=Topic(
+            conf.stream_loader.subscription_scheduled_topic
+        ),
+        subscription_scheduler_mode=SchedulingWatermarkMode(
+            conf.stream_loader.subscription_scheduler_mode
+        ),
+        subscription_result_topic=Topic(conf.stream_loader.subscription_result_topic),
+        pre_filter=CONF_TO_PREFILTER[conf.stream_loader.pre_filter.type](
+            *conf.stream_loader.pre_filter.kwargs
+        ),
+    ),
+)
+
+print(dist_bucket_storage)

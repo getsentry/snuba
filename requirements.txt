@@ -30,3 +30,4 @@ simplejson==3.17.6
 urllib3==1.26.10
 uWSGI==2.0.20
 Werkzeug==2.0.3
+PyYAML==6.0

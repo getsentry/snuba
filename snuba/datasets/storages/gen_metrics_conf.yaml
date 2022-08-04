@@ -1,0 +1,18 @@
+storage:
+  key: generic_metrics_distributions_raw
+  set_key: generic_metrics_distributions
+
+schema:
+  columns: []
+  local_table_name: generic_metric_distributions_raw_local
+  dist_table_name: generic_metric_distributions_raw_local
+
+stream_loader:
+  default_topic: snuba-generic-metrics
+  commit_log_topic: snuba-generic-metrics-distributions-commit-log
+  subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-distributions
+  subscription_scheduler_mode: global
+  subscription_result_topic: generic-metrics-distributions-subscription-results
+  pre_filter:
+    type: kafka_header_select_filter
+    kwargs: [metric_type, d]
