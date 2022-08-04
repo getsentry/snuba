@@ -19,14 +19,16 @@ class ReplayEvent:
     segment_id: int
     trace_ids: list[str]
     error_ids: list[str]
+    urls: list[str]
     timestamp: float
+    replay_start_timestamp: float | None
     platform: str
     environment: str
     release: str
     dist: str
-    url: str | None
     ipv4: str | None
     ipv6: str | None
+    user_agent: str | None
     user_name: str | None
     user_id: str | None
     user_email: str | None
@@ -49,11 +51,13 @@ class ReplayEvent:
                             "replay_id": self.replay_id,
                             "segment_id": self.segment_id,
                             "tags": {"customtag": "is_set", "transaction": self.title},
+                            "urls": self.urls,
                             "trace_ids": self.trace_ids,
                             "error_ids": self.error_ids,
                             "dist": self.dist,
                             "platform": self.platform,
                             "timestamp": self.timestamp,
+                            "replay_start_timestamp": self.replay_start_timestamp,
                             "environment": self.environment,
                             "release": self.release,
                             "user": {
@@ -74,10 +78,8 @@ class ReplayEvent:
                                 }
                             },
                             "request": {
-                                "url": self.url,
-                                "headers": {
-                                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
-                                },
+                                "url": "Doesn't matter not ingested.",
+                                "headers": {"User-Agent": self.user_agent},
                             },
                             "extra": {},
                         }
@@ -113,12 +115,18 @@ class ReplayEvent:
             "error_ids": self.error_ids,
             "trace_ids": self.trace_ids,
             "timestamp": datetime.utcfromtimestamp(self.timestamp),
+            "replay_start_timestamp": datetime.utcfromtimestamp(
+                self.replay_start_timestamp
+            )
+            if self.replay_start_timestamp
+            else None,
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
             "dist": self.dist,
-            "url": self.url,
+            "urls": self.urls,
             "user_id": self.user_id,
+            "user_agent": self.user_agent,
             "user_name": self.user_name,
             "user_email": self.user_email,
             "tags.key": ["customtag"],
@@ -127,7 +135,6 @@ class ReplayEvent:
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
             "retention_days": 30,
-            # "url": "http://localhost:3000/", # commented out until we have the url field
             "offset": meta.offset,
             "partition": meta.partition,
         }
@@ -159,9 +166,11 @@ class TestReplaysProcessor:
             ],
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
+            replay_start_timestamp=datetime.now(tz=timezone.utc).timestamp(),
             platform="python",
             dist="",
-            url="http://localhost:8001",
+            urls=["http://localhost:8001"],
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
             user_name="me",
             user_id="232",
             user_email="test@test.com",
@@ -188,9 +197,11 @@ class TestReplaysProcessor:
             trace_ids=[],
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
+            replay_start_timestamp=None,
             platform="python",
             dist="",
-            url=None,
+            urls=[],
+            user_agent=None,
             user_name=None,
             user_id=None,
             user_email=None,
