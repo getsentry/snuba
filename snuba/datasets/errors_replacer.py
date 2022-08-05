@@ -192,12 +192,23 @@ def set_project_exclude_groups(
     )
     p = redis_client.pipeline()
 
-    group_id_data: Mapping[str | bytes, bytes | float | int | str] = {
-        str(group_id): now for group_id in group_ids
-    }
+    # the redis key size limit is defined as 2 times the clickhouse query size
+    # limit. there is an explicit check in the query processor for the same
+    # limit
+    max_group_ids_exclude = get_config(
+        "max_group_ids_exclude",
+        settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+    )
+    assert isinstance(max_group_ids_exclude, int)
+
+    group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}
+    for group_id in group_ids:
+        group_id_data[str(group_id)] = now
+        if len(group_id_data) > 2 * max_group_ids_exclude:
+            break
+
     p.zadd(key, group_id_data)
-    # remove group id deletions that should have been merged by now
-    p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
+    truncate_group_id_replacement_set(p, key, now, max_group_ids_exclude)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
     # store the replacement type data
@@ -205,10 +216,28 @@ def set_project_exclude_groups(
         replacement_type: now
     }
     p.zadd(type_key, replacement_type_data)
-    p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
+    truncate_group_id_replacement_set(p, type_key, now, max_group_ids_exclude)
     p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
     p.execute()
+
+
+def truncate_group_id_replacement_set(
+    p: StrictClusterPipeline, key: str, now: float, max_group_ids_exclude: int
+) -> None:
+    # remove group id deletions that should have been merged by now
+    p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
+
+    # remove group id deletions that exceed the maximum number of deletions
+    # snuba's query processor will put in a query.
+    #
+    # Add +2 because:
+    #
+    # - ranges are exclusive in redis (apparently)
+    # - such that the query processor will recognize that we exceeded the limit
+    #   and fall back to FINAL (because the set doesn't contain all group ids to
+    #   exclude anymore)
+    p.zremrangebyrank(key, 0, -(2 * max_group_ids_exclude + 2))
 
 
 def set_project_needs_final(
