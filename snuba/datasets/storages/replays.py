@@ -39,6 +39,7 @@ columns = ColumnSet(
             Array(UUID()),
         ),
         ("title", String(Modifiers(readonly=True))),
+        ("url", String()),
         ("urls", Array(String())),
         ### common sentry event columns
         ("project_id", UInt(64)),
