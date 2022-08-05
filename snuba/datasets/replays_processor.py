@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, List, Mapping, MutableMapping, Optional
 
 import rapidjson
 
@@ -59,6 +59,26 @@ class ReplaysProcessor(MessageProcessor):
         else:
             raise TypeError("Missing data for replay_start_timestamp column.")
 
+    def __extract_urls(self, replay_event: ReplayEventDict) -> List[str]:
+        if "url" in replay_event:
+            # Backwards compat for non-public, pre-alpha javascript SDK.
+            return self.__extract_url(replay_event)
+        elif "urls" in replay_event:
+            # Latest SDK input.
+            urls = replay_event.get("urls")
+            return urls[:URLS_LIMIT] if isinstance(urls, list) else []
+        else:
+            # Malformed event catch all.
+            return []
+
+    def __extract_url(self, replay_event: ReplayEventDict) -> List[str]:
+        request = replay_event.get("request", {})
+        if not isinstance(request, dict):
+            return []
+
+        url = request.get("url")
+        return [url] if isinstance(url, str) else []
+
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
@@ -71,7 +91,7 @@ class ReplaysProcessor(MessageProcessor):
         processed["replay_start_timestamp"] = self.__extract_started_at(
             replay_event.get("replay_start_timestamp"),
         )
-        processed["urls"] = replay_event.get("urls", [])[:URLS_LIMIT]
+        processed["urls"] = self.__extract_urls(replay_event)
         processed["release"] = replay_event.get("release")
         processed["environment"] = replay_event.get("environment")
         processed["dist"] = replay_event.get("dist")
