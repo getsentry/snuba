@@ -21,6 +21,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 FINAL_METRIC = "final"
+CONSISTENCY_DENYLIST_METRIC = "post_replacement_consistency_projects_denied"
 
 
 class PostReplacementConsistencyEnforcer(QueryProcessor):
@@ -50,6 +51,14 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         if project_ids is None:
             self._set_query_final(query, False)
+            return
+
+        denied_projects = set(
+            get_config("post_replacement_consistency_projects_denylist") or ()
+        )
+
+        if any(p in denied_projects for p in project_ids):
+            metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
             return
 
         flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
