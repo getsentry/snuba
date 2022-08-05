@@ -3,7 +3,25 @@ storage:
   set_key: generic_metrics_distributions
 
 schema:
-  columns: []
+  columns:
+    [
+      { name: org_id, type: UInt, args: [64] },
+      { name: use_case_id, type: String, args: [] },
+      { name: project_id, type: UInt, args: [64] },
+      { name: metric_id, type: UInt, args: [64] },
+      { name: timestamp, type: DateTime, args: [] },
+      { name: retention_days, type: UInt, args: [16] },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          [
+            { name: key, type: UInt, args: [64] },
+            { name: indexed_value, type: UInt, args: [64] },
+            { name: raw_value, type: String, args: [] },
+          ],
+      },
+    ]
   local_table_name: generic_metric_distributions_raw_local
   dist_table_name: generic_metric_distributions_raw_local
 
@@ -17,7 +35,7 @@ stream_loader:
   replacement_topic: null
   pre_filter:
     type: kafka_header_select_filter
-    kwargs: [metric_type, d]
+    args: [metric_type, d]
   dlq_policy:
     type: produce
-    kwargs: [snuba-dead-letter-generic-metrics]
+    args: [snuba-dead-letter-generic-metrics]

@@ -3,8 +3,9 @@ The storages defined in this file are for the generic metrics system,
 initially built to handle metrics-enhanced performance.
 """
 
+import collections
 from dataclasses import dataclass, fields
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Type, Union
+from typing import Any, Callable, Mapping, Optional, Sequence, Type, Union
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -37,7 +38,8 @@ from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.deep_compare import deep_compare_storages
+
+# from snuba.datasets.storages.deep_compare import deep_compare_storages
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
@@ -187,13 +189,20 @@ distributions_bucket_storage_old = WritableTableStorage(
 )
 
 
-def dataclass_from_dict(
-    cls: Type[Any],
-    d: Dict[Any, Any],
-) -> Union[Any, Dict[Any, Any]]:
-    """
-    https://stackoverflow.com/a/54769644
-    """
+def dataclass_from_dict(cls: Type[Any], d: Any) -> Any:
+    # recursively type cast dict to classes
+    try:
+        if cls.__origin__ == collections.abc.Sequence:
+            return [dataclass_from_dict(cls.__dict__["__args__"][0], cfg) for cfg in d]
+        elif cls.__origin__ == Union:
+            return d
+    except Exception:
+        pass
+
+    if cls in {str, int}:
+        return d
+
+    # https://stackoverflow.com/a/54769644
     try:
         fieldtypes = {f.name: f.type for f in fields(cls)}
         return cls(**{f: dataclass_from_dict(fieldtypes[f], d[f]) for f in d})
@@ -208,10 +217,17 @@ class StorageMetadata:
 
 
 @dataclass(frozen=True)
+class ColumnConfig:
+    name: str
+    type: str
+    args: Sequence[int]
+
+
+@dataclass(frozen=True)
 class SchemaConfig:
     # columns: Sequence[Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]]
     # somehow configure this^
-    columns: Sequence[str]
+    columns: Sequence[ColumnConfig]
     local_table_name: str
     dist_table_name: str
 
@@ -219,7 +235,7 @@ class SchemaConfig:
 @dataclass(frozen=True)
 class FunctionCallConfig:
     type: str
-    kwargs: Sequence[str]
+    args: Sequence[str]
 
 
 @dataclass(frozen=True)
@@ -246,7 +262,7 @@ def policy_creator_creator(
     dlq_policy_conf: FunctionCallConfig,
 ) -> Optional[Callable[[], DeadLetterQueuePolicy]]:
     if dlq_policy_conf.type == "produce":
-        dlq_topic = dlq_policy_conf.kwargs[0]
+        dlq_topic = dlq_policy_conf.args[0]
 
         def produce_policy_creator2() -> DeadLetterQueuePolicy:
             return ProduceInvalidMessagePolicy(
@@ -264,12 +280,15 @@ assert isinstance(conf_yml, dict)
 conf = dataclass_from_dict(StorageConfig, conf_yml)
 assert isinstance(conf, StorageConfig)
 
+print(conf)
+
 CONF_TO_PREFILTER: Mapping[str, Any] = {
     "kafka_header_select_filter": KafkaHeaderSelectFilter
 }
 CONF_TO_PROCESSOR: Mapping[str, Any] = {
     "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor
 }
+
 
 distributions_bucket_storage = WritableTableStorage(
     storage_key=StorageKey(conf.storage.key),
@@ -299,10 +318,10 @@ distributions_bucket_storage = WritableTableStorage(
         if conf.stream_loader.replacement_topic
         else None,
         pre_filter=CONF_TO_PREFILTER[conf.stream_loader.pre_filter.type](
-            *conf.stream_loader.pre_filter.kwargs
+            *conf.stream_loader.pre_filter.args
         ),
     ),
 )
 
 
-deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
+# deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
