@@ -3,11 +3,13 @@ from __future__ import annotations
 import importlib
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
+from unittest import mock
 
 import pytz
 import simplejson as json
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from freezegun import freeze_time
 
 from snuba import replacer, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -23,12 +25,6 @@ from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
-
-# from unittest import mock
-
-
-# from freezegun import freeze_time
-
 
 CONSUMER_GROUP = "consumer_group"
 
@@ -408,36 +404,41 @@ class TestReplacer:
         )
 
     # @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2)
-    # def test_query_time_flags_bounded_size(self) -> None:
-    #     redis_client.flushdb()
-    #     project_id = 4
-    #     now = datetime.now()
-    #     for i in range(10):
-    #         with freeze_time(now + timedelta(seconds=i)):
-    #             errors_replacer.set_project_exclude_groups(
-    #                 project_id,
-    #                 [i],
-    #                 ReplacerState.ERRORS,
-    #                 ReplacementType.EXCLUDE_GROUPS,
-    #             )
+    def test_query_time_flags_bounded_size(self) -> None:
+        redis_client.flushdb()
+        project_id = 4
+        now = datetime.now()
+        with mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2):
+            for i in range(10):
+                with freeze_time(now + timedelta(seconds=i)):
+                    errors_replacer.set_project_exclude_groups(
+                        project_id,
+                        [i],
+                        ReplacerState.ERRORS,
+                        ReplacementType.EXCLUDE_GROUPS,
+                    )
 
-    #     flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
-    #     # Assert that most recent groups are preserved
-    #     assert flags.group_ids_to_exclude == {9, 8, 7, 6, 5}
+            flags = ProjectsQueryFlags.load_from_redis(
+                [project_id], ReplacerState.ERRORS
+            )
+            # Assert that most recent groups are preserved
+            assert flags.group_ids_to_exclude == {9, 8, 7, 6, 5}
 
-    #     project_id = 5
+            project_id = 5
 
-    #     errors_replacer.set_project_exclude_groups(
-    #         project_id,
-    #         list(range(10)),
-    #         ReplacerState.ERRORS,
-    #         ReplacementType.EXCLUDE_GROUPS,
-    #     )
+            errors_replacer.set_project_exclude_groups(
+                project_id,
+                list(range(10)),
+                ReplacerState.ERRORS,
+                ReplacementType.EXCLUDE_GROUPS,
+            )
 
-    #     flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
-    #     # All groups were excluded at the same time, so their order is not deterministic
-    #     # 2 * REPLACER_MAX_GROUP_IDS_TO_EXCLUDE + 1
-    #     assert len(flags.group_ids_to_exclude) == 5
+            flags = ProjectsQueryFlags.load_from_redis(
+                [project_id], ReplacerState.ERRORS
+            )
+            # All groups were excluded at the same time, so their order is not deterministic
+            # 2 * REPLACER_MAX_GROUP_IDS_TO_EXCLUDE + 1
+            assert len(flags.group_ids_to_exclude) == 5
 
     def test_query_time_flags_project_and_groups(self) -> None:
         """
