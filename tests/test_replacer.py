@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
+from unittest import mock
 
 import pytz
 import simplejson as json
@@ -401,10 +402,10 @@ class TestReplacer:
             {ReplacementType.EXCLUDE_GROUPS},
         )
 
-    def test_query_time_flags_bounded_size(self, monkeypatch) -> None:
+    @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 5)
+    def test_query_time_flags_bounded_size(self) -> None:
         redis_client.flushdb()
         project_id = 4
-        monkeypatch.setattr(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 5)
         for i in range(10):
             errors_replacer.set_project_exclude_groups(
                 project_id, [i], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS

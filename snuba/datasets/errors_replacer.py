@@ -213,7 +213,7 @@ def set_project_exclude_groups(
     p.execute()
 
 
-def truncate_group_id_replacement_set(p, key, now):
+def truncate_group_id_replacement_set(p: Any, key: str, now: float) -> None:
     # remove group id deletions that should have been merged by now
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     # remove group id deletions that exceed the maximum number of deletions
