@@ -419,7 +419,7 @@ class TestReplacer:
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
         # Assert that most recent groups are preserved
-        assert flags.group_ids_to_exclude == {9, 8, 7, 6, 5}
+        assert flags.group_ids_to_exclude == {9, 8, 7, 6, 5, 4}
 
         project_id = 5
 
@@ -433,7 +433,7 @@ class TestReplacer:
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
         # All groups were excluded at the same time, so their order is not deterministic
-        assert len(flags.group_ids_to_exclude) == 5
+        assert len(flags.group_ids_to_exclude) == 6
 
     def test_query_time_flags_project_and_groups(self) -> None:
         """
