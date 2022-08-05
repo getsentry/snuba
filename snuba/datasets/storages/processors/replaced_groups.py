@@ -58,6 +58,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         )[1:-1].split(","):
             if int(denied_project_id_string) in project_ids:
                 metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
+                self._set_query_final(query, True)
                 return
 
         flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
