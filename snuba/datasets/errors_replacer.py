@@ -175,7 +175,6 @@ def set_project_exclude_groups(
     state_name: Optional[ReplacerState],
     #  replacement type is just for metrics, not necessary for functionality
     replacement_type: ReplacementType,
-    now: Optional[float] = None,
 ) -> None:
     """
     This method is called when a replacement comes in. For a specific project, record
@@ -187,8 +186,7 @@ def set_project_exclude_groups(
 
     Add replacement type for this replacement.
     """
-    if now is None:
-        now = time.time()
+    now = time.time()
     key, type_key = ProjectsQueryFlags._build_project_exclude_groups_key_and_type_key(
         project_id, state_name
     )

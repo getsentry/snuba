@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import time
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
 from unittest import mock
@@ -10,6 +9,7 @@ import pytz
 import simplejson as json
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from freezegun import freeze_time
 
 from snuba import replacer, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -407,15 +407,15 @@ class TestReplacer:
     def test_query_time_flags_bounded_size(self) -> None:
         redis_client.flushdb()
         project_id = 4
-        now = time.time()
+        now = datetime.now()
         for i in range(10):
-            errors_replacer.set_project_exclude_groups(
-                project_id,
-                [i],
-                ReplacerState.ERRORS,
-                ReplacementType.EXCLUDE_GROUPS,
-                now=now + i,
-            )
+            with freeze_time(now + timedelta(seconds=i)):
+                errors_replacer.set_project_exclude_groups(
+                    project_id,
+                    [i],
+                    ReplacerState.ERRORS,
+                    ReplacementType.EXCLUDE_GROUPS,
+                )
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
         # Assert that most recent groups are preserved
@@ -428,7 +428,6 @@ class TestReplacer:
             list(range(10)),
             ReplacerState.ERRORS,
             ReplacementType.EXCLUDE_GROUPS,
-            now=now,
         )
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
