@@ -56,7 +56,10 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         for denied_project_id_string in (
             get_config("post_replacement_consistency_projects_denylist") or "[]"
         )[1:-1].split(","):
-            if int(denied_project_id_string) in project_ids:
+            if (
+                denied_project_id_string
+                and int(denied_project_id_string) in project_ids
+            ):
                 metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
                 self._set_query_final(query, True)
                 return
