@@ -53,13 +53,12 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             self._set_query_final(query, False)
             return
 
-        denied_projects = set(
-            get_config("post_replacement_consistency_projects_denylist") or ()
-        )
-
-        if any(p in denied_projects for p in project_ids):
-            metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
-            return
+        for denied_project_id_string in (
+            get_config("post_replacement_consistency_projects_denylist") or "[]"
+        )[1:-1].split(","):
+            if int(denied_project_id_string) in project_ids:
+                metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
+                return
 
         flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
             list(project_ids), self.__replacer_state_name
