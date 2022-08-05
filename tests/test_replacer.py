@@ -403,7 +403,7 @@ class TestReplacer:
             {ReplacementType.EXCLUDE_GROUPS},
         )
 
-    @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 5)
+    @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2)
     def test_query_time_flags_bounded_size(self) -> None:
         redis_client.flushdb()
         project_id = 4
@@ -419,7 +419,7 @@ class TestReplacer:
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
         # Assert that most recent groups are preserved
-        assert flags.group_ids_to_exclude == {9, 8, 7, 6, 5, 4}
+        assert flags.group_ids_to_exclude == {9, 8, 7, 6, 5}
 
         project_id = 5
 
@@ -433,7 +433,8 @@ class TestReplacer:
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
         # All groups were excluded at the same time, so their order is not deterministic
-        assert len(flags.group_ids_to_exclude) == 6
+        # 2 * REPLACER_MAX_GROUP_IDS_TO_EXCLUDE + 1
+        assert len(flags.group_ids_to_exclude) == 5
 
     def test_query_time_flags_project_and_groups(self) -> None:
         """
