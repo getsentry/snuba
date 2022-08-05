@@ -245,7 +245,7 @@ class NestedColumnConfig:
 class ColumnConfig:
     name: str
     type: str
-    args: Union[Sequence[NestedColumnConfig], Sequence[int]]
+    args: Union[Sequence[NestedColumnConfig], Sequence[Union[str, int]]]
 
 
 @dataclass(frozen=True)
@@ -315,25 +315,45 @@ CONF_TO_PROCESSOR: Mapping[str, Any] = {
 }
 
 
+def parse_simple(
+    col: Union[ColumnConfig, NestedColumnConfig]
+) -> Column[SchemaModifiers]:
+    if col.type == "UInt":
+        assert isinstance(col.args[0], int)
+        return Column(col.name, UInt(col.args[0]))
+    elif col.type == "Float":
+        assert isinstance(col.args[0], int)
+        return Column(col.name, Float(col.args[0]))
+    elif col.type == "String":
+        return Column(col.name, String())
+    elif col.type == "DateTime":
+        return Column(col.name, DateTime())
+    raise
+
+
 def parse_columns(
     columns: Union[Sequence[ColumnConfig], Sequence[NestedColumnConfig]]
 ) -> Sequence[Column[SchemaModifiers]]:
     cols: MutableSequence[Column[SchemaModifiers]] = []
 
-    COLUMN_TYPES = {"UInt", "String", "DateTime", "Nested"}
+    SIMPLE_COLUMN_TYPES = {
+        "UInt": UInt,
+        "Float": Float,
+        "String": String,
+        "DateTime": DateTime,
+    }
 
     for col in columns:
         column: Optional[Column[SchemaModifiers]] = None
-        assert col.type in COLUMN_TYPES
-        if col.type == "UInt":
-            assert isinstance(col.args[0], int)
-            column = Column(col.name, UInt(col.args[0]))
-        elif col.type == "String":
-            column = Column(col.name, String())
-        elif col.type == "DateTime":
-            column = Column(col.name, DateTime())
+        if col.type in SIMPLE_COLUMN_TYPES:
+            column = parse_simple(col)
         elif col.type == "Nested":
             column = Column(col.name, Nested(parse_columns(col.args)))  # type: ignore
+        elif col.type == "Array":
+            subtype, value = col.args
+            assert isinstance(subtype, str)
+            assert isinstance(value, int)
+            column = Column(col.name, Array(SIMPLE_COLUMN_TYPES[subtype](value)))
         assert column is not None
         cols.append(column)
     return cols
@@ -343,9 +363,7 @@ distributions_bucket_storage = WritableTableStorage(
     storage_key=StorageKey(conf.storage.key),
     storage_set_key=StorageSetKey(conf.storage.set_key),
     schema=WritableTableSchema(
-        columns=ColumnSet(
-            [*parse_columns(conf.schema.columns), *bucket_columns]
-        ),  # not config'd
+        columns=ColumnSet(parse_columns(conf.schema.columns)),
         local_table_name=conf.schema.local_table_name,
         dist_table_name=conf.schema.dist_table_name,
         storage_set_key=StorageSetKey(conf.storage.set_key),

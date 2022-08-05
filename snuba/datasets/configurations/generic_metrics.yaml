@@ -21,6 +21,11 @@ schema:
             { name: raw_value, type: String, args: [] },
           ],
       },
+      { name: granularities, type: Array, args: [UInt, 8] },
+      { name: count_value, type: Float, args: [64] },
+      { name: set_values, type: Array, args: [UInt, 64] },
+      { name: distribution_values, type: Array, args: [Float, 64] },
+      { name: timeseries_id, type: UInt, args: [32] },
     ]
   local_table_name: generic_metric_distributions_raw_local
   dist_table_name: generic_metric_distributions_raw_local
