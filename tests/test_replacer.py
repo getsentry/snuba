@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import time
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
 from unittest import mock
@@ -406,23 +407,32 @@ class TestReplacer:
     def test_query_time_flags_bounded_size(self) -> None:
         redis_client.flushdb()
         project_id = 4
+        now = time.time()
         for i in range(10):
             errors_replacer.set_project_exclude_groups(
-                project_id, [i], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+                project_id,
+                [i],
+                ReplacerState.ERRORS,
+                ReplacementType.EXCLUDE_GROUPS,
+                now=now + i,
             )
-            flags = ProjectsQueryFlags.load_from_redis(
-                [project_id], ReplacerState.ERRORS
-            )
-            assert len(flags.group_ids_to_exclude) == min(i + 1, 5)
+
+        flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
+        # Assert that most recent groups are preserved
+        assert flags.group_ids_to_exclude == {9, 8, 7, 6, 5}
+
+        project_id = 5
 
         errors_replacer.set_project_exclude_groups(
             project_id,
             list(range(10)),
             ReplacerState.ERRORS,
             ReplacementType.EXCLUDE_GROUPS,
+            now=now,
         )
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
+        # All groups were excluded at the same time, so their order is not deterministic
         assert len(flags.group_ids_to_exclude) == 5
 
     def test_query_time_flags_project_and_groups(self) -> None:
