@@ -37,6 +37,7 @@ from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.deep_compare import deep_compare_storages
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
@@ -190,6 +191,9 @@ def dataclass_from_dict(
     cls: Type[Any],
     d: Dict[Any, Any],
 ) -> Union[Any, Dict[Any, Any]]:
+    """
+    https://stackoverflow.com/a/54769644
+    """
     try:
         fieldtypes = {f.name: f.type for f in fields(cls)}
         return cls(**{f: dataclass_from_dict(fieldtypes[f], d[f]) for f in d})
@@ -254,7 +258,7 @@ def policy_creator_creator(
     return None
 
 
-file = open("./snuba/datasets/storages/gen_metrics_conf.yaml")
+file = open("./snuba/datasets/configurations/generic_metrics.yaml")
 conf_yml = safe_load(file)
 assert isinstance(conf_yml, dict)
 conf = dataclass_from_dict(StorageConfig, conf_yml)
@@ -299,3 +303,6 @@ distributions_bucket_storage = WritableTableStorage(
         ),
     ),
 )
+
+
+deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
