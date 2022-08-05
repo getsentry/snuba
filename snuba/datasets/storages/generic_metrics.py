@@ -5,7 +5,16 @@ initially built to handle metrics-enhanced performance.
 
 import collections
 from dataclasses import dataclass, fields
-from typing import Any, Callable, Mapping, Optional, Sequence, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+)
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -38,6 +47,7 @@ from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.deep_compare import deep_compare_storages
 
 # from snuba.datasets.storages.deep_compare import deep_compare_storages
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
@@ -295,7 +305,7 @@ assert isinstance(conf_yml, dict)
 conf = dataclass_from_dict(StorageConfig, conf_yml)
 assert isinstance(conf, StorageConfig)
 
-print(conf)
+# print(conf)
 
 CONF_TO_PREFILTER: Mapping[str, Any] = {
     "kafka_header_select_filter": KafkaHeaderSelectFilter
@@ -303,14 +313,39 @@ CONF_TO_PREFILTER: Mapping[str, Any] = {
 CONF_TO_PROCESSOR: Mapping[str, Any] = {
     "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor
 }
-CONF_TO_COLUMN: Mapping[str, Any] = {}
+
+
+def parse_columns(
+    columns: Union[Sequence[ColumnConfig], Sequence[NestedColumnConfig]]
+) -> Sequence[Column[SchemaModifiers]]:
+    cols: MutableSequence[Column[SchemaModifiers]] = []
+
+    COLUMN_TYPES = {"UInt", "String", "DateTime", "Nested"}
+
+    for col in columns:
+        column: Optional[Column[SchemaModifiers]] = None
+        assert col.type in COLUMN_TYPES
+        if col.type == "UInt":
+            assert isinstance(col.args[0], int)
+            column = Column(col.name, UInt(col.args[0]))
+        elif col.type == "String":
+            column = Column(col.name, String())
+        elif col.type == "DateTime":
+            column = Column(col.name, DateTime())
+        elif col.type == "Nested":
+            column = Column(col.name, Nested(parse_columns(col.args)))  # type: ignore
+        assert column is not None
+        cols.append(column)
+    return cols
 
 
 distributions_bucket_storage = WritableTableStorage(
     storage_key=StorageKey(conf.storage.key),
     storage_set_key=StorageSetKey(conf.storage.set_key),
     schema=WritableTableSchema(
-        columns=ColumnSet([*common_columns, *bucket_columns]),  # not config'd
+        columns=ColumnSet(
+            [*parse_columns(conf.schema.columns), *bucket_columns]
+        ),  # not config'd
         local_table_name=conf.schema.local_table_name,
         dist_table_name=conf.schema.dist_table_name,
         storage_set_key=StorageSetKey(conf.storage.set_key),
@@ -340,4 +375,4 @@ distributions_bucket_storage = WritableTableStorage(
 )
 
 
-# deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
+deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
