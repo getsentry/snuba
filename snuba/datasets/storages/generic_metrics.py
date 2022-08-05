@@ -191,10 +191,18 @@ distributions_bucket_storage_old = WritableTableStorage(
 
 def dataclass_from_dict(cls: Type[Any], d: Any) -> Any:
     # recursively type cast dict to classes
+    # HACK: super hacks
     try:
         if cls.__origin__ == collections.abc.Sequence:
             return [dataclass_from_dict(cls.__dict__["__args__"][0], cfg) for cfg in d]
         elif cls.__origin__ == Union:
+            if isinstance(d[0], str) or isinstance(d[0], int):
+                return d
+            elif isinstance(d[0], dict):
+                for t in cls.__dict__["__args__"]:
+                    result = dataclass_from_dict(t, d)
+                    if not isinstance(result[0], dict):
+                        return result
             return d
     except Exception:
         pass
@@ -211,16 +219,23 @@ def dataclass_from_dict(cls: Type[Any], d: Any) -> Any:
 
 
 @dataclass(frozen=True)
-class StorageMetadata:
+class StorageMetadataConfig:
     key: str
     set_key: str
+
+
+@dataclass(frozen=True)
+class NestedColumnConfig:
+    name: str
+    type: str
+    args: Sequence[int]
 
 
 @dataclass(frozen=True)
 class ColumnConfig:
     name: str
     type: str
-    args: Sequence[int]
+    args: Union[Sequence[NestedColumnConfig], Sequence[int]]
 
 
 @dataclass(frozen=True)
@@ -253,7 +268,7 @@ class StreamLoaderConfig:
 
 @dataclass(frozen=True)
 class StorageConfig:
-    storage: StorageMetadata
+    storage: StorageMetadataConfig
     schema: SchemaConfig
     stream_loader: StreamLoaderConfig
 
@@ -288,6 +303,7 @@ CONF_TO_PREFILTER: Mapping[str, Any] = {
 CONF_TO_PROCESSOR: Mapping[str, Any] = {
     "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor
 }
+CONF_TO_COLUMN: Mapping[str, Any] = {}
 
 
 distributions_bucket_storage = WritableTableStorage(
