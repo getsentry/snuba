@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import time
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
 from unittest import mock
@@ -24,9 +25,6 @@ from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
-
-# from freezegun import freeze_time
-
 
 CONSUMER_GROUP = "consumer_group"
 
@@ -407,20 +405,16 @@ class TestReplacer:
 
     @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2)
     def test_query_time_flags_bounded_size(self) -> None:
-        import time
-
         redis_client.flushdb()
         project_id = 256
-        # now = datetime.now()
         for i in range(10):
-            # with freeze_time(now + timedelta(seconds=i)):
             errors_replacer.set_project_exclude_groups(
                 project_id,
                 [i],
                 ReplacerState.ERRORS,
                 ReplacementType.EXCLUDE_GROUPS,
             )
-            time.sleep(2)
+            time.sleep(1.1)  # Hack because freezegun was breaking unrelated tests
 
         flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
         # Assert that most recent groups are preserved
