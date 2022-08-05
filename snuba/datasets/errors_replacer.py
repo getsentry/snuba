@@ -192,12 +192,14 @@ def set_project_exclude_groups(
     )
     p = redis_client.pipeline()
 
-    group_id_data: Mapping[str | bytes, bytes | float | int | str] = {
-        str(group_id): now for group_id in group_ids
-    }
+    group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}
+    for group_id in group_ids:
+        group_id_data[str(group_id)] = now
+        if len(group_id_data) > settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE:
+            break
+
     p.zadd(key, group_id_data)
-    # remove group id deletions that should have been merged by now
-    p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
+    truncate_group_id_replacement_set(p, key, now)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 
     # store the replacement type data
@@ -205,10 +207,20 @@ def set_project_exclude_groups(
         replacement_type: now
     }
     p.zadd(type_key, replacement_type_data)
-    p.zremrangebyscore(type_key, -1, now - settings.REPLACER_KEY_TTL)
+    truncate_group_id_replacement_set(p, type_key, now)
     p.expire(type_key, int(settings.REPLACER_KEY_TTL))
 
     p.execute()
+
+
+def truncate_group_id_replacement_set(p, key, now):
+    # remove group id deletions that should have been merged by now
+    p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
+    # remove group id deletions that exceed the maximum number of deletions
+    # snuba's query processor will put in a query.
+    # Add +1 such that the query processor will still recognize that we
+    # exceeded the limit and fall back to FINAL.
+    p.zremrangebyrank(key, 0, -(settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE + 1))
 
 
 def set_project_needs_final(

@@ -401,6 +401,29 @@ class TestReplacer:
             {ReplacementType.EXCLUDE_GROUPS},
         )
 
+    def test_query_time_flags_bounded_size(self, monkeypatch) -> None:
+        redis_client.flushdb()
+        project_id = 4
+        monkeypatch.setattr(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 5)
+        for i in range(10):
+            errors_replacer.set_project_exclude_groups(
+                project_id, [i], ReplacerState.ERRORS, ReplacementType.EXCLUDE_GROUPS
+            )
+            flags = ProjectsQueryFlags.load_from_redis(
+                [project_id], ReplacerState.ERRORS
+            )
+            assert len(flags.group_ids_to_exclude) == min(i + 1, 5)
+
+        errors_replacer.set_project_exclude_groups(
+            project_id,
+            list(range(10)),
+            ReplacerState.ERRORS,
+            ReplacementType.EXCLUDE_GROUPS,
+        )
+
+        flags = ProjectsQueryFlags.load_from_redis([project_id], ReplacerState.ERRORS)
+        assert len(flags.group_ids_to_exclude) == 5
+
     def test_query_time_flags_project_and_groups(self) -> None:
         """
         Tests errors_replacer.set_project_needs_final() and
