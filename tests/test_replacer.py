@@ -406,7 +406,7 @@ class TestReplacer:
     # @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2)
     def test_query_time_flags_bounded_size(self) -> None:
         redis_client.flushdb()
-        project_id = 4
+        project_id = 256
         now = datetime.now()
         with mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2):
             for i in range(10):
