@@ -3,13 +3,11 @@ from __future__ import annotations
 import importlib
 from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Sequence
-from unittest import mock
 
 import pytz
 import simplejson as json
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
-from freezegun import freeze_time
 
 from snuba import replacer, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -25,6 +23,12 @@ from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
+
+# from unittest import mock
+
+
+# from freezegun import freeze_time
+
 
 CONSUMER_GROUP = "consumer_group"
 
