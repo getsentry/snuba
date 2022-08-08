@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime
 from hashlib import md5
-from typing import Any, List, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional
 
 import rapidjson
 
@@ -59,7 +61,7 @@ class ReplaysProcessor(MessageProcessor):
         else:
             raise TypeError("Missing data for replay_start_timestamp column.")
 
-    def __extract_urls(self, replay_event: ReplayEventDict) -> List[str]:
+    def __extract_urls(self, replay_event: ReplayEventDict) -> list[str]:
         if "url" in replay_event:
             # Backwards compat for non-public, pre-alpha javascript SDK.
             return self.__extract_url(replay_event)
@@ -71,7 +73,7 @@ class ReplaysProcessor(MessageProcessor):
             # Malformed event catch all.
             return []
 
-    def __extract_url(self, replay_event: ReplayEventDict) -> List[str]:
+    def __extract_url(self, replay_event: ReplayEventDict) -> list[str]:
         request = replay_event.get("request", {})
         if not isinstance(request, dict):
             return []
