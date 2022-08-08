@@ -173,6 +173,7 @@ class ReplaysLoader(DirectoryLoader):
             "0002_add_url",
             "0003_alter_url_allow_null",
             "0004_add_error_ids_column",
+            "0005_add_urls_user_agent_replay_start_timestamp",
         ]
 
 

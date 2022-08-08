@@ -98,6 +98,7 @@ CONFIG_MEMOIZE_TIMEOUT = 10
 
 # Sentry Options
 SENTRY_DSN = None
+SENTRY_TRACE_SAMPLE_RATE = 0
 
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")

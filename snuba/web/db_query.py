@@ -342,7 +342,9 @@ def execute_query_with_rate_limits(
     # This allows us not to borrow capacity from the global quota
     # during the evaluation if one of the more specific limiters
     # (like the project rate limiter) rejects the query first.
-    query_settings.add_rate_limit(get_global_rate_limit_params())
+    if state.get_config("enable_global_rate_limiter", 1):
+        query_settings.add_rate_limit(get_global_rate_limit_params())
+
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
     with RateLimitAggregator(
