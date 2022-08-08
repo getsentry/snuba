@@ -21,6 +21,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 FINAL_METRIC = "final"
+CONSISTENCY_DENYLIST_METRIC = "post_replacement_consistency_projects_denied"
 
 
 class PostReplacementConsistencyEnforcer(QueryProcessor):
@@ -51,6 +52,17 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         if project_ids is None:
             self._set_query_final(query, False)
             return
+
+        for denied_project_id_string in (
+            get_config("post_replacement_consistency_projects_denylist") or "[]"
+        )[1:-1].split(","):
+            if (
+                denied_project_id_string
+                and int(denied_project_id_string) in project_ids
+            ):
+                metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
+                self._set_query_final(query, True)
+                return
 
         flags: ProjectsQueryFlags = ProjectsQueryFlags.load_from_redis(
             list(project_ids), self.__replacer_state_name
@@ -85,7 +97,10 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             groups_to_exclude = self._groups_to_exclude(
                 query, flags.group_ids_to_exclude
             )
-            if len(groups_to_exclude) > max_group_ids_exclude:
+            if (
+                len(flags.group_ids_to_exclude) > 2 * max_group_ids_exclude
+                or len(groups_to_exclude) > max_group_ids_exclude
+            ):
                 tags["cause"] = "max_groups"
                 metrics.increment(
                     name=FINAL_METRIC,
