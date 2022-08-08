@@ -28,16 +28,12 @@ class Migration(migration.ClickhouseNodeMigration):
         return new_column_ops
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        new_column_ops: List[operations.SqlOperation] = [
-            operations.AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_local",
-                column=Column("url", String(Modifiers(nullable=True))),
-                after="title",
-            )
+        drop_column_ops: List[operations.SqlOperation] = [
+            operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", column.name)
+            for column, _ in reversed(new_columns)
         ]
 
-        return new_column_ops
+        return drop_column_ops
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         new_column_ops: List[operations.SqlOperation] = [
@@ -52,13 +48,9 @@ class Migration(migration.ClickhouseNodeMigration):
         return new_column_ops
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        new_column_ops: List[operations.SqlOperation] = [
-            operations.AddColumn(
-                storage_set=StorageSetKey.REPLAYS,
-                table_name="replays_dist",
-                column=Column("url", String(Modifiers(nullable=True))),
-                after="title",
-            )
+        drop_column_ops: List[operations.SqlOperation] = [
+            operations.DropColumn(StorageSetKey.REPLAYS, "replays_dist", column.name)
+            for column, _ in reversed(new_columns)
         ]
 
-        return new_column_ops
+        return drop_column_ops
