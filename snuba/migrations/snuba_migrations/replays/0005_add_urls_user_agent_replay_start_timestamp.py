@@ -8,7 +8,17 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (Column("urls", Array(String())), "url"),
     (Column("replay_start_timestamp", DateTime(Modifiers(nullable=True))), "timestamp"),
-    (Column("user_agent", String(Modifiers(nullable=True))), "user"),
+    # OS
+    (Column("os_name", String(Modifiers(nullable=True))), "user_email"),
+    (Column("os_version", String(Modifiers(nullable=True))), "os_name"),
+    # Browser
+    (Column("browser_name", String(Modifiers(nullable=True))), "os_version"),
+    (Column("browser_version", String(Modifiers(nullable=True))), "browser_name"),
+    # Device
+    (Column("device_name", String(Modifiers(nullable=True))), "browser_version"),
+    (Column("device_brand", String(Modifiers(nullable=True))), "device_name"),
+    (Column("device_family", String(Modifiers(nullable=True))), "device_brand"),
+    (Column("device_model", String(Modifiers(nullable=True))), "device_family"),
 ]
 
 
