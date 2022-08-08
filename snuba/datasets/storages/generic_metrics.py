@@ -27,7 +27,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.configurations.config_loader import (
+from snuba.datasets.configuration.config_loader import (
     CONF_TO_PREFILTER,
     CONF_TO_PROCESSOR,
     StorageConfig,
@@ -194,7 +194,9 @@ distributions_bucket_storage_old = WritableTableStorage(
 )
 
 
-file = open("./snuba/datasets/configurations/generic_metrics.yaml")
+file = open(
+    "./snuba/datasets/configuration/generic_metrics/storage_distributions_raw.yaml"
+)
 conf_yml = safe_load(file)
 assert isinstance(conf_yml, dict)
 conf = dataclass_from_dict(StorageConfig, conf_yml)
