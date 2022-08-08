@@ -143,18 +143,26 @@ class ReplaysProcessor(MessageProcessor):
 
         self._add_user_column(processed, user_data)
 
-    def _process_request_headers(
+    def _process_contexts(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
-        request = replay_event.get("request", {})
-        if not isinstance(request, dict):
+        contexts = replay_event.get("contexts", {})
+        if not contexts:
             return None
 
-        headers = request.get("headers", {})
-        if not isinstance(headers, dict):
-            return None
+        os_context = contexts.get("os", {})
+        processed["os_name"] = os_context.get("name")
+        processed["os_version"] = os_context.get("version")
 
-        processed["user_agent"] = headers.get("User-Agent")
+        browser_context = contexts.get("browser", {})
+        processed["browser_name"] = browser_context.get("name")
+        processed["browser_version"] = browser_context.get("version")
+
+        device_context = contexts.get("device", {})
+        processed["device_name"] = device_context.get("name")
+        processed["device_brand"] = device_context.get("brand")
+        processed["device_family"] = device_context.get("family")
+        processed["device_model"] = device_context.get("model")
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -211,7 +219,7 @@ class ReplaysProcessor(MessageProcessor):
             # # the following operation modifies the event_dict and is therefore *not* order-independent
             self._process_user(processed, replay_event)
             self._process_event_hash(processed, replay_event)
-            self._process_request_headers(processed, replay_event)
+            self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
         except Exception as e:
             metrics.increment("consumer_error")

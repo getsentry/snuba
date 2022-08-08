@@ -52,10 +52,20 @@ columns = ColumnSet(
         ("ip_address_v6", IPv6(Modifiers(nullable=True))),
         # user columns
         ("user", String()),
-        ("user_agent", String(Modifiers(nullable=True))),
         ("user_id", String(Modifiers(nullable=True))),
         ("user_name", String(Modifiers(nullable=True))),
         ("user_email", String(Modifiers(nullable=True))),
+        # OS
+        ("os_name", String(Modifiers(nullable=True))),
+        ("os_version", String(Modifiers(nullable=True))),
+        # Browser
+        ("browser_name", String(Modifiers(nullable=True))),
+        ("browser_version", String(Modifiers(nullable=True))),
+        # Device
+        ("device_name", String(Modifiers(nullable=True))),
+        ("device_brand", String(Modifiers(nullable=True))),
+        ("device_family", String(Modifiers(nullable=True))),
+        ("device_model", String(Modifiers(nullable=True))),
         # sdk info
         ("sdk_name", String()),
         ("sdk_version", String()),
