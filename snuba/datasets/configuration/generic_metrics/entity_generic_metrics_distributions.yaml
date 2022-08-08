@@ -1,0 +1,10 @@
+kind: entity
+name: generic-metrics-distributions
+spec:
+  readable_storage: snuba.datasets.storages.generic_metrics.distributions_storage
+  writable_storage: snuba.datasets.storages.generic_metrics.distributions_bucket_storage
+  query_processors:
+    TagsTypeTransformer:
+    MappedGranularityProcessor:
+      accepted_granularities: {60: 1, 3600: 2, 86400: 3}
+      default_granularity_enum: 1
