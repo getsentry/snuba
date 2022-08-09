@@ -62,16 +62,12 @@ class ReplaysProcessor(MessageProcessor):
             raise TypeError("Missing data for replay_start_timestamp column.")
 
     def __extract_urls(self, replay_event: ReplayEventDict) -> list[str]:
-        if "url" in replay_event:
-            # Backwards compat for non-public, pre-alpha javascript SDK.
-            return self.__extract_url(replay_event)
-        elif "urls" in replay_event:
-            # Latest SDK input.
+        if "urls" in replay_event:
             urls = replay_event.get("urls")
             return urls[:URLS_LIMIT] if isinstance(urls, list) else []
         else:
-            # Malformed event catch all.
-            return []
+            # Backwards compat for non-public, pre-alpha javascript SDK.
+            return self.__extract_url(replay_event)
 
     def __extract_url(self, replay_event: ReplayEventDict) -> list[str]:
         request = replay_event.get("request", {})
