@@ -1,5 +1,5 @@
 from snuba.clickhouse.columns import Any, ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (

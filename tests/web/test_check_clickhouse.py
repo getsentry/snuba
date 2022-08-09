@@ -2,7 +2,7 @@ from typing import Sequence
 from unittest import mock
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.events import EventsDataset
 from snuba.web.views import check_clickhouse
 

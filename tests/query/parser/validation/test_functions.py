@@ -8,7 +8,7 @@ import pytest
 import snuba.query.parser.validation.functions as functions
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.simple import Entity as QueryEntity

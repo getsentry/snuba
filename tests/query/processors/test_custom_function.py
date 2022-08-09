@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity

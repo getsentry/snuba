@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression

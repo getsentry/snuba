@@ -4,7 +4,7 @@ from typing import Any, Callable
 
 import simplejson as json
 
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from tests.base import BaseApiTest
 from tests.fixtures import get_replay_event

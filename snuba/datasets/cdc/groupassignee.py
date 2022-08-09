@@ -1,5 +1,5 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 
 
 class GroupAssigneeDataset(Dataset):

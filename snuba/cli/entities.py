@@ -2,7 +2,7 @@ from typing import Optional
 
 import click
 
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import InvalidEntityError, get_entity
 from snuba.utils.describer import Description, DescriptionVisitor, Property
 

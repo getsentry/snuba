@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 import pytest
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.events import v2_selector_function
 from snuba.query import SelectedExpression

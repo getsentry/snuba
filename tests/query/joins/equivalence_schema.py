@@ -3,7 +3,7 @@ from typing import Sequence
 from unittest.mock import Mock
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entity import Entity
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.processors import QueryProcessor

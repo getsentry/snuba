@@ -8,7 +8,7 @@ from pytest import approx
 
 from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.metrics_aggregate_processor import timestamp_to_bucket
 from snuba.datasets.metrics_messages import InputType

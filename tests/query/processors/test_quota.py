@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 
 from snuba import state
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition

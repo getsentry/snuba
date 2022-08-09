@@ -8,7 +8,7 @@ from arroyo import configure_metrics
 from arroyo.backends.kafka import KafkaProducer
 
 from snuba import environment
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.scheduler_consumer import SchedulerBuilder

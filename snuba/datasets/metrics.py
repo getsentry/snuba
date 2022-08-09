@@ -1,7 +1,7 @@
 from typing import Sequence
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 

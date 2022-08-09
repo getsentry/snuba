@@ -3,7 +3,7 @@ from typing import Set, Union
 import pytest
 
 from snuba.clickhouse.columns import UUID, UInt
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery

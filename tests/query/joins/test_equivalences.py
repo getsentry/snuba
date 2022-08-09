@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query.data_source.join import (
     IndividualNode,

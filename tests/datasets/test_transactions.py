@@ -1,6 +1,6 @@
 from snuba import settings, state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.datasets.entities.transactions import (
     TransactionsQueryStorageSelector,
     transaction_translator,

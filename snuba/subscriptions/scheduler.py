@@ -14,7 +14,7 @@ from typing import (
 )
 
 from snuba import settings, state
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKey
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,

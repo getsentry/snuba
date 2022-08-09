@@ -4,7 +4,7 @@ from typing import Sequence, Tuple
 import pytest
 
 from snuba import state
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKeys
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     Subscription,

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet as PhysicalColumnSet
-from snuba.datasets.entities import EntityKey, EntityKeys
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import FunctionCall
