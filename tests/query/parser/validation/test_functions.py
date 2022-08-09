@@ -8,7 +8,7 @@ import pytest
 import snuba.query.parser.validation.functions as functions
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -87,10 +87,10 @@ def test_functions(
 
     entity_return = MagicMock()
     entity_return.return_value = entity_validators
-    events_entity = get_entity(EntityKey.EVENTS)
+    events_entity = get_entity(EntityKeys.EVENTS)
     cached = events_entity.get_function_call_validators
     setattr(events_entity, "get_function_call_validators", entity_return)
-    data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
+    data_source = QueryEntity(EntityKeys.EVENTS, ColumnSet([]))
 
     expression = FunctionCall(
         None, "and", (Column(alias=None, table_name=None, column_name="col"),)
@@ -108,7 +108,7 @@ def test_functions(
 
 @pytest.mark.parametrize("expression, should_raise", test_expressions[:1])
 def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> None:
-    data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
+    data_source = QueryEntity(EntityKeys.EVENTS, ColumnSet([]))
     state.set_config("function-validator.enabled", True)
 
     with pytest.raises(InvalidExpressionException):
@@ -119,7 +119,7 @@ def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> 
 def test_allowed_functions_validator(
     expression: FunctionCall, should_raise: bool
 ) -> None:
-    data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
+    data_source = QueryEntity(EntityKeys.EVENTS, ColumnSet([]))
     state.set_config("function-validator.enabled", True)
 
     if should_raise:

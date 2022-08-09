@@ -1,7 +1,7 @@
 from typing import Callable, MutableMapping
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entity import Entity
 from snuba.datasets.table_storage import TableWriter
 from snuba.utils.serializable_exception import SerializableException
@@ -48,26 +48,26 @@ def get_entity(name: EntityKey) -> Entity:
     dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
 
     entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
-        EntityKey.DISCOVER: DiscoverEntity,
-        EntityKey.EVENTS: EventsEntity,
-        EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
-        EntityKey.GROUPEDMESSAGES: GroupedMessageEntity,
-        EntityKey.OUTCOMES: OutcomesEntity,
-        EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
-        EntityKey.SESSIONS: SessionsEntity,
-        EntityKey.ORG_SESSIONS: OrgSessionsEntity,
-        EntityKey.TRANSACTIONS: TransactionsEntity,
-        EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
-        EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
-        EntityKey.METRICS_SETS: MetricsSetsEntity,
-        EntityKey.METRICS_COUNTERS: MetricsCountersEntity,
-        EntityKey.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
-        EntityKey.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
-        EntityKey.PROFILES: ProfilesEntity,
-        EntityKey.FUNCTIONS: FunctionsEntity,
-        EntityKey.REPLAYS: ReplaysEntity,
-        EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsEntity,
-        EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity,
+        EntityKeys.DISCOVER: DiscoverEntity,
+        EntityKeys.EVENTS: EventsEntity,
+        EntityKeys.GROUPASSIGNEE: GroupAssigneeEntity,
+        EntityKeys.GROUPEDMESSAGES: GroupedMessageEntity,
+        EntityKeys.OUTCOMES: OutcomesEntity,
+        EntityKeys.OUTCOMES_RAW: OutcomesRawEntity,
+        EntityKeys.SESSIONS: SessionsEntity,
+        EntityKeys.ORG_SESSIONS: OrgSessionsEntity,
+        EntityKeys.TRANSACTIONS: TransactionsEntity,
+        EntityKeys.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
+        EntityKeys.DISCOVER_EVENTS: DiscoverEventsEntity,
+        EntityKeys.METRICS_SETS: MetricsSetsEntity,
+        EntityKeys.METRICS_COUNTERS: MetricsCountersEntity,
+        EntityKeys.ORG_METRICS_COUNTERS: OrgMetricsCountersEntity,
+        EntityKeys.METRICS_DISTRIBUTIONS: MetricsDistributionsEntity,
+        EntityKeys.PROFILES: ProfilesEntity,
+        EntityKeys.FUNCTIONS: FunctionsEntity,
+        EntityKeys.REPLAYS: ReplaysEntity,
+        EntityKeys.GENERIC_METRICS_SETS: GenericMetricsSetsEntity,
+        EntityKeys.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity,
         **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
     }
 

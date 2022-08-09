@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import MutableMapping, NamedTuple, Optional, Sequence, Union
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -36,7 +36,7 @@ def test_simple() -> None:
     }
 
     query = Query(
-        Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
+        Entity(EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model())
     )
 
     request = Request(
@@ -86,7 +86,7 @@ def test_simple() -> None:
         ],
         projects={2},
         snql_anonymized=request.snql_anonymized,
-        entity=EntityKey.EVENTS.value,
+        entity=EntityKeys.EVENTS.value,
     ).to_dict()
 
     processor = (
@@ -149,7 +149,7 @@ def test_missing_fields() -> None:
     }
 
     query = Query(
-        Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
+        Entity(EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model())
     )
 
     request = Request(
@@ -199,7 +199,7 @@ def test_missing_fields() -> None:
         ],
         projects={2},
         snql_anonymized=request.snql_anonymized,
-        entity=EntityKey.EVENTS.value,
+        entity=EntityKeys.EVENTS.value,
     ).to_dict()
 
     messages = []

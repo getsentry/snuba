@@ -3,7 +3,7 @@ from typing import Optional
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
@@ -19,7 +19,7 @@ from snuba.query.validation.validators import (
 
 required_column_tests = [
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "equals",
             Column("_snuba_project_id", None, "project_id"),
@@ -28,7 +28,7 @@ required_column_tests = [
         id="spans has project required with =",
     ),
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "in",
             Column("_snuba_project_id", None, "project_id"),
@@ -37,7 +37,7 @@ required_column_tests = [
         id="in is also allowed",
     ),
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "and",
             binary_condition(
@@ -54,7 +54,7 @@ required_column_tests = [
         id="specific time conditions are valid",
     ),
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "and",
             binary_condition(
@@ -93,12 +93,12 @@ def test_entity_required_column_validation(
 
 invalid_required_column_tests = [
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         None,
         id="entity has columns, but there are no conditions",
     ),
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "notIn",
             Column(None, None, "project_id"),
@@ -128,7 +128,7 @@ def test_entity_required_column_validation_failure(
 
 entity_contains_columns_tests = [
     pytest.param(
-        EntityKey.OUTCOMES,
+        EntityKeys.OUTCOMES,
         id="Validate Outcomes Entity Columns",
     )
 ]

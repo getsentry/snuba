@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -15,14 +15,14 @@ from snuba.query.query_settings import HTTPQuerySettings
 test_data = [
     pytest.param(
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(name=None, expression=Column(None, None, "column1")),
                 SelectedExpression(name=None, expression=Column(None, None, "column2")),
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None,
@@ -39,7 +39,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None, expression=Column("some_alias", None, "column1")
@@ -48,7 +48,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None,

@@ -5,7 +5,7 @@ import pytest
 import pytz
 import simplejson as json
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -41,7 +41,7 @@ class TestDiscoverApi(BaseApiTest):
             second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=90)
 
-        events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        events_storage = get_entity(EntityKeys.EVENTS).get_writable_storage()
         assert events_storage is not None
         self.events_storage = events_storage
         write_unprocessed_events(self.events_storage, [self.event])

@@ -9,7 +9,7 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors
 from snuba.datasets.schemas.tables import TableSchema
@@ -48,8 +48,8 @@ from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
 from snuba.web import QueryResult
 
-events_ent = Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
-events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+events_ent = Entity(EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model())
+events_storage = get_entity(EntityKeys.EVENTS).get_writable_storage()
 assert events_storage is not None
 events_table_name = events_storage.get_table_writer().get_schema().get_table_name()
 
@@ -64,7 +64,7 @@ events_table = Table(
 )
 
 groups_ent = Entity(
-    EntityKey.GROUPEDMESSAGES, get_entity(EntityKey.GROUPEDMESSAGES).get_data_model()
+    EntityKeys.GROUPEDMESSAGES, get_entity(EntityKeys.GROUPEDMESSAGES).get_data_model()
 )
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_schema = groups_storage.get_schema()

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Collection, Optional, Tuple
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     PartitionId,
@@ -66,7 +66,7 @@ class TestSubscriptionScheduler:
             store.create(subscription.identifier.uuid, subscription.data)
 
         scheduler = SubscriptionScheduler(
-            EntityKey.EVENTS,
+            EntityKeys.EVENTS,
             store,
             self.partition_id,
             timedelta(minutes=1),
@@ -92,7 +92,7 @@ class TestSubscriptionScheduler:
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         subscription,
                         self.build_tick(start, end).offsets.upper,
                     ),
@@ -114,7 +114,7 @@ class TestSubscriptionScheduler:
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         subscription,
                         self.build_tick(start, end).offsets.upper,
                     ),
@@ -143,7 +143,7 @@ class TestSubscriptionScheduler:
                 ScheduledSubscriptionTask(
                     self.now,
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         subscription,
                         self.build_tick(start, end).offsets.upper,
                     ),
@@ -164,7 +164,7 @@ class TestSubscriptionScheduler:
                 ScheduledSubscriptionTask(
                     self.now,
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         subscription,
                         self.build_tick(start, end).offsets.upper,
                     ),
@@ -181,7 +181,7 @@ class TestSubscriptionScheduler:
             ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
                 SubscriptionWithMetadata(
-                    EntityKey.EVENTS,
+                    EntityKeys.EVENTS,
                     subscription,
                     self.build_tick(start, end).offsets.upper,
                 ),
@@ -191,7 +191,7 @@ class TestSubscriptionScheduler:
             ScheduledSubscriptionTask(
                 self.now + timedelta(minutes=-10 + i),
                 SubscriptionWithMetadata(
-                    EntityKey.EVENTS,
+                    EntityKeys.EVENTS,
                     other_subscription,
                     self.build_tick(start, end).offsets.upper,
                 ),

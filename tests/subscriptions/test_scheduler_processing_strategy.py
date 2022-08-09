@@ -13,7 +13,7 @@ from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -530,7 +530,7 @@ def test_produce_scheduled_subscription_message() -> None:
     epoch = datetime(1970, 1, 1)
     metrics_backend = TestingMetricsBackend()
     partition_index = 0
-    entity_key = EntityKey.EVENTS
+    entity_key = EntityKeys.EVENTS
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 
@@ -642,7 +642,7 @@ def test_produce_stale_message() -> None:
     now = datetime.now()
     metrics_backend = TestingMetricsBackend()
     partition_index = 0
-    entity_key = EntityKey.EVENTS
+    entity_key = EntityKeys.EVENTS
     topic = Topic("scheduled-subscriptions-events")
     partition = Partition(topic, partition_index)
 

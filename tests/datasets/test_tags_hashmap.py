@@ -1,5 +1,5 @@
 from snuba.clickhouse.query import Query
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column, FunctionCall, NoopVisitor
@@ -11,7 +11,7 @@ from snuba.utils.metrics.timer import Timer
 
 
 def test_tags_hashmap_optimization() -> None:
-    entity = get_entity(EntityKey.DISCOVER)
+    entity = get_entity(EntityKeys.DISCOVER)
     dataset_name = "discover"
     query_str = """
     MATCH (discover)

@@ -10,7 +10,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
@@ -201,13 +201,13 @@ class BaseEventsEntity(Entity, ABC):
             abstract_column_set=columns,
             join_relationships={
                 "grouped": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPEDMESSAGES,
+                    rhs_entity=EntityKeys.GROUPEDMESSAGES,
                     columns=[("project_id", "project_id"), ("group_id", "id")],
                     join_type=JoinType.INNER,
                     equivalences=[],
                 ),
                 "assigned": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPASSIGNEE,
+                    rhs_entity=EntityKeys.GROUPASSIGNEE,
                     columns=[("project_id", "project_id"), ("group_id", "group_id")],
                     join_type=JoinType.INNER,
                     equivalences=[],

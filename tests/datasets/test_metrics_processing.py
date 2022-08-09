@@ -9,7 +9,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression, Query
 from snuba.clusters import cluster
 from snuba.datasets import factory
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import factory as storage_factory
@@ -27,7 +27,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_sets",
         "uniq(value)",
-        EntityKey.METRICS_SETS,
+        EntityKeys.METRICS_SETS,
         FunctionCall(
             "_snuba_uniq(value)",
             "uniqCombined64Merge",
@@ -38,7 +38,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_counters",
         "sum(value)",
-        EntityKey.METRICS_COUNTERS,
+        EntityKeys.METRICS_COUNTERS,
         FunctionCall(
             "_snuba_sum(value)",
             "sumMerge",
@@ -49,7 +49,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_counters",
         "sumIf(value, cond())",
-        EntityKey.METRICS_COUNTERS,
+        EntityKeys.METRICS_COUNTERS,
         FunctionCall(
             "_snuba_sumIf(value, cond())",
             "sumMergeIf",
@@ -63,7 +63,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "max(value)",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_max(value)",
             "maxMerge",
@@ -74,7 +74,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "maxIf(value, cond())",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_maxIf(value, cond())",
             "maxMergeIf",
@@ -88,7 +88,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "min(value)",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_min(value)",
             "minMerge",
@@ -99,7 +99,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "minIf(value, cond())",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_minIf(value, cond())",
             "minMergeIf",
@@ -113,7 +113,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "avg(value)",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_avg(value)",
             "avgMerge",
@@ -124,7 +124,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "avgIf(value, cond())",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_avgIf(value, cond())",
             "avgMergeIf",
@@ -138,7 +138,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "count(value)",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_count(value)",
             "countMerge",
@@ -149,7 +149,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)(value)",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         CurriedFunctionCall(
             "_snuba_quantiles(0.5, 0.75, 0.9, 0.95, 0.99)(value)",
             FunctionCall(
@@ -164,7 +164,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "quantilesIf(0.5, 0.75, 0.9, 0.95, 0.99)(value, cond())",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         CurriedFunctionCall(
             "_snuba_quantilesIf(0.5, 0.75, 0.9, 0.95, 0.99)(value, cond())",
             FunctionCall(
@@ -179,7 +179,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "avg(something_else)",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         FunctionCall(
             "_snuba_avg(something_else)",
             "avg",
@@ -190,7 +190,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "histogram(250)(value)",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         CurriedFunctionCall(
             "_snuba_histogram(250)(value)",
             FunctionCall(None, "histogramMerge", (Literal(None, 250),)),
@@ -201,7 +201,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_distributions",
         "histogramIf(250)(value, cond())",
-        EntityKey.METRICS_DISTRIBUTIONS,
+        EntityKeys.METRICS_DISTRIBUTIONS,
         CurriedFunctionCall(
             "_snuba_histogramIf(250)(value, cond())",
             FunctionCall(None, "histogramMergeIf", (Literal(None, 250),)),

@@ -4,7 +4,7 @@ from typing import Sequence, Tuple
 import pytest
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     Subscription,
@@ -33,7 +33,7 @@ TEST_CASES = [
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         1,
                     ),
@@ -74,7 +74,7 @@ TEST_CASES = [
                     # to the minute without jitter.
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         1,
                     ),
@@ -113,7 +113,7 @@ TEST_CASES = [
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         1,
                     ),
@@ -133,7 +133,7 @@ TEST_CASES = [
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         build_subscription(timedelta(minutes=2), 0),
                         1,
                     ),
@@ -159,7 +159,7 @@ TEST_CASES = [
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         1,
                     ),
@@ -195,7 +195,7 @@ TEST_CASES = [
                 ScheduledSubscriptionTask(
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP + 60),
                     SubscriptionWithMetadata(
-                        EntityKey.EVENTS,
+                        EntityKeys.EVENTS,
                         build_subscription(timedelta(minutes=1), 0),
                         1,
                     ),
@@ -231,7 +231,7 @@ def test_sequences(
     output = []
     for timestamp, subscription in sequence_in:
         ret = builder.get_task(
-            SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1), timestamp
+            SubscriptionWithMetadata(EntityKeys.EVENTS, subscription, 1), timestamp
         )
         if ret:
             output.append((timestamp, ret))

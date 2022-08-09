@@ -2,7 +2,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -18,7 +18,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 
 
 def test_handled_processor() -> None:
-    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
+    entity = QueryEntity(EntityKeys.EVENTS, ColumnSet([]))
     unprocessed = Query(
         entity,
         selected_columns=[
@@ -82,7 +82,7 @@ def test_handled_processor() -> None:
 
 def test_handled_processor_invalid() -> None:
     unprocessed = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
                 "result",
@@ -102,7 +102,7 @@ def test_handled_processor_invalid() -> None:
 
 
 def test_not_handled_processor() -> None:
-    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
+    entity = QueryEntity(EntityKeys.EVENTS, ColumnSet([]))
     unprocessed = Query(
         entity,
         selected_columns=[
@@ -165,7 +165,7 @@ def test_not_handled_processor() -> None:
 
 
 def test_not_handled_processor_invalid() -> None:
-    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
+    entity = QueryEntity(EntityKeys.EVENTS, ColumnSet([]))
     unprocessed = Query(
         entity,
         selected_columns=[

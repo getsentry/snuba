@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -64,7 +64,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} GRANULARITY 60",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -86,7 +86,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -108,8 +108,8 @@ test_cases = [
         f"MATCH (events SAMPLE 0.5) SELECT 4-5, c WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS,
-                get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKeys.EVENTS,
+                get_entity(EntityKeys.EVENTS).get_data_model(),
                 0.5,
             ),
             selected_columns=[
@@ -132,7 +132,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -163,7 +163,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 BY c",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -185,7 +185,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 OFFSET 3",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -206,7 +206,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, c, arrayJoin(c) AS x WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -234,7 +234,7 @@ test_cases = [
         f"MATCH (events) SELECT 4-5, 3* foo(c) AS foo, c WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -271,7 +271,7 @@ test_cases = [
         AND {added_condition}""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -321,7 +321,7 @@ test_cases = [
         f"MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -379,7 +379,7 @@ test_cases = [
         f"MATCH (events) SELECT (2*(4-5)+3), g(c) AS goo, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression("d", Column("_snuba_d", None, "d")),
@@ -434,7 +434,7 @@ test_cases = [
         f"MATCH (events) SELECT (2*(4-5)+3), foo(c) AS thing2, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression("d", Column("_snuba_d", None, "d")),
@@ -491,7 +491,7 @@ test_cases = [
         f"MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(c) AS foo BY toDateTime('2020-01-01') AS now WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -527,7 +527,7 @@ test_cases = [
         f"MATCH (events) SELECT a WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
             condition=binary_condition(
@@ -572,7 +572,7 @@ test_cases = [
         f"MATCH (events) SELECT a WHERE ((time_seen<3 OR last_seen=afternoon) OR name=bob) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
             condition=binary_condition(
@@ -609,7 +609,7 @@ test_cases = [
         f"MATCH (events) SELECT a WHERE (name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0)) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
             condition=binary_condition(
@@ -666,7 +666,7 @@ test_cases = [
         AND timestamp<toDateTime('2021-01-02')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression("a", Column("_snuba_a", None, "a")),
@@ -711,7 +711,7 @@ test_cases = [
         WHERE {added_condition}""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -747,7 +747,7 @@ test_cases = [
         WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -865,15 +865,15 @@ test_cases = [
                 left_node=IndividualNode(
                     "e",
                     QueryEntity(
-                        EntityKey.EVENTS,
-                        get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKeys.EVENTS,
+                        get_entity(EntityKeys.EVENTS).get_data_model(),
                     ),
                 ),
                 right_node=IndividualNode(
                     "t",
                     QueryEntity(
-                        EntityKey.TRANSACTIONS,
-                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        EntityKeys.TRANSACTIONS,
+                        get_entity(EntityKeys.TRANSACTIONS).get_data_model(),
                     ),
                 ),
                 keys=[
@@ -951,15 +951,15 @@ test_cases = [
                 left_node=IndividualNode(
                     "e",
                     QueryEntity(
-                        EntityKey.EVENTS,
-                        get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKeys.EVENTS,
+                        get_entity(EntityKeys.EVENTS).get_data_model(),
                     ),
                 ),
                 right_node=IndividualNode(
                     "t",
                     QueryEntity(
-                        EntityKey.TRANSACTIONS,
-                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        EntityKeys.TRANSACTIONS,
+                        get_entity(EntityKeys.TRANSACTIONS).get_data_model(),
                         0.5,
                     ),
                 ),
@@ -1042,15 +1042,15 @@ test_cases = [
                     left_node=IndividualNode(
                         "e",
                         QueryEntity(
-                            EntityKey.EVENTS,
-                            get_entity(EntityKey.EVENTS).get_data_model(),
+                            EntityKeys.EVENTS,
+                            get_entity(EntityKeys.EVENTS).get_data_model(),
                         ),
                     ),
                     right_node=IndividualNode(
                         "ga",
                         QueryEntity(
-                            EntityKey.GROUPASSIGNEE,
-                            get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
+                            EntityKeys.GROUPASSIGNEE,
+                            get_entity(EntityKeys.GROUPASSIGNEE).get_data_model(),
                         ),
                     ),
                     keys=[
@@ -1064,8 +1064,8 @@ test_cases = [
                 right_node=IndividualNode(
                     "t",
                     QueryEntity(
-                        EntityKey.TRANSACTIONS,
-                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        EntityKeys.TRANSACTIONS,
+                        get_entity(EntityKeys.TRANSACTIONS).get_data_model(),
                     ),
                 ),
                 keys=[
@@ -1153,15 +1153,15 @@ test_cases = [
                             left_node=IndividualNode(
                                 "e",
                                 QueryEntity(
-                                    EntityKey.EVENTS,
-                                    get_entity(EntityKey.EVENTS).get_data_model(),
+                                    EntityKeys.EVENTS,
+                                    get_entity(EntityKeys.EVENTS).get_data_model(),
                                 ),
                             ),
                             right_node=IndividualNode(
                                 "se",
                                 QueryEntity(
-                                    EntityKey.SESSIONS,
-                                    get_entity(EntityKey.SESSIONS).get_data_model(),
+                                    EntityKeys.SESSIONS,
+                                    get_entity(EntityKeys.SESSIONS).get_data_model(),
                                 ),
                             ),
                             keys=[
@@ -1175,8 +1175,8 @@ test_cases = [
                         right_node=IndividualNode(
                             "gm",
                             QueryEntity(
-                                EntityKey.GROUPEDMESSAGES,
-                                get_entity(EntityKey.GROUPEDMESSAGES).get_data_model(),
+                                EntityKeys.GROUPEDMESSAGES,
+                                get_entity(EntityKeys.GROUPEDMESSAGES).get_data_model(),
                             ),
                         ),
                         keys=[
@@ -1190,8 +1190,8 @@ test_cases = [
                     right_node=IndividualNode(
                         "ga",
                         QueryEntity(
-                            EntityKey.GROUPASSIGNEE,
-                            get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
+                            EntityKeys.GROUPASSIGNEE,
+                            get_entity(EntityKeys.GROUPASSIGNEE).get_data_model(),
                         ),
                     ),
                     keys=[
@@ -1205,8 +1205,8 @@ test_cases = [
                 right_node=IndividualNode(
                     "t",
                     QueryEntity(
-                        EntityKey.TRANSACTIONS,
-                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        EntityKeys.TRANSACTIONS,
+                        get_entity(EntityKeys.TRANSACTIONS).get_data_model(),
                     ),
                 ),
                 keys=[
@@ -1342,8 +1342,8 @@ test_cases = [
         CompositeQuery(
             from_clause=LogicalQuery(
                 QueryEntity(
-                    EntityKey.EVENTS,
-                    get_entity(EntityKey.EVENTS).get_data_model(),
+                    EntityKeys.EVENTS,
+                    get_entity(EntityKeys.EVENTS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -1382,8 +1382,8 @@ test_cases = [
             from_clause=CompositeQuery(
                 from_clause=LogicalQuery(
                     QueryEntity(
-                        EntityKey.EVENTS,
-                        get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKeys.EVENTS,
+                        get_entity(EntityKeys.EVENTS).get_data_model(),
                     ),
                     selected_columns=[
                         SelectedExpression(
@@ -1426,7 +1426,7 @@ test_cases = [
         f"""MATCH (events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\'' AND {added_condition} """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1479,8 +1479,8 @@ test_cases = [
         ORDER BY count DESC,tags_key ASC  LIMIT 10""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1559,8 +1559,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1590,8 +1590,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1621,8 +1621,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1651,8 +1651,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1688,8 +1688,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1714,8 +1714,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1747,8 +1747,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1790,8 +1790,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1831,8 +1831,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1892,8 +1892,8 @@ test_cases = [
         """,
         LogicalQuery(
             QueryEntity(
-                EntityKey.DISCOVER_EVENTS,
-                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+                EntityKeys.DISCOVER_EVENTS,
+                get_entity(EntityKeys.DISCOVER_EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1959,10 +1959,10 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events = get_dataset("events")
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
-        "contains": (EntityKey.TRANSACTIONS, "event_id"),
-        "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGES, "first_release_id"),
-        "activity": (EntityKey.SESSIONS, "org_id"),
+        "contains": (EntityKeys.TRANSACTIONS, "event_id"),
+        "assigned": (EntityKeys.GROUPASSIGNEE, "group_id"),
+        "bookmark": (EntityKeys.GROUPEDMESSAGES, "first_release_id"),
+        "activity": (EntityKeys.SESSIONS, "org_id"),
     }
 
     def events_mock(relationship: str) -> JoinRelationship:
@@ -1974,7 +1974,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
             equivalences=[],
         )
 
-    events_entity = get_entity(EntityKey.EVENTS)
+    events_entity = get_entity(EntityKeys.EVENTS)
     setattr(events_entity, "get_join_relationship", events_mock)
 
     query, _ = parse_snql_query(query_body, events)

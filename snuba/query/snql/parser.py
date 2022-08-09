@@ -27,7 +27,7 @@ from snuba import state
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
@@ -1379,7 +1379,7 @@ def _select_entity_for_dataset(
             # The legacy -> snql parser will mark queries with no entity specified as the "discover" entity
             # so only do this selection in that case. If someone wants the "discover" entity specifically
             # then their query will have to only use fields from that entity.
-            if query_entity.key == EntityKey.DISCOVER:
+            if query_entity.key == EntityKeys.DISCOVER:
                 selected_entity_key = dataset.select_entity(query)
                 selected_entity = get_entity(selected_entity_key)
                 query_entity = QueryEntity(

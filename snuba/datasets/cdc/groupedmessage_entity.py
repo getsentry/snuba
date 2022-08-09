@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
@@ -30,7 +30,7 @@ class GroupedMessageEntity(Entity):
             abstract_column_set=schema.get_columns(),
             join_relationships={
                 "groups": JoinRelationship(
-                    rhs_entity=EntityKey.EVENTS,
+                    rhs_entity=EntityKeys.EVENTS,
                     columns=[("project_id", "project_id"), ("id", "group_id")],
                     join_type=JoinType.LEFT,
                     equivalences=[],

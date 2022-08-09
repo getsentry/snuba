@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -39,11 +39,11 @@ from tests.query.joins.join_structures import (
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
         alias="ev",
-        data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
+        data_source=Entity(EntityKeys.EVENTS, EVENTS_SCHEMA, None),
     ),
     right_node=IndividualNode(
         alias="gr",
-        data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
+        data_source=Entity(EntityKeys.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
     ),
     keys=[
         JoinCondition(
@@ -257,7 +257,7 @@ TEST_CASES = [
             from_clause=JoinClause(
                 left_node=BASIC_JOIN,
                 right_node=IndividualNode(
-                    "as", Entity(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
+                    "as", Entity(EntityKeys.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
                 ),
                 keys=[
                     JoinCondition(
@@ -297,7 +297,7 @@ TEST_CASES = [
                 right_node=IndividualNode(
                     alias="as",
                     data_source=LogicalQuery(
-                        from_clause=Entity(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE),
+                        from_clause=Entity(EntityKeys.GROUPASSIGNEE, GROUPS_ASSIGNEE),
                         selected_columns=[
                             SelectedExpression(
                                 "_snuba_group_id",
@@ -514,9 +514,9 @@ def test_subquery_generator(
     original_query: CompositeQuery[Entity],
     processed_query: CompositeQuery[Entity],
 ) -> None:
-    ENTITY_IMPL[EntityKey.EVENTS] = Events()
-    ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
-    ENTITY_IMPL[EntityKey.GROUPASSIGNEE] = GroupAssignee()
+    ENTITY_IMPL[EntityKeys.EVENTS] = Events()
+    ENTITY_IMPL[EntityKeys.GROUPEDMESSAGES] = GroupedMessage()
+    ENTITY_IMPL[EntityKeys.GROUPASSIGNEE] = GroupAssignee()
 
     generate_subqueries(original_query)
 

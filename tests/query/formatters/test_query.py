@@ -6,7 +6,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import (
     LimitBy,
     OrderBy,
@@ -34,11 +34,11 @@ columns = ColumnSet([("some_int", UInt(8, Modifiers(nullable=True)))])
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
         alias="ev",
-        data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
+        data_source=Entity(EntityKeys.EVENTS, EVENTS_SCHEMA, None),
     ),
     right_node=IndividualNode(
         alias="gr",
-        data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
+        data_source=Entity(EntityKeys.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
     ),
     keys=[
         JoinCondition(
@@ -50,14 +50,14 @@ BASIC_JOIN = JoinClause(
 )
 
 SIMPLE_SELECT_QUERY = LogicalQuery(
-    from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
+    from_clause=Entity(EntityKeys.EVENTS, EVENTS_SCHEMA, 0.5),
     selected_columns=[
         SelectedExpression("c1", Column("_snuba_simple", "simple_t", "simple_c")),
     ],
 )
 
 LOGICAL_QUERY = LogicalQuery(
-    from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
+    from_clause=Entity(EntityKeys.EVENTS, EVENTS_SCHEMA, 0.5),
     selected_columns=[
         SelectedExpression("c1", Column("_snuba_c1", "t", "c")),
         SelectedExpression(

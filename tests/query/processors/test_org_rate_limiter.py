@@ -1,7 +1,7 @@
 import pytest
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -65,7 +65,7 @@ tests = [
 @pytest.mark.parametrize("unprocessed, org_id", tests)
 def test_org_rate_limit_processor(unprocessed: Expression, org_id: int) -> None:
     query = Query(
-        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        QueryEntity(EntityKeys.EVENTS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
@@ -86,7 +86,7 @@ def test_org_rate_limit_processor_overridden(
     unprocessed: Expression, org_id: int
 ) -> None:
     query = Query(
-        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        QueryEntity(EntityKeys.EVENTS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )

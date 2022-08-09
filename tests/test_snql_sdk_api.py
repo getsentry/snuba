@@ -18,7 +18,7 @@ from snuba_sdk import (
     Relationship,
 )
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -42,7 +42,7 @@ class TestSDKSnQLApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=180)
-        events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        events_storage = get_entity(EntityKeys.EVENTS).get_writable_storage()
         assert events_storage is not None
         write_unprocessed_events(events_storage, [self.event])
         self.next_time = datetime.utcnow().replace(

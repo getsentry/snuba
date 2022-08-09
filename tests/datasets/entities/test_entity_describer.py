@@ -1,10 +1,10 @@
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.utils.describer import Description, Property
 
 
 def test_entity_describer() -> None:
-    entity = get_entity(EntityKey.GROUPASSIGNEE)
+    entity = get_entity(EntityKeys.GROUPASSIGNEE)
     description = entity.describe()
 
     assert description == Description(

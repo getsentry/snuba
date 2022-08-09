@@ -3,7 +3,7 @@ from typing import Any, MutableMapping
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
@@ -76,7 +76,7 @@ def test_build_request(body: MutableMapping[str, Any], condition: Expression) ->
     )
 
     expected_query = Query(
-        from_clause=Entity(EntityKey.EVENTS, entity.get_data_model()),
+        from_clause=Entity(EntityKeys.EVENTS, entity.get_data_model()),
         selected_columns=[
             SelectedExpression(
                 name="time",

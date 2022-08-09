@@ -3,7 +3,7 @@ from copy import deepcopy
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
@@ -14,7 +14,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 test_data = [
     (
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",
@@ -29,7 +29,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",
@@ -62,7 +62,7 @@ test_data = [
     ),  # Single simple uniq + emptyIfNull
     (
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(name=None, expression=Column(None, None, "column1")),
                 SelectedExpression(
@@ -85,7 +85,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(name=None, expression=Column(None, None, "column1")),
                 SelectedExpression(
@@ -142,7 +142,7 @@ test_data = [
     ),  # Complex query with both uniq and emptyIfNull
     (
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None,
@@ -155,7 +155,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None,
@@ -170,7 +170,7 @@ test_data = [
     ),
     (
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",
@@ -179,7 +179,7 @@ test_data = [
             ],
         ),
         Query(
-            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",

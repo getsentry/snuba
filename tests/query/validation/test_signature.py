@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
@@ -123,7 +123,7 @@ def test_like_validator(
     should_raise: bool,
 ) -> None:
     entity = QueryEntity(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         ColumnSet(
             [
                 ("event_id", String()),

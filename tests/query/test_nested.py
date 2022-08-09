@@ -1,5 +1,5 @@
 from snuba.clickhouse.columns import Any, ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
@@ -20,7 +20,7 @@ def test_nested_query() -> None:
     """
 
     nested = LogicalQuery(
-        Entity(EntityKey.EVENTS, ColumnSet([("event_id", String())])),
+        Entity(EntityKeys.EVENTS, ColumnSet([("event_id", String())])),
         selected_columns=[
             SelectedExpression(
                 "string_evt_id", Column("string_evt_id", None, "event_id")
@@ -50,7 +50,7 @@ def test_nested_query() -> None:
 def test_join_query() -> None:
     events_query = LogicalQuery(
         Entity(
-            EntityKey.EVENTS,
+            EntityKeys.EVENTS,
             ColumnSet([("event_id", String()), ("group_id", UInt(32))]),
         ),
         selected_columns=[
@@ -63,7 +63,7 @@ def test_join_query() -> None:
 
     groups_query = LogicalQuery(
         Entity(
-            EntityKey.GROUPEDMESSAGES,
+            EntityKeys.GROUPEDMESSAGES,
             ColumnSet([("id", UInt(32)), ("message", String())]),
         ),
         selected_columns=[

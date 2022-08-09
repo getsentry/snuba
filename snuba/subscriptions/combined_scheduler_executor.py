@@ -12,7 +12,7 @@ from arroyo.types import Position
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec

@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import copy
 from typing import Mapping, MutableMapping, NamedTuple, Set
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.data_source.join import (
     IndividualNode,

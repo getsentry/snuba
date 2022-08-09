@@ -4,7 +4,7 @@ from typing import Any, Generator
 import pytest
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
@@ -36,8 +36,8 @@ time_validation_tests = [
         CompositeQuery(
             from_clause=LogicalQuery(
                 QueryEntity(
-                    EntityKey.EVENTS,
-                    get_entity(EntityKey.EVENTS).get_data_model(),
+                    EntityKeys.EVENTS,
+                    get_entity(EntityKeys.EVENTS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -96,15 +96,15 @@ time_validation_tests = [
                 left_node=IndividualNode(
                     "e",
                     QueryEntity(
-                        EntityKey.EVENTS,
-                        get_entity(EntityKey.EVENTS).get_data_model(),
+                        EntityKeys.EVENTS,
+                        get_entity(EntityKeys.EVENTS).get_data_model(),
                     ),
                 ),
                 right_node=IndividualNode(
                     "t",
                     QueryEntity(
-                        EntityKey.TRANSACTIONS,
-                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        EntityKeys.TRANSACTIONS,
+                        get_entity(EntityKeys.TRANSACTIONS).get_data_model(),
                     ),
                 ),
                 keys=[
@@ -181,8 +181,8 @@ time_validation_tests = [
         AND timestamp=toDateTime('2021-01-01T00:00:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS,
-                get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKeys.EVENTS,
+                get_entity(EntityKeys.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -211,8 +211,8 @@ time_validation_tests = [
         AND timestamp IN tuple(toDateTime('2021-01-01T00:00:00'))""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS,
-                get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKeys.EVENTS,
+                get_entity(EntityKeys.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -246,8 +246,8 @@ time_validation_tests = [
         AND timestamp < toDateTime('2021-01-02T00:30:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS,
-                get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKeys.EVENTS,
+                get_entity(EntityKeys.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -285,8 +285,8 @@ time_validation_tests = [
         AND timestamp < toDateTime('2021-01-20T00:30:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS,
-                get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKeys.EVENTS,
+                get_entity(EntityKeys.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -325,8 +325,8 @@ time_validation_tests = [
         AND timestamp < toDateTime('2021-01-03T00:30:00')""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS,
-                get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKeys.EVENTS,
+                get_entity(EntityKeys.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -373,8 +373,8 @@ time_validation_tests = [
         AND (timestamp < toDateTime('2021-01-02T00:30:00') OR timestamp < toDateTime('2021-01-02T00:30:00'))""",
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS,
-                get_entity(EntityKey.EVENTS).get_data_model(),
+                EntityKeys.EVENTS,
+                get_entity(EntityKeys.EVENTS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression("title", Column("_snuba_title", None, "title")),
@@ -442,7 +442,7 @@ def test_entity_column_validation(
 
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
-        "contains": (EntityKey.TRANSACTIONS, "event_id"),
+        "contains": (EntityKeys.TRANSACTIONS, "event_id"),
     }
 
     def events_mock(relationship: str) -> JoinRelationship:
@@ -454,7 +454,7 @@ def test_entity_column_validation(
             equivalences=[],
         )
 
-    events_entity = get_entity(EntityKey.EVENTS)
+    events_entity = get_entity(EntityKeys.EVENTS)
     old_get_join = events_entity.get_join_relationship
 
     try:

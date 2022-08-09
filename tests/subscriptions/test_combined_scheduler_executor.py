@@ -7,7 +7,7 @@ from unittest import mock
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaProducer
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.combined_scheduler_executor import (
@@ -24,7 +24,7 @@ from tests.backends.metrics import TestingMetricsBackend
 
 
 def create_subscription() -> None:
-    store = RedisSubscriptionDataStore(redis_client, EntityKey.EVENTS, PartitionId(0))
+    store = RedisSubscriptionDataStore(redis_client, EntityKeys.EVENTS, PartitionId(0))
     store.create(
         uuid.uuid4(),
         SubscriptionData(

@@ -4,7 +4,7 @@ from typing import Any, Callable
 
 import simplejson as json
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from tests.base import BaseApiTest
 from tests.fixtures import get_replay_event
@@ -24,7 +24,7 @@ class TestReplaysApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=180)
-        replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()
+        replays_storage = get_entity(EntityKeys.REPLAYS).get_writable_storage()
         assert replays_storage is not None
         write_raw_unprocessed_events(replays_storage, [self.event])
         self.next_time = datetime.utcnow().replace(

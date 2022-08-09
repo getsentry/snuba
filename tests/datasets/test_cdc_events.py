@@ -5,7 +5,7 @@ import pytest
 import pytz
 import simplejson as json
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.base import BaseApiTest
@@ -66,7 +66,7 @@ class TestCdcEvents(BaseApiTest):
         ) - timedelta(minutes=90)
         self.next_time = self.base_time + timedelta(minutes=95)
 
-        self.events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        self.events_storage = get_entity(EntityKeys.EVENTS).get_writable_storage()
         write_unprocessed_events(self.events_storage, [self.event])
 
         groups = [
@@ -79,7 +79,7 @@ class TestCdcEvents(BaseApiTest):
             }
         ]
 
-        groups_storage = get_entity(EntityKey.GROUPEDMESSAGES).get_writable_storage()
+        groups_storage = get_entity(EntityKeys.GROUPEDMESSAGES).get_writable_storage()
         groups_storage.get_table_writer().get_batch_writer(
             metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(group).encode("utf-8") for group in groups])
@@ -94,7 +94,7 @@ class TestCdcEvents(BaseApiTest):
             }
         ]
 
-        assignees_storage = get_entity(EntityKey.GROUPASSIGNEE).get_writable_storage()
+        assignees_storage = get_entity(EntityKeys.GROUPASSIGNEE).get_writable_storage()
         assignees_storage.get_table_writer().get_batch_writer(
             metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(assignee).encode("utf-8") for assignee in assignees])

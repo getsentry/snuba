@@ -8,7 +8,7 @@ from pytest import approx
 
 from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.metrics_aggregate_processor import timestamp_to_bucket
 from snuba.datasets.metrics_messages import InputType
@@ -78,7 +78,7 @@ class TestMetricsApiCounters(BaseApiTest):
         self.base_time = utc_yesterday_12_15()
         self.storage = cast(
             WritableTableStorage,
-            get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
+            get_entity(EntityKeys.METRICS_COUNTERS).get_writable_storage(),
         )
         self.generate_counters()
 
@@ -224,7 +224,7 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         )
         self.storage = cast(
             WritableTableStorage,
-            get_entity(EntityKey.METRICS_COUNTERS).get_writable_storage(),
+            get_entity(EntityKeys.METRICS_COUNTERS).get_writable_storage(),
         )
         self.generate_counters()
 
@@ -364,7 +364,7 @@ class TestMetricsApiSets(BaseApiTest):
         self.base_time = utc_yesterday_12_15() - timedelta(minutes=self.seconds)
         self.storage = cast(
             WritableTableStorage,
-            get_entity(EntityKey.METRICS_SETS).get_writable_storage(),
+            get_entity(EntityKeys.METRICS_SETS).get_writable_storage(),
         )
         self.unique_set_values = 100
         self.generate_sets()
@@ -461,7 +461,7 @@ class TestMetricsApiDistributions(BaseApiTest):
         self.base_time = utc_yesterday_12_15() - timedelta(seconds=self.seconds)
         self.storage = cast(
             WritableTableStorage,
-            get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
+            get_entity(EntityKeys.METRICS_DISTRIBUTIONS).get_writable_storage(),
         )
         self.generate_uniform_distributions()
 

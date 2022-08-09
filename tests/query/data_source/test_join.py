@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.clickhouse.columns import UUID, Any, ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -25,17 +25,17 @@ GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
 
 
 def test_entity_node() -> None:
-    e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
+    e = Entity(key=EntityKeys.EVENTS, schema=ERRORS_SCHEMA)
     node = IndividualNode(alias="err", data_source=e)
 
     assert node.get_column_sets() == {"err": e.schema}
 
 
 def test_simple_join() -> None:
-    e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
+    e = Entity(key=EntityKeys.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
-    g = Entity(key=EntityKey.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)
+    g = Entity(key=EntityKeys.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)
     node_group = IndividualNode(alias="groups", data_source=g)
 
     join = JoinClause(
@@ -74,13 +74,13 @@ def test_simple_join() -> None:
 
 
 def test_complex_joins() -> None:
-    e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
+    e = Entity(key=EntityKeys.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
-    g = Entity(key=EntityKey.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)
+    g = Entity(key=EntityKeys.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)
     node_group = IndividualNode(alias="groups", data_source=g)
 
-    a = Entity(key=EntityKey.GROUPASSIGNEE, schema=GROUPS_ASSIGNEE)
+    a = Entity(key=EntityKeys.GROUPASSIGNEE, schema=GROUPS_ASSIGNEE)
     query = Query(
         from_clause=a,
         selected_columns=[

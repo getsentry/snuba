@@ -9,7 +9,7 @@ from arroyo.backends.kafka import KafkaProducer
 
 from snuba import environment, state
 from snuba.attribution.log import flush_attribution_producer
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.executor_consumer import build_executor_consumer
@@ -33,12 +33,12 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     multiple=True,
     type=click.Choice(
         [
-            EntityKey.EVENTS.value,
-            EntityKey.TRANSACTIONS.value,
-            EntityKey.METRICS_COUNTERS.value,
-            EntityKey.METRICS_SETS.value,
-            EntityKey.GENERIC_METRICS_SETS.value,
-            EntityKey.GENERIC_METRICS_DISTRIBUTIONS.value,
+            EntityKeys.EVENTS.value,
+            EntityKeys.TRANSACTIONS.value,
+            EntityKeys.METRICS_COUNTERS.value,
+            EntityKeys.METRICS_SETS.value,
+            EntityKeys.GENERIC_METRICS_SETS.value,
+            EntityKeys.GENERIC_METRICS_DISTRIBUTIONS.value,
         ]
     ),
     help="The entity to target.",

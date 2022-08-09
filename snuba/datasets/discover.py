@@ -3,7 +3,7 @@ import logging
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
 from snuba.query.conditions import (
     BINARY_OPERATORS,
@@ -20,14 +20,14 @@ from snuba.query.matchers import String as StringMatch
 from snuba.query.subscripts import subscript_key_column_name
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-EVENTS = EntityKey.DISCOVER_EVENTS
-TRANSACTIONS = EntityKey.DISCOVER_TRANSACTIONS
-EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
+EVENTS = EntityKeys.DISCOVER_EVENTS
+TRANSACTIONS = EntityKeys.DISCOVER_TRANSACTIONS
+EVENTS_AND_TRANSACTIONS = EntityKeys.DISCOVER
 
 
 class DiscoverDataset(Dataset):
     def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.DISCOVER)
+        super().__init__(default_entity=EntityKeys.DISCOVER)
 
     # XXX: This is temporary code that will eventually need to be ported to Sentry
     # since SnQL will require an entity to always be specified by the user.

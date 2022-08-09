@@ -1,6 +1,6 @@
 from snuba import settings, state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.transactions import (
     TransactionsQueryStorageSelector,
     transaction_translator,
@@ -22,7 +22,7 @@ STORAGE_RO = get_storage(StorageKey.TRANSACTIONS_RO)
 def test_storage_selector_global_config() -> None:
     state.set_config("enable_transactions_readonly_table", True)
 
-    query = Query(Entity(EntityKey.TRANSACTIONS, ColumnSet([])), selected_columns=[])
+    query = Query(Entity(EntityKeys.TRANSACTIONS, ColumnSet([])), selected_columns=[])
 
     assert (
         STORAGE_SELECTOR.select_storage(query, HTTPQuerySettings()).storage
@@ -38,7 +38,7 @@ def test_storage_selector_global_config() -> None:
 def test_storage_selector_query_settings() -> None:
     settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS = set([RO_REFERRER])
 
-    query = Query(Entity(EntityKey.TRANSACTIONS, ColumnSet([])), selected_columns=[])
+    query = Query(Entity(EntityKeys.TRANSACTIONS, ColumnSet([])), selected_columns=[])
 
     assert (
         STORAGE_SELECTOR.select_storage(

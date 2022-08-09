@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 from pytest import raises
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
@@ -60,7 +60,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
     def test(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
+        creator = SubscriptionCreator(self.dataset, EntityKeys.EVENTS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
@@ -76,7 +76,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID)
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
+        creator = SubscriptionCreator(self.dataset, EntityKeys.EVENTS)
         with raises(QueryException):
             creator.create(
                 subscription,
@@ -84,7 +84,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_aggregation(self) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
+        creator = SubscriptionCreator(self.dataset, EntityKeys.EVENTS)
         with raises(QueryException):
             creator.create(
                 SubscriptionData(
@@ -98,7 +98,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_time_window(self) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
+        creator = SubscriptionCreator(self.dataset, EntityKeys.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
                 SubscriptionData(
@@ -141,7 +141,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     def test_invalid_resolution(self) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
+        creator = SubscriptionCreator(self.dataset, EntityKeys.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
                 SubscriptionData(
@@ -167,10 +167,10 @@ TESTS_CREATE_METRICS = [
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, 1
+                EntityKeys.METRICS_COUNTERS, 1
             ),
         ),
-        EntityKey.METRICS_COUNTERS,
+        EntityKeys.METRICS_COUNTERS,
         id="Metrics Counters Snql subscription",
     ),
     pytest.param(
@@ -183,9 +183,9 @@ TESTS_CREATE_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+            entity_subscription=create_entity_subscription(EntityKeys.METRICS_SETS, 1),
         ),
-        EntityKey.METRICS_SETS,
+        EntityKeys.METRICS_SETS,
         id="Metrics Sets Snql subscription",
     ),
 ]
@@ -202,7 +202,7 @@ TESTS_INVALID_METRICS = [
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, 1
+                EntityKeys.METRICS_COUNTERS, 1
             ),
         ),
         id="Metrics Counters subscription missing tags[3] condition",
@@ -217,7 +217,7 @@ TESTS_INVALID_METRICS = [
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, 1
+                EntityKeys.METRICS_COUNTERS, 1
             ),
         ),
         id="Metrics Counters subscription missing project_id condition",
@@ -231,7 +231,7 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+            entity_subscription=create_entity_subscription(EntityKeys.METRICS_SETS, 1),
         ),
         id="Metrics Sets subscription missing tags[3] condition",
     ),
@@ -244,7 +244,7 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+            entity_subscription=create_entity_subscription(EntityKeys.METRICS_SETS, 1),
         ),
         id="Metrics Sets subscription missing project_id condition",
     ),
@@ -277,7 +277,7 @@ class TestMetricsCountersSubscriptionCreator:
     def test_missing_conditions_for_groupby_clause(
         self, subscription: SubscriptionData
     ) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
+        creator = SubscriptionCreator(self.dataset, EntityKeys.METRICS_COUNTERS)
         with raises(InvalidQueryException):
             creator.create(
                 subscription,
@@ -287,7 +287,7 @@ class TestMetricsCountersSubscriptionCreator:
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
     def test(self) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
+        creator = SubscriptionCreator(self.dataset, EntityKeys.EVENTS)
         subscription = SubscriptionData(
             project_id=1,
             query="MATCH (events) SELECT count() AS count",

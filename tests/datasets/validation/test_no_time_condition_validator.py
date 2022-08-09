@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
@@ -14,7 +14,7 @@ from snuba.query.validation.validators import NoTimeBasedConditionValidator
 
 tests = [
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "equals",
             Column("_snuba_project_id", None, "project_id"),
@@ -43,7 +43,7 @@ def test_no_time_based_validation(key: EntityKey, condition: Expression) -> None
 
 invalid_tests = [
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "equals",
             Column("_snuba_timestamp", None, "timestamp"),
@@ -52,7 +52,7 @@ invalid_tests = [
         id="equals",
     ),
     pytest.param(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         binary_condition(
             "and",
             binary_condition(

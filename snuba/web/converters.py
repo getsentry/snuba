@@ -1,7 +1,7 @@
 from werkzeug.routing import BaseConverter
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
 from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset, get_dataset_name

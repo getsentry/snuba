@@ -2,7 +2,7 @@ import pytest
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -28,7 +28,7 @@ tests = [
 @pytest.mark.parametrize("unprocessed, project_id", tests)
 def test_referrer_unspecified_project(unprocessed: Expression, project_id: int) -> None:
     query = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
@@ -51,7 +51,7 @@ def test_referrer_unspecified_project(unprocessed: Expression, project_id: int) 
 @pytest.mark.parametrize("unprocessed, project_id", tests)
 def test_referrer_specified_project(unprocessed: Expression, project_id: int) -> None:
     query = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
@@ -76,7 +76,7 @@ def test_referrer_rate_limit_processor_no_config(
     unprocessed: Expression, project_id: int
 ) -> None:
     query = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )

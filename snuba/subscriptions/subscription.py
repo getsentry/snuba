@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID, uuid1
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import enforce_table_writer, get_entity
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (

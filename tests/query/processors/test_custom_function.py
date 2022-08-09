@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -17,7 +17,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.validation.signature import Column as ColType
 
 QUERY_ENTITY = QueryEntity(
-    EntityKey.EVENTS,
+    EntityKeys.EVENTS,
     ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
 )
 

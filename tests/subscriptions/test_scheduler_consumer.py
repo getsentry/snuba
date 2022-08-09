@@ -17,7 +17,7 @@ from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer

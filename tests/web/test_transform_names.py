@@ -5,7 +5,7 @@ from datetime import datetime
 from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
@@ -29,7 +29,7 @@ def test_transform_column_names() -> None:
     to the SelectedExpression names and not to the expression aliases
     (which are supposed to be internal).
     """
-    events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+    events_storage = get_entity(EntityKeys.EVENTS).get_writable_storage()
     assert events_storage is not None
 
     event_id = uuid.uuid4().hex
@@ -56,7 +56,7 @@ def test_transform_column_names() -> None:
     )
 
     query = Query(
-        Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+        Entity(EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()),
         selected_columns=[
             # The selected expression names are those provided by the
             # user in the query and those the user expect in the response.

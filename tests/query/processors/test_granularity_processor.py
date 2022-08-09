@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
@@ -27,9 +27,9 @@ from snuba.query.query_settings import HTTPQuerySettings
 @pytest.mark.parametrize(
     "entity_key,column",
     [
-        (EntityKey.METRICS_COUNTERS, "value"),
-        (EntityKey.METRICS_DISTRIBUTIONS, "percentiles"),
-        (EntityKey.METRICS_SETS, "value"),
+        (EntityKeys.METRICS_COUNTERS, "value"),
+        (EntityKeys.METRICS_DISTRIBUTIONS, "percentiles"),
+        (EntityKeys.METRICS_SETS, "value"),
     ],
 )
 @pytest.mark.parametrize(
@@ -93,8 +93,8 @@ def test_granularity_added(
 @pytest.mark.parametrize(
     "entity_key,column",
     [
-        (EntityKey.GENERIC_METRICS_DISTRIBUTIONS, "percentiles"),
-        (EntityKey.GENERIC_METRICS_SETS, "value"),
+        (EntityKeys.GENERIC_METRICS_DISTRIBUTIONS, "percentiles"),
+        (EntityKeys.GENERIC_METRICS_SETS, "value"),
     ],
 )
 @pytest.mark.parametrize(

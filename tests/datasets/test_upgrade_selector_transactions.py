@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 import pytest
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.transactions import v2_selector_function
 from snuba.query import SelectedExpression
@@ -15,7 +15,7 @@ from snuba.query.logical import Query
 from snuba.state import set_config
 
 query = Query(
-    QueryEntity(EntityKey.TRANSACTIONS, EntityColumnSet([])),
+    QueryEntity(EntityKeys.TRANSACTIONS, EntityColumnSet([])),
     selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
     condition=binary_condition(
         ConditionFunctions.EQ,
@@ -112,7 +112,7 @@ def test_selector_function(
     expected_value: Tuple[str, List[str]],
 ) -> None:
     query = Query(
-        QueryEntity(EntityKey.TRANSACTIONS, EntityColumnSet([])),
+        QueryEntity(EntityKeys.TRANSACTIONS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=time_condition,
     )

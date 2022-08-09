@@ -3,20 +3,20 @@ from typing import Any, MutableMapping
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.factory import get_dataset
 from snuba.query.snql.parser import parse_snql_query
 
 test_data = [
-    ({"conditions": [["type", "=", "transaction"]]}, EntityKey.DISCOVER_TRANSACTIONS),
+    ({"conditions": [["type", "=", "transaction"]]}, EntityKeys.DISCOVER_TRANSACTIONS),
     (
         {"conditions": [["type", "=", "transaction"], ["duration", ">", 1000]]},
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
-    ({"conditions": [["type", "=", "error"]]}, EntityKey.DISCOVER_EVENTS),
+    ({"conditions": [["type", "=", "error"]]}, EntityKeys.DISCOVER_EVENTS),
     (
         {"conditions": [[["type", "=", "error"], ["type", "=", "transaction"]]]},
-        EntityKey.DISCOVER,
+        EntityKeys.DISCOVER,
     ),
     (
         {
@@ -34,7 +34,7 @@ test_data = [
                 ]
             ]
         },
-        EntityKey.DISCOVER,
+        EntityKeys.DISCOVER,
     ),
     (
         {
@@ -52,7 +52,7 @@ test_data = [
                 ]
             ]
         },
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
     (
         {
@@ -70,18 +70,18 @@ test_data = [
                 ]
             ]
         },
-        EntityKey.DISCOVER_EVENTS,
+        EntityKeys.DISCOVER_EVENTS,
     ),
-    ({"conditions": [["type", "!=", "transaction"]]}, EntityKey.DISCOVER_EVENTS),
-    ({"conditions": []}, EntityKey.DISCOVER),
-    ({"conditions": [["duration", "=", 0]]}, EntityKey.DISCOVER_TRANSACTIONS),
+    ({"conditions": [["type", "!=", "transaction"]]}, EntityKeys.DISCOVER_EVENTS),
+    ({"conditions": []}, EntityKeys.DISCOVER),
+    ({"conditions": [["duration", "=", 0]]}, EntityKeys.DISCOVER_TRANSACTIONS),
     (
         {"conditions": [["event_id", "=", "asdasdasd"], ["duration", "=", 0]]},
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
     (
         {"conditions": [["group_id", "=", "asdasdasd"], ["duration", "=", 0]]},
-        EntityKey.DISCOVER,
+        EntityKeys.DISCOVER,
     ),
     (
         {
@@ -100,7 +100,7 @@ test_data = [
                 ["duration", "=", 0],
             ]
         },
-        EntityKey.DISCOVER_EVENTS,
+        EntityKeys.DISCOVER_EVENTS,
     ),
     (
         {
@@ -119,33 +119,33 @@ test_data = [
                 ["duration", "=", 0],
             ]
         },
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
     # # No conditions, other referenced columns
-    ({"selected_columns": ["group_id"]}, EntityKey.DISCOVER_EVENTS),
-    ({"selected_columns": ["span_id"]}, EntityKey.DISCOVER),
-    ({"selected_columns": ["group_id", "span_id"]}, EntityKey.DISCOVER_EVENTS),
+    ({"selected_columns": ["group_id"]}, EntityKeys.DISCOVER_EVENTS),
+    ({"selected_columns": ["span_id"]}, EntityKeys.DISCOVER),
+    ({"selected_columns": ["group_id", "span_id"]}, EntityKeys.DISCOVER_EVENTS),
     (
         {"aggregations": [["max", "duration", "max_duration"]]},
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
     (
         {"aggregations": [["apdex(duration, 300)", None, "apdex_duration_300"]]},
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
     (
         {"aggregations": [["failure_rate()", None, "failure_rate"]]},
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
-    ({"aggregations": [["isHandled()", None, "handled"]]}, EntityKey.DISCOVER_EVENTS),
-    ({"aggregations": [["notHandled()", None, "handled"]]}, EntityKey.DISCOVER_EVENTS),
+    ({"aggregations": [["isHandled()", None, "handled"]]}, EntityKeys.DISCOVER_EVENTS),
+    ({"aggregations": [["notHandled()", None, "handled"]]}, EntityKeys.DISCOVER_EVENTS),
     (
         {"selected_columns": ["measurements[lcp.elementSize]"]},
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
     (
         {"selected_columns": ["span_op_breakdowns[ops.http]"]},
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKeys.DISCOVER_TRANSACTIONS,
     ),
 ]
 

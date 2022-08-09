@@ -14,7 +14,7 @@ from sentry_sdk import Client, Hub
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
 from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.factory import get_dataset
@@ -43,7 +43,7 @@ class SimpleAPITest(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
-        storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        storage = get_entity(EntityKeys.EVENTS).get_writable_storage()
         assert storage is not None
         self.storage = storage
         self.table = self.storage.get_table_writer().get_schema().get_table_name()
@@ -2202,7 +2202,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         """
 
         expected_uuid = uuid.uuid1()
-        entity_key = EntityKey.METRICS_COUNTERS
+        entity_key = EntityKeys.METRICS_COUNTERS
 
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
@@ -2243,7 +2243,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
     def test_invalid_dataset_and_entity_combination(self) -> None:
         expected_uuid = uuid.uuid1()
-        entity_key = EntityKey.METRICS_COUNTERS
+        entity_key = EntityKeys.METRICS_COUNTERS
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(

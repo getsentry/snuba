@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -61,7 +61,7 @@ def test_apply_quota(
     state.set_config(config_to_set, 5)
 
     query = Query(
-        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        QueryEntity(EntityKeys.EVENTS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=binary_condition(
             ConditionFunctions.EQ,

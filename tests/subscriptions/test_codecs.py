@@ -7,7 +7,7 @@ from typing import Callable, Optional, Type
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -53,19 +53,19 @@ SNQL_CASES = [
     pytest.param(
         build_snql_subscription_data,
         None,
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         id="snql",
     ),
     pytest.param(
         build_snql_subscription_data,
         1,
-        EntityKey.METRICS_COUNTERS,
+        EntityKeys.METRICS_COUNTERS,
         id="snql",
     ),
     pytest.param(
         build_snql_subscription_data,
         1,
-        EntityKey.METRICS_SETS,
+        EntityKeys.METRICS_SETS,
         id="snql",
     ),
 ]
@@ -164,7 +164,7 @@ def test_subscription_task_result_encoder() -> None:
         ScheduledSubscriptionTask(
             timestamp,
             SubscriptionWithMetadata(
-                EntityKey.EVENTS,
+                EntityKeys.EVENTS,
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
                     subscription_data,
@@ -186,20 +186,20 @@ def test_subscription_task_result_encoder() -> None:
     assert payload["request"] == request.original_body
     assert payload["result"] == result
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
-    assert payload["entity"] == EntityKey.EVENTS.value
+    assert payload["entity"] == EntityKeys.EVENTS.value
 
 
 METRICS_CASES = [
     pytest.param(
         MetricsCountersSubscription,
         "sum",
-        EntityKey.METRICS_COUNTERS,
+        EntityKeys.METRICS_COUNTERS,
         id="metrics_counters subscription",
     ),
     pytest.param(
         MetricsSetsSubscription,
         "uniq",
-        EntityKey.METRICS_SETS,
+        EntityKeys.METRICS_SETS,
         id="metrics_sets subscription",
     ),
 ]
@@ -288,7 +288,7 @@ def test_subscription_task_encoder() -> None:
     tick_upper_offset = 5
 
     subscription_with_metadata = SubscriptionWithMetadata(
-        EntityKey.EVENTS,
+        EntityKeys.EVENTS,
         Subscription(
             SubscriptionIdentifier(PartitionId(1), subscription_id), subscription_data
         ),

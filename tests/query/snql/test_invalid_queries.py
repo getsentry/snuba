@@ -3,7 +3,7 @@ from typing import Optional
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.data_source.join import JoinRelationship, JoinType
@@ -96,10 +96,10 @@ test_cases = [
 def test_failures(query_body: str, message: str) -> None:
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
-        "contains": (EntityKey.TRANSACTIONS, "event_id"),
-        "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGES, "first_release_id"),
-        "activity": (EntityKey.SESSIONS, "org_id"),
+        "contains": (EntityKeys.TRANSACTIONS, "event_id"),
+        "assigned": (EntityKeys.GROUPASSIGNEE, "group_id"),
+        "bookmark": (EntityKeys.GROUPEDMESSAGES, "first_release_id"),
+        "activity": (EntityKeys.SESSIONS, "org_id"),
     }
 
     def events_mock(relationship: str) -> Optional[JoinRelationship]:
@@ -114,7 +114,7 @@ def test_failures(query_body: str, message: str) -> None:
         )
 
     events = get_dataset("events")
-    events_entity = get_entity(EntityKey.EVENTS)
+    events_entity = get_entity(EntityKeys.EVENTS)
     setattr(events_entity, "get_join_relationship", events_mock)
 
     with pytest.raises(ParsingException, match=re.escape(message)):

@@ -15,7 +15,7 @@ from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
@@ -184,7 +184,7 @@ def generate_message(
         subscription_identifier = SubscriptionIdentifier(PartitionId(1), uuid.uuid1())
 
     data_dict = {}
-    if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
+    if entity_key in (EntityKeys.METRICS_SETS, EntityKeys.METRICS_COUNTERS):
         data_dict = {"organization": 1}
 
     entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
@@ -228,7 +228,7 @@ def test_execute_query_strategy() -> None:
         next_step=next_step,
     )
 
-    make_message = generate_message(EntityKey.EVENTS)
+    make_message = generate_message(EntityKeys.EVENTS)
     message = next(make_message)
 
     strategy.submit(message)
@@ -261,7 +261,7 @@ def test_too_many_concurrent_queries() -> None:
         next_step=mock.Mock(),
     )
 
-    make_message = generate_message(EntityKey.EVENTS)
+    make_message = generate_message(EntityKeys.EVENTS)
 
     for _ in range(4):
         strategy.submit(next(make_message))
@@ -286,9 +286,9 @@ def test_skip_execution_for_entity() -> None:
         next_step=mock.Mock(),
     )
 
-    metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
+    metrics_sets_message = next(generate_message(EntityKeys.METRICS_SETS))
     strategy.submit(metrics_sets_message)
-    metrics_counters_message = next(generate_message(EntityKey.METRICS_COUNTERS))
+    metrics_counters_message = next(generate_message(EntityKeys.METRICS_COUNTERS))
     strategy.submit(metrics_counters_message)
 
     assert (
@@ -342,7 +342,7 @@ def test_produce_result() -> None:
         SubscriptionTaskResult(
             ScheduledSubscriptionTask(
                 epoch,
-                SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
+                SubscriptionWithMetadata(EntityKeys.EVENTS, subscription, 1),
             ),
             (request, result),
         ),
@@ -392,7 +392,7 @@ def test_execute_and_produce_result() -> None:
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
 
-    make_message = generate_message(EntityKey.EVENTS, subscription_identifier)
+    make_message = generate_message(EntityKeys.EVENTS, subscription_identifier)
     message = next(make_message)
     strategy.submit(message)
 
@@ -431,7 +431,7 @@ def test_skip_stale_message() -> None:
 
     subscription_identifier = SubscriptionIdentifier(PartitionId(0), uuid.uuid1())
 
-    make_message = generate_message(EntityKey.EVENTS, subscription_identifier)
+    make_message = generate_message(EntityKeys.EVENTS, subscription_identifier)
     message = next(make_message)
     strategy.submit(message)
 

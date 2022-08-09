@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
@@ -35,7 +35,7 @@ tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression(
@@ -53,8 +53,8 @@ tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.METRICS_COUNTERS,
-                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
+                EntityKeys.METRICS_COUNTERS,
+                get_entity(EntityKeys.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[SelectedExpression("value", Column(None, None, "value"))],
             condition=binary_condition(
@@ -122,7 +122,7 @@ invalid_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
@@ -139,7 +139,7 @@ invalid_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
@@ -160,7 +160,7 @@ invalid_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKeys.EVENTS, get_entity(EntityKeys.EVENTS).get_data_model()
             ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
@@ -181,8 +181,8 @@ invalid_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.METRICS_COUNTERS,
-                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
+                EntityKeys.METRICS_COUNTERS,
+                get_entity(EntityKeys.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[SelectedExpression("value", Column(None, None, "value"))],
             condition=binary_condition(
@@ -220,8 +220,8 @@ invalid_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.METRICS_COUNTERS,
-                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
+                EntityKeys.METRICS_COUNTERS,
+                get_entity(EntityKeys.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[SelectedExpression("value", Column(None, None, "value"))],
             condition=binary_condition(

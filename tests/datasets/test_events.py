@@ -1,7 +1,7 @@
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.events import (
     ErrorsQueryStorageSelector,
     errors_translators,
@@ -56,7 +56,7 @@ def test_storage_selector() -> None:
     storage = get_storage(StorageKey.ERRORS)
     storage_ro = get_storage(StorageKey.ERRORS_RO)
 
-    query = Query(Entity(EntityKey.EVENTS, ColumnSet([])), selected_columns=[])
+    query = Query(Entity(EntityKeys.EVENTS, ColumnSet([])), selected_columns=[])
 
     storage_selector = ErrorsQueryStorageSelector(mappers=errors_translators)
     assert (

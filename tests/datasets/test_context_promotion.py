@@ -3,7 +3,7 @@ from typing import Union
 import pytest
 
 from snuba.clickhouse.query import Query
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
@@ -26,12 +26,12 @@ span_id_as_uint64 = int(span_id_hex, 16)
     "entity, expected_table_name",
     [
         pytest.param(
-            get_entity(EntityKey.DISCOVER),
+            get_entity(EntityKeys.DISCOVER),
             "discover",
             id="discover",
         ),
         pytest.param(
-            get_entity(EntityKey.EVENTS),
+            get_entity(EntityKeys.EVENTS),
             "errors",
             id="events",
         ),

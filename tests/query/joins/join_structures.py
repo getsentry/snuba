@@ -1,7 +1,7 @@
 from typing import Optional, Sequence, TypeVar
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.query import SelectedExpression
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -43,7 +43,7 @@ def events_node(
     condition: Optional[Expression] = None,
 ) -> IndividualNode[Entity]:
     return build_node(
-        "ev", Entity(EntityKey.EVENTS, EVENTS_SCHEMA), selected_columns, condition
+        "ev", Entity(EntityKeys.EVENTS, EVENTS_SCHEMA), selected_columns, condition
     )
 
 
@@ -53,7 +53,7 @@ def groups_node(
 ) -> IndividualNode[Entity]:
     return build_node(
         "gr",
-        Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
+        Entity(EntityKeys.GROUPEDMESSAGES, GROUPS_SCHEMA),
         selected_columns,
         condition,
     )

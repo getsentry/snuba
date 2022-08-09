@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import QueryRunner

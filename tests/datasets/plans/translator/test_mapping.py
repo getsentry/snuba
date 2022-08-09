@@ -8,7 +8,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -25,7 +25,7 @@ test_cases = [
     pytest.param(
         TranslationMappers(),
         SnubaQuery(
-            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            from_clause=QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -75,7 +75,7 @@ test_cases = [
             subscriptables=[SubscriptableMapper(None, "tags", None, "tags")],
         ),
         SnubaQuery(
-            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            from_clause=QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -148,7 +148,7 @@ test_cases = [
             ],
         ),
         SnubaQuery(
-            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+            from_clause=QueryEntity(EntityKeys.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",

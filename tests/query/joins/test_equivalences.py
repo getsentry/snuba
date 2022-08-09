@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -27,9 +27,9 @@ from tests.query.joins.equivalence_schema import (
 TEST_CASES = [
     pytest.param(
         JoinClause(
-            IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
+            IndividualNode("ev", EntitySource(EntityKeys.EVENTS, EVENTS_SCHEMA, None)),
             IndividualNode(
-                "gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
+                "gr", EntitySource(EntityKeys.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
             ),
             [
                 JoinCondition(
@@ -41,17 +41,17 @@ TEST_CASES = [
             None,
         ),
         {
-            QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
+            QualifiedCol(EntityKeys.EVENTS, "group_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"): {
-                QualifiedCol(EntityKey.EVENTS, "group_id"),
+            QualifiedCol(EntityKeys.GROUPEDMESSAGES, "id"): {
+                QualifiedCol(EntityKeys.EVENTS, "group_id"),
             },
-            QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
+            QualifiedCol(EntityKeys.EVENTS, "project_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"): {
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
+            QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"): {
+                QualifiedCol(EntityKeys.EVENTS, "project_id"),
             },
         },
         id="Two entities join",
@@ -60,10 +60,10 @@ TEST_CASES = [
         JoinClause(
             JoinClause(
                 IndividualNode(
-                    "ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)
+                    "ev", EntitySource(EntityKeys.EVENTS, EVENTS_SCHEMA, None)
                 ),
                 IndividualNode(
-                    "as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
+                    "as", EntitySource(EntityKeys.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
                 ),
                 [
                     JoinCondition(
@@ -75,7 +75,7 @@ TEST_CASES = [
                 None,
             ),
             IndividualNode(
-                "gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
+                "gr", EntitySource(EntityKeys.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
             ),
             [
                 JoinCondition(
@@ -87,29 +87,29 @@ TEST_CASES = [
             None,
         ),
         {
-            QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"),
+            QualifiedCol(EntityKeys.EVENTS, "group_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "id"),
+                QualifiedCol(EntityKeys.GROUPASSIGNEE, "group_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"): {
-                QualifiedCol(EntityKey.EVENTS, "group_id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"),
+            QualifiedCol(EntityKeys.GROUPEDMESSAGES, "id"): {
+                QualifiedCol(EntityKeys.EVENTS, "group_id"),
+                QualifiedCol(EntityKeys.GROUPASSIGNEE, "group_id"),
             },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"): {
-                QualifiedCol(EntityKey.EVENTS, "group_id"),
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
+            QualifiedCol(EntityKeys.GROUPASSIGNEE, "group_id"): {
+                QualifiedCol(EntityKeys.EVENTS, "group_id"),
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "id"),
             },
-            QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
+            QualifiedCol(EntityKeys.EVENTS, "project_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKeys.GROUPASSIGNEE, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"): {
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
+            QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"): {
+                QualifiedCol(EntityKeys.GROUPASSIGNEE, "project_id"),
+                QualifiedCol(EntityKeys.EVENTS, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
+            QualifiedCol(EntityKeys.GROUPASSIGNEE, "project_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKeys.EVENTS, "project_id"),
             },
         },
         id="Join with three tables",
@@ -118,10 +118,10 @@ TEST_CASES = [
         JoinClause(
             JoinClause(
                 IndividualNode(
-                    "ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)
+                    "ev", EntitySource(EntityKeys.EVENTS, EVENTS_SCHEMA, None)
                 ),
                 IndividualNode(
-                    "gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
+                    "gr", EntitySource(EntityKeys.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
                 ),
                 [
                     JoinCondition(
@@ -133,7 +133,7 @@ TEST_CASES = [
                 None,
             ),
             IndividualNode(
-                "as", EntitySource(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
+                "as", EntitySource(EntityKeys.GROUPASSIGNEE, GROUPS_ASSIGNEE, None)
             ),
             [
                 JoinCondition(
@@ -145,29 +145,29 @@ TEST_CASES = [
             None,
         ),
         {
-            QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
+            QualifiedCol(EntityKeys.EVENTS, "group_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"): {
-                QualifiedCol(EntityKey.EVENTS, "group_id"),
+            QualifiedCol(EntityKeys.GROUPEDMESSAGES, "id"): {
+                QualifiedCol(EntityKeys.EVENTS, "group_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "user_id"): {
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "user_id"),
+            QualifiedCol(EntityKeys.GROUPEDMESSAGES, "user_id"): {
+                QualifiedCol(EntityKeys.GROUPASSIGNEE, "user_id"),
             },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "user_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "user_id"),
+            QualifiedCol(EntityKeys.GROUPASSIGNEE, "user_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "user_id"),
             },
-            QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
+            QualifiedCol(EntityKeys.EVENTS, "project_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKeys.GROUPASSIGNEE, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"): {
-                QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
+            QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"): {
+                QualifiedCol(EntityKeys.GROUPASSIGNEE, "project_id"),
+                QualifiedCol(EntityKeys.EVENTS, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
-                QualifiedCol(EntityKey.EVENTS, "project_id"),
+            QualifiedCol(EntityKeys.GROUPASSIGNEE, "project_id"): {
+                QualifiedCol(EntityKeys.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKeys.EVENTS, "project_id"),
             },
         },
         id="Join with three tables",
@@ -179,9 +179,9 @@ TEST_CASES = [
 def test_find_equivalences(
     join: JoinClause[EntitySource], graph: EquivalenceGraph
 ) -> None:
-    ENTITY_IMPL[EntityKey.EVENTS] = Events()
-    ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
-    ENTITY_IMPL[EntityKey.GROUPASSIGNEE] = GroupAssignee()
+    ENTITY_IMPL[EntityKeys.EVENTS] = Events()
+    ENTITY_IMPL[EntityKeys.GROUPEDMESSAGES] = GroupedMessage()
+    ENTITY_IMPL[EntityKeys.GROUPASSIGNEE] = GroupAssignee()
 
     assert get_equivalent_columns(join) == graph
 

@@ -2,7 +2,7 @@ from functools import partial
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities import EntityKey, EntityKeys
 from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -39,8 +39,8 @@ def test_classify_and_replace() -> None:
     condition = binary_condition(
         ConditionFunctions.EQ, Column(None, "ev", "project_id"), Literal(None, 1)
     )
-    assert _classify_single_column_condition(condition, {"ev": EntityKey.EVENTS}) == (
-        QualifiedCol(EntityKey.EVENTS, "project_id"),
+    assert _classify_single_column_condition(condition, {"ev": EntityKeys.EVENTS}) == (
+        QualifiedCol(EntityKeys.EVENTS, "project_id"),
         "ev",
     )
 
@@ -52,8 +52,8 @@ def test_classify_and_replace() -> None:
 
 
 ENTITY_GROUP_JOIN = JoinClause(
-    IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-    IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)),
+    IndividualNode("ev", EntitySource(EntityKeys.EVENTS, EVENTS_SCHEMA, None)),
+    IndividualNode("gr", EntitySource(EntityKeys.GROUPEDMESSAGES, GROUPS_SCHEMA, None)),
     [
         JoinCondition(
             JoinConditionExpression("ev", "group_id"),
@@ -81,8 +81,8 @@ TEST_REPLACEMENT = [
             ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)
         ),
         JoinClause(
-            IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-            IndividualNode("ev2", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
+            IndividualNode("ev", EntitySource(EntityKeys.EVENTS, EVENTS_SCHEMA, None)),
+            IndividualNode("ev2", EntitySource(EntityKeys.EVENTS, EVENTS_SCHEMA, None)),
             [
                 JoinCondition(
                     JoinConditionExpression("ev", "event_id"),
@@ -263,8 +263,8 @@ def test_add_equivalent_condition(
     join_clause: JoinClause[EntitySource],
     expected_expr: Expression,
 ) -> None:
-    ENTITY_IMPL[EntityKey.EVENTS] = Events()
-    ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
+    ENTITY_IMPL[EntityKeys.EVENTS] = Events()
+    ENTITY_IMPL[EntityKeys.GROUPEDMESSAGES] = GroupedMessage()
 
     query = CompositeQuery(
         from_clause=join_clause,
