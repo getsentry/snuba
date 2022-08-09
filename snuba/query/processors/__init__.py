@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Callable, MutableMapping, Type
 
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
@@ -29,3 +30,23 @@ class QueryProcessor(ABC):
         # existing one in place. We can move towards an immutable structure
         # after changing Request.
         raise NotImplementedError
+
+
+_SEEN_QUERY_PROCESSORS: MutableMapping[str, Type[QueryProcessor]] = {}
+
+# Decorator for registering your query processor in the static list
+def query_processor(
+    name: str,
+) -> Callable[[Type[QueryProcessor]], Type[QueryProcessor]]:
+    def register_query_processor(cls: Type[QueryProcessor]) -> Type[QueryProcessor]:
+        assert (
+            _SEEN_QUERY_PROCESSORS.get(name) is None
+        ), f"{cls} trying to claim name {name}, already owned by {_SEEN_QUERY_PROCESSORS[name]}"
+        _SEEN_QUERY_PROCESSORS[name] = cls
+        return cls
+
+    return register_query_processor
+
+
+def get_query_processor_by_name(name: str) -> Type[QueryProcessor]:
+    return _SEEN_QUERY_PROCESSORS[name]

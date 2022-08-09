@@ -1,11 +1,11 @@
-from typing import NamedTuple, Sequence
+from typing import NamedTuple, Sequence, Union
 
 from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors import QueryProcessor, query_processor
 from snuba.query.query_settings import QuerySettings
 
 #: Granularities for which a materialized view exist, in ascending order
@@ -56,6 +56,7 @@ PERFORMANCE_GRANULARITIES: Sequence[GranularityMapping] = [
 DEFAULT_MAPPED_GRANULARITY_ENUM = 1
 
 
+@query_processor("handle_mapped_granularities")
 class MappedGranularityProcessor(QueryProcessor):
     """
     Use the granularity set on the query to filter on the granularity column,
@@ -64,11 +65,28 @@ class MappedGranularityProcessor(QueryProcessor):
 
     def __init__(
         self,
-        accepted_granularities: Sequence[GranularityMapping],
+        accepted_granularities: Union[
+            Sequence[GranularityMapping], Sequence[Sequence[int]]
+        ],
         default_granularity_enum: int,
     ):
+        # handle YAML not knowing about the GranularityMapping NamedTuple
+        accepted_granularities_processed: Sequence[GranularityMapping] = []
+        if isinstance(accepted_granularities[0], Sequence):
+            accepted_granularities_processed = [
+                GranularityMapping(raw=seq[0], enum_value=seq[1])
+                for seq in accepted_granularities
+            ]
+        else:
+            # this is dumb but I wanted to shut mypy up
+            accepted_granularities_processed = [
+                g for g in accepted_granularities if isinstance(g, GranularityMapping)
+            ]
+
         self._accepted_granularities = sorted(
-            accepted_granularities, key=lambda mapping: mapping.raw, reverse=True
+            accepted_granularities_processed,
+            key=lambda mapping: mapping.raw,
+            reverse=True,
         )
         self._available_granularities_values = [
             mapping.raw for mapping in self._accepted_granularities
