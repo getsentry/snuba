@@ -31,7 +31,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "replays.processor")
-from sentry_sdk import capture_exception
 
 ReplayEventDict = Mapping[Any, Any]
 RetentionDays = int
@@ -223,7 +222,6 @@ class ReplaysProcessor(MessageProcessor):
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
-        except Exception as e:
+        except Exception:
             metrics.increment("consumer_error")
-            capture_exception(e)
-            return None
+            raise
