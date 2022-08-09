@@ -19,71 +19,90 @@ class ReplayEvent:
     segment_id: int
     trace_ids: list[str]
     error_ids: list[str]
+    urls: list[str]
     timestamp: float
+    replay_start_timestamp: float | None
     platform: str
     environment: str
     release: str
     dist: str
-    url: str | None
     ipv4: str | None
     ipv6: str | None
     user_name: str | None
     user_id: str | None
     user_email: str | None
+    os_name: str | None
+    os_version: str | None
+    browser_name: str | None
+    browser_version: str | None
+    device_name: str | None
+    device_brand: str | None
+    device_family: str | None
+    device_model: str | None
     sdk_name: str
     sdk_version: str
     title: str | None
 
     def serialize(self) -> Mapping[Any, Any]:
+        replay_event = {
+            "type": "replay_event",
+            "replay_id": self.replay_id,
+            "segment_id": self.segment_id,
+            "tags": {"customtag": "is_set", "transaction": self.title},
+            "urls": self.urls,
+            "trace_ids": self.trace_ids,
+            "error_ids": self.error_ids,
+            "dist": self.dist,
+            "platform": self.platform,
+            "timestamp": self.timestamp,
+            "replay_start_timestamp": self.replay_start_timestamp,
+            "environment": self.environment,
+            "release": self.release,
+            "user": {
+                "id": self.user_id,
+                "username": self.user_name,
+                "email": self.user_email,
+                "ip_address": self.ipv4,
+            },
+            "sdk": {
+                "name": self.sdk_name,
+                "version": self.sdk_version,
+            },
+            "contexts": {
+                "trace": {
+                    "op": "pageload",
+                    "span_id": "affa5649681a1eeb",
+                    "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
+                },
+                "os": {
+                    "name": self.os_name,
+                    "version": self.os_version,
+                },
+                "browser": {
+                    "name": self.browser_name,
+                    "version": self.browser_version,
+                },
+                "device": {
+                    "name": self.device_name,
+                    "brand": self.device_brand,
+                    "family": self.device_family,
+                    "model": self.device_model,
+                },
+            },
+            "request": {
+                "url": "Doesn't matter not ingested.",
+                "headers": {"User-Agent": "not used"},
+            },
+            "extra": {},
+        }
+
         return {
             "type": "replay_event",
             "start_time": self.timestamp,
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
-            "payload": list(
-                bytes(
-                    json.dumps(
-                        {
-                            "type": "replay_event",
-                            "replay_id": self.replay_id,
-                            "segment_id": self.segment_id,
-                            "tags": {"customtag": "is_set", "transaction": self.title},
-                            "trace_ids": self.trace_ids,
-                            "error_ids": self.error_ids,
-                            "dist": self.dist,
-                            "platform": self.platform,
-                            "timestamp": self.timestamp,
-                            "environment": self.environment,
-                            "release": self.release,
-                            "user": {
-                                "id": self.user_id,
-                                "username": self.user_name,
-                                "email": self.user_email,
-                                "ip_address": self.ipv4,
-                            },
-                            "sdk": {
-                                "name": self.sdk_name,
-                                "version": self.sdk_version,
-                            },
-                            "contexts": {
-                                "trace": {
-                                    "op": "pageload",
-                                    "span_id": "affa5649681a1eeb",
-                                    "trace_id": "23eda6cd4b174ef8a51f0096df3bfdd1",
-                                }
-                            },
-                            "request": {
-                                "url": self.url,
-                                "headers": {
-                                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
-                                },
-                            },
-                            "extra": {},
-                        }
-                    ).encode()
-                )
-            ),
+            "payload": list(bytes(json.dumps(replay_event).encode())),
         }
 
     def _user_field(self) -> str | None:
@@ -113,21 +132,33 @@ class ReplayEvent:
             "error_ids": self.error_ids,
             "trace_ids": self.trace_ids,
             "timestamp": datetime.utcfromtimestamp(self.timestamp),
+            "replay_start_timestamp": datetime.utcfromtimestamp(
+                self.replay_start_timestamp
+            )
+            if self.replay_start_timestamp
+            else None,
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
             "dist": self.dist,
-            "url": self.url,
+            "urls": self.urls,
             "user_id": self.user_id,
             "user_name": self.user_name,
             "user_email": self.user_email,
+            "os_name": self.os_name,
+            "os_version": self.os_version,
+            "browser_name": self.browser_name,
+            "browser_version": self.browser_version,
+            "device_name": self.device_name,
+            "device_brand": self.device_brand,
+            "device_family": self.device_family,
+            "device_model": self.device_model,
             "tags.key": ["customtag"],
             "tags.value": ["is_set"],
             "title": self.title,
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
             "retention_days": 30,
-            # "url": "http://localhost:3000/", # commented out until we have the url field
             "offset": meta.offset,
             "partition": meta.partition,
         }
@@ -159,12 +190,21 @@ class TestReplaysProcessor:
             ],
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
+            replay_start_timestamp=datetime.now(tz=timezone.utc).timestamp(),
             platform="python",
             dist="",
-            url="http://localhost:8001",
+            urls=["http://localhost:8001"],
             user_name="me",
             user_id="232",
             user_email="test@test.com",
+            os_name="iOS",
+            os_version="16.2",
+            browser_name="Chrome",
+            browser_version="103.0.38",
+            device_name="iPhone 11",
+            device_brand="Apple",
+            device_family="iPhone",
+            device_model="iPhone",
             ipv4="127.0.0.1",
             ipv6=None,
             environment="prod",
@@ -188,9 +228,18 @@ class TestReplaysProcessor:
             trace_ids=[],
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
+            replay_start_timestamp=None,
             platform="python",
             dist="",
-            url=None,
+            urls=[],
+            os_name=None,
+            os_version=None,
+            browser_name=None,
+            browser_version=None,
+            device_name=None,
+            device_brand=None,
+            device_family=None,
+            device_model=None,
             user_name=None,
             user_id=None,
             user_email=None,
