@@ -29,19 +29,74 @@ stream_loader_schema: Any = {
     },
 }
 
+UInt_schema: Any = {
+    "type": "object",
+    "properties": {
+        "name": TYPE_STRING,
+        "type": {"const": "UInt"},
+        "args": {"type": "object", "properties": {"size": {"type": "number"}}},
+        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
+    },
+}
+
+No_arg_schema: Any = {
+    "type": "object",
+    "properties": {
+        "name": TYPE_STRING,
+        "type": {"enum": ["String", "DateTime"]},
+        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
+    },
+}
+
+Nested_schema: Any = {
+    "type": "object",
+    "properties": {
+        "name": TYPE_STRING,
+        "type": {"const": "Nested"},
+        "args": {"type": "array"},
+        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
+    },
+}
+
+Array_schema: Any = {
+    "type": "object",
+    "properties": {
+        "name": TYPE_STRING,
+        "type": {"const": "Array"},
+        "args": {
+            "type": "object",
+            "properties": {"type": TYPE_STRING, "arg": {"type": "number"}},
+        },
+        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
+    },
+}
+
+AggregateFunction_schema: Any = {
+    "type": "object",
+    "properties": {
+        "name": TYPE_STRING,
+        "type": {"const": "AggregateFunction"},
+        "args": {
+            "type": "object",
+            "properties": {"func": TYPE_STRING, "arg_types": {"type": "array"}},
+        },
+        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
+    },
+}
+
 schema_schema: Any = {
     "type": "object",
     "properties": {
         "columns": {
             "type": "array",
             "items": {
-                "type": "object",
-                "properties": {
-                    "name": TYPE_STRING,
-                    "type": TYPE_STRING,
-                    "args": {"type": "array"},
-                    "schema_modifiers": {"type": "array", "items": TYPE_STRING},
-                },
+                "anyOf": [
+                    UInt_schema,
+                    No_arg_schema,
+                    Nested_schema,
+                    Array_schema,
+                    AggregateFunction_schema,
+                ]
             },
         },
         "local_table_name": TYPE_STRING,

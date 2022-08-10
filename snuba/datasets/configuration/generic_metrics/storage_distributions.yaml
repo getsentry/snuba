@@ -5,72 +5,76 @@ storage:
 schema:
   columns:
     [
-      { name: org_id, type: UInt, args: [64] },
-      { name: use_case_id, type: String, args: [] },
-      { name: project_id, type: UInt, args: [64] },
-      { name: metric_id, type: UInt, args: [64] },
-      { name: timestamp, type: DateTime, args: [] },
-      { name: retention_days, type: UInt, args: [16] },
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: use_case_id, type: String },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
       {
         name: tags,
         type: Nested,
         args:
           [
-            { name: key, type: UInt, args: [64] },
-            { name: indexed_value, type: UInt, args: [64] },
-            { name: raw_value, type: String, args: [] },
+            { name: key, type: UInt, args: { size: 64 } },
+            { name: indexed_value, type: UInt, args: { size: 64 } },
+            { name: raw_value, type: String },
           ],
       },
 
       {
         name: _raw_tags_hash,
         type: Array,
-        args: [UInt, 64],
+        args: { type: UInt, arg: 64 },
         schema_modifiers: [readonly],
       },
       {
         name: _indexed_tags_hash,
         type: Array,
-        args: [UInt, 64],
+        args: { type: UInt, arg: 64 },
         schema_modifiers: [readonly],
       },
-      { name: granularity, type: UInt, args: [8] },
+      { name: granularity, type: UInt, args: { size: 8 } },
 
       {
         name: percentiles,
         type: AggregateFunction,
         args:
-          ["quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [{ type: Float, arg: 64 }]],
+          {
+            func: "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)",
+            arg_types: [{ type: Float, arg: 64 }],
+          },
       },
       {
         name: min,
         type: AggregateFunction,
-        args: ["min", [{ type: Float, arg: 64 }]],
+        args: { func: "min", arg_types: [{ type: Float, arg: 64 }] },
       },
       {
         name: max,
         type: AggregateFunction,
-        args: ["max", [{ type: Float, arg: 64 }]],
+        args: { func: "max", arg_types: [{ type: Float, arg: 64 }] },
       },
       {
         name: avg,
         type: AggregateFunction,
-        args: ["avg", [{ type: Float, arg: 64 }]],
+        args: { func: "avg", arg_types: [{ type: Float, arg: 64 }] },
       },
       {
         name: sum,
         type: AggregateFunction,
-        args: ["sum", [{ type: Float, arg: 64 }]],
+        args: { func: "sum", arg_types: [{ type: Float, arg: 64 }] },
       },
       {
         name: count,
         type: AggregateFunction,
-        args: ["count", [{ type: Float, arg: 64 }]],
+        args: { func: "count", arg_types: [{ type: Float, arg: 64 }] },
       },
       {
         name: histogram_buckets,
         type: AggregateFunction,
-        args: ["histogram(250)", [{ type: Float, arg: 64 }]],
+        args:
+          { func: "histogram(250)", arg_types: [{ type: Float, size: 64 }] },
       },
     ]
 
