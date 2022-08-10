@@ -26,30 +26,51 @@ schema:
         name: _raw_tags_hash,
         type: Array,
         args: [UInt, 64],
-        schema_modifiers: { readonly: True },
+        schema_modifiers: [readonly],
       },
       {
         name: _indexed_tags_hash,
         type: Array,
         args: [UInt, 64],
-        schema_modifiers: { readonly: True },
+        schema_modifiers: [readonly],
       },
       { name: granularity, type: UInt, args: [8] },
 
       {
         name: percentiles,
         type: AggregateFunction,
-        args: ["quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float, 64]],
+        args:
+          ["quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [{ type: Float, arg: 64 }]],
       },
-      { name: min, type: AggregateFunction, args: ["min", [Float, 64]] },
-      { name: max, type: AggregateFunction, args: ["max", [Float, 64]] },
-      { name: avg, type: AggregateFunction, args: ["avg", [Float, 64]] },
-      { name: sum, type: AggregateFunction, args: ["sum", [Float, 64]] },
-      { name: count, type: AggregateFunction, args: ["count", [Float, 64]] },
+      {
+        name: min,
+        type: AggregateFunction,
+        args: ["min", [{ type: Float, arg: 64 }]],
+      },
+      {
+        name: max,
+        type: AggregateFunction,
+        args: ["max", [{ type: Float, arg: 64 }]],
+      },
+      {
+        name: avg,
+        type: AggregateFunction,
+        args: ["avg", [{ type: Float, arg: 64 }]],
+      },
+      {
+        name: sum,
+        type: AggregateFunction,
+        args: ["sum", [{ type: Float, arg: 64 }]],
+      },
+      {
+        name: count,
+        type: AggregateFunction,
+        args: ["count", [{ type: Float, arg: 64 }]],
+      },
       {
         name: histogram_buckets,
         type: AggregateFunction,
-        args: ["histogram(250)", [Float, 64]],
+        args: ["histogram(250)", [{ type: Float, arg: 64 }]],
       },
     ]
 

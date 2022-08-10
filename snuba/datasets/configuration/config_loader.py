@@ -23,7 +23,8 @@ from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
-from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storage import ReadableStorage
+from snuba.utils.schemas import UUID, AggregateFunction
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -52,17 +53,19 @@ CONF_TO_PROCESSOR: dict[str, Any] = {
 }
 
 
-def parse_simple(col: dict[str, Any]) -> Column[SchemaModifiers]:
+def parse_simple(
+    col: dict[str, Any], modifiers: SchemaModifiers | None
+) -> Column[SchemaModifiers]:
     if col["type"] == "UInt":
         assert isinstance(col["args"][0], int)
-        return Column(col["name"], UInt(col["args"][0]))
+        return Column(col["name"], UInt(col["args"][0], modifiers))
     elif col["type"] == "Float":
         assert isinstance(col["args"][0], int)
-        return Column(col["name"], Float(col["args"][0]))
+        return Column(col["name"], Float(col["args"][0], modifiers))
     elif col["type"] == "String":
-        return Column(col["name"], String())
+        return Column(col["name"], String(modifiers))
     elif col["type"] == "DateTime":
-        return Column(col["name"], DateTime())
+        return Column(col["name"], DateTime(modifiers))
     raise
 
 
@@ -74,34 +77,48 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
         "Float": Float,
         "String": String,
         "DateTime": DateTime,
+        "UUID": UUID,
     }
 
     for col in columns:
+        modifiers = None
+        if "schema_modifiers" in col:
+            modifiers = SchemaModifiers(
+                "nullable" in col["schema_modifiers"],
+                "readonly" in col["schema_modifiers"],
+            )
+
         column: Column[SchemaModifiers] | None = None
         if col["type"] in SIMPLE_COLUMN_TYPES:
-            column = parse_simple(col)
+            column = parse_simple(col, modifiers)
         elif col["type"] == "Nested":
-            column = Column(col["name"], Nested(parse_columns(col["args"])))
+            column = Column(col["name"], Nested(parse_columns(col["args"]), modifiers))
         elif col["type"] == "Array":
             subtype, value = col["args"]
             assert isinstance(subtype, str)
             assert isinstance(value, int)
-            column = Column(col["name"], Array(SIMPLE_COLUMN_TYPES[subtype](value)))
+            column = Column(
+                col["name"], Array(SIMPLE_COLUMN_TYPES[subtype](value), modifiers)
+            )
+        elif col["type"] == "AggregateFunction":
+            column = Column(
+                col["name"],
+                AggregateFunction(
+                    col["args"][0],
+                    [
+                        SIMPLE_COLUMN_TYPES[c["type"]](c["arg"])
+                        if "arg" in c
+                        else SIMPLE_COLUMN_TYPES[c["type"]]()
+                        for c in col["args"][1]
+                    ],
+                ),
+            )
         assert column is not None
         cols.append(column)
     return cols
 
 
-def deep_compare_storages(old: WritableTableStorage, new: WritableTableStorage) -> None:
-    assert (
-        old.get_cluster().get_clickhouse_cluster_name()
-        == new.get_cluster().get_clickhouse_cluster_name()
-    )
-    assert (
-        old.get_cluster().get_storage_set_keys()
-        == new.get_cluster().get_storage_set_keys()
-    )
-    assert old.get_is_write_error_ignorable() == new.get_is_write_error_ignorable()
+def deep_compare_storages(old: ReadableStorage, new: ReadableStorage) -> None:
     assert (
         old.get_mandatory_condition_checkers() == new.get_mandatory_condition_checkers()
     )
