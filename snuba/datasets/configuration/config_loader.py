@@ -57,11 +57,9 @@ def parse_simple(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> Column[SchemaModifiers]:
     if col["type"] == "UInt":
-        assert isinstance(col["args"][0], int)
-        return Column(col["name"], UInt(col["args"][0], modifiers))
+        return Column(col["name"], UInt(col["args"]["size"], modifiers))
     elif col["type"] == "Float":
-        assert isinstance(col["args"][0], int)
-        return Column(col["name"], Float(col["args"][0], modifiers))
+        return Column(col["name"], Float(col["args"]["size"], modifiers))
     elif col["type"] == "String":
         return Column(col["name"], String(modifiers))
     elif col["type"] == "DateTime":
@@ -94,22 +92,23 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
         elif col["type"] == "Nested":
             column = Column(col["name"], Nested(parse_columns(col["args"]), modifiers))
         elif col["type"] == "Array":
-            subtype, value = col["args"]
-            assert isinstance(subtype, str)
-            assert isinstance(value, int)
             column = Column(
-                col["name"], Array(SIMPLE_COLUMN_TYPES[subtype](value), modifiers)
+                col["name"],
+                Array(
+                    SIMPLE_COLUMN_TYPES[col["args"]["type"]](col["args"]["arg"]),
+                    modifiers,
+                ),
             )
         elif col["type"] == "AggregateFunction":
             column = Column(
                 col["name"],
                 AggregateFunction(
-                    col["args"][0],
+                    col["args"]["func"],
                     [
                         SIMPLE_COLUMN_TYPES[c["type"]](c["arg"])
                         if "arg" in c
                         else SIMPLE_COLUMN_TYPES[c["type"]]()
-                        for c in col["args"][1]
+                        for c in col["args"]["arg_types"]
                     ],
                 ),
             )

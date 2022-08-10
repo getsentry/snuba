@@ -74,7 +74,7 @@ schema:
         name: histogram_buckets,
         type: AggregateFunction,
         args:
-          { func: "histogram(250)", arg_types: [{ type: Float, size: 64 }] },
+          { func: "histogram(250)", arg_types: [{ type: Float, arg: 64 }] },
       },
     ]
 

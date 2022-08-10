@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 TYPE_STRING = {"type": "string"}
@@ -29,60 +31,50 @@ stream_loader_schema: Any = {
     },
 }
 
-UInt_schema: Any = {
-    "type": "object",
-    "properties": {
-        "name": TYPE_STRING,
-        "type": {"const": "UInt"},
-        "args": {"type": "object", "properties": {"size": {"type": "number"}}},
-        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
-    },
-}
 
-No_arg_schema: Any = {
-    "type": "object",
-    "properties": {
+def make_column_schema(column_type: Any, args: Any) -> Any:
+    props = {
         "name": TYPE_STRING,
-        "type": {"enum": ["String", "DateTime"]},
+        "type": column_type,
         "schema_modifiers": {"type": "array", "items": TYPE_STRING},
-    },
-}
+    }
+    if args is not None:
+        props["args"] = args
+    return {
+        "type": "object",
+        "properties": props,
+    }
 
-Nested_schema: Any = {
-    "type": "object",
-    "properties": {
-        "name": TYPE_STRING,
-        "type": {"const": "Nested"},
-        "args": {"type": "array"},
-        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
-    },
-}
 
-Array_schema: Any = {
-    "type": "object",
-    "properties": {
-        "name": TYPE_STRING,
-        "type": {"const": "Array"},
-        "args": {
-            "type": "object",
-            "properties": {"type": TYPE_STRING, "arg": {"type": "number"}},
-        },
-        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
-    },
-}
+Number_schema: Any = make_column_schema(
+    column_type={"enum": ["UInt", "Float"]},
+    args={"type": "object", "properties": {"size": {"type": "number"}}},
+)
 
-AggregateFunction_schema: Any = {
-    "type": "object",
-    "properties": {
-        "name": TYPE_STRING,
-        "type": {"const": "AggregateFunction"},
-        "args": {
-            "type": "object",
-            "properties": {"func": TYPE_STRING, "arg_types": {"type": "array"}},
-        },
-        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
+
+No_arg_schema = make_column_schema(
+    column_type={"enum": ["String", "DateTime"]}, args=None
+)
+
+Nested_schema = make_column_schema(
+    column_type={"const": "Nested"}, args={"type": "array"}
+)
+
+Array_schema = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {"type": TYPE_STRING, "arg": {"type": "number"}},
     },
-}
+)
+
+AggregateFunction_schema: Any = make_column_schema(
+    column_type={"const": "AggregateFunction"},
+    args={
+        "type": "object",
+        "properties": {"func": TYPE_STRING, "arg_types": {"type": "array"}},
+    },
+)
 
 schema_schema: Any = {
     "type": "object",
@@ -91,7 +83,7 @@ schema_schema: Any = {
             "type": "array",
             "items": {
                 "anyOf": [
-                    UInt_schema,
+                    Number_schema,
                     No_arg_schema,
                     Nested_schema,
                     Array_schema,

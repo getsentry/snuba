@@ -28,14 +28,16 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.configuration.config_loader import (  # deep_compare_storages,
+from snuba.datasets.configuration.config_loader import (
     CONF_TO_PREFILTER,
     CONF_TO_PROCESSOR,
+    deep_compare_storages,
     parse_columns,
     policy_creator_creator,
 )
-from snuba.datasets.configuration.generic_metrics.json_schema import (  # writable_storage_schema,
+from snuba.datasets.configuration.generic_metrics.json_schema import (
     readable_storage_schema,
+    writable_storage_schema,
 )
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
@@ -145,7 +147,7 @@ config_file_path = "./snuba/datasets/configuration/generic_metrics"
 
 dist_raw = open(f"{config_file_path}/storage_distributions_raw.yaml")
 conf_dist_raw = safe_load(dist_raw)
-# validate(conf_dist_raw, writable_storage_schema)
+validate(conf_dist_raw, writable_storage_schema)
 
 dist_readonly = open(f"{config_file_path}/storage_distributions.yaml")
 conf_dist_readonly = safe_load(dist_readonly)
@@ -253,5 +255,5 @@ distributions_bucket_storage = WritableTableStorage(
 )
 
 
-# deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
-# deep_compare_storages(distributions_storage_old, distributions_storage)
+deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
+deep_compare_storages(distributions_storage_old, distributions_storage)
