@@ -19,11 +19,14 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.storage import ReadableStorage
+from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
@@ -51,6 +54,15 @@ CONF_TO_PREFILTER: dict[str, Any] = {
 CONF_TO_PROCESSOR: dict[str, Any] = {
     "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor
 }
+
+QUERY_PROCESSORS: dict[str, Any] = {
+    "TableRateLimit": TableRateLimit,
+    "TupleUnaliaser": TupleUnaliaser,
+}
+
+
+def get_query_processors(query_processor_names: list[str]) -> list[QueryProcessor]:
+    return [QUERY_PROCESSORS[name]() for name in query_processor_names]
 
 
 def parse_simple(
@@ -119,9 +131,17 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
 
 def deep_compare_storages(old: ReadableStorage, new: ReadableStorage) -> None:
     assert (
+        old.get_cluster().get_clickhouse_cluster_name()
+        == new.get_cluster().get_clickhouse_cluster_name()
+    )
+    assert (
+        old.get_cluster().get_storage_set_keys()
+        == new.get_cluster().get_storage_set_keys()
+    )
+    assert (
         old.get_mandatory_condition_checkers() == new.get_mandatory_condition_checkers()
     )
-    assert old.get_query_processors() == new.get_query_processors()
+    assert len(old.get_query_processors()) == len(new.get_query_processors())
     assert old.get_query_splitters() == new.get_query_splitters()
     assert (
         old.get_schema().get_columns().columns == new.get_schema().get_columns().columns

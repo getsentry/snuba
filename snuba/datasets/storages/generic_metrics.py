@@ -32,6 +32,7 @@ from snuba.datasets.configuration.config_loader import (
     CONF_TO_PREFILTER,
     CONF_TO_PROCESSOR,
     deep_compare_storages,
+    get_query_processors,
     parse_columns,
     policy_creator_creator,
 )
@@ -186,15 +187,15 @@ distributions_storage_old = ReadableTableStorage(
 )
 
 distributions_storage = ReadableTableStorage(
-    storage_key=conf_dist_readonly["storage"]["key"],
-    storage_set_key=conf_dist_readonly["storage"]["set_key"],
+    storage_key=StorageKey(conf_dist_readonly["storage"]["key"]),
+    storage_set_key=StorageSetKey(conf_dist_readonly["storage"]["set_key"]),
     schema=TableSchema(
         local_table_name="generic_metric_distributions_aggregated_local",
         dist_table_name="generic_metric_distributions_aggregated_dist",
-        storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
+        storage_set_key=StorageSetKey(conf_dist_readonly["storage"]["set_key"]),
         columns=ColumnSet(parse_columns(conf_dist_readonly["schema"]["columns"])),
     ),
-    query_processors=shared_query_processors,
+    query_processors=get_query_processors(conf_dist_readonly["query_processors"]),
 )
 
 distributions_bucket_storage_old = WritableTableStorage(
