@@ -12,6 +12,7 @@ from snuba.utils.schemas import (
     Column,
     ColumnType,
     DateTime,
+    Float,
     Nested,
     SchemaModifiers,
     UInt,
@@ -24,7 +25,8 @@ class EntityDefinition:
     columns: ColumnSet
 
 
-COLUMN_TYPE_MAPPING: Mapping[str, ColumnType[SchemaModifiers]] = {
+SIMPLE_COLUMN_TYPE_MAPPING: Mapping[str, ColumnType[SchemaModifiers]] = {
+    "Float(64)": Float(64),
     "UInt(64)": UInt(64),
     "DateTime": DateTime(),
 }
@@ -34,15 +36,19 @@ def column_from_spec(yaml_spec: Any) -> Column[SchemaModifiers]:
     if yaml_spec["type"] == "Nested":
         subcolumns_spec = yaml_spec["subcolumns"]
         subcolumns = [
-            (sub["name"], COLUMN_TYPE_MAPPING[sub["type"]]) for sub in subcolumns_spec
+            (sub["name"], SIMPLE_COLUMN_TYPE_MAPPING[sub["type"]])
+            for sub in subcolumns_spec
         ]
         return Column(yaml_spec["name"], Nested(subcolumns))
     elif yaml_spec["type"] == "AggregateFunction":
         return Column(
             yaml_spec["name"],
-            AggregateFunction(yaml_spec["function"], [yaml_spec["datatype"]]),
+            AggregateFunction(
+                yaml_spec["function"],
+                [SIMPLE_COLUMN_TYPE_MAPPING[yaml_spec["datatype"]]],
+            ),
         )
-    return Column(yaml_spec["name"], COLUMN_TYPE_MAPPING[yaml_spec["type"]])
+    return Column(yaml_spec["name"], SIMPLE_COLUMN_TYPE_MAPPING[yaml_spec["type"]])
 
 
 def load_from_file(path: str) -> EntityDefinition:
