@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Callable, MutableMapping, Type
+from typing import Any, Mapping, MutableMapping, Optional, Type
 
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
+
+_QUERY_PROCESSOR_REGISTRY: MutableMapping[str, Type["QueryProcessor"]] = {}
 
 
 class QueryProcessor(ABC):
@@ -21,6 +23,19 @@ class QueryProcessor(ABC):
     instance may be reused.
     """
 
+    def __init_subclass__(
+        cls: Type["QueryProcessor"],
+        config_name: Optional[str] = None,
+        **kwargs: Mapping[str, Any],
+    ) -> None:
+        if config_name:
+            assert (
+                _QUERY_PROCESSOR_REGISTRY.get(config_name) is None
+            ), f"{cls} trying to claim name {config_name}, already owned by {_QUERY_PROCESSOR_REGISTRY[config_name]}"
+            _QUERY_PROCESSOR_REGISTRY[config_name] = cls
+
+        return super().__init_subclass__(**kwargs)  # type: ignore
+
     @abstractmethod
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # TODO: Now the query is moved around through the Request object, which
@@ -32,21 +47,5 @@ class QueryProcessor(ABC):
         raise NotImplementedError
 
 
-_SEEN_QUERY_PROCESSORS: MutableMapping[str, Type[QueryProcessor]] = {}
-
-# Decorator for registering your query processor in the static list
-def query_processor(
-    name: str,
-) -> Callable[[Type[QueryProcessor]], Type[QueryProcessor]]:
-    def register_query_processor(cls: Type[QueryProcessor]) -> Type[QueryProcessor]:
-        assert (
-            _SEEN_QUERY_PROCESSORS.get(name) is None
-        ), f"{cls} trying to claim name {name}, already owned by {_SEEN_QUERY_PROCESSORS[name]}"
-        _SEEN_QUERY_PROCESSORS[name] = cls
-        return cls
-
-    return register_query_processor
-
-
 def get_query_processor_by_name(name: str) -> Type[QueryProcessor]:
-    return _SEEN_QUERY_PROCESSORS[name]
+    return _QUERY_PROCESSOR_REGISTRY[name]

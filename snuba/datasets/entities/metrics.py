@@ -37,7 +37,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor, query_processor
+from snuba.query.processors import QueryProcessor
 from snuba.query.processors.granularity_processor import GranularityProcessor
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
@@ -55,8 +55,7 @@ from snuba.query.validation.validators import (
 )
 
 
-@query_processor("transform_tag_types")
-class TagsTypeTransformer(QueryProcessor):
+class TagsTypeTransformer(QueryProcessor, config_name="transform_tag_types"):
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             if not isinstance(exp, SubscriptableReference):
