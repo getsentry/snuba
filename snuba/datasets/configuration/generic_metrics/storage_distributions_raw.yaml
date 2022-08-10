@@ -44,3 +44,5 @@ stream_loader:
   dlq_policy:
     type: produce
     args: [snuba-dead-letter-generic-metrics]
+
+query_processors: []

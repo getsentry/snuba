@@ -11,6 +11,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
     DeadLetterQueuePolicy,
     ProduceInvalidMessagePolicy,
 )
+from jsonschema import validate
 from yaml import safe_load
 
 from snuba.clickhouse.columns import (
@@ -30,11 +31,12 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.config_loader import (
     CONF_TO_PREFILTER,
     CONF_TO_PROCESSOR,
-    StorageConfig,
-    dataclass_from_dict,
     deep_compare_storages,
     parse_columns,
     policy_creator_creator,
+)
+from snuba.datasets.configuration.generic_metrics.json_schema import (
+    writable_storage_schema,
 )
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
@@ -197,41 +199,41 @@ distributions_bucket_storage_old = WritableTableStorage(
 file = open(
     "./snuba/datasets/configuration/generic_metrics/storage_distributions_raw.yaml"
 )
-conf_yml = safe_load(file)
-assert isinstance(conf_yml, dict)
-conf = dataclass_from_dict(StorageConfig, conf_yml)
-assert isinstance(conf, StorageConfig)
+conf = safe_load(file)
+validate(conf, writable_storage_schema)
 
 
 distributions_bucket_storage = WritableTableStorage(
-    storage_key=StorageKey(conf.storage.key),
-    storage_set_key=StorageSetKey(conf.storage.set_key),
+    storage_key=StorageKey(conf["storage"]["key"]),
+    storage_set_key=StorageSetKey(conf["storage"]["set_key"]),
     schema=WritableTableSchema(
-        columns=ColumnSet(parse_columns(conf.schema.columns)),
-        local_table_name=conf.schema.local_table_name,
-        dist_table_name=conf.schema.dist_table_name,
-        storage_set_key=StorageSetKey(conf.storage.set_key),
+        columns=ColumnSet(parse_columns(conf["schema"]["columns"])),
+        local_table_name=conf["schema"]["local_table_name"],
+        dist_table_name=conf["schema"]["dist_table_name"],
+        storage_set_key=StorageSetKey(conf["storage"]["set_key"]),
     ),
-    query_processors=[],
+    query_processors=conf["query_processors"],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=CONF_TO_PROCESSOR[conf.stream_loader.processor](),
-        default_topic=Topic(conf.stream_loader.default_topic),
+        processor=CONF_TO_PROCESSOR[conf["stream_loader"]["processor"]](),
+        default_topic=Topic(conf["stream_loader"]["default_topic"]),
         dead_letter_queue_policy_creator=policy_creator_creator(
-            conf.stream_loader.dlq_policy
+            conf["stream_loader"]["dlq_policy"]
         ),
-        commit_log_topic=Topic(conf.stream_loader.commit_log_topic),
+        commit_log_topic=Topic(conf["stream_loader"]["commit_log_topic"]),
         subscription_scheduled_topic=Topic(
-            conf.stream_loader.subscription_scheduled_topic
+            conf["stream_loader"]["subscription_scheduled_topic"]
         ),
         subscription_scheduler_mode=SchedulingWatermarkMode(
-            conf.stream_loader.subscription_scheduler_mode
+            conf["stream_loader"]["subscription_scheduler_mode"]
         ),
-        subscription_result_topic=Topic(conf.stream_loader.subscription_result_topic),
-        replacement_topic=Topic(conf.stream_loader.replacement_topic)
-        if conf.stream_loader.replacement_topic
+        subscription_result_topic=Topic(
+            conf["stream_loader"]["subscription_result_topic"]
+        ),
+        replacement_topic=Topic(conf["stream_loader"]["replacement_topic"])
+        if conf["stream_loader"]["replacement_topic"]
         else None,
-        pre_filter=CONF_TO_PREFILTER[conf.stream_loader.pre_filter.type](
-            *conf.stream_loader.pre_filter.args
+        pre_filter=CONF_TO_PREFILTER[conf["stream_loader"]["pre_filter"]["type"]](
+            *conf["stream_loader"]["pre_filter"]["args"]
         ),
     ),
 )

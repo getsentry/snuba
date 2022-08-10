@@ -63,5 +63,6 @@
   "python.testing.unittestEnabled": true,
   "python.testing.pytestArgs": [
     "tests"
-  ]
+  ],
+  "editor.experimental.stickyScroll.enabled": true
 }

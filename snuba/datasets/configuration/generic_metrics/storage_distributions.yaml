@@ -1,0 +1,56 @@
+storage:
+  key: generic_metrics_distributions
+  set_key: generic_metrics_distributions
+
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: [64] },
+      { name: use_case_id, type: String, args: [] },
+      { name: project_id, type: UInt, args: [64] },
+      { name: metric_id, type: UInt, args: [64] },
+      { name: timestamp, type: DateTime, args: [] },
+      { name: retention_days, type: UInt, args: [16] },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          [
+            { name: key, type: UInt, args: [64] },
+            { name: indexed_value, type: UInt, args: [64] },
+            { name: raw_value, type: String, args: [] },
+          ],
+      },
+
+      {
+        name: _raw_tags_hash,
+        type: Array,
+        args: [UInt, 64],
+        schema_modifiers: { readonly: True },
+      },
+      {
+        name: _indexed_tags_hash,
+        type: Array,
+        args: [UInt, 64],
+        schema_modifiers: { readonly: True },
+      },
+      { name: granularity, type: UInt, args: [8] },
+
+      {
+        name: percentiles,
+        type: AggregateFunction,
+        args: ["quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float, 64]],
+      },
+      { name: min, type: AggregateFunction, args: ["min", [Float, 64]] },
+      { name: max, type: AggregateFunction, args: ["max", [Float, 64]] },
+      { name: avg, type: AggregateFunction, args: ["avg", [Float, 64]] },
+      { name: sum, type: AggregateFunction, args: ["sum", [Float, 64]] },
+      { name: count, type: AggregateFunction, args: ["count", [Float, 64]] },
+      {
+        name: histogram_buckets,
+        type: AggregateFunction,
+        args: ["histogram(250)", [Float, 64]],
+      },
+    ]
+
+query_processors: ["TableRateLimit", "TupleUnaliaser"]
