@@ -21,7 +21,21 @@ class _ClassRegistry(Generic[T]):
 
 
 class RegisteredClass(ABCMeta, Generic[T]):
-    """Metaclass for making classes that can be looked up by name"""
+    """Metaclass for making classes that can be looked up by name
+    Usage:
+        class SomeGenericClass(metaclass=RegisteredClass):
+            pass
+
+        class Subclass(SomeGenericClass):
+            def config_key(self) -> str:
+                return "sub_class"
+
+
+        assert SomeGenericClass.from_name("sub_class") is Subclass
+
+    Notes:
+        The base class cannot be looked up by name, only subclasses
+    """
 
     def __new__(cls, name: str, bases: Tuple[Type[Any]], dct: Dict[str, Any]):
         res = super().__new__(cls, name, bases, dct)
