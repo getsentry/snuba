@@ -29,6 +29,7 @@ columns = ColumnSet(
         ("event_hash", UUID()),
         ("segment_id", UInt(16, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
+        ("replay_start_timestamp", DateTime(Modifiers(nullable=True))),
         (
             "trace_ids",
             Array(UUID()),
@@ -39,6 +40,7 @@ columns = ColumnSet(
         ),
         ("title", String(Modifiers(readonly=True))),
         ("url", String(Modifiers(nullable=True))),
+        ("urls", Array(String())),
         ### common sentry event columns
         ("project_id", UInt(64)),
         # release/environment info
@@ -53,6 +55,17 @@ columns = ColumnSet(
         ("user_id", String(Modifiers(nullable=True))),
         ("user_name", String(Modifiers(nullable=True))),
         ("user_email", String(Modifiers(nullable=True))),
+        # OS
+        ("os_name", String(Modifiers(nullable=True))),
+        ("os_version", String(Modifiers(nullable=True))),
+        # Browser
+        ("browser_name", String(Modifiers(nullable=True))),
+        ("browser_version", String(Modifiers(nullable=True))),
+        # Device
+        ("device_name", String(Modifiers(nullable=True))),
+        ("device_brand", String(Modifiers(nullable=True))),
+        ("device_family", String(Modifiers(nullable=True))),
+        ("device_model", String(Modifiers(nullable=True))),
         # sdk info
         ("sdk_name", String()),
         ("sdk_version", String()),

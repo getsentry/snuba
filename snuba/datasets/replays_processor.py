@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime
@@ -36,6 +38,9 @@ RetentionDays = int
 
 # A sane upper bound of 1000 was chosen for error_ids. If you know better, change it.
 ERROR_IDS_LIMIT = 1000
+# A sane upper bound of 1000 was chosen for urls. If you know better, change it.
+URLS_LIMIT = 1000
+
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
@@ -46,16 +51,35 @@ class ReplaysProcessor(MessageProcessor):
             timestamp = datetime.utcnow()
         return timestamp
 
-    def _get_url(self, replay_event: ReplayEventDict) -> Optional[str]:
-        request = replay_event.get("request", {})
-        if not isinstance(request, dict):
+    def __extract_started_at(self, started_at: Optional[int]) -> Optional[datetime]:
+        if started_at is None:
             return None
 
-        url = request.get("url")
-        if url is None:
-            return None
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(started_at))
+        if timestamp:
+            return timestamp
         else:
-            return str(url)
+            raise TypeError("Missing data for replay_start_timestamp column.")
+
+    def __extract_urls(self, replay_event: ReplayEventDict) -> list[str]:
+        if "url" in replay_event:
+            # Backwards compat for non-public, pre-alpha javascript SDK.
+            return self.__extract_url(replay_event)
+        elif "urls" in replay_event:
+            # Latest SDK input.
+            urls = replay_event.get("urls")
+            return urls[:URLS_LIMIT] if isinstance(urls, list) else []
+        else:
+            # Malformed event catch all.
+            return []
+
+    def __extract_url(self, replay_event: ReplayEventDict) -> list[str]:
+        request = replay_event.get("request", {})
+        if not isinstance(request, dict):
+            return []
+
+        url = request.get("url")
+        return [url] if isinstance(url, str) else []
 
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -66,10 +90,13 @@ class ReplaysProcessor(MessageProcessor):
         processed["timestamp"] = self.__extract_timestamp(
             replay_event["timestamp"],
         )
+        processed["replay_start_timestamp"] = self.__extract_started_at(
+            replay_event.get("replay_start_timestamp"),
+        )
+        processed["urls"] = self.__extract_urls(replay_event)
         processed["release"] = replay_event.get("release")
         processed["environment"] = replay_event.get("environment")
         processed["dist"] = replay_event.get("dist")
-        processed["url"] = self._get_url(replay_event)
         processed["platform"] = _unicodify(replay_event["platform"])
 
         error_ids = replay_event.get("error_ids") or []
@@ -117,6 +144,27 @@ class ReplaysProcessor(MessageProcessor):
                 processed["ip_address_v6"] = str(ip_address)
 
         self._add_user_column(processed, user_data)
+
+    def _process_contexts(
+        self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
+    ) -> None:
+        contexts = replay_event.get("contexts", {})
+        if not contexts:
+            return None
+
+        os_context = contexts.get("os", {})
+        processed["os_name"] = os_context.get("name")
+        processed["os_version"] = os_context.get("version")
+
+        browser_context = contexts.get("browser", {})
+        processed["browser_name"] = browser_context.get("name")
+        processed["browser_version"] = browser_context.get("version")
+
+        device_context = contexts.get("device", {})
+        processed["device_name"] = device_context.get("name")
+        processed["device_brand"] = device_context.get("brand")
+        processed["device_family"] = device_context.get("family")
+        processed["device_model"] = device_context.get("model")
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -173,6 +221,7 @@ class ReplaysProcessor(MessageProcessor):
             # # the following operation modifies the event_dict and is therefore *not* order-independent
             self._process_user(processed, replay_event)
             self._process_event_hash(processed, replay_event)
+            self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
         except Exception as e:
             metrics.increment("consumer_error")
