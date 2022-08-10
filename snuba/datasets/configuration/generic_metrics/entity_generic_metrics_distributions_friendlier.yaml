@@ -4,6 +4,37 @@ name: generic-metrics-distributions
 spec:
   readable_storage: distributions_storage
   writable_storage: distributions_bucket_storage
+  columns:
+    -
+      name: org_id
+      type: UInt(64)
+    -
+      name: project_id
+      type: UInt(64)
+    -
+      name: metric_id
+      type: UInt(64)
+    -
+      name: timestamp
+      type: DateTime
+    -
+      name: bucketed_time
+      type: DateTime
+    -
+      name: tags
+      type: Nested
+      subcolumns:
+        -
+          name: key
+          type: UInt(64)
+        -
+          name: value
+          type: UInt(64)
+    -
+      name: percentiles
+      type: AggregateFunction
+      function: "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)"
+      datatype: Float(64)
   query_processors:
     -
       transform_tag_types:
