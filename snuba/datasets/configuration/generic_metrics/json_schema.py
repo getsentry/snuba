@@ -56,9 +56,6 @@ No_arg_schema = make_column_schema(
     column_type={"enum": ["String", "DateTime"]}, args=None
 )
 
-Nested_schema = make_column_schema(
-    column_type={"const": "Nested"}, args={"type": "array"}
-)
 
 Array_schema = make_column_schema(
     column_type={"const": "Array"},
@@ -72,8 +69,32 @@ AggregateFunction_schema: Any = make_column_schema(
     column_type={"const": "AggregateFunction"},
     args={
         "type": "object",
-        "properties": {"func": TYPE_STRING, "arg_types": {"type": "array"}},
+        "properties": {
+            "func": TYPE_STRING,
+            "arg_types": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"enum": ["Float", "UUID"]},
+                        "arg": {"type": ["number", "null"]},
+                    },
+                },
+            },
+        },
     },
+)
+
+column_types = [
+    Number_schema,
+    No_arg_schema,
+    Array_schema,
+    AggregateFunction_schema,
+]
+
+Nested_schema = make_column_schema(
+    column_type={"const": "Nested"},
+    args={"type": "array", "items": {"anyOf": column_types}},
 )
 
 schema_schema: Any = {
@@ -81,15 +102,7 @@ schema_schema: Any = {
     "properties": {
         "columns": {
             "type": "array",
-            "items": {
-                "anyOf": [
-                    Number_schema,
-                    No_arg_schema,
-                    Nested_schema,
-                    Array_schema,
-                    AggregateFunction_schema,
-                ]
-            },
+            "items": {"anyOf": column_types + [Nested_schema]},
         },
         "local_table_name": TYPE_STRING,
         "dist_table_name": TYPE_STRING,
