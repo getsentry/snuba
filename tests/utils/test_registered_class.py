@@ -1,4 +1,4 @@
-from typing import Type, cast
+from typing import Optional, Type, cast
 
 from snuba.utils.registered_class import RegisteredClass
 
@@ -46,16 +46,17 @@ def test_custom_key() -> None:
     assert CustomKey.from_name("custom_af") is None
 
 
-class TypedFromName(metaclass=RegisteredClass):
+class TypedFromName(metaclass=RegisteredClass["TypedFromName"]):
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
 
     @classmethod
-    def from_name(cls, name: str) -> Type["TypedFromName"]:
-        return cast(
-            Type[TypedFromName], getattr(cls, "_registry").get_class_from_name(name)
-        )
+    def from_name(cls, name: str) -> Optional[Type["TypedFromName"]]:
+        # TODO: I don't know if I can make this method typed without doing this cast
+        # if I parametrize RegisteredClass["TypedFromName"] mypy tells me dynamic metaclasses
+        # are not supported even though it's not really dynamic?
+        return cast(Type[TypedFromName], cls.from_name(name))
 
 
 class ExtraName(TypedFromName):
@@ -64,7 +65,10 @@ class ExtraName(TypedFromName):
         return "ExtraName"
 
 
-def test_override_from_name() -> None:
+def get_from_name(name: str) -> Optional[Type[TypedFromName]]:
+    return TypedFromName.from_name(name)
 
-    assert isinstance(TypedFromName.from_name("ExtraName")(), ExtraName)
-    assert TypedFromName.from_name("TypedFromName") is None
+
+def test_override_from_name() -> None:
+    assert get_from_name("ExtraName") is ExtraName
+    assert get_from_name("TypedFromName") is None
