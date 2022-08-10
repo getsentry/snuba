@@ -8,7 +8,7 @@ flake8==4.0.1
 Flask==2.1.2
 honcho==1.1.0
 jsonschema==4.7.1
-Markdown==3.3.7
+Markdown==3.4.1
 mywsgi==1.0.3
 mypy==0.812
 packaging==21.3
