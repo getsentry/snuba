@@ -485,49 +485,40 @@ class FunctionCall(Expression):
                 return False
         return True
 
-    def __gt__(self, other: Any) -> bool:
+    def operator_helper(
+        self,
+        other: FunctionCall,
+        main_op: Callable[[Any, Any], Any],
+        other_op: Callable[[Any, Any], Any],
+    ) -> bool:
+        relate = {operator.lt: True, operator.gt: False}
+
         # Sort by classes if they are different
         if not isinstance(other, FunctionCall):
-            return self.compare_expressions(other, operator.gt)
+            return self.compare_expressions(other, main_op)
 
         # Sort by FunctionCall function names if different
-        if self.function_name < other.function_name:
-            return False
-        elif self.function_name > other.function_name:
+        if main_op(self.function_name, other.function_name):
             return True
+        elif other_op(self.function_name, other.function_name):
+            return False
 
         # Compare the Expressions in the first index in the two FunctionCalls
         if self.parameters and other.parameters:
-            return (
-                self.parameters[0] > other.parameters[0]
+            return bool(
+                main_op(self.parameters[0], other.parameters[0])
             )  # uses child class overrides or defaults to parent class compare_expressions()
         elif self.parameters and not other.parameters:
-            return True
+            return not relate[main_op]
         elif not self.parameters:
-            return False
+            return relate[main_op]
         return True
+
+    def __gt__(self, other: Any) -> bool:
+        return self.operator_helper(other, operator.gt, operator.lt)
 
     def __lt__(self, other: Any) -> bool:
-        # Sort by classes if they are different
-        if not isinstance(other, FunctionCall):
-            return self.compare_expressions(other, operator.lt)
-
-        # Sort by FunctionCall function names if different
-        if self.function_name < other.function_name:
-            return True
-        elif self.function_name > other.function_name:
-            return False
-
-        # Compare the Expressions in the first index in the two FunctionCalls
-        if self.parameters and other.parameters:
-            return (
-                self.parameters[0] < other.parameters[0]
-            )  # uses child class overrides or defaults to parent class compare_expressions()
-        elif self.parameters and not other.parameters:
-            return False
-        elif not self.parameters:
-            return True
-        return True
+        return self.operator_helper(other, operator.lt, operator.gt)
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)

@@ -59,7 +59,7 @@ from snuba.utils.serializable_exception import (
 )
 from snuba.web import QueryException, QueryResult
 
-MAX_HASH_PLUS_ONE = 16**32
+MAX_HASH_PLUS_ONE = 16**32  # Max value of md5 hash
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 
@@ -392,8 +392,10 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 
 def check_sorted_sql_key_in_cache(
-    formatted_query_sorted: Optional[FormattedQuery], reader: Reader
-) -> bool:
+    formatted_query_sorted: Optional[FormattedQuery],
+    reader: Reader,
+    sorted_key_cache_experiment: dict[str, bool],
+) -> None:
     cache_partition = _get_cache_partition(reader)
     if formatted_query_sorted:
         key_sorted = get_query_cache_key(formatted_query_sorted)
@@ -405,7 +407,8 @@ def check_sorted_sql_key_in_cache(
             key_sorted_with_prefix = f"sorted:{key_sorted}"
             result = cache_partition.get(key_sorted_with_prefix)
             if result is not None:
-                return True
+                sorted_key_cache_experiment["is_selected"] = True
+                sorted_key_cache_experiment["sorted_key_exists"] = True
             else:
                 empty_result: Result = {
                     "meta": [],
@@ -415,8 +418,7 @@ def check_sorted_sql_key_in_cache(
                     "trace_output": "",
                 }
                 cache_partition.set(key_sorted_with_prefix, empty_result)
-                return False
-    return False
+                sorted_key_cache_experiment["is_selected"] = True
 
 
 def hash_to_probability(hexadecimal: str) -> float:
@@ -424,12 +426,14 @@ def hash_to_probability(hexadecimal: str) -> float:
 
 
 def write_sorted_unsorted_cache_hit_metric(
-    sorted_key_exists: bool, unsorted_key_exists: bool
+    sorted_key_cache_experiment: dict[str, bool], unsorted_key_exists: bool
 ) -> None:
-    metrics.increment(
-        "sorted_and_unsorted_cache_hit",
-        tags={"sorted/unsorted": f"{sorted_key_exists}/{unsorted_key_exists}"},
-    )
+    if sorted_key_cache_experiment["is_selected"]:
+        sorted_key_exists = sorted_key_cache_experiment["sorted_key_exists"]
+        metrics.increment(
+            "sorted_and_unsorted_cache_hit",
+            tags={"sorted/unsorted": f"{sorted_key_exists}/{unsorted_key_exists}"},
+        )
 
 
 def _get_cache_partition(reader: Reader) -> Cache[Result]:
@@ -501,21 +505,27 @@ def execute_query_with_caching(
     with sentry_sdk.start_span(description="execute", op="db") as span:
         key = get_query_cache_key(formatted_query)
         clickhouse_query_settings["query_id"] = key
+        sorted_key_cache_experiment = {"is_selected": False, "sorted_key_exists": False}
         if use_cache:
-            sorted_key_exists = check_sorted_sql_key_in_cache(
-                formatted_query_sorted, reader
-            )
+            try:
+                check_sorted_sql_key_in_cache(
+                    formatted_query_sorted, reader, sorted_key_cache_experiment
+                )
+            except Exception:
+                pass
             cache_partition = _get_cache_partition(reader)
             result = cache_partition.get(key)
             timer.mark("cache_get")
             stats["cache_hit"] = result is not None
             if result is not None:
                 span.set_tag("cache", "hit")
-                write_sorted_unsorted_cache_hit_metric(sorted_key_exists, True)
+                write_sorted_unsorted_cache_hit_metric(
+                    sorted_key_cache_experiment, True
+                )
                 return result
 
             span.set_tag("cache", "miss")
-            write_sorted_unsorted_cache_hit_metric(sorted_key_exists, False)
+            write_sorted_unsorted_cache_hit_metric(sorted_key_cache_experiment, False)
             result = execute()
             cache_partition.set(key, result)
             timer.mark("cache_set")
@@ -537,7 +547,13 @@ def execute_query_with_readthrough_caching(
     robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
-    sorted_key_exists = check_sorted_sql_key_in_cache(formatted_query_sorted, reader)
+    sorted_key_cache_experiment = {"is_selected": False, "sorted_key_exists": False}
+    try:
+        check_sorted_sql_key_in_cache(
+            formatted_query_sorted, reader, sorted_key_cache_experiment
+        )
+    except Exception:
+        pass
     clickhouse_query_settings["query_id"] = query_id
 
     span = Hub.current.scope.span
@@ -549,12 +565,12 @@ def execute_query_with_readthrough_caching(
         if hit_type == RESULT_VALUE:
             stats["cache_hit"] = 1
             span_tag = "cache_hit"
-            write_sorted_unsorted_cache_hit_metric(sorted_key_exists, True)
+            write_sorted_unsorted_cache_hit_metric(sorted_key_cache_experiment, True)
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
         else:
-            write_sorted_unsorted_cache_hit_metric(sorted_key_exists, False)
+            write_sorted_unsorted_cache_hit_metric(sorted_key_cache_experiment, False)
         sentry_sdk.set_tag("cache_status", span_tag)
         if span:
             span.set_data("cache_status", span_tag)
