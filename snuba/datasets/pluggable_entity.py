@@ -69,6 +69,7 @@ def load_from_file(path: str) -> EntityDefinition:
                     processor = processor_cls()
                 else:
                     processor = processor_cls(**args)  # type: ignore
+                assert isinstance(processor, QueryProcessor), "uh-oh"
                 loaded_processors.append(processor)
         columns = [column_from_spec(c) for c in spec["columns"]]
         return EntityDefinition(
