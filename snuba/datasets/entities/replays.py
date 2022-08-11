@@ -1,7 +1,5 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import DateTime, UInt
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
@@ -16,17 +14,12 @@ from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityRequiredColumnValidator,
 )
-from snuba.utils.schemas import Column
-
-replays_data_model = EntityColumnSet(
-    [Column("project_id", UInt(64)), Column("timestamp", DateTime())]
-)
 
 
 class ReplaysEntity(Entity):
     def __init__(self) -> None:
-
         writable_storage = get_writable_storage(StorageKey.REPLAYS)
+        schema = writable_storage.get_table_writer().get_schema()
 
         super().__init__(
             storages=[writable_storage],
@@ -35,7 +28,7 @@ class ReplaysEntity(Entity):
                     storage=replays_storage
                 ),
             ),
-            abstract_column_set=replays_data_model,
+            abstract_column_set=schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
