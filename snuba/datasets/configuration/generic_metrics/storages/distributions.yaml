@@ -19,24 +19,25 @@ schema:
         name: tags,
         type: Nested,
         args:
-          [
-            { name: key, type: UInt, args: { size: 64 } },
-            { name: indexed_value, type: UInt, args: { size: 64 } },
-            { name: raw_value, type: String },
-          ],
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: indexed_value, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
+              ],
+          },
       },
 
       {
         name: _raw_tags_hash,
         type: Array,
-        args: { type: UInt, arg: 64 },
-        schema_modifiers: [readonly],
+        args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
       },
       {
         name: _indexed_tags_hash,
         type: Array,
-        args: { type: UInt, arg: 64 },
-        schema_modifiers: [readonly],
+        args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
       },
       { name: granularity, type: UInt, args: { size: 8 } },
 
@@ -77,8 +78,7 @@ schema:
       {
         name: histogram_buckets,
         type: AggregateFunction,
-        args:
-          { func: "histogram(250)", arg_types: [{ type: Float, arg: 64 }] },
+        args: { func: "histogram(250)", arg_types: [{ type: Float, arg: 64 }] },
       },
     ]
 

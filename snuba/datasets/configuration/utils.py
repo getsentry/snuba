@@ -96,17 +96,19 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
 
     for col in columns:
         modifiers = None
-        if "schema_modifiers" in col:
+        if "args" in col and "schema_modifiers" in col["args"]:
             modifiers = SchemaModifiers(
-                "nullable" in col["schema_modifiers"],
-                "readonly" in col["schema_modifiers"],
+                "nullable" in col["args"]["schema_modifiers"],
+                "readonly" in col["args"]["schema_modifiers"],
             )
 
         column: Column[SchemaModifiers] | None = None
         if col["type"] in SIMPLE_COLUMN_TYPES:
             column = parse_simple(col, modifiers)
         elif col["type"] == "Nested":
-            column = Column(col["name"], Nested(parse_columns(col["args"]), modifiers))
+            column = Column(
+                col["name"], Nested(parse_columns(col["args"]["subcolumns"]), modifiers)
+            )
         elif col["type"] == "Array":
             column = Column(
                 col["name"],

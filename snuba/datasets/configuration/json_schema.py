@@ -34,18 +34,16 @@ STREAM_LOADER_SCHEMA = {
 ######
 # Column specific json schemas
 def make_column_schema(
-    column_type: dict[str, Any], args: dict[str, Any] | None
+    column_type: dict[str, Any], args: dict[str, Any]
 ) -> dict[str, Any]:
-    props = {
-        "name": TYPE_STRING,
-        "type": column_type,
-        "schema_modifiers": {"type": "array", "items": TYPE_STRING},
-    }
-    if args is not None:
-        props["args"] = args
+    args["properties"]["schema_modifiers"] = {"type": "array", "items": TYPE_STRING}
     return {
         "type": "object",
-        "properties": props,
+        "properties": {
+            "name": TYPE_STRING,
+            "type": column_type,
+            "args": args,
+        },
     }
 
 
@@ -56,7 +54,8 @@ NUMBER_SCHEMA = make_column_schema(
 
 
 NO_ARG_SCHEMA = make_column_schema(
-    column_type={"enum": ["String", "DateTime"]}, args=None
+    column_type={"enum": ["String", "DateTime"]},
+    args={"type": "object", "properties": {}},
 )
 
 
@@ -97,7 +96,12 @@ COLUMN_TYPES = [
 
 NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},
-    args={"type": "array", "items": {"anyOf": COLUMN_TYPES}},
+    args={
+        "type": "object",
+        "properties": {
+            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
+        },
+    },
 )
 
 SCHEMA_SCHEMA = {
