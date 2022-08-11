@@ -1,3 +1,7 @@
+version: v1
+kind: readonly_storage
+name: generic-metrics-distributions
+
 storage:
   key: generic_metrics_distributions
   set_key: generic_metrics_distributions
@@ -73,7 +77,8 @@ schema:
       {
         name: histogram_buckets,
         type: AggregateFunction,
-        args: { func: "histogram(250)", arg_types: [{ type: Float, arg: 64 }] },
+        args:
+          { func: "histogram(250)", arg_types: [{ type: Float, arg: 64 }] },
       },
     ]
 

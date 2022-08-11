@@ -4,7 +4,7 @@ from typing import Any
 
 TYPE_STRING = {"type": "string"}
 
-stream_loader_schema: Any = {
+STREAM_LOADER_SCHEMA = {
     "type": "object",
     "properties": {
         "processor": TYPE_STRING,
@@ -33,7 +33,9 @@ stream_loader_schema: Any = {
 
 ######
 # Column specific json schemas
-def make_column_schema(column_type: Any, args: Any) -> Any:
+def make_column_schema(
+    column_type: dict[str, Any], args: dict[str, Any] | None
+) -> dict[str, Any]:
     props = {
         "name": TYPE_STRING,
         "type": column_type,
@@ -47,18 +49,18 @@ def make_column_schema(column_type: Any, args: Any) -> Any:
     }
 
 
-Number_schema: Any = make_column_schema(
+NUMBER_SCHEMA = make_column_schema(
     column_type={"enum": ["UInt", "Float"]},
     args={"type": "object", "properties": {"size": {"type": "number"}}},
 )
 
 
-No_arg_schema = make_column_schema(
+NO_ARG_SCHEMA = make_column_schema(
     column_type={"enum": ["String", "DateTime"]}, args=None
 )
 
 
-Array_schema = make_column_schema(
+ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
@@ -66,7 +68,7 @@ Array_schema = make_column_schema(
     },
 )
 
-AggregateFunction_schema: Any = make_column_schema(
+AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     column_type={"const": "AggregateFunction"},
     args={
         "type": "object",
@@ -86,24 +88,24 @@ AggregateFunction_schema: Any = make_column_schema(
     },
 )
 
-column_types = [
-    Number_schema,
-    No_arg_schema,
-    Array_schema,
-    AggregateFunction_schema,
+COLUMN_TYPES = [
+    NUMBER_SCHEMA,
+    NO_ARG_SCHEMA,
+    ARRAY_SCHEMA,
+    AGGREGATE_FUNCTION_SCHEMA,
 ]
 
-Nested_schema = make_column_schema(
+NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},
-    args={"type": "array", "items": {"anyOf": column_types}},
+    args={"type": "array", "items": {"anyOf": COLUMN_TYPES}},
 )
 
-schema_schema: Any = {
+SCHEMA_SCHEMA = {
     "type": "object",
     "properties": {
         "columns": {
             "type": "array",
-            "items": {"anyOf": [*column_types, Nested_schema]},
+            "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]},
         },
         "local_table_name": TYPE_STRING,
         "dist_table_name": TYPE_STRING,
@@ -111,31 +113,39 @@ schema_schema: Any = {
 }
 ######
 
-storage_schema: Any = {
+STORAGE_SCHEMA = {
     "type": "object",
     "properties": {"key": TYPE_STRING, "set_key": TYPE_STRING},
 }
 
-query_processors_schema: Any = {"type": "array", "items": TYPE_STRING}
+QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
+
+KIND_SCHEMA = {"enum": ["writable_storage", "readonly_storage"]}
 
 
 # Full schemas:
 
-writable_storage_schema: Any = {
+WRITABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
-        "storage": storage_schema,
-        "schema": schema_schema,
-        "stream_loader": stream_loader_schema,
-        "query_processors": query_processors_schema,
+        "version": TYPE_STRING,
+        "kind": KIND_SCHEMA,
+        "name": TYPE_STRING,
+        "storage": STORAGE_SCHEMA,
+        "schema": SCHEMA_SCHEMA,
+        "query_processors": QUERY_PROCESSORS_SCHEMA,
+        "stream_loader": STREAM_LOADER_SCHEMA,
     },
 }
 
-readable_storage_schema: Any = {
+READABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
-        "storage": storage_schema,
-        "schema": schema_schema,
-        "query_processors": query_processors_schema,
+        "version": TYPE_STRING,
+        "kind": KIND_SCHEMA,
+        "name": TYPE_STRING,
+        "storage": STORAGE_SCHEMA,
+        "schema": SCHEMA_SCHEMA,
+        "query_processors": QUERY_PROCESSORS_SCHEMA,
     },
 }

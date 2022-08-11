@@ -1,3 +1,7 @@
+version: v1
+kind: writable_storage
+name: generic-metric-distributions
+
 storage:
   key: generic_metrics_distributions_raw
   set_key: generic_metrics_distributions
