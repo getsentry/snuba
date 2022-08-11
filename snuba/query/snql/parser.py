@@ -422,7 +422,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return visit_column_name(node, visited_children)
 
     def visit_quoted_column_name(
-        self, node: Node, visited_children: Iterable[Node, Node, Node]
+        self, node: Node, visited_children: Tuple[Node, Node, Node]
     ) -> Column:
         # We are parsing 'quoted_column_name' -> "backtick column_name backtick"
         _, column, _ = visited_children
