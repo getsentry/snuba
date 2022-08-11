@@ -46,7 +46,7 @@ def test_custom_key() -> None:
     assert CustomKey.from_name("custom_af") is None
 
 
-class TypedFromName(metaclass=RegisteredClass["TypedFromName"]):
+class TypedFromName(metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
