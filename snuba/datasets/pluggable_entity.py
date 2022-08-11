@@ -6,6 +6,7 @@ from yaml import safe_load
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.metrics import TagsTypeTransformer  # noqa
+from snuba.datasets.entity import Entity
 from snuba.query.processors import QueryProcessor, get_query_processor_by_name
 from snuba.utils.schemas import (
     AggregateFunction,
@@ -20,9 +21,12 @@ from snuba.utils.schemas import (
 
 
 @dataclass
-class EntityDefinition:
+class PluggableEntity(Entity):
     query_processors: Sequence[QueryProcessor]
     columns: ColumnSet
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return self.query_processors
 
 
 SIMPLE_COLUMN_TYPE_MAPPING: Mapping[str, ColumnType[SchemaModifiers]] = {
@@ -51,7 +55,7 @@ def column_from_spec(yaml_spec: Any) -> Column[SchemaModifiers]:
     return Column(yaml_spec["name"], SIMPLE_COLUMN_TYPE_MAPPING[yaml_spec["type"]])
 
 
-def load_from_file(path: str) -> EntityDefinition:
+def load_from_file(path: str) -> PluggableEntity:
     with open(path, "r") as f:
         unstructured_definition = safe_load(f)
         print(unstructured_definition)
@@ -72,7 +76,7 @@ def load_from_file(path: str) -> EntityDefinition:
                 assert isinstance(processor, QueryProcessor), "uh-oh"
                 loaded_processors.append(processor)
         columns = [column_from_spec(c) for c in spec["columns"]]
-        return EntityDefinition(
+        return PluggableEntity(
             query_processors=loaded_processors, columns=ColumnSet(columns)
         )
 
