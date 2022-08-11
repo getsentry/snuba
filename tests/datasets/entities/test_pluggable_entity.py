@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from functools import partial
-from typing import MutableMapping
+from typing import Mapping, MutableMapping
 
 import pytest
 import pytz
@@ -53,41 +53,9 @@ def end_time(start_time: datetime) -> datetime:
     return start_time + timedelta(minutes=10)
 
 
-def test_generic_metrics_sets_vs_pluggable_similar_behavior(
-    start_time: datetime, end_time: datetime
-) -> None:
-    query_body = {
-        "query": f"""
-            MATCH (generic_metrics_sets)
-            SELECT uniq(value) AS unique_values BY project_id, org_id
-            WHERE org_id = 1
-            AND project_id = 2
-            AND metric_id = 3
-            AND tags['a'] = 4
-            AND timestamp >= toDateTime('{start_time}')
-            AND timestamp < toDateTime('{end_time}')
-            GRANULARITY 60
-        """,
-        "dataset": "generic_metrics",
-    }
-
-    generic_metrics_dataset = get_dataset("generic_metrics")
-
-    query, snql_anonymized = parse_snql_query(
-        query_body["query"], generic_metrics_dataset
-    )
-
-    request = Request(
-        id="",
-        original_body=query_body,
-        query=query,
-        snql_anonymized=snql_anonymized,
-        query_settings=HTTPQuerySettings(referrer=""),
-        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
-    )
-
-    sets_entity: GenericMetricsSetsEntity = GenericMetricsSetsEntity()
-    pluggable_sets_entity: PluggableEntity = PluggableEntity(
+@pytest.fixture
+def pluggable_sets_entity() -> PluggableEntity:
+    return PluggableEntity(
         readable_storage=sets_storage,
         query_processors=[
             TagsTypeTransformer(),
@@ -136,28 +104,63 @@ def test_generic_metrics_sets_vs_pluggable_similar_behavior(
         validators=[],
     )
 
+
+def build_request(query_body: Mapping[str, str]) -> Request:
+    generic_metrics_dataset = get_dataset("generic_metrics")
+    query, snql_anonymized = parse_snql_query(
+        query_body["query"], generic_metrics_dataset
+    )
+    request = Request(
+        id="",
+        original_body=query_body,
+        query=query,
+        snql_anonymized=snql_anonymized,
+        query_settings=HTTPQuerySettings(referrer=""),
+        attribution_info=AttributionInfo(get_app_id("blah"), "blah", None, None, None),
+    )
+    return request
+
+
+def test_generic_metrics_sets_vs_pluggable_similar_behavior(
+    start_time: datetime, end_time: datetime, pluggable_sets_entity: PluggableEntity
+) -> None:
+    query_body = {
+        "query": f"""
+            MATCH (generic_metrics_sets)
+            SELECT uniq(value) AS unique_values BY project_id, org_id
+            WHERE org_id = 1
+            AND project_id = 2
+            AND metric_id = 3
+            AND tags['a'] = 4
+            AND timestamp >= toDateTime('{start_time}')
+            AND timestamp < toDateTime('{end_time}')
+            GRANULARITY 60
+        """,
+        "dataset": "generic_metrics",
+    }
+
+    # the pipeline modifies the query in the request so we need to construct
+    # two separate ones
+    request = build_request(query_body=query_body)
+    request2 = build_request(query_body=query_body)
+
+    sets_entity: GenericMetricsSetsEntity = GenericMetricsSetsEntity()
+
     RESULT_MAP: MutableMapping[str, Query] = {}
 
     def query_runner(
         query: Query, settings: QuerySettings, reader: Reader, output_name: str
     ) -> QueryResult:
         RESULT_MAP[output_name] = query
-        return QueryResult({}, {})
+        return QueryResult({}, {"experiments": {}, "sql": "", "stats": {}})
 
     sets_entity.get_query_pipeline_builder().build_execution_pipeline(
         request=request, runner=partial(query_runner, output_name="existing")
     ).execute()
 
     pluggable_sets_entity.get_query_pipeline_builder().build_execution_pipeline(
-        request=request, runner=partial(query_runner, output_name="pluggable")
+        request=request2, runner=partial(query_runner, output_name="pluggable")
     ).execute()
 
-    assert (
-        RESULT_MAP["existing"].get_granularity()
-        == RESULT_MAP["pluggable"].get_granularity()
-    )
-
-    assert (
-        RESULT_MAP["existing"].get_selected_columns()
-        == RESULT_MAP["pluggable"].get_selected_columns()
-    )
+    (match, failure_test) = RESULT_MAP["existing"].equals(RESULT_MAP["pluggable"])
+    assert match, failure_test
