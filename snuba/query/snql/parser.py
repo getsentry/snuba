@@ -113,7 +113,7 @@ snql_grammar = Grammar(
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
-    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name limit_by_columns
+    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ (quoted_column_name / column_name) limit_by_columns
     limit_clause          = space+ "LIMIT" space+ integer_literal
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
@@ -150,7 +150,7 @@ snql_grammar = Grammar(
     group_columns         = selected_expression space* comma
     order_list            = order_columns* low_pri_arithmetic space+ ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic space+ ("ASC"/"DESC") space* comma space*
-    limit_by_columns      = (space* comma space* column_name)*
+    limit_by_columns      = (space* comma space* (quoted_column_name / column_name))*
 
     low_pri_arithmetic    = space* high_pri_arithmetic (space* low_pri_tuple)*
     high_pri_arithmetic   = space* arithmetic_term (space* high_pri_tuple)*
@@ -170,9 +170,9 @@ snql_grammar = Grammar(
 
     aliased_tag_column    = tag_column space+ "AS" space+ (quoted_alias_literal / alias_literal)
     aliased_subscriptable = subscriptable space+ "AS" space+ (quoted_alias_literal / alias_literal)
-    aliased_column_name   = column_name space+ "AS" space+ (quoted_alias_literal / alias_literal)
+    aliased_column_name   = (quoted_column_name / column_name) space+ "AS" space+ (quoted_alias_literal / alias_literal)
 
-    simple_term           = quoted_literal / numeric_literal / null_literal / boolean_literal / column_name
+    simple_term           = quoted_literal / numeric_literal / null_literal / boolean_literal / quoted_column_name / column_name
     quoted_literal        = ~r"(?<!\\)'(?:(?<!\\)(?:\\{2})*\\'|[^'])*(?<!\\)(?:\\{2})*'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:\-]*"
     alias_literal         = ~r"[a-zA-Z0-9_\.\+\*\/:\-\[\]]*"
@@ -183,8 +183,9 @@ snql_grammar = Grammar(
     true_literal          = ~r"TRUE"i
     false_literal         = ~r"FALSE"i
     null_literal          = ~r"NULL"i
-    subscriptable         = column_name open_square (column_name/tag_name) close_square
+    subscriptable         = (quoted_column_name / column_name) open_square (quoted_column_name / column_name /tag_name) close_square
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:]*"
+    quoted_column_name    = backtick ~r"[a-zA-Z_][a-zA-Z0-9_\.:@/]*" backtick
     tag_column            = "tags" open_square tag_name close_square
     tag_name              = ~r"[^\[\]]*"
     identifier            = backtick ~r"[a-zA-Z_][a-zA-Z0-9_]*" backtick
@@ -419,6 +420,13 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return visit_column_name(node, visited_children)
+
+    def visit_quoted_column_name(
+        self, node: Node, visited_children: Iterable[Node, Node, Node]
+    ) -> Column:
+        # We are parsing 'quoted_column_name' -> "backtick column_name backtick"
+        _, column, _ = visited_children
+        return visit_column_name(column, visited_children)
 
     def visit_subscriptable(
         self, node: Node, visited_children: Iterable[Any]
