@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
@@ -36,8 +36,10 @@ class PluggableEntity(Entity):
     validators: Sequence[QueryValidator]
     translation_mappers: TranslationMappers
     writeable_storage: Optional[WritableTableStorage] = None
-    join_relationships: Mapping[str, JoinRelationship] = {}
-    function_call_validators: Mapping[str, FunctionCallValidator] = {}
+    join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
+    function_call_validators: Mapping[str, FunctionCallValidator] = field(
+        default_factory=dict
+    )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.query_processors
