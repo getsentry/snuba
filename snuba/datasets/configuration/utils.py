@@ -8,6 +8,8 @@ from arroyo.processing.strategies.dead_letter_queue import (
     DeadLetterQueuePolicy,
     ProduceInvalidMessagePolicy,
 )
+from jsonschema import validate
+from yaml import safe_load
 
 from snuba.clickhouse.columns import (
     Array,
@@ -20,10 +22,15 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.processors import QueryProcessor
+from snuba.datasets.configuration.json_schema import (
+    READABLE_STORAGE_SCHEMA,
+    WRITABLE_STORAGE_SCHEMA,
+)
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.datasets.storages import StorageKey
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction
@@ -67,7 +74,7 @@ def get_query_processors(query_processor_names: list[str]) -> list[QueryProcesso
     return [QUERY_PROCESSORS[name]() for name in query_processor_names]
 
 
-def parse_simple(
+def __parse_simple(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> Column[SchemaModifiers]:
     if col["type"] == "UInt":
@@ -104,7 +111,7 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
 
         column: Column[SchemaModifiers] | None = None
         if col["type"] in SIMPLE_COLUMN_TYPES:
-            column = parse_simple(col, modifiers)
+            column = __parse_simple(col, modifiers)
         elif col["type"] == "Nested":
             column = Column(
                 col["name"], Nested(parse_columns(col["args"]["subcolumns"]), modifiers)
@@ -133,3 +140,22 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
         assert column is not None
         cols.append(column)
     return cols
+
+
+CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
+CONFIG_FILES = {
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{CONFIG_FILES_PATH}/distributions.yaml",
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{CONFIG_FILES_PATH}/distributions_bucket.yaml",
+}
+STORAGE_VALIDATION_SCHEMAS = {
+    "readonly_storage": READABLE_STORAGE_SCHEMA,
+    "writable_storage": WRITABLE_STORAGE_SCHEMA,
+}
+
+
+def load_storage_config(storage_key: StorageKey) -> dict[str, Any]:
+    file = open(CONFIG_FILES[storage_key])
+    config = safe_load(file)
+    assert isinstance(config, dict)
+    validate(config, STORAGE_VALIDATION_SCHEMAS[config["kind"]])
+    return config

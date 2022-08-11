@@ -1,21 +1,16 @@
 import pytest
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
-from yaml import safe_load
 
-from snuba.datasets.configuration.json_schema import (
-    READABLE_STORAGE_SCHEMA,
-    WRITABLE_STORAGE_SCHEMA,
-)
-from snuba.datasets.configuration.utils import parse_columns
+from snuba.datasets.configuration.json_schema import READABLE_STORAGE_SCHEMA
+from snuba.datasets.configuration.utils import load_storage_config, parse_columns
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.generic_metrics import (
     aggregate_common_columns,
     aggregate_distributions_columns,
     bucket_columns,
     common_columns,
 )
-
-CONF_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
 
 DISTRIBUTIONS_STORAGE_COLUMN_SET = [
     *common_columns,
@@ -25,18 +20,14 @@ DISTRIBUTIONS_STORAGE_COLUMN_SET = [
 
 
 def test_distributions_storage() -> None:
-    file = open(f"{CONF_PATH}/distributions.yaml")
-    config = safe_load(file)
-    validate(config, READABLE_STORAGE_SCHEMA)
+    config = load_storage_config(StorageKey.GENERIC_METRICS_DISTRIBUTIONS)
     assert (
         parse_columns(config["schema"]["columns"]) == DISTRIBUTIONS_STORAGE_COLUMN_SET
     )
 
 
 def test_distributions_bucket_storage() -> None:
-    file = open(f"{CONF_PATH}/distributions_bucket.yaml")
-    config = safe_load(file)
-    validate(config, WRITABLE_STORAGE_SCHEMA)
+    config = load_storage_config(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
     assert parse_columns(config["schema"]["columns"]) == [
         *common_columns,
         *bucket_columns,
