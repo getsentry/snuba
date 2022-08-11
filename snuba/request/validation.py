@@ -85,11 +85,9 @@ def build_request(
                 }
                 query_settings["referrer"] = referrer
                 # TODO: referrer probably doesn't need to be passed in, it should be from the body
-                settings_obj: Union[
-                    HTTPQuerySettings, SubscriptionQuerySettings
-                ] = settings_class(
-                    **query_settings,
-                )
+                settings_obj: Union[HTTPQuerySettings, SubscriptionQuerySettings]
+                # the parameters accept either `str` or `bool` but we pass in `str | bool`
+                settings_obj = settings_class(**query_settings)  # type: ignore
             elif settings_class == SubscriptionQuerySettings:
                 settings_obj = settings_class(
                     consistent=_consistent_override(True, referrer),
