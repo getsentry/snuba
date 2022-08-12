@@ -1,8 +1,12 @@
 from abc import ABCMeta
-from typing import Any, Dict, Optional, Tuple, Type, cast
+from typing import Any, Dict, Tuple, Type, cast
 
 
 class NoConfigKeyError(Exception):
+    pass
+
+
+class InvalidConfigKeyError(Exception):
     pass
 
 
@@ -18,8 +22,13 @@ class _ClassRegistry:
         if not existing_class:
             self.__mapping[key] = cls
 
-    def get_class_from_name(self, cls_name: str) -> Optional["RegisteredClass"]:
-        return self.__mapping.get(cls_name)
+    def get_class_from_name(self, config_key: str) -> "RegisteredClass":
+        res = self.__mapping.get(config_key)
+        if res is None:
+            raise InvalidConfigKeyError(
+                f"A class with config_key={config_key} does not exist in the registry. Was it ever imported? Are you trying to look up the base class (not supported)?"
+            )
+        return res
 
 
 class RegisteredClass(ABCMeta):
@@ -53,8 +62,8 @@ class RegisteredClass(ABCMeta):
             getattr(res, "_registry").register_class(res)
         return res
 
-    def from_name(self, name: str) -> Optional[Type[Any]]:
+    def from_name(self, name: str) -> Type[Any]:
         return cast(
-            Optional[Type[Any]],
+            Type[Any],
             getattr(self, "_registry").get_class_from_name(name),
         )
