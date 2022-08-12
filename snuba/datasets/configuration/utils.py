@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
-from arroyo import Topic as KafkaTopic
-from arroyo.backends.kafka import KafkaProducer
-from arroyo.processing.strategies.dead_letter_queue import (
-    DeadLetterQueuePolicy,
-    ProduceInvalidMessagePolicy,
-)
 from jsonschema import validate
 from yaml import safe_load
 
@@ -21,57 +15,12 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.configuration.json_schema import (
     V1_READABLE_STORAGE_SCHEMA,
     V1_WRITABLE_STORAGE_SCHEMA,
 )
-from snuba.datasets.generic_metrics_processor import (
-    GenericDistributionsMetricsProcessor,
-)
-from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.storages import StorageKey
-from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction
-from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.utils.streams.topics import Topic
-
-
-def generate_policy_creator(
-    dlq_policy_config: dict[str, Any],
-) -> Callable[[], DeadLetterQueuePolicy] | None:
-    """
-    Creates a DLQ Policy creator function.
-    """
-    if dlq_policy_config["type"] == "produce":
-        dlq_topic = dlq_policy_config["args"][0]
-
-        def produce_policy_creator() -> DeadLetterQueuePolicy:
-            return ProduceInvalidMessagePolicy(
-                KafkaProducer(build_kafka_producer_configuration(Topic(dlq_topic))),
-                KafkaTopic(dlq_topic),
-            )
-
-        return produce_policy_creator
-    return None
-
-
-CONF_TO_PREFILTER: dict[str, Any] = {
-    "kafka_header_select_filter": KafkaHeaderSelectFilter
-}
-CONF_TO_PROCESSOR: dict[str, Any] = {
-    "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor
-}
-
-QUERY_PROCESSORS: dict[str, Any] = {
-    "TableRateLimit": TableRateLimit,
-    "TupleUnaliaser": TupleUnaliaser,
-}
-
-
-def get_query_processors(query_processor_names: list[str]) -> list[QueryProcessor]:
-    return [QUERY_PROCESSORS[name]() for name in query_processor_names]
 
 
 def __parse_simple(
