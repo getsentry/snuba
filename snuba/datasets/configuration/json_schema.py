@@ -129,10 +129,10 @@ KIND_SCHEMA = {"enum": ["writable_storage", "readonly_storage"]}
 
 # Full schemas:
 
-WRITABLE_STORAGE_SCHEMA = {
+V1_WRITABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
-        "version": TYPE_STRING,
+        "version": {"const": "v1"},
         "kind": KIND_SCHEMA,
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
@@ -142,10 +142,10 @@ WRITABLE_STORAGE_SCHEMA = {
     },
 }
 
-READABLE_STORAGE_SCHEMA = {
+V1_READABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
-        "version": TYPE_STRING,
+        "version": {"const": "v1"},
         "kind": KIND_SCHEMA,
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
