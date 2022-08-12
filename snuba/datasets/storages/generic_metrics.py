@@ -93,6 +93,22 @@ aggregate_common_columns: Sequence[Column[SchemaModifiers]] = [
     Column("granularity", UInt(8)),
 ]
 
+aggregate_distributions_columns: Sequence[Column[SchemaModifiers]] = [
+    Column(
+        "percentiles",
+        AggregateFunction("quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]),
+    ),
+    Column("min", AggregateFunction("min", [Float(64)])),
+    Column("max", AggregateFunction("max", [Float(64)])),
+    Column("avg", AggregateFunction("avg", [Float(64)])),
+    Column("sum", AggregateFunction("sum", [Float(64)])),
+    Column("count", AggregateFunction("count", [Float(64)])),
+    Column(
+        "histogram_buckets",
+        AggregateFunction("histogram(250)", [Float(64)]),
+    ),
+]
+
 bucket_columns: Sequence[Column[SchemaModifiers]] = [
     Column("granularities", Array(UInt(8))),
     Column("count_value", Float(64)),
@@ -165,21 +181,7 @@ distributions_storage_old = ReadableTableStorage(
             [
                 *common_columns,
                 *aggregate_common_columns,
-                Column(
-                    "percentiles",
-                    AggregateFunction(
-                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]
-                    ),
-                ),
-                Column("min", AggregateFunction("min", [Float(64)])),
-                Column("max", AggregateFunction("max", [Float(64)])),
-                Column("avg", AggregateFunction("avg", [Float(64)])),
-                Column("sum", AggregateFunction("sum", [Float(64)])),
-                Column("count", AggregateFunction("count", [Float(64)])),
-                Column(
-                    "histogram_buckets",
-                    AggregateFunction("histogram(250)", [Float(64)]),
-                ),
+                *aggregate_distributions_columns,
             ]
         ),
     ),
