@@ -33,24 +33,6 @@ def test_distributions_bucket_storage() -> None:
         *bucket_columns,
     ]
 
-    assert config["stream_loader"] == {
-        "processor": "generic_distributions_metrics_processor",
-        "default_topic": "snuba-generic-metrics",
-        "commit_log_topic": "snuba-generic-metrics-distributions-commit-log",
-        "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-distributions",
-        "subscription_scheduler_mode": "global",
-        "subscription_result_topic": "generic-metrics-distributions-subscription-results",
-        "replacement_topic": None,
-        "pre_filter": {
-            "type": "kafka_header_select_filter",
-            "args": ["metric_type", "d"],
-        },
-        "dlq_policy": {
-            "type": "produce",
-            "args": ["snuba-dead-letter-generic-metrics"],
-        },
-    }
-
 
 def test_invalid_storage() -> None:
     config = {
@@ -61,3 +43,14 @@ def test_invalid_storage() -> None:
     with pytest.raises(ValidationError) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
     assert e.value.message == "1 is not of type 'string'"
+
+
+def test_invalid_query_processor() -> None:
+    config = {
+        "storage": {"key": "x", "set_key": "x"},
+        "schema": {"columns": []},
+        "query_processors": [5],
+    }
+    with pytest.raises(ValidationError) as e:
+        validate(config, V1_READABLE_STORAGE_SCHEMA)
+    assert e.value.message == "5 is not of type 'string'"

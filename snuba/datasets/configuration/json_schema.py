@@ -4,33 +4,6 @@ from typing import Any
 
 TYPE_STRING = {"type": "string"}
 
-STREAM_LOADER_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "processor": TYPE_STRING,
-        "default_topic": TYPE_STRING,
-        "commit_log_topic": TYPE_STRING,
-        "subscription_scheduled_topic": TYPE_STRING,
-        "subscription_scheduler_mode": TYPE_STRING,
-        "subscription_result_topic": TYPE_STRING,
-        "replacement_topic": {"type": ["string", "null"]},
-        "prefilter": {
-            "type": "object",
-            "properties": {
-                "type": TYPE_STRING,
-                "args": {"type": "array", "items": TYPE_STRING},
-            },
-        },
-        "dlq_policy": {
-            "type": "object",
-            "properties": {
-                "type": TYPE_STRING,
-                "args": {"type": "array", "items": TYPE_STRING},
-            },
-        },
-    },
-}
-
 ######
 # Column specific json schemas
 def make_column_schema(
@@ -138,7 +111,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": QUERY_PROCESSORS_SCHEMA,
-        "stream_loader": STREAM_LOADER_SCHEMA,
+        # TODO: "stream_loader": STREAM_LOADER_SCHEMA,
     },
 }
 
