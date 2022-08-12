@@ -244,7 +244,7 @@ def test_convert_SnQL_to_SQL_invalid_dataset(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert data["error"]["message"] == "dataset '' does not exist"
+    assert data["error"]["message"] == "dataset '' is not available"
 
 
 def test_convert_SnQL_to_SQL_invalid_query(admin_api: FlaskClient) -> None:
