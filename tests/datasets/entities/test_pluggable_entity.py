@@ -121,7 +121,7 @@ def build_request(query_body: Mapping[str, str]) -> Request:
     return request
 
 
-def test_generic_metrics_sets_vs_pluggable_similar_behavior(
+def test_generic_metrics_sets_vs_pluggable_similar_pipeline_behavior(
     start_time: datetime, end_time: datetime, pluggable_sets_entity: PluggableEntity
 ) -> None:
     query_body = {
