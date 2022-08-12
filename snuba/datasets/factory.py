@@ -7,11 +7,11 @@ from snuba.utils.serializable_exception import SerializableException
 
 
 class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
-    def __init__(self):
+    def __init__(self) -> None:
         self._dataset_map: MutableMapping[str, Dataset] = {}
         self._name_map: MutableMapping[Type[Dataset], str] = {}
 
-    def initialize(self):
+    def initialize(self) -> None:
         from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
         from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
         from snuba.datasets.discover import DiscoverDataset
@@ -75,7 +75,7 @@ class InvalidDatasetError(SerializableException):
 _DS_FACTORY = None
 
 
-def _ds_factory():
+def _ds_factory() -> _DatasetFactory:
     global _DS_FACTORY
     if _DS_FACTORY is None:
         _DS_FACTORY = _DatasetFactory()

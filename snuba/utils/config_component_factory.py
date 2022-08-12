@@ -5,7 +5,7 @@ KeyType = TypeVar("KeyType")
 
 
 class ConfigComponentFactory(Generic[T, KeyType]):
-    def initialize(self, **kwargs) -> None:
+    def initialize(self) -> None:
         raise NotImplementedError
 
     def iter_all(self) -> Generator[T, None, None]:
