@@ -269,7 +269,7 @@ def test_alias_regex_allows_for_mri_format() -> None:
 
 def test_quoted_column_regex_allows_for_mri_format() -> None:
     body = (
-        "MATCH (metrics_counters) SELECT sumIf(value, equals(`c:sessions/session@none`, 0)) "
+        "MATCH (metrics_counters) SELECT sumIf(value, equals(c:sessions/session@none, 0)) "
         "BY tags[44] AS `session.status`"
     )
     query = parse_snql_query_initial(body)
@@ -277,7 +277,7 @@ def test_quoted_column_regex_allows_for_mri_format() -> None:
     assert len(expressions) == 2
     assert sorted([expr.name for expr in expressions]) == [
         "session.status",
-        "sumIf(value, equals(`c:sessions/session@none`, 0))",
+        "sumIf(value, equals(c:sessions/session@none, 0))",
     ]
 
 
