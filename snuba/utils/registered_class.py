@@ -1,10 +1,8 @@
 from abc import ABCMeta
-from typing import Any, Dict, Generic, Optional, Tuple, Type, TypeVar, cast
-
-T = TypeVar("T")
+from typing import Any, Dict, Optional, Tuple, Type, cast
 
 
-class _ClassRegistry(Generic[T]):
+class _ClassRegistry:
     """Keep a mapping of classes to their names"""
 
     def __init__(self) -> None:
@@ -20,7 +18,7 @@ class _ClassRegistry(Generic[T]):
         return self.__mapping.get(cls_name)
 
 
-class RegisteredClass(ABCMeta, Generic[T]):
+class RegisteredClass(ABCMeta):
     """Metaclass for making classes that can be looked up by name
     Usage:
         class SomeGenericClass(metaclass=RegisteredClass):
@@ -37,7 +35,7 @@ class RegisteredClass(ABCMeta, Generic[T]):
         The base class cannot be looked up by name, only subclasses
     """
 
-    def __new__(cls, name: str, bases: Tuple[Type[Any]], dct: Dict[str, Any]):
+    def __new__(cls, name: str, bases: Tuple[Type[Any]], dct: Dict[str, Any]) -> Any:
         res = super().__new__(cls, name, bases, dct)
         if not hasattr(res, "_registry"):
             setattr(res, "_registry", _ClassRegistry())
@@ -45,9 +43,9 @@ class RegisteredClass(ABCMeta, Generic[T]):
             getattr(res, "_registry").register_class(res)
         return res
 
-    def from_name(self, name: str) -> Optional[Type[T]]:
+    def from_name(self, name: str) -> Optional[Type[Any]]:
         return cast(
-            Optional[Optional[Type[T]]],
+            Optional[Type[Any]],
             getattr(self, "_registry").get_class_from_name(name),
         )
 
