@@ -33,6 +33,24 @@ def test_distributions_bucket_storage() -> None:
         *bucket_columns,
     ]
 
+    assert config["stream_loader"] == {
+        "processor": "generic_distributions_metrics_processor",
+        "default_topic": "snuba-generic-metrics",
+        "commit_log_topic": "snuba-generic-metrics-distributions-commit-log",
+        "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-distributions",
+        "subscription_scheduler_mode": "global",
+        "subscription_result_topic": "generic-metrics-distributions-subscription-results",
+        "replacement_topic": None,
+        "pre_filter": {
+            "type": "kafka_header_select_filter",
+            "args": ["metric_type", "d"],
+        },
+        "dlq_policy": {
+            "type": "produce",
+            "args": ["snuba-dead-letter-generic-metrics"],
+        },
+    }
+
 
 def test_invalid_storage() -> None:
     config = {
