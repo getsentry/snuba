@@ -1,5 +1,6 @@
 from typing import Generator, MutableMapping, Sequence, Type
 
+from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.util import with_span
 from snuba.utils.config_component_factory import ConfigComponentFactory
@@ -52,9 +53,17 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
             yield dset
 
     def all_names(self) -> Sequence[str]:
-        return list(self._dataset_map.keys())
+        return [
+            name
+            for name in self._dataset_map.keys()
+            if name not in settings.DISABLED_DATASETS
+        ]
 
     def get(self, name: str) -> Dataset:
+        if name in settings.DISABLED_DATASETS:
+            raise InvalidDatasetError(
+                f"dataset {name!r} is disabled in this environment"
+            )
         try:
             return self._dataset_map[name]
         except KeyError as error:
