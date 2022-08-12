@@ -2,6 +2,10 @@ from abc import ABCMeta
 from typing import Any, Dict, Optional, Tuple, Type, cast
 
 
+class NoConfigKeyError(Exception):
+    pass
+
+
 class _ClassRegistry:
     """Keep a mapping of classes to their names"""
 
@@ -9,7 +13,7 @@ class _ClassRegistry:
         self.__mapping: Dict[str, RegisteredClass] = {}
 
     def register_class(self, cls: "RegisteredClass") -> None:
-        key = cls.config_key()
+        key = cls.config_key
         existing_class = self.__mapping.get(key)
         if not existing_class:
             self.__mapping[key] = cls
@@ -35,8 +39,14 @@ class RegisteredClass(ABCMeta):
         The base class cannot be looked up by name, only subclasses
     """
 
+    config_key: str
+
     def __new__(cls, name: str, bases: Tuple[Type[Any]], dct: Dict[str, Any]) -> Any:
         res = super().__new__(cls, name, bases, dct)
+        if not hasattr(res, "config_key"):
+            raise NoConfigKeyError(
+                "RegisteredClass(es) must define the `config-key` property"
+            )
         if not hasattr(res, "_registry"):
             setattr(res, "_registry", _ClassRegistry())
         else:
@@ -48,6 +58,3 @@ class RegisteredClass(ABCMeta):
             Optional[Type[Any]],
             getattr(self, "_registry").get_class_from_name(name),
         )
-
-    def config_key(self) -> str:
-        raise NotImplementedError
