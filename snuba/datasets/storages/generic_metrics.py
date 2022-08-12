@@ -11,8 +11,6 @@ from arroyo.processing.strategies.dead_letter_queue import (
     DeadLetterQueuePolicy,
     ProduceInvalidMessagePolicy,
 )
-from jsonschema import validate
-from yaml import safe_load
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -28,18 +26,6 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.configuration.config_loader import (
-    CONF_TO_PREFILTER,
-    CONF_TO_PROCESSOR,
-    deep_compare_storages,
-    get_query_processors,
-    parse_columns,
-    policy_creator_creator,
-)
-from snuba.datasets.configuration.generic_metrics.json_schema import (
-    readable_storage_schema,
-    writable_storage_schema,
-)
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
@@ -159,18 +145,7 @@ sets_bucket_storage = WritableTableStorage(
     ),
 )
 
-
-config_file_path = "./snuba/datasets/configuration/generic_metrics"
-
-dist_raw = open(f"{config_file_path}/storage_distributions_raw.yaml")
-conf_dist_raw = safe_load(dist_raw)
-validate(conf_dist_raw, writable_storage_schema)
-
-dist_readonly = open(f"{config_file_path}/storage_distributions.yaml")
-conf_dist_readonly = safe_load(dist_readonly)
-validate(conf_dist_readonly, readable_storage_schema)
-
-distributions_storage_old = ReadableTableStorage(
+distributions_storage = ReadableTableStorage(
     storage_key=StorageKey.GENERIC_METRICS_DISTRIBUTIONS,
     storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
     schema=TableSchema(
@@ -188,19 +163,7 @@ distributions_storage_old = ReadableTableStorage(
     query_processors=shared_query_processors,
 )
 
-distributions_storage = ReadableTableStorage(
-    storage_key=StorageKey(conf_dist_readonly["storage"]["key"]),
-    storage_set_key=StorageSetKey(conf_dist_readonly["storage"]["set_key"]),
-    schema=TableSchema(
-        local_table_name="generic_metric_distributions_aggregated_local",
-        dist_table_name="generic_metric_distributions_aggregated_dist",
-        storage_set_key=StorageSetKey(conf_dist_readonly["storage"]["set_key"]),
-        columns=ColumnSet(parse_columns(conf_dist_readonly["schema"]["columns"])),
-    ),
-    query_processors=get_query_processors(conf_dist_readonly["query_processors"]),
-)
-
-distributions_bucket_storage_old = WritableTableStorage(
+distributions_bucket_storage = WritableTableStorage(
     storage_key=StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW,
     storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
     schema=WritableTableSchema(
@@ -221,42 +184,3 @@ distributions_bucket_storage_old = WritableTableStorage(
         pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )
-
-distributions_bucket_storage = WritableTableStorage(
-    storage_key=StorageKey(conf_dist_raw["storage"]["key"]),
-    storage_set_key=StorageSetKey(conf_dist_raw["storage"]["set_key"]),
-    schema=WritableTableSchema(
-        columns=ColumnSet(parse_columns(conf_dist_raw["schema"]["columns"])),
-        local_table_name=conf_dist_raw["schema"]["local_table_name"],
-        dist_table_name=conf_dist_raw["schema"]["dist_table_name"],
-        storage_set_key=StorageSetKey(conf_dist_raw["storage"]["set_key"]),
-    ),
-    query_processors=conf_dist_raw["query_processors"],
-    stream_loader=build_kafka_stream_loader_from_settings(
-        processor=CONF_TO_PROCESSOR[conf_dist_raw["stream_loader"]["processor"]](),
-        default_topic=Topic(conf_dist_raw["stream_loader"]["default_topic"]),
-        dead_letter_queue_policy_creator=policy_creator_creator(
-            conf_dist_raw["stream_loader"]["dlq_policy"]
-        ),
-        commit_log_topic=Topic(conf_dist_raw["stream_loader"]["commit_log_topic"]),
-        subscription_scheduled_topic=Topic(
-            conf_dist_raw["stream_loader"]["subscription_scheduled_topic"]
-        ),
-        subscription_scheduler_mode=SchedulingWatermarkMode(
-            conf_dist_raw["stream_loader"]["subscription_scheduler_mode"]
-        ),
-        subscription_result_topic=Topic(
-            conf_dist_raw["stream_loader"]["subscription_result_topic"]
-        ),
-        replacement_topic=Topic(conf_dist_raw["stream_loader"]["replacement_topic"])
-        if conf_dist_raw["stream_loader"]["replacement_topic"]
-        else None,
-        pre_filter=CONF_TO_PREFILTER[
-            conf_dist_raw["stream_loader"]["pre_filter"]["type"]
-        ](*conf_dist_raw["stream_loader"]["pre_filter"]["args"]),
-    ),
-)
-
-
-deep_compare_storages(distributions_bucket_storage_old, distributions_bucket_storage)
-deep_compare_storages(distributions_storage_old, distributions_storage)

@@ -3,53 +3,27 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
 from snuba.datasets.configuration.json_schema import READABLE_STORAGE_SCHEMA
-from snuba.datasets.configuration.utils import load_storage_config, parse_columns
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storage import ReadableStorage, WritableStorage
 from snuba.datasets.storages.generic_metrics import (
-    aggregate_common_columns,
-    aggregate_distributions_columns,
-    bucket_columns,
-    common_columns,
+    distributions_bucket_storage as distributions_bucket_storage_old,
 )
-
-DISTRIBUTIONS_STORAGE_COLUMN_SET = [
-    *common_columns,
-    *aggregate_common_columns,
-    *aggregate_distributions_columns,
-]
+from snuba.datasets.storages.generic_metrics import (
+    distributions_storage as distributions_storage_old,
+)
+from snuba.datasets.storages.generic_metrics_from_config import (
+    distributions_bucket_storage,
+    distributions_storage,
+)
 
 
 def test_distributions_storage() -> None:
-    config = load_storage_config(StorageKey.GENERIC_METRICS_DISTRIBUTIONS)
-    assert (
-        parse_columns(config["schema"]["columns"]) == DISTRIBUTIONS_STORAGE_COLUMN_SET
-    )
+    _deep_compare_storages(distributions_storage_old, distributions_storage)
 
 
 def test_distributions_bucket_storage() -> None:
-    config = load_storage_config(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
-    assert parse_columns(config["schema"]["columns"]) == [
-        *common_columns,
-        *bucket_columns,
-    ]
-
-    assert config["stream_loader"] == {
-        "processor": "generic_distributions_metrics_processor",
-        "default_topic": "snuba-generic-metrics",
-        "commit_log_topic": "snuba-generic-metrics-distributions-commit-log",
-        "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-distributions",
-        "subscription_scheduler_mode": "global",
-        "subscription_result_topic": "generic-metrics-distributions-subscription-results",
-        "replacement_topic": None,
-        "pre_filter": {
-            "type": "kafka_header_select_filter",
-            "args": ["metric_type", "d"],
-        },
-        "dlq_policy": {
-            "type": "produce",
-            "args": ["snuba-dead-letter-generic-metrics"],
-        },
-    }
+    _deep_compare_storages(
+        distributions_bucket_storage_old, distributions_bucket_storage
+    )
 
 
 def test_invalid_storage() -> None:
@@ -61,3 +35,31 @@ def test_invalid_storage() -> None:
     with pytest.raises(ValidationError) as e:
         validate(config, READABLE_STORAGE_SCHEMA)
     assert e.value.message == "1 is not of type 'string'"
+
+
+def _deep_compare_storages(old: ReadableStorage, new: ReadableStorage) -> None:
+    """
+    temp function to compare storages
+    """
+    assert (
+        old.get_cluster().get_clickhouse_cluster_name()
+        == new.get_cluster().get_clickhouse_cluster_name()
+    )
+    assert (
+        old.get_cluster().get_storage_set_keys()
+        == new.get_cluster().get_storage_set_keys()
+    )
+    assert (
+        old.get_mandatory_condition_checkers() == new.get_mandatory_condition_checkers()
+    )
+    assert len(old.get_query_processors()) == len(new.get_query_processors())
+    assert old.get_query_splitters() == new.get_query_splitters()
+    assert (
+        old.get_schema().get_columns().columns == new.get_schema().get_columns().columns
+    )
+
+    if isinstance(old, WritableStorage) and isinstance(new, WritableStorage):
+        assert (
+            old.get_table_writer().get_schema().get_columns()
+            == new.get_table_writer().get_schema().get_columns()
+        )
