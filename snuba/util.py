@@ -21,7 +21,6 @@ from typing import (
     cast,
 )
 
-import _strptime  # NOQA fixes _strptime deferred import issue
 import sentry_sdk
 from dateutil.parser import parse as dateutil_parse
 

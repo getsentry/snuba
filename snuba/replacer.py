@@ -30,6 +30,7 @@ from snuba.replacers.replacer_processor import (
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
+from snuba.utils.time_bucket import Counter, compare_counters
 
 logger = logging.getLogger("snuba.replacer")
 
@@ -270,6 +271,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__storage = storage
 
         self.metrics = metrics
+        self.__global_counter = Counter()
         processor = storage.get_table_writer().get_replacer_processor()
         assert (
             processor
@@ -388,9 +390,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             ClickhouseClientSettings.REPLACE
         )
 
+        project_counter = Counter()
         for replacement in batch:
-
-            start_time = time.time()
+            start_time = datetime.now()
 
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
@@ -414,7 +416,15 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self.__replacer_processor.post_replacement(replacement, count)
 
-            self._check_timing_and_write_to_redis(replacement, start_time)
+            self._check_timing_and_write_to_redis(replacement, start_time.timestamp())
+
+            get_project_id = getattr(replacement, "get_project_id", None)
+            if callable(get_project_id):
+                project_id = get_project_id()
+                end_time = datetime.now()
+                self._update_and_compare_counters(
+                    project_counter, start_time, end_time, project_id
+                )
 
         if need_optimize:
             from snuba.optimize import run_optimize
@@ -509,3 +519,26 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 str(message_metadata.partition_index),
             ]
         )
+
+    def _update_and_compare_counters(
+        self,
+        project_counter: Counter,
+        start_time: datetime,
+        end_time: datetime,
+        project_id: int,
+    ) -> None:
+        project_counter.write_to_bucket(
+            project_id,
+            start_time,
+            end_time,
+        )
+        self.__global_counter.write_to_bucket(
+            None,
+            start_time,
+            end_time,
+        )
+        print("global bucket")
+        self.__global_counter.print_buckets()
+        print("project bucket")
+        project_counter.print_buckets()
+        compare_counters(self.__global_counter, project_counter, self.__consumer_group)
