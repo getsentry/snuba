@@ -149,6 +149,7 @@ CONFIG_FILES = {
     StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{CONFIG_FILES_PATH}/distributions.yaml",
     StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{CONFIG_FILES_PATH}/distributions_bucket.yaml",
     StorageKey.GENERIC_METRICS_SETS_RAW: f"{CONFIG_FILES_PATH}/sets_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS: f"{CONFIG_FILES_PATH}/sets.yaml",
 }
 
 STORAGE_VALIDATION_SCHEMAS = {

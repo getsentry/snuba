@@ -78,7 +78,7 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
                 "items": {
                     "type": "object",
                     "properties": {
-                        "type": {"enum": ["Float", "UUID"]},
+                        "type": {"enum": ["Float", "UUID", "UInt"]},
                         "arg": {"type": ["number", "null"]},
                     },
                 },

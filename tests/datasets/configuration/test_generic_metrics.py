@@ -3,6 +3,7 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableStorage, WritableStorage
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage as distributions_bucket_storage_old,
@@ -13,10 +14,12 @@ from snuba.datasets.storages.generic_metrics import (
 from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage as sets_bucket_storage_old,
 )
+from snuba.datasets.storages.generic_metrics import sets_storage as sets_storage_old
 from snuba.datasets.storages.generic_metrics_from_config import (
     distributions_bucket_storage,
     distributions_storage,
     sets_bucket_storage,
+    sets_storage,
 )
 
 
@@ -32,6 +35,10 @@ def test_distributions_bucket_storage() -> None:
 
 def test_sets_bucket_storage() -> None:
     _deep_compare_storages(sets_bucket_storage_old, sets_bucket_storage)
+
+
+def test_sets_storage() -> None:
+    _deep_compare_storages(sets_storage_old, sets_storage)
 
 
 def test_invalid_storage() -> None:
@@ -73,9 +80,11 @@ def _deep_compare_storages(old: ReadableStorage, new: ReadableStorage) -> None:
     )
     assert len(old.get_query_processors()) == len(new.get_query_processors())
     assert old.get_query_splitters() == new.get_query_splitters()
-    assert (
-        old.get_schema().get_columns().columns == new.get_schema().get_columns().columns
-    )
+    schema_old, schema_new = old.get_schema(), new.get_schema()
+    assert schema_old.get_columns().columns == schema_new.get_columns().columns
+
+    if isinstance(schema_old, TableSchema) and isinstance(schema_new, TableSchema):
+        assert schema_old.get_table_name() == schema_new.get_table_name()
 
     if isinstance(old, WritableStorage) and isinstance(new, WritableStorage):
         assert (
