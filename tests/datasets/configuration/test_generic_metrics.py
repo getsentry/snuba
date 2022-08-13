@@ -22,6 +22,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage as sets_bucket_storage_old,
 )
 from snuba.datasets.storages.generic_metrics import sets_storage as sets_storage_old
+from snuba.datasets.table_storage import KafkaStreamLoader
 
 
 def test_distributions_storage() -> None:
@@ -103,3 +104,26 @@ def _deep_compare_storages(
             old.get_table_writer().get_schema().get_columns()
             == new.get_table_writer().get_schema().get_columns()
         )
+        _compare_stream_loaders(
+            old.get_table_writer().get_stream_loader(),
+            new.get_table_writer().get_stream_loader(),
+        )
+
+
+def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> None:
+    assert old.get_commit_log_topic_spec() == new.get_commit_log_topic_spec()
+    assert old.get_default_topic_spec() == new.get_default_topic_spec()
+    assert isinstance(old.get_pre_filter(), type(new.get_pre_filter()))
+    assert isinstance(old.get_processor(), type(new.get_processor()))
+    assert old.get_replacement_topic_spec() == new.get_replacement_topic_spec()
+    assert (
+        old.get_subscription_result_topic_spec()
+        == new.get_subscription_result_topic_spec()
+    )
+    assert (
+        old.get_subscription_scheduled_topic_spec()
+        == new.get_subscription_scheduled_topic_spec()
+    )
+    assert (
+        old.get_subscription_scheduler_mode() == new.get_subscription_scheduler_mode()
+    )

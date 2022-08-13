@@ -58,29 +58,27 @@ def get_storage(storage_key: StorageKey) -> ReadableTableStorage | WritableTable
 
     if config[KIND] == WRITABLE_STORAGE:
         # add additional kwargs related to WritableTableStorage
-        kwargs[STREAM_LOADER] = (
-            build_kafka_stream_loader_from_settings(
-                processor=CONF_TO_PROCESSOR[config[STREAM_LOADER]["processor"]](),
-                default_topic=Topic(config[STREAM_LOADER]["default_topic"]),
-                dead_letter_queue_policy_creator=generate_policy_creator(
-                    config[STREAM_LOADER]["dlq_policy"]
-                ),
-                commit_log_topic=Topic(config[STREAM_LOADER]["commit_log_topic"]),
-                subscription_scheduled_topic=Topic(
-                    config[STREAM_LOADER]["subscription_scheduled_topic"]
-                ),
-                subscription_scheduler_mode=SchedulingWatermarkMode(
-                    config[STREAM_LOADER]["subscription_scheduler_mode"]
-                ),
-                subscription_result_topic=Topic(
-                    config[STREAM_LOADER]["subscription_result_topic"]
-                ),
-                replacement_topic=Topic(config[STREAM_LOADER]["replacement_topic"])
-                if config[STREAM_LOADER]["replacement_topic"]
-                else None,
-                pre_filter=CONF_TO_PREFILTER[config[STREAM_LOADER][PRE_FILTER]["type"]](
-                    *config[STREAM_LOADER][PRE_FILTER]["args"]
-                ),
+        kwargs[STREAM_LOADER] = build_kafka_stream_loader_from_settings(
+            processor=CONF_TO_PROCESSOR[config[STREAM_LOADER]["processor"]](),
+            default_topic=Topic(config[STREAM_LOADER]["default_topic"]),
+            dead_letter_queue_policy_creator=generate_policy_creator(
+                config[STREAM_LOADER]["dlq_policy"]
+            ),
+            commit_log_topic=Topic(config[STREAM_LOADER]["commit_log_topic"]),
+            subscription_scheduled_topic=Topic(
+                config[STREAM_LOADER]["subscription_scheduled_topic"]
+            ),
+            subscription_scheduler_mode=SchedulingWatermarkMode(
+                config[STREAM_LOADER]["subscription_scheduler_mode"]
+            ),
+            subscription_result_topic=Topic(
+                config[STREAM_LOADER]["subscription_result_topic"]
+            ),
+            replacement_topic=Topic(config[STREAM_LOADER]["replacement_topic"])
+            if config[STREAM_LOADER]["replacement_topic"]
+            else None,
+            pre_filter=CONF_TO_PREFILTER[config[STREAM_LOADER][PRE_FILTER]["type"]](
+                *config[STREAM_LOADER][PRE_FILTER]["args"]
             ),
         )
 
