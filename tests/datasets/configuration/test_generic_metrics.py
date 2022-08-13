@@ -2,7 +2,7 @@ import pytest
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
-from snuba.datasets.configuration.json_schema import READABLE_STORAGE_SCHEMA
+from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
 from snuba.datasets.storage import ReadableStorage, WritableStorage
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage as distributions_bucket_storage_old,
@@ -41,8 +41,19 @@ def test_invalid_storage() -> None:
         "query_processors": [],
     }
     with pytest.raises(ValidationError) as e:
-        validate(config, READABLE_STORAGE_SCHEMA)
+        validate(config, V1_READABLE_STORAGE_SCHEMA)
     assert e.value.message == "1 is not of type 'string'"
+
+
+def test_invalid_query_processor() -> None:
+    config = {
+        "storage": {"key": "x", "set_key": "x"},
+        "schema": {"columns": []},
+        "query_processors": [5],
+    }
+    with pytest.raises(ValidationError) as e:
+        validate(config, V1_READABLE_STORAGE_SCHEMA)
+    assert e.value.message == "5 is not of type 'string'"
 
 
 def _deep_compare_storages(old: ReadableStorage, new: ReadableStorage) -> None:

@@ -23,8 +23,8 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.configuration.json_schema import (
-    READABLE_STORAGE_SCHEMA,
-    WRITABLE_STORAGE_SCHEMA,
+    V1_READABLE_STORAGE_SCHEMA,
+    V1_WRITABLE_STORAGE_SCHEMA,
 )
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
@@ -150,9 +150,10 @@ CONFIG_FILES = {
     StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{CONFIG_FILES_PATH}/distributions_bucket.yaml",
     StorageKey.GENERIC_METRICS_SETS_RAW: f"{CONFIG_FILES_PATH}/sets_bucket.yaml",
 }
+
 STORAGE_VALIDATION_SCHEMAS = {
-    "readonly_storage": READABLE_STORAGE_SCHEMA,
-    "writable_storage": WRITABLE_STORAGE_SCHEMA,
+    "readonly_storage": V1_READABLE_STORAGE_SCHEMA,
+    "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
 }
 
 
