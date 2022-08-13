@@ -3,31 +3,28 @@ from __future__ import annotations
 from typing import Any
 
 TYPE_STRING = {"type": "string"}
+TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
+
+FUNCTION_CALL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "type": TYPE_STRING,
+        "args": {"type": "array", "items": TYPE_STRING},
+    },
+}
 
 STREAM_LOADER_SCHEMA = {
     "type": "object",
     "properties": {
         "processor": TYPE_STRING,
         "default_topic": TYPE_STRING,
-        "commit_log_topic": TYPE_STRING,
-        "subscription_scheduled_topic": TYPE_STRING,
-        "subscription_scheduler_mode": TYPE_STRING,
-        "subscription_result_topic": TYPE_STRING,
-        "replacement_topic": {"type": ["string", "null"]},
-        "prefilter": {
-            "type": "object",
-            "properties": {
-                "type": TYPE_STRING,
-                "args": {"type": "array", "items": TYPE_STRING},
-            },
-        },
-        "dlq_policy": {
-            "type": "object",
-            "properties": {
-                "type": TYPE_STRING,
-                "args": {"type": "array", "items": TYPE_STRING},
-            },
-        },
+        "commit_log_topic": TYPE_NULLABLE_STRING,
+        "subscription_scheduled_topic": TYPE_NULLABLE_STRING,
+        "subscription_scheduler_mode": TYPE_NULLABLE_STRING,
+        "subscription_result_topic": TYPE_NULLABLE_STRING,
+        "replacement_topic": TYPE_NULLABLE_STRING,
+        "prefilter": FUNCTION_CALL_SCHEMA,
+        "dlq_policy": FUNCTION_CALL_SCHEMA,
     },
 }
 

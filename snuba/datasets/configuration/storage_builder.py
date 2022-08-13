@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Type
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
@@ -28,6 +28,8 @@ SCHEMA = "schema"
 STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
+SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
+DLQ_POLICY = "dlq_policy"
 
 
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage | WritableTableStorage:
@@ -37,7 +39,9 @@ def get_storage(storage_key: StorageKey) -> ReadableTableStorage | WritableTable
 
     config = load_storage_config(storage_key)
     schema_type = TableSchema
-    storage_type: Any = ReadableTableStorage
+    storage_type: Type[
+        ReadableTableStorage | WritableTableStorage
+    ] = ReadableTableStorage
 
     if config[KIND] == WRITABLE_STORAGE:
         schema_type = WritableTableSchema
@@ -53,37 +57,62 @@ def get_storage(storage_key: StorageKey) -> ReadableTableStorage | WritableTable
             dist_table_name=config[SCHEMA]["dist_table_name"],
             storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
         ),
-        QUERY_PROCESSORS: get_query_processors(config[QUERY_PROCESSORS]),
+        QUERY_PROCESSORS: get_query_processors(
+            config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
+        ),
     }
 
     if config[KIND] == WRITABLE_STORAGE:
-        # add additional kwargs related to WritableTableStorage
-        kwargs[STREAM_LOADER] = build_kafka_stream_loader_from_settings(
-            processor=CONF_TO_PROCESSOR[config[STREAM_LOADER]["processor"]](),
-            default_topic=Topic(config[STREAM_LOADER]["default_topic"]),
-            dead_letter_queue_policy_creator=generate_policy_creator(
-                config[STREAM_LOADER]["dlq_policy"]
-            ),
-            commit_log_topic=Topic(config[STREAM_LOADER]["commit_log_topic"]),
-            subscription_scheduled_topic=Topic(
-                config[STREAM_LOADER]["subscription_scheduled_topic"]
-            ),
-            subscription_scheduler_mode=SchedulingWatermarkMode(
-                config[STREAM_LOADER]["subscription_scheduler_mode"]
-            ),
-            subscription_result_topic=Topic(
-                config[STREAM_LOADER]["subscription_result_topic"]
-            ),
-            replacement_topic=Topic(config[STREAM_LOADER]["replacement_topic"])
-            if config[STREAM_LOADER]["replacement_topic"]
-            else None,
-            pre_filter=CONF_TO_PREFILTER[config[STREAM_LOADER][PRE_FILTER]["type"]](
-                *config[STREAM_LOADER][PRE_FILTER]["args"]
-            ),
+        sl_config = config[STREAM_LOADER]
+        processor = CONF_TO_PROCESSOR[sl_config["processor"]]()
+        default_topic = Topic(sl_config["default_topic"])
+
+        # optionals
+        pre_filter = (
+            CONF_TO_PREFILTER[sl_config[PRE_FILTER]["type"]](
+                *sl_config[PRE_FILTER]["args"]
+            )
+            if PRE_FILTER in sl_config and sl_config[PRE_FILTER] is not None
+            else None
+        )
+        replacement_topic = __get_topic(sl_config, "replacement_topic")
+        commit_log_topic = __get_topic(sl_config, "commit_log_topic")
+        subscription_scheduled_topic = __get_topic(
+            sl_config, "subscription_scheduled_topic"
+        )
+        subscription_scheduler_mode = (
+            SchedulingWatermarkMode(sl_config[SUBCRIPTION_SCHEDULER_MODE])
+            if SUBCRIPTION_SCHEDULER_MODE in sl_config
+            and sl_config[SUBCRIPTION_SCHEDULER_MODE] is not None
+            else None
+        )
+        subscription_result_topic = __get_topic(sl_config, "subscription_result_topic")
+        dead_letter_queue_policy_creator = (
+            generate_policy_creator(sl_config[DLQ_POLICY])
+            if DLQ_POLICY in sl_config and sl_config[DLQ_POLICY] is not None
+            else None
         )
 
-    storage = storage_type(**kwargs)
-    assert isinstance(storage, ReadableTableStorage) or isinstance(
-        storage, WritableTableStorage
-    )
+        # add additional kwargs related to WritableTableStorage
+        kwargs[STREAM_LOADER] = build_kafka_stream_loader_from_settings(
+            processor,
+            default_topic,
+            pre_filter,
+            replacement_topic,
+            commit_log_topic,
+            subscription_scheduler_mode,
+            subscription_scheduled_topic,
+            subscription_result_topic,
+            dead_letter_queue_policy_creator,
+        )
+
+    storage = storage_type(**kwargs)  # type: ignore
     return storage
+
+
+def __get_topic(stream_loader_config: dict[str, Any], name: str | None) -> Topic | None:
+    return (
+        Topic(stream_loader_config[name])
+        if name in stream_loader_config and stream_loader_config[name] is not None
+        else None
+    )

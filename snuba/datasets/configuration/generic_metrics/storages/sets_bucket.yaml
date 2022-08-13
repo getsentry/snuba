@@ -45,16 +45,13 @@ schema:
 stream_loader:
   processor: generic_sets_metrics_processor
   default_topic: snuba-generic-metrics
-  commit_log_topic: snuba-generic-metrics-sets-commit-log
-  subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-sets
-  subscription_scheduler_mode: global
-  subscription_result_topic: generic-metrics-sets-subscription-results
-  replacement_topic: null
   pre_filter:
     type: kafka_header_select_filter
     args: [metric_type, s]
+  commit_log_topic: snuba-generic-metrics-sets-commit-log
+  subscription_scheduler_mode: global
+  subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-sets
+  subscription_result_topic: generic-metrics-sets-subscription-results
   dlq_policy:
     type: produce
     args: [snuba-dead-letter-generic-metrics]
-
-query_processors: []
