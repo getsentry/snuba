@@ -1,10 +1,17 @@
+from __future__ import annotations
+
 import pytest
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
+from snuba.datasets.configuration.storage_builder import get_storage
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import ReadableStorage, WritableStorage
+from snuba.datasets.storage import (
+    ReadableTableStorage,
+    WritableStorage,
+    WritableTableStorage,
+)
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage as distributions_bucket_storage_old,
 )
@@ -15,30 +22,32 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage as sets_bucket_storage_old,
 )
 from snuba.datasets.storages.generic_metrics import sets_storage as sets_storage_old
-from snuba.datasets.storages.generic_metrics_from_config import (
-    distributions_bucket_storage,
-    distributions_storage,
-    sets_bucket_storage,
-    sets_storage,
-)
 
 
 def test_distributions_storage() -> None:
-    _deep_compare_storages(distributions_storage_old, distributions_storage)
+    _deep_compare_storages(
+        distributions_storage_old,
+        get_storage(distributions_storage_old.get_storage_key()),
+    )
 
 
 def test_distributions_bucket_storage() -> None:
     _deep_compare_storages(
-        distributions_bucket_storage_old, distributions_bucket_storage
+        distributions_bucket_storage_old,
+        get_storage(distributions_bucket_storage_old.get_storage_key()),
     )
 
 
 def test_sets_bucket_storage() -> None:
-    _deep_compare_storages(sets_bucket_storage_old, sets_bucket_storage)
+    _deep_compare_storages(
+        sets_bucket_storage_old, get_storage(sets_bucket_storage_old.get_storage_key())
+    )
 
 
 def test_sets_storage() -> None:
-    _deep_compare_storages(sets_storage_old, sets_storage)
+    _deep_compare_storages(
+        sets_storage_old, get_storage(sets_storage_old.get_storage_key())
+    )
 
 
 def test_invalid_storage() -> None:
@@ -63,7 +72,10 @@ def test_invalid_query_processor() -> None:
     assert e.value.message == "5 is not of type 'string'"
 
 
-def _deep_compare_storages(old: ReadableStorage, new: ReadableStorage) -> None:
+def _deep_compare_storages(
+    old: ReadableTableStorage | WritableTableStorage,
+    new: ReadableTableStorage | WritableTableStorage,
+) -> None:
     """
     temp function to compare storages
     """
