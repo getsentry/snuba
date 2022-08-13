@@ -1,6 +1,6 @@
 version: v1
 kind: writable_storage
-name: generic-metric-distributions
+name: generic-metrics-distributions-bucket
 
 storage:
   key: generic_metrics_distributions_raw

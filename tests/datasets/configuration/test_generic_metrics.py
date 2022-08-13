@@ -10,9 +10,13 @@ from snuba.datasets.storages.generic_metrics import (
 from snuba.datasets.storages.generic_metrics import (
     distributions_storage as distributions_storage_old,
 )
+from snuba.datasets.storages.generic_metrics import (
+    sets_bucket_storage as sets_bucket_storage_old,
+)
 from snuba.datasets.storages.generic_metrics_from_config import (
     distributions_bucket_storage,
     distributions_storage,
+    sets_bucket_storage,
 )
 
 
@@ -24,6 +28,10 @@ def test_distributions_bucket_storage() -> None:
     _deep_compare_storages(
         distributions_bucket_storage_old, distributions_bucket_storage
     )
+
+
+def test_sets_bucket_storage() -> None:
+    _deep_compare_storages(sets_bucket_storage_old, sets_bucket_storage)
 
 
 def test_invalid_storage() -> None:

@@ -28,6 +28,7 @@ from snuba.datasets.configuration.json_schema import (
 )
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
+    GenericSetsMetricsProcessor,
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.storages import StorageKey
@@ -61,7 +62,8 @@ CONF_TO_PREFILTER: dict[str, Any] = {
     "kafka_header_select_filter": KafkaHeaderSelectFilter
 }
 CONF_TO_PROCESSOR: dict[str, Any] = {
-    "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor
+    "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor,
+    "generic_sets_metrics_processor": GenericSetsMetricsProcessor,
 }
 
 QUERY_PROCESSORS: dict[str, Any] = {
@@ -146,6 +148,7 @@ CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
 CONFIG_FILES = {
     StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{CONFIG_FILES_PATH}/distributions.yaml",
     StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{CONFIG_FILES_PATH}/distributions_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS_RAW: f"{CONFIG_FILES_PATH}/sets_bucket.yaml",
 }
 STORAGE_VALIDATION_SCHEMAS = {
     "readonly_storage": READABLE_STORAGE_SCHEMA,
