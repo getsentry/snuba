@@ -35,22 +35,26 @@ SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
 
-def build_storage_from_config(
-    storage_key: StorageKey,
-) -> ReadableTableStorage | WritableTableStorage:
-    """
-    Builds a storage object completely from config.
-    """
-
+def build_readonly_storage(storage_key: StorageKey) -> ReadableTableStorage:
     config = load_storage_config(storage_key)
-    schema_type = (
-        WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
-    )
+    storage_kwargs = __build_readonly_storage_kwargs(config)
+    return ReadableTableStorage(**storage_kwargs)
 
-    kwargs: dict[str, Any] = {
-        STORAGE_KEY: storage_key,
+
+def build_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
+    config = load_storage_config(storage_key)
+    storage_kwargs = __build_readonly_storage_kwargs(config)
+    storage_kwargs[STREAM_LOADER] = __build_stream_loader(config[STREAM_LOADER])
+    return WritableTableStorage(**storage_kwargs)
+
+
+def __build_readonly_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        STORAGE_KEY: StorageKey(config[STORAGE]["key"]),
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
-        SCHEMA: schema_type(
+        SCHEMA: (
+            WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
+        )(
             columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
             local_table_name=config[SCHEMA]["local_table_name"],
             dist_table_name=config[SCHEMA]["dist_table_name"],
@@ -60,12 +64,6 @@ def build_storage_from_config(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),
     }
-
-    if config[KIND] == "readonly_storage":
-        return ReadableTableStorage(**kwargs)
-
-    kwargs[STREAM_LOADER] = __build_stream_loader(config[STREAM_LOADER])
-    return WritableTableStorage(**kwargs)
 
 
 def __build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
