@@ -1,0 +1,47 @@
+version: v1
+kind: writable_storage
+name: generic-metric-distributions
+
+storage:
+  key: generic_metrics_distributions_raw
+  set_key: generic_metrics_distributions
+
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: use_case_id, type: String },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: indexed_value, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
+              ],
+          },
+      },
+
+      { name: granularities, type: Array, args: { type: UInt, arg: 8 } },
+      { name: count_value, type: Float, args: { size: 64 } },
+      { name: set_values, type: Array, args: { type: UInt, arg: 64 } },
+      {
+        name: distribution_values,
+        type: Array,
+        args: { type: Float, arg: 64 },
+      },
+      { name: timeseries_id, type: UInt, args: { size: 32 } },
+    ]
+  local_table_name: generic_metric_distributions_raw_local
+  dist_table_name: generic_metric_distributions_raw_local
+
+# TODO: Stream loader
+
+query_processors: []
