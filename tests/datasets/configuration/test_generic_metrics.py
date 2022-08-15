@@ -5,7 +5,7 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
-from snuba.datasets.configuration.storage_builder import get_storage
+from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import (
     ReadableTableStorage,
@@ -28,26 +28,27 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 def test_distributions_storage() -> None:
     _deep_compare_storages(
         distributions_storage_old,
-        get_storage(distributions_storage_old.get_storage_key()),
+        build_storage_from_config(distributions_storage_old.get_storage_key()),
     )
 
 
 def test_distributions_bucket_storage() -> None:
     _deep_compare_storages(
         distributions_bucket_storage_old,
-        get_storage(distributions_bucket_storage_old.get_storage_key()),
+        build_storage_from_config(distributions_bucket_storage_old.get_storage_key()),
     )
 
 
 def test_sets_bucket_storage() -> None:
     _deep_compare_storages(
-        sets_bucket_storage_old, get_storage(sets_bucket_storage_old.get_storage_key())
+        sets_bucket_storage_old,
+        build_storage_from_config(sets_bucket_storage_old.get_storage_key()),
     )
 
 
 def test_sets_storage() -> None:
     _deep_compare_storages(
-        sets_storage_old, get_storage(sets_storage_old.get_storage_key())
+        sets_storage_old, build_storage_from_config(sets_storage_old.get_storage_key())
     )
 
 
