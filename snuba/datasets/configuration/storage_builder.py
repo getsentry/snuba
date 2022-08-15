@@ -40,6 +40,7 @@ QUERY_PROCESSORS = "query_processors"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
+# TODO: The config files should be discovered automatically
 CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
 CONFIG_FILES = {
     StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{CONFIG_FILES_PATH}/distributions.yaml",

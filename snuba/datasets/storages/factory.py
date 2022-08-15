@@ -22,7 +22,7 @@ from snuba.datasets.storages.generic_metrics import (
     distributions_storage as gen_metrics_dists_aggregate_storage_original,
 )
 from snuba.datasets.storages.generic_metrics import (
-    sets_bucket_storage as generic_metrics_sets_bucket_storage_original,
+    sets_bucket_storage as gen_metrics_sets_bucket_storage_original,
 )
 from snuba.datasets.storages.generic_metrics import (
     sets_storage as gen_metrics_sets_aggregate_storage_original,
@@ -63,7 +63,7 @@ from snuba.state import get_config
 
 gen_metrics_dists_bucket_storage = gen_metrics_dists_bucket_storage_original
 gen_metrics_dists_aggregate_storage = gen_metrics_dists_aggregate_storage_original
-generic_metrics_sets_bucket_storage = generic_metrics_sets_bucket_storage_original
+gen_metrics_sets_bucket_storage = gen_metrics_sets_bucket_storage_original
 gen_metrics_sets_aggregate_storage = gen_metrics_sets_aggregate_storage_original
 
 if get_config("use_generic_metrics_storages_from_configs", 0):
@@ -73,7 +73,7 @@ if get_config("use_generic_metrics_storages_from_configs", 0):
     gen_metrics_dists_aggregate_storage = build_readonly_storage(
         StorageKey.GENERIC_METRICS_DISTRIBUTIONS
     )
-    generic_metrics_sets_bucket_storage = build_writable_storage(
+    gen_metrics_sets_bucket_storage = build_writable_storage(
         StorageKey.GENERIC_METRICS_SETS_RAW
     )
     gen_metrics_sets_aggregate_storage = build_readonly_storage(
@@ -115,7 +115,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             errors_v2_storage,
             profiles_writable_storage,
             functions_storage,
-            generic_metrics_sets_bucket_storage,
+            gen_metrics_sets_bucket_storage,
             replays_storage,
             gen_metrics_dists_bucket_storage,
         ]
