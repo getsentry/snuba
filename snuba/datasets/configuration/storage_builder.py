@@ -2,14 +2,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from jsonschema import validate
+from yaml import safe_load
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.configuration.json_schema import (
+    V1_READABLE_STORAGE_SCHEMA,
+    V1_WRITABLE_STORAGE_SCHEMA,
+)
 from snuba.datasets.configuration.utils import (
     CONF_TO_PREFILTER,
     CONF_TO_PROCESSOR,
     generate_policy_creator,
     get_query_processors,
-    load_storage_config,
     parse_columns,
 )
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -34,18 +40,39 @@ QUERY_PROCESSORS = "query_processors"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
+CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
+CONFIG_FILES = {
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{CONFIG_FILES_PATH}/distributions.yaml",
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{CONFIG_FILES_PATH}/distributions_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS_RAW: f"{CONFIG_FILES_PATH}/sets_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS: f"{CONFIG_FILES_PATH}/sets.yaml",
+}
+
+STORAGE_VALIDATION_SCHEMAS = {
+    "readonly_storage": V1_READABLE_STORAGE_SCHEMA,
+    "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
+}
+
 
 def build_readonly_storage(storage_key: StorageKey) -> ReadableTableStorage:
-    config = load_storage_config(storage_key)
+    config = __load_storage_config(storage_key)
     storage_kwargs = __build_readonly_storage_kwargs(config)
     return ReadableTableStorage(**storage_kwargs)
 
 
 def build_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
-    config = load_storage_config(storage_key)
+    config = __load_storage_config(storage_key)
     storage_kwargs = __build_readonly_storage_kwargs(config)
     storage_kwargs[STREAM_LOADER] = __build_stream_loader(config[STREAM_LOADER])
     return WritableTableStorage(**storage_kwargs)
+
+
+def __load_storage_config(storage_key: StorageKey) -> dict[str, Any]:
+    file = open(CONFIG_FILES[storage_key])
+    config = safe_load(file)
+    assert isinstance(config, dict)
+    validate(config, STORAGE_VALIDATION_SCHEMAS[config["kind"]])
+    return config
 
 
 def __build_readonly_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:

@@ -2,7 +2,6 @@
 The storages defined in this file are for the generic metrics system,
 initially built to handle metrics-enhanced performance.
 """
-
 from typing import Sequence
 
 from arroyo import Topic as KafkaTopic
