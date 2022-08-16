@@ -16,6 +16,7 @@ from snuba_sdk import (
     OrderBy,
     Query,
     Relationship,
+    Request,
 )
 
 from snuba.datasets.entities import EntityKey
@@ -55,7 +56,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_simple_query(self) -> None:
         query = (
-            Query("discover", Entity("discover_events"))
+            Query(Entity("discover_events"))
             .set_select([Function("count", [], "count")])
             .set_groupby([Column("project_id"), Column("tags[custom_tag]")])
             .set_where(
@@ -68,11 +69,13 @@ class TestSDKSnQLApi(BaseApiTest):
             )
             .set_orderby([OrderBy(Function("count", [], "count"), Direction.ASC)])
             .set_limit(1000)
-            .set_consistent(True)
-            .set_debug(True)
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        request = Request(dataset="discover", query=query, app_id="default")
+        request.flags.consistent = True
+        request.flags.debug = True
+
+        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
         assert response.status_code == 200, data
@@ -87,7 +90,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_sessions_query(self) -> None:
         query = (
-            Query("sessions", Entity("sessions"))
+            Query(Entity("sessions"))
             .set_select([Column("project_id"), Column("release")])
             .set_groupby([Column("project_id"), Column("release")])
             .set_where(
@@ -108,7 +111,8 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(100)
         )
 
-        response = self.post("/sessions/snql", data=query.snuba())
+        request = Request(dataset="sessions", query=query, app_id="default")
+        response = self.post("/sessions/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -119,7 +123,7 @@ class TestSDKSnQLApi(BaseApiTest):
         gm = Entity("groupedmessage", "gm")
         join = Join([Relationship(ev, "grouped", gm)])
         query = (
-            Query("discover", join)
+            Query(join)
             .set_select(
                 [
                     Column("group_id", ev),
@@ -138,7 +142,8 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        request = Request(dataset="discover", query=query, app_id="default")
+        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -146,7 +151,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_sub_query(self) -> None:
         inner_query = (
-            Query("discover", Entity("discover_events"))
+            Query(Entity("discover_events"))
             .set_select([Function("count", [], "count")])
             .set_groupby([Column("project_id"), Column("tags[custom_tag]")])
             .set_where(
@@ -160,7 +165,7 @@ class TestSDKSnQLApi(BaseApiTest):
         )
 
         query = (
-            Query("discover", inner_query)
+            Query(inner_query)
             .set_select([Function("avg", [Column("count")], "avg_count")])
             .set_orderby(
                 [
@@ -172,14 +177,15 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        request = Request(dataset="discover", query=query, app_id="default")
+        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
 
     def test_arrayjoin(self) -> None:
         query = (
-            Query("events", Entity("events"))
+            Query(Entity("events"))
             .set_select(
                 [
                     Function("count", [], "times_seen"),
@@ -208,14 +214,15 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        request = Request(dataset="events", query=query, app_id="default")
+        response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert len(data["data"]) == 6
 
     def test_tags_in_groupby(self) -> None:
         query = (
-            Query("events", Entity("events"))
+            Query(Entity("events"))
             .set_select(
                 [
                     Function("count", [], "times_seen"),
@@ -244,7 +251,8 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        request = Request(dataset="events", query=query, app_id="default")
+        response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
         assert response.status_code == 200, data
 
@@ -253,7 +261,7 @@ class TestSDKSnQLApi(BaseApiTest):
         gm = Entity("groupedmessage", "gm")
         join = Join([Relationship(ev, "grouped", gm)])
         query = (
-            Query("discover", join)
+            Query(join)
             .set_select(
                 [
                     Column("group_id", ev),
@@ -273,10 +281,11 @@ class TestSDKSnQLApi(BaseApiTest):
                     ),
                 ]
             )
-            .set_debug(True)
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        request = Request(dataset="discover", query=query, app_id="default")
+        request.flags.debug = True
+        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -284,7 +293,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_escape_edge_cases(self) -> None:
         query = (
-            Query("events", Entity("events"))
+            Query(Entity("events"))
             .set_select([Function("count", [], "times_seen")])
             .set_where(
                 [
@@ -296,13 +305,15 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        request = Request(dataset="events", query=query, app_id="default")
+        response = self.post("/events/snql", data=json.dumps(request.to_dict()))
+
         data = json.loads(response.data)
         assert response.status_code == 200, data
 
     def test_suspect_spans_lambdas(self) -> None:
         query = (
-            Query("discover", Entity("discover_transactions"))
+            Query(Entity("discover_transactions"))
             .set_select(
                 [
                     Column("spans.op"),
@@ -380,7 +391,9 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(10)
         )
 
-        response = self.post("/discover/snql", data=query.snuba())
+        request = Request(dataset="discover", query=query, app_id="default")
+        response = self.post("/discover/snql", data=json.dumps(request.to_dict()))
+
         resp = json.loads(response.data)
         assert response.status_code == 200, resp
         data = resp["data"]
@@ -389,7 +402,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_attribution_tags(self) -> None:
         query = (
-            Query("events", Entity("events"))
+            Query(Entity("events"))
             .set_select([Function("count", [], "count")])
             .set_where(
                 [
@@ -398,11 +411,11 @@ class TestSDKSnQLApi(BaseApiTest):
                     Condition(Column("timestamp"), Op.LT, self.next_time),
                 ]
             )
-            .set_team("sns")
-            .set_feature("test")
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        request = Request(dataset="events", query=query, app_id="default")
+
+        response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
         assert response.status_code == 200, resp
         metric_calls = get_recorded_metric_calls("increment", "snuba.attribution.log")
@@ -413,7 +426,7 @@ class TestSDKSnQLApi(BaseApiTest):
 
     def test_invalid_time_conditions(self) -> None:
         query = (
-            Query("events", Entity("events"))
+            Query(Entity("events"))
             .set_select([Function("count", [], "count")])
             .set_where(
                 [
@@ -424,13 +437,14 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        response = self.post("/events/snql", data=query.snuba())
+        request = Request(dataset="events", query=query, app_id="default")
+        response = self.post("/events/snql", data=json.dumps(request.to_dict()))
         resp = json.loads(response.data)
         assert response.status_code == 400, resp
 
     def test_tags_raw_access(self) -> None:
         query = (
-            Query("generic_metrics", Entity("generic_metrics_distributions"))
+            Query(Entity("generic_metrics_distributions"))
             .set_select([Function("count", [], "count")])
             .set_where(
                 conditions=[
@@ -442,7 +456,9 @@ class TestSDKSnQLApi(BaseApiTest):
                 ]
             )
         )
-
-        response = self.post("/generic_metrics/snql", data=query.snuba())
+        request = Request(dataset="generic_metrics", query=query, app_id="default")
+        response = self.post(
+            "/generic_metrics/snql", data=json.dumps(request.to_dict())
+        )
         resp = json.loads(response.data)
         assert response.status_code == 200, resp
