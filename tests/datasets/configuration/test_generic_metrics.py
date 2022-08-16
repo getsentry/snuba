@@ -5,16 +5,9 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
-from snuba.datasets.configuration.storage_builder import (
-    build_readonly_storage,
-    build_writable_storage,
-)
+from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import (
-    ReadableTableStorage,
-    WritableStorage,
-    WritableTableStorage,
-)
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage,
     distributions_storage,
@@ -27,27 +20,25 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 def test_distributions_storage() -> None:
     _deep_compare_storages(
         distributions_storage,
-        build_readonly_storage(distributions_storage.get_storage_key()),
+        build_storage(distributions_storage.get_storage_key()),
     )
 
 
 def test_distributions_bucket_storage() -> None:
     _deep_compare_storages(
         distributions_bucket_storage,
-        build_writable_storage(distributions_bucket_storage.get_storage_key()),
+        build_storage(distributions_bucket_storage.get_storage_key()),
     )
 
 
 def test_sets_storage() -> None:
-    _deep_compare_storages(
-        sets_storage, build_readonly_storage(sets_storage.get_storage_key())
-    )
+    _deep_compare_storages(sets_storage, build_storage(sets_storage.get_storage_key()))
 
 
 def test_sets_bucket_storage() -> None:
     _deep_compare_storages(
         sets_bucket_storage,
-        build_writable_storage(sets_bucket_storage.get_storage_key()),
+        build_storage(sets_bucket_storage.get_storage_key()),
     )
 
 
@@ -99,7 +90,7 @@ def _deep_compare_storages(
     if isinstance(schema_old, TableSchema) and isinstance(schema_new, TableSchema):
         assert schema_old.get_table_name() == schema_new.get_table_name()
 
-    if isinstance(old, WritableStorage) and isinstance(new, WritableStorage):
+    if isinstance(old, WritableTableStorage) and isinstance(new, WritableTableStorage):
         assert (
             old.get_table_writer().get_schema().get_columns()
             == new.get_table_writer().get_schema().get_columns()
