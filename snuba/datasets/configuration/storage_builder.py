@@ -57,8 +57,7 @@ def build_storage(
 
 
 def __load_storage_config(config_file_path: str) -> dict[str, Any]:
-    file = open(config_file_path)
-    return load_configuration_data(file_path, STORAGE_VALIDATION_SCHEMAS)
+    return load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
 
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
