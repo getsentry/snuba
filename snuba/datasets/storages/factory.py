@@ -2,10 +2,7 @@ from typing import Mapping
 
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.configuration.storage_builder import (
-    build_readable_storage,
-    build_writable_storage,
-)
+from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.discover import storage as discover_storage
@@ -67,18 +64,16 @@ gen_metrics_sets_bucket_storage = gen_metrics_sets_bucket_storage_original
 gen_metrics_sets_aggregate_storage = gen_metrics_sets_aggregate_storage_original
 
 if get_config("use_generic_metrics_storages_from_configs", 0):
-    gen_metrics_dists_bucket_storage = build_writable_storage(
-        StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW
-    )
-    gen_metrics_dists_aggregate_storage = build_readable_storage(
+    dists_storage_new = build_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
+    assert isinstance(dists_storage_new, WritableTableStorage)
+    gen_metrics_dists_bucket_storage = dists_storage_new
+    gen_metrics_dists_aggregate_storage = build_storage(
         StorageKey.GENERIC_METRICS_DISTRIBUTIONS
     )
-    gen_metrics_sets_bucket_storage = build_writable_storage(
-        StorageKey.GENERIC_METRICS_SETS_RAW
-    )
-    gen_metrics_sets_aggregate_storage = build_readable_storage(
-        StorageKey.GENERIC_METRICS_SETS
-    )
+    sets_storage_new = build_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
+    assert isinstance(sets_storage_new, WritableTableStorage)
+    gen_metrics_sets_bucket_storage = sets_storage_new
+    gen_metrics_sets_aggregate_storage = build_storage(StorageKey.GENERIC_METRICS_SETS)
 
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}

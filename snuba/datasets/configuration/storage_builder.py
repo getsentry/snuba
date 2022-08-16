@@ -55,15 +55,13 @@ STORAGE_VALIDATION_SCHEMAS = {
 }
 
 
-def build_readable_storage(storage_key: StorageKey) -> ReadableTableStorage:
+def build_storage(
+    storage_key: StorageKey,
+) -> ReadableTableStorage | WritableTableStorage:
     config = __load_storage_config(storage_key)
     storage_kwargs = __build_readable_storage_kwargs(config)
-    return ReadableTableStorage(**storage_kwargs)
-
-
-def build_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
-    config = __load_storage_config(storage_key)
-    storage_kwargs = __build_readable_storage_kwargs(config)
+    if config[KIND] == "readable_storage":
+        return ReadableTableStorage(**storage_kwargs)
     storage_kwargs[STREAM_LOADER] = __build_stream_loader(config[STREAM_LOADER])
     return WritableTableStorage(**storage_kwargs)
 
