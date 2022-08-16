@@ -94,7 +94,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
     def convert(data: str, entity: str) -> str:
         legacy = json.loads(data)
         sdk_output = json_to_snql(legacy, entity)
-        return sdk_output.snuba()
+        return json.dumps(sdk_output.to_dict())
 
     return convert
 
