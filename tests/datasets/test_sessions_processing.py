@@ -1,4 +1,3 @@
-import json
 from typing import Any, MutableMapping
 
 import pytest
@@ -196,16 +195,16 @@ def test_select_storage(
     query_body: MutableMapping[str, Any], is_subscription: bool, expected_table: str
 ) -> None:
     sessions = get_dataset("sessions")
-    snql_query = json_to_snql(query_body, "sessions")
-    query, snql_anonymized = parse_snql_query(str(snql_query), sessions)
-    query_body = json.loads(snql_query.snuba())
+    request = json_to_snql(query_body, "sessions")
+    request.validate()
+    query, snql_anonymized = parse_snql_query(str(request.query), sessions)
     subscription_settings = (
         SubscriptionQuerySettings if is_subscription else HTTPQuerySettings
     )
 
     request = Request(
         id="a",
-        original_body=query_body,
+        original_body=request.to_dict(),
         query=query,
         snql_anonymized=snql_anonymized,
         query_settings=subscription_settings(referrer=""),

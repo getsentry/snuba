@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.8.0
+
+### Various fixes & improvements
+
+- feat: Sort raw sql fields and conditions [Experiment] (#2988) by @enochtangg
+- Revert "ref(MDC): cleanup dataset factory, formalize factory pattern (#3051)" (#3052) by @volokluev
+- ref(MDC): cleanup dataset factory, formalize factory pattern (#3051) by @volokluev
+- feat(MDC): Add Storage yaml parsing and schema (#3046) by @rahul-kumar-saini
+- config(datasets) - create a PluggableEntity class (#3050) by @onewland
+- Generate abstract_column_set from replays schema (#3041) by @cmanallen
+- ref: remove future (unused python2 porting library) (#3040) by @asottile-sentry
+- cleanup: remove unused query processor PatternReplacer (#3038) by @onewland
+- feat(replays): Add urls, user_agent, and replay_start_timestamp fields and processor (#3023) by @cmanallen
+- feat(replays): Add urls, user_agent, and replay_start_timestamp migration (#3021) by @cmanallen
+- feat(datasets): Add configs directory structure (#3034) by @rahul-kumar-saini
+- fix(replacements): Limit size of excluded groups set [INC-190] (#3027) by @untitaker
+- fix(inc): Introduce denylist that stops attempting consistent queries per project [INC-190] (#3026) by @untitaker
+- Allow us to disable the global rate limiter (#3025) by @fpacifici
+- build: Bump confluent sentry-python to 1.9.0 (#3022) by @andriisoldatenko
+- config(ds): get rid of existing logic to move to dynamic sampling (#3018) by @onewland
+- fix(discover): add missing transaction_source to TRANSACTIONS_COLUMNS (#3020) by @andriisoldatenko
+- config(mep): add table rate limit and tuple unaliaser to sets/distributions (#3019) by @onewland
+- Remove replays from the skipped migrations group (#3017) by @cmanallen
+- feat(rollout): Make transaction query processors same (#3006) by @nikhars
+- feat(replays): Enable URL processing in the consumer (#3004) by @cmanallen
+- feat(replays): add error_ids column (#3001) by @JoshFerge
+- fix(admin): Fix deletion of configs with `/` in them (#3016) by @nikhars
+- config(mep): add schedulers/executors to snuba-stable freight (#3015) by @onewland
+
+_Plus 56 more_
+
 ## 22.7.0
 
 ### Various fixes & improvements
