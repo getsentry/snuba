@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from jsonschema import validate
-from yaml import safe_load
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.json_schema import (
     V1_READABLE_STORAGE_SCHEMA,
     V1_WRITABLE_STORAGE_SCHEMA,
 )
+from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
     CONF_TO_PREFILTER,
     CONF_TO_PROCESSOR,
@@ -67,11 +65,8 @@ def build_storage(
 
 
 def __load_storage_config(storage_key: StorageKey) -> dict[str, Any]:
-    file = open(CONFIG_FILES[storage_key])
-    config = safe_load(file)
-    assert isinstance(config, dict)
-    validate(config, STORAGE_VALIDATION_SCHEMAS[config["kind"]])
-    return config
+    file_path = CONFIG_FILES[storage_key]
+    return load_configuration_data(file_path, STORAGE_VALIDATION_SCHEMAS)
 
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
@@ -93,7 +88,6 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def __build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
-
     processor = CONF_TO_PROCESSOR[loader_config["processor"]]()
     default_topic = Topic(loader_config["default_topic"])
 

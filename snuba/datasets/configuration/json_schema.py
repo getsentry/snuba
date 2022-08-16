@@ -130,7 +130,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
-        "kind": KIND_SCHEMA,
+        "kind": {"const": "writable_storage"},
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
@@ -144,10 +144,22 @@ V1_READABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
-        "kind": KIND_SCHEMA,
+        "kind": {"const": "readonly_storage"},
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": QUERY_PROCESSORS_SCHEMA,
+    },
+}
+
+V1_ENTITY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"const": "v1"},
+        "kind": {"const": "entity"},
+        "schema": SCHEMA_SCHEMA,
+        "name": TYPE_STRING,
+        "readable_storage": TYPE_STRING,
+        "writable_storage": TYPE_NULLABLE_STRING,
     },
 }
