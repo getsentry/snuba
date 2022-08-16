@@ -12,6 +12,7 @@ from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
@@ -380,3 +381,33 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         )
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
+
+
+class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
+    def setup_method(self, test_method: Any) -> None:
+        set_config("use_generic_metrics_storages_from_configs", 1)
+        super().setup_method(test_method)
+
+    def test_arbitrary_granularity(self) -> None:
+        super().test_arbitrary_granularity()
+
+    def test_retrieval_percentiles(self) -> None:
+        super().test_retrieval_percentiles()
+
+    def test_retrieval_basic(self) -> None:
+        pass
+
+
+class TestGenericMetricsApiSetsFromConfig(TestGenericMetricsApiSets):
+    def setup_method(self, test_method: Any) -> None:
+        set_config("use_generic_metrics_storages_from_configs", 1)
+        super().setup_method(test_method)
+
+    def test_indexed_tags(self) -> None:
+        super().test_indexed_tags()
+
+    def test_raw_tags(self) -> None:
+        super().test_raw_tags()
+
+    def test_retrieval_basic(self) -> None:
+        pass

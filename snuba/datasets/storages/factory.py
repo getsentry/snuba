@@ -13,16 +13,16 @@ from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
 from snuba.datasets.storages.functions import agg_storage as functions_ro_storage
 from snuba.datasets.storages.functions import raw_storage as functions_storage
 from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage as gen_metrics_dists_bucket_storage_original,
+    distributions_bucket_storage as gen_metrics_dists_bucket_storage,
 )
 from snuba.datasets.storages.generic_metrics import (
-    distributions_storage as gen_metrics_dists_aggregate_storage_original,
+    distributions_storage as gen_metrics_dists_aggregate_storage,
 )
 from snuba.datasets.storages.generic_metrics import (
-    sets_bucket_storage as gen_metrics_sets_bucket_storage_original,
+    sets_bucket_storage as gen_metrics_sets_bucket_storage,
 )
 from snuba.datasets.storages.generic_metrics import (
-    sets_storage as gen_metrics_sets_aggregate_storage_original,
+    sets_storage as gen_metrics_sets_aggregate_storage,
 )
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
@@ -58,22 +58,17 @@ from snuba.datasets.storages.transactions_ro import storage as transactions_ro_s
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
 from snuba.state import get_config
 
-gen_metrics_dists_bucket_storage = gen_metrics_dists_bucket_storage_original
-gen_metrics_dists_aggregate_storage = gen_metrics_dists_aggregate_storage_original
-gen_metrics_sets_bucket_storage = gen_metrics_sets_bucket_storage_original
-gen_metrics_sets_aggregate_storage = gen_metrics_sets_aggregate_storage_original
+CONFIG_FILES = {
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{settings.STORAGE_CONFIG_FILES_PATH}/distributions.yaml",
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{settings.STORAGE_CONFIG_FILES_PATH}/distributions_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS_RAW: f"{settings.STORAGE_CONFIG_FILES_PATH}/sets_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS: f"{settings.STORAGE_CONFIG_FILES_PATH}/sets.yaml",
+}
 
-if get_config("use_generic_metrics_storages_from_configs", 0):
-    dists_storage_new = build_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
-    assert isinstance(dists_storage_new, WritableTableStorage)
-    gen_metrics_dists_bucket_storage = dists_storage_new
-    gen_metrics_dists_aggregate_storage = build_storage(
-        StorageKey.GENERIC_METRICS_DISTRIBUTIONS
-    )
-    sets_storage_new = build_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
-    assert isinstance(sets_storage_new, WritableTableStorage)
-    gen_metrics_sets_bucket_storage = sets_storage_new
-    gen_metrics_sets_aggregate_storage = build_storage(StorageKey.GENERIC_METRICS_SETS)
+CONFIG_BUILT_STORAGES = {
+    storage_key: build_storage(CONFIG_FILES[storage_key])
+    for storage_key in CONFIG_FILES
+}
 
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
@@ -155,10 +150,25 @@ STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
 
 
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
+    if (
+        get_config("use_generic_metrics_storages_from_configs", 0)
+        and storage_key in CONFIG_BUILT_STORAGES
+    ):
+        return CONFIG_BUILT_STORAGES[storage_key]
+
     return STORAGES[storage_key]
 
 
 def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
+    if (
+        get_config("use_generic_metrics_storages_from_configs", 0)
+        and storage_key in CONFIG_BUILT_STORAGES
+    ):
+        assert isinstance(
+            storage := CONFIG_BUILT_STORAGES[storage_key], WritableTableStorage
+        )
+        return storage
+
     return WRITABLE_STORAGES[storage_key]
 
 

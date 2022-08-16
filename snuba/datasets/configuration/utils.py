@@ -48,9 +48,12 @@ def generate_policy_creator(
             )
 
         return produce_policy_creator
+    # TODO: Add rest of DLQ policy types
     return None
 
 
+# TODO: Add rest of prefilters and processors
+# TODO: Replace these dictionaries with something better - Factories maybe
 CONF_TO_PREFILTER: dict[str, Any] = {
     "kafka_header_select_filter": KafkaHeaderSelectFilter
 }
@@ -58,7 +61,6 @@ CONF_TO_PROCESSOR: dict[str, Any] = {
     "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor,
     "generic_sets_metrics_processor": GenericSetsMetricsProcessor,
 }
-
 QUERY_PROCESSORS: dict[str, Any] = {
     "TableRateLimit": TableRateLimit,
     "TupleUnaliaser": TupleUnaliaser,
@@ -86,6 +88,8 @@ def __parse_simple(
 
 
 def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]]:
+    # TODO: Add more of Column/Value types as needed
+
     cols: list[Column[SchemaModifiers]] = []
 
     SIMPLE_COLUMN_TYPES = {
