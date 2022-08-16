@@ -81,6 +81,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),
+        # TODO: Rest of readable storage optional args
     }
 
 
