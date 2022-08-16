@@ -386,6 +386,7 @@ def parse_request_body(http_request: Request) -> MutableMapping[str, Any]:
     with sentry_sdk.start_span(description="parse_request_body", op="parse"):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
+            print("GHerererererererer ", http_request.data)
             body = json.loads(http_request.data)
             assert isinstance(body, MutableMapping)
             return body
@@ -507,7 +508,6 @@ def dataset_query(
 
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
-
     return Response(
         json.dumps(payload, default=str), 200, {"Content-Type": "application/json"}
     )

@@ -360,6 +360,7 @@ class TestTransactionsApi(BaseApiTest):
                 }
             ),
         )
+        print(response)
 
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
