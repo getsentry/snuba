@@ -13,27 +13,7 @@ from snuba.datasets.factory import (
 )
 
 
-def test_get_dataset() -> None:
-    for ds_name in [
-        "discover",
-        "events",
-        "groupassignee",
-        "groupedmessage",
-        "metrics",
-        "outcomes",
-        "outcomes_raw",
-        "sessions",
-        "transactions",
-        "profiles",
-        "functions",
-        "generic_metrics",
-        "replays",
-    ]:
-        factory_ds = get_dataset(ds_name)
-        assert isinstance(factory_ds, Dataset)
-        assert get_dataset_name(factory_ds) == ds_name
-
-
+# This test should be the first to ensure dataset factory module is has fresh set of objects
 def test_get_dataset_multithreaded_collision() -> None:
     class GetDatasetThread(threading.Thread):
         def test_get_dataset_threaded(self) -> None:
@@ -65,6 +45,27 @@ def test_get_dataset_multithreaded_collision() -> None:
             thread.join()
         except Exception as error:
             raise error
+
+
+def test_get_dataset() -> None:
+    for ds_name in [
+        "discover",
+        "events",
+        "groupassignee",
+        "groupedmessage",
+        "metrics",
+        "outcomes",
+        "outcomes_raw",
+        "sessions",
+        "transactions",
+        "profiles",
+        "functions",
+        "generic_metrics",
+        "replays",
+    ]:
+        factory_ds = get_dataset(ds_name)
+        assert isinstance(factory_ds, Dataset)
+        assert get_dataset_name(factory_ds) == ds_name
 
 
 @pytest.fixture(scope="function")
