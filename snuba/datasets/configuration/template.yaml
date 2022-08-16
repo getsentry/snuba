@@ -1,5 +1,5 @@
 version: v1
-kind: writable_storage | readonly_storage
+kind: writable_storage | readable_storage
 name: string
 
 storage:

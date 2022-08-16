@@ -121,7 +121,7 @@ STORAGE_SCHEMA = {
 
 QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
 
-KIND_SCHEMA = {"enum": ["writable_storage", "readonly_storage"]}
+KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage"]}
 
 
 # Full schemas:

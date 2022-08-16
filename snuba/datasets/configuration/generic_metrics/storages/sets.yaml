@@ -1,5 +1,5 @@
 version: v1
-kind: readonly_storage
+kind: readable_storage
 name: generic-metrics-sets
 
 storage:

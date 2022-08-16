@@ -50,20 +50,20 @@ CONFIG_FILES = {
 }
 
 STORAGE_VALIDATION_SCHEMAS = {
-    "readonly_storage": V1_READABLE_STORAGE_SCHEMA,
+    "readable_storage": V1_READABLE_STORAGE_SCHEMA,
     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
 }
 
 
-def build_readonly_storage(storage_key: StorageKey) -> ReadableTableStorage:
+def build_readable_storage(storage_key: StorageKey) -> ReadableTableStorage:
     config = __load_storage_config(storage_key)
-    storage_kwargs = __build_readonly_storage_kwargs(config)
+    storage_kwargs = __build_readable_storage_kwargs(config)
     return ReadableTableStorage(**storage_kwargs)
 
 
 def build_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
     config = __load_storage_config(storage_key)
-    storage_kwargs = __build_readonly_storage_kwargs(config)
+    storage_kwargs = __build_readable_storage_kwargs(config)
     storage_kwargs[STREAM_LOADER] = __build_stream_loader(config[STREAM_LOADER])
     return WritableTableStorage(**storage_kwargs)
 
@@ -76,7 +76,7 @@ def __load_storage_config(storage_key: StorageKey) -> dict[str, Any]:
     return config
 
 
-def __build_readonly_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         STORAGE_KEY: StorageKey(config[STORAGE]["key"]),
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
