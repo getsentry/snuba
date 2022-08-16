@@ -1,10 +1,10 @@
 version: v1
 kind: writable_storage
-name: generic-metrics-distributions-bucket
+name: generic-metrics-sets-bucket
 
 storage:
-  key: generic_metrics_distributions_raw
-  set_key: generic_metrics_distributions
+  key: generic_metrics_sets_raw
+  set_key: generic_metrics_sets
 
 schema:
   columns:
@@ -39,19 +39,19 @@ schema:
       },
       { name: timeseries_id, type: UInt, args: { size: 32 } },
     ]
-  local_table_name: generic_metric_distributions_raw_local
-  dist_table_name: generic_metric_distributions_raw_local
+  local_table_name: generic_metric_sets_raw_local
+  dist_table_name: generic_metric_sets_raw_dist
 
 stream_loader:
-  processor: generic_distributions_metrics_processor
+  processor: generic_sets_metrics_processor
   default_topic: snuba-generic-metrics
   pre_filter:
     type: kafka_header_select_filter
-    args: [metric_type, d]
-  commit_log_topic: snuba-generic-metrics-distributions-commit-log
+    args: [metric_type, s]
+  commit_log_topic: snuba-generic-metrics-sets-commit-log
   subscription_scheduler_mode: global
-  subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-distributions
-  subscription_result_topic: generic-metrics-distributions-subscription-results
+  subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-sets
+  subscription_result_topic: generic-metrics-sets-subscription-results
   dlq_policy:
     type: produce
     args: [snuba-dead-letter-generic-metrics]

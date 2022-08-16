@@ -1,0 +1,41 @@
+version: v1
+kind: writable_storage | readonly_storage
+name: string
+
+storage:
+  key: string
+  set_key: string
+
+schema:
+  columns: [{ name: string, type: string, args: object }]
+  local_table_name: string
+  dist_table_name: string
+  mandatory_conditions: [string] # | null
+  part_format: [string] # | null
+
+query_processors: [string] # | null
+query_splitters: [string] # | null
+mandatory_condition_checkers: [string] # | null
+
+#----
+# writable_storage only
+replacer_processor: string | null
+writer_options: object | null
+write_format: json | values
+ignore_write_errors: bool | null
+
+stream_loader:
+  processor: generic_sets_metrics_processor
+  default_topic: snuba-generic-metrics
+  pre_filter: # | null
+    type: kafka_header_select_filter
+    args: [string]
+  replacement_topic: string | null
+  commit_log_topic: string | null
+  subscription_scheduler_mode: global | partition | null
+  subscription_scheduled_topic: string | null
+  subscription_result_topic: string | null
+  dlq_policy: # | null
+    type: produce
+    args: [string]
+#-----

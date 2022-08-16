@@ -9,10 +9,9 @@ from pytest import approx
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
-from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage,
-    sets_bucket_storage,
-)
+from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
@@ -87,7 +86,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
     def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
-        self.write_storage = sets_bucket_storage
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
         self.count = 10
         self.org_id = 1
         self.project_id = 2
@@ -111,6 +110,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         mapping_meta: Mapping[str, Mapping[str, str]],
         int_source: Iterable[int],
     ) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
         rows = [
             self.write_storage.get_table_writer()
             .get_stream_loader()
@@ -246,7 +246,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
     def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
-        self.write_storage = distributions_bucket_storage
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
         self.count = 10
         self.org_id = 1
         self.project_id = 2
@@ -274,6 +274,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         self.generate_dists()
 
     def generate_dists(self) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
         rows = [
             self.write_storage.get_table_writer()
             .get_stream_loader()

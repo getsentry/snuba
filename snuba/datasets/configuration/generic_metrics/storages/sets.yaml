@@ -1,0 +1,53 @@
+version: v1
+kind: readonly_storage
+name: generic-metrics-sets
+
+storage:
+  key: generic_metrics_sets
+  set_key: generic_metrics_sets
+
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: use_case_id, type: String },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: indexed_value, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
+              ],
+          },
+      },
+
+      {
+        name: _raw_tags_hash,
+        type: Array,
+        args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
+      },
+      {
+        name: _indexed_tags_hash,
+        type: Array,
+        args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
+      },
+      { name: granularity, type: UInt, args: { size: 8 } },
+
+      {
+        name: value,
+        type: AggregateFunction,
+        args: { func: "uniqCombined64", arg_types: [{ type: UInt, arg: 64 }] },
+      },
+    ]
+  local_table_name: generic_metric_sets_local
+  dist_table_name: generic_metric_sets_aggregated_dist
+
+query_processors: ["TableRateLimit", "TupleUnaliaser"]

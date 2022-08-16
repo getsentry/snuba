@@ -2,6 +2,10 @@ from typing import Mapping
 
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.configuration.storage_builder import (
+    build_readonly_storage,
+    build_writable_storage,
+)
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.discover import storage as discover_storage
@@ -12,16 +16,16 @@ from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
 from snuba.datasets.storages.functions import agg_storage as functions_ro_storage
 from snuba.datasets.storages.functions import raw_storage as functions_storage
 from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage as gen_metrics_dists_bucket_storage,
+    distributions_bucket_storage as gen_metrics_dists_bucket_storage_original,
 )
 from snuba.datasets.storages.generic_metrics import (
-    distributions_storage as gen_metrics_dists_aggregate_storage,
+    distributions_storage as gen_metrics_dists_aggregate_storage_original,
 )
 from snuba.datasets.storages.generic_metrics import (
-    sets_bucket_storage as generic_metrics_sets_bucket_storage,
+    sets_bucket_storage as gen_metrics_sets_bucket_storage_original,
 )
 from snuba.datasets.storages.generic_metrics import (
-    sets_storage as gen_metrics_sets_aggregate_storage,
+    sets_storage as gen_metrics_sets_aggregate_storage_original,
 )
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
@@ -55,6 +59,27 @@ from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.transactions_ro import storage as transactions_ro_storage
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
+from snuba.state import get_config
+
+gen_metrics_dists_bucket_storage = gen_metrics_dists_bucket_storage_original
+gen_metrics_dists_aggregate_storage = gen_metrics_dists_aggregate_storage_original
+gen_metrics_sets_bucket_storage = gen_metrics_sets_bucket_storage_original
+gen_metrics_sets_aggregate_storage = gen_metrics_sets_aggregate_storage_original
+
+if get_config("use_generic_metrics_storages_from_configs", 0):
+    gen_metrics_dists_bucket_storage = build_writable_storage(
+        StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW
+    )
+    gen_metrics_dists_aggregate_storage = build_readonly_storage(
+        StorageKey.GENERIC_METRICS_DISTRIBUTIONS
+    )
+    gen_metrics_sets_bucket_storage = build_writable_storage(
+        StorageKey.GENERIC_METRICS_SETS_RAW
+    )
+    gen_metrics_sets_aggregate_storage = build_readonly_storage(
+        StorageKey.GENERIC_METRICS_SETS
+    )
+
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
 
@@ -90,7 +115,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             errors_v2_storage,
             profiles_writable_storage,
             functions_storage,
-            generic_metrics_sets_bucket_storage,
+            gen_metrics_sets_bucket_storage,
             replays_storage,
             gen_metrics_dists_bucket_storage,
         ]
