@@ -8,6 +8,7 @@ from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
 from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
+from snuba.datasets.storages.factory import CONFIG_FILES
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage,
     distributions_storage,
@@ -20,25 +21,27 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 def test_distributions_storage() -> None:
     _deep_compare_storages(
         distributions_storage,
-        build_storage(distributions_storage.get_storage_key()),
+        build_storage(CONFIG_FILES[distributions_storage.get_storage_key()]),
     )
 
 
 def test_distributions_bucket_storage() -> None:
     _deep_compare_storages(
         distributions_bucket_storage,
-        build_storage(distributions_bucket_storage.get_storage_key()),
+        build_storage(CONFIG_FILES[distributions_bucket_storage.get_storage_key()]),
     )
 
 
 def test_sets_storage() -> None:
-    _deep_compare_storages(sets_storage, build_storage(sets_storage.get_storage_key()))
+    _deep_compare_storages(
+        sets_storage, build_storage(CONFIG_FILES[sets_storage.get_storage_key()])
+    )
 
 
 def test_sets_bucket_storage() -> None:
     _deep_compare_storages(
         sets_bucket_storage,
-        build_storage(sets_bucket_storage.get_storage_key()),
+        build_storage(CONFIG_FILES[sets_bucket_storage.get_storage_key()]),
     )
 
 

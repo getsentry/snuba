@@ -58,14 +58,16 @@ from snuba.datasets.storages.transactions_ro import storage as transactions_ro_s
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
 from snuba.state import get_config
 
+CONFIG_FILES = {
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{settings.STORAGE_CONFIG_FILES_PATH}/distributions.yaml",
+    StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{settings.STORAGE_CONFIG_FILES_PATH}/distributions_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS_RAW: f"{settings.STORAGE_CONFIG_FILES_PATH}/sets_bucket.yaml",
+    StorageKey.GENERIC_METRICS_SETS: f"{settings.STORAGE_CONFIG_FILES_PATH}/sets.yaml",
+}
+
 CONFIG_BUILT_STORAGES = {
-    storage_key: build_storage(storage_key)
-    for storage_key in [
-        StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW,
-        StorageKey.GENERIC_METRICS_DISTRIBUTIONS,
-        StorageKey.GENERIC_METRICS_SETS_RAW,
-        StorageKey.GENERIC_METRICS_SETS,
-    ]
+    storage_key: build_storage(CONFIG_FILES[storage_key])
+    for storage_key in CONFIG_FILES
 }
 
 

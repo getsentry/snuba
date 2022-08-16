@@ -40,14 +40,6 @@ QUERY_PROCESSORS = "query_processors"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
-# TODO: The config files should be discovered automatically
-CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
-CONFIG_FILES = {
-    StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{CONFIG_FILES_PATH}/distributions.yaml",
-    StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{CONFIG_FILES_PATH}/distributions_bucket.yaml",
-    StorageKey.GENERIC_METRICS_SETS_RAW: f"{CONFIG_FILES_PATH}/sets_bucket.yaml",
-    StorageKey.GENERIC_METRICS_SETS: f"{CONFIG_FILES_PATH}/sets.yaml",
-}
 
 STORAGE_VALIDATION_SCHEMAS = {
     "readable_storage": V1_READABLE_STORAGE_SCHEMA,
@@ -56,9 +48,9 @@ STORAGE_VALIDATION_SCHEMAS = {
 
 
 def build_storage(
-    storage_key: StorageKey,
+    config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
-    config = __load_storage_config(storage_key)
+    config = __load_storage_config(config_file_path)
     storage_kwargs = __build_readable_storage_kwargs(config)
     if config[KIND] == "readable_storage":
         return ReadableTableStorage(**storage_kwargs)
@@ -66,8 +58,8 @@ def build_storage(
     return WritableTableStorage(**storage_kwargs)
 
 
-def __load_storage_config(storage_key: StorageKey) -> dict[str, Any]:
-    file = open(CONFIG_FILES[storage_key])
+def __load_storage_config(config_file_path: str) -> dict[str, Any]:
+    file = open(config_file_path)
     config = safe_load(file)
     assert isinstance(config, dict)
     validate(config, STORAGE_VALIDATION_SCHEMAS[config["kind"]])
