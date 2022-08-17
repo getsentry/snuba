@@ -11,6 +11,7 @@ from snuba import environment, state
 from snuba.attribution.log import flush_attribution_producer
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.environment import setup_logging, setup_sentry
 from snuba.subscriptions.executor_consumer import build_executor_consumer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -23,7 +24,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     "--dataset",
     "dataset_name",
     required=True,
-    type=click.Choice(["events", "transactions", "metrics", "generic_metrics"]),
+    type=click.Choice(get_enabled_dataset_names()),
     help="The dataset to target.",
 )
 @click.option(

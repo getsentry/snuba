@@ -1,3 +1,4 @@
+import logging
 from typing import Mapping
 
 from snuba import settings
@@ -57,6 +58,10 @@ from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.transactions_ro import storage as transactions_ro_storage
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
 from snuba.state import get_config
+
+logger = logging.getLogger(__name__)
+
+USE_CONFIG_BUILT_STORAGES = "use_config_built_storages"
 
 CONFIG_FILES = {
     StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{settings.STORAGE_CONFIG_FILES_PATH}/distributions.yaml",
@@ -151,9 +156,10 @@ STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
 
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
     if (
-        get_config("use_generic_metrics_storages_from_configs", 0)
+        get_config(USE_CONFIG_BUILT_STORAGES, 0)
         and storage_key in CONFIG_BUILT_STORAGES
     ):
+        logger.info(f"Using config built storage: {storage_key.value}")
         return CONFIG_BUILT_STORAGES[storage_key]
 
     return STORAGES[storage_key]
@@ -161,12 +167,13 @@ def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
 
 def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
     if (
-        get_config("use_generic_metrics_storages_from_configs", 0)
+        get_config(USE_CONFIG_BUILT_STORAGES, 0)
         and storage_key in CONFIG_BUILT_STORAGES
     ):
         assert isinstance(
             storage := CONFIG_BUILT_STORAGES[storage_key], WritableTableStorage
         )
+        logger.info(f"Using config built storage: {storage_key.value}")
         return storage
 
     return WRITABLE_STORAGES[storage_key]
