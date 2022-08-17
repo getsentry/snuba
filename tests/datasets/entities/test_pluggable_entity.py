@@ -57,6 +57,7 @@ def end_time(start_time: datetime) -> datetime:
 @pytest.fixture
 def pluggable_sets_entity() -> PluggableEntity:
     return PluggableEntity(
+        name="generic_metrics_sets",
         readable_storage=get_storage(StorageKey.GENERIC_METRICS_SETS),
         query_processors=[
             TagsTypeTransformer(),
