@@ -11,7 +11,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import USE_CONFIG_BUILT_STORAGES, get_storage
 from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
@@ -385,7 +385,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
 class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
     def setup_method(self, test_method: Any) -> None:
-        set_config("use_generic_metrics_storages_from_configs", 1)
+        set_config(USE_CONFIG_BUILT_STORAGES, 1)
         super().setup_method(test_method)
 
     def test_arbitrary_granularity(self) -> None:
@@ -400,7 +400,7 @@ class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistribu
 
 class TestGenericMetricsApiSetsFromConfig(TestGenericMetricsApiSets):
     def setup_method(self, test_method: Any) -> None:
-        set_config("use_generic_metrics_storages_from_configs", 1)
+        set_config(USE_CONFIG_BUILT_STORAGES, 1)
         super().setup_method(test_method)
 
     def test_indexed_tags(self) -> None:
