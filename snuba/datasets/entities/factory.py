@@ -1,6 +1,7 @@
-from typing import Callable, MutableMapping
+from typing import Callable, Mapping, MutableMapping
 
 from snuba import settings
+from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.table_storage import TableWriter
@@ -47,6 +48,10 @@ def get_entity(name: EntityKey) -> Entity:
 
     dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
 
+    entity_to_config_path_mapping: Mapping[EntityKey, str] = {
+        EntityKey.GENERIC_METRICS_SETS: "snuba/datasets/configuration/generic_metrics/entities/sets.yaml"
+    }
+
     entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
         EntityKey.DISCOVER: DiscoverEntity,
         EntityKey.EVENTS: EventsEntity,
@@ -72,7 +77,14 @@ def get_entity(name: EntityKey) -> Entity:
     }
 
     try:
-        entity = ENTITY_IMPL[name] = entity_factories[name]()
+        if settings.PREFER_PLUGGABLE_ENTITIES:
+            if name in entity_to_config_path_mapping:
+                entity = ENTITY_IMPL[name] = build_entity_from_config(
+                    entity_to_config_path_mapping[name]
+                )
+
+        if not entity:
+            entity = ENTITY_IMPL[name] = entity_factories[name]()
         ENTITY_NAME_LOOKUP[entity] = name
     except KeyError as error:
         raise InvalidEntityError(f"entity {name!r} does not exist") from error

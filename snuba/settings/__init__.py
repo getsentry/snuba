@@ -243,6 +243,8 @@ OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 # TODO: This is hardcoded, the config files should be discovered automatically
 STORAGE_CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
 
+PREFER_PLUGGABLE_ENTITIES = False
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
