@@ -54,7 +54,7 @@ def build_storage(
     storage_kwargs = __build_readable_storage_kwargs(config)
     if config[KIND] == "readable_storage":
         return ReadableTableStorage(**storage_kwargs)
-    storage_kwargs[STREAM_LOADER] = __build_stream_loader(config[STREAM_LOADER])
+    storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
     return WritableTableStorage(**storage_kwargs)
 
 
@@ -85,7 +85,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def __build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
+def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
 
     processor = CONF_TO_PROCESSOR[loader_config["processor"]]()
     default_topic = Topic(loader_config["default_topic"])

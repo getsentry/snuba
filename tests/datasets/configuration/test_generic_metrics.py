@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import pytest
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
-
-from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
 from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
@@ -13,8 +8,8 @@ from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage,
     distributions_storage,
     sets_bucket_storage,
+    sets_storage,
 )
-from snuba.datasets.storages.generic_metrics import sets_storage as sets_storage
 from snuba.datasets.table_storage import KafkaStreamLoader
 
 
@@ -43,28 +38,6 @@ def test_sets_bucket_storage() -> None:
         sets_bucket_storage,
         build_storage(CONFIG_FILES[sets_bucket_storage.get_storage_key()]),
     )
-
-
-def test_invalid_storage() -> None:
-    config = {
-        "storage": {"key": 1, "set_key": "x"},
-        "schema": {"columns": []},
-        "query_processors": [],
-    }
-    with pytest.raises(ValidationError) as e:
-        validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert e.value.message == "1 is not of type 'string'"
-
-
-def test_invalid_query_processor() -> None:
-    config = {
-        "storage": {"key": "x", "set_key": "x"},
-        "schema": {"columns": []},
-        "query_processors": [5],
-    }
-    with pytest.raises(ValidationError) as e:
-        validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert e.value.message == "5 is not of type 'string'"
 
 
 def _deep_compare_storages(
