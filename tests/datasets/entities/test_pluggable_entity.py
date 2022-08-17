@@ -104,6 +104,7 @@ def pluggable_sets_entity() -> PluggableEntity:
             ],
         ),
         validators=[],
+        required_time_column="timestamp",
     )
 
 
