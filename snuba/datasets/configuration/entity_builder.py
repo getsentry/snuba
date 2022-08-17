@@ -30,6 +30,10 @@ from snuba.query.processors.object_id_rate_limiter import (
 )
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.validation.validators import (
+    EntityRequiredColumnValidator,
+    QueryValidator,
+)
 
 QP_MAPPING: Mapping[str, Type[QueryProcessor]] = {
     "transform_tag_types": TagsTypeTransformer,
@@ -49,6 +53,19 @@ FUNCTION_MAPPER_MAPPING: Mapping[str, Type[FunctionCallMapper]] = {
 SUB_MAPPER_MAPPING: Mapping[str, Type[SubscriptableReferenceMapper]] = {
     "subscriptable": SubscriptableMapper
 }
+
+VALIDATOR_MAPPING: Mapping[str, Type[QueryValidator]] = {
+    "entity_required": EntityRequiredColumnValidator
+}
+
+
+def _build_entity_validators(
+    config_validators: list[dict[str, Any]]
+) -> Sequence[QueryValidator]:
+    return [
+        VALIDATOR_MAPPING[qv_config["validator"]](**qv_config["args"])  # type: ignore
+        for qv_config in config_validators
+    ]
 
 
 def _build_entity_query_processors(
@@ -82,7 +99,7 @@ def build_entity_from_config(file_path: str) -> Entity:
         ),
         columns=parse_columns(config_data["schema"]),
         readable_storage=get_storage(StorageKey(config_data["readable_storage"])),
-        validators=[],
+        validators=_build_entity_validators(config_data["validators"]),
         translation_mappers=_build_entity_translation_mappers(
             config_data["translation_mappers"]
         ),

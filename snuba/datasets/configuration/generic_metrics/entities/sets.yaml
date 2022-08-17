@@ -109,3 +109,8 @@ translation_mappers:
         to_nested_col_table:
         to_nested_col_name: tags
         value_subcolumn_name: indexed_value
+validators:
+  -
+    validator: entity_required
+    args:
+      required_filter_columns: ["org_id", "project_id"]
