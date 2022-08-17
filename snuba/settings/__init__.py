@@ -240,8 +240,12 @@ OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 
-# File path glob for storage configs
-STORAGE_CONFIG_FILES_GLOB = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration/**/storages/*.yaml"
+# Configuration directory settings
+CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
+
+# File path glob for configs
+STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
+MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False
 
