@@ -1,11 +1,10 @@
 version: v1
 kind: entity
-name: generic-metrics-sets
+name: generic_metrics_sets
 
 schema:
   [
     { name: org_id, type: UInt, args: { size: 64 } },
-    { name: use_case_id, type: String },
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: metric_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
@@ -18,21 +17,9 @@ schema:
           subcolumns:
             [
               { name: key, type: UInt, args: { size: 64 } },
-              { name: indexed_value, type: UInt, args: { size: 64 } },
-              { name: raw_value, type: String },
+              { name: value, type: UInt, args: { size: 64 } },
             ],
         },
-    },
-
-    {
-      name: _raw_tags_hash,
-      type: Array,
-      args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
-    },
-    {
-      name: _indexed_tags_hash,
-      type: Array,
-      args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
     },
     { name: granularity, type: UInt, args: { size: 8 } },
 

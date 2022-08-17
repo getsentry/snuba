@@ -30,6 +30,7 @@ class PluggableEntity(Entity):
     provided readable storage.
     """
 
+    name: str
     query_processors: Sequence[QueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     readable_storage: ReadableTableStorage

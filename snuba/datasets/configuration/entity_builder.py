@@ -92,8 +92,8 @@ def _build_entity_translation_mappers(
 
 def build_entity_from_config(file_path: str) -> Entity:
     config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
-    print(config_data)
     return PluggableEntity(
+        name=config_data["name"],
         query_processors=_build_entity_query_processors(
             config_data["query_processors"]
         ),
