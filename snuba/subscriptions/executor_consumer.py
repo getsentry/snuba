@@ -21,7 +21,7 @@ from snuba import state
 from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
+from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
@@ -86,7 +86,7 @@ def build_executor_consumer(
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
     dataset_entity_names = [
-        ENTITY_NAME_LOOKUP[e].value for e in dataset.get_all_entities()
+        get_entity_name(e).value for e in dataset.get_all_entities()
     ]
 
     # Only entities in the same dataset with the same scheduled and result topics

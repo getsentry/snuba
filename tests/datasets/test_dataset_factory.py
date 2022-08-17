@@ -13,7 +13,6 @@ from snuba.datasets.factory import (
 )
 
 
-# This test should be the first to ensure dataset factory module is has fresh set of objects
 def test_get_dataset_multithreaded_collision() -> None:
     class GetDatasetThread(threading.Thread):
         def test_get_dataset_threaded(self) -> None:
@@ -35,7 +34,7 @@ def test_get_dataset_multithreaded_collision() -> None:
                 raise self.exception
 
     threads = []
-    for _ in range(10):
+    for _ in range(5):
         thread = GetDatasetThread()
         threads.append(thread)
         thread.start()
