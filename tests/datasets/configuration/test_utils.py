@@ -25,7 +25,6 @@ def assert_valid_policy_creator(
     assert policy_creator is not None
     policy = policy_creator()
     assert isinstance(policy, ProduceInvalidMessagePolicy)
-    assert policy.get_topic().name == Topic.DEAD_LETTER_GENERIC_METRICS.value
     policy.terminate()
 
 
