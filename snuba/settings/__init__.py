@@ -239,6 +239,10 @@ OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 
+# File path for storage configs
+# TODO: This is hardcoded, the config files should be discovered automatically
+STORAGE_CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
