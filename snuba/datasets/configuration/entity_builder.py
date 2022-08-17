@@ -3,6 +3,14 @@ from __future__ import annotations
 import sys
 from typing import Any, Mapping, Sequence, Type
 
+from snuba.clickhouse.translators.snuba.allowed import (
+    FunctionCallMapper,
+    SubscriptableReferenceMapper,
+)
+from snuba.clickhouse.translators.snuba.mappers import (
+    FunctionNameMapper,
+    SubscriptableMapper,
+)
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.configuration.json_schema import V1_ENTITY_SCHEMA
 from snuba.datasets.configuration.loader import load_configuration_data
@@ -34,22 +42,50 @@ QP_MAPPING: Mapping[str, Type[QueryProcessor]] = {
     "resource_quota_limiter": ResourceQuotaProcessor,
 }
 
+FUNCTION_MAPPER_MAPPING: Mapping[str, Type[FunctionCallMapper]] = {
+    "simple_func": FunctionNameMapper
+}
 
-def get_entity_query_processors(
+SUB_MAPPER_MAPPING: Mapping[str, Type[SubscriptableReferenceMapper]] = {
+    "subscriptable": SubscriptableMapper
+}
+
+
+def _build_entity_query_processors(
     config_query_processors: list[dict[str, Any]],
 ) -> Sequence[QueryProcessor]:
     return [QP_MAPPING[config_qp["processor"]](**(config_qp["args"] if config_qp.get("args") else {})) for config_qp in config_query_processors]  # type: ignore
+
+
+def _build_entity_translation_mappers(
+    config_translation_mappers: dict[str, Any],
+) -> TranslationMappers:
+    function_mappers: list[FunctionCallMapper] = [
+        FUNCTION_MAPPER_MAPPING[fm_config["mapper"]](**fm_config["args"])  # type: ignore
+        for fm_config in config_translation_mappers["functions"]
+    ]
+    subscriptable_mappers: list[SubscriptableReferenceMapper] = [
+        SUB_MAPPER_MAPPING[sub_config["mapper"]](**sub_config["args"])  # type: ignore
+        for sub_config in config_translation_mappers["subscriptables"]
+    ]
+    return TranslationMappers(
+        functions=function_mappers, subscriptables=subscriptable_mappers
+    )
 
 
 def build_entity_from_config(file_path: str) -> Entity:
     config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
     print(config_data)
     return PluggableEntity(
-        query_processors=get_entity_query_processors(config_data["query_processors"]),
+        query_processors=_build_entity_query_processors(
+            config_data["query_processors"]
+        ),
         columns=parse_columns(config_data["schema"]),
         readable_storage=get_storage(StorageKey(config_data["readable_storage"])),
         validators=[],
-        translation_mappers=TranslationMappers(),
+        translation_mappers=_build_entity_translation_mappers(
+            config_data["translation_mappers"]
+        ),
         writeable_storage=get_writable_storage(
             StorageKey(config_data["writable_storage"])
         )

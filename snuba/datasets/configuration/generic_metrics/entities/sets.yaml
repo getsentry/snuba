@@ -80,3 +80,32 @@ query_processors:
     processor: resource_quota_limiter
     args:
       project_field: project_id
+translation_mappers:
+  functions:
+    -
+      mapper: simple_func
+      args:
+        from_name: uniq
+        to_name: uniqCombined64Merge
+    -
+      mapper: simple_func
+      args:
+        from_name: uniqIf
+        to_name: uniqCombined64MergeIf
+  subscriptables:
+    -
+      mapper: subscriptable
+      args:
+        from_column_table:
+        from_column_name: tags_raw
+        to_nested_col_table:
+        to_nested_col_name: tags
+        value_subcolumn_name: raw_value
+    -
+      mapper: subscriptable
+      args:
+        from_column_table:
+        from_column_name: tags
+        to_nested_col_table:
+        to_nested_col_name: tags
+        value_subcolumn_name: indexed_value
