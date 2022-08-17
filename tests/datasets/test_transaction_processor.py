@@ -4,7 +4,7 @@ import uuid
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
