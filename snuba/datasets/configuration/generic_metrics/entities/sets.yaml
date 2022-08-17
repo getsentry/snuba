@@ -42,3 +42,41 @@ schema:
       args: { func: "uniqCombined64", arg_types: [{ type: UInt, arg: 64 }] },
     },
   ]
+
+readable_storage: generic_metrics_sets
+writable_storage: generic_metrics_sets_raw
+query_processors:
+  -
+    processor: transform_tag_types
+  -
+    processor: handle_mapped_granularities
+    args:
+      accepted_granularities:
+        60: 1
+        3600: 2
+        86400: 3
+      default_granularity: 1
+  -
+    processor: translate_time_series
+    args:
+      time_group_columns:
+        bucketed_time: timestamp
+      time_parse_columns: [timestamp]
+  -
+    processor: referrer_rate_limit
+  -
+    processor: org_rate_limiter_processor
+    args:
+      org_column: org_id
+  -
+    processor: project_referrer_rate_limiter
+    args:
+      project_column: project_id
+  -
+    processor: project_rate_limiter
+    args:
+      project_column: project_id
+  -
+    processor: resource_quota_limiter
+    args:
+      project_field: project_id
