@@ -159,7 +159,7 @@ def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
         get_config(USE_CONFIG_BUILT_STORAGES, 0)
         and storage_key in CONFIG_BUILT_STORAGES
     ):
-        logger.warning(f"Using config built storage: {storage_key.value}")
+        logger.info(f"Using config built storage: {storage_key.value}")
         return CONFIG_BUILT_STORAGES[storage_key]
 
     return STORAGES[storage_key]
@@ -173,7 +173,7 @@ def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
         assert isinstance(
             storage := CONFIG_BUILT_STORAGES[storage_key], WritableTableStorage
         )
-        logger.warning(f"Using config built storage: {storage_key.value}")
+        logger.info(f"Using config built storage: {storage_key.value}")
         return storage
 
     return WRITABLE_STORAGES[storage_key]
