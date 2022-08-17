@@ -8,18 +8,20 @@ import progressbar
 from snuba import environment, settings
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import CDC_STORAGES, get_cdc_storage
+from snuba.datasets.storages.factory import get_cdc_storage_keys, get_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.loaders import ProgressCallback
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.writer import BufferedWriterWrapper
+
+from ..datasets.cdc import CdcStorage
 
 
 @click.command()
 @click.option(
     "--storage",
     "storage_name",
-    type=click.Choice([storage_key.value for storage_key in CDC_STORAGES.keys()]),
+    type=click.Choice([storage_key.value for storage_key in get_cdc_storage_keys()]),
     help="The CDC storage to bulk load",
 )
 @click.option(
@@ -67,7 +69,7 @@ def bulk_load(
         "Start bulk load process for storage %s, from source %s", storage_name, source
     )
 
-    storage = get_cdc_storage(StorageKey(storage_name))
+    assert isinstance(storage := get_storage(StorageKey(storage_name)), CdcStorage)
     table_writer = storage.get_table_writer()
 
     # TODO: Have a more abstract way to load sources if/when we support more than one.
