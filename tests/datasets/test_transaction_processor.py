@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple, List
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -16,6 +18,7 @@ class TransactionEvent:
     event_id: str
     trace_id: str
     span_id: str
+    group_ids: list[int]
     transaction_name: str
     op: str
     start_timestamp: float
@@ -49,6 +52,7 @@ class TransactionEvent:
                 "event_id": self.event_id,
                 "message": "/organizations/:orgId/issues/",
                 "group_id": None,
+                "group_ids": self.group_ids,
                 "retention_days": 23,
                 "data": {
                     "event_id": self.event_id,
@@ -179,6 +183,7 @@ class TransactionEvent:
             "event_id": str(uuid.UUID(self.event_id)),
             "trace_id": str(uuid.UUID(self.trace_id)),
             "span_id": int(self.span_id, 16),
+            "group_ids": self.group_ids,
             "transaction_name": self.transaction_name,
             "transaction_op": self.op,
             "transaction_status": 1 if self.status == "cancelled" else 2,
@@ -254,6 +259,7 @@ class TestTransactionsProcessor:
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
+            group_ids=[100, 200],
             transaction_name="/organizations/:orgId/issues/",
             status="cancelled",
             op="navigation",
@@ -291,6 +297,7 @@ class TestTransactionsProcessor:
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
+            group_ids=[100, 200],
             transaction_name="/organizations/:orgId/issues/",
             status="cancelled",
             op="navigation",
@@ -331,6 +338,7 @@ class TestTransactionsProcessor:
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
+            group_ids=[100, 200],
             transaction_name="/organizations/:orgId/issues/",
             status="cancelled",
             op="navigation",
@@ -370,6 +378,7 @@ class TestTransactionsProcessor:
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
+            group_ids=[100, 200],
             transaction_name="/organizations/:orgId/issues/",
             status="cancelled",
             op="navigation",
@@ -416,6 +425,7 @@ class TestTransactionsProcessor:
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
+            group_ids=[100, 200],
             transaction_name="/organizations/:orgId/issues/",
             status="cancelled",
             op="navigation",
