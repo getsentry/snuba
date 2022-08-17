@@ -28,6 +28,7 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
@@ -160,6 +161,7 @@ prewhere_candidates = [
 
 query_processors = [
     UniqInSelectAndHavingProcessor(),
+    TupleUnaliaser(),
     PostReplacementConsistencyEnforcer(
         project_column="project_id",
         replacer_state_name=ReplacerState.ERRORS,
