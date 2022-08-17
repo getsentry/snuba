@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Any, Mapping, Sequence, Type
 
@@ -40,6 +41,8 @@ _SUB_MAPPER_MAPPING: Mapping[str, Type[SubscriptableReferenceMapper]] = {
 _VALIDATOR_MAPPING: Mapping[str, Type[QueryValidator]] = {
     "entity_required": EntityRequiredColumnValidator
 }
+
+logger = logging.getLogger("snuba.entity_builder")
 
 
 def _initialize_mappings() -> None:
@@ -104,6 +107,7 @@ def _build_entity_translation_mappers(
 
 
 def build_entity_from_config(file_path: str) -> Entity:
+    logger.warn(f"building entity from {file_path}")
     if not __MAPPINGS_HAVE_BEEN_INITIALIZED:
         _initialize_mappings()
     config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
@@ -114,6 +118,7 @@ def build_entity_from_config(file_path: str) -> Entity:
         ),
         columns=parse_columns(config_data["schema"]),
         readable_storage=get_storage(StorageKey(config_data["readable_storage"])),
+        required_time_column=config_data["required_time_column"],
         validators=_build_entity_validators(config_data["validators"]),
         translation_mappers=_build_entity_translation_mappers(
             config_data["translation_mappers"]

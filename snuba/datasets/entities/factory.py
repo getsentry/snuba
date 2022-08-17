@@ -83,7 +83,7 @@ def get_entity(name: EntityKey) -> Entity:
                     entity_to_config_path_mapping[name]
                 )
 
-        if not entity:
+        if not ENTITY_IMPL[name]:
             entity = ENTITY_IMPL[name] = entity_factories[name]()
         ENTITY_NAME_LOOKUP[entity] = name
     except KeyError as error:

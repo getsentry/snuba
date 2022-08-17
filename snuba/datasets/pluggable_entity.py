@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -35,6 +35,7 @@ class PluggableEntity(Entity):
     readable_storage: ReadableTableStorage
     validators: Sequence[QueryValidator]
     translation_mappers: TranslationMappers
+    required_time_column: str
     writeable_storage: Optional[WritableTableStorage] = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
@@ -77,3 +78,9 @@ class PluggableEntity(Entity):
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, PluggableEntity) and self.name == other.name
+
+    def __hash__(self) -> int:
+        return hash(self.name)
