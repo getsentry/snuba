@@ -184,6 +184,10 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def get_all_storage_keys(self) -> list[StorageKey]:
         return list(self._all_storages.keys())
 
+    def get_config_built_storages(self) -> dict[StorageKey, Storage]:
+        # TODO: Remove once all storages are config
+        return self._config_built_storages
+
 
 _STORAGE_FACTORY: _StorageFactory | None = None
 
@@ -219,3 +223,8 @@ def get_cdc_storage_keys() -> list[StorageKey]:
 
 def get_all_storage_keys() -> list[StorageKey]:
     return _storage_factory().get_all_storage_keys()
+
+
+def get_config_built_storages() -> dict[StorageKey, Storage]:
+    # TODO: Remove once all storages are config
+    return _storage_factory().get_config_built_storages()
