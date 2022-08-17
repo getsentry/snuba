@@ -40,7 +40,7 @@ QP_MAPPING: Mapping[str, Type[QueryProcessor]] = {
     "handle_mapped_granularities": MappedGranularityProcessor,
     "translate_time_series": TimeSeriesProcessor,
     "referrer_rate_limit": ReferrerRateLimiterProcessor,
-    "org_rate_limiter_processor": OrganizationRateLimiterProcessor,
+    "org_rate_limiter": OrganizationRateLimiterProcessor,
     "project_referrer_rate_limiter": ProjectReferrerRateLimiter,
     "project_rate_limiter": ProjectRateLimiterProcessor,
     "resource_quota_limiter": ResourceQuotaProcessor,

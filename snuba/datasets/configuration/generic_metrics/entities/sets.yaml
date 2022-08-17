@@ -65,7 +65,7 @@ query_processors:
   -
     processor: referrer_rate_limit
   -
-    processor: org_rate_limiter_processor
+    processor: org_rate_limiter
     args:
       org_column: org_id
   -
