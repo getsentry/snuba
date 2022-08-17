@@ -1,6 +1,6 @@
-from typing import Sequence, Tuple, List
+from typing import List, Sequence, Tuple
 
-from snuba.clickhouse.columns import Column, UUID, Array, UInt
+from snuba.clickhouse.columns import UUID, Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
