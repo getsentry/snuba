@@ -100,6 +100,7 @@ columns = ColumnSet(
         ("title", String(Modifiers(readonly=True))),
         ("transaction_source", String()),
         ("timestamp", DateTime(Modifiers(readonly=True))),
+        ("group_ids", Array(UUID())),
     ]
 )
 
