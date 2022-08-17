@@ -10,7 +10,7 @@ honcho==1.1.0
 jsonschema==4.9.1
 Markdown==3.4.1
 mywsgi==1.0.3
-mypy==0.812
+mypy==0.971
 packaging==21.3
 # Do not update parsimonious, there is a performance issue in newer versions
 parsimonious==0.8.1
