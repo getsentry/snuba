@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import logging
 from glob import glob
-from typing import Mapping
+from typing import Generator, Mapping
 
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage
-from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
+from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.discover import storage as discover_storage
 from snuba.datasets.storages.errors import storage as errors_storage
@@ -59,6 +61,7 @@ from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.transactions_ro import storage as transactions_ro_storage
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
 from snuba.state import get_config
+from snuba.utils.config_component_factory import ConfigComponentFactory
 
 logger = logging.getLogger(__name__)
 
@@ -177,3 +180,56 @@ def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
 
 def get_cdc_storage(storage_key: StorageKey) -> CdcStorage:
     return CDC_STORAGES[storage_key]
+
+
+class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
+    def __init__(self) -> None:
+        self._config_built_storages: dict[StorageKey, Storage] = {}
+        self._writable_storages: dict[StorageKey, Storage] = {}
+        self._dev_writable_storages: dict[StorageKey, Storage] = {}
+        self._cdc_storages: dict[StorageKey, Storage] = {}
+        self._dev_cdc_storages: dict[StorageKey, Storage] = {}
+        self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
+        self._all_storages: dict[StorageKey, Storage] = {}
+
+    def __initialize(self) -> None:
+        pass
+
+    def iter_all(self) -> Generator[Storage, None, None]:
+        pass
+
+    def get(self, storage_key: StorageKey) -> Storage:
+        pass
+
+    def get_writable_storage_keys(self) -> list[StorageKey]:
+        pass
+
+    def get_cdc_storage_keys(self) -> list[StorageKey]:
+        pass
+
+    def get_all_storage_keys(self) -> list[StorageKey]:
+        pass
+
+
+_STORAGE_FACTORY: _StorageFactory | None = None
+
+
+def _storage_factory() -> _StorageFactory:
+    global _STORAGE_FACTORY
+    if _STORAGE_FACTORY is None:
+        _STORAGE_FACTORY = _StorageFactory()
+    return _STORAGE_FACTORY
+
+
+def get_storage2(storage_key: StorageKey) -> ReadableTableStorage:
+    assert isinstance(
+        storage := _storage_factory().get(storage_key), ReadableTableStorage
+    )
+    return storage
+
+
+def get_writable_storage2(storage_key: StorageKey) -> WritableTableStorage:
+    assert isinstance(
+        storage := _storage_factory().get(storage_key), WritableTableStorage
+    )
+    return storage
