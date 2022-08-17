@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
-    (Column("group_ids", Array(UUID())), "timestamp"),
+    (Column("group_ids", Array(UInt(64))), "timestamp"),
     (
         Column(
             "_group_ids_hashed",
