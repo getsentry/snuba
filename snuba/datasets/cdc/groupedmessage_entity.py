@@ -1,5 +1,6 @@
 from typing import Sequence
 
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -11,8 +12,6 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
 
-from . import CdcStorage
-
 
 class GroupedMessageEntity(Entity):
     """
@@ -21,9 +20,8 @@ class GroupedMessageEntity(Entity):
     """
 
     def __init__(self) -> None:
-        assert isinstance(
-            storage := get_storage(StorageKey.GROUPEDMESSAGES), CdcStorage
-        )
+        storage = get_storage(StorageKey.GROUPEDMESSAGES)
+        assert isinstance(storage, CdcStorage)
         schema = storage.get_table_writer().get_schema()
 
         super().__init__(

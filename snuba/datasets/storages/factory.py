@@ -200,16 +200,14 @@ def _storage_factory() -> _StorageFactory:
 
 
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
-    assert isinstance(
-        storage := _storage_factory().get(storage_key), ReadableTableStorage
-    )
+    storage = _storage_factory().get(storage_key)
+    assert isinstance(storage, ReadableTableStorage)
     return storage
 
 
 def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
-    assert isinstance(
-        storage := _storage_factory().get(storage_key), WritableTableStorage
-    )
+    storage = _storage_factory().get(storage_key)
+    assert isinstance(storage, WritableTableStorage)
     return storage
 
 
