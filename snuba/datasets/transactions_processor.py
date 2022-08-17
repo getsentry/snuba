@@ -136,7 +136,7 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         processed["platform"] = _unicodify(event_dict["platform"])
 
-        group_ids = event_dict["data"].get["group_ids"] or []
+        group_ids = event_dict["data"].get("group_ids") or []
         if len(group_ids) > GROUP_IDS_LIMIT:
             metrics.increment("group_ids_exceeded_limit")
 

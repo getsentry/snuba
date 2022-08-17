@@ -18,7 +18,7 @@ class TransactionEvent:
     event_id: str
     trace_id: str
     span_id: str
-    group_ids: list[int]
+    group_ids: Optional[int]
     transaction_name: str
     op: str
     start_timestamp: float
