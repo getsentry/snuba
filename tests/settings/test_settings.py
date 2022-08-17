@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Any, Mapping
 
 import pytest
 
@@ -7,7 +8,7 @@ from snuba.settings.validation import validate_settings
 from snuba.utils.streams.topics import Topic
 
 
-def build_settings_dict():
+def build_settings_dict() -> Mapping[str, Any]:
 
     # Build a dictionary with all variables defined in settings.
     all_settings = {
