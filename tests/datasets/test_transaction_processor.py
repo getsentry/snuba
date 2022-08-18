@@ -58,6 +58,7 @@ class TransactionEvent:
                     "event_id": self.event_id,
                     "environment": self.environment,
                     "project_id": 1,
+                    "group_ids": self.group_ids,
                     "release": self.release,
                     "dist": self.dist,
                     "transaction_info": {"source": "url"},
