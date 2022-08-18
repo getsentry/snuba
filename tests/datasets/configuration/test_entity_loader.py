@@ -39,8 +39,7 @@ def test_build_entity_from_config_matches_python_definition() -> None:
         config_sets_entity.required_time_column == py_sets_entity.required_time_column
     )
 
-    # TODO add tests for TranslationMappers equality
-    # TODO add tests for schema equality
+    assert config_sets_entity.get_data_model() == py_sets_entity.get_data_model()
 
 
 def test_bad_configuration_broken_query_processor() -> None:
