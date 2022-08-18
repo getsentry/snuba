@@ -4,12 +4,11 @@ from typing import Any, Dict
 import pytest
 
 from snuba import settings
-from snuba.settings.validation import validate_settings
+from snuba.settings.validation import InvalidTopicError, validate_settings
 from snuba.utils.streams.topics import Topic
 
 
 def build_settings_dict() -> Dict[str, Any]:
-
     # Build a dictionary with all variables defined in settings.
     all_settings = {
         key: value
@@ -21,7 +20,6 @@ def build_settings_dict() -> Dict[str, Any]:
 
 
 def test_invalid_storage() -> None:
-
     all_settings = build_settings_dict()
 
     cluster = all_settings["CLUSTERS"]
@@ -35,7 +33,6 @@ def test_invalid_storage() -> None:
 
 
 def test_topics_sync_in_settings_validator() -> None:
-
     all_settings = build_settings_dict()
     # Make a copy of the default Kafka topic map from settings
     default_map = deepcopy(all_settings["KAFKA_TOPIC_MAP"])
@@ -47,7 +44,7 @@ def test_topics_sync_in_settings_validator() -> None:
     # topic names in the settings validator
     try:
         validate_settings(all_settings)
-    except Exception:
+    except InvalidTopicError:
         pytest.fail(
             "Defined Kafka Topics are not in sync with topic names in validator"
         )
