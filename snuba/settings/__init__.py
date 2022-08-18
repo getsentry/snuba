@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
@@ -240,7 +241,7 @@ OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 
 # File path glob for storage configs
-STORAGE_CONFIG_FILES_GLOB = "./snuba/datasets/configuration/**/storages/*.yaml"
+STORAGE_CONFIG_FILES_GLOB = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration/**/storages/*.yaml"
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
