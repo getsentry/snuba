@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from typing import Any, Mapping, Sequence, Type
 
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -129,8 +128,3 @@ def build_entity_from_config(file_path: str) -> Entity:
         if "writable_storage" in config_data
         else None,
     )
-
-
-if __name__ == "__main__":
-    entity = build_entity_from_config(sys.argv[1])
-    # breakpoint()
