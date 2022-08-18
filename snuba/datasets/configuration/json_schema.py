@@ -101,13 +101,12 @@ NESTED_SCHEMA = make_column_schema(
     },
 )
 
+SCHEMA_COLUMNS = {"type": "array", "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]}}
+
 SCHEMA_SCHEMA = {
     "type": "object",
     "properties": {
-        "columns": {
-            "type": "array",
-            "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]},
-        },
+        "columns": SCHEMA_COLUMNS,
         "local_table_name": TYPE_STRING,
         "dist_table_name": TYPE_STRING,
     },
@@ -119,10 +118,18 @@ STORAGE_SCHEMA = {
     "properties": {"key": TYPE_STRING, "set_key": TYPE_STRING},
 }
 
-QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
+STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
 
 KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage"]}
 
+ENTITY_QUERY_PROCESSOR = {
+    "type": "object",
+    "properties": {
+        "processor": TYPE_STRING,
+        "args": {"type": "object"},  # args are a flexible dict
+    },
+    "required": ["processor"],
+}
 
 # Full schemas:
 
@@ -134,7 +141,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": QUERY_PROCESSORS_SCHEMA,
+        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
 }
@@ -144,11 +151,11 @@ V1_READABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
-        "kind": {"const": "readonly_storage"},
+        "kind": {"const": "readable_storage"},
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": QUERY_PROCESSORS_SCHEMA,
+        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
     },
 }
 
@@ -157,9 +164,19 @@ V1_ENTITY_SCHEMA = {
     "properties": {
         "version": {"const": "v1"},
         "kind": {"const": "entity"},
-        "schema": SCHEMA_SCHEMA,
+        "schema": SCHEMA_COLUMNS,
         "name": TYPE_STRING,
         "readable_storage": TYPE_STRING,
         "writable_storage": TYPE_NULLABLE_STRING,
+        "query_processors": {"type": "array", "items": ENTITY_QUERY_PROCESSOR},
+        "translation_mappers": {},
     },
+    "required": [
+        "version",
+        "kind",
+        "schema",
+        "name",
+        "readable_storage",
+        "query_processors",
+    ],
 }
