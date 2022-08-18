@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.settings.validation import validate_settings
@@ -239,9 +240,8 @@ OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 
-# File path for storage configs
-# TODO: This is hardcoded, the config files should be discovered automatically
-STORAGE_CONFIG_FILES_PATH = "./snuba/datasets/configuration/generic_metrics/storages"
+# File path glob for storage configs
+STORAGE_CONFIG_FILES_GLOB = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration/**/storages/*.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False
 
