@@ -48,3 +48,10 @@ def test_bad_configuration_broken_query_processor() -> None:
         build_entity_from_config(
             "tests/datasets/configuration/broken_entity_bad_query_processor.yaml"
         )
+
+
+def test_bad_configuration_broken_validator() -> None:
+    with pytest.raises(ValidationError):
+        build_entity_from_config(
+            "tests/datasets/configuration/broken_entity_positional_validator_args.yaml"
+        )

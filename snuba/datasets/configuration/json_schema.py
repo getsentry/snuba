@@ -131,6 +131,15 @@ ENTITY_QUERY_PROCESSOR = {
     "required": ["processor"],
 }
 
+ENTITY_VALIDATOR = {
+    "type": "object",
+    "properties": {
+        "validator": TYPE_STRING,
+        "args": {"type": "object"},  # args are a flexible dict
+    },
+    "required": ["validator"],
+}
+
 ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
     "type": "array",
     "items": {
@@ -190,6 +199,7 @@ V1_ENTITY_SCHEMA = {
         "writable_storage": TYPE_NULLABLE_STRING,
         "query_processors": {"type": "array", "items": ENTITY_QUERY_PROCESSOR},
         "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
+        "validators": {"type": "array", "items": ENTITY_VALIDATOR},
         "required_time_column": TYPE_STRING,
     },
     "required": [
@@ -199,6 +209,7 @@ V1_ENTITY_SCHEMA = {
         "name",
         "readable_storage",
         "query_processors",
+        "validators",
         "required_time_column",
     ],
 }
