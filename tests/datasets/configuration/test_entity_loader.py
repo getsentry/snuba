@@ -1,3 +1,6 @@
+import pytest
+from jsonschema.exceptions import ValidationError
+
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -38,3 +41,10 @@ def test_build_entity_from_config_matches_python_definition() -> None:
 
     # TODO add tests for TranslationMappers equality
     # TODO add tests for schema equality
+
+
+def test_bad_configuration_broken_query_processor() -> None:
+    with pytest.raises(ValidationError):
+        build_entity_from_config(
+            "tests/datasets/configuration/broken_entity_bad_query_processor.yaml"
+        )
