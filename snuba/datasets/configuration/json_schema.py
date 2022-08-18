@@ -120,7 +120,7 @@ STORAGE_SCHEMA = {
 
 STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
 
-KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage"]}
+KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage", "entity"]}
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
@@ -129,6 +129,26 @@ ENTITY_QUERY_PROCESSOR = {
         "args": {"type": "object"},  # args are a flexible dict
     },
     "required": ["processor"],
+}
+
+ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "mapper": TYPE_STRING,
+            "args": {"type": "object"},
+        },
+        "required": ["mapper"],
+    },
+}
+
+ENTITY_TRANSLATION_MAPPERS = {
+    "type": "object",
+    "properties": {
+        "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
+        "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
+    },
 }
 
 # Full schemas:
@@ -169,7 +189,8 @@ V1_ENTITY_SCHEMA = {
         "readable_storage": TYPE_STRING,
         "writable_storage": TYPE_NULLABLE_STRING,
         "query_processors": {"type": "array", "items": ENTITY_QUERY_PROCESSOR},
-        "translation_mappers": {},
+        "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
+        "required_time_column": TYPE_STRING,
     },
     "required": [
         "version",
@@ -178,5 +199,6 @@ V1_ENTITY_SCHEMA = {
         "name",
         "readable_storage",
         "query_processors",
+        "required_time_column",
     ],
 }
