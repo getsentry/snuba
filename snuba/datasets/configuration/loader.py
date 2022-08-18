@@ -17,5 +17,5 @@ def load_configuration_data(
     file = open(path)
     config = safe_load(file)
     assert isinstance(config, dict)
-    validate(config, validation_schemas)
+    validate(config, validation_schemas[config["kind"]])
     return config
