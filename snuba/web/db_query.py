@@ -737,7 +737,7 @@ def raw_query(
 
                 logger.exception("Error running query: %s\n%s", sql, cause)
             stats = update_with_status(QueryStatus.ERROR, error_code=error_code)
-        raise QueryException(
+        raise QueryException.from_args(
             {
                 "stats": stats,
                 "sql": sql,

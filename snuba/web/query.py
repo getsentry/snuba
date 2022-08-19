@@ -336,7 +336,7 @@ def _format_storage_query_and_run(
     }
 
     if query_size_bytes > MAX_QUERY_SIZE_BYTES:
-        raise QueryException(
+        raise QueryException.from_args(
             extra=QueryExtraData(
                 stats=stats,
                 sql=formatted_sql,
