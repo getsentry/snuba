@@ -73,7 +73,7 @@ class Counter:
         right = self.ceil_minute(start)
         while right <= end:
             self.create_and_add_bucket(project_id, start_minute, right - left)
-            left = right
+            left = start_minute = right
             right += timedelta(minutes=1)
         self.create_and_add_bucket(project_id, start_minute, end - left)
 
@@ -82,7 +82,7 @@ class Counter:
             print(bucket.minute, bucket.project_id, bucket.processing_time)
 
 
-def compare_counters(
+def compare_counters_and_write_metric(
     global_consumer_counter: Counter, project_counter: Counter, consumer_group: str
 ) -> None:
     metrics = MetricsWrapper(

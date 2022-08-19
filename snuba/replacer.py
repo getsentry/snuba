@@ -28,9 +28,9 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessageMetadata,
 )
 from snuba.state import get_config
+from snuba.utils.bucket_timer import Counter, compare_counters_and_write_metric
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
-from snuba.utils.time_bucket import Counter, compare_counters
 
 logger = logging.getLogger("snuba.replacer")
 
@@ -537,8 +537,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             start_time,
             end_time,
         )
-        print("global bucket")
-        self.__global_counter.print_buckets()
-        print("project bucket")
-        project_counter.print_buckets()
-        compare_counters(self.__global_counter, project_counter, self.__consumer_group)
+        compare_counters_and_write_metric(
+            self.__global_counter, project_counter, self.__consumer_group
+        )
