@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Sequence, Set
+from typing import Any, Mapping, Optional, Sequence, Set
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import Query
@@ -29,6 +29,10 @@ class QueryValidator(ABC):
     Contains validation logic that requires the entire query. An entity has one or more
     of these validators that it adds contextual information too.
     """
+
+    @abstractmethod
+    def __init__(self, *args: Sequence[Any], **kwargs: Mapping[str, Any]) -> None:
+        raise NotImplementedError
 
     @abstractmethod
     def validate(

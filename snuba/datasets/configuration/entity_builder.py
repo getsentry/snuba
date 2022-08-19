@@ -78,7 +78,7 @@ def _build_entity_validators(
     config_validators: list[dict[str, Any]]
 ) -> Sequence[QueryValidator]:
     return [
-        _VALIDATOR_MAPPING[qv_config["validator"]](**qv_config["args"])  # type: ignore
+        _VALIDATOR_MAPPING[qv_config["validator"]](**qv_config["args"])
         for qv_config in config_validators
     ]
 
@@ -86,18 +86,23 @@ def _build_entity_validators(
 def _build_entity_query_processors(
     config_query_processors: list[dict[str, Any]],
 ) -> Sequence[QueryProcessor]:
-    return [_QP_MAPPING[config_qp["processor"]](**(config_qp["args"] if config_qp.get("args") else {})) for config_qp in config_query_processors]  # type: ignore
+    return [
+        _QP_MAPPING[config_qp["processor"]](
+            **(config_qp["args"] if config_qp.get("args") else {})
+        )
+        for config_qp in config_query_processors
+    ]
 
 
 def _build_entity_translation_mappers(
     config_translation_mappers: dict[str, Any],
 ) -> TranslationMappers:
     function_mappers: list[FunctionCallMapper] = [
-        _FUNCTION_MAPPER_MAPPING[fm_config["mapper"]](**fm_config["args"])  # type: ignore
+        _FUNCTION_MAPPER_MAPPING[fm_config["mapper"]](**fm_config["args"])
         for fm_config in config_translation_mappers["functions"]
     ]
     subscriptable_mappers: list[SubscriptableReferenceMapper] = [
-        _SUB_MAPPER_MAPPING[sub_config["mapper"]](**sub_config["args"])  # type: ignore
+        _SUB_MAPPER_MAPPING[sub_config["mapper"]](**sub_config["args"])
         for sub_config in config_translation_mappers["subscriptables"]
     ]
     return TranslationMappers(
