@@ -1,4 +1,5 @@
 import logging
+from glob import glob
 from typing import Mapping
 
 from snuba import settings
@@ -63,18 +64,13 @@ logger = logging.getLogger(__name__)
 
 USE_CONFIG_BUILT_STORAGES = "use_config_built_storages"
 
-CONFIG_FILES = {
-    StorageKey.GENERIC_METRICS_DISTRIBUTIONS: f"{settings.STORAGE_CONFIG_FILES_PATH}/distributions.yaml",
-    StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW: f"{settings.STORAGE_CONFIG_FILES_PATH}/distributions_bucket.yaml",
-    StorageKey.GENERIC_METRICS_SETS_RAW: f"{settings.STORAGE_CONFIG_FILES_PATH}/sets_bucket.yaml",
-    StorageKey.GENERIC_METRICS_SETS: f"{settings.STORAGE_CONFIG_FILES_PATH}/sets.yaml",
-}
-
 CONFIG_BUILT_STORAGES = {
-    storage_key: build_storage(CONFIG_FILES[storage_key])
-    for storage_key in CONFIG_FILES
+    storage.get_storage_key(): storage
+    for storage in [
+        build_storage(config_file)
+        for config_file in glob(settings.STORAGE_CONFIG_FILES_GLOB, recursive=True)
+    ]
 }
-
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
 
