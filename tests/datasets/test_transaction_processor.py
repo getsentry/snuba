@@ -4,7 +4,7 @@ import uuid
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -18,7 +18,7 @@ class TransactionEvent:
     event_id: str
     trace_id: str
     span_id: str
-    group_ids: list[int]
+    group_ids: Sequence[int]
     transaction_name: str
     op: str
     start_timestamp: float
@@ -58,7 +58,6 @@ class TransactionEvent:
                     "event_id": self.event_id,
                     "environment": self.environment,
                     "project_id": 1,
-                    "group_ids": self.group_ids,
                     "release": self.release,
                     "dist": self.dist,
                     "transaction_info": {"source": "url"},
