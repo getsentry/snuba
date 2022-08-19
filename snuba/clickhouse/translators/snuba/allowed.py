@@ -1,4 +1,4 @@
-from typing import Any, Mapping, Sequence, TypeVar, Union
+from typing import TypeVar, Union
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.datasets.plans.translator.mapper import ExpressionMapper
@@ -19,9 +19,6 @@ TExpOut = TypeVar("TExpOut")
 class SnubaClickhouseMapper(
     ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseStrictTranslator]
 ):
-    def __init__(self, *args: Sequence[Any], **kwargs: Mapping[str, Any]) -> None:
-        raise NotImplementedError
-
     pass
 
 

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Sequence
 
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
@@ -20,9 +19,6 @@ class QueryProcessor(ABC):
     Processors are designed to be stateless. There is no guarantee whether the same
     instance may be reused.
     """
-
-    def __init__(self, *args: Sequence[Any], **kwargs: Mapping[str, Any]) -> None:
-        raise NotImplementedError
 
     @abstractmethod
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
