@@ -28,7 +28,7 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessageMetadata,
 )
 from snuba.state import get_config
-from snuba.utils.bucket_timer import Counter, compare_counters_and_write_metric
+from snuba.utils.bucket_timer import Counter, compare_counter_and_write_metric
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
 
@@ -271,7 +271,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__storage = storage
 
         self.metrics = metrics
-        self.__global_counter = Counter()
+        self.__process_time_counter = Counter()
         processor = storage.get_table_writer().get_replacer_processor()
         assert (
             processor
@@ -390,7 +390,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             ClickhouseClientSettings.REPLACE
         )
 
-        project_counter = Counter()
         for replacement in batch:
             start_time = datetime.now()
 
@@ -422,9 +421,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             if callable(get_project_id):
                 project_id = get_project_id()
                 end_time = datetime.now()
-                self._update_and_compare_counters(
-                    project_counter, start_time, end_time, project_id
-                )
+                self._update_and_compare_counter(start_time, end_time, project_id)
 
         if need_optimize:
             from snuba.optimize import run_optimize
@@ -520,23 +517,17 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             ]
         )
 
-    def _update_and_compare_counters(
+    def _update_and_compare_counter(
         self,
-        project_counter: Counter,
         start_time: datetime,
         end_time: datetime,
         project_id: int,
     ) -> None:
-        project_counter.write_to_bucket(
+        self.__process_time_counter.write_to_bucket(
             project_id,
             start_time,
             end_time,
         )
-        self.__global_counter.write_to_bucket(
-            None,
-            start_time,
-            end_time,
-        )
-        compare_counters_and_write_metric(
-            self.__global_counter, project_counter, self.__consumer_group
+        compare_counter_and_write_metric(
+            self.__process_time_counter, self.__consumer_group
         )

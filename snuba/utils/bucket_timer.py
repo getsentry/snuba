@@ -7,6 +7,8 @@ from typing import Deque, List, Optional
 from snuba import environment
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
+WINDOW_SIZE = timedelta(minutes=10)  # minutes
+
 
 class Bucket:
     def __init__(
@@ -40,8 +42,8 @@ class Counter:
 
     def reorganize_buckets(self, now: datetime) -> None:
         current_minute = self.floor_minute(now)
-        five_minutes_ago = current_minute - timedelta(minutes=5)
-        while self.buckets and self.buckets[0].minute < five_minutes_ago:
+        window = current_minute - WINDOW_SIZE
+        while self.buckets and self.buckets[0].minute < window:
             self.buckets.popleft()
 
     def get_existing_bucket(
@@ -82,30 +84,22 @@ class Counter:
             print(bucket.minute, bucket.project_id, bucket.processing_time)
 
 
-def compare_counters_and_write_metric(
-    global_consumer_counter: Counter, project_counter: Counter, consumer_group: str
+def compare_counter_and_write_metric(
+    processing_time_counter: Counter, consumer_group: str
 ) -> None:
     metrics = MetricsWrapper(
         environment.metrics, "replacer", tags={"group": consumer_group}
     )
     now = datetime.now()
-    global_consumer_counter.reorganize_buckets(now)
-    project_counter.reorganize_buckets(now)
+    processing_time_counter.reorganize_buckets(now)
     project_groups = defaultdict(list)
-    for bucket in project_counter.buckets:
+    for bucket in processing_time_counter.buckets:
         project_groups[bucket.project_id].append(bucket.processing_time)
 
     for project_id, processing_times in project_groups.items():
-        project_total_processing_time = project_counter.get_time_sum(processing_times)
-        replacer_total_processing_time = global_consumer_counter.get_time_sum(
-            [
-                bucket.processing_time
-                for bucket in global_consumer_counter.buckets
-                if not bucket.project_id
-            ]
-        )
-        if project_total_processing_time > replacer_total_processing_time * 0.5:
+        project_processing_time = processing_time_counter.get_time_sum(processing_times)
+        if project_processing_time > WINDOW_SIZE * 0.5:
             metrics.increment(
-                "project_exceeded_50_percent_global_processing_time",
+                "project_processing_time_exceeded_time_interval",
                 tags={"project_id": str(project_id)},
             )

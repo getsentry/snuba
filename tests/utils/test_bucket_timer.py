@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from snuba.utils.bucket_timer import Counter, compare_counters_and_write_metric
+from snuba.utils.bucket_timer import (
+    WINDOW_SIZE,
+    Counter,
+    compare_counter_and_write_metric,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
@@ -37,22 +41,15 @@ def test_write_to_bucket_over_multiple_minutes() -> None:
 
 @patch.object(MetricsWrapper, "increment")
 def test_compare_counters_and_write_metric(increment_method_mock: MagicMock) -> None:
-    global_counter = Counter()
-    project_counter = Counter()
+    counter = Counter()
 
     now = datetime.now()
-    project_counter.write_to_bucket(1, now - timedelta(seconds=100), now)
-    project_counter.write_to_bucket(2, now - timedelta(seconds=100), now)
-    project_counter.write_to_bucket(3, now - timedelta(seconds=10), now)
-    global_counter.write_to_bucket(None, now - timedelta(seconds=120), now)
+    counter.write_to_bucket(1, now - WINDOW_SIZE * 0.2, now)
+    counter.write_to_bucket(2, now - WINDOW_SIZE * 0.6, now)
+    counter.write_to_bucket(3, now - WINDOW_SIZE * 0.01, now)
 
-    compare_counters_and_write_metric(global_counter, project_counter, "not available")
-    assert increment_method_mock.call_count == 2
-    increment_method_mock.assert_any_call(
-        "project_exceeded_50_percent_global_processing_time",
+    compare_counter_and_write_metric(counter, "not available")
+    increment_method_mock.assert_called_once_with(
+        "project_processing_time_exceeded_time_interval",
         tags={"project_id": str(2)},
-    )
-    increment_method_mock.assert_any_call(
-        "project_exceeded_50_percent_global_processing_time",
-        tags={"project_id": str(1)},
     )
