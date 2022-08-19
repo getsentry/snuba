@@ -25,7 +25,6 @@ RUN set -ex; \
         libc6-dev \
         liblz4-dev \
         libpcre3-dev \
-        wget \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
@@ -33,15 +32,6 @@ RUN set -ex; \
     [ $(uname -m) = "aarch64" ] && apt-get install -y librdkafka-dev --no-install-recommends; \
     \
     pip install -r requirements.txt; \
-    \
-    mkdir /tmp/uwsgi-dogstatsd; \
-    wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
-    | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
-    uwsgi --build-plugin /tmp/uwsgi-dogstatsd; \
-    rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
-    mkdir -p /var/lib/uwsgi; \
-    mv dogstatsd_plugin.so /var/lib/uwsgi/; \
-    uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
     \
     apt-get purge -y --auto-remove $buildDeps; \
     rm -rf /var/lib/apt/lists/*;
@@ -62,7 +52,7 @@ ENV SNUBA_RELEASE=$SOURCE_COMMIT \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UWSGI_ENABLE_METRICS=true \
-    UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
+    UWSGI_NEED_PLUGIN=/usr/local/lib/dogstatsd_plugin.so \
     UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
 
