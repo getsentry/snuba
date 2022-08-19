@@ -30,7 +30,6 @@ class QueryValidator(ABC):
     of these validators that it adds contextual information too.
     """
 
-    @abstractmethod
     def __init__(self, *args: Sequence[Any], **kwargs: Mapping[str, Any]) -> None:
         raise NotImplementedError
 

@@ -1,4 +1,3 @@
-from abc import abstractmethod
 from typing import Any, Mapping, Sequence, TypeVar, Union
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
@@ -20,7 +19,6 @@ TExpOut = TypeVar("TExpOut")
 class SnubaClickhouseMapper(
     ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseStrictTranslator]
 ):
-    @abstractmethod
     def __init__(self, *args: Sequence[Any], **kwargs: Mapping[str, Any]) -> None:
         raise NotImplementedError
 

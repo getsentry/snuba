@@ -21,7 +21,6 @@ class QueryProcessor(ABC):
     instance may be reused.
     """
 
-    @abstractmethod
     def __init__(self, *args: Sequence[Any], **kwargs: Mapping[str, Any]) -> None:
         raise NotImplementedError
 
