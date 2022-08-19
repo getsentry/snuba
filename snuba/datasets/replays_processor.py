@@ -233,7 +233,7 @@ class ReplaysProcessor(MessageProcessor):
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
-        except Exception as e:
+        except Exception:
             metrics.increment("consumer_error")
-            logger.exception(e)
+            logger.exception("replay event could not be processed.")
             return None
