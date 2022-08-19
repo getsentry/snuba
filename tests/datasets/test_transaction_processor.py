@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass
