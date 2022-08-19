@@ -25,8 +25,6 @@ from snuba.query.validation.validators import (
     QueryValidator,
 )
 
-__MAPPINGS_HAVE_BEEN_INITIALIZED = False
-
 _QP_MAPPING: dict[str, Type[QueryProcessor]] = {}
 
 _FUNCTION_MAPPER_MAPPING: Mapping[str, Type[FunctionCallMapper]] = {
@@ -45,8 +43,9 @@ logger = logging.getLogger("snuba.entity_builder")
 
 
 def _initialize_mappings() -> None:
-    # circular imports 🤪
-    global __MAPPINGS_HAVE_BEEN_INITIALIZED
+    if len(_QP_MAPPING) > 0:
+        return
+
     from snuba.datasets.entities.metrics import TagsTypeTransformer
     from snuba.query.processors.granularity_processor import MappedGranularityProcessor
     from snuba.query.processors.object_id_rate_limiter import (
@@ -70,8 +69,6 @@ def _initialize_mappings() -> None:
             "resource_quota_limiter": ResourceQuotaProcessor,
         }
     )
-
-    __MAPPINGS_HAVE_BEEN_INITIALIZED = True
 
 
 def _build_entity_validators(
@@ -111,9 +108,8 @@ def _build_entity_translation_mappers(
 
 
 def build_entity_from_config(file_path: str) -> Entity:
-    logger.warn(f"building entity from {file_path}")
-    if not __MAPPINGS_HAVE_BEEN_INITIALIZED:
-        _initialize_mappings()
+    logger.info(f"building entity from {file_path}")
+    _initialize_mappings()
     config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
     return PluggableEntity(
         name=config_data["name"],
