@@ -104,3 +104,8 @@ def get_dataset_name(dataset: Dataset) -> str:
 
 def get_enabled_dataset_names() -> Sequence[str]:
     return _ds_factory().all_names()
+
+
+def reset_dataset_factory() -> None:
+    global _DS_FACTORY
+    _DS_FACTORY = _DatasetFactory()

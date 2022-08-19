@@ -1,49 +1,17 @@
-import threading
-from typing import Any, Iterator
+from typing import Iterator
 
 import pytest
 
 from snuba import settings
+from snuba.datasets import factory
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
     get_dataset_name,
     get_enabled_dataset_names,
+    reset_dataset_factory,
 )
-
-
-def test_get_dataset_multithreaded_collision() -> None:
-    class GetDatasetThread(threading.Thread):
-        def test_get_dataset_threaded(self) -> None:
-            ds_name = "events"
-            factory_ds = get_dataset(ds_name)
-            assert isinstance(factory_ds, Dataset)
-            assert get_dataset_name(factory_ds) == ds_name
-
-        def run(self) -> None:
-            self.exception = None
-            try:
-                self.test_get_dataset_threaded()
-            except Exception as e:
-                self.exception = e
-
-        def join(self, *args: Any, **kwargs: Any) -> None:
-            threading.Thread.join(self)
-            if self.exception:
-                raise self.exception
-
-    threads = []
-    for _ in range(5):
-        thread = GetDatasetThread()
-        threads.append(thread)
-        thread.start()
-
-    for thread in threads:
-        try:
-            thread.join()
-        except Exception as error:
-            raise error
 
 
 def test_get_dataset() -> None:
@@ -81,7 +49,17 @@ def test_disabled(disable_datasets: Iterator[None]) -> None:
         get_dataset("events")
 
 
+def test_get_dataset_factory_and_mapping_coupling() -> None:
+    # Test will fail if the factory object initialization is decoupled from mapping initialization
+    ds_name = "events"
+    reset_dataset_factory()
+    factory_ds = get_dataset(ds_name)
+    assert isinstance(factory_ds, Dataset)
+    assert get_dataset_name(factory_ds) == ds_name
+
+
 def test_all_names() -> None:
+    factory._DS_FACTORY = None
     assert set(get_enabled_dataset_names()) == set(
         [
             "discover",
