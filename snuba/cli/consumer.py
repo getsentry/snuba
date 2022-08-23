@@ -111,6 +111,11 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Use cooperative-sticky partition assignment strategy",
 )
+@click.option(
+    "--no-op",
+    type=bool,
+    default=True,
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -132,6 +137,9 @@ def consumer(
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
     cooperative_rebalancing: bool = False,
+    no_op: bool = True,
+    no_op_avg_write_latency: int = 1,
+    no_op_mock_std_deviation: int = 1
 ) -> None:
 
     setup_logging(log_level)
@@ -175,6 +183,9 @@ def consumer(
         stats_callback=stats_callback,
         parallel_collect=parallel_collect,
         cooperative_rebalancing=cooperative_rebalancing,
+        no_op=no_op,
+        no_op_avg_write_latency=no_op_avg_write_latency,
+        no_op_mock_std_deviation=no_op_mock_std_deviation,
     )
 
     consumer = consumer_builder.build_base_consumer()

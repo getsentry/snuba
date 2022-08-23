@@ -82,6 +82,9 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
         mock_parameters: Optional[MockParameters] = None,
         cooperative_rebalancing: bool = False,
+        no_op: bool = True,
+        no_op_avg_write_latency: int = 1,
+        no_op_mock_std_deviation: int = 1,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
@@ -155,6 +158,9 @@ class ConsumerBuilder:
         self.__mock_parameters = mock_parameters
         self.__parallel_collect = parallel_collect
         self.__cooperative_rebalancing = cooperative_rebalancing
+        self.no_op = no_op
+        self.no_op_avg_write_latency = no_op_avg_write_latency
+        self.no_op_mock_std_deviation = no_op_mock_std_deviation
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -231,6 +237,9 @@ class ConsumerBuilder:
         if processor_wrapper is not None:
             processor = processor_wrapper(processor)
 
+        if self.no_op:
+            print("no op activated")
+
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload
         ] = KafkaConsumerStrategyFactory(
@@ -246,13 +255,13 @@ class ConsumerBuilder:
                 ),
                 replacements_topic=self.replacements_topic,
             )
-            if self.__mock_parameters is None
+            if self.__mock_parameters is None and not self.no_op
             else build_mock_batch_writer(
                 self.storage,
                 bool(self.replacements_topic),
                 self.metrics,
-                self.__mock_parameters.avg_write_latency,
-                self.__mock_parameters.std_deviation,
+                self.no_op_avg_write_latency,
+                self.no_op_mock_std_deviation,
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
