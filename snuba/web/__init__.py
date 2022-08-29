@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, NamedTuple, TypedDict
+from typing import Any, Mapping, NamedTuple, TypedDict, cast
 
 from snuba.reader import Column, Result, Row, transform_rows
-from snuba.utils.serializable_exception import SerializableException
+from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 
 
 class QueryExtraData(TypedDict):
@@ -21,8 +21,16 @@ class QueryException(SerializableException):
     the cause of the exception.
     """
 
-    def __init__(self, extra: QueryExtraData):
-        self.extra = extra
+    @classmethod
+    def from_args(cls, extra: QueryExtraData) -> "QueryException":
+        return cls(extra=cast(JsonSerializable, extra))
+
+    @property
+    def extra(self) -> QueryExtraData:
+        extra = self.extra_data.get("extra", None)
+        if not extra:
+            return QueryExtraData(stats={}, sql="noquery", experiments={})
+        return cast(QueryExtraData, extra)
 
 
 class QueryTooLongException(SerializableException):
