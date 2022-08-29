@@ -1,4 +1,4 @@
-from typing import Mapping, NamedTuple
+from typing import NamedTuple, Sequence
 
 from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -48,11 +48,11 @@ class GranularityMapping(NamedTuple):
     enum_value: int
 
 
-PERFORMANCE_GRANULARITIES: Mapping[int, int] = {
-    60: 1,
-    3600: 2,
-    86400: 3,
-}
+PERFORMANCE_GRANULARITIES: Sequence[GranularityMapping] = [
+    GranularityMapping(60, 1),
+    GranularityMapping(3600, 2),
+    GranularityMapping(86400, 3),
+]
 DEFAULT_MAPPED_GRANULARITY_ENUM = 1
 
 
@@ -64,21 +64,16 @@ class MappedGranularityProcessor(QueryProcessor):
 
     def __init__(
         self,
-        accepted_granularities: Mapping[int, int],
-        default_granularity: int,
+        accepted_granularities: Sequence[GranularityMapping],
+        default_granularity_enum: int,
     ):
-        accepted_granularities_processed = [
-            GranularityMapping(k, v) for (k, v) in accepted_granularities.items()
-        ]
         self._accepted_granularities = sorted(
-            accepted_granularities_processed,
-            key=lambda mapping: mapping.raw,
-            reverse=True,
+            accepted_granularities, key=lambda mapping: mapping.raw, reverse=True
         )
         self._available_granularities_values = [
             mapping.raw for mapping in self._accepted_granularities
         ]
-        self._default_granularity_enum = default_granularity
+        self._default_granularity_enum = default_granularity_enum
 
     def __get_granularity(self, query: Query) -> int:
         """Find the best fitting granularity for this query"""

@@ -2,10 +2,8 @@ from typing import Optional
 
 import click
 
-from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import InvalidEntityError, get_entity
-from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.utils.describer import Description, DescriptionVisitor, Property
 
 
@@ -62,12 +60,3 @@ def describe(entity_name: str) -> None:
         entity.describe().accept(CLIDescriber())
     except InvalidEntityError:
         click.echo(f"Entity {entity_name} does not exists or it is not registered.")
-
-
-@entities.command()
-@click.argument("entity_path", type=str)
-def load(entity_path: str) -> None:
-    entity = build_entity_from_config(entity_path)
-    assert isinstance(entity, PluggableEntity)
-    click.echo(f"Entity {entity.name}")
-    entity.describe().accept(CLIDescriber())

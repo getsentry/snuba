@@ -57,13 +57,12 @@ def end_time(start_time: datetime) -> datetime:
 @pytest.fixture
 def pluggable_sets_entity() -> PluggableEntity:
     return PluggableEntity(
-        name="generic_metrics_sets",
         readable_storage=get_storage(StorageKey.GENERIC_METRICS_SETS),
         query_processors=[
             TagsTypeTransformer(),
             MappedGranularityProcessor(
                 accepted_granularities=PERFORMANCE_GRANULARITIES,
-                default_granularity=DEFAULT_MAPPED_GRANULARITY_ENUM,
+                default_granularity_enum=DEFAULT_MAPPED_GRANULARITY_ENUM,
             ),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
             ReferrerRateLimiterProcessor(),
@@ -104,7 +103,6 @@ def pluggable_sets_entity() -> PluggableEntity:
             ],
         ),
         validators=[],
-        required_time_column="timestamp",
     )
 
 
