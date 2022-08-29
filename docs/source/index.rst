@@ -10,6 +10,7 @@ Contents:
    architecture/overview
    architecture/datamodel
    architecture/queryprocessing
+   configuration/overview
    query/overview
    language/snql
    migrations/modes
