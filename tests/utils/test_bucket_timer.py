@@ -1,16 +1,12 @@
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from snuba.utils.bucket_timer import (
-    WINDOW_SIZE,
-    Counter,
-    compare_counter_and_write_metric,
-)
+from snuba.utils.bucket_timer import WINDOW_SIZE, Counter
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
 def test_write_to_bucket_over_one_minute() -> None:
-    counter = Counter()
+    counter = Counter("test-consumer-group")
     start_time = datetime(2022, 1, 1, 1, 1, 30)
     end_time = start_time + timedelta(seconds=5)
     counter.write_to_bucket(None, start_time, end_time)
@@ -22,7 +18,7 @@ def test_write_to_bucket_over_one_minute() -> None:
 
 
 def test_write_to_bucket_over_multiple_minutes() -> None:
-    counter = Counter()
+    counter = Counter("test-consumer-group")
     start_time = datetime(2022, 1, 1, 1, 1, 30)
     end_time = start_time + timedelta(seconds=70)
     counter.write_to_bucket(None, start_time, end_time)
@@ -41,14 +37,14 @@ def test_write_to_bucket_over_multiple_minutes() -> None:
 
 @patch.object(MetricsWrapper, "increment")
 def test_compare_counters_and_write_metric(increment_method_mock: MagicMock) -> None:
-    counter = Counter()
+    counter = Counter("test-consumer-group")
 
     now = datetime.now()
-    counter.write_to_bucket(1, now - WINDOW_SIZE * 0.2, now)
-    counter.write_to_bucket(2, now - WINDOW_SIZE * 0.6, now)
-    counter.write_to_bucket(3, now - WINDOW_SIZE * 0.01, now)
+    counter.write_to_bucket(1, now - (WINDOW_SIZE * 0.2), now)
+    counter.write_to_bucket(2, now - (WINDOW_SIZE * 0.6), now)
+    counter.write_to_bucket(3, now - (WINDOW_SIZE * 0.01), now)
 
-    compare_counter_and_write_metric(counter, "not available")
+    counter.compare_and_write_metric()
     increment_method_mock.assert_called_once_with(
         "project_processing_time_exceeded_time_interval",
         tags={"project_id": str(2)},

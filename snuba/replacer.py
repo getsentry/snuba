@@ -28,7 +28,7 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessageMetadata,
 )
 from snuba.state import get_config
-from snuba.utils.bucket_timer import Counter, compare_counter_and_write_metric
+from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
 
@@ -271,7 +271,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__storage = storage
 
         self.metrics = metrics
-        self.__process_time_counter = Counter()
+        self.__processing_time_counter = Counter(consumer_group)
         processor = storage.get_table_writer().get_replacer_processor()
         assert (
             processor
@@ -523,11 +523,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         end_time: datetime,
         project_id: int,
     ) -> None:
-        self.__process_time_counter.write_to_bucket(
+        self.__processing_time_counter.write_to_bucket(
             project_id,
             start_time,
             end_time,
         )
-        compare_counter_and_write_metric(
-            self.__process_time_counter, self.__consumer_group
-        )
+        self.__processing_time_counter.compare_and_write_metric()

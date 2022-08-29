@@ -26,7 +26,8 @@ class Bucket:
 
 
 class Counter:
-    def __init__(self) -> None:
+    def __init__(self, consumer_group: str) -> None:
+        self.consumer_group: str = consumer_group
         self.buckets: Deque[Bucket] = deque()
 
     def get_time_sum(self, group: List[timedelta]) -> timedelta:
@@ -40,7 +41,7 @@ class Counter:
             return time
         return self.floor_minute(time + timedelta(minutes=1))
 
-    def reorganize_buckets(self, now: datetime) -> None:
+    def trim_expired_buckets(self, now: datetime) -> None:
         current_minute = self.floor_minute(now)
         window = current_minute - WINDOW_SIZE
         while self.buckets and self.buckets[0].minute < window:
@@ -83,23 +84,21 @@ class Counter:
         for bucket in self.buckets:
             print(bucket.minute, bucket.project_id, bucket.processing_time)
 
+    def compare_and_write_metric(self) -> None:
+        metrics = MetricsWrapper(
+            environment.metrics, "replacer", tags={"group": self.consumer_group}
+        )
+        now = datetime.now()
+        self.trim_expired_buckets(now)
+        project_groups = defaultdict(list)
+        for bucket in self.buckets:
+            project_groups[bucket.project_id].append(bucket.processing_time)
 
-def compare_counter_and_write_metric(
-    processing_time_counter: Counter, consumer_group: str
-) -> None:
-    metrics = MetricsWrapper(
-        environment.metrics, "replacer", tags={"group": consumer_group}
-    )
-    now = datetime.now()
-    processing_time_counter.reorganize_buckets(now)
-    project_groups = defaultdict(list)
-    for bucket in processing_time_counter.buckets:
-        project_groups[bucket.project_id].append(bucket.processing_time)
-
-    for project_id, processing_times in project_groups.items():
-        project_processing_time = processing_time_counter.get_time_sum(processing_times)
-        if project_processing_time > WINDOW_SIZE * 0.5:
-            metrics.increment(
-                "project_processing_time_exceeded_time_interval",
-                tags={"project_id": str(project_id)},
-            )
+        # Compare the replacement total grouped by project_id with system time
+        for project_id, processing_times in project_groups.items():
+            project_processing_time = self.get_time_sum(processing_times)
+            if project_processing_time > WINDOW_SIZE * 0.5 and len(project_groups) > 1:
+                metrics.increment(
+                    "project_processing_time_exceeded_time_interval",
+                    tags={"project_id": str(project_id)},
+                )
