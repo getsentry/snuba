@@ -75,7 +75,6 @@ def build_executor_consumer(
     entity_names: Sequence[str],
     consumer_group: str,
     producer: Producer[KafkaPayload],
-    max_concurrent_queries: int,
     total_concurrent_queries: int,
     auto_offset_reset: str,
     strict_offset_reset: Optional[bool],
@@ -133,14 +132,6 @@ def build_executor_consumer(
 
     total_partition_count = get_partition_count(scheduled_topic_spec.topic)
 
-    # XXX: for now verify that the partition_counts are correct for
-    # the executors.
-    metrics.gauge(
-        "executor.partition_count",
-        total_partition_count,
-        tags={"topic": scheduled_topic_spec.topic_name},
-    )
-
     # Collect metrics from librdkafka if we have stats_collection_freq_ms set
     # for the consumer group, or use the default.
     stats_collection_frequency_ms = get_config(
@@ -168,7 +159,6 @@ def build_executor_consumer(
         KafkaConsumer(consumer_configuration),
         Topic(scheduled_topic_spec.topic_name),
         SubscriptionExecutorProcessingFactory(
-            max_concurrent_queries,
             total_concurrent_queries,
             total_partition_count,
             dataset,
@@ -184,7 +174,6 @@ def build_executor_consumer(
 class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
-        max_concurrent_queries: int,
         total_concurrent_queries: int,
         total_partition_count: int,
         dataset: Dataset,
@@ -194,7 +183,6 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         stale_threshold_seconds: Optional[int],
         result_topic: str,
     ) -> None:
-        self.__max_concurrent_queries = max_concurrent_queries
         self.__total_concurrent_queries = total_concurrent_queries
         self.__total_partition_count = total_partition_count
         self.__dataset = dataset
@@ -215,20 +203,14 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
             self.__total_partition_count,
             self.__total_concurrent_queries,
         )
-        # XXX(meredith): temporarily log both the calculated and passed in
-        # max concurrent queries
         self.__metrics.gauge(
             "calculated_max_concurrent_queries", calculated_max_concurrent_queries
         )
-        self.__metrics.gauge("max_concurrent_queries", self.__max_concurrent_queries)
-
-        if state.get_config("use_calculated_max_concurrent_queries", False):
-            self.__max_concurrent_queries = calculated_max_concurrent_queries
 
         return ExecuteQuery(
             self.__dataset,
             self.__entity_names,
-            self.__max_concurrent_queries,
+            calculated_max_concurrent_queries,
             self.__stale_threshold_seconds,
             self.__metrics,
             ProduceResult(self.__producer, self.__result_topic, commit),
