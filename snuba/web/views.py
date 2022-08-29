@@ -40,7 +40,7 @@ from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings, ConnectionId
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP
+from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.entity import Entity
 from snuba.datasets.factory import (
     InvalidDatasetError,
@@ -530,7 +530,7 @@ def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> Re
         raise InvalidSubscriptionError(
             "Invalid subscription dataset and entity combination"
         )
-    entity_key = ENTITY_NAME_LOOKUP[entity]
+    entity_key = get_entity_name(entity)
     subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
     identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
 
@@ -553,7 +553,7 @@ def delete_subscription(
         raise InvalidSubscriptionError(
             "Invalid subscription dataset and entity combination"
         )
-    entity_key = ENTITY_NAME_LOOKUP[entity]
+    entity_key = get_entity_name(entity)
     SubscriptionDeleter(entity_key, PartitionId(partition)).delete(UUID(key))
     metrics.increment("subscription_deleted", tags={"entity": entity_key.value})
 

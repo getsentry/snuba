@@ -3,7 +3,7 @@ from functools import partial
 import pytest
 
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import ENTITY_IMPL
+from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -263,8 +263,8 @@ def test_add_equivalent_condition(
     join_clause: JoinClause[EntitySource],
     expected_expr: Expression,
 ) -> None:
-    ENTITY_IMPL[EntityKey.EVENTS] = Events()
-    ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
+    override_entity_map(EntityKey.EVENTS, Events())
+    override_entity_map(EntityKey.GROUPEDMESSAGES, GroupedMessage())
 
     query = CompositeQuery(
         from_clause=join_clause,
@@ -278,4 +278,4 @@ def test_add_equivalent_condition(
     add_equivalent_conditions(query)
     assert query.get_condition() == expected_expr
 
-    ENTITY_IMPL.clear()
+    reset_entity_factory()
