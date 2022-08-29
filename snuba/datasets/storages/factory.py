@@ -5,6 +5,7 @@ from glob import glob
 from typing import Generator
 
 from snuba import settings
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -208,6 +209,12 @@ def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
 def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
     storage = _storage_factory().get(storage_key)
     assert isinstance(storage, WritableTableStorage)
+    return storage
+
+
+def get_cdc_storage(storage_key: StorageKey) -> CdcStorage:
+    storage = _storage_factory().get(storage_key)
+    assert isinstance(storage, CdcStorage)
     return storage
 
 

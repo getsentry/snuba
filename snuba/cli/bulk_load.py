@@ -7,9 +7,8 @@ import progressbar
 
 from snuba import environment, settings
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_cdc_storage_keys, get_storage
+from snuba.datasets.storages.factory import get_cdc_storage, get_cdc_storage_keys
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.loaders import ProgressCallback
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
@@ -67,8 +66,7 @@ def bulk_load(
     logger.info(
         "Start bulk load process for storage %s, from source %s", storage_name, source
     )
-
-    assert isinstance(storage := get_storage(StorageKey(storage_name)), CdcStorage)
+    storage = get_cdc_storage(StorageKey(storage_name))
     table_writer = storage.get_table_writer()
 
     # TODO: Have a more abstract way to load sources if/when we support more than one.

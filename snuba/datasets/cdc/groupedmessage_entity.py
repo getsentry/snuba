@@ -1,11 +1,10 @@
 from typing import Sequence
 
-from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.processors import QueryProcessor
@@ -20,8 +19,7 @@ class GroupedMessageEntity(Entity):
     """
 
     def __init__(self) -> None:
-        storage = get_storage(StorageKey.GROUPEDMESSAGES)
-        assert isinstance(storage, CdcStorage)
+        storage = get_cdc_storage(StorageKey.GROUPEDMESSAGES)
         schema = storage.get_table_writer().get_schema()
 
         super().__init__(
