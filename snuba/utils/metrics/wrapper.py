@@ -1,4 +1,3 @@
-from collections import ChainMap
 from typing import Optional, Union
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -28,7 +27,7 @@ class MetricsWrapper(MetricsBackend):
         elif tags is None:
             return self.__tags
         else:
-            return ChainMap(tags, self.__tags)
+            return {**tags, **self.__tags}
 
     def increment(
         self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None

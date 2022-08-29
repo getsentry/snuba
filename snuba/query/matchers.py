@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections import ChainMap
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any as AnyType
@@ -88,7 +87,7 @@ class MatchResult:
     # from the Results if needed.
 
     def merge(self, values: MatchResult) -> MatchResult:
-        return MatchResult(ChainMap(self.results, values.results))
+        return MatchResult({**self.results, **values.results})
 
 
 class Pattern(ABC, Generic[TMatchedType]):

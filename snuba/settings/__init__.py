@@ -265,6 +265,7 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             settings_spec = importlib.util.spec_from_file_location(
                 "snuba.settings.custom", settings
             )
+            assert settings_spec is not None
             settings_module = importlib.util.module_from_spec(settings_spec)
             assert isinstance(settings_spec.loader, importlib.abc.Loader)
             settings_spec.loader.exec_module(settings_module)
