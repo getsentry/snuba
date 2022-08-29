@@ -165,3 +165,11 @@ class SerializableException(Exception):
 
     def __repr__(self) -> str:
         return cast(str, rapidjson.dumps(self.to_dict(), indent=2))
+
+    def __str__(self) -> str:
+        if self.message:
+            return self.message
+        elif self.__cause__:
+            return str(self.__cause__)
+        else:
+            return repr(self)

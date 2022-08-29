@@ -76,3 +76,26 @@ def test_sentry_integration() -> None:
             single_exception_from_error_tuple(MySubException, e2, tb=None)["value"]
             == "message"
         )
+
+
+def test_sentry_integration_cause() -> None:
+    class MyQueryException(SerializableException):
+        @classmethod
+        def from_args(cls, extra: dict) -> "MyQueryException":
+            return cls(extra_data=extra)
+
+    def func():
+        try:
+            raise ValueError("Some stuff happened")
+        except ValueError as cause:
+            raise MyQueryException.from_args(
+                {"stats": {}, "sql": "fdsfsdaf", "experiments": {}}
+            ) from cause
+
+    try:
+        func()
+    except MyQueryException as exc:
+        assert (
+            single_exception_from_error_tuple(MyQueryException, exc, tb=None)["value"]
+            == "Some stuff happened"
+        )
