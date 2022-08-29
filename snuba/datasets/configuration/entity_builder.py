@@ -87,7 +87,12 @@ def _build_entity_validators(
 def _build_entity_query_processors(
     config_query_processors: list[dict[str, Any]],
 ) -> Sequence[QueryProcessor]:
-    return [_QP_MAPPING[config_qp["processor"]](**(config_qp["args"] if config_qp.get("args") else {})) for config_qp in config_query_processors]  # type: ignore
+    return [
+        _QP_MAPPING[config_qp["processor"]](  # type: ignore
+            **(config_qp["args"] if config_qp.get("args") else {})
+        )
+        for config_qp in config_query_processors
+    ]
 
 
 def _build_entity_translation_mappers(
