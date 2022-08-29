@@ -46,6 +46,10 @@ def _initialize_mappings() -> None:
     if len(_QP_MAPPING) > 0:
         return
 
+    # HACK: These imports are necessary because of circular imports between
+    # very dataset-specific query processors and the QueryPipelineBuilder. When
+    # we institute a registry meta-class for dependencies
+    # (e.g. https://github.com/getsentry/snuba/pull/3044) this should be removed.
     from snuba.datasets.entities.metrics import TagsTypeTransformer
     from snuba.query.processors.granularity_processor import MappedGranularityProcessor
     from snuba.query.processors.object_id_rate_limiter import (
