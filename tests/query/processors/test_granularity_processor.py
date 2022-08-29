@@ -133,7 +133,7 @@ def test_granularity_enum_mapping(
     try:
         MappedGranularityProcessor(
             accepted_granularities=PERFORMANCE_GRANULARITIES,
-            default_granularity=DEFAULT_MAPPED_GRANULARITY_ENUM,
+            default_granularity_enum=DEFAULT_MAPPED_GRANULARITY_ENUM,
         ).process_query(query, HTTPQuerySettings())
     except InvalidGranularityException:
         assert query_granularity is None

@@ -110,7 +110,7 @@ class GenericMetricsEntity(Entity, ABC):
             TagsTypeTransformer(),
             MappedGranularityProcessor(
                 accepted_granularities=PERFORMANCE_GRANULARITIES,
-                default_granularity=DEFAULT_MAPPED_GRANULARITY_ENUM,
+                default_granularity_enum=DEFAULT_MAPPED_GRANULARITY_ENUM,
             ),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
             ReferrerRateLimiterProcessor(),

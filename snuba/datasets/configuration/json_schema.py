@@ -101,12 +101,13 @@ NESTED_SCHEMA = make_column_schema(
     },
 )
 
-SCHEMA_COLUMNS = {"type": "array", "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]}}
-
 SCHEMA_SCHEMA = {
     "type": "object",
     "properties": {
-        "columns": SCHEMA_COLUMNS,
+        "columns": {
+            "type": "array",
+            "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]},
+        },
         "local_table_name": TYPE_STRING,
         "dist_table_name": TYPE_STRING,
     },
@@ -118,47 +119,10 @@ STORAGE_SCHEMA = {
     "properties": {"key": TYPE_STRING, "set_key": TYPE_STRING},
 }
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
+QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
 
-KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage", "entity"]}
+KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage"]}
 
-ENTITY_QUERY_PROCESSOR = {
-    "type": "object",
-    "properties": {
-        "processor": TYPE_STRING,
-        "args": {"type": "object"},  # args are a flexible dict
-    },
-    "required": ["processor"],
-}
-
-ENTITY_VALIDATOR = {
-    "type": "object",
-    "properties": {
-        "validator": TYPE_STRING,
-        "args": {"type": "object"},  # args are a flexible dict
-    },
-    "required": ["validator"],
-}
-
-ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "properties": {
-            "mapper": TYPE_STRING,
-            "args": {"type": "object"},
-        },
-        "required": ["mapper"],
-    },
-}
-
-ENTITY_TRANSLATION_MAPPERS = {
-    "type": "object",
-    "properties": {
-        "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
-        "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
-    },
-}
 
 # Full schemas:
 
@@ -166,11 +130,11 @@ V1_WRITABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
-        "kind": {"const": "writable_storage"},
+        "kind": KIND_SCHEMA,
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_processors": QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
 }
@@ -180,36 +144,10 @@ V1_READABLE_STORAGE_SCHEMA = {
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
-        "kind": {"const": "readable_storage"},
+        "kind": KIND_SCHEMA,
         "name": TYPE_STRING,
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_processors": QUERY_PROCESSORS_SCHEMA,
     },
-}
-
-V1_ENTITY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "version": {"const": "v1"},
-        "kind": {"const": "entity"},
-        "schema": SCHEMA_COLUMNS,
-        "name": TYPE_STRING,
-        "readable_storage": TYPE_STRING,
-        "writable_storage": TYPE_NULLABLE_STRING,
-        "query_processors": {"type": "array", "items": ENTITY_QUERY_PROCESSOR},
-        "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
-        "validators": {"type": "array", "items": ENTITY_VALIDATOR},
-        "required_time_column": TYPE_STRING,
-    },
-    "required": [
-        "version",
-        "kind",
-        "schema",
-        "name",
-        "readable_storage",
-        "query_processors",
-        "validators",
-        "required_time_column",
-    ],
 }
