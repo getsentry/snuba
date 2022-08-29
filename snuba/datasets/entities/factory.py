@@ -1,4 +1,5 @@
 from typing import Generator, MutableMapping, Sequence, Type
+
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.table_storage import TableWriter
