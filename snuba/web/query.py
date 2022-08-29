@@ -336,18 +336,20 @@ def _format_storage_query_and_run(
     }
 
     if query_size_bytes > MAX_QUERY_SIZE_BYTES:
-        raise QueryException.from_args(
-            extra=QueryExtraData(
-                stats=stats,
-                sql=formatted_sql,
-                experiments=clickhouse_query.get_experiments(),
-            )
-        ) from QueryTooLongException(
+        cause = QueryTooLongException(
             f"After processing, query is {query_size_bytes} bytes, "
             "which is too long for ClickHouse to process. "
             f"Max size is {MAX_QUERY_SIZE_BYTES} bytes."
         )
 
+        raise QueryException.from_args(
+            str(cause),
+            extra=QueryExtraData(
+                stats=stats,
+                sql=formatted_sql,
+                experiments=clickhouse_query.get_experiments(),
+            ),
+        ) from cause
     with sentry_sdk.start_span(description=formatted_sql, op="db") as span:
         span.set_tag("table", table_names)
 

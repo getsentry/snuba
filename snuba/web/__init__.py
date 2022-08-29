@@ -22,8 +22,8 @@ class QueryException(SerializableException):
     """
 
     @classmethod
-    def from_args(cls, extra: QueryExtraData) -> "QueryException":
-        return cls(extra=cast(JsonSerializable, extra))
+    def from_args(cls, message: str, extra: QueryExtraData) -> "QueryException":
+        return cls(message=message, extra=cast(JsonSerializable, extra))
 
     @property
     def extra(self) -> QueryExtraData:

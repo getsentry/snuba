@@ -5,7 +5,10 @@ from snuba.web import QueryException
 
 
 def test_printable() -> None:
-    e = QueryException.from_args({"stats": {}, "sql": "fdsfsdaf", "experiments": {}})
+    e = QueryException.from_args(
+        "the cause was coming from inside the house!",
+        {"stats": {}, "sql": "fdsfsdaf", "experiments": {}},
+    )
     assert isinstance(repr(e), str)
     assert isinstance(e.extra, dict)
     json_exc = json.dumps(e.to_dict())
