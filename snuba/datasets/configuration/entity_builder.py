@@ -20,6 +20,16 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.processors import QueryProcessor
+from snuba.query.processors.granularity_processor import MappedGranularityProcessor
+from snuba.query.processors.object_id_rate_limiter import (
+    OrganizationRateLimiterProcessor,
+    ProjectRateLimiterProcessor,
+    ProjectReferrerRateLimiter,
+    ReferrerRateLimiterProcessor,
+)
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
+from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     QueryValidator,
@@ -27,7 +37,16 @@ from snuba.query.validation.validators import (
 
 # TODO replace all the explicit mapping dictionaries below with the
 # registered class factory pattern (e.g. https://github.com/getsentry/snuba/pull/3044)
-_QP_MAPPING: dict[str, Type[QueryProcessor]] = {}
+_QP_MAPPING: dict[str, Type[QueryProcessor]] = {
+    "transform_tag_types": TagsTypeTransformer,
+    "handle_mapped_granularities": MappedGranularityProcessor,
+    "translate_time_series": TimeSeriesProcessor,
+    "referrer_rate_limit": ReferrerRateLimiterProcessor,
+    "org_rate_limiter": OrganizationRateLimiterProcessor,
+    "project_referrer_rate_limiter": ProjectReferrerRateLimiter,
+    "project_rate_limiter": ProjectRateLimiterProcessor,
+    "resource_quota_limiter": ResourceQuotaProcessor,
+}
 
 _FUNCTION_MAPPER_MAPPING: Mapping[str, Type[FunctionCallMapper]] = {
     "simple_func": FunctionNameMapper
@@ -42,39 +61,6 @@ _VALIDATOR_MAPPING: Mapping[str, Type[QueryValidator]] = {
 }
 
 logger = logging.getLogger("snuba.entity_builder")
-
-
-def _initialize_mappings() -> None:
-    if len(_QP_MAPPING) > 0:
-        return
-
-    # HACK: These imports are necessary because of circular imports between
-    # very dataset-specific query processors and the QueryPipelineBuilder. When
-    # we institute a registry meta-class for dependencies
-    # (e.g. https://github.com/getsentry/snuba/pull/3044) this should be removed.
-    from snuba.datasets.entities.metrics import TagsTypeTransformer
-    from snuba.query.processors.granularity_processor import MappedGranularityProcessor
-    from snuba.query.processors.object_id_rate_limiter import (
-        OrganizationRateLimiterProcessor,
-        ProjectRateLimiterProcessor,
-        ProjectReferrerRateLimiter,
-        ReferrerRateLimiterProcessor,
-    )
-    from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-    from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-
-    _QP_MAPPING.update(
-        {
-            "transform_tag_types": TagsTypeTransformer,
-            "handle_mapped_granularities": MappedGranularityProcessor,
-            "translate_time_series": TimeSeriesProcessor,
-            "referrer_rate_limit": ReferrerRateLimiterProcessor,
-            "org_rate_limiter": OrganizationRateLimiterProcessor,
-            "project_referrer_rate_limiter": ProjectReferrerRateLimiter,
-            "project_rate_limiter": ProjectRateLimiterProcessor,
-            "resource_quota_limiter": ResourceQuotaProcessor,
-        }
-    )
 
 
 def _build_entity_validators(
@@ -115,7 +101,6 @@ def _build_entity_translation_mappers(
 
 def build_entity_from_config(file_path: str) -> Entity:
     logger.info(f"building entity from {file_path}")
-    _initialize_mappings()
     config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
     return PluggableEntity(
         name=config_data["name"],
