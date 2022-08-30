@@ -9,15 +9,15 @@ from snuba.clickhouse.columns import (
     Nested,
     UInt,
 )
+from snuba.clickhouse.translators.snuba.function_call_mappers import (
+    AggregateCurriedFunctionMapper,
+    AggregateFunctionMapper,
+)
 from snuba.clickhouse.translators.snuba.mappers import (
     FunctionNameMapper,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.metrics import (
-    AggregateCurriedFunctionMapper,
-    AggregateFunctionMapper,
-)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
