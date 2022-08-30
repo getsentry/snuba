@@ -175,7 +175,9 @@ class Runner:
         group_migrations = get_group_loader(migration_group).get_migrations()
 
         if migration_id not in group_migrations:
-            raise MigrationError("Could not find migration in group")
+            raise MigrationError(
+                f"Could not find migration id {migration_id} in group {migration_group}"
+            )
 
         if dry_run:
             self._run_migration_impl(migration_key, dry_run=True)

@@ -56,6 +56,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "replays",
             "generic_metrics_sets",
             "generic_metrics_distributions",
+            "audit_log",
         },
         "single_node": True,
     },
