@@ -9,11 +9,11 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.entity_subscription import (
-    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
+from snuba.subscriptions.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
 )
+from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 
 UUIDS = [
     UUID("fac82541-049f-4435-982d-819082761a53"),
@@ -42,4 +42,4 @@ def create_entity_subscription(
         data_dict = {"organization": org_id}
     else:
         data_dict = {}
-    return ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](data_dict=data_dict)
+    return get_entity_subscription(entity_key)(data_dict=data_dict)

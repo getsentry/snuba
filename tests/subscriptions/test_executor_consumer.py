@@ -29,10 +29,10 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
 )
-from snuba.subscriptions.entity_subscription import (
-    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
+from snuba.subscriptions.entity_subscriptions.entity_subscription import (
     EventsSubscription,
 )
+from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
     ProduceResult,
@@ -186,9 +186,7 @@ def generate_message(
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
         data_dict = {"organization": 1}
 
-    entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
-        data_dict=data_dict
-    )
+    entity_subscription = get_entity_subscription(entity_key)(data_dict=data_dict)
 
     while True:
         payload = codec.encode(

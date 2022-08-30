@@ -14,7 +14,9 @@ from snuba.subscriptions.combined_scheduler_executor import (
     CombinedSchedulerExecutorFactory,
 )
 from snuba.subscriptions.data import PartitionId, SubscriptionData
-from snuba.subscriptions.entity_subscription import EventsSubscription
+from snuba.subscriptions.entity_subscriptions.entity_subscription import (
+    EventsSubscription,
+)
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration

@@ -5,7 +5,7 @@ import pytest
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.subscriptions.entity_subscription import (
+from snuba.subscriptions.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
     MetricsCountersSubscription,

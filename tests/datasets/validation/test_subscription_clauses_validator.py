@@ -20,11 +20,11 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.validation.validators import SubscriptionAllowedClausesValidator
-from snuba.subscriptions.entity_subscription import (
-    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
+from snuba.subscriptions.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     EntitySubscriptionValidation,
 )
+from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 
 
 class EntityKeySubscription(EntitySubscriptionValidation, EntitySubscription):
@@ -108,7 +108,7 @@ tests = [
 def test_subscription_clauses_validation(query: LogicalQuery) -> None:
     entity_subscription_cls = cast(
         EntityKeySubscription,
-        ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[query.get_from_clause().key],
+        get_entity_subscription(query.get_from_clause().key),
     )
 
     validator = SubscriptionAllowedClausesValidator(
@@ -275,7 +275,7 @@ invalid_tests = [
 def test_subscription_clauses_validation_failure(query: LogicalQuery) -> None:
     entity_subscription_cls = cast(
         EntityKeySubscription,
-        ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[query.get_from_clause().key],
+        get_entity_subscription(query.get_from_clause().key),
     )
     validator = SubscriptionAllowedClausesValidator(
         max_allowed_aggregations=1,
