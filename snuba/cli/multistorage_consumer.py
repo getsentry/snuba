@@ -13,7 +13,10 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
+from snuba.datasets.storages.factory import (
+    get_writable_storage,
+    get_writable_storage_keys,
+)
 from snuba.environment import setup_logging, setup_sentry
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -34,7 +37,9 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--storage",
     "storage_names",
-    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
+    type=click.Choice(
+        [storage_key.value for storage_key in get_writable_storage_keys()]
+    ),
     multiple=True,
     required=True,
 )

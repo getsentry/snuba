@@ -9,7 +9,7 @@ from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_clust
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
-from snuba.datasets.storages.factory import STORAGES, get_storage
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
@@ -184,7 +184,7 @@ def test_no_schema_differences() -> None:
     runner = Runner()
     runner.run_all(force=True)
 
-    for storage_key in STORAGES:
+    for storage_key in get_all_storage_keys():
         storage = get_storage(storage_key)
         conn = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.MIGRATE
