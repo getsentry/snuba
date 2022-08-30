@@ -25,6 +25,8 @@ from snuba.query.validation.validators import (
     QueryValidator,
 )
 
+# TODO replace all the explicit mapping dictionaries below with the
+# registered class factory pattern (e.g. https://github.com/getsentry/snuba/pull/3044)
 _QP_MAPPING: dict[str, Type[QueryProcessor]] = {}
 
 _FUNCTION_MAPPER_MAPPING: Mapping[str, Type[FunctionCallMapper]] = {
