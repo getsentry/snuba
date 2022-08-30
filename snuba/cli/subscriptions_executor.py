@@ -49,14 +49,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     default="snuba-subscription-executor",
     help="Consumer group used for consuming the scheduled subscription topic/s.",
 )
-# TODO: Once we are using the --total-concurrent-queries to calculate the max
-# concurrent queries we can remove this cli arg.
-@click.option(
-    "--max-concurrent-queries",
-    default=20,
-    type=int,
-    help="Max concurrent ClickHouse queries.",
-)
 @click.option(
     "--total-concurrent-queries",
     default=64,
@@ -92,7 +84,6 @@ def subscriptions_executor(
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
-    max_concurrent_queries: int,
     total_concurrent_queries: int,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
@@ -145,7 +136,6 @@ def subscriptions_executor(
         entity_names,
         consumer_group,
         producer,
-        max_concurrent_queries,
         total_concurrent_queries,
         auto_offset_reset,
         not no_strict_offset_reset,

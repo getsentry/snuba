@@ -46,7 +46,6 @@ def build_scheduler_executor_consumer(
     schedule_ttl: int,
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
-    max_concurrent_queries: int,
     total_concurrent_queries: int,
     metrics: MetricsBackend,
     scheduling_mode: Optional[SchedulingWatermarkMode],
@@ -98,7 +97,6 @@ def build_scheduler_executor_consumer(
         dataset,
         entity_names,
         partitions,
-        max_concurrent_queries,
         total_concurrent_queries,
         producer,
         metrics,
@@ -134,7 +132,6 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         dataset: Dataset,
         entity_names: Sequence[str],
         partitions: int,
-        max_concurrent_queries: int,
         total_concurrent_queries: int,
         producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
@@ -178,7 +175,6 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         )
 
         self.__executor_factory = SubscriptionExecutorProcessingFactory(
-            max_concurrent_queries,
             total_concurrent_queries,
             # total_partition_count should always be 1 when using the combined executor/scheduler
             1,
