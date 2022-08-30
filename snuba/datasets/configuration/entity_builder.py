@@ -52,7 +52,6 @@ def _initialize_mappings() -> None:
     # very dataset-specific query processors and the QueryPipelineBuilder. When
     # we institute a registry meta-class for dependencies
     # (e.g. https://github.com/getsentry/snuba/pull/3044) this should be removed.
-    from snuba.datasets.entities.metrics import TagsTypeTransformer
     from snuba.query.processors.granularity_processor import MappedGranularityProcessor
     from snuba.query.processors.object_id_rate_limiter import (
         OrganizationRateLimiterProcessor,
@@ -61,6 +60,7 @@ def _initialize_mappings() -> None:
         ReferrerRateLimiterProcessor,
     )
     from snuba.query.processors.quota_processor import ResourceQuotaProcessor
+    from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
     from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 
     _QP_MAPPING.update(
