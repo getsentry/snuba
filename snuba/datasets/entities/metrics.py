@@ -27,16 +27,8 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import (
-    CurriedFunctionCall,
-    Expression,
-    FunctionCall,
-    Literal,
-    SubscriptableReference,
-)
-from snuba.query.logical import Query
+from snuba.query.expressions import CurriedFunctionCall, Expression, FunctionCall
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.granularity_processor import GranularityProcessor
 from snuba.query.processors.object_id_rate_limiter import (
@@ -46,33 +38,13 @@ from snuba.query.processors.object_id_rate_limiter import (
     ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     GranularityValidator,
     QueryValidator,
 )
-
-
-class TagsTypeTransformer(QueryProcessor):
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        def transform_expression(exp: Expression) -> Expression:
-            if not isinstance(exp, SubscriptableReference):
-                return exp
-
-            key = exp.key
-            if not isinstance(key.value, str) or not key.value.isdigit():
-                raise InvalidExpressionException.from_args(
-                    exp,
-                    "Expected a string key containing an integer in subscriptable.",
-                )
-
-            return SubscriptableReference(
-                exp.alias, exp.column, Literal(None, int(key.value))
-            )
-
-        query.transform_expressions(transform_expression)
 
 
 class MetricsEntity(Entity, ABC):
