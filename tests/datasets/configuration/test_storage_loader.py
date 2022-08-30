@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-from snuba.datasets.storages.factory import CONFIG_BUILT_STORAGES
+from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
+from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage,
     distributions_storage,
@@ -10,6 +10,8 @@ from snuba.datasets.storages.generic_metrics import (
     sets_storage,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+
+CONFIG_BUILT_STORAGES = get_config_built_storages()
 
 
 def test_config_file_discovery() -> None:
@@ -52,13 +54,12 @@ def test_sets_bucket_storage() -> None:
     )
 
 
-def _deep_compare_storages(
-    old: ReadableTableStorage | WritableTableStorage,
-    new: ReadableTableStorage | WritableTableStorage,
-) -> None:
+def _deep_compare_storages(old: Storage, new: Storage) -> None:
     """
     temp function to compare storages
     """
+    assert isinstance(old, ReadableTableStorage)
+    assert isinstance(new, ReadableTableStorage)
     assert (
         old.get_cluster().get_clickhouse_cluster_name()
         == new.get_cluster().get_clickhouse_cluster_name()
