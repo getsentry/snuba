@@ -3,7 +3,7 @@ from typing import cast
 import pytest
 
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import ENTITY_IMPL
+from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -514,9 +514,9 @@ def test_subquery_generator(
     original_query: CompositeQuery[Entity],
     processed_query: CompositeQuery[Entity],
 ) -> None:
-    ENTITY_IMPL[EntityKey.EVENTS] = Events()
-    ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
-    ENTITY_IMPL[EntityKey.GROUPASSIGNEE] = GroupAssignee()
+    override_entity_map(EntityKey.EVENTS, Events())
+    override_entity_map(EntityKey.GROUPEDMESSAGES, GroupedMessage())
+    override_entity_map(EntityKey.GROUPASSIGNEE, GroupAssignee())
 
     generate_subqueries(original_query)
 
@@ -535,4 +535,4 @@ def test_subquery_generator(
 
     report = original_query.equals(processed_query)
     assert report[0], f"Failed equality: {report[1]}"
-    ENTITY_IMPL.clear()
+    reset_entity_factory()

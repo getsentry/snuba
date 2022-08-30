@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import ENTITY_IMPL
+from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -179,10 +179,10 @@ TEST_CASES = [
 def test_find_equivalences(
     join: JoinClause[EntitySource], graph: EquivalenceGraph
 ) -> None:
-    ENTITY_IMPL[EntityKey.EVENTS] = Events()
-    ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
-    ENTITY_IMPL[EntityKey.GROUPASSIGNEE] = GroupAssignee()
+    override_entity_map(EntityKey.EVENTS, Events())
+    override_entity_map(EntityKey.GROUPEDMESSAGES, GroupedMessage())
+    override_entity_map(EntityKey.GROUPASSIGNEE, GroupAssignee())
 
     assert get_equivalent_columns(join) == graph
 
-    ENTITY_IMPL.clear()
+    reset_entity_factory()

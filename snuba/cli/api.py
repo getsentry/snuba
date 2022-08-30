@@ -5,6 +5,7 @@ import click
 
 from snuba.attribution.log import flush_attribution_producer
 from snuba.environment import setup_logging
+from snuba.utils import uwsgi
 
 
 @click.command()
@@ -46,13 +47,11 @@ def api(
         WSGIRequestHandler.protocol_version = "HTTP/1.1"
         application.run(host=host, port=port, threaded=True, debug=debug)
     else:
-        import mywsgi
-
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
 
         with flush_attribution_producer():
-            mywsgi.run(
+            uwsgi.run(
                 "snuba.web.wsgi:application",
                 f"{host}:{port}",
                 processes=processes,

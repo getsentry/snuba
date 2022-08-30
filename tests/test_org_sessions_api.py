@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytz
 import simplejson as json
+from snuba_sdk import Request
 from snuba_sdk.column import Column
 from snuba_sdk.conditions import Condition, Op
 from snuba_sdk.entity import Entity
@@ -99,7 +100,6 @@ class TestOrgSessionsApi(BaseApiTest):
 
     def test_simple(self) -> None:
         query = Query(
-            dataset="sessions",
             match=Entity("org_sessions"),
             select=[Column("org_id"), Column("project_id")],
             groupby=[Column("org_id"), Column("project_id")],
@@ -112,9 +112,10 @@ class TestOrgSessionsApi(BaseApiTest):
             granularity=Granularity(3600),
         )
 
+        request = Request(dataset="sessions", app_id="default", query=query)
         response = self.app.post(
             "/sessions/snql",
-            data=query.snuba(),
+            data=json.dumps(request.to_dict()),
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -130,7 +131,6 @@ class TestOrgSessionsApi(BaseApiTest):
         self.generate_session_events(self.org_id2, self.project_id3)
 
         query = Query(
-            dataset="sessions",
             match=Entity("org_sessions"),
             select=[Column("org_id"), Column("project_id")],
             groupby=[Column("org_id"), Column("project_id")],
@@ -144,9 +144,10 @@ class TestOrgSessionsApi(BaseApiTest):
             orderby=[OrderBy(Column("org_id"), Direction.ASC)],
         )
 
+        request = Request(dataset="sessions", app_id="default", query=query)
         response = self.app.post(
             "/sessions/snql",
-            data=query.snuba(),
+            data=json.dumps(request.to_dict()),
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -161,9 +162,11 @@ class TestOrgSessionsApi(BaseApiTest):
         query = query.set_orderby(
             [OrderBy(Column("org_id"), Direction.DESC)],
         )
+
+        request = Request(dataset="sessions", app_id="default", query=query)
         response = self.app.post(
             "/sessions/snql",
-            data=query.snuba(),
+            data=json.dumps(request.to_dict()),
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data

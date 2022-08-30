@@ -12,7 +12,7 @@ from snuba.consumers.consumer_builder import (
     ProcessingParameters,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import WRITABLE_STORAGES
+from snuba.datasets.storages.factory import get_writable_storage_keys
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -31,7 +31,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--storage",
     "storage_name",
-    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
+    type=click.Choice(
+        [storage_key.value for storage_key in get_writable_storage_keys()]
+    ),
     help="The storage to target",
     required=True,
 )

@@ -55,7 +55,6 @@ def test_combined_scheduler_and_executor() -> None:
             dataset=get_dataset("events"),
             entity_names=["events"],
             partitions=1,
-            max_concurrent_queries=2,
             total_concurrent_queries=2,
             producer=producer,
             metrics=TestingMetricsBackend(),

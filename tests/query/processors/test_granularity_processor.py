@@ -4,7 +4,6 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -16,6 +15,7 @@ from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.granularity_processor import (
+    DEFAULT_GRANULARITY_RAW,
     DEFAULT_MAPPED_GRANULARITY_ENUM,
     PERFORMANCE_GRANULARITIES,
     GranularityProcessor,
@@ -35,7 +35,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 @pytest.mark.parametrize(
     "requested_granularity, query_granularity",
     [
-        (None, DEFAULT_GRANULARITY),
+        (None, DEFAULT_GRANULARITY_RAW),
         (10, 10),
         (60, 60),
         (90, 10),
@@ -133,7 +133,7 @@ def test_granularity_enum_mapping(
     try:
         MappedGranularityProcessor(
             accepted_granularities=PERFORMANCE_GRANULARITIES,
-            default_granularity_enum=DEFAULT_MAPPED_GRANULARITY_ENUM,
+            default_granularity=DEFAULT_MAPPED_GRANULARITY_ENUM,
         ).process_query(query, HTTPQuerySettings())
     except InvalidGranularityException:
         assert query_granularity is None

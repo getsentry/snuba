@@ -372,8 +372,9 @@ def test_col_split_conditions(
     id_column: str, project_column: str, timestamp_column: str, query, expected_result
 ) -> None:
     dataset = get_dataset("events")
-    snql_query = json_to_snql(query, "events")
-    query, _ = parse_snql_query(str(snql_query), dataset)
+    request = json_to_snql(query, "events")
+    request.validate()
+    query, _ = parse_snql_query(str(request.query), dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
 
     def do_query(

@@ -1,0 +1,57 @@
+version: v1
+kind: writable_storage
+name: generic-metrics-sets-bucket
+
+storage:
+  key: generic_metrics_sets_raw
+  set_key: generic_metrics_sets
+
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: use_case_id, type: String },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [
+                { name: key, type: UInt, args: { size: 64 } },
+                { name: indexed_value, type: UInt, args: { size: 64 } },
+                { name: raw_value, type: String },
+              ],
+          },
+      },
+
+      { name: granularities, type: Array, args: { type: UInt, arg: 8 } },
+      { name: count_value, type: Float, args: { size: 64 } },
+      { name: set_values, type: Array, args: { type: UInt, arg: 64 } },
+      {
+        name: distribution_values,
+        type: Array,
+        args: { type: Float, arg: 64 },
+      },
+      { name: timeseries_id, type: UInt, args: { size: 32 } },
+    ]
+  local_table_name: generic_metric_sets_raw_local
+  dist_table_name: generic_metric_sets_raw_dist
+
+stream_loader:
+  processor: generic_sets_metrics_processor
+  default_topic: snuba-generic-metrics
+  pre_filter:
+    type: kafka_header_select_filter
+    args: [metric_type, s]
+  commit_log_topic: snuba-generic-metrics-sets-commit-log
+  subscription_scheduler_mode: global
+  subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-sets
+  subscription_result_topic: generic-metrics-sets-subscription-results
+  dlq_policy:
+    type: produce
+    args: [snuba-dead-letter-generic-metrics]

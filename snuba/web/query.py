@@ -50,6 +50,17 @@ logger = logging.getLogger("snuba.query")
 metrics = MetricsWrapper(environment.metrics, "api")
 
 MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
+EXCLUDED_REFERRERS_FROM_FIELDS_SORTING = {
+    "subsciptions_executor",
+    "tsdb-modelid:4",
+    "outcomes.timeseries",
+    "tsdb-modelid:300",
+    "tasks.process_projects_with_sessions.session_count",
+    "tsdb-modelid:100",
+    "api.group-events",
+    "tagstore.get_release_tags",
+    "group.unhandled-flag",
+}
 
 
 class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Entity]):
@@ -300,6 +311,12 @@ def _format_storage_query_and_run(
         _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
 
         formatted_query = format_query(clickhouse_query)
+        formatted_query_sorted = None
+
+        # Build formatted query with sorted fields and expressions
+        if referrer not in EXCLUDED_REFERRERS_FROM_FIELDS_SORTING:
+            formatted_query_sorted = format_query(clickhouse_query, sort_fields=True)
+
         formatted_sql = formatted_query.get_sql()
         query_size_bytes = len(formatted_sql.encode("utf-8"))
         span.set_data(
@@ -319,18 +336,20 @@ def _format_storage_query_and_run(
     }
 
     if query_size_bytes > MAX_QUERY_SIZE_BYTES:
-        raise QueryException(
-            extra=QueryExtraData(
-                stats=stats,
-                sql=formatted_sql,
-                experiments=clickhouse_query.get_experiments(),
-            )
-        ) from QueryTooLongException(
+        cause = QueryTooLongException(
             f"After processing, query is {query_size_bytes} bytes, "
             "which is too long for ClickHouse to process. "
             f"Max size is {MAX_QUERY_SIZE_BYTES} bytes."
         )
 
+        raise QueryException.from_args(
+            str(cause),
+            extra=QueryExtraData(
+                stats=stats,
+                sql=formatted_sql,
+                experiments=clickhouse_query.get_experiments(),
+            ),
+        ) from cause
     with sentry_sdk.start_span(description=formatted_sql, op="db") as span:
         span.set_tag("table", table_names)
 
@@ -339,6 +358,7 @@ def _format_storage_query_and_run(
                 clickhouse_query,
                 query_settings,
                 formatted_query,
+                formatted_query_sorted,
                 reader,
                 timer,
                 query_metadata,

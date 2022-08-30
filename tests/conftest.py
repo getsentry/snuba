@@ -7,7 +7,7 @@ from snuba_sdk.legacy import json_to_snql
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.storages.factory import STORAGES, get_storage
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
 from snuba.redis import redis_client
 
@@ -61,7 +61,7 @@ def run_migrations() -> Iterator[None]:
 
     yield
 
-    for storage_key in STORAGES:
+    for storage_key in get_all_storage_keys():
         storage = get_storage(storage_key)
         cluster = storage.get_cluster()
         database = cluster.get_database()
@@ -94,7 +94,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
     def convert(data: str, entity: str) -> str:
         legacy = json.loads(data)
         sdk_output = json_to_snql(legacy, entity)
-        return sdk_output.snuba()
+        return json.dumps(sdk_output.to_dict())
 
     return convert
 

@@ -162,8 +162,9 @@ def test_get_all_columns_legacy() -> None:
         "groupby": [["format_eventid", ["event_id"]]],
     }
     events = get_dataset("events")
-    snql_query = json_to_snql(query_body, "events")
-    query, _ = parse_snql_query(str(snql_query), events)
+    request = json_to_snql(query_body, "events")
+    request.validate()
+    query, _ = parse_snql_query(str(request.query), events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_column1", None, "column1"),
@@ -267,6 +268,20 @@ def test_alias_regex_allows_for_mri_format() -> None:
     ]
 
 
+def test_quoted_column_regex_allows_for_mri_format() -> None:
+    body = (
+        "MATCH (metrics_counters) SELECT sumIf(value, equals(c:sessions/session@none, 0)) "
+        "BY tags[44] AS `session.status`"
+    )
+    query = parse_snql_query_initial(body)
+    expressions = query.get_selected_columns()
+    assert len(expressions) == 2
+    assert sorted([expr.name for expr in expressions]) == [
+        "session.status",
+        "sumIf(value, equals(c:sessions/session@none, 0))",
+    ]
+
+
 VALIDATION_TESTS = [
     pytest.param(
         {
@@ -328,8 +343,9 @@ def test_alias_validation(
     query_body: MutableMapping[str, Any], expected_result: bool
 ) -> None:
     events = get_dataset("events")
-    snql_query = json_to_snql(query_body, "events")
-    query, _ = parse_snql_query(str(snql_query), events)
+    request = json_to_snql(query_body, "events")
+    request.validate()
+    query, _ = parse_snql_query(str(request.query), events)
     settings = HTTPQuerySettings()
     query_plan = (
         events.get_default_entity()
