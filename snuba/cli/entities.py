@@ -67,6 +67,10 @@ def describe(entity_name: str) -> None:
 @entities.command()
 @click.argument("entity_path", type=str)
 def load(entity_path: str) -> None:
+    """
+    Load an entity from YAML configuration to validate it. To be used in testing
+    the contents of snuba/datasets/configuration/*
+    """
     entity = build_entity_from_config(entity_path)
     assert isinstance(entity, PluggableEntity)
     click.echo(f"Entity {entity.name}")
