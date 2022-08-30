@@ -5,8 +5,6 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 
-DEFAULT_GRANULARITY = 60
-
 
 class MetricsDataset(Dataset):
     def __init__(self) -> None:
