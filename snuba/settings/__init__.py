@@ -243,6 +243,8 @@ OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 # File path glob for storage configs
 STORAGE_CONFIG_FILES_GLOB = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration/**/storages/*.yaml"
 
+PREFER_PLUGGABLE_ENTITIES = False
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

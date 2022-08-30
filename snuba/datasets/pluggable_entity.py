@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -9,7 +9,6 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
@@ -30,11 +29,13 @@ class PluggableEntity(Entity):
     provided readable storage.
     """
 
+    name: str
     query_processors: Sequence[QueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     readable_storage: ReadableTableStorage
     validators: Sequence[QueryValidator]
     translation_mappers: TranslationMappers
+    required_time_column: str
     writeable_storage: Optional[WritableTableStorage] = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
@@ -54,6 +55,8 @@ class PluggableEntity(Entity):
         return self.join_relationships
 
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
+        from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+
         return SimplePipelineBuilder(
             query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=self.readable_storage, mappers=self.translation_mappers
@@ -75,3 +78,9 @@ class PluggableEntity(Entity):
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, PluggableEntity) and self.name == other.name
+
+    def __hash__(self) -> int:
+        return hash(self.name)

@@ -1,5 +1,7 @@
-from typing import Generator, MutableMapping, Sequence, Type
+from typing import Generator, Mapping, MutableMapping, Sequence, Type
 
+from snuba import settings
+from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.table_storage import TableWriter
@@ -40,6 +42,10 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
+        entity_to_config_path_mapping: Mapping[EntityKey, str] = {
+            EntityKey.GENERIC_METRICS_SETS: "snuba/datasets/configuration/generic_metrics/entities/sets.yaml"
+        }
+
         self._entity_map.update(
             {
                 EntityKey.DISCOVER: DiscoverEntity(),
@@ -65,7 +71,13 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             }
         )
 
-        # TODO: load the yaml entities here
+        if settings.PREFER_PLUGGABLE_ENTITIES:
+            self._entity_map.update(
+                {
+                    key: build_entity_from_config(path)
+                    for (key, path) in entity_to_config_path_mapping.items()
+                }
+            )
 
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 
