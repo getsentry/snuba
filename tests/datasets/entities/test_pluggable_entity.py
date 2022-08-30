@@ -16,7 +16,8 @@ from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.datasets.storages.generic_metrics import sets_storage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.query import Query
 from snuba.query.processors.granularity_processor import (
     DEFAULT_MAPPED_GRANULARITY_ENUM,
@@ -56,12 +57,13 @@ def end_time(start_time: datetime) -> datetime:
 @pytest.fixture
 def pluggable_sets_entity() -> PluggableEntity:
     return PluggableEntity(
-        readable_storage=sets_storage,
+        name="generic_metrics_sets",
+        readable_storage=get_storage(StorageKey.GENERIC_METRICS_SETS),
         query_processors=[
             TagsTypeTransformer(),
             MappedGranularityProcessor(
                 accepted_granularities=PERFORMANCE_GRANULARITIES,
-                default_granularity_enum=DEFAULT_MAPPED_GRANULARITY_ENUM,
+                default_granularity=DEFAULT_MAPPED_GRANULARITY_ENUM,
             ),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
             ReferrerRateLimiterProcessor(),
@@ -102,6 +104,7 @@ def pluggable_sets_entity() -> PluggableEntity:
             ],
         ),
         validators=[],
+        required_time_column="timestamp",
     )
 
 

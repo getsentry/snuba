@@ -19,6 +19,7 @@ from typing import (
     Optional,
     Sequence,
     Set,
+    SupportsIndex,
     Tuple,
     Union,
     cast,
@@ -69,9 +70,9 @@ class BytesInsertBatch(NamedTuple):
     origin_timestamp: Optional[datetime]
 
     def __reduce_ex__(
-        self, protocol: int
+        self, protocol: SupportsIndex
     ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime]]]:
-        if protocol >= 5:
+        if int(protocol) >= 5:
             return (
                 type(self),
                 ([PickleBuffer(row) for row in self.rows], self.origin_timestamp),

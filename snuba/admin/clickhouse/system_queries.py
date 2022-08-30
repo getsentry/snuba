@@ -62,12 +62,32 @@ DESCRIBE_QUERY_RE = re.compile(
     re.VERBOSE,
 )
 
+SHOW_QUERY_RE = re.compile(
+    r"""
+        ^ # Start
+        (SHOW|show)
+        \s
+        [\w\s]+
+        ;? # Optional semicolon
+        $ # End
+    """,
+    re.VERBOSE,
+)
+
 
 def is_query_select(sql_query: str) -> bool:
     """
     Simple validation to ensure query is a select command
     """
     match = SYSTEM_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
+def is_query_show(sql_query: str) -> bool:
+    """
+    Simple validation to ensure query is a show command
+    """
+    match = SHOW_QUERY_RE.match(sql_query)
     return True if match else False
 
 
@@ -85,6 +105,8 @@ def run_system_query_on_host_with_sql(
     if is_query_select(system_query_sql):
         validate_system_query(system_query_sql)
     elif is_query_describe(system_query_sql):
+        pass
+    elif is_query_show(system_query_sql):
         pass
     else:
         raise InvalidCustomQuery("Query is invalid")

@@ -4,6 +4,7 @@ from typing import Optional
 import click
 
 from snuba.environment import setup_logging
+from snuba.utils import uwsgi
 
 
 @click.command()
@@ -21,6 +22,7 @@ def admin(
     from snuba import settings
 
     host, port = settings.ADMIN_HOST, settings.ADMIN_PORT
+    setup_logging(log_level)
 
     if debug:
         if processes > 1 or threads > 1:
@@ -30,17 +32,12 @@ def admin(
 
         from snuba.admin.views import application
 
-        setup_logging(log_level)
-
         WSGIRequestHandler.protocol_version = "HTTP/1.1"
         application.run(host=host, port=port, threaded=True, debug=debug)
     else:
-        import mywsgi
-
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
-
-        mywsgi.run(
+        uwsgi.run(
             "snuba.admin.wsgi:application",
             f"{host}:{port}",
             processes=processes,

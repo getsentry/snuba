@@ -1,7 +1,10 @@
+import logging
+from glob import glob
 from typing import Mapping
 
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.discover import storage as discover_storage
@@ -18,7 +21,7 @@ from snuba.datasets.storages.generic_metrics import (
     distributions_storage as gen_metrics_dists_aggregate_storage,
 )
 from snuba.datasets.storages.generic_metrics import (
-    sets_bucket_storage as generic_metrics_sets_bucket_storage,
+    sets_bucket_storage as gen_metrics_sets_bucket_storage,
 )
 from snuba.datasets.storages.generic_metrics import (
     sets_storage as gen_metrics_sets_aggregate_storage,
@@ -55,6 +58,19 @@ from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.transactions_ro import storage as transactions_ro_storage
 from snuba.datasets.storages.transactions_v2 import storage as transactions_v2_storage
+from snuba.state import get_config
+
+logger = logging.getLogger(__name__)
+
+USE_CONFIG_BUILT_STORAGES = "use_config_built_storages"
+
+CONFIG_BUILT_STORAGES = {
+    storage.get_storage_key(): storage
+    for storage in [
+        build_storage(config_file)
+        for config_file in glob(settings.STORAGE_CONFIG_FILES_GLOB, recursive=True)
+    ]
+}
 
 DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
 
@@ -90,7 +106,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             errors_v2_storage,
             profiles_writable_storage,
             functions_storage,
-            generic_metrics_sets_bucket_storage,
+            gen_metrics_sets_bucket_storage,
             replays_storage,
             gen_metrics_dists_bucket_storage,
         ]
@@ -135,10 +151,27 @@ STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
 
 
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
+    if (
+        get_config(USE_CONFIG_BUILT_STORAGES, 0)
+        and storage_key in CONFIG_BUILT_STORAGES
+    ):
+        logger.info(f"Using config built storage: {storage_key.value}")
+        return CONFIG_BUILT_STORAGES[storage_key]
+
     return STORAGES[storage_key]
 
 
 def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
+    if (
+        get_config(USE_CONFIG_BUILT_STORAGES, 0)
+        and storage_key in CONFIG_BUILT_STORAGES
+    ):
+        assert isinstance(
+            storage := CONFIG_BUILT_STORAGES[storage_key], WritableTableStorage
+        )
+        logger.info(f"Using config built storage: {storage_key.value}")
+        return storage
+
     return WRITABLE_STORAGES[storage_key]
 
 

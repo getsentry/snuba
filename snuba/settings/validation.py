@@ -1,6 +1,10 @@
 from typing import Any, Mapping, MutableMapping
 
 
+class InvalidTopicError(ValueError):
+    pass
+
+
 def validate_settings(locals: Mapping[str, Any]) -> None:
     if locals.get("QUERIES_TOPIC"):
         raise ValueError("QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead.")
@@ -56,12 +60,11 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         "snuba-dead-letter-generic-metrics",
         "snuba-dead-letter-sessions",
         "snuba-dead-letter-metrics",
-        "snuba-dead-letter-replays",
     }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
         if key not in topic_names:
-            raise ValueError(f"Invalid topic value: {key}")
+            raise InvalidTopicError(f"Invalid topic value: {key}")
 
     for key in locals["KAFKA_BROKER_CONFIG"].keys():
         if key not in topic_names:
