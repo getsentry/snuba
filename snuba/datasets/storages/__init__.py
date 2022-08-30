@@ -1,10 +1,7 @@
 from functools import lru_cache
-from glob import glob
 from typing import Any
 
-from yaml import safe_load
-
-from snuba import settings
+from snuba.datasets.configuration.loader import load_config_built_storage_keys
 
 HARDCODED_STORAGE_KEYS = {
     "DISCOVER": "discover",
@@ -37,13 +34,7 @@ HARDCODED_STORAGE_KEYS = {
     "ERRORS_V2_RO": "errors_v2_ro",
 }
 
-CONFIG_BUILT_STORAGE_KEYS = {
-    key.upper(): key
-    for key in [
-        safe_load(open(config_file))["storage"]["key"]
-        for config_file in glob(settings.STORAGE_CONFIG_FILES_GLOB, recursive=True)
-    ]
-}
+CONFIG_BUILT_STORAGE_KEYS = load_config_built_storage_keys()
 
 ALL_STORAGE_KEYS = {**HARDCODED_STORAGE_KEYS, **CONFIG_BUILT_STORAGE_KEYS}
 

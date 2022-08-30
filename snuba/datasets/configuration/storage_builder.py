@@ -48,16 +48,12 @@ STORAGE_VALIDATION_SCHEMAS = {
 def build_storage(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
-    config = __load_storage_config(config_file_path)
+    config = load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
     storage_kwargs = __build_readable_storage_kwargs(config)
     if config[KIND] == "readable_storage":
         return ReadableTableStorage(**storage_kwargs)
     storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
     return WritableTableStorage(**storage_kwargs)
-
-
-def __load_storage_config(config_file_path: str) -> dict[str, Any]:
-    return load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
 
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
