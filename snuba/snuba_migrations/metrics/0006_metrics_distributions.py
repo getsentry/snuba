@@ -1,7 +1,7 @@
 from typing import Sequence
 
 from snuba.migrations import migration, operations
-from snuba.migrations.snuba_migrations.metrics.templates import (
+from snuba.snuba_migrations.metrics.templates import (
     COL_SCHEMA_DISTRIBUTIONS,
     get_forward_migrations_dist,
     get_forward_migrations_local,

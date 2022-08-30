@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.snuba_migrations.metrics.templates import COMMON_AGGR_COLUMNS
+from snuba.snuba_migrations.metrics.templates import COMMON_AGGR_COLUMNS
 from snuba.utils.schemas import AggregateFunction, String
 
 

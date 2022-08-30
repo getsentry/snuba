@@ -2,7 +2,7 @@ from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.snuba_migrations.metrics.templates import (
+from snuba.snuba_migrations.metrics.templates import (
     COL_SCHEMA_DISTRIBUTIONS,
     get_forward_view_migration_polymorphic_table,
     get_polymorphic_mv_v2_name,
