@@ -49,6 +49,8 @@ class Topic(Enum):
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
 
+    AUDIT_LOG = "snuba-audit-log"
+
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
     config = {

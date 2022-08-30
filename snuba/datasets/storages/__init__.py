@@ -39,6 +39,7 @@ class StorageKey(Enum):
     GENERIC_METRICS_SETS = "generic_metrics_sets"
     GENERIC_METRICS_DISTRIBUTIONS_RAW = "generic_metrics_distributions_raw"
     GENERIC_METRICS_DISTRIBUTIONS = "generic_metrics_distributions"
+    AUDIT_LOG = "audit_log"
 
 
 IDENTICAL_STORAGES = frozenset(

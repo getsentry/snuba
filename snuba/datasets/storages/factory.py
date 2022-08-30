@@ -7,6 +7,7 @@ from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.auditlog import storage as auditlog_storage
 from snuba.datasets.storages.discover import storage as discover_storage
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
@@ -109,6 +110,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             gen_metrics_sets_bucket_storage,
             replays_storage,
             gen_metrics_dists_bucket_storage,
+            auditlog_storage,
         ]
     },
     **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
