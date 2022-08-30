@@ -7,60 +7,83 @@ from snuba.utils.registered_class import InvalidConfigKeyError, RegisteredClass
 
 def test_register() -> None:
     class Foo(metaclass=RegisteredClass):
-        config_key = "base"
+        @classmethod
+        def config_key(cls):
+            return "base"
 
     class Bar(Foo):
-        config_key = "Bar"
+        @classmethod
+        def config_key(cls):
+            return "Bar"
 
-    assert Bar.config_key == "Bar"
-    assert Foo.from_name("Bar") is Bar
+    assert Bar.config_key() == "Bar"
+    assert Foo.class_from_name("Bar") is Bar
     with pytest.raises(InvalidConfigKeyError):
-        Foo.from_name("Foo")
+        Foo.class_from_name("Foo")
 
 
 def test_register_different() -> None:
     class X(metaclass=RegisteredClass):
-        config_key = "X"
+        @classmethod
+        def config_key(cls):
+            return "X"
 
     class Y(X):
-        config_key = "Y"
+        @classmethod
+        def config_key(cls):
+            return "Y"
 
     with pytest.raises(InvalidConfigKeyError):
-        X.from_name("X")
+        X.class_from_name("X")
     with pytest.raises(InvalidConfigKeyError):
-        X.from_name("Bar")
-    assert X.from_name("Y") is Y
-    assert Y.from_name("Y") is Y
+        X.class_from_name("Bar")
+    assert X.class_from_name("Y") is Y
+    assert Y.class_from_name("Y") is Y
 
 
 def test_custom_key() -> None:
     class CustomKey(metaclass=RegisteredClass):
-        config_key = "custom_af"
+        @classmethod
+        def config_key(cls):
+            return "custom_af"
 
     class ExtraCustom(CustomKey):
-        config_key = "cool_key"
+        @classmethod
+        def config_key(cls):
+            return "cool_key"
 
-    assert CustomKey.from_name("cool_key") is ExtraCustom
+    class SubclassCustom(ExtraCustom):
+        @classmethod
+        def config_key(cls):
+            return "subclass_key"
+
+    assert CustomKey.class_from_name("cool_key") is ExtraCustom
     with pytest.raises(InvalidConfigKeyError):
-        CustomKey.from_name("custom_af")
+        CustomKey.class_from_name("custom_af")
+
+    assert CustomKey.class_from_name("subclass_key") is SubclassCustom
 
 
 class TypedFromName(metaclass=RegisteredClass):
-    config_key = "base"
+    @classmethod
+    def config_key(cls):
+        return "base"
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["TypedFromName"]:
+    def get_class_from_name(cls, name: str) -> Type["TypedFromName"]:
         # NOTE: This method cannot be type safe without doing this cast. Such is the nature of metaprogramming
-        res = cls.from_name(name)
+        res = cls.class_from_name(name)
         return cast(Type[TypedFromName], res)
 
 
 class ExtraName(TypedFromName):
-    config_key = "extra_name"
+    @classmethod
+    def config_key(cls):
+        return "extra_name"
 
 
 def get_from_name(name: str) -> Type[TypedFromName]:
-    return TypedFromName.get_from_name(name)
+    return TypedFromName.get_class_from_name(name)
 
 
 def test_override_from_name() -> None:

@@ -17,7 +17,7 @@ class _ClassRegistry:
         self.__mapping: Dict[str, RegisteredClass] = {}
 
     def register_class(self, cls: "RegisteredClass") -> None:
-        key = cls.config_key
+        key = cls.config_key()
         existing_class = self.__mapping.get(key)
         if not existing_class:
             self.__mapping[key] = cls
@@ -48,7 +48,8 @@ class RegisteredClass(ABCMeta):
         The base class cannot be looked up by name, only subclasses
     """
 
-    config_key: str
+    def config_key(cls) -> str:
+        raise NotImplementedError
 
     def __new__(cls, name: str, bases: Tuple[Type[Any]], dct: Dict[str, Any]) -> Any:
         res = super().__new__(cls, name, bases, dct)
@@ -62,7 +63,7 @@ class RegisteredClass(ABCMeta):
             getattr(res, "_registry").register_class(res)
         return res
 
-    def from_name(self, name: str) -> Type[Any]:
+    def class_from_name(self, name: str) -> Type[Any]:
         return cast(
             Type[Any],
             getattr(self, "_registry").get_class_from_name(name),
