@@ -31,15 +31,12 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "replays.processor")
-from sentry_sdk import capture_exception
 
 ReplayEventDict = Mapping[Any, Any]
 RetentionDays = int
 
-# A sane upper bound of 1000 was chosen for error_ids. If you know better, change it.
-ERROR_IDS_LIMIT = 1000
-# A sane upper bound of 1000 was chosen for urls. If you know better, change it.
-URLS_LIMIT = 1000
+# Limit for error_ids / trace_ids / urls array elements
+LIST_ELEMENT_LIMIT = 1000
 
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
@@ -68,7 +65,7 @@ class ReplaysProcessor(MessageProcessor):
         elif "urls" in replay_event:
             # Latest SDK input.
             urls = replay_event.get("urls")
-            return urls[:URLS_LIMIT] if isinstance(urls, list) else []
+            return urls[:LIST_ELEMENT_LIMIT] if isinstance(urls, list) else []
         else:
             # Malformed event catch all.
             return []
@@ -81,12 +78,29 @@ class ReplaysProcessor(MessageProcessor):
         url = request.get("url")
         return [url] if isinstance(url, str) else []
 
+    def __process_trace_ids(self, trace_ids: list[str] | None) -> list[str]:
+        if not trace_ids:
+            return []
+        if len(trace_ids) > LIST_ELEMENT_LIMIT:
+            metrics.increment("trace_ids exceeded list limit")
+
+        return [str(uuid.UUID(t)) for t in trace_ids[:LIST_ELEMENT_LIMIT]]
+
+    def __process_error_ids(self, error_ids: list[str] | None) -> list[str]:
+        if not error_ids:
+            return []
+        if len(error_ids) > LIST_ELEMENT_LIMIT:
+            metrics.increment("error_ids exceeded list limit")
+
+        return [str(uuid.UUID(e)) for e in error_ids[:LIST_ELEMENT_LIMIT]]
+
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         processed["replay_id"] = str(uuid.UUID(replay_event["replay_id"]))
         processed["segment_id"] = replay_event["segment_id"]
-        processed["trace_ids"] = replay_event.get("trace_ids") or []
+        processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
+
         processed["timestamp"] = self.__extract_timestamp(
             replay_event["timestamp"],
         )
@@ -99,11 +113,7 @@ class ReplaysProcessor(MessageProcessor):
         processed["dist"] = replay_event.get("dist")
         processed["platform"] = _unicodify(replay_event["platform"])
 
-        error_ids = replay_event.get("error_ids") or []
-        if len(error_ids) > ERROR_IDS_LIMIT:
-            metrics.increment("error_ids_exceeded_limit")
-
-        processed["error_ids"] = error_ids[:ERROR_IDS_LIMIT]
+        processed["error_ids"] = self.__process_error_ids(replay_event.get("error_ids"))
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -223,7 +233,7 @@ class ReplaysProcessor(MessageProcessor):
             self._process_event_hash(processed, replay_event)
             self._process_contexts(processed, replay_event)
             return InsertBatch([processed], None)
-        except Exception as e:
+        except Exception:
             metrics.increment("consumer_error")
-            capture_exception(e)
+            logger.exception("replay event could not be processed.")
             return None

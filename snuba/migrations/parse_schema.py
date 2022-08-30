@@ -72,18 +72,21 @@ def merge_modifiers(
         return col_type.set_modifiers(existing_modifiers.merge(modifiers))
 
 
+_TYPES: dict[str, type[ColumnType[MigrationModifiers]]] = {
+    "Date": Date,
+    "DateTime": DateTime,
+    "IPv4": IPv4,
+    "IPv6": IPv6,
+    "String": String,
+    "UUID": UUID,
+}
+
+
 class Visitor(NodeVisitor):  # type: ignore
     def visit_basic_type(
         self, node: Node, visited_children: Iterable[Any]
     ) -> ColumnType[MigrationModifiers]:
-        return {
-            "Date": Date,
-            "DateTime": DateTime,
-            "IPv4": IPv4,
-            "IPv6": IPv6,
-            "String": String,
-            "UUID": UUID,
-        }[node.text]()
+        return _TYPES[node.text]()
 
     def visit_uint(
         self, node: Node, visited_children: Iterable[Any]

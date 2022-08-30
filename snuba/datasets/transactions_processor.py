@@ -37,7 +37,7 @@ metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
 
 UNKNOWN_SPAN_STATUS = 2
-
+GROUP_IDS_LIMIT = 10
 
 EventDict = Dict[str, Any]
 SpanDict = Dict[str, Any]
@@ -135,6 +135,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["duration"] = max(int(duration_secs * 1000), 0)
 
         processed["platform"] = _unicodify(event_dict["platform"])
+
+        group_ids = event_dict.get("group_ids") or []
+        if len(group_ids) > GROUP_IDS_LIMIT:
+            metrics.increment("group_ids_exceeded_limit")
+
+        processed["group_ids"] = group_ids[:GROUP_IDS_LIMIT]
         return processed
 
     def _process_tags(

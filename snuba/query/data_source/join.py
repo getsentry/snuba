@@ -173,7 +173,7 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
         return visitor.visit_join_clause(self)
 
 
-TReturn = TypeVar("TReturn")
+TReturn = TypeVar("TReturn", covariant=True)
 
 
 class JoinVisitor(ABC, Generic[TReturn, TSimpleDataSource]):

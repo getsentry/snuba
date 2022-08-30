@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import calendar
 import time
 import uuid
@@ -15,7 +17,7 @@ from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import ENTITY_NAME_LOOKUP, get_entity
+from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
@@ -150,7 +152,7 @@ class SimpleAPITest(BaseApiTest):
     def redis_db_size(self) -> int:
         # dbsize could be an integer for a single node cluster or a dictionary
         # with one key value pair per node for a multi node cluster
-        dbsize = redis_client.dbsize()
+        dbsize: int | dict[str, int] = redis_client.dbsize()
         if isinstance(dbsize, dict):
             return sum(dbsize.values())
         else:
@@ -2135,7 +2137,7 @@ class TestApi(SimpleAPITest):
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from redis.cluster import ClusterDownError
+        from redis.exceptions import ClusterDownError
 
         pipeline_mock.side_effect = ClusterDownError("stuff")
         response = self.post(
@@ -2339,7 +2341,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         subscription_id = data["subscription_id"]
         partition = subscription_id.split("/", 1)[0]
 
-        entity_key = ENTITY_NAME_LOOKUP[self.dataset.get_default_entity()]
+        entity_key = get_entity_name(self.dataset.get_default_entity())
 
         assert (
             len(

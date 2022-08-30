@@ -9,8 +9,6 @@ Flask==2.2.2
 honcho==1.1.0
 jsonschema==4.9.1
 Markdown==3.4.1
-mywsgi==1.0.3
-mypy==0.812
 packaging==21.3
 # Do not update parsimonious, there is a performance issue in newer versions
 parsimonious==0.8.1
@@ -27,6 +25,6 @@ sentry-relay==0.8.13
 sentry-sdk==1.9.4
 simplejson==3.17.6
 urllib3==1.26.11
-uWSGI==2.0.20
+pyuwsgi==2.0.20
 Werkzeug==2.2.2
 PyYAML==6.0
