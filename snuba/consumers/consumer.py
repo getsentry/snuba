@@ -47,9 +47,8 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import are_writes_identical
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey, are_writes_identical
 from snuba.datasets.table_storage import TableWriter
 from snuba.processor import (
     AggregateInsertBatch,

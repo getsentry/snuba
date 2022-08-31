@@ -1,7 +1,10 @@
 import pytest
 
-from snuba.datasets.storages import are_writes_identical
-from snuba.datasets.storages.storage_key import REGISTERED_STORAGE_KEYS, StorageKey
+from snuba.datasets.storages.storage_key import (
+    REGISTERED_STORAGE_KEYS,
+    StorageKey,
+    are_writes_identical,
+)
 
 
 def test_storage_key() -> None:
