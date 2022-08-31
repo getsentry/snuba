@@ -7,7 +7,9 @@ VERSION = "22.9.0.dev0"
 
 def get_requirements() -> Sequence[str]:
     with open("requirements.txt") as fp:
-        return [x.strip() for x in fp.read().split("\n") if not x.startswith("#")]
+        return [
+            x.strip() for x in fp.read().split("\n") if not x.startswith(("#", "--"))
+        ]
 
 
 setup(
