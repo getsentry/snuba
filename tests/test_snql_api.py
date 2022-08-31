@@ -307,7 +307,7 @@ class TestSnQLApi(BaseApiTest):
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from redis.cluster import ClusterDownError
+        from redis.exceptions import ClusterDownError
 
         hsh = "0" * 32
         group_id = int(hsh[:16], 16)

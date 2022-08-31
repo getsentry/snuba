@@ -35,7 +35,7 @@ Snuba does not provide an api endpoint to insert rows (except when running
 in debug mode). Data is loaded from multiple input streams, processed by
 a series of consumers and written to Clickhouse tables.
 
-A consumer consumes one one or multiple topics and writes on one or multiple
+A consumer consumes one or multiple topics and writes on one or multiple
 tables. No table is written onto by multiple consumers as of today. This
 allows some consistency guarantees discussed below.
 

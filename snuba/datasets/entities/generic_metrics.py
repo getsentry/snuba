@@ -9,25 +9,20 @@ from snuba.clickhouse.columns import (
     Nested,
     UInt,
 )
+from snuba.clickhouse.translators.snuba.function_call_mappers import (
+    AggregateCurriedFunctionMapper,
+    AggregateFunctionMapper,
+)
 from snuba.clickhouse.translators.snuba.mappers import (
     FunctionNameMapper,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.metrics import (
-    AggregateCurriedFunctionMapper,
-    AggregateFunctionMapper,
-    TagsTypeTransformer,
-)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage,
-    distributions_storage,
-    sets_bucket_storage,
-    sets_storage,
-)
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.granularity_processor import (
@@ -42,6 +37,7 @@ from snuba.query.processors.object_id_rate_limiter import (
     ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
@@ -114,7 +110,7 @@ class GenericMetricsEntity(Entity, ABC):
             TagsTypeTransformer(),
             MappedGranularityProcessor(
                 accepted_granularities=PERFORMANCE_GRANULARITIES,
-                default_granularity_enum=DEFAULT_MAPPED_GRANULARITY_ENUM,
+                default_granularity=DEFAULT_MAPPED_GRANULARITY_ENUM,
             ),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
             ReferrerRateLimiterProcessor(),
@@ -126,10 +122,11 @@ class GenericMetricsEntity(Entity, ABC):
 
 
 class GenericMetricsSetsEntity(GenericMetricsEntity):
-    READABLE_STORAGE = sets_storage
-    WRITABLE_STORAGE = sets_bucket_storage
+    READABLE_STORAGE = get_storage(StorageKey.GENERIC_METRICS_SETS)
+    WRITABLE_STORAGE = get_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
 
     def __init__(self) -> None:
+        assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
@@ -149,10 +146,11 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
 
 
 class GenericMetricsDistributionsEntity(GenericMetricsEntity):
-    READABLE_STORAGE = distributions_storage
-    WRITABLE_STORAGE = distributions_bucket_storage
+    READABLE_STORAGE = get_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS)
+    WRITABLE_STORAGE = get_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
 
     def __init__(self) -> None:
+        assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,

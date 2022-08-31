@@ -9,10 +9,10 @@ from pytest import approx
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
-from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage,
-    sets_bucket_storage,
-)
+from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import USE_CONFIG_BUILT_STORAGES, get_storage
+from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
@@ -87,7 +87,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
     def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
-        self.write_storage = sets_bucket_storage
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
         self.count = 10
         self.org_id = 1
         self.project_id = 2
@@ -111,6 +111,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         mapping_meta: Mapping[str, Mapping[str, str]],
         int_source: Iterable[int],
     ) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
         rows = [
             self.write_storage.get_table_writer()
             .get_stream_loader()
@@ -246,7 +247,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
     def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
-        self.write_storage = distributions_bucket_storage
+        self.write_storage = get_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW)
         self.count = 10
         self.org_id = 1
         self.project_id = 2
@@ -274,6 +275,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         self.generate_dists()
 
     def generate_dists(self) -> None:
+        assert isinstance(self.write_storage, WritableTableStorage)
         rows = [
             self.write_storage.get_table_writer()
             .get_stream_loader()
@@ -379,3 +381,33 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         )
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
+
+
+class TestGenericMetricsApiDistributionsFromConfig(TestGenericMetricsApiDistributions):
+    def setup_method(self, test_method: Any) -> None:
+        set_config(USE_CONFIG_BUILT_STORAGES, 1)
+        super().setup_method(test_method)
+
+    def test_arbitrary_granularity(self) -> None:
+        super().test_arbitrary_granularity()
+
+    def test_retrieval_percentiles(self) -> None:
+        super().test_retrieval_percentiles()
+
+    def test_retrieval_basic(self) -> None:
+        pass
+
+
+class TestGenericMetricsApiSetsFromConfig(TestGenericMetricsApiSets):
+    def setup_method(self, test_method: Any) -> None:
+        set_config(USE_CONFIG_BUILT_STORAGES, 1)
+        super().setup_method(test_method)
+
+    def test_indexed_tags(self) -> None:
+        super().test_indexed_tags()
+
+    def test_raw_tags(self) -> None:
+        super().test_raw_tags()
+
+    def test_retrieval_basic(self) -> None:
+        pass

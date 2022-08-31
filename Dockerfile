@@ -26,6 +26,7 @@ RUN set -ex; \
         liblz4-dev \
         libpcre3-dev \
         wget \
+        zlib1g-dev \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
@@ -41,7 +42,8 @@ RUN set -ex; \
     rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
     mkdir -p /var/lib/uwsgi; \
     mv dogstatsd_plugin.so /var/lib/uwsgi/; \
-    uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
+    # TODO: https://github.com/lincolnloop/pyuwsgi-wheels/pull/17
+    python -c 'import os, sys; sys.setdlopenflags(sys.getdlopenflags() | os.RTLD_GLOBAL); import pyuwsgi; pyuwsgi.run()' --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
     \
     apt-get purge -y --auto-remove $buildDeps; \
     rm -rf /var/lib/apt/lists/*;
