@@ -48,6 +48,10 @@ class AggregateFunctionMapper(FunctionCallMapper):
     to_name: str
     aggr_col_name: str
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "aggregate_function"
+
     def attempt_map(
         self,
         expression: FunctionCall,
