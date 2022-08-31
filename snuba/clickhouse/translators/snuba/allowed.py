@@ -75,9 +75,18 @@ class FunctionCallMapper(
 
 
 class CurriedFunctionCallMapper(
-    SnubaClickhouseMapper[CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]]
+    SnubaClickhouseMapper[
+        CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]
+    ],
+    metaclass=RegisteredClass,
 ):
-    pass
+    @classmethod
+    def config_key(cls) -> str:
+        return "curried_function_call_mapper_base"
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["CurriedFunctionCallMapper"]:
+        return cast(Type["CurriedFunctionCallMapper"], cls.class_from_name(name))
 
 
 class SubscriptableReferenceMapper(

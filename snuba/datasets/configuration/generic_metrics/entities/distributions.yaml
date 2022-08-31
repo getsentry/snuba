@@ -167,6 +167,35 @@ translation_mappers:
         from_name: countIf
         to_name: countMergeIf
         aggr_col_name: count
+  curried_functions:
+    -
+      mapper: aggregate_curried_func
+      args:
+        column_to_map: value
+        from_name: quantiles
+        to_name: quantilesMerge
+        aggr_col_name: percentiles
+    -
+      mapper: aggregate_curried_func
+      args:
+        column_to_map: value
+        from_name: quantilesIf
+        to_name: quantilesMergeIf
+        aggr_col_name: percentiles
+    -
+      mapper: aggregate_curried_func
+      args:
+        column_to_map: value
+        from_name: histogram
+        to_name: histogramMerge
+        aggr_col_name: histogram_buckets
+    -
+      mapper: aggregate_curried_func
+      args:
+        column_to_map: value
+        from_name: histogramIf
+        to_name: histogramMergeIf
+        aggr_col_name: histogram_buckets
   subscriptables:
     -
       mapper: subscriptable
