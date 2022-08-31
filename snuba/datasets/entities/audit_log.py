@@ -2,6 +2,7 @@ from abc import ABC
 from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import UUID, Column, DateTime, String
+from snuba.datasets.auditlog_processor import AuditlogProcessor
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -42,4 +43,4 @@ class AuditLogEntity(Entity, ABC):
 
     # temporarily Optional
     def get_query_processors(self) -> Optional[Sequence[QueryProcessor]]:
-        return
+        return [AuditlogProcessor()]
