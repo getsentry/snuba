@@ -2,7 +2,7 @@ from typing import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.migrations import migration, operations
-from snuba.migrations.snuba_migrations.metrics.templates import (
+from snuba.snuba_migrations.metrics.templates import (
     get_forward_bucket_table_dist,
     get_forward_bucket_table_local,
     get_reverse_table_migration,

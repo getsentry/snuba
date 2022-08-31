@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import AggregateFunction, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.snuba_migrations.metrics.templates import (
+from snuba.snuba_migrations.metrics.templates import (
     get_consolidated_mv_name,
     get_forward_view_migration_local_consolidated,
 )
