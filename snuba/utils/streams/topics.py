@@ -50,6 +50,9 @@ class Topic(Enum):
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
 
     AUDIT_LOG = "snuba-audit-log"
+    AUDIT_LOG_COMMIT = "snuba-audit-log-commit"
+    AUDIT_LOG_SUBSCRIPTION = "snuba-audit-log-subscription"
+    AUDIT_LOG_RESULTS = "snuba-audit-log-results"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:

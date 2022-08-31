@@ -1,6 +1,6 @@
 from typing import List, Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, String
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -14,6 +14,11 @@ columns: List[Column[Modifiers]] = [
     Column("event_type", String(Modifiers(low_cardinality=True))),
     Column("user", String()),
     Column("details", String()),
+    Column("project_id", UInt(64)),
+    Column("org_id", UInt(64)),
+    Column("metric_id", UInt(64)),
+    Column("granularity", UInt(8)),
+    Column("offset", UInt(64)),
 ]
 
 

@@ -1,4 +1,4 @@
-from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, String
+from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.auditlog_processor import AuditlogProcessor
 from snuba.datasets.message_filters import KafkaHeaderFilterWithBypass
@@ -16,6 +16,7 @@ columns = ColumnSet(
         ("event_type", String()),
         ("user", String()),
         ("details", String()),
+        ("project_id", UInt(64)),
     ]
 )
 

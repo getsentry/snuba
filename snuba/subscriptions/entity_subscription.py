@@ -141,6 +141,10 @@ class GenericMetricsDistributionsSubscription(SessionsSubscription):
     disallowed_aggregations = ["having", "orderby"]
 
 
+class AuditLogSubscription(BaseEventsSubscription):
+    ...
+
+
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
     EventsSubscription: EntityKey.EVENTS,
     TransactionsSubscription: EntityKey.TRANSACTIONS,
@@ -148,6 +152,7 @@ ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] 
     MetricsSetsSubscription: EntityKey.METRICS_SETS,
     GenericMetricsSetsSubscription: EntityKey.GENERIC_METRICS_SETS,
     GenericMetricsDistributionsSubscription: EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    AuditLogSubscription: EntityKey.AUDIT_LOG,
 }
 
 ENTITY_KEY_TO_SUBSCRIPTION_MAPPER: Mapping[EntityKey, Type[EntitySubscription]] = {

@@ -40,6 +40,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
             EntityKey.METRICS_SETS.value,
             EntityKey.GENERIC_METRICS_SETS.value,
             EntityKey.GENERIC_METRICS_DISTRIBUTIONS.value,
+            EntityKey.AUDIT_LOG.value,
         ]
     ),
     help="The entity to target.",
