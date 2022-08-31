@@ -18,7 +18,7 @@ class AuditlogProcessor(MessageProcessor):
             "event_type": str(message["event_type"]),
             "user": str(message["user"]),
             "details": str(message["details"]),
-            "event_id": UUID(message["event_id"]),
+            "event_id": str(UUID(message["event_id"])),
         }
 
         return InsertBatch([processed], None)
