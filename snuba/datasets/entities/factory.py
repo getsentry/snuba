@@ -1,9 +1,10 @@
-from typing import Generator, Mapping, MutableMapping, Sequence, Type
+from typing import Generator, Mapping, MutableMapping, Optional, Sequence, Type
 
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.storages.factory import initialize_storage_factory
 from snuba.datasets.table_storage import TableWriter
 from snuba.utils.config_component_factory import ConfigComponentFactory
 from snuba.utils.serializable_exception import SerializableException
@@ -11,6 +12,7 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
+        initialize_storage_factory()
         self._entity_map: MutableMapping[EntityKey, Entity] = {}
         self._name_map: MutableMapping[Type[Entity], EntityKey] = {}
         self.__initialize()
@@ -106,7 +108,7 @@ class InvalidEntityError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-_ENT_FACTORY = None
+_ENT_FACTORY: Optional[_EntityFactory] = None
 
 
 def _ent_factory() -> _EntityFactory:

@@ -202,6 +202,13 @@ def _storage_factory() -> _StorageFactory:
     return _STORAGE_FACTORY
 
 
+def initialize_storage_factory() -> None:
+    """
+    Used to load storages on initialization of entities.
+    """
+    _storage_factory()
+
+
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage:
     storage = _storage_factory().get(storage_key)
     assert isinstance(storage, ReadableTableStorage)
