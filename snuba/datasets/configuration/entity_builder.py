@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Sequence, Type
 
+import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
     FunctionCallMapper,
     SubscriptableReferenceMapper,
