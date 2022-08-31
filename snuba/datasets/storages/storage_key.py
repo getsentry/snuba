@@ -59,19 +59,7 @@ class StorageKey(metaclass=_StorageKey):
         return f"StorageKey.{self.value.upper()}"
 
 
-class KeyExistsError(Exception):
-    """
-    Exception to be raised if a key is attempted to be registered
-    more than once.
-    """
-
-    pass
-
-
 def register_storage_key(key: str) -> StorageKey:
-    upper_key = key.upper()
-    if upper_key in REGISTERED_STORAGE_KEYS or upper_key in HARDCODED_STORAGE_KEYS:
-        raise KeyExistsError(f"StorageKey.{upper_key} already exists!")
     REGISTERED_STORAGE_KEYS[key.upper()] = key.lower()
     return StorageKey(key)
 
