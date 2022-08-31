@@ -35,6 +35,7 @@ class StorageSetKey(Enum):
     REPLAYS = "replays"
     GENERIC_METRICS_SETS = "generic_metrics_sets"
     GENERIC_METRICS_DISTRIBUTIONS = "generic_metrics_distributions"
+    AUDIT_LOG = "audit_log"
 
 
 # Storage sets enabled only when development features are enabled.

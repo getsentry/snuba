@@ -20,6 +20,7 @@ class MigrationGroup(Enum):
     FUNCTIONS = "functions"
     REPLAYS = "replays"
     GENERIC_METRICS = "generic_metrics"
+    AUDIT_LOG = "audit_log"
 
 
 # Migration groups are mandatory by default, unless they are on this list
@@ -275,6 +276,14 @@ class GenericMetricsLoader(DirectoryLoader):
         ]
 
 
+class AuditLogLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.audit_log")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_auditlog"]
+
+
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
@@ -288,6 +297,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.FUNCTIONS: FunctionsLoader(),
     MigrationGroup.REPLAYS: ReplaysLoader(),
     MigrationGroup.GENERIC_METRICS: GenericMetricsLoader(),
+    MigrationGroup.AUDIT_LOG: AuditLogLoader(),
 }
 
 

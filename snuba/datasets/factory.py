@@ -14,6 +14,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         self.__initialize()
 
     def __initialize(self) -> None:
+        from snuba.datasets.audit_log import AuditLogDataset
         from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
         from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
         from snuba.datasets.discover import DiscoverDataset
@@ -43,6 +44,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
                 "functions": FunctionsDataset(),
                 "generic_metrics": GenericMetricsDataset(),
                 "replays": ReplaysDataset(),
+                "audit_log": AuditLogDataset(),
             }
         )
         # TODO: load the yaml datasets here

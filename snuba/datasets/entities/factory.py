@@ -21,6 +21,7 @@ def get_entity(name: EntityKey) -> Entity:
 
     from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
     from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
+    from snuba.datasets.entities.audit_log import AuditLogEntity
     from snuba.datasets.entities.discover import (
         DiscoverEntity,
         DiscoverEventsEntity,
@@ -68,6 +69,7 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.REPLAYS: ReplaysEntity,
         EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsEntity,
         EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity,
+        EntityKey.AUDIT_LOG: AuditLogEntity,
         **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
     }
 
