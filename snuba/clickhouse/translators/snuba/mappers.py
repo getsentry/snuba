@@ -281,7 +281,7 @@ class FunctionNameMapper(FunctionCallMapper):
     to_name: str
 
     @classmethod
-    def config_key(cls):
+    def config_key(cls) -> str:
         return "simple_func"
 
     def attempt_map(

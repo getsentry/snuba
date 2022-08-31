@@ -10,6 +10,10 @@ class InvalidConfigKeyError(Exception):
     pass
 
 
+class RegisteredClassNameCollisionError(Exception):
+    pass
+
+
 class _ClassRegistry:
     """Keep a mapping of classes to their names"""
 
@@ -21,6 +25,10 @@ class _ClassRegistry:
         existing_class = self.__mapping.get(key)
         if not existing_class:
             self.__mapping[key] = cls
+        else:
+            raise RegisteredClassNameCollisionError(
+                f"Class with name {key} already exists in the registry, change the config_key property in the class {cls} or {existing_class}"
+            )
 
     def get_class_from_name(self, config_key: str) -> "RegisteredClass":
         res = self.__mapping.get(config_key)
