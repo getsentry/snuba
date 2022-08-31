@@ -75,7 +75,7 @@ class DirectoryLoader(GroupLoader, ABC):
 
 class SystemLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.system")
+        super().__init__("snuba.migrations.system_migrations")
 
     def get_migrations(self) -> Sequence[str]:
         return ["0001_migrations"]
@@ -83,7 +83,7 @@ class SystemLoader(DirectoryLoader):
 
 class EventsLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.events")
+        super().__init__("snuba.snuba_migrations.events")
 
     def get_migrations(self) -> Sequence[str]:
         return [
@@ -108,7 +108,7 @@ class EventsLoader(DirectoryLoader):
 
 class TransactionsLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.transactions")
+        super().__init__("snuba.snuba_migrations.transactions")
 
     def get_migrations(self) -> Sequence[str]:
         return [
@@ -137,7 +137,7 @@ class DiscoverLoader(DirectoryLoader):
     """
 
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.discover")
+        super().__init__("snuba.snuba_migrations.discover")
 
     def get_migrations(self) -> Sequence[str]:
         return [
@@ -153,7 +153,7 @@ class DiscoverLoader(DirectoryLoader):
 
 class OutcomesLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.outcomes")
+        super().__init__("snuba.snuba_migrations.outcomes")
 
     def get_migrations(self) -> Sequence[str]:
         return [
@@ -166,7 +166,7 @@ class OutcomesLoader(DirectoryLoader):
 
 class ReplaysLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.replays")
+        super().__init__("snuba.snuba_migrations.replays")
 
     def get_migrations(self) -> Sequence[str]:
         return [
@@ -180,7 +180,7 @@ class ReplaysLoader(DirectoryLoader):
 
 class MetricsLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.metrics")
+        super().__init__("snuba.snuba_migrations.metrics")
 
     def get_migrations(self) -> Sequence[str]:
         return [
@@ -223,7 +223,7 @@ class MetricsLoader(DirectoryLoader):
 
 class SessionsLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.sessions")
+        super().__init__("snuba.snuba_migrations.sessions")
 
     def get_migrations(self) -> Sequence[str]:
         return ["0001_sessions", "0002_sessions_aggregates", "0003_sessions_matview"]
@@ -231,7 +231,7 @@ class SessionsLoader(DirectoryLoader):
 
 class QuerylogLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.querylog")
+        super().__init__("snuba.snuba_migrations.querylog")
 
     def get_migrations(self) -> Sequence[str]:
         return ["0001_querylog", "0002_status_type_change", "0003_add_profile_fields"]
@@ -239,7 +239,7 @@ class QuerylogLoader(DirectoryLoader):
 
 class ProfilesLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.profiles")
+        super().__init__("snuba.snuba_migrations.profiles")
 
     def get_migrations(self) -> Sequence[str]:
         return [
@@ -251,7 +251,7 @@ class ProfilesLoader(DirectoryLoader):
 
 class FunctionsLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.functions")
+        super().__init__("snuba.snuba_migrations.functions")
 
     def get_migrations(self) -> Sequence[str]:
         return ["0001_functions"]
@@ -259,7 +259,7 @@ class FunctionsLoader(DirectoryLoader):
 
 class GenericMetricsLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.generic_metrics")
+        super().__init__("snuba.snuba_migrations.generic_metrics")
 
     def get_migrations(self) -> Sequence[str]:
         return [

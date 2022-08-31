@@ -111,7 +111,6 @@ def test_executor_consumer() -> None:
         consumer_group,
         result_producer,
         2,
-        2,
         auto_offset_reset,
         strict_offset_reset,
         TestingMetricsBackend(),

@@ -1,6 +1,5 @@
 from typing import Mapping, NamedTuple
 
-from snuba.datasets.metrics import DEFAULT_GRANULARITY
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
@@ -10,6 +9,7 @@ from snuba.query.query_settings import QuerySettings
 
 #: Granularities for which a materialized view exist, in ascending order
 GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)
+DEFAULT_GRANULARITY_RAW = 60
 
 
 class GranularityProcessor(QueryProcessor):
@@ -21,7 +21,7 @@ class GranularityProcessor(QueryProcessor):
         requested_granularity = query.get_granularity()
 
         if requested_granularity is None:
-            return DEFAULT_GRANULARITY
+            return DEFAULT_GRANULARITY_RAW
         elif requested_granularity > 0:
             for granularity in reversed(GRANULARITIES_AVAILABLE):
                 if (requested_granularity % granularity) == 0:

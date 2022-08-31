@@ -1,6 +1,5 @@
 from abc import ABC
-from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -12,10 +11,9 @@ from snuba.clickhouse.columns import (
     SchemaModifiers,
     UInt,
 )
-from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
-from snuba.clickhouse.translators.snuba.allowed import (
-    CurriedFunctionCallMapper,
-    FunctionCallMapper,
+from snuba.clickhouse.translators.snuba.function_call_mappers import (
+    AggregateCurriedFunctionMapper,
+    AggregateFunctionMapper,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
     FunctionNameMapper,
@@ -27,16 +25,6 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.exceptions import InvalidExpressionException
-from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import (
-    CurriedFunctionCall,
-    Expression,
-    FunctionCall,
-    Literal,
-    SubscriptableReference,
-)
-from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.granularity_processor import GranularityProcessor
 from snuba.query.processors.object_id_rate_limiter import (
@@ -46,33 +34,13 @@ from snuba.query.processors.object_id_rate_limiter import (
     ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
-from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     GranularityValidator,
     QueryValidator,
 )
-
-
-class TagsTypeTransformer(QueryProcessor):
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        def transform_expression(exp: Expression) -> Expression:
-            if not isinstance(exp, SubscriptableReference):
-                return exp
-
-            key = exp.key
-            if not isinstance(key.value, str) or not key.value.isdigit():
-                raise InvalidExpressionException.from_args(
-                    exp,
-                    "Expected a string key containing an integer in subscriptable.",
-                )
-
-            return SubscriptableReference(
-                exp.alias, exp.column, Literal(None, int(key.value))
-            )
-
-        query.transform_expressions(transform_expression)
 
 
 class MetricsEntity(Entity, ABC):
@@ -193,100 +161,6 @@ class OrgMetricsCountersEntity(MetricsEntity):
                 ]
             ),
             validators=[GranularityValidator(minimum=3600)],
-        )
-
-
-def _build_parameters(
-    expression: Union[FunctionCall, CurriedFunctionCall],
-    children_translator: SnubaClickhouseStrictTranslator,
-    aggregated_col_name: str,
-) -> Tuple[Expression, ...]:
-    assert isinstance(expression.parameters[0], ColumnExpr)
-    return (
-        ColumnExpr(None, expression.parameters[0].table_name, aggregated_col_name),
-        *[p.accept(children_translator) for p in expression.parameters[1:]],
-    )
-
-
-def _should_transform_aggregation(
-    function_name: str,
-    expected_function_name: str,
-    column_to_map: str,
-    function_call: Union[FunctionCall, CurriedFunctionCall],
-) -> bool:
-    return (
-        function_name == expected_function_name
-        and len(function_call.parameters) > 0
-        and isinstance(function_call.parameters[0], ColumnExpr)
-        and function_call.parameters[0].column_name == column_to_map
-    )
-
-
-@dataclass(frozen=True)
-class AggregateFunctionMapper(FunctionCallMapper):
-    """
-    Turns expressions like max(value) into maxMerge(max)
-    or maxIf(value, condition) into maxMergeIf(max, condition)
-    """
-
-    column_to_map: str
-    from_name: str
-    to_name: str
-    aggr_col_name: str
-
-    def attempt_map(
-        self,
-        expression: FunctionCall,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
-        if not _should_transform_aggregation(
-            expression.function_name, self.from_name, self.column_to_map, expression
-        ):
-            return None
-
-        return FunctionCall(
-            expression.alias,
-            self.to_name,
-            _build_parameters(expression, children_translator, self.aggr_col_name),
-        )
-
-
-@dataclass(frozen=True)
-class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
-    """
-    Turns expressions like quantiles(0.9)(value) into quantilesMerge(0.9)(percentiles)
-    or quantilesIf(0.9)(value, condition) into quantilesMergeIf(0.9)(percentiles, condition)
-    """
-
-    column_to_map: str
-    from_name: str
-    to_name: str
-    aggr_col_name: str
-
-    def attempt_map(
-        self,
-        expression: CurriedFunctionCall,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[CurriedFunctionCall]:
-        if not _should_transform_aggregation(
-            expression.internal_function.function_name,
-            self.from_name,
-            self.column_to_map,
-            expression,
-        ):
-            return None
-
-        return CurriedFunctionCall(
-            expression.alias,
-            FunctionCall(
-                None,
-                self.to_name,
-                tuple(
-                    p.accept(children_translator)
-                    for p in expression.internal_function.parameters
-                ),
-            ),
-            _build_parameters(expression, children_translator, self.aggr_col_name),
         )
 
 

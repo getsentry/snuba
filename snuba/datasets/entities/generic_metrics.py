@@ -9,16 +9,15 @@ from snuba.clickhouse.columns import (
     Nested,
     UInt,
 )
+from snuba.clickhouse.translators.snuba.function_call_mappers import (
+    AggregateCurriedFunctionMapper,
+    AggregateFunctionMapper,
+)
 from snuba.clickhouse.translators.snuba.mappers import (
     FunctionNameMapper,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.metrics import (
-    AggregateCurriedFunctionMapper,
-    AggregateFunctionMapper,
-    TagsTypeTransformer,
-)
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
@@ -38,6 +37,7 @@ from snuba.query.processors.object_id_rate_limiter import (
     ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
