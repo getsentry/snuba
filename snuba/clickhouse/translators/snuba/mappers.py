@@ -138,6 +138,10 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
     value_subcolumn_name: str = "value"
     nullable: bool = False
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "subscriptable"
+
     def attempt_map(
         self,
         expression: SubscriptableReference,
@@ -275,6 +279,10 @@ class FunctionNameMapper(FunctionCallMapper):
 
     from_name: str
     to_name: str
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "simple_func"
 
     def attempt_map(
         self,
