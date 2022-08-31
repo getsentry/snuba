@@ -1,10 +1,12 @@
 from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, String
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.querylog_processor import QuerylogProcessor
+from snuba.datasets.auditlog_processor import AuditlogProcessor
+from snuba.datasets.message_filters import KafkaHeaderFilterWithBypass
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
 columns = ColumnSet(
@@ -30,7 +32,12 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=QuerylogProcessor(),
+        processor=AuditlogProcessor(),
         default_topic=Topic.AUDIT_LOG,
+        commit_log_topic=Topic.AUDIT_LOG_COMMIT,
+        pre_filter=KafkaHeaderFilterWithBypass("transaction_forwarder", "0", 100),
+        subscription_result_topic=Topic.AUDIT_LOG_RESULTS,
+        subscription_scheduled_topic=Topic.AUDIT_LOG_SUBSCRIPTION,
+        subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
     ),
 )
