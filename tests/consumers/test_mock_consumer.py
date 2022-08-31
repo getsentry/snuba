@@ -6,8 +6,8 @@ from arroyo.types import Message, Partition, Topic
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery, StringNode
 from snuba.consumers.consumer import build_mock_batch_writer
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from tests.backends.metrics import TestingMetricsBackend
 
 

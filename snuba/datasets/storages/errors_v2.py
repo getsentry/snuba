@@ -5,7 +5,6 @@ from snuba.datasets.errors_replacer import ErrorsReplacer
 from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
     all_columns,
     mandatory_conditions,
@@ -19,6 +18,7 @@ from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsPr
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.storages.type_condition_optimizer import TypeConditionOptimizer
 from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings

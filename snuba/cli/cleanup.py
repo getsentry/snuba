@@ -3,8 +3,8 @@ from typing import Optional
 import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 
 

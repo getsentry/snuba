@@ -17,8 +17,8 @@ from snuba.consumers.consumer import (
     build_mock_batch_writer,
     process_message,
 )
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
 from snuba.state import get_config

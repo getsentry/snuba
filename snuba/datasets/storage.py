@@ -12,7 +12,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query

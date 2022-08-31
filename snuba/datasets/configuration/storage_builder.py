@@ -18,7 +18,7 @@ from snuba.datasets.configuration.utils import (
 )
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import register_storage_key
 from snuba.datasets.table_storage import (
     KafkaStreamLoader,
     build_kafka_stream_loader_from_settings,
@@ -58,7 +58,7 @@ def build_storage(
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
-        STORAGE_KEY: StorageKey(config[STORAGE]["key"]),
+        STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
         SCHEMA: (
             WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
