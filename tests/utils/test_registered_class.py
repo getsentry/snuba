@@ -27,7 +27,7 @@ def test_register() -> None:
 
 
 def test_name_collision() -> None:
-    def register_identical_keys():
+    def register_identical_keys() -> None:
         class A(metaclass=RegisteredClass):
             @classmethod
             def config_key(cls) -> str:
