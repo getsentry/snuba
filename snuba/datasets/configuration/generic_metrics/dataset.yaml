@@ -1,6 +1,6 @@
 version: v1
 kind: dataset
-name: generic-metrics
+name: generic_metrics
 
 is_experimental: false
 
