@@ -16,9 +16,6 @@ from snuba.datasets.storages.errors_common import (
     required_columns,
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
-    ArrayJoinKeyValueOptimizer,
-)
 from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
@@ -26,6 +23,9 @@ from snuba.query.processors.empty_tag_condition_processor import (
 from snuba.query.processors.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
 from snuba.query.processors.physical.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )

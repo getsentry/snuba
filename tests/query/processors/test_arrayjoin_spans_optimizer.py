@@ -20,12 +20,12 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.processors.abstract_array_join_optimizer import (
+from snuba.query.processors.physical.abstract_array_join_optimizer import (
     get_multiple_columns_filters,
     get_single_column_filters,
 )
-from snuba.query.processors.arrayjoin_optimizer import ArrayJoinOptimizer
-from snuba.query.processors.bloom_filter_optimizer import BloomFilterOptimizer
+from snuba.query.processors.physical.arrayjoin_optimizer import ArrayJoinOptimizer
+from snuba.query.processors.physical.bloom_filter_optimizer import BloomFilterOptimizer
 from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 

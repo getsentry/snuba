@@ -8,7 +8,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ReferrerRateLimiterProcessor,

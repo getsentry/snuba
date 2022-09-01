@@ -33,7 +33,7 @@ from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema, Writ
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.table_rate_limit import TableRateLimit

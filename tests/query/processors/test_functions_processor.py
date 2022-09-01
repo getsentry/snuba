@@ -8,7 +8,7 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 
 test_data = [
