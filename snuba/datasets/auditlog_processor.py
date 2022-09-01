@@ -14,6 +14,7 @@ class AuditlogProcessor(MessageProcessor):
     ) -> Optional[ProcessedMessage]:
 
         processed = {
+            "project_id": message["project_id"],
             "timestamp": datetime.datetime.utcfromtimestamp(message["timestamp"]),
             "event_type": str(message["event_type"]),
             "user": str(message["user"]),
