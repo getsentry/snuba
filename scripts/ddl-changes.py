@@ -19,7 +19,7 @@ def _main() -> None:
             "--name-only",
             "origin/master",
             "--",
-            "snuba/migrations/snuba_migrations/*/[0-9]*.py",
+            "snuba/snuba_migrations/*/[0-9]*.py",
         ],
         stdout=subprocess.PIPE,
         text=True,
