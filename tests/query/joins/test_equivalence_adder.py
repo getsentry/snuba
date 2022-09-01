@@ -2,7 +2,7 @@ from functools import partial
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery

@@ -2,7 +2,7 @@ from typing import Generator, Mapping, MutableMapping, Optional, Sequence, Type
 
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.storages.factory import initialize_storage_factory
 from snuba.datasets.table_storage import TableWriter

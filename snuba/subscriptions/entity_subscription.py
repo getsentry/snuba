@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Mapping, Optional, Sequence, Type, Union
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition

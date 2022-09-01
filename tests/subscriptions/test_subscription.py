@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 from pytest import raises
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client

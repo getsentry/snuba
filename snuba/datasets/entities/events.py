@@ -10,8 +10,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder

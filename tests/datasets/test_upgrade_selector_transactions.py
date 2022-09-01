@@ -4,8 +4,8 @@ from typing import List, Optional, Tuple
 import pytest
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.transactions import v2_selector_function
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition

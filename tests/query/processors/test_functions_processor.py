@@ -3,7 +3,7 @@ from copy import deepcopy
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal

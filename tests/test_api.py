@@ -16,7 +16,7 @@ from sentry_sdk import Client, Hub
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.factory import get_dataset

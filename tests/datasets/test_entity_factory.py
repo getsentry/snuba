@@ -1,4 +1,4 @@
-from snuba.datasets.entities import EntityKey, factory
+from snuba.datasets.entities.entity_key import EntityKey, factory
 from snuba.datasets.entities.factory import (
     get_all_entity_names,
     get_entity,
