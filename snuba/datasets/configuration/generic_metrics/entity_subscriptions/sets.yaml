@@ -2,6 +2,5 @@ version: v1
 kind: entity_subscription
 name: generic_metrics_sets_subscription
 
-parent_subscription_entity_class: sessions_subscription
 max_allowed_aggregations: 3
 disallowed_aggregations: ["having", "orderby"]

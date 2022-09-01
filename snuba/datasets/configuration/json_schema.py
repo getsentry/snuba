@@ -242,7 +242,6 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
         "version": {"const": "v1"},
         "kind": {"const": "entity_subscription"},
         "name": TYPE_STRING,
-        "parent_subscription_entity_class": TYPE_STRING,
         "max_allowed_aggregations": TYPE_NULLABLE_INTEGER,
         "disallowed_aggregations": NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA,
     },
@@ -250,6 +249,5 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
         "version",
         "kind",
         "name",
-        "parent_subscription_entity_class",
     ],
 }

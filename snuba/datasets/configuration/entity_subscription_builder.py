@@ -35,18 +35,4 @@ def build_entity_subscription_from_config(
     PluggableEntitySubscription.disallowed_aggregations = config_data[
         "disallowed_aggregations"
     ]
-
-    # Plug parent class dynamically from config
-    NewPluggableEntitySubscription = type(
-        "PluggableEntitySubscription",
-        (
-            _PARENT_SUBSCRIPTION_CLASS_MAPPING[
-                config_data["parent_subscription_entity_class"]
-            ],
-        ),
-        PluggableEntitySubscription.__dict__.copy(),
-    )
-    assert (
-        NewPluggableEntitySubscription.__name__ == PluggableEntitySubscription.__name__
-    )
-    return NewPluggableEntitySubscription
+    return PluggableEntitySubscription

@@ -71,12 +71,9 @@ def test_entity_subscription_generic_metrics_sets_regular_vs_pluggable(
     sets_identifier = SubscriptionCreator(dataset, entity_key).create(
         sets_subscription, timer
     )
-    print(f"Created {sets_identifier}")
-
     pluggable_identifier = SubscriptionCreator(dataset, entity_key).create(
         pluggable_subscription, timer
     )
-    print(f"Created {pluggable_identifier}")
 
     stores = [
         RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(i))
