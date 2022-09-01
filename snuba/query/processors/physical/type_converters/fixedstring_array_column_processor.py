@@ -1,7 +1,10 @@
 from typing import Set
 
 from snuba.query.expressions import Expression, FunctionCall, Literal
-from snuba.query.processors.type_converters import BaseTypeConverter, ColumnTypeError
+from snuba.query.processors.physical.type_converters import (
+    BaseTypeConverter,
+    ColumnTypeError,
+)
 
 
 class FixedStringArrayColumnProcessor(BaseTypeConverter):

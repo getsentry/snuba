@@ -2,7 +2,10 @@ import uuid
 from typing import Set
 
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.processors.type_converters import BaseTypeConverter, ColumnTypeError
+from snuba.query.processors.physical.type_converters import (
+    BaseTypeConverter,
+    ColumnTypeError,
+)
 
 
 class UUIDColumnProcessor(BaseTypeConverter):

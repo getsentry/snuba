@@ -26,14 +26,14 @@ from snuba.query.processors.events_bool_contexts import EventsBooleanContextsPro
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.null_column_caster import NullColumnCaster
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.type_converters.hexint_column_processor import (
+from snuba.query.processors.physical.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
-from snuba.query.processors.type_converters.uuid_column_processor import (
+from snuba.query.processors.physical.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
+from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 columns = ColumnSet(

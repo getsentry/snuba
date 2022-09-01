@@ -26,21 +26,21 @@ from snuba.query.processors.empty_tag_condition_processor import (
 from snuba.query.processors.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.physical.type_converters.hexint_column_processor import (
+    HexIntColumnProcessor,
+)
+from snuba.query.processors.physical.type_converters.uuid_array_column_processor import (
+    UUIDArrayColumnProcessor,
+)
+from snuba.query.processors.physical.type_converters.uuid_column_processor import (
+    UUIDColumnProcessor,
+)
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.replaced_groups import PostReplacementConsistencyEnforcer
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.type_condition_optimizer import TypeConditionOptimizer
-from snuba.query.processors.type_converters.hexint_column_processor import (
-    HexIntColumnProcessor,
-)
-from snuba.query.processors.type_converters.uuid_array_column_processor import (
-    UUIDArrayColumnProcessor,
-)
-from snuba.query.processors.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
 from snuba.query.processors.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )

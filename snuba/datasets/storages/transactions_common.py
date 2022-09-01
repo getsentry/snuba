@@ -23,16 +23,16 @@ from snuba.query.processors.empty_tag_condition_processor import (
 from snuba.query.processors.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
-from snuba.query.processors.type_converters.hexint_column_processor import (
+from snuba.query.processors.physical.type_converters.hexint_column_processor import (
     HexIntArrayColumnProcessor,
     HexIntColumnProcessor,
 )
-from snuba.query.processors.type_converters.uuid_column_processor import (
+from snuba.query.processors.physical.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
+from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
