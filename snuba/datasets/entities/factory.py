@@ -4,6 +4,7 @@ from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import initialize_storage_factory
 from snuba.datasets.table_storage import TableWriter
 from snuba.utils.config_component_factory import ConfigComponentFactory
@@ -98,8 +99,10 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             raise InvalidEntityError(f"entity {name!r} does not exist") from error
 
     def get_entity_name(self, entity: Entity) -> EntityKey:
-        # TODO: This is dumb, the name should just be a property on the entity
         try:
+            if isinstance(entity, PluggableEntity):
+                return EntityKey(entity.name)
+            # TODO: Destroy all non-PluggableEntity Entities
             return self._name_map[entity.__class__]
         except KeyError as error:
             raise InvalidEntityError(f"entity {entity} has no name") from error
