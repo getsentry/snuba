@@ -2,7 +2,7 @@ from typing import Sequence
 
 from snuba.clickhouse.columns import AggregateFunction, Column, UInt
 from snuba.migrations import migration, operations
-from snuba.migrations.snuba_migrations.metrics.templates import (
+from snuba.snuba_migrations.metrics.templates import (
     get_forward_migrations_dist,
     get_forward_migrations_local,
     get_migration_args_for_sets,

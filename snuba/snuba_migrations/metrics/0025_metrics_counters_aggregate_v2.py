@@ -5,30 +5,21 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.snuba_migrations.metrics.templates import COMMON_AGGR_COLUMNS
+from snuba.snuba_migrations.metrics.templates import COMMON_AGGR_COLUMNS
 from snuba.utils.schemas import AggregateFunction, Float, String
 
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
-    table_name = "metrics_distributions_v2_local"
-    dist_table_name = "metrics_distributions_v2_dist"
+    table_name = "metrics_counters_v2_local"
+    dist_table_name = "metrics_counters_v2_dist"
     granularity = "2048"
     aggregated_cols: Sequence[Column[Modifiers]] = [
         # This is a common column for aggregate tables going forward
         # but doesn't exist in the old templates so we include it here
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
         *COMMON_AGGR_COLUMNS,
-        Column(
-            "percentiles",
-            AggregateFunction("quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]),
-        ),
-        Column("min", AggregateFunction("min", [Float(64)])),
-        Column("max", AggregateFunction("max", [Float(64)])),
-        Column("avg", AggregateFunction("avg", [Float(64)])),
-        Column("sum", AggregateFunction("sum", [Float(64)])),
-        Column("count", AggregateFunction("count", [Float(64)])),
-        Column("histogram_buckets", AggregateFunction("histogram(250)", [Float(64)])),
+        Column("value", AggregateFunction("sum", [Float(64)])),
     ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
