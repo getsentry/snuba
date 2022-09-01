@@ -168,6 +168,10 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
 
     function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
 
+    @classmethod
+    def config_key(_cls) -> str:
+        return "default_if_null_curried_function"
+
     def attempt_map(
         self,
         expression: CurriedFunctionCall,

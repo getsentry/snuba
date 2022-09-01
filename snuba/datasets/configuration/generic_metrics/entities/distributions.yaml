@@ -98,70 +98,70 @@ query_processors:
 translation_mappers:
   functions:
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: min
         to_name: minMerge
         aggr_col_name: min
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: minIf
         to_name: minMergeIf
         aggr_col_name: minIf
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: max
         to_name: maxMerge
         aggr_col_name: max
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: maxIf
         to_name: maxMergeIf
         aggr_col_name: max
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: avg
         to_name: avgMerge
         aggr_col_name: avg
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: avgIf
         to_name: avgMergeIf
         aggr_col_name: avg
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: sum
         to_name: sumMerge
         aggr_col_name: sum
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: sumIf
         to_name: sumMergeIf
         aggr_col_name: sum
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: count
         to_name: countMerge
         aggr_col_name: count
     -
-      mapper: aggregate_func
+      mapper: aggregate_function
       args:
         column_to_map: value
         from_name: countIf
@@ -169,28 +169,28 @@ translation_mappers:
         aggr_col_name: count
   curried_functions:
     -
-      mapper: aggregate_curried_func
+      mapper: aggregate_curried_function
       args:
         column_to_map: value
         from_name: quantiles
         to_name: quantilesMerge
         aggr_col_name: percentiles
     -
-      mapper: aggregate_curried_func
+      mapper: aggregate_curried_function
       args:
         column_to_map: value
         from_name: quantilesIf
         to_name: quantilesMergeIf
         aggr_col_name: percentiles
     -
-      mapper: aggregate_curried_func
+      mapper: aggregate_curried_function
       args:
         column_to_map: value
         from_name: histogram
         to_name: histogramMerge
         aggr_col_name: histogram_buckets
     -
-      mapper: aggregate_curried_func
+      mapper: aggregate_curried_function
       args:
         column_to_map: value
         from_name: histogramIf
