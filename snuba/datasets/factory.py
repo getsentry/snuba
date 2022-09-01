@@ -1,7 +1,10 @@
-from typing import Generator, MutableMapping, Sequence, Type
+from glob import glob
+from typing import Generator, MutableMapping, Optional, Sequence, Type
 
 from snuba import settings
+from snuba.datasets.configuration.dataset_builder import build_dataset
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import initialize_entity_factory
 from snuba.util import with_span
 from snuba.utils.config_component_factory import ConfigComponentFactory
 from snuba.utils.serializable_exception import SerializableException
@@ -9,17 +12,28 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
     def __init__(self) -> None:
+        initialize_entity_factory()
         self._dataset_map: MutableMapping[str, Dataset] = {}
         self._name_map: MutableMapping[Type[Dataset], str] = {}
         self.__initialize()
 
     def __initialize(self) -> None:
+
+        self._config_built_datasets = {
+            dataset.name: dataset
+            for dataset in [
+                build_dataset(config_file)
+                for config_file in glob(
+                    settings.DATASET_CONFIG_FILES_GLOB, recursive=True
+                )
+            ]
+        }
+
         from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
         from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
         from snuba.datasets.discover import DiscoverDataset
         from snuba.datasets.events import EventsDataset
         from snuba.datasets.functions import FunctionsDataset
-        from snuba.datasets.generic_metrics import GenericMetricsDataset
         from snuba.datasets.metrics import MetricsDataset
         from snuba.datasets.outcomes import OutcomesDataset
         from snuba.datasets.outcomes_raw import OutcomesRawDataset
@@ -41,11 +55,11 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
                 "transactions": TransactionsDataset(),
                 "profiles": ProfilesDataset(),
                 "functions": FunctionsDataset(),
-                "generic_metrics": GenericMetricsDataset(),
                 "replays": ReplaysDataset(),
             }
         )
-        # TODO: load the yaml datasets here
+
+        self._dataset_map.update(self._config_built_datasets)
 
         self._name_map = {v.__class__: k for k, v in self._dataset_map.items()}
 
@@ -82,7 +96,7 @@ class InvalidDatasetError(SerializableException):
     """Exception raised on invalid dataset access."""
 
 
-_DS_FACTORY = None
+_DS_FACTORY: Optional[_DatasetFactory] = None
 
 
 def _ds_factory() -> _DatasetFactory:

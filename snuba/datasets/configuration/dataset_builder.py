@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
 from snuba.datasets.configuration.loader import load_configuration_data
-from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.pluggable_dataset import PluggableDataset
 
@@ -10,7 +9,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 DATASET_VALIDATION_SCHEMAS = {"dataset": V1_READABLE_STORAGE_SCHEMA}
 
 
-def build_dataset(config_file_path: str) -> Dataset:
+def build_dataset(config_file_path: str) -> PluggableDataset:
     config = load_configuration_data(config_file_path, DATASET_VALIDATION_SCHEMAS)
     return PluggableDataset(
         name=config["name"],
