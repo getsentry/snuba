@@ -99,6 +99,7 @@ def _build_entity_translation_mappers(
 
 def build_entity_from_config(file_path: str) -> Entity:
     logger.info(f"building entity from {file_path}")
+    print(f"building entity from {file_path}")
     config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
     return PluggableEntity(
         entity_key=register_entity_key(config_data["name"]),
