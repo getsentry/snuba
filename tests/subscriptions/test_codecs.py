@@ -8,6 +8,13 @@ from typing import Callable, Optional, Type
 import pytest
 
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    EntitySubscription,
+    EventsSubscription,
+    MetricsCountersSubscription,
+    MetricsSetsSubscription,
+)
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -24,13 +31,6 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
 )
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EventsSubscription,
-    MetricsCountersSubscription,
-    MetricsSetsSubscription,
-)
-from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 from snuba.utils.metrics.timer import Timer
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
 

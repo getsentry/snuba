@@ -4,17 +4,17 @@ from uuid import UUID
 import pytest
 
 from snuba.datasets.entities.factory import get_entity_name
-from snuba.datasets.factory import get_dataset
-from snuba.redis import redis_client
-from snuba.subscriptions.data import PartitionId, SubscriptionData
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
+from snuba.datasets.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     GenericMetricsSetsSubscription,
     SessionsSubscription,
 )
-from snuba.subscriptions.entity_subscriptions.pluggable_entity_subscription import (
+from snuba.datasets.entity_subscriptions.pluggable_entity_subscription import (
     PluggableEntitySubscription,
 )
+from snuba.datasets.factory import get_dataset
+from snuba.redis import redis_client
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer

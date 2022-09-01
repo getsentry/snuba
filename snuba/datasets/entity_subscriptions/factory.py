@@ -1,13 +1,11 @@
 from typing import Generator, Mapping, MutableMapping, Sequence, Type
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey
-from snuba.subscriptions.entity_subscriptions.configuration.entity_subscription_builder import (
+from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
 )
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-)
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.utils.config_component_factory import ConfigComponentFactory
 from snuba.utils.serializable_exception import SerializableException
 
@@ -23,8 +21,7 @@ class _EntitySubscriptionFactory(
         self.__initialize()
 
     def __initialize(self) -> None:
-        from snuba.subscriptions.entity_subscriptions.entity_subscription import (
-            EntitySubscription,
+        from snuba.datasets.entity_subscriptions.entity_subscription import (
             EventsSubscription,
             GenericMetricsDistributionsSubscription,
             GenericMetricsSetsSubscription,

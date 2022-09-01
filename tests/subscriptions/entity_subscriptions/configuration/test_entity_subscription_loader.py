@@ -3,13 +3,13 @@ from typing import Type
 import pytest
 from jsonschema.exceptions import ValidationError
 
-from snuba.subscriptions.entity_subscriptions.configuration.entity_subscription_builder import (
+from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
 )
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
+from snuba.datasets.entity_subscriptions.entity_subscription import (
     GenericMetricsSetsSubscription,
 )
-from snuba.subscriptions.entity_subscriptions.pluggable_entity_subscription import (
+from snuba.datasets.entity_subscriptions.pluggable_entity_subscription import (
     PluggableEntitySubscription,
 )
 

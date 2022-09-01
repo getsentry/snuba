@@ -17,6 +17,8 @@ from confluent_kafka.admin import AdminClient
 from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -29,10 +31,6 @@ from snuba.subscriptions.data import (
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
 )
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
-    EventsSubscription,
-)
-from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
     ProduceResult,

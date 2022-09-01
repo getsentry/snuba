@@ -4,6 +4,11 @@ import pytest
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    EntitySubscription,
+    EntitySubscriptionValidation,
+)
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -20,11 +25,6 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.validation.validators import SubscriptionAllowedClausesValidator
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EntitySubscriptionValidation,
-)
-from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 
 
 class EntityKeySubscription(EntitySubscriptionValidation, EntitySubscription):

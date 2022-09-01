@@ -4,10 +4,10 @@ import random
 from datetime import timedelta
 
 from snuba.datasets.entities.factory import get_entity_name
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
-from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer

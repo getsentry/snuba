@@ -3,17 +3,17 @@ from typing import Optional
 from uuid import UUID
 
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    EntitySubscription,
+    EventsSubscription,
+)
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.subscriptions.data import (
     PartitionId,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EventsSubscription,
-)
-from snuba.subscriptions.entity_subscriptions.factory import get_entity_subscription
 
 UUIDS = [
     UUID("fac82541-049f-4435-982d-819082761a53"),

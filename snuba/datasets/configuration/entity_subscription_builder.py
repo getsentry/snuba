@@ -1,18 +1,16 @@
 import logging
 from typing import Mapping, Type
 
-from snuba.subscriptions.entity_subscriptions.configuration.json_schema import (
-    V1_ENTITY_SUBSCIPTION_SCHEMA,
-)
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
+from snuba.datasets.configuration.json_schema import V1_ENTITY_SUBSCIPTION_SCHEMA
+from snuba.datasets.configuration.loader import load_configuration_data
+from snuba.datasets.entity_subscriptions.entity_subscription import (
     BaseEventsSubscription,
     EntitySubscription,
     SessionsSubscription,
 )
-from snuba.subscriptions.entity_subscriptions.pluggable_entity_subscription import (
+from snuba.datasets.entity_subscriptions.pluggable_entity_subscription import (
     PluggableEntitySubscription,
 )
-from snuba.utils.loader import load_configuration_data
 
 logger = logging.getLogger("snuba.entity_subscriptions_builder")
 

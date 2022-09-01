@@ -14,13 +14,11 @@ from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
 from snuba.datasets.entities import EntityKey
+from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId, SubscriptionData
-from snuba.subscriptions.entity_subscriptions.entity_subscription import (
-    EventsSubscription,
-)
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
     CommittableTick,
