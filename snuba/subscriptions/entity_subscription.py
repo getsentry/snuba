@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Mapping, Optional, Sequence, Type, Union
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.factory import get_entity, initialize_entity_factory
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity
@@ -13,6 +13,8 @@ from snuba.query.validation.validators import (
     NoTimeBasedConditionValidator,
     SubscriptionAllowedClausesValidator,
 )
+
+initialize_entity_factory()
 
 
 class InvalidSubscriptionError(Exception):

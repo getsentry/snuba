@@ -121,6 +121,10 @@ def _ent_factory() -> _EntityFactory:
     return _ENT_FACTORY
 
 
+def initialize_entity_factory() -> None:
+    _ent_factory()
+
+
 def get_entity(name: EntityKey) -> Entity:
     return _ent_factory().get(name)
 
