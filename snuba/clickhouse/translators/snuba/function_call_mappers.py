@@ -81,6 +81,10 @@ class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
     to_name: str
     aggr_col_name: str
 
+    @classmethod
+    def config_key(_cls) -> str:
+        return "aggregate_curried_function"
+
     def attempt_map(
         self,
         expression: CurriedFunctionCall,

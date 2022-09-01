@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Sequence, Type
 
+import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
+    CurriedFunctionCallMapper,
     FunctionCallMapper,
     SubscriptableReferenceMapper,
 )
@@ -77,8 +79,20 @@ def _build_entity_translation_mappers(
         )
         for sub_config in config_translation_mappers["subscriptables"]
     ]
+    curried_function_mappers: list[CurriedFunctionCallMapper] = (
+        [
+            CurriedFunctionCallMapper.get_from_name(fm_config["mapper"])(
+                **fm_config["args"]
+            )
+            for fm_config in config_translation_mappers["curried_functions"]
+        ]
+        if "curried_functions" in config_translation_mappers
+        else []
+    )
     return TranslationMappers(
-        functions=function_mappers, subscriptables=subscriptable_mappers
+        functions=function_mappers,
+        subscriptables=subscriptable_mappers,
+        curried_functions=curried_function_mappers,
     )
 
 

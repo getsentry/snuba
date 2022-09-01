@@ -43,7 +43,8 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         from snuba.datasets.entities.transactions import TransactionsEntity
 
         entity_to_config_path_mapping: Mapping[EntityKey, str] = {
-            EntityKey.GENERIC_METRICS_SETS: "snuba/datasets/configuration/generic_metrics/entities/sets.yaml"
+            EntityKey.GENERIC_METRICS_SETS: "snuba/datasets/configuration/generic_metrics/entities/sets.yaml",
+            EntityKey.GENERIC_METRICS_DISTRIBUTIONS: "snuba/datasets/configuration/generic_metrics/entities/distributions.yaml",
         }
 
         self._entity_map.update(
