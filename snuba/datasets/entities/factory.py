@@ -1,4 +1,5 @@
-from typing import Generator, Mapping, MutableMapping, Optional, Sequence, Type
+from glob import glob
+from typing import Generator, MutableMapping, Optional, Sequence, Type
 
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
@@ -18,6 +19,17 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         self.__initialize()
 
     def __initialize(self) -> None:
+
+        self._config_built_entities = {
+            entity.entity_key: entity
+            for entity in [
+                build_entity_from_config(config_file)
+                for config_file in glob(
+                    settings.ENTITY_CONFIG_FILES_GLOB, recursive=True
+                )
+            ]
+        }
+
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
@@ -43,11 +55,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         from snuba.datasets.entities.replays import ReplaysEntity
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
-
-        entity_to_config_path_mapping: Mapping[EntityKey, str] = {
-            EntityKey.GENERIC_METRICS_SETS: "snuba/datasets/configuration/generic_metrics/entities/sets.yaml",
-            EntityKey.GENERIC_METRICS_DISTRIBUTIONS: "snuba/datasets/configuration/generic_metrics/entities/distributions.yaml",
-        }
 
         self._entity_map.update(
             {
@@ -75,12 +82,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         )
 
         if settings.PREFER_PLUGGABLE_ENTITIES:
-            self._entity_map.update(
-                {
-                    key: build_entity_from_config(path)
-                    for (key, path) in entity_to_config_path_mapping.items()
-                }
-            )
+            self._entity_map.update(self._config_built_entities)
 
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 

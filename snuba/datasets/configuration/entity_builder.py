@@ -14,7 +14,6 @@ from snuba.datasets.configuration.json_schema import V1_ENTITY_SCHEMA
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.entities.entity_key import register_entity_key
-from snuba.datasets.entity import Entity
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -97,9 +96,8 @@ def _build_entity_translation_mappers(
     )
 
 
-def build_entity_from_config(file_path: str) -> Entity:
+def build_entity_from_config(file_path: str) -> PluggableEntity:
     logger.info(f"building entity from {file_path}")
-    print(f"building entity from {file_path}")
     config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
     return PluggableEntity(
         entity_key=register_entity_key(config_data["name"]),
