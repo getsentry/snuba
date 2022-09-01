@@ -7,8 +7,8 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 
 
 def test_flattened() -> None:

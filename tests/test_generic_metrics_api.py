@@ -10,8 +10,8 @@ from pytest import approx
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import USE_CONFIG_BUILT_STORAGES, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages

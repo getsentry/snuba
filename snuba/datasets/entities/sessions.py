@@ -15,8 +15,8 @@ from snuba.datasets.plans.single_storage import (
     SingleStorageQueryPlanBuilder,
 )
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.conditions import (

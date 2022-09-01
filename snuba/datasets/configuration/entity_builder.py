@@ -15,8 +15,8 @@ from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.entity import Entity
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.granularity_processor import MappedGranularityProcessor
 from snuba.query.processors.object_id_rate_limiter import (

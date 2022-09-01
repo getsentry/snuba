@@ -9,8 +9,8 @@ import simplejson as json
 from sentry_relay import DataCategory
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 

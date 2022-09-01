@@ -6,8 +6,8 @@ from snuba import settings
 from snuba.clusters.cluster import UndefinedClickhouseCluster
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 
 Node = TypedDict("Node", {"host": str, "port": int})
 

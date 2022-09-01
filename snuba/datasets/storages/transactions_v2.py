@@ -3,7 +3,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.storages.transactions_common import (
     columns,
     mandatory_condition_checkers,
