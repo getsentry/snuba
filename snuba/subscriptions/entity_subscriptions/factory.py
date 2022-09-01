@@ -25,6 +25,9 @@ class _EntitySubscriptionFactory(
     def __initialize(self) -> None:
         from snuba.subscriptions.entity_subscriptions.entity_subscription import (
             EntitySubscription,
+            EventsSubscription,
+            GenericMetricsDistributionsSubscription,
+            GenericMetricsSetsSubscription,
             MetricsCountersSubscription,
             MetricsSetsSubscription,
             TransactionsSubscription,
@@ -37,10 +40,13 @@ class _EntitySubscriptionFactory(
 
         self._entity_subscription_map.update(
             {
+                EntityKey.EVENTS: EventsSubscription,
                 EntityKey.DISCOVER: EntitySubscription,
                 EntityKey.TRANSACTIONS: TransactionsSubscription,
                 EntityKey.METRICS_COUNTERS: MetricsCountersSubscription,
                 EntityKey.METRICS_SETS: MetricsSetsSubscription,
+                EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsSubscription,
+                EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsSubscription,
             }
         )
 

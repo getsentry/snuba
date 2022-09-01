@@ -128,3 +128,13 @@ class MetricsCountersSubscription(SessionsSubscription):
 class MetricsSetsSubscription(SessionsSubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 3
     disallowed_aggregations = ["having", "orderby"]
+
+
+class GenericMetricsSetsSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+    disallowed_aggregations = ["having", "orderby"]
+
+
+class GenericMetricsDistributionsSubscription(SessionsSubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 3
+    disallowed_aggregations = ["having", "orderby"]

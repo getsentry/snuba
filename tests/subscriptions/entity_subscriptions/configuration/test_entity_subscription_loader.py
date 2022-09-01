@@ -1,0 +1,47 @@
+from typing import Type
+
+import pytest
+from jsonschema.exceptions import ValidationError
+
+from snuba.subscriptions.entity_subscriptions.configuration.entity_subscription_builder import (
+    build_entity_subscription_from_config,
+)
+from snuba.subscriptions.entity_subscriptions.entity_subscription import (
+    GenericMetricsSetsSubscription,
+)
+from snuba.subscriptions.entity_subscriptions.pluggable_entity_subscription import (
+    PluggableEntitySubscription,
+)
+
+data = {"organization": 1}
+
+
+def test_build_entity_subscription_from_config() -> None:
+    config_sets_entity_subscription: Type[
+        PluggableEntitySubscription
+    ] = build_entity_subscription_from_config(
+        "snuba/subscriptions/entity_subscriptions/generic_metrics/sets.yaml"
+    )
+    py_sets_entity_subscription = GenericMetricsSetsSubscription
+    assert config_sets_entity_subscription.name == "generic_metrics_sets_subscription"
+
+    config_sets = config_sets_entity_subscription(
+        data_dict=data
+    )  # mypy type checking will complain here because parent class is added programatically
+    py_sets = py_sets_entity_subscription(data_dict=data)
+
+    assert config_sets.name == "generic_metrics_sets_subscription"
+
+    assert config_sets.MAX_ALLOWED_AGGREGATIONS == py_sets.MAX_ALLOWED_AGGREGATIONS
+    assert config_sets.disallowed_aggregations == py_sets.disallowed_aggregations
+    assert (
+        config_sets.get_entity_subscription_conditions_for_snql()
+        == py_sets.get_entity_subscription_conditions_for_snql()
+    )
+
+
+def test_bad_configuration_broken_attribute() -> None:
+    with pytest.raises((ValidationError, TypeError)):
+        build_entity_subscription_from_config(
+            "tests/subscriptions/entity_subscriptions/configuration/broken_entity_subscription_bad_attribute.yaml"
+        )
