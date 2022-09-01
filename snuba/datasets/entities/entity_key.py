@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterator
 
 HARDCODED_ENTITY_KEYS = {
     "DISCOVER": "discover",
@@ -33,6 +33,12 @@ class _EntityKey(type):
             raise AttributeError(attr)
 
         return EntityKey(attr.lower())
+
+    def __iter__(cls) -> Iterator[EntityKey]:
+        return iter(
+            EntityKey(key)
+            for key in {**HARDCODED_ENTITY_KEYS, **REGISTERED_ENTITY_KEYS}
+        )
 
 
 class EntityKey(metaclass=_EntityKey):

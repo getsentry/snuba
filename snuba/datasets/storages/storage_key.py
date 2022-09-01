@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, Iterator
 
 HARDCODED_STORAGE_KEYS = {
     "DISCOVER": "discover",
@@ -43,6 +43,12 @@ class _StorageKey(type):
             raise AttributeError(attr)
 
         return StorageKey(attr.lower())
+
+    def __iter__(cls) -> Iterator[StorageKey]:
+        return iter(
+            StorageKey(key)
+            for key in {**HARDCODED_STORAGE_KEYS, **REGISTERED_STORAGE_KEYS}
+        )
 
 
 class StorageKey(metaclass=_StorageKey):
