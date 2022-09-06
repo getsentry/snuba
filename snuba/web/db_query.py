@@ -717,7 +717,12 @@ def raw_query(
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     error_code = cause.code
-                    scope.fingerprint = ["{{default}}", str(cause.code)]
+                    scope.fingerprint = [
+                        "{{default}}",
+                        str(cause.code),
+                        query_metadata.dataset,
+                        query_metadata.request.referrer,
+                    ]
                     if scope.span:
                         if cause.code == errors.ErrorCodes.TOO_SLOW:
                             sentry_sdk.set_tag("timeout", "predicted")
