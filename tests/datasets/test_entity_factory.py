@@ -12,7 +12,7 @@ ENTITY_KEYS = [
     EntityKey.DISCOVER,
     EntityKey.EVENTS,
     EntityKey.GROUPASSIGNEE,
-    EntityKey.GROUPEDMESSAGES,
+    EntityKey.GROUPEDMESSAGE,
     EntityKey.OUTCOMES,
     EntityKey.OUTCOMES_RAW,
     EntityKey.SESSIONS,
