@@ -64,7 +64,7 @@ events_table = Table(
 )
 
 groups_ent = Entity(
-    EntityKey.GROUPEDMESSAGE, get_entity(EntityKey.GROUPEDMESSAGE).get_data_model()
+    EntityKey.GROUPEDMESSAGES, get_entity(EntityKey.GROUPEDMESSAGES).get_data_model()
 )
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_schema = groups_storage.get_schema()

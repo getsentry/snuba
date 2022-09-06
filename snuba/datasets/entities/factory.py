@@ -61,7 +61,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
                 EntityKey.DISCOVER: DiscoverEntity(),
                 EntityKey.EVENTS: EventsEntity(),
                 EntityKey.GROUPASSIGNEE: GroupAssigneeEntity(),
-                EntityKey.GROUPEDMESSAGE: GroupedMessageEntity(),
+                EntityKey.GROUPEDMESSAGES: GroupedMessageEntity(),
                 EntityKey.OUTCOMES: OutcomesEntity(),
                 EntityKey.OUTCOMES_RAW: OutcomesRawEntity(),
                 EntityKey.SESSIONS: SessionsEntity(),

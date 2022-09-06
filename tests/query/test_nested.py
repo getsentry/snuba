@@ -63,7 +63,7 @@ def test_join_query() -> None:
 
     groups_query = LogicalQuery(
         Entity(
-            EntityKey.GROUPEDMESSAGE,
+            EntityKey.GROUPEDMESSAGES,
             ColumnSet([("id", UInt(32)), ("message", String())]),
         ),
         selected_columns=[

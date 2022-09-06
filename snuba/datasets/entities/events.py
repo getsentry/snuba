@@ -201,7 +201,7 @@ class BaseEventsEntity(Entity, ABC):
             abstract_column_set=columns,
             join_relationships={
                 "grouped": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPEDMESSAGE,
+                    rhs_entity=EntityKey.GROUPEDMESSAGES,
                     columns=[("project_id", "project_id"), ("group_id", "id")],
                     join_type=JoinType.INNER,
                     equivalences=[],

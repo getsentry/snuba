@@ -53,7 +53,7 @@ def test_classify_and_replace() -> None:
 
 ENTITY_GROUP_JOIN = JoinClause(
     IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-    IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)),
+    IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)),
     [
         JoinCondition(
             JoinConditionExpression("ev", "group_id"),
@@ -264,7 +264,7 @@ def test_add_equivalent_condition(
     expected_expr: Expression,
 ) -> None:
     override_entity_map(EntityKey.EVENTS, Events())
-    override_entity_map(EntityKey.GROUPEDMESSAGE, GroupedMessage())
+    override_entity_map(EntityKey.GROUPEDMESSAGES, GroupedMessage())
 
     query = CompositeQuery(
         from_clause=join_clause,

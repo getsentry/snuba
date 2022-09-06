@@ -79,7 +79,7 @@ class TestCdcEvents(BaseApiTest):
             }
         ]
 
-        groups_storage = get_entity(EntityKey.GROUPEDMESSAGE).get_writable_storage()
+        groups_storage = get_entity(EntityKey.GROUPEDMESSAGES).get_writable_storage()
         groups_storage.get_table_writer().get_batch_writer(
             metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(group).encode("utf-8") for group in groups])

@@ -156,7 +156,7 @@ def test_format_expressions(query_body: str, expected_snql_anonymized: str) -> N
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
         "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
+        "bookmark": (EntityKey.GROUPEDMESSAGES, "first_release_id"),
         "activity": (EntityKey.SESSIONS, "org_id"),
     }
 

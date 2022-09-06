@@ -43,7 +43,7 @@ BASIC_JOIN = JoinClause(
     ),
     right_node=IndividualNode(
         alias="gr",
-        data_source=Entity(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None),
+        data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
     ),
     keys=[
         JoinCondition(
@@ -515,7 +515,7 @@ def test_subquery_generator(
     processed_query: CompositeQuery[Entity],
 ) -> None:
     override_entity_map(EntityKey.EVENTS, Events())
-    override_entity_map(EntityKey.GROUPEDMESSAGE, GroupedMessage())
+    override_entity_map(EntityKey.GROUPEDMESSAGES, GroupedMessage())
     override_entity_map(EntityKey.GROUPASSIGNEE, GroupAssignee())
 
     generate_subqueries(original_query)

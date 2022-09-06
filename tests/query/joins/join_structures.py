@@ -53,7 +53,7 @@ def groups_node(
 ) -> IndividualNode[Entity]:
     return build_node(
         "gr",
-        Entity(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA),
+        Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
         selected_columns,
         condition,
     )
