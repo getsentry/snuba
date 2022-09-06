@@ -19,7 +19,7 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.query import Query
-from snuba.query.processors.granularity_processor import (
+from snuba.query.processors.logical.granularity_processor import (
     DEFAULT_MAPPED_GRANULARITY_ENUM,
     PERFORMANCE_GRANULARITIES,
     MappedGranularityProcessor,

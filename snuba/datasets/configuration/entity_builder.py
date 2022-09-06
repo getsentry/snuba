@@ -20,7 +20,9 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.granularity_processor import MappedGranularityProcessor
+from snuba.query.processors.logical.granularity_processor import (
+    MappedGranularityProcessor,
+)
 from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
@@ -28,8 +30,8 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ReferrerRateLimiterProcessor,
 )
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     QueryValidator,

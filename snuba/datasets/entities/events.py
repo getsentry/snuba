@@ -26,8 +26,8 @@ from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
