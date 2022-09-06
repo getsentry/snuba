@@ -38,7 +38,7 @@ BASIC_JOIN = JoinClause(
     ),
     right_node=IndividualNode(
         alias="gr",
-        data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
+        data_source=Entity(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None),
     ),
     keys=[
         JoinCondition(
