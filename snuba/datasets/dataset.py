@@ -43,8 +43,7 @@ class Dataset:
     def __init__(self, *, default_entity: EntityKey) -> None:
         self.__default_entity = default_entity
 
-    @classmethod
-    def is_experimental(cls) -> bool:
+    def is_experimental(self) -> bool:
         """Marks the dataset as experimental. Healthchecks failing on this
         dataset:
             * do not block deploys
