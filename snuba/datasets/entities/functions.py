@@ -11,7 +11,7 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 

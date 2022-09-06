@@ -35,11 +35,11 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.query.validation.validators import (
     ColumnValidationMode,

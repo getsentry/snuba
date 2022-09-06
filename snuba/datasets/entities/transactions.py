@@ -34,13 +34,13 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.processors.performance_expressions import (
     apdex_processor,
     failure_rate_processor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 

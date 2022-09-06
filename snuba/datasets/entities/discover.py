@@ -53,9 +53,9 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.util import qualified_column
 
