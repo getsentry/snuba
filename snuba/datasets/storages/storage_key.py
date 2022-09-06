@@ -46,8 +46,8 @@ class _StorageKey(type):
 
     def __iter__(cls) -> Iterator[StorageKey]:
         return iter(
-            StorageKey(key)
-            for key in {**HARDCODED_STORAGE_KEYS, **REGISTERED_STORAGE_KEYS}
+            StorageKey(value)
+            for value in {**HARDCODED_STORAGE_KEYS, **REGISTERED_STORAGE_KEYS}.values()
         )
 
 
