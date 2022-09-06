@@ -56,6 +56,5 @@ class EntityKey(metaclass=_EntityKey):
 
 
 def register_entity_key(key: str) -> EntityKey:
-    print(f"registering {key}")
     REGISTERED_ENTITY_KEYS[key.upper()] = key.lower()
     return EntityKey(key)
