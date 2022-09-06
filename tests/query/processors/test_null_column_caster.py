@@ -13,7 +13,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.null_column_caster import NullColumnCaster
+from snuba.query.processors.physical.null_column_caster import NullColumnCaster
 from snuba.query.query_settings import HTTPQuerySettings
 
 columns1 = ColumnSet(

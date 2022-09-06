@@ -7,11 +7,11 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.events_bool_contexts import (
+from snuba.query.processors.physical.events_bool_contexts import (
     EventsBooleanContextsProcessor,
     EventsPromotedBooleanContextsProcessor,
 )
-from snuba.query.processors.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.physical.mapping_promoter import MappingColumnPromoter
 from snuba.query.query_settings import HTTPQuerySettings
 
 

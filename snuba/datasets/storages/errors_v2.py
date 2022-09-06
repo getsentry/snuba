@@ -16,15 +16,27 @@ from snuba.datasets.storages.errors_common import (
     required_columns,
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
-from snuba.query.processors.empty_tag_condition_processor import (
-    EmptyTagConditionProcessor,
-)
-from snuba.query.processors.events_bool_contexts import EventsBooleanContextsProcessor
-from snuba.query.processors.mapping_optimizer import MappingOptimizer
-from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
+)
+from snuba.query.processors.physical.conditions_enforcer import ProjectIdEnforcer
+from snuba.query.processors.physical.empty_tag_condition_processor import (
+    EmptyTagConditionProcessor,
+)
+from snuba.query.processors.physical.events_bool_contexts import (
+    EventsBooleanContextsProcessor,
+)
+from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
+from snuba.query.processors.physical.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.physical.prewhere import PrewhereProcessor
+from snuba.query.processors.physical.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
+from snuba.query.processors.physical.slice_of_map_optimizer import SliceOfMapOptimizer
+from snuba.query.processors.physical.table_rate_limit import TableRateLimit
+from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
+from snuba.query.processors.physical.type_condition_optimizer import (
+    TypeConditionOptimizer,
 )
 from snuba.query.processors.physical.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
@@ -35,16 +47,10 @@ from snuba.query.processors.physical.type_converters.uuid_array_column_processor
 from snuba.query.processors.physical.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.replaced_groups import PostReplacementConsistencyEnforcer
-from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
-from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
-from snuba.query.processors.type_condition_optimizer import TypeConditionOptimizer
-from snuba.query.processors.uniq_in_select_and_having import (
+from snuba.query.processors.physical.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
-from snuba.query.processors.user_column_processor import UserColumnProcessor
+from snuba.query.processors.physical.user_column_processor import UserColumnProcessor
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic

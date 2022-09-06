@@ -14,7 +14,9 @@ from snuba.datasets.events_processor_base import ReplacementType
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.processors.replaced_groups import PostReplacementConsistencyEnforcer
+from snuba.query.processors.physical.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import ReplacerState

@@ -8,7 +8,9 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Literal
-from snuba.query.processors.type_condition_optimizer import TypeConditionOptimizer
+from snuba.query.processors.physical.type_condition_optimizer import (
+    TypeConditionOptimizer,
+)
 from snuba.query.query_settings import HTTPQuerySettings
 
 

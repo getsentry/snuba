@@ -13,7 +13,7 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
+from snuba.query.processors.physical.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.query_settings import HTTPQuerySettings
 
 tests = [
