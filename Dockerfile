@@ -1,16 +1,6 @@
 ARG PYTHON_VERSION=3.8.13
 FROM python:${PYTHON_VERSION}-slim-bullseye AS application
 
-# these are required all the way through, and removing them will cause bad things
-RUN set -ex; \
-    apt-get update; \
-    apt-get install --no-install-recommends -y \
-        libexpat1 \
-        liblz4-1 \
-        libpcre3 \
-    ; \
-    rm -rf /var/lib/apt/lists/*
-
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
@@ -30,9 +20,6 @@ RUN set -ex; \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
-    # Since there's no confluent-kafka wheel for aarch64, remove when there is
-    [ $(uname -m) = "aarch64" ] && apt-get install -y librdkafka-dev --no-install-recommends; \
-    \
     pip install -r requirements.txt; \
     \
     mkdir /tmp/uwsgi-dogstatsd; \

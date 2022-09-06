@@ -13,8 +13,8 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.composite import (
     CompositeExecutionPipeline,
     CompositeExecutionStrategy,
@@ -68,7 +68,7 @@ events_table = Table(
 )
 
 groups_ent = Entity(
-    EntityKey.GROUPEDMESSAGES, get_entity(EntityKey.GROUPEDMESSAGES).get_data_model()
+    EntityKey.GROUPEDMESSAGE, get_entity(EntityKey.GROUPEDMESSAGE).get_data_model()
 )
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_schema = groups_storage.get_schema()

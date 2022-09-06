@@ -2,8 +2,8 @@ from typing import Sequence
 
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (

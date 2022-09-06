@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.outcomes_processor import OutcomesProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.physical.conditions_enforcer import OrgIdEnforcer
 from snuba.query.processors.physical.prewhere import PrewhereProcessor

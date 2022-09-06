@@ -232,7 +232,7 @@ def test_multistorage_strategy_dead_letter_step(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
 ) -> None:
-    from snuba.datasets.storages import StorageKey
+    from snuba.datasets.storages.storage_key import StorageKey
 
     clock = TestingClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
@@ -316,7 +316,7 @@ def test_multistorage_strategy_dead_letter_step(
 
 
 def test_dead_letter_step() -> None:
-    from snuba.datasets.storages import StorageKey
+    from snuba.datasets.storages.storage_key import StorageKey
 
     clock = TestingClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)

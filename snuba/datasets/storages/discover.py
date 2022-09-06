@@ -12,9 +12,9 @@ from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import storage as error_storage
 from snuba.datasets.storages.errors_common import mandatory_conditions
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,

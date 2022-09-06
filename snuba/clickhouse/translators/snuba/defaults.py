@@ -58,6 +58,10 @@ class DefaultSubscriptableMapper(SubscriptableReferenceMapper):
 
 
 class DefaultFunctionMapper(FunctionCallMapper):
+    @classmethod
+    def config_key(cls) -> str:
+        return "default_function"
+
     def attempt_map(
         self,
         expression: FunctionCall,

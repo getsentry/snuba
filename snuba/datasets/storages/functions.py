@@ -15,7 +15,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.functions_processor import FunctionsMessageProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.utils.schemas import SchemaModifiers

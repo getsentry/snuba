@@ -12,7 +12,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.replays_processor import ReplaysProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.physical.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit

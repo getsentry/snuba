@@ -9,7 +9,7 @@ from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal

@@ -23,8 +23,8 @@ backend-typing:
 
 install-python-dependencies:
 	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
-	pip install -e .
-	pip install -r requirements-test.txt
+	pip install `grep ^-- requirements.txt` -e .
+	pip install `grep ^-- requirements.txt` -r requirements-test.txt
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt

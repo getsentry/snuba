@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.utils.streams.topics import Topic
 

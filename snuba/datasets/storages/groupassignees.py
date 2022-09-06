@@ -9,7 +9,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.physical.consistency_enforcer import (
     ConsistencyEnforcerProcessor,

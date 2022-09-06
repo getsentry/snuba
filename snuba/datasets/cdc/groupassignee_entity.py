@@ -3,8 +3,8 @@ from typing import Sequence
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.processors import QueryProcessor

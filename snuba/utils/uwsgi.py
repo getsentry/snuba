@@ -44,6 +44,7 @@ def run(module: str, bind: str, **kwargs: bool | int | str | None) -> NoReturn:
     protocol = os.environ.pop("UWSGI_PROTOCOL", "http")
     options: dict[str, bool | int | str | None] = {
         "auto_procname": True,
+        "binary_path": sys.executable,
         "chmod_socket": 777,
         "die_on_term": True,
         "disable_write_exception": True,

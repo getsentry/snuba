@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 TYPE_STRING = {"type": "string"}
+TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
         "type": TYPE_STRING,
-        "args": {"type": "array", "items": TYPE_STRING},
+        "args": TYPE_STRING_ARRAY,
     },
 }
 
@@ -33,7 +34,7 @@ STREAM_LOADER_SCHEMA = {
 def make_column_schema(
     column_type: dict[str, Any], args: dict[str, Any]
 ) -> dict[str, Any]:
-    args["properties"]["schema_modifiers"] = {"type": "array", "items": TYPE_STRING}
+    args["properties"]["schema_modifiers"] = TYPE_STRING_ARRAY
     return {
         "type": "object",
         "properties": {
@@ -118,9 +119,7 @@ STORAGE_SCHEMA = {
     "properties": {"key": TYPE_STRING, "set_key": TYPE_STRING},
 }
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
-
-KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage", "entity"]}
+STORAGE_QUERY_PROCESSORS_SCHEMA = TYPE_STRING_ARRAY
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
@@ -212,4 +211,18 @@ V1_ENTITY_SCHEMA = {
         "validators",
         "required_time_column",
     ],
+}
+
+V1_DATASET_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"const": "v1"},
+        "kind": {"const": "dataset"},
+        "name": TYPE_STRING,
+        "is_experimental": {"type": "boolean"},
+        "entities": {
+            "type": "object",
+            "properties": {"default": TYPE_STRING, "all": TYPE_STRING_ARRAY},
+        },
+    },
 }

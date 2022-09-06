@@ -1,13 +1,13 @@
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
     all_columns,
     mandatory_conditions,
     query_splitters,
 )
 from snuba.datasets.storages.errors_v2 import query_processors
+from snuba.datasets.storages.storage_key import StorageKey
 
 schema = TableSchema(
     columns=all_columns,
