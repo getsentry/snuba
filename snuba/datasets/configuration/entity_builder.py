@@ -30,10 +30,7 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.validation.validators import (
-    EntityRequiredColumnValidator,
-    QueryValidator,
-)
+from snuba.query.validation.validators import QueryValidator
 
 # TODO replace all the explicit mapping dictionaries below with the
 # registered class factory pattern (e.g. https://github.com/getsentry/snuba/pull/3044)
@@ -54,9 +51,6 @@ logger = logging.getLogger("snuba.entity_builder")
 def _build_entity_validators(
     config_validators: list[dict[str, Any]]
 ) -> Sequence[QueryValidator]:
-    # FIXME: auto imports don't work yet so I have to assert this otherwise
-    # the linter complains about the import being unused
-    assert EntityRequiredColumnValidator
     return [
         QueryValidator.get_from_name(qv_config["validator"])(**qv_config["args"])
         for qv_config in config_validators
