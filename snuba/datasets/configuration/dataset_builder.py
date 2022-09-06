@@ -8,7 +8,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 DATASET_VALIDATION_SCHEMAS = {"dataset": V1_DATASET_SCHEMA}
 
 
-def build_dataset(config_file_path: str) -> PluggableDataset:
+def build_dataset_from_config(config_file_path: str) -> PluggableDataset:
     config = load_configuration_data(config_file_path, DATASET_VALIDATION_SCHEMAS)
     return PluggableDataset(
         name=config["name"],
