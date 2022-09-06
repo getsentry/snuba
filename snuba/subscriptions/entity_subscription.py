@@ -14,8 +14,6 @@ from snuba.query.validation.validators import (
     SubscriptionAllowedClausesValidator,
 )
 
-initialize_entity_factory()
-
 
 class InvalidSubscriptionError(Exception):
     pass
@@ -143,6 +141,10 @@ class GenericMetricsDistributionsSubscription(SessionsSubscription):
     disallowed_aggregations = ["having", "orderby"]
 
 
+# HACK: Entities need to be loaded before Keys can be used and mapped to subscriptions
+initialize_entity_factory()
+
+# HACK: Subscriptions and Entities should be associated in a cleaner way than this mapping
 ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
     EventsSubscription: EntityKey.EVENTS,
     TransactionsSubscription: EntityKey.TRANSACTIONS,
