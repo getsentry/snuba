@@ -36,8 +36,8 @@ class _EntityKey(type):
 
     def __iter__(cls) -> Iterator[EntityKey]:
         return iter(
-            EntityKey(key)
-            for key in {**HARDCODED_ENTITY_KEYS, **REGISTERED_ENTITY_KEYS}
+            EntityKey(value)
+            for value in {**HARDCODED_ENTITY_KEYS, **REGISTERED_ENTITY_KEYS}.values()
         )
 
 
