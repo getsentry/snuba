@@ -7,7 +7,7 @@ HARDCODED_ENTITY_KEYS = {
     "EVENTS": "events",
     "GROUPS": "groups",
     "GROUPASSIGNEE": "groupassignee",
-    "GROUPEDMESSAGES": "groupedmessage",
+    "GROUPEDMESSAGE": "groupedmessage",
     "METRICS_SETS": "metrics_sets",
     "METRICS_COUNTERS": "metrics_counters",
     "ORG_METRICS_COUNTERS": "org_metrics_counters",
