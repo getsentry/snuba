@@ -24,14 +24,14 @@ from snuba.query.processors.granularity_processor import (
     PERFORMANCE_GRANULARITIES,
     MappedGranularityProcessor,
 )
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader

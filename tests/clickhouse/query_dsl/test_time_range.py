@@ -3,7 +3,7 @@ from datetime import datetime
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 

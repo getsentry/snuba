@@ -9,11 +9,11 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityRequiredColumnValidator,

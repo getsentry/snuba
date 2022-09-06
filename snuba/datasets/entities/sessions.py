@@ -29,17 +29,17 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.timeseries_processor import (
+from snuba.query.processors.logical.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
+from snuba.query.processors.quota_processor import ResourceQuotaProcessor
 from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.query.validation.validators import (
     ColumnValidationMode,
