@@ -12,6 +12,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.factory import get_dataset
@@ -57,7 +58,7 @@ def end_time(start_time: datetime) -> datetime:
 @pytest.fixture
 def pluggable_sets_entity() -> PluggableEntity:
     return PluggableEntity(
-        entity_key="generic_metrics_sets",
+        entity_key=EntityKey.GENERIC_METRICS_SETS,
         readable_storage=get_storage(StorageKey.GENERIC_METRICS_SETS),
         query_processors=[
             TagsTypeTransformer(),
