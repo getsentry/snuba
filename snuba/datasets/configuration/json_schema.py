@@ -121,8 +121,6 @@ STORAGE_SCHEMA = {
 
 STORAGE_QUERY_PROCESSORS_SCHEMA = TYPE_STRING_ARRAY
 
-KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage", "entity"]}
-
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
     "properties": {
