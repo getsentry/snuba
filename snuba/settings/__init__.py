@@ -88,6 +88,7 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
+REDIS_REINITIALIZE_STEPS = 10
 
 USE_RESULT_CACHE = True
 
