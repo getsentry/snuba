@@ -12,13 +12,14 @@ from arroyo import Message
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
 )
+from snuba.datasets.errors_replacer import Replacement as ErrorReplacement
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.redis import redis_client
@@ -30,6 +31,7 @@ from snuba.replacers.replacer_processor import (
 from snuba.state import get_config
 from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
@@ -417,12 +419,12 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self._check_timing_and_write_to_redis(replacement, start_time.timestamp())
 
-            get_project_id = getattr(replacement, "get_project_id", None)
-            if callable(get_project_id):
-                project_id = get_project_id()
+            if isinstance(replacement, ErrorReplacement):
+                project_id = replacement.get_project_id()
                 end_time = datetime.now()
-                self._update_and_compare_counter(start_time, end_time, project_id)
-
+                self._attempt_emitting_metric_for_projects_exceeding_limit(
+                    start_time, end_time, project_id
+                )
         if need_optimize:
             from snuba.optimize import run_optimize
 
@@ -517,15 +519,30 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             ]
         )
 
-    def _update_and_compare_counter(
+    def _attempt_emitting_metric_for_projects_exceeding_limit(
         self,
         start_time: datetime,
         end_time: datetime,
         project_id: int,
     ) -> None:
-        self.__processing_time_counter.write_to_bucket(
+        """
+        Attempts to emit a metric for projects which have a total processing time greater than some limit. This is accomplished
+        by first writing the time spent on processing the current replacement in Counter class. Then, a list of all projects
+        exceeding some limit is obtained and a metric is written to DataDog.
+        """
+        self.__processing_time_counter.record_time_spent(
             project_id,
             start_time,
             end_time,
         )
-        self.__processing_time_counter.compare_and_write_metric()
+        projects_exceeding_limit = (
+            self.__processing_time_counter.get_projects_exceeding_limit()
+        )
+        for project_id in projects_exceeding_limit:
+            metrics = MetricsWrapper(
+                environment.metrics, "replacer", tags={"group": self.__consumer_group}
+            )
+            metrics.increment(
+                "project_processing_time_exceeded_time_limit",
+                tags={"project_id": str(project_id)},
+            )

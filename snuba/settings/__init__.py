@@ -265,6 +265,9 @@ DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 PREFER_PLUGGABLE_ENTITIES = False
 PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
 
+# Counter utility class window size in minutes
+COUNTER_WINDOW_SIZE = timedelta(minutes=10)
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
