@@ -284,6 +284,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
                 ]
             ),
         ),
+        ("app_start_type", String(Modifiers(nullable=True))),
     ]
 )
 
