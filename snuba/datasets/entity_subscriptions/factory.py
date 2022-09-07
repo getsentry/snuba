@@ -31,8 +31,8 @@ class _EntitySubscriptionFactory(
         )
 
         entity_subscription_to_config_path_mapping: Mapping[EntityKey, str] = {
-            EntityKey.GENERIC_METRICS_SETS: "snuba/subscriptions/entity_subscriptions/generic_metrics/sets.yaml",
-            EntityKey.GENERIC_METRICS_DISTRIBUTIONS: "snuba/subscriptions/entity_subscriptions/generic_metrics/distributions.yaml",
+            EntityKey.GENERIC_METRICS_SETS: "snuba/datasets/configuration/generic_metrics/entity_subscriptions/sets.yaml",
+            EntityKey.GENERIC_METRICS_DISTRIBUTIONS: "snuba/datasets/configuration/generic_metrics/entity_subscriptions/distributions.yaml",
         }
 
         self._entity_subscription_map.update(

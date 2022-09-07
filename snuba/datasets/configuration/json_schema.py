@@ -3,11 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 TYPE_STRING = {"type": "string"}
-<<<<<<< HEAD
 TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
-=======
 TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
->>>>>>> 826025c7 (Relocate configuration files (loader, yaml, mapping) to datasets)
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
 FUNCTION_CALL_SCHEMA = {

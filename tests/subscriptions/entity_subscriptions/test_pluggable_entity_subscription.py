@@ -7,7 +7,6 @@ from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     GenericMetricsSetsSubscription,
-    SessionsSubscription,
 )
 from snuba.datasets.entity_subscriptions.pluggable_entity_subscription import (
     PluggableEntitySubscription,
@@ -48,13 +47,8 @@ def pluggable_sets_entity_subscription() -> EntitySubscription:
     PluggableEntitySubscription.name = "generic_metrics_sets_subscription"
     PluggableEntitySubscription.MAX_ALLOWED_AGGREGATIONS = 3
     PluggableEntitySubscription.disallowed_aggregations = ["having", "orderby"]
-    NewPluggableEntitySubscription = type(
-        "PluggableEntitySubscription",
-        (SessionsSubscription,),
-        PluggableEntitySubscription.__dict__.copy(),
-    )
-    assert issubclass(NewPluggableEntitySubscription, EntitySubscription)
-    return NewPluggableEntitySubscription(data_dict=data)
+    assert issubclass(PluggableEntitySubscription, EntitySubscription)
+    return PluggableEntitySubscription(data_dict=data)
 
 
 def test_entity_subscription_generic_metrics_sets_regular_vs_pluggable(

@@ -20,14 +20,12 @@ def test_build_entity_subscription_from_config() -> None:
     config_sets_entity_subscription: Type[
         PluggableEntitySubscription
     ] = build_entity_subscription_from_config(
-        "snuba/subscriptions/entity_subscriptions/generic_metrics/sets.yaml"
+        "snuba/datasets/configuration/generic_metrics/entity_subscriptions/sets.yaml"
     )
     py_sets_entity_subscription = GenericMetricsSetsSubscription
     assert config_sets_entity_subscription.name == "generic_metrics_sets_subscription"
 
-    config_sets = config_sets_entity_subscription(
-        data_dict=data
-    )  # mypy type checking will complain here because parent class is added programatically
+    config_sets = config_sets_entity_subscription(data_dict=data)
     py_sets = py_sets_entity_subscription(data_dict=data)
 
     assert config_sets.name == "generic_metrics_sets_subscription"
