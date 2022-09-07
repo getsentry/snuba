@@ -4,7 +4,7 @@ import pytest
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.uniq_in_select_and_having import (
+from snuba.query.processors.physical.uniq_in_select_and_having import (
     MismatchedAggregationException,
     UniqInSelectAndHavingProcessor,
 )

@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.processors.array_has_optimizer import ArrayHasOptimizer
+from snuba.query.processors.physical.array_has_optimizer import ArrayHasOptimizer
 from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 

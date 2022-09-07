@@ -7,7 +7,7 @@ from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.processors.abstract_array_join_optimizer import (
+from snuba.query.processors.physical.abstract_array_join_optimizer import (
     AbstractArrayJoinOptimizer,
 )
 from snuba.query.query_settings import QuerySettings
