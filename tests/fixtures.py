@@ -187,6 +187,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
     event_received = now - timedelta(seconds=1)
     trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
     span_id = "8841662216cc598b" if not span_id else span_id
+    app_start_type = "warm.prewarmed"
 
     return {
         "project_id": PROJECT_ID,
@@ -226,6 +227,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
                     "exclusive_time": 1.2,
                 },
                 "device": {"online": True, "charging": True, "model_id": "Galaxy"},
+                "app": {"start_type": app_start_type},
             },
             "measurements": {
                 "lcp": {"value": 32.129},
