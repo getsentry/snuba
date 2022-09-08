@@ -249,6 +249,7 @@ STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False
+PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
