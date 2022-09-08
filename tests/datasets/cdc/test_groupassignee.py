@@ -9,8 +9,8 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeRow,
 )
 from snuba.datasets.cdc.types import DeleteEvent, InsertEvent, UpdateEvent
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch
 from tests.helpers import write_processed_messages
 

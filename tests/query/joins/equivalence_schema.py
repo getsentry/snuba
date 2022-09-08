@@ -50,7 +50,7 @@ class Events(FakeEntity):
             abstract_column_set=EVENTS_SCHEMA,
             join_relationships={
                 "grouped": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPEDMESSAGES,
+                    rhs_entity=EntityKey.GROUPEDMESSAGE,
                     columns=[("group_id", "id")],
                     join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],

@@ -13,8 +13,8 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.composite import (
     CompositeExecutionPipeline,
     CompositeExecutionStrategy,
@@ -42,8 +42,12 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
-from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
+from snuba.query.processors.physical.conditions_enforcer import (
+    MandatoryConditionEnforcer,
+)
+from snuba.query.processors.physical.mandatory_condition_applier import (
+    MandatoryConditionApplier,
+)
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
 from snuba.web import QueryResult
@@ -64,7 +68,7 @@ events_table = Table(
 )
 
 groups_ent = Entity(
-    EntityKey.GROUPEDMESSAGES, get_entity(EntityKey.GROUPEDMESSAGES).get_data_model()
+    EntityKey.GROUPEDMESSAGE, get_entity(EntityKey.GROUPEDMESSAGE).get_data_model()
 )
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_schema = groups_storage.get_schema()

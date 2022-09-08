@@ -1,6 +1,22 @@
 import pytest
 
-from snuba.datasets.storages import StorageKey, are_writes_identical
+from snuba.datasets.storages.storage_key import (
+    REGISTERED_STORAGE_KEYS,
+    StorageKey,
+    are_writes_identical,
+)
+
+
+def test_storage_key() -> None:
+    with pytest.raises(AttributeError):
+        StorageKey.NON_EXISTENT_STORAGE
+
+    assert REGISTERED_STORAGE_KEYS == {
+        "GENERIC_METRICS_DISTRIBUTIONS": "generic_metrics_distributions",
+        "GENERIC_METRICS_DISTRIBUTIONS_RAW": "generic_metrics_distributions_raw",
+        "GENERIC_METRICS_SETS": "generic_metrics_sets",
+        "GENERIC_METRICS_SETS_RAW": "generic_metrics_sets_raw",
+    }
 
 
 @pytest.mark.parametrize(

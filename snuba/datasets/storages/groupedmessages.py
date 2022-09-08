@@ -9,14 +9,14 @@ from snuba.datasets.cdc.groupedmessage_processor import (
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.processors.consistency_enforcer import (
-    ConsistencyEnforcerProcessor,
-)
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
-from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.physical.consistency_enforcer import (
+    ConsistencyEnforcerProcessor,
+)
+from snuba.query.processors.physical.prewhere import PrewhereProcessor
 from snuba.utils.streams.topics import Topic
 
 columns = ColumnSet(

@@ -8,7 +8,7 @@ from snuba import settings
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import get_config
 from snuba.utils.config_component_factory import ConfigComponentFactory
 
@@ -30,6 +30,18 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         self.__initialize()
 
     def __initialize(self) -> None:
+
+        self._config_built_storages = {
+            storage.get_storage_key(): storage
+            for storage in [
+                build_storage(config_file)
+                for config_file in glob(
+                    settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
+                )
+            ]
+        }
+
+        # TODO: Remove these as they are converted to configs
         from snuba.datasets.storages.discover import storage as discover_storage
         from snuba.datasets.storages.errors import storage as errors_storage
         from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
@@ -93,16 +105,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.transactions_v2 import (
             storage as transactions_v2_storage,
         )
-
-        self._config_built_storages = {
-            storage.get_storage_key(): storage
-            for storage in [
-                build_storage(config_file)
-                for config_file in glob(
-                    settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
-                )
-            ]
-        }
 
         self._cdc_storages = {
             **{
@@ -198,6 +200,13 @@ def _storage_factory() -> _StorageFactory:
     if _STORAGE_FACTORY is None:
         _STORAGE_FACTORY = _StorageFactory()
     return _STORAGE_FACTORY
+
+
+def initialize_storage_factory() -> None:
+    """
+    Used to load storages on initialization of entities.
+    """
+    _storage_factory()
 
 
 def get_storage(storage_key: StorageKey) -> ReadableTableStorage:

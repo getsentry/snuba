@@ -7,7 +7,7 @@ from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.processors.type_converters.hexint_column_processor import (
+from snuba.query.processors.physical.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
 from snuba.query.query_settings import HTTPQuerySettings

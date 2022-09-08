@@ -31,12 +31,12 @@ from snuba.datasets.metrics_aggregate_processor import (
 from snuba.datasets.metrics_bucket_processor import PolymorphicMetricsProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema, WriteFormat
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic

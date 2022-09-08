@@ -3,7 +3,7 @@ import pytest
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import binary_condition
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.processors.empty_tag_condition_processor import (
+from snuba.query.processors.physical.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
 from snuba.query.query_settings import HTTPQuerySettings
