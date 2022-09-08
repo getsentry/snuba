@@ -11,7 +11,6 @@ from snuba.datasets.configuration.migration_json_schema import MIGRATION_GROUP_S
 def load_migration_group(path_to_file: str) -> dict[str, Any]:
     yaml_file = open(path_to_file)
     config = safe_load(yaml_file)
-    print("CONFIG", config)
     assert isinstance(config, dict)
     validate(config, MIGRATION_GROUP_SCHEMA)
     return config

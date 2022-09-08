@@ -300,7 +300,9 @@ class _MigrationGroup(type):
 
 class MigrationGroup(metaclass=_MigrationGroup):
     """
-    This class is a replacement for the Enum class that used to define the different migration groups. In order to avoid having to go through the entire codebase to find instances of MigrationGroup and replace them, this will mimic the functionality of an Enum class while allowing arbitrary values to be populated.
+    This class is a replacement for the Enum class that used to define the different migration groups.
+    In order to avoid having to go through the entire codebase to find instances of MigrationGroup and
+    replace them, this will mimic the functionality of an Enum class while allowing arbitrary values to be populated.
     """
 
     def __init__(self, value: str) -> None:
