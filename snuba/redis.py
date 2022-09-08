@@ -86,6 +86,7 @@ def _initialize_redis_cluster() -> RedisClientType:
             socket_keepalive=True,
             password=settings.REDIS_PASSWORD,
             max_connections_per_node=True,
+            reinitialize_steps=settings.REDIS_REINITIALIZE_STEPS,
         )
     else:
         return StrictRedis(
