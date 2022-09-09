@@ -547,6 +547,31 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
+    def test_transaction_group_ids(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (discover_transactions)
+                    SELECT count() AS count BY time
+                    WHERE
+                        type = 'transaction' AND performance.issue_ids = '123' AND
+                        timestamp >= toDateTime('{self.base_time.isoformat()}') AND
+                        timestamp < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id})
+                    ORDER BY time ASC
+                    LIMIT 10000
+                    GRANULARITY 1800
+                    """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 1
+
     def test_suspect_spans_data(self) -> None:
         response = self.post(
             "/discover/snql",
