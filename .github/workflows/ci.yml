@@ -78,8 +78,9 @@ jobs:
           make backend-typing
 
   config-validation:
-    name: "dataset config validation"
+    name: "Dataset Config Validation"
     runs-on: ubuntu-latest
+    continue-on-error: true
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@v2
