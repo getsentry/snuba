@@ -80,7 +80,6 @@ jobs:
   config-validation:
     name: "Dataset Config Validation"
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@v2
@@ -93,6 +92,7 @@ jobs:
           python -m pip install --upgrade pip
           make install-python-dependencies
       - name: Validate configs
+        continue-on-error: true
         run: |
           make validate-configs
 
