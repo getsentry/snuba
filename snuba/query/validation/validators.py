@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Sequence, Set
+from typing import Optional, Sequence, Set, Type, cast
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.query import Query
@@ -14,6 +14,7 @@ from snuba.query.conditions import (
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import Column
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
+from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,25 @@ class ColumnValidationMode(Enum):
     ERROR = 2
 
 
-class QueryValidator(ABC):
+class QueryValidator(ABC, metaclass=RegisteredClass):
     """
     Contains validation logic that requires the entire query. An entity has one or more
     of these validators that it adds contextual information too.
+
+    WARNING!!!
+
+    This class assumes that all of its subclasses are in this same file in order for the
+    RegisteredClass functionality to work. If validators are defined in other files and
+    not imported, they would not be picked up and the `get_from_name` function would not work
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "query_validator_base"
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["QueryValidator"]:
+        return cast(Type["QueryValidator"], cls.class_from_name(name))
 
     @abstractmethod
     def validate(
@@ -55,6 +70,10 @@ class EntityRequiredColumnValidator(QueryValidator):
     Certain entities require the Query to filter by certain required columns.
     This validator checks if the Query contains filters by all of the required columns.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "entity_required"
 
     def __init__(self, required_filter_columns: Set[str]) -> None:
         self.required_columns = required_filter_columns
@@ -83,6 +102,10 @@ class EntityContainsColumnsValidator(QueryValidator):
     """
     Ensures that all columns in the query actually exist in the entity.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "entity_contains_columns"
 
     def __init__(
         self, entity_data_model: EntityColumnSet, validation_mode: ColumnValidationMode
@@ -120,6 +143,10 @@ class NoTimeBasedConditionValidator(QueryValidator):
     column and ensure there are no conditions.
     """
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "no_time_based_condition"
+
     def __init__(self, required_time_column: str) -> None:
         self.required_time_column = required_time_column
         self.match = build_match(
@@ -151,6 +178,10 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
     Subscriptions expect a very specific query structure. This will ensure that only the allowed
     clauses are being used in the query, and that those clauses are in the correct structure.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "subscription_allowed_clauses"
 
     def __init__(
         self, max_allowed_aggregations: int, disallowed_aggregations: Sequence[str]
@@ -226,6 +257,10 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
 
 class GranularityValidator(QueryValidator):
     """Verify that the given granularity is a multiple of the configured value"""
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "granularity"
 
     def __init__(self, minimum: int, required: bool = False):
         self.minimum = minimum

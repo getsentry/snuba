@@ -9,7 +9,10 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.processors.type_converters import BaseTypeConverter, ColumnTypeError
+from snuba.query.processors.physical.type_converters import (
+    BaseTypeConverter,
+    ColumnTypeError,
+)
 
 
 class UUIDArrayColumnProcessor(BaseTypeConverter):

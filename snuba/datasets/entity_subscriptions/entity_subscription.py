@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Type, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -139,17 +138,3 @@ class GenericMetricsSetsSubscription(SessionsSubscription):
 class GenericMetricsDistributionsSubscription(SessionsSubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 3
     disallowed_aggregations = ["having", "orderby"]
-
-
-ENTITY_SUBSCRIPTION_TO_KEY_MAPPER: Mapping[Type[EntitySubscription], EntityKey] = {
-    EventsSubscription: EntityKey.EVENTS,
-    TransactionsSubscription: EntityKey.TRANSACTIONS,
-    MetricsCountersSubscription: EntityKey.METRICS_COUNTERS,
-    MetricsSetsSubscription: EntityKey.METRICS_SETS,
-    GenericMetricsSetsSubscription: EntityKey.GENERIC_METRICS_SETS,
-    GenericMetricsDistributionsSubscription: EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-}
-
-ENTITY_KEY_TO_SUBSCRIPTION_MAPPER: Mapping[EntityKey, Type[EntitySubscription]] = {
-    value: key for key, value in ENTITY_SUBSCRIPTION_TO_KEY_MAPPER.items()
-}

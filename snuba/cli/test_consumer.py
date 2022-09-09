@@ -11,8 +11,8 @@ from snuba.consumers.consumer_builder import (
     MockParameters,
     ProcessingParameters,
 )
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage_keys
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter

@@ -4,8 +4,8 @@ from typing import Any, Optional, Sequence
 import click
 
 from snuba import environment, settings
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter

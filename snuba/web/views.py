@@ -42,6 +42,9 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    InvalidSubscriptionError,
+)
 from snuba.datasets.factory import (
     InvalidDatasetError,
     get_dataset,
@@ -59,7 +62,6 @@ from snuba.state import MismatchedTypeException
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
-from snuba.subscriptions.entity_subscription import InvalidSubscriptionError
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer

@@ -88,6 +88,7 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
+REDIS_REINITIALIZE_STEPS = 10
 
 USE_RESULT_CACHE = True
 
@@ -240,10 +241,15 @@ OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 
-# File path glob for storage configs
-STORAGE_CONFIG_FILES_GLOB = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration/**/storages/*.yaml"
+# Configuration directory settings
+CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
+
+# File path glob for configs
+STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
+DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False
+PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

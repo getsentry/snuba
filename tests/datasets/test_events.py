@@ -7,8 +7,8 @@ from snuba.datasets.entities.events import (
     errors_translators,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings

@@ -15,7 +15,7 @@ from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Or, Param, String
-from snuba.query.processors.abstract_array_join_optimizer import (
+from snuba.query.processors.physical.abstract_array_join_optimizer import (
     AbstractArrayJoinOptimizer,
 )
 from snuba.query.query_settings import QuerySettings

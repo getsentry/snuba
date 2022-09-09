@@ -10,7 +10,7 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.quota_processor import (
+from snuba.query.processors.logical.quota_processor import (
     ENABLED_CONFIG,
     REFERRER_PROJECT_CONFIG,
     ResourceQuotaProcessor,

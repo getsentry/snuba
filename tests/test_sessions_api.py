@@ -8,8 +8,8 @@ import simplejson as json
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import MAX_UINT32
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.base import BaseApiTest

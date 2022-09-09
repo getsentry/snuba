@@ -30,8 +30,8 @@ from snuba.datasets.entities.events import BaseEventsEntity
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
@@ -47,15 +47,15 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.util import qualified_column
 
@@ -70,6 +70,10 @@ class DefaultNoneColumnMapper(ColumnMapper):
     """
 
     columns: ColumnSet
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "default_none_column"
 
     def attempt_map(
         self,
@@ -96,6 +100,10 @@ class DefaultNoneFunctionMapper(FunctionCallMapper):
 
     function_names: Set[str]
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "default_none_function"
+
     def __post_init__(self) -> None:
         self.function_match = FunctionCallMatch(
             Or([StringMatch(func) for func in self.function_names])
@@ -118,6 +126,10 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     If a function is being called on a column that doesn't exist, or is being
     called on NULL, change the entire function to be NULL.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "default_if_null"
 
     function_match = FunctionCallMatch(
         StringMatch("identity"), (LiteralMatch(value=Any(type(None))),)
@@ -156,6 +168,10 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
 
     function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
 
+    @classmethod
+    def config_key(_cls) -> str:
+        return "default_if_null_curried_function"
+
     def attempt_map(
         self,
         expression: CurriedFunctionCall,
@@ -185,6 +201,10 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
     """
 
     subscript_names: Set[str]
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "default_none_subscript"
 
     def attempt_map(
         self,

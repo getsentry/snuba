@@ -1,4 +1,4 @@
-from typing import TypeVar, Union
+from typing import Type, TypeVar, Union, cast
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.datasets.plans.translator.mapper import ExpressionMapper
@@ -11,6 +11,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.utils.registered_class import RegisteredClass
 
 TExpIn = TypeVar("TExpIn")
 TExpOut = TypeVar("TExpOut")
@@ -50,7 +51,9 @@ class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings]):
     pass
 
 
-class FunctionCallMapper(SnubaClickhouseMapper[FunctionCall, FunctionCall]):
+class FunctionCallMapper(
+    SnubaClickhouseMapper[FunctionCall, FunctionCall], metaclass=RegisteredClass
+):
     """
     Functions are only allowed to become Functions so that we can ensure
     CurriedFunctions internal functions can be successfully translated.
@@ -62,13 +65,28 @@ class FunctionCallMapper(SnubaClickhouseMapper[FunctionCall, FunctionCall]):
     requires a function to be translated into a function as of now.
     """
 
-    pass
+    @classmethod
+    def config_key(cls) -> str:
+        return "function_call_mapper_base"
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["FunctionCallMapper"]:
+        return cast(Type["FunctionCallMapper"], cls.class_from_name(name))
 
 
 class CurriedFunctionCallMapper(
-    SnubaClickhouseMapper[CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]]
+    SnubaClickhouseMapper[
+        CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]
+    ],
+    metaclass=RegisteredClass,
 ):
-    pass
+    @classmethod
+    def config_key(cls) -> str:
+        return "curried_function_call_mapper_base"
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["CurriedFunctionCallMapper"]:
+        return cast(Type["CurriedFunctionCallMapper"], cls.class_from_name(name))
 
 
 class SubscriptableReferenceMapper(
@@ -76,6 +94,7 @@ class SubscriptableReferenceMapper(
         SubscriptableReference,
         Union[FunctionCall, Literal, SubscriptableReference],
     ],
+    metaclass=RegisteredClass,
 ):
     """
     A SubscriptableReference can only translate into a FunctionCall.
@@ -86,7 +105,13 @@ class SubscriptableReferenceMapper(
     a translator.
     """
 
-    pass
+    @classmethod
+    def config_key(cls) -> str:
+        return "subref_mapper_base"
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["SubscriptableReferenceMapper"]:
+        return cast(Type["SubscriptableReferenceMapper"], cls.class_from_name(name))
 
 
 class LambdaMapper(SnubaClickhouseMapper[Lambda, Lambda]):
