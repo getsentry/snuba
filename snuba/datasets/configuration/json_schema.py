@@ -248,3 +248,11 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
         "name",
     ],
 }
+
+V1_ALL_SCHEMAS = {
+    "dataset": V1_DATASET_SCHEMA,
+    "entity": V1_ENTITY_SCHEMA,
+    "entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA,
+    "readable_storage": V1_READABLE_STORAGE_SCHEMA,
+    "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
+}
