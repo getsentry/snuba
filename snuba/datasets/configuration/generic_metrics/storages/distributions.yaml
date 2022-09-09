@@ -1,4 +1,4 @@
-version: v2
+version: v1
 kind: readable_storage
 name: generic-metrics-distributions
 
