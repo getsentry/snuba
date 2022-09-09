@@ -1,6 +1,6 @@
 version: v1
 kind: entity
-# name: generic_metrics_sets
+name: generic_metrics_sets
 
 schema:
   [
