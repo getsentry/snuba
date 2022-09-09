@@ -3,16 +3,16 @@ from typing import Optional
 from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    EntitySubscription,
+    EventsSubscription,
+)
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.subscriptions.data import (
     PartitionId,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
-)
-from snuba.subscriptions.entity_subscription import (
-    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
-    EntitySubscription,
-    EventsSubscription,
 )
 
 UUIDS = [
@@ -42,4 +42,4 @@ def create_entity_subscription(
         data_dict = {"organization": org_id}
     else:
         data_dict = {}
-    return ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](data_dict=data_dict)
+    return get_entity_subscription(entity_key)(data_dict=data_dict)

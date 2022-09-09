@@ -51,9 +51,11 @@ def test_scheduler_consumer() -> None:
 
     mock_scheduler_producer = mock.Mock()
 
+    from snuba.datasets.entity_subscriptions.entity_subscription import (
+        EventsSubscription,
+    )
     from snuba.redis import redis_client
     from snuba.subscriptions.data import PartitionId, SubscriptionData
-    from snuba.subscriptions.entity_subscription import EventsSubscription
     from snuba.subscriptions.store import RedisSubscriptionDataStore
 
     entity_key = EntityKey(entity_name)

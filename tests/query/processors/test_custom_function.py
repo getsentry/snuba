@@ -7,7 +7,7 @@ from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.custom_function import (
+from snuba.query.processors.logical.custom_function import (
     CustomFunction,
     InvalidCustomFunctionCall,
     partial_function,

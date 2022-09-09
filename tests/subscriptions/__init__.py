@@ -4,11 +4,11 @@ from datetime import datetime, timedelta
 
 from snuba import settings
 from snuba.datasets.entities.factory import get_entity_name
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.subscriptions.entity_subscription import EntitySubscription
 from tests.helpers import write_unprocessed_events
 
 

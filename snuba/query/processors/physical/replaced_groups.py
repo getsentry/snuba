@@ -19,7 +19,7 @@ from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
-metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
+metrics = MetricsWrapper(environment.metrics, "processors.physical.replaced_groups")
 FINAL_METRIC = "final"
 CONSISTENCY_DENYLIST_METRIC = "post_replacement_consistency_projects_denied"
 

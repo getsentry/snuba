@@ -88,6 +88,7 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
+REDIS_REINITIALIZE_STEPS = 10
 
 USE_RESULT_CACHE = True
 
@@ -249,6 +250,7 @@ ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False
+PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

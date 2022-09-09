@@ -42,8 +42,12 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
-from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
+from snuba.query.processors.physical.conditions_enforcer import (
+    MandatoryConditionEnforcer,
+)
+from snuba.query.processors.physical.mandatory_condition_applier import (
+    MandatoryConditionApplier,
+)
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
 from snuba.web import QueryResult
