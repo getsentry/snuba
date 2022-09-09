@@ -13,7 +13,7 @@ from arroyo.synchronized import commit_codec
 from arroyo.types import Position
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import redis_client

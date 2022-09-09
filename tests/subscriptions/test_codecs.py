@@ -7,7 +7,7 @@ from typing import Callable, Optional, Type
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,

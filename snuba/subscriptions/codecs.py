@@ -5,7 +5,7 @@ from typing import cast
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,

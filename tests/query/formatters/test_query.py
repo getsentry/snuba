@@ -6,7 +6,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import (
     LimitBy,
     OrderBy,

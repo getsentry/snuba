@@ -6,7 +6,7 @@ from confluent_kafka.admin import AdminClient, ClusterMetadata
 
 from snuba import settings
 from snuba.consumers.utils import TopicNotFound, get_partition_count
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration

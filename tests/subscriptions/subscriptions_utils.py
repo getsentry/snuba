@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Optional
 from uuid import UUID
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     EventsSubscription,
