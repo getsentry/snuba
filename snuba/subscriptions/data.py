@@ -73,16 +73,17 @@ class SubscriptionData:
     """
     Represents the state of a subscription.
     project_id, resolution, time_window are all specified as separate fields
-    in the subscription payload by the user, alongside the query.
+    in the subscription payload by the user, alongside the query. This allows
+    us to pre-build one subscription query and vary these as separate parameters.
 
     time_window_sec becomes part of a query condition, and the subscription
-    query will look at the past 'x' seconds specified by the window
+    query will look at the past 'x' seconds specified by the window.
 
     project_id becomes part of a condition, and the query will filter
-    records by matching on the specified id
+    records by matching on the specified id.
 
     resolution_sec is used to determine when the scheduler creates tasks
-    for the executor to run
+    for the executor to run.
     """
 
     project_id: int
