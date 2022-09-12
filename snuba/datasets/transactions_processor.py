@@ -248,6 +248,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             if context in contexts:
                 del contexts[context]
 
+        processed["app_start_type"] = None
         appContext = contexts.get("app")
         if appContext is not None:
             appStartType = appContext.get("start_type")
