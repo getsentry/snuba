@@ -1,6 +1,6 @@
 from snuba.migrations.groups import (
     OPTIONAL_GROUPS,
-    REGISTERED_GROUPS,
+    REGISTERED_GROUPS_LOOKUP,
     MigrationGroup,
     get_group_loader,
 )
@@ -8,10 +8,10 @@ from snuba.migrations.migration import Migration
 
 
 def test_generic_metrics_configuration() -> None:
-    assert MigrationGroup.GENERIC_METRICS in REGISTERED_GROUPS
-    assert MigrationGroup.GENERIC_METRICS in OPTIONAL_GROUPS
+    assert "generic_metrics" in REGISTERED_GROUPS_LOOKUP
+    assert "generic_metrics" in OPTIONAL_GROUPS
 
-    generic_metrics_loader = get_group_loader(MigrationGroup.GENERIC_METRICS)
+    generic_metrics_loader = get_group_loader(MigrationGroup("generic_metrics"))
 
     assert generic_metrics_loader.get_migrations() == [
         "0001_sets_aggregate_table",
