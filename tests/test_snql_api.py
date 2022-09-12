@@ -547,22 +547,21 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    def test_transaction_group_ids(self) -> None:
+    def test_transaction_group_ids_with_results(self) -> None:
         response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
                     "query": f"""
-                    MATCH (discover_transactions)
+                    MATCH (discover)
                     SELECT count() AS count BY time
                     WHERE
-                        type = 'transaction' AND performance.issue_ids = '123' AND
+                        group_ids = '100' AND
                         timestamp >= toDateTime('{self.base_time.isoformat()}') AND
                         timestamp < toDateTime('{self.next_time.isoformat()}') AND
                         project_id IN tuple({self.project_id})
                     ORDER BY time ASC
                     LIMIT 10000
-                    GRANULARITY 1800
                     """
                 }
             ),
@@ -571,6 +570,31 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)["data"]
         assert len(data) == 1
+        assert data[0]["count"] == 1
+
+    def test_transaction_group_ids_with_no_results(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (discover)
+                    SELECT count() AS count BY time
+                    WHERE
+                        group_ids = '300' AND
+                        timestamp >= toDateTime('{self.base_time.isoformat()}') AND
+                        timestamp < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id})
+                    ORDER BY time ASC
+                    LIMIT 10000
+                    """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 0
 
     def test_suspect_spans_data(self) -> None:
         response = self.post(
