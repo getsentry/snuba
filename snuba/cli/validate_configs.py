@@ -1,12 +1,15 @@
 from glob import glob
 
+import click
 from jsonschema.exceptions import ValidationError
 
 from snuba import settings
 from snuba.datasets.configuration.json_schema import V1_ALL_SCHEMAS
 from snuba.datasets.configuration.loader import load_configuration_data
 
-if __name__ == "__main__":
+
+@click.command()
+def validate_configs() -> None:
     print("Validating configs:")
     errors = []
 
