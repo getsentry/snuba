@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
+from hashlib import md5
 from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 
@@ -548,6 +549,8 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 200
 
     def test_transaction_group_ids_with_results(self) -> None:
+        unique = "100"
+        group_id = md5(unique.encode("utf-8")).hexdigest()
         response = self.post(
             "/discover/snql",
             data=json.dumps(
@@ -556,7 +559,7 @@ class TestSnQLApi(BaseApiTest):
                     MATCH (discover)
                     SELECT count() AS count BY time
                     WHERE
-                        group_ids = '100' AND
+                        group_ids = {group_id} AND
                         timestamp >= toDateTime('{self.base_time.isoformat()}') AND
                         timestamp < toDateTime('{self.next_time.isoformat()}') AND
                         project_id IN tuple({self.project_id})
@@ -573,6 +576,8 @@ class TestSnQLApi(BaseApiTest):
         assert data[0]["count"] == 1
 
     def test_transaction_group_ids_with_no_results(self) -> None:
+        unique = "200"
+        group_id = md5(unique.encode("utf-8")).hexdigest()
         response = self.post(
             "/discover/snql",
             data=json.dumps(
@@ -581,7 +586,7 @@ class TestSnQLApi(BaseApiTest):
                     MATCH (discover)
                     SELECT count() AS count BY time
                     WHERE
-                        group_ids = '300' AND
+                        group_ids = {group_id} AND
                         timestamp >= toDateTime('{self.base_time.isoformat()}') AND
                         timestamp < toDateTime('{self.next_time.isoformat()}') AND
                         project_id IN tuple({self.project_id})
