@@ -550,7 +550,8 @@ class TestSnQLApi(BaseApiTest):
 
     def test_transaction_group_ids_with_results(self) -> None:
         unique = "100"
-        group_id = md5(unique.encode("utf-8")).hexdigest()
+        hash = md5(unique.encode("utf-8")).hexdigest()
+        group_id = int(hash[:16], 16)
         response = self.post(
             "/discover/snql",
             data=json.dumps(
@@ -577,7 +578,8 @@ class TestSnQLApi(BaseApiTest):
 
     def test_transaction_group_ids_with_no_results(self) -> None:
         unique = "200"
-        group_id = md5(unique.encode("utf-8")).hexdigest()
+        hash = md5(unique.encode("utf-8")).hexdigest()
+        group_id = int(hash[:16], 16)
         response = self.post(
             "/discover/snql",
             data=json.dumps(
