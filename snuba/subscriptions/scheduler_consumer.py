@@ -6,10 +6,10 @@ import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.commit import CommitCodec
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.synchronized import commit_codec
 from arroyo.types import Position
 
 from snuba import settings
@@ -32,6 +32,8 @@ from snuba.utils.streams.configuration_builder import build_kafka_consumer_confi
 from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
+
+commit_codec = CommitCodec()
 
 
 class MessageDetails(NamedTuple):
