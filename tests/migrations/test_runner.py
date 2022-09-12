@@ -40,15 +40,15 @@ def teardown_function() -> None:
 def test_get_status() -> None:
     runner = Runner()
     assert runner.get_status(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
+        MigrationKey(MigrationGroup("events"), "0001_events_initial")
     ) == (Status.NOT_STARTED, None)
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
     assert runner.get_status(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
+        MigrationKey(MigrationGroup("events"), "0001_events_initial")
     ) == (Status.NOT_STARTED, None)
-    runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"))
+    runner.run_migration(MigrationKey(MigrationGroup("events"), "0001_events_initial"))
     status = runner.get_status(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
+        MigrationKey(MigrationGroup("events"), "0001_events_initial")
     )
     assert status[0] == Status.COMPLETED
     assert isinstance(status[1], datetime)
@@ -75,7 +75,7 @@ def test_show_all() -> None:
 
 def test_run_migration() -> None:
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
@@ -86,15 +86,15 @@ def test_run_migration() -> None:
 
     # Invalid migration ID
     with pytest.raises(MigrationError):
-        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+        runner.run_migration(MigrationKey(MigrationGroup("system"), "xxx"))
 
     # Run out of order
     with pytest.raises(MigrationError):
-        runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+        runner.run_migration(MigrationKey(MigrationGroup("events"), "0003_errors"))
 
     # Running with --fake
     runner.run_migration(
-        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"), fake=True
+        MigrationKey(MigrationGroup("events"), "0001_events_initial"), fake=True
     )
     assert connection.execute("SHOW TABLES LIKE 'sentry_local'").results == []
 
@@ -109,17 +109,17 @@ def test_reverse_migration() -> None:
 
     # Invalid migration ID
     with pytest.raises(MigrationError):
-        runner.reverse_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+        runner.reverse_migration(MigrationKey(MigrationGroup("system"), "xxx"))
 
     with pytest.raises(MigrationError):
-        runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+        runner.reverse_migration(MigrationKey(MigrationGroup("events"), "0003_errors"))
 
     # Reverse with --fake
     for migration_id in reversed(
-        get_group_loader(MigrationGroup.EVENTS).get_migrations()
+        get_group_loader(MigrationGroup("events")).get_migrations()
     ):
         runner.reverse_migration(
-            MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True
+            MigrationKey(MigrationGroup("events"), migration_id), fake=True
         )
     assert (
         len(connection.execute("SHOW TABLES LIKE 'errors_local'").results) == 1
@@ -130,7 +130,7 @@ def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
     assert len(runner._get_pending_migrations()) == total_migrations
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
     assert len(runner._get_pending_migrations()) == total_migrations - 1
 
 
@@ -169,8 +169,8 @@ def get_total_migration_count() -> int:
 
 def test_version() -> None:
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
-    migration_key = MigrationKey(MigrationGroup.EVENTS, "test")
+    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
+    migration_key = MigrationKey(MigrationGroup("events"), "test")
     assert runner._get_next_version(migration_key) == 1
     runner._update_migration_status(migration_key, Status.IN_PROGRESS)
     assert runner._get_next_version(migration_key) == 2

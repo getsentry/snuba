@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from glob import glob
 from importlib import import_module
-from typing import Any, Iterator, Sequence
+from typing import Sequence
 
 from snuba import settings
 from snuba.datasets.configuration.migration_parser import load_migration_group
@@ -255,22 +255,10 @@ class FunctionsLoader(DirectoryLoader):
         return ["0001_functions"]
 
 
-HARDCODED_MIGRATIONS = {
-    "SYSTEM": "system",
-    "EVENTS": "events",
-    "TRANSACTIONS": "transactions",
-    "DISCOVER": "discover",
-    "OUTCOMES": "outcomes",
-    "METRICS": "metrics",
-    "SESSIONS": "sessions",
-    "QUERYLOG": "querylog",
-    "PROFILES": "profiles",
-    "FUNCTIONS": "functions",
-    "REPLAYS": "replays",
-}
+MigrationGroup = str
 
 CONFIG_BUILT_MIGRATIONS = {
-    loader.migration_group_name: loader
+    MigrationGroup(loader.migration_group_name): loader
     for loader in [
         ConfigurationLoader(config_file)
         for config_file in glob(settings.MIGRATION_CONFIG_FILES_GLOB, recursive=True)
@@ -278,85 +266,46 @@ CONFIG_BUILT_MIGRATIONS = {
 }
 
 
-class _MigrationGroup(type):
-    """
-    This class allows fetching arbitrary static attributes on whichever class extends it. This mimics some of the behaviour of the Enum class.
-    """
+# This is a list instead of a dictionary to preserve the order
+# of existing migrations. For example, the discover migrations
+# need to run after the events/transactions migrations.
+REGISTERED_GROUPS: list[tuple[str, GroupLoader]] = [
+    ("system", SystemLoader()),
+    ("events", EventsLoader()),
+    ("transactions", TransactionsLoader()),
+    ("discover", DiscoverLoader()),
+    ("metrics", MetricsLoader()),
+    ("outcomes", OutcomesLoader()),
+    ("sessions", SessionsLoader()),
+    ("querylog", QuerylogLoader()),
+    ("profiles", ProfilesLoader()),
+    ("functions", FunctionsLoader()),
+    ("replays", ReplaysLoader()),
+]
 
-    def __getattr__(cls, attr: str) -> "MigrationGroup":
-        if (
-            attr not in HARDCODED_MIGRATIONS
-            and attr.lower() not in CONFIG_BUILT_MIGRATIONS
-        ):
-            raise AttributeError(
-                f"type object 'MigrationGroup' has no attribute '{attr}'"
-            )
-
-        return MigrationGroup(attr.lower())
-
-    def __iter__(cls) -> Iterator[MigrationGroup]:
-        return iter(REGISTERED_GROUPS)
-
-
-class MigrationGroup(metaclass=_MigrationGroup):
-    """
-    This class is a replacement for the Enum class that used to define the different migration groups.
-    In order to avoid having to go through the entire codebase to find instances of MigrationGroup and
-    replace them, this will mimic the functionality of an Enum class while allowing arbitrary values to be populated.
-    """
-
-    def __init__(self, value: str) -> None:
-        self.value = value
-
-    def __hash__(self) -> int:
-        return hash(self.value)
-
-    def __eq__(self, other: Any) -> bool:
-        return isinstance(other, MigrationGroup) and other.value == self.value
-
-    def __repr__(self) -> str:
-        return f"<snuba.migrations.groups.MigrationGroup.{self.value.upper()} object at {id(self)}>"
-
-
-REGISTERED_GROUPS = {
-    MigrationGroup.SYSTEM: SystemLoader(),
-    MigrationGroup.EVENTS: EventsLoader(),
-    MigrationGroup.TRANSACTIONS: TransactionsLoader(),
-    MigrationGroup.DISCOVER: DiscoverLoader(),
-    MigrationGroup.METRICS: MetricsLoader(),
-    MigrationGroup.OUTCOMES: OutcomesLoader(),
-    MigrationGroup.SESSIONS: SessionsLoader(),
-    MigrationGroup.QUERYLOG: QuerylogLoader(),
-    MigrationGroup.PROFILES: ProfilesLoader(),
-    MigrationGroup.FUNCTIONS: FunctionsLoader(),
-    MigrationGroup.REPLAYS: ReplaysLoader(),
-}
-
-REGISTERED_GROUPS.update(
-    {MigrationGroup(name): loader for name, loader in CONFIG_BUILT_MIGRATIONS.items()}
+# TODO: config defined migrations are not run in any particular order.
+# In the future we will need the ability to ensure migrations run in
+# the right order.
+REGISTERED_GROUPS.extend(
+    [(name, loader) for name, loader in CONFIG_BUILT_MIGRATIONS.items()]
 )
 
+REGISTERED_GROUPS_LOOKUP = {k: v for (k, v) in REGISTERED_GROUPS}
 
 # Migration groups are mandatory by default, unless they are on this list
 OPTIONAL_GROUPS = {
-    MigrationGroup.METRICS,
-    MigrationGroup.SESSIONS,
-    MigrationGroup.QUERYLOG,
-    MigrationGroup.PROFILES,
-    MigrationGroup.FUNCTIONS,
-    MigrationGroup.REPLAYS,
+    "metrics",
+    "sessions",
+    "querylog",
+    "profiles",
+    "functions",
+    "replays",
 }
 
 OPTIONAL_GROUPS.update(
-    set(
-        [
-            MigrationGroup(m)
-            for m in CONFIG_BUILT_MIGRATIONS
-            if CONFIG_BUILT_MIGRATIONS[m].optional
-        ]
-    )
+    set([m for m in CONFIG_BUILT_MIGRATIONS if CONFIG_BUILT_MIGRATIONS[m].optional])
 )
 
 
 def get_group_loader(group: MigrationGroup) -> GroupLoader:
-    return REGISTERED_GROUPS[group]
+    return REGISTERED_GROUPS_LOOKUP[group]
