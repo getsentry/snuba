@@ -197,7 +197,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
         "datetime": end_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         "platform": "python",
         "retention_days": settings.DEFAULT_RETENTION_DAYS,
-        "group_ids": [primary_hash],
+        "group_ids": [int(primary_hash[:16], 16)],
         "data": {
             "received": calendar.timegm(event_received.timetuple()),
             "type": "transaction",
