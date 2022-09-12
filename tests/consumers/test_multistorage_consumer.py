@@ -10,7 +10,7 @@ from snuba.consumers.consumer import (
     process_message_multistorage,
     process_message_multistorage_identical_storages,
 )
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from tests.fixtures import get_raw_event, get_raw_transaction
 
 test_data = [

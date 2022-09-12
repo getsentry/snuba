@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Collection, Optional, Tuple
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     PartitionId,

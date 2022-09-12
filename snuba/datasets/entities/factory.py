@@ -1,9 +1,12 @@
-from typing import Generator, Mapping, MutableMapping, Sequence, Type
+from glob import glob
+from typing import Generator, MutableMapping, Optional, Sequence, Type
 
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.pluggable_entity import PluggableEntity
+from snuba.datasets.storages.factory import initialize_storage_factory
 from snuba.datasets.table_storage import TableWriter
 from snuba.utils.config_component_factory import ConfigComponentFactory
 from snuba.utils.serializable_exception import SerializableException
@@ -11,11 +14,23 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
+        initialize_storage_factory()
         self._entity_map: MutableMapping[EntityKey, Entity] = {}
         self._name_map: MutableMapping[Type[Entity], EntityKey] = {}
         self.__initialize()
 
     def __initialize(self) -> None:
+
+        self._config_built_entities = {
+            entity.entity_key: entity
+            for entity in [
+                build_entity_from_config(config_file)
+                for config_file in glob(
+                    settings.ENTITY_CONFIG_FILES_GLOB, recursive=True
+                )
+            ]
+        }
+
         from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
         from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
         from snuba.datasets.entities.discover import (
@@ -42,16 +57,12 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
         from snuba.datasets.entities.transactions import TransactionsEntity
 
-        entity_to_config_path_mapping: Mapping[EntityKey, str] = {
-            EntityKey.GENERIC_METRICS_SETS: "snuba/datasets/configuration/generic_metrics/entities/sets.yaml"
-        }
-
         self._entity_map.update(
             {
                 EntityKey.DISCOVER: DiscoverEntity(),
                 EntityKey.EVENTS: EventsEntity(),
                 EntityKey.GROUPASSIGNEE: GroupAssigneeEntity(),
-                EntityKey.GROUPEDMESSAGES: GroupedMessageEntity(),
+                EntityKey.GROUPEDMESSAGE: GroupedMessageEntity(),
                 EntityKey.OUTCOMES: OutcomesEntity(),
                 EntityKey.OUTCOMES_RAW: OutcomesRawEntity(),
                 EntityKey.SESSIONS: SessionsEntity(),
@@ -72,12 +83,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         )
 
         if settings.PREFER_PLUGGABLE_ENTITIES:
-            self._entity_map.update(
-                {
-                    key: build_entity_from_config(path)
-                    for (key, path) in entity_to_config_path_mapping.items()
-                }
-            )
+            self._entity_map.update(self._config_built_entities)
 
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 
@@ -95,8 +101,10 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             raise InvalidEntityError(f"entity {name!r} does not exist") from error
 
     def get_entity_name(self, entity: Entity) -> EntityKey:
-        # TODO: This is dumb, the name should just be a property on the entity
         try:
+            if isinstance(entity, PluggableEntity):
+                return entity.entity_key
+            # TODO: Destroy all non-PluggableEntity Entities
             return self._name_map[entity.__class__]
         except KeyError as error:
             raise InvalidEntityError(f"entity {entity} has no name") from error
@@ -106,7 +114,7 @@ class InvalidEntityError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-_ENT_FACTORY = None
+_ENT_FACTORY: Optional[_EntityFactory] = None
 
 
 def _ent_factory() -> _EntityFactory:
@@ -114,6 +122,13 @@ def _ent_factory() -> _EntityFactory:
     if _ENT_FACTORY is None:
         _ENT_FACTORY = _EntityFactory()
     return _ENT_FACTORY
+
+
+def initialize_entity_factory() -> None:
+    """
+    Used to load entities on initialization of datasets.
+    """
+    _ent_factory()
 
 
 def get_entity(name: EntityKey) -> Entity:

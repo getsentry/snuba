@@ -1,12 +1,12 @@
 from snuba import settings, state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.transactions import (
     TransactionsQueryStorageSelector,
     transaction_translator,
 )
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings

@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.clickhouse.columns import UUID, Any, ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -35,7 +35,7 @@ def test_simple_join() -> None:
     e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
-    g = Entity(key=EntityKey.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)
+    g = Entity(key=EntityKey.GROUPEDMESSAGE, schema=GROUPS_SCHEMA)
     node_group = IndividualNode(alias="groups", data_source=g)
 
     join = JoinClause(
@@ -77,7 +77,7 @@ def test_complex_joins() -> None:
     e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
-    g = Entity(key=EntityKey.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)
+    g = Entity(key=EntityKey.GROUPEDMESSAGE, schema=GROUPS_SCHEMA)
     node_group = IndividualNode(alias="groups", data_source=g)
 
     a = Entity(key=EntityKey.GROUPASSIGNEE, schema=GROUPS_ASSIGNEE)

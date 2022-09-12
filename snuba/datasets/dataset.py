@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import QueryRunner
@@ -43,8 +43,7 @@ class Dataset:
     def __init__(self, *, default_entity: EntityKey) -> None:
         self.__default_entity = default_entity
 
-    @classmethod
-    def is_experimental(cls) -> bool:
+    def is_experimental(self) -> bool:
         """Marks the dataset as experimental. Healthchecks failing on this
         dataset:
             * do not block deploys

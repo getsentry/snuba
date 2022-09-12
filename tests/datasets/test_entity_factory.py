@@ -1,4 +1,5 @@
-from snuba.datasets.entities import EntityKey, factory
+from snuba.datasets.entities import factory
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import (
     get_all_entity_names,
     get_entity,
@@ -11,7 +12,7 @@ ENTITY_KEYS = [
     EntityKey.DISCOVER,
     EntityKey.EVENTS,
     EntityKey.GROUPASSIGNEE,
-    EntityKey.GROUPEDMESSAGES,
+    EntityKey.GROUPEDMESSAGE,
     EntityKey.OUTCOMES,
     EntityKey.OUTCOMES_RAW,
     EntityKey.SESSIONS,

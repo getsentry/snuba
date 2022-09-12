@@ -12,26 +12,28 @@ from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import storage as error_storage
 from snuba.datasets.storages.errors_common import mandatory_conditions
-from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.storages.transactions import storage as transactions_storage
-from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.empty_tag_condition_processor import (
+from snuba.query.processors.physical.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
-from snuba.query.processors.mapping_optimizer import MappingOptimizer
-from snuba.query.processors.mapping_promoter import MappingColumnPromoter
-from snuba.query.processors.null_column_caster import NullColumnCaster
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.type_converters.hexint_column_processor import (
+from snuba.query.processors.physical.events_bool_contexts import (
+    EventsBooleanContextsProcessor,
+)
+from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
+from snuba.query.processors.physical.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.physical.null_column_caster import NullColumnCaster
+from snuba.query.processors.physical.prewhere import PrewhereProcessor
+from snuba.query.processors.physical.table_rate_limit import TableRateLimit
+from snuba.query.processors.physical.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
-from snuba.query.processors.type_converters.uuid_column_processor import (
+from snuba.query.processors.physical.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy

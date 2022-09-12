@@ -5,7 +5,6 @@ from snuba.datasets.errors_replacer import ErrorsReplacer
 from snuba.datasets.message_filters import KafkaHeaderFilterWithBypass
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
     all_columns,
     mandatory_conditions,
@@ -14,8 +13,9 @@ from snuba.datasets.storages.errors_common import (
     query_splitters,
     required_columns,
 )
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
+from snuba.query.processors.physical.conditions_enforcer import ProjectIdEnforcer
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic

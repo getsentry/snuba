@@ -1,14 +1,14 @@
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.events import (
     ErrorsQueryStorageSelector,
     errors_translators,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings

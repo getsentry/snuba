@@ -7,8 +7,8 @@ from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 
 ENABLED_STORAGE_SETS = {
     "cdc",

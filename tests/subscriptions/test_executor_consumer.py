@@ -15,8 +15,10 @@ from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -28,10 +30,6 @@ from snuba.subscriptions.data import (
     SubscriptionIdentifier,
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
-)
-from snuba.subscriptions.entity_subscription import (
-    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
-    EventsSubscription,
 )
 from snuba.subscriptions.executor_consumer import (
     ExecuteQuery,
@@ -186,9 +184,7 @@ def generate_message(
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
         data_dict = {"organization": 1}
 
-    entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
-        data_dict=data_dict
-    )
+    entity_subscription = get_entity_subscription(entity_key)(data_dict=data_dict)
 
     while True:
         payload = codec.encode(

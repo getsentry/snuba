@@ -6,7 +6,7 @@ from random import randint
 from time import sleep
 from typing import Any, Generic, Iterable, List, Mapping, TypeVar
 
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
 logger = logging.getLogger("snuba.writer")

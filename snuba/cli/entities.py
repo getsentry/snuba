@@ -3,7 +3,7 @@ from typing import Optional
 import click
 
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import InvalidEntityError, get_entity
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.utils.describer import Description, DescriptionVisitor, Property
@@ -73,5 +73,5 @@ def load(entity_path: str) -> None:
     """
     entity = build_entity_from_config(entity_path)
     assert isinstance(entity, PluggableEntity)
-    click.echo(f"Entity {entity.name}")
+    click.echo(f"Entity {entity.entity_key}")
     entity.describe().accept(CLIDescriber())

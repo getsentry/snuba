@@ -17,7 +17,7 @@ from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import settings
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler_consumer
 from snuba.subscriptions.scheduler_consumer import CommitLogTickConsumer
@@ -51,9 +51,11 @@ def test_scheduler_consumer() -> None:
 
     mock_scheduler_producer = mock.Mock()
 
+    from snuba.datasets.entity_subscriptions.entity_subscription import (
+        EventsSubscription,
+    )
     from snuba.redis import redis_client
     from snuba.subscriptions.data import PartitionId, SubscriptionData
-    from snuba.subscriptions.entity_subscription import EventsSubscription
     from snuba.subscriptions.store import RedisSubscriptionDataStore
 
     entity_key = EntityKey(entity_name)

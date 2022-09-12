@@ -12,11 +12,11 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import (
     get_writable_storage,
     get_writable_storage_keys,
 )
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper

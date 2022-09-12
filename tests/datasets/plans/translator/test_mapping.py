@@ -8,7 +8,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity

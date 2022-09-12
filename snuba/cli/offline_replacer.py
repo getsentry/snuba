@@ -10,8 +10,8 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import Partition, Topic
 
 from snuba import environment
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.replacer import ReplacerWorker
 from snuba.utils.metrics.wrapper import MetricsWrapper

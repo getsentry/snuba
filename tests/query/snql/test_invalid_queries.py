@@ -3,7 +3,7 @@ from typing import Optional
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.data_source.join import JoinRelationship, JoinType
@@ -98,7 +98,7 @@ def test_failures(query_body: str, message: str) -> None:
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
         "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGES, "first_release_id"),
+        "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
         "activity": (EntityKey.SESSIONS, "org_id"),
     }
 

@@ -7,8 +7,8 @@ import progressbar
 
 from snuba import environment, settings
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage, get_cdc_storage_keys
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.loaders import ProgressCallback
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot

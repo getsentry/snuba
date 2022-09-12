@@ -3,8 +3,8 @@ from typing import MutableMapping
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
-from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.serializable_exception import SerializableException
 
 
