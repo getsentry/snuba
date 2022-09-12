@@ -5,7 +5,7 @@ from datetime import datetime
 from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset

@@ -27,8 +27,8 @@ from snuba import state
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression

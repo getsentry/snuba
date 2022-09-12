@@ -4,7 +4,7 @@ from snuba import settings
 from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
 )
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.utils.config_component_factory import ConfigComponentFactory
 from snuba.utils.serializable_exception import SerializableException

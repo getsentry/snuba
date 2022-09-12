@@ -4,6 +4,7 @@ from typing import Any, Mapping, Optional, Sequence
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -29,7 +30,7 @@ class PluggableEntity(Entity):
     provided readable storage.
     """
 
-    name: str
+    entity_key: EntityKey
     query_processors: Sequence[QueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     readable_storage: ReadableTableStorage
@@ -80,7 +81,9 @@ class PluggableEntity(Entity):
         return self.writeable_storage
 
     def __eq__(self, other: Any) -> bool:
-        return isinstance(other, PluggableEntity) and self.name == other.name
+        return (
+            isinstance(other, PluggableEntity) and self.entity_key == other.entity_key
+        )
 
     def __hash__(self) -> int:
-        return hash(self.name)
+        return hash(self.entity_key)
