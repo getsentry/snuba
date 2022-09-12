@@ -1,7 +1,7 @@
 from functools import partial
 from typing import Mapping, MutableMapping, Optional, Set, Tuple
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (

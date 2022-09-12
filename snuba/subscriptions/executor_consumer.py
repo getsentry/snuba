@@ -20,7 +20,7 @@ from arroyo.types import Position
 from snuba import state
 from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec

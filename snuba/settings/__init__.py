@@ -247,6 +247,7 @@ CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configu
 # File path glob for configs
 STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"
+ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False

@@ -15,7 +15,7 @@ from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
 from snuba.datasets.entity_subscriptions.factory import get_entity_subscription

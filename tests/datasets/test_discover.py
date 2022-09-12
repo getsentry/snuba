@@ -3,7 +3,7 @@ from typing import Any, MutableMapping
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.query.snql.parser import parse_snql_query
 

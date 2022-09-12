@@ -9,7 +9,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression, Query
 from snuba.clusters import cluster
 from snuba.datasets import factory
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import factory as storage_factory
