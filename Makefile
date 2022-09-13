@@ -37,4 +37,4 @@ watch-admin:
 	cd snuba/admin && yarn install && yarn run watch
 
 validate-configs:
-	snuba validate-configs
+	python3 snuba/validate_configs.py

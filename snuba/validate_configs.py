@@ -1,6 +1,5 @@
 from glob import glob
 
-import click
 from jsonschema.exceptions import ValidationError
 
 from snuba import settings
@@ -8,9 +7,8 @@ from snuba.datasets.configuration.json_schema import V1_ALL_SCHEMAS
 from snuba.datasets.configuration.loader import load_configuration_data
 
 
-@click.command()
 def validate_configs() -> None:
-    click.echo("Validating configs:")
+    print("Validating configs:")
     errors = []
 
     for config_file in glob(f"{settings.CONFIG_FILES_PATH}/**/*.yaml", recursive=True):
@@ -21,15 +19,19 @@ def validate_configs() -> None:
         except Exception as e:
             errors.append((file_name, e))
             message += " FAILED"
-        click.echo(message)
+        print(message)
 
     if errors:
-        click.echo("\nFailures:")
+        print("\nFailures:")
         for file_name, err in errors:
             if isinstance(err, ValidationError):
-                click.echo(f"{file_name}: {err.message}")
+                print(f"{file_name}: {err.message}")
             else:
-                click.echo(f"{file_name}: {err.__class__.__name__}: {err}")
+                print(f"{file_name}: {err.__class__.__name__}: {err}")
         exit(1)
     else:
-        click.echo("All configs valid!")
+        print("All configs valid!")
+
+
+if __name__ == "__main__":
+    validate_configs()
