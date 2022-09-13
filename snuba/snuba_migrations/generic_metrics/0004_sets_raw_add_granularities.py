@@ -30,19 +30,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.AddColumn(
-                storage_set=StorageSetKey.GENERIC_METRICS_SETS,
-                table_name=self.table_name,
-                column=self.new_column,
-            )
-        ]
+        return []
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropColumn(
-                storage_set=StorageSetKey.GENERIC_METRICS_SETS,
-                table_name=self.table_name,
-                column_name=self.new_column.name,
-            )
-        ]
+        return []
