@@ -13,6 +13,7 @@ FUNCTION_CALL_SCHEMA = {
         "type": TYPE_STRING,
         "args": TYPE_STRING_ARRAY,
     },
+    "additionalProperties": False,
 }
 
 STREAM_LOADER_SCHEMA = {
@@ -25,9 +26,10 @@ STREAM_LOADER_SCHEMA = {
         "subscription_scheduler_mode": TYPE_NULLABLE_STRING,
         "subscription_result_topic": TYPE_NULLABLE_STRING,
         "replacement_topic": TYPE_NULLABLE_STRING,
-        "prefilter": FUNCTION_CALL_SCHEMA,
+        "pre_filter": FUNCTION_CALL_SCHEMA,
         "dlq_policy": FUNCTION_CALL_SCHEMA,
     },
+    "additionalProperties": False,
 }
 
 NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA = {
@@ -48,18 +50,29 @@ def make_column_schema(
             "type": column_type,
             "args": args,
         },
+        "additionalProperties": False,
     }
 
 
 NUMBER_SCHEMA = make_column_schema(
     column_type={"enum": ["UInt", "Float"]},
-    args={"type": "object", "properties": {"size": {"type": "number"}}},
+    args={
+        "type": "object",
+        "properties": {
+            "size": {"type": "number"},
+        },
+        "additionalProperties": False,
+    },
 )
 
 
 NO_ARG_SCHEMA = make_column_schema(
     column_type={"enum": ["String", "DateTime"]},
-    args={"type": "object", "properties": {}},
+    args={
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
 )
 
 
@@ -67,7 +80,11 @@ ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
-        "properties": {"type": TYPE_STRING, "arg": {"type": "number"}},
+        "properties": {
+            "type": TYPE_STRING,
+            "arg": {"type": "number"},
+        },
+        "additionalProperties": False,
     },
 )
 
@@ -85,9 +102,11 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
                         "type": {"enum": ["Float", "UUID", "UInt"]},
                         "arg": {"type": ["number", "null"]},
                     },
+                    "additionalProperties": False,
                 },
             },
         },
+        "additionalProperties": False,
     },
 )
 
@@ -105,6 +124,7 @@ NESTED_SCHEMA = make_column_schema(
         "properties": {
             "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
         },
+        "additionalProperties": False,
     },
 )
 
@@ -117,12 +137,14 @@ SCHEMA_SCHEMA = {
         "local_table_name": TYPE_STRING,
         "dist_table_name": TYPE_STRING,
     },
+    "additionalProperties": False,
 }
 ######
 
 STORAGE_SCHEMA = {
     "type": "object",
     "properties": {"key": TYPE_STRING, "set_key": TYPE_STRING},
+    "additionalProperties": False,
 }
 
 STORAGE_QUERY_PROCESSORS_SCHEMA = TYPE_STRING_ARRAY
@@ -134,6 +156,7 @@ ENTITY_QUERY_PROCESSOR = {
         "args": {"type": "object"},  # args are a flexible dict
     },
     "required": ["processor"],
+    "additionalProperties": False,
 }
 
 ENTITY_VALIDATOR = {
@@ -143,6 +166,7 @@ ENTITY_VALIDATOR = {
         "args": {"type": "object"},  # args are a flexible dict
     },
     "required": ["validator"],
+    "additionalProperties": False,
 }
 
 ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
@@ -154,6 +178,7 @@ ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
             "args": {"type": "object"},
         },
         "required": ["mapper"],
+        "additionalProperties": False,
     },
 }
 
@@ -161,8 +186,10 @@ ENTITY_TRANSLATION_MAPPERS = {
     "type": "object",
     "properties": {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
+        "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
     },
+    "additionalProperties": False,
 }
 
 # Full schemas:
@@ -178,6 +205,15 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
+    "required": [
+        "version",
+        "kind",
+        "name",
+        "storage",
+        "schema",
+        "stream_loader",
+    ],
+    "additionalProperties": False,
 }
 
 
@@ -191,6 +227,14 @@ V1_READABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
     },
+    "required": [
+        "version",
+        "kind",
+        "name",
+        "storage",
+        "schema",
+    ],
+    "additionalProperties": False,
 }
 
 V1_ENTITY_SCHEMA = {
@@ -217,6 +261,7 @@ V1_ENTITY_SCHEMA = {
         "validators",
         "required_time_column",
     ],
+    "additionalProperties": False,
 }
 
 V1_DATASET_SCHEMA = {
@@ -229,8 +274,16 @@ V1_DATASET_SCHEMA = {
         "entities": {
             "type": "object",
             "properties": {"default": TYPE_STRING, "all": TYPE_STRING_ARRAY},
+            "additionalProperties": False,
         },
     },
+    "required": [
+        "version",
+        "kind",
+        "name",
+        "entities",
+    ],
+    "additionalProperties": False,
 }
 
 V1_ENTITY_SUBSCIPTION_SCHEMA = {
@@ -247,6 +300,7 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
         "kind",
         "name",
     ],
+    "additionalProperties": False,
 }
 
 V1_ALL_SCHEMAS = {
