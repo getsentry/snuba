@@ -29,6 +29,8 @@ DISABLED_DATASETS: Set[str] = set()
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
 SENTRY_LOGICAL_PARTITIONS = 256
+# The number of physical slices that we will need to map resources to
+# for dataset partitioning
 LOCAL_PHYSICAL_SLICES = 1
 # Mapping of logical (key) to physical (value) partitions for datasets
 # that are partitioned across Sentry
