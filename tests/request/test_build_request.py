@@ -4,6 +4,7 @@ from typing import Any, MutableMapping
 import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
@@ -62,7 +63,7 @@ TESTS = [
 @pytest.mark.parametrize("body, condition", TESTS)
 def test_build_request(body: MutableMapping[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
-    entity = dataset.get_default_entity()
+    entity = get_entity(EntityKey.EVENTS)
     schema = RequestSchema.build(HTTPQuerySettings)
 
     request = build_request(

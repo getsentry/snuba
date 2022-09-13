@@ -27,6 +27,7 @@ from snuba import state
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.discover import DiscoverDataset
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -1380,6 +1381,7 @@ def _select_entity_for_dataset(
             # so only do this selection in that case. If someone wants the "discover" entity specifically
             # then their query will have to only use fields from that entity.
             if query_entity.key == EntityKey.DISCOVER:
+                assert isinstance(dataset, DiscoverDataset)
                 selected_entity_key = dataset.select_entity(query)
                 selected_entity = get_entity(selected_entity_key)
                 query_entity = QueryEntity(

@@ -17,7 +17,7 @@ from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity, get_entity_name
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.errors import storage as errors_storage
@@ -2026,7 +2026,9 @@ class TestApi(SimpleAPITest):
                 "data": {"received": time.mktime(self.base_time.timetuple())},
             },
         )
-        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
+        response = self.app.post(
+            "/tests/events/events/eventstream", data=json.dumps(event)
+        )
         assert response.status_code == 200
 
         query = {
@@ -2055,7 +2057,9 @@ class TestApi(SimpleAPITest):
                 ),
             },
         )
-        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
+        response = self.app.post(
+            "/tests/events/events/eventstream", data=json.dumps(event)
+        )
         assert response.status_code == 200
 
         result = json.loads(self.post(json.dumps(query)).data)
@@ -2341,7 +2345,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         subscription_id = data["subscription_id"]
         partition = subscription_id.split("/", 1)[0]
 
-        entity_key = get_entity_name(self.dataset.get_default_entity())
+        entity_key = EntityKey.EVENTS
 
         assert (
             len(

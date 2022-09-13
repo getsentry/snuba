@@ -604,16 +604,14 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
-    def write(*, dataset: Dataset) -> RespTuple:
-        return _write_to_entity(entity=dataset.get_default_entity())
-
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
     def write_to_entity(*, entity: EntityType) -> RespTuple:
         return _write_to_entity(entity=entity)
 
-    @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
-    def eventstream(*, dataset: Dataset) -> RespTuple:
+    @application.route(
+        "/tests/<dataset:dataset>/<entity:entity>/eventstream", methods=["POST"]
+    )
+    def eventstream(*, dataset: Dataset, entity: Entity) -> RespTuple:
         record = json.loads(http_request.data)
 
         version = record[0]
@@ -629,7 +627,7 @@ if application.debug or application.testing:
 
         type_ = record[1]
 
-        storage = dataset.get_default_entity().get_writable_storage()
+        storage = entity.get_writable_storage()
         assert storage is not None
 
         if type_ == "insert":

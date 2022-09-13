@@ -2,7 +2,6 @@ from typing import Sequence
 from unittest import mock
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.events import EventsDataset
 from snuba.web.views import check_clickhouse
 
@@ -22,9 +21,6 @@ class ExperimentalDataset(Dataset):
     def is_experimental(cls) -> bool:
         return True
 
-    def get_default_entity(self) -> BadEntity:
-        return BadEntity()
-
     def get_all_entities(self) -> Sequence[BadEntity]:
         return [BadEntity()]
 
@@ -34,9 +30,6 @@ class BadDataset(Dataset):
     def is_experimental(cls) -> bool:
         return False
 
-    def get_default_entity(self) -> BadEntity:
-        return BadEntity()
-
     def get_all_entities(self) -> Sequence[BadEntity]:
         return [BadEntity()]
 
@@ -44,8 +37,8 @@ class BadDataset(Dataset):
 def fake_get_dataset(name: str) -> Dataset:
     return {
         "events": EventsDataset(),
-        "experimental": ExperimentalDataset(default_entity=EntityKey.PROFILES),
-        "bad": BadDataset(default_entity=EntityKey.TRANSACTIONS),
+        "experimental": ExperimentalDataset(),
+        "bad": BadDataset(),
     }[name]
 
 

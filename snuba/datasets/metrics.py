@@ -7,13 +7,10 @@ from snuba.datasets.entity import Entity
 
 
 class MetricsDataset(Dataset):
-    def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.METRICS_SETS)
-
     def get_all_entities(self) -> Sequence[Entity]:
-        return (
+        return [
             get_entity(EntityKey.METRICS_COUNTERS),
             get_entity(EntityKey.METRICS_DISTRIBUTIONS),
             get_entity(EntityKey.METRICS_SETS),
             get_entity(EntityKey.ORG_METRICS_COUNTERS),
-        )
+        ]

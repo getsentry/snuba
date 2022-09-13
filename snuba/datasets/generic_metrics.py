@@ -9,9 +9,6 @@ DEFAULT_GRANULARITY = 60
 
 
 class GenericMetricsDataset(Dataset):
-    def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.GENERIC_METRICS_SETS)
-
     def get_all_entities(self) -> Sequence[Entity]:
         return [
             get_entity(EntityKey.GENERIC_METRICS_SETS),

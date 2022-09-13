@@ -1,10 +1,13 @@
 import logging
+from typing import Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity import Entity
 from snuba.query.conditions import (
     BINARY_OPERATORS,
     ConditionFunctions,
@@ -26,9 +29,6 @@ EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
 
 
 class DiscoverDataset(Dataset):
-    def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.DISCOVER)
-
     # XXX: This is temporary code that will eventually need to be ported to Sentry
     # since SnQL will require an entity to always be specified by the user.
     def select_entity(self, query: Query) -> EntityKey:
@@ -39,6 +39,13 @@ class DiscoverDataset(Dataset):
         track_bad_query(query, selected_entity, EVENTS_COLUMNS, TRANSACTIONS_COLUMNS)
 
         return selected_entity
+
+    def get_all_entities(self) -> Sequence[Entity]:
+        return [
+            get_entity(EntityKey.DISCOVER),
+            get_entity(EntityKey.DISCOVER_EVENTS),
+            get_entity(EntityKey.DISCOVER_TRANSACTIONS),
+        ]
 
 
 metrics = MetricsWrapper(environment.metrics, "api.discover")
