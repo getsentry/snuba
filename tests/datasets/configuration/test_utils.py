@@ -80,6 +80,9 @@ def test_build_stream_loader() -> None:
 
 def test_invalid_storage() -> None:
     config = {
+        "version": "v1",
+        "kind": "readable_storage",
+        "name": "",
         "storage": {"key": 1, "set_key": "x"},
         "schema": {"columns": []},
         "query_processors": [],
@@ -91,6 +94,9 @@ def test_invalid_storage() -> None:
 
 def test_invalid_query_processor() -> None:
     config = {
+        "version": "v1",
+        "kind": "readable_storage",
+        "name": "",
         "storage": {"key": "x", "set_key": "x"},
         "schema": {"columns": []},
         "query_processors": [5],
