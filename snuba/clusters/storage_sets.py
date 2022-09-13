@@ -2,41 +2,6 @@ from typing import FrozenSet
 
 from snuba.clusters.storage_set_key import StorageSetKey
 
-# class StorageSetKey(Enum):
-#     """
-#     A storage set key is a unique identifier for a storage set.
-
-#     A storage set represents a collection of storages that must be physically located
-#     on the same cluster.
-
-#     Storages in the same storage sets are:
-#     - Storages that join queries are performed on
-#     - Raw and materialized views (potentially moving into the same storage in future)
-
-#     Storage sets are assigned to clusters via configuration.
-#     """
-
-#     CDC = "cdc"
-#     DISCOVER = "discover"
-#     EVENTS = "events"
-#     EVENTS_RO = "events_ro"
-#     METRICS = "metrics"
-#     MIGRATIONS = "migrations"
-#     OUTCOMES = "outcomes"
-#     QUERYLOG = "querylog"
-#     SESSIONS = "sessions"
-#     TRANSACTIONS = "transactions"
-#     TRANSACTIONS_RO = "transactions_ro"
-#     TRANSACTIONS_V2 = "transactions_v2"
-#     ERRORS_V2 = "errors_v2"
-#     ERRORS_V2_RO = "errors_v2_ro"
-#     PROFILES = "profiles"
-#     FUNCTIONS = "functions"
-#     REPLAYS = "replays"
-#     GENERIC_METRICS_SETS = "generic_metrics_sets"
-#     GENERIC_METRICS_DISTRIBUTIONS = "generic_metrics_distributions"
-
-
 # Storage sets enabled only when development features are enabled.
 DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 
