@@ -10,7 +10,7 @@ from snuba.datasets.configuration.loader import load_configuration_data
 
 @click.command()
 def validate_configs() -> None:
-    print("Validating configs:")
+    click.echo("Validating configs:")
     errors = []
 
     for config_file in glob(f"{settings.CONFIG_FILES_PATH}/**/*.yaml", recursive=True):
@@ -21,16 +21,15 @@ def validate_configs() -> None:
         except Exception as e:
             errors.append((file_name, e))
             message += " FAILED"
-        print(message)
+        click.echo(message)
 
     if errors:
-        print("\nFailures:")
+        click.echo("\nFailures:")
         for file_name, err in errors:
-            print(f"{file_name}: ", end="")
             if isinstance(err, ValidationError):
-                print(err.message)
+                click.echo(f"{file_name}: {err.message}")
             else:
-                print(f"{err.__class__.__name__}: {err}")
+                click.echo(f"{file_name}: {err.__class__.__name__}: {err}")
         exit(1)
     else:
-        print("All configs valid!")
+        click.echo("All configs valid!")
