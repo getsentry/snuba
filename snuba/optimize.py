@@ -41,8 +41,6 @@ def run_optimize(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
-    part_format = schema.get_part_format()
-    assert part_format is not None
 
     partitions = get_partitions_to_optimize(
         clickhouse, storage, database, table, before
@@ -87,8 +85,6 @@ def run_optimize_cron_job(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
-    part_format = schema.get_part_format()
-    assert part_format
     optimize_scheduler = OptimizeScheduler(parallel=parallel)
 
     try:
