@@ -28,6 +28,16 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
+SENTRY_LOGICAL_PARTITIONS = 256
+LOCAL_PHYSICAL_SLICES = 1
+# Mapping of logical (key) to physical (value) partitions for datasets
+# that are partitioned across Sentry
+DATASET_PARTITION_MAPPING: Mapping[str, int] = {
+    str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
+}
+# Storage names to apply dataset partitioning to
+PARTITIONED_STORAGES: Set[str] = set()
+
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),

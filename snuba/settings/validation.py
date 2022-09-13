@@ -83,3 +83,13 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # We allow definition of storage_sets in configuration files
                 # that are not defined in StorageSetKey.
                 pass
+
+    for logical_part in range(0, locals["SENTRY_LOGICAL_PARTITIONS"]):
+        physical_part = locals["DATASET_PARTITION_MAPPING"].get(str(logical_part))
+        slice_count = locals["LOCAL_PHYSICAL_SLICES"]
+        assert (
+            physical_part is not None
+        ), f"missing physical partition for logical partition {logical_part}"
+        assert (
+            physical_part < locals["LOCAL_PHYSICAL_SLICES"]
+        ), f"physical partition for logical partition {logical_part} is {physical_part}, but only {slice_count} slices exist"
