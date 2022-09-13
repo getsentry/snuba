@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -14,7 +14,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.granularity_processor import (
+from snuba.query.processors.logical.granularity_processor import (
     DEFAULT_GRANULARITY_RAW,
     DEFAULT_MAPPED_GRANULARITY_ENUM,
     PERFORMANCE_GRANULARITIES,

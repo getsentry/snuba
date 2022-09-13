@@ -12,6 +12,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.factory import get_dataset
@@ -19,19 +20,19 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import Query
-from snuba.query.processors.granularity_processor import (
+from snuba.query.processors.logical.granularity_processor import (
     DEFAULT_MAPPED_GRANULARITY_ENUM,
     PERFORMANCE_GRANULARITIES,
     MappedGranularityProcessor,
 )
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
@@ -57,7 +58,7 @@ def end_time(start_time: datetime) -> datetime:
 @pytest.fixture
 def pluggable_sets_entity() -> PluggableEntity:
     return PluggableEntity(
-        name="generic_metrics_sets",
+        entity_key=EntityKey.GENERIC_METRICS_SETS,
         readable_storage=get_storage(StorageKey.GENERIC_METRICS_SETS),
         query_processors=[
             TagsTypeTransformer(),

@@ -11,7 +11,7 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
+from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
 from tests.query.processors.query_builders import build_query

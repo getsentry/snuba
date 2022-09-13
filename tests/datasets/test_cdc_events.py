@@ -5,7 +5,7 @@ import pytest
 import pytz
 import simplejson as json
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.base import BaseApiTest

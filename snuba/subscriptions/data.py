@@ -20,8 +20,13 @@ from typing import (
 from uuid import UUID
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    EntitySubscription,
+    InvalidSubscriptionError,
+)
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -37,11 +42,6 @@ from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
-from snuba.subscriptions.entity_subscription import (
-    ENTITY_KEY_TO_SUBSCRIPTION_MAPPER,
-    EntitySubscription,
-    InvalidSubscriptionError,
-)
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -172,9 +172,7 @@ class SubscriptionData:
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SubscriptionData:
-        entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](
-            data_dict=data
-        )
+        entity_subscription = get_entity_subscription(entity_key)(data_dict=data)
 
         return SubscriptionData(
             project_id=data["project_id"],

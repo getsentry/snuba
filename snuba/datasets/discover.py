@@ -3,8 +3,8 @@ import logging
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.conditions import (
     BINARY_OPERATORS,
     ConditionFunctions,

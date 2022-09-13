@@ -1,7 +1,7 @@
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.clickhouse.columns import UInt
-from snuba.query.processors.custom_function import (
+from snuba.query.processors.logical.custom_function import (
     CustomFunction,
     partial_function,
     simple_function,

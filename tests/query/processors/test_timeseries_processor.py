@@ -4,7 +4,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.transactions import TransactionsEntity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
@@ -17,7 +17,7 @@ from snuba.query.dsl import multiply
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.timeseries_processor import (
+from snuba.query.processors.logical.timeseries_processor import (
     TimeSeriesProcessor,
     extract_granularity_from_query,
 )
