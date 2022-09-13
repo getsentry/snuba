@@ -303,10 +303,27 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
     "additionalProperties": False,
 }
 
+
+V1_MIGRATION_GROUP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"const": "v1"},
+        "kind": {"const": "migration_group"},
+        "name": TYPE_STRING,
+        "optional": {"type": "boolean"},
+        "migrations": {
+            "type": "array",
+            "items": TYPE_STRING,
+        },
+    },
+    "required": ["name", "migrations"],
+}
+
 V1_ALL_SCHEMAS = {
     "dataset": V1_DATASET_SCHEMA,
     "entity": V1_ENTITY_SCHEMA,
     "entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA,
     "readable_storage": V1_READABLE_STORAGE_SCHEMA,
     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
+    "migration_group": V1_MIGRATION_GROUP_SCHEMA,
 }
