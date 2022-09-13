@@ -101,7 +101,7 @@ columns = ColumnSet(
         ("transaction_source", String()),
         ("timestamp", DateTime(Modifiers(readonly=True))),
         ("group_ids", Array(UInt(64))),
-        ("app_start_type", String(Modifiers(readonly=True))),
+        ("app_start_type", String()),
     ]
 )
 
