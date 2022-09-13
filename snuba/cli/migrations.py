@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 import click
 
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.errors import MigrationError

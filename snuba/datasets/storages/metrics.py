@@ -22,7 +22,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.datasets.metrics_aggregate_processor import (
     CounterAggregateProcessor,
     DistributionsAggregateProcessor,

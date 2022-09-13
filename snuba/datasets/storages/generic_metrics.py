@@ -24,7 +24,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.processors import QueryProcessor
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
