@@ -28,6 +28,7 @@ from snuba.query.processors.physical.replaced_groups import (
 )
 from snuba.query.processors.physical.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
+from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.physical.type_condition_optimizer import (
     TypeConditionOptimizer,
 )
@@ -164,6 +165,7 @@ prewhere_candidates = [
 
 query_processors = [
     UniqInSelectAndHavingProcessor(),
+    TupleUnaliaser(),
     PostReplacementConsistencyEnforcer(
         project_column="project_id",
         replacer_state_name=ReplacerState.ERRORS,

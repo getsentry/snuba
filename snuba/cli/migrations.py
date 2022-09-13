@@ -28,7 +28,7 @@ def list() -> None:
     check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
-        click.echo(group.value)
+        click.echo(group)
         for migration_id, status, blocking in group_migrations:
             symbol = {
                 Status.COMPLETED: "X",
