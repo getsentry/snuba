@@ -575,13 +575,22 @@ class TestSnQLApi(BaseApiTest):
         assert len(data) == 1
         assert data[0]["array_spans_exclusive_time"] > 0
 
-    def test_app_start_type(self) -> None:
+    @pytest.mark.parametrize(
+        "url, entity",
+        [
+            pytest.param("/transactions/snql", "transactions", id="transactions"),
+            pytest.param(
+                "/discover/snql", "discover_transactions", id="discover_transactions"
+            ),
+        ],
+    )
+    def test_app_start_type(self, url: str, entity: str) -> None:
         response = self.post(
-            "/discover/snql",
+            url,
             data=json.dumps(
                 {
                     "query": f"""
-                    MATCH (discover_transactions)
+                    MATCH ({entity})
                     SELECT count() AS count
                     WHERE
                         finish_ts >= toDateTime('{self.base_time.isoformat()}') AND
