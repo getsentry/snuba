@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
-from snuba.datasets.sharding import SENTRY_LOGICAL_PARTITIONS
+from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -29,9 +29,9 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-# The number of physical slices that we will need to map resources to
+# The number of physical partitions that we will need to map resources to
 # for dataset partitioning
-LOCAL_PHYSICAL_SLICES = 1
+LOCAL_PHYSICAL_PARTITIONS = 1
 # Mapping of logical (key) to physical (value) partitions for storages
 # that are partitioned in Snuba resources
 DATASET_PARTITION_MAPPING: Mapping[str, int] = {
