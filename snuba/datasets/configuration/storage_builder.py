@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clusters.storage_set_key import register_storage_set_key
+from snuba.clusters.storage_sets import StorageSetKey, register_storage_set_key
 from snuba.datasets.configuration.json_schema import (
     V1_READABLE_STORAGE_SCHEMA,
     V1_WRITABLE_STORAGE_SCHEMA,
@@ -66,7 +66,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
             local_table_name=config[SCHEMA]["local_table_name"],
             dist_table_name=config[SCHEMA]["dist_table_name"],
-            storage_set_key=register_storage_set_key(config[STORAGE][SET_KEY]),
+            storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
         ),
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
