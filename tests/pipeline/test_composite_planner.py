@@ -8,7 +8,7 @@ import pytest
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.clusters.cluster import get_cluster
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors

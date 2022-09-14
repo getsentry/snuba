@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.utils.schemas import Array, Column, DateTime, Float, Nested, String, UInt

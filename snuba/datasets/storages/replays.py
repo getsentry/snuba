@@ -8,7 +8,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
 from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, IPv4, IPv6
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.replays_processor import ReplaysProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage

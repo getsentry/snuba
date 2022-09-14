@@ -11,7 +11,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.functions_processor import FunctionsMessageProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage

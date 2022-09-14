@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations import migration, operations

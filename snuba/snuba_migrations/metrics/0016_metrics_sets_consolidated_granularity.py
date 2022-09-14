@@ -1,7 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import AggregateFunction, Column, UInt
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.snuba_migrations.metrics.templates import (
     get_consolidated_mv_name,

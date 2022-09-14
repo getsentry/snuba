@@ -1,7 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import UInt
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,

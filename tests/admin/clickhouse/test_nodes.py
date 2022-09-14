@@ -2,7 +2,7 @@ from unittest import mock
 
 from snuba.admin.clickhouse.nodes import _get_local_nodes
 from snuba.clusters.cluster import _get_storage_set_cluster_map
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.storage_key import StorageKey
 
 _OG_CLUSTER_MAP = _get_storage_set_cluster_map()

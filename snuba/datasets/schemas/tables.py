@@ -7,7 +7,7 @@ from typing import Optional, Sequence
 from snuba import util
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.cluster import get_cluster
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.expressions import FunctionCall
 

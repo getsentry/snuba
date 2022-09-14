@@ -1,7 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree

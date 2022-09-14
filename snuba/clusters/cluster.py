@@ -20,8 +20,7 @@ from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clusters.storage_set_key import StorageSetKey
-from snuba.clusters.storage_sets import DEV_STORAGE_SETS
+from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
 from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException

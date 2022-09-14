@@ -2,7 +2,7 @@ import pytest
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseCluster
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import table_engines
 
 single_node_cluster = ClickhouseCluster(

@@ -7,8 +7,7 @@ import sentry_sdk
 from snuba.clickhouse.processors import CompositeQueryProcessor, QueryProcessor
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
-from snuba.clusters.storage_set_key import StorageSetKey
-from snuba.clusters.storage_sets import is_valid_storage_set_combination
+from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,

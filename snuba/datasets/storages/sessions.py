@@ -11,7 +11,7 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.sessions_processor import SessionsProcessor
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage

@@ -8,7 +8,7 @@ from snuba.clusters.cluster import (
     ClickhouseWriterOptions,
     get_cluster,
 )
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat

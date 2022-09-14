@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Sequence, cast
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey

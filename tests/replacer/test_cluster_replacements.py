@@ -16,7 +16,7 @@ import pytest
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseNode
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_replacer import NEEDS_FINAL, LegacyReplacement
 from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages.factory import get_writable_storage

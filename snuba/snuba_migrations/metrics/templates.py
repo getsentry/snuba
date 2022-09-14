@@ -9,7 +9,7 @@ from snuba.clickhouse.columns import (
     Nested,
     UInt,
 )
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers

@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import get_cluster
-from snuba.clusters.storage_set_key import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.pipeline.plans_selector import select_best_plans
