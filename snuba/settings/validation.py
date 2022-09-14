@@ -1,5 +1,7 @@
 from typing import Any, Mapping, MutableMapping
 
+from snuba.datasets.sharding import SENTRY_LOGICAL_PARTITIONS
+
 
 class InvalidTopicError(ValueError):
     pass
@@ -84,7 +86,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
-    for logical_part in range(0, locals["SENTRY_LOGICAL_PARTITIONS"]):
+    for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
         physical_part = locals["DATASET_PARTITION_MAPPING"].get(str(logical_part))
         slice_count = locals["LOCAL_PHYSICAL_SLICES"]
         assert (
