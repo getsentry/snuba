@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Dict, Iterator
 
 HARDCODED_STORAGE_SET_KEYS = {
@@ -36,7 +38,7 @@ class _StorageSetKey(type):
 
         return StorageSetKey(attr.lower())
 
-    def __iter__(self) -> Iterator[StorageSetKey]:  # noqa
+    def __iter__(self) -> Iterator[StorageSetKey]:
         return iter(
             StorageSetKey(value)
             for value in {

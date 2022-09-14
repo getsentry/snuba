@@ -4,7 +4,7 @@ from typing import Callable, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
 

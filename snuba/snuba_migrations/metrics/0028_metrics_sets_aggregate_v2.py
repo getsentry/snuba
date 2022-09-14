@@ -1,7 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers

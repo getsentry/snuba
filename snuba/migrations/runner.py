@@ -14,7 +14,7 @@ from snuba.clusters.cluster import (
     ClickhouseNodeType,
     get_cluster,
 )
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,

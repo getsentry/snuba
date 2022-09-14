@@ -3,7 +3,7 @@ from datetime import datetime
 import pytz
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,

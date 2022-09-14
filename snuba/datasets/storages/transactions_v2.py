@@ -1,5 +1,5 @@
 from snuba import util
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage

@@ -4,7 +4,7 @@ import time
 from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.migrations import migration, operations
 
 TABLE_NAME = "transactions_local"

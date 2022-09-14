@@ -6,7 +6,7 @@ import pytest
 
 from snuba import settings
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage

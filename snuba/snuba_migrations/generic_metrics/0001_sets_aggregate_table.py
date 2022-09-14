@@ -9,7 +9,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import (
     hash_map_int_column_definition,
     hash_map_int_key_str_value_column_definition,

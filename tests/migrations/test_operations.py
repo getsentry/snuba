@@ -2,7 +2,7 @@ import os
 from typing import Sequence
 
 from snuba.clickhouse.columns import Column, String, UInt
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import (
     AddColumn,

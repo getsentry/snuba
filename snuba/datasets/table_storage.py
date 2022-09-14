@@ -12,7 +12,7 @@ from snuba.clusters.cluster import (
     ClickhouseWriterOptions,
     get_cluster,
 )
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.processor import MessageProcessor

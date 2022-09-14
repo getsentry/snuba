@@ -4,7 +4,7 @@ from typing import Mapping, Optional
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clusters.cluster import ClickhouseCluster
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_set_key import StorageSetKey
 
 
 class TableEngine(ABC):

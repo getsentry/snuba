@@ -71,7 +71,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
             raise ValueError(f"Invalid topic value {key}")
 
     # Validate cluster configuration
-    from snuba.clusters.storage_sets import StorageSetKey
+    from snuba.clusters.storage_set_key import StorageSetKey
 
     storage_set_to_cluster: MutableMapping[StorageSetKey, Any] = {}
 
