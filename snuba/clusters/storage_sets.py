@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, FrozenSet, Iterator
 
-HARDCODED_STORAGE_SET_KEYS = {
+_HARDCODED_STORAGE_SET_KEYS = {
     "CDC": "cdc",
     "DISCOVER": "discover",
     "EVENTS": "events",
@@ -31,7 +31,7 @@ _REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
 class _StorageSetKey(type):
     def __getattr__(self, attr: str) -> "StorageSetKey":
         if (
-            attr not in HARDCODED_STORAGE_SET_KEYS
+            attr not in _HARDCODED_STORAGE_SET_KEYS
             and attr not in _REGISTERED_STORAGE_SET_KEYS
         ):
             raise AttributeError(attr)
@@ -42,7 +42,7 @@ class _StorageSetKey(type):
         return iter(
             StorageSetKey(value)
             for value in {
-                **HARDCODED_STORAGE_SET_KEYS,
+                **_HARDCODED_STORAGE_SET_KEYS,
                 **_REGISTERED_STORAGE_SET_KEYS,
             }.values()
         )
