@@ -25,14 +25,14 @@ HARDCODED_STORAGE_SET_KEYS = {
 }
 
 
-REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
+_REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
 
 
 class _StorageSetKey(type):
     def __getattr__(self, attr: str) -> "StorageSetKey":
         if (
             attr not in HARDCODED_STORAGE_SET_KEYS
-            and attr not in REGISTERED_STORAGE_SET_KEYS
+            and attr not in _REGISTERED_STORAGE_SET_KEYS
         ):
             raise AttributeError(attr)
 
@@ -43,7 +43,7 @@ class _StorageSetKey(type):
             StorageSetKey(value)
             for value in {
                 **HARDCODED_STORAGE_SET_KEYS,
-                **REGISTERED_STORAGE_SET_KEYS,
+                **_REGISTERED_STORAGE_SET_KEYS,
             }.values()
         )
 
@@ -76,7 +76,7 @@ class StorageSetKey(metaclass=_StorageSetKey):
 
 
 def register_storage_set_key(key: str) -> StorageSetKey:
-    REGISTERED_STORAGE_SET_KEYS[key.upper()] = key.lower()
+    _REGISTERED_STORAGE_SET_KEYS[key.upper()] = key.lower()
     return StorageSetKey(key)
 
 
