@@ -30,11 +30,11 @@ DISABLED_DATASETS: Set[str] = set()
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
 # The number of physical partitions that we will need to map resources to
-# for dataset partitioning
+# for storage partitioning
 LOCAL_PHYSICAL_PARTITIONS = 1
 # Mapping of logical (key) to physical (value) partitions for storages
 # that are partitioned in Snuba resources
-DATASET_PARTITION_MAPPING: Mapping[str, int] = {
+LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
     str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
 }
 # Storage names to apply dataset partitioning to

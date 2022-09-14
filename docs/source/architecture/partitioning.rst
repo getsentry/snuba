@@ -10,9 +10,9 @@ datasets and storages that span multiple physical resources
 etc.) with the same schema. Across Sentry, data records will
 have a logical partition assignment based on the data's organization_id. In Snuba,
 we maintain a mapping of logical to physical partitions in
-``settings.DATASET_PARTITION_MAPPING``.
+``settings.LOGICAL_PARTITION_MAPPING``.
 
-In a future revision, this ``settings.DATASET_PARTITION_MAPPING`` will be
+In a future revision, this ``settings.LOGICAL_PARTITION_MAPPING`` will be
 used along with ``settings.PARTITIONED_STORAGES`` to map queries and incoming
 data from consumers to different ClickHouse clusters by overriding the
 StorageSet key that exists in configuration.
@@ -25,7 +25,7 @@ Add the logical:physical mapping
 --------------------------------
 To add a physical partition to the logical:physical mapping, or reshard, increment the
 value of ``settings.LOCAL_PHYSICAL_PARTITIONS`` and change
-the mapping of relevant partitions in ``settings.DATASET_PARTITION_MAPPING``.
+the mapping of relevant partitions in ``settings.LOGICAL_PARTITION_MAPPING``.
 Every logical partition **must** be assigned to a physical partition and the
 valid values of physical partitions are in the range
 of ``[0,settings.LOCAL_PHYSICAL_PARTITIONS)``.

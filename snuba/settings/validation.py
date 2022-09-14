@@ -87,7 +87,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 pass
 
     for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
-        physical_part = locals["DATASET_PARTITION_MAPPING"].get(str(logical_part))
+        physical_part = locals["LOGICAL_PARTITION_MAPPING"].get(str(logical_part))
         slice_count = locals["LOCAL_PHYSICAL_PARTITIONS"]
         assert (
             physical_part is not None
