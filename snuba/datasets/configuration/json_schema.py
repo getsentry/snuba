@@ -317,6 +317,7 @@ V1_MIGRATION_GROUP_SCHEMA = {
         },
     },
     "required": ["name", "migrations"],
+    "additionalProperties": False,
 }
 
 V1_ALL_SCHEMAS = {

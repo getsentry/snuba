@@ -104,3 +104,34 @@ def test_invalid_query_processor() -> None:
     with pytest.raises(ValidationError) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
     assert e.value.message == "5 is not of type 'string'"
+
+
+def test_unexpected_key() -> None:
+    config = {
+        "version": "v1",
+        "kind": "readable_storage",
+        "name": "",
+        "storage": {"key": "1", "set_key": "x"},
+        "schema": {"columns": []},
+        "query_processors": [],
+        "extra": "",
+    }
+    with pytest.raises(ValidationError) as e:
+        validate(config, V1_READABLE_STORAGE_SCHEMA)
+    assert (
+        e.value.message
+        == "Additional properties are not allowed ('extra' was unexpected)"
+    )
+
+
+def test_missing_required_key() -> None:
+    config = {
+        "version": "v1",
+        "name": "",
+        "storage": {"key": "1", "set_key": "x"},
+        "schema": {"columns": []},
+        "query_processors": [],
+    }
+    with pytest.raises(ValidationError) as e:
+        validate(config, V1_READABLE_STORAGE_SCHEMA)
+    assert e.value.message == "'kind' is a required property"
