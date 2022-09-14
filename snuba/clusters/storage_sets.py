@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, FrozenSet, Iterator
+from typing import Any, FrozenSet, Iterator
 
 HARDCODED_STORAGE_SET_KEYS = {
     "CDC": "cdc",
@@ -25,7 +25,7 @@ HARDCODED_STORAGE_SET_KEYS = {
 }
 
 
-REGISTERED_STORAGE_SET_KEYS: Dict[str, str] = {}
+REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
 
 
 class _StorageSetKey(type):
