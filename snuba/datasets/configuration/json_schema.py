@@ -178,7 +178,6 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
-    "additionalProperties": False,
 }
 
 
@@ -192,7 +191,6 @@ V1_READABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
     },
-    "additionalProperties": False,
 }
 
 V1_ENTITY_SCHEMA = {
@@ -219,7 +217,6 @@ V1_ENTITY_SCHEMA = {
         "validators",
         "required_time_column",
     ],
-    "additionalProperties": False,
 }
 
 V1_DATASET_SCHEMA = {
@@ -234,7 +231,6 @@ V1_DATASET_SCHEMA = {
             "properties": {"default": TYPE_STRING, "all": TYPE_STRING_ARRAY},
         },
     },
-    "additionalProperties": False,
 }
 
 V1_ENTITY_SUBSCIPTION_SCHEMA = {
@@ -251,7 +247,6 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
         "kind",
         "name",
     ],
-    "additionalProperties": False,
 }
 
 
@@ -268,7 +263,6 @@ V1_MIGRATION_GROUP_SCHEMA = {
         },
     },
     "required": ["name", "migrations"],
-    "additionalProperties": False,
 }
 
 V1_ALL_SCHEMAS = {
