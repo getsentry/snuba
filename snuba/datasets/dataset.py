@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import abstractmethod
 from typing import Sequence
 
 from snuba.datasets.entities.factory import get_entity
@@ -40,6 +39,9 @@ class Dataset:
     manipulate the lower layer objects.
     """
 
+    def __init__(self, *, all_entities: Sequence[Entity]) -> None:
+        self.__all_entities = all_entities
+
     def is_experimental(self) -> bool:
         """Marks the dataset as experimental. Healthchecks failing on this
         dataset:
@@ -49,9 +51,8 @@ class Dataset:
         """
         return False
 
-    @abstractmethod
     def get_all_entities(self) -> Sequence[Entity]:
-        return []
+        return self.__all_entities
 
     def get_query_pipeline_builder(self) -> DatasetQueryPipelineBuilder:
         return DatasetQueryPipelineBuilder()

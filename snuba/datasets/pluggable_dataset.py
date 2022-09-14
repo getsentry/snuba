@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import Entity
 
 
 class PluggableDataset(Dataset):
@@ -23,15 +22,14 @@ class PluggableDataset(Dataset):
         all_entities: list[EntityKey],
         is_experimental: bool | None,
     ) -> None:
-        self.__all_entities = [get_entity(entity_key) for entity_key in all_entities]
+        super().__init__(
+            all_entities=[get_entity(entity_key) for entity_key in all_entities]
+        )
         self.name = name
         self.__is_experimental = is_experimental or False
 
     def is_experimental(self) -> bool:
         return self.__is_experimental
-
-    def get_all_entities(self) -> Sequence[Entity]:
-        return self.__all_entities
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, PluggableDataset) and self.name == other.name
