@@ -604,14 +604,81 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset) -> RespTuple:
+        # This endpoint is only used by sentry, this will be deprecated after https://github.com/getsentry/sentry/pull/38877 is merged
+        all_entities = dataset.get_all_entities()
+        assert len(all_entities) > 0
+        entity = all_entities[0]
+        return _write_to_entity(entity=entity)
+
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
     def write_to_entity(*, entity: EntityType) -> RespTuple:
         return _write_to_entity(entity=entity)
 
-    @application.route(
-        "/tests/<dataset:dataset>/<entity:entity>/eventstream", methods=["POST"]
-    )
-    def eventstream(*, dataset: Dataset, entity: Entity) -> RespTuple:
+    @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
+    def eventstream_v1(*, dataset: Dataset) -> RespTuple:
+        # This endpoint is only used by sentry, this will be deprecated after https://github.com/getsentry/sentry/pull/38877 is merged
+        record = json.loads(http_request.data)
+
+        version = record[0]
+        if version != 2:
+            raise RuntimeError("Unsupported protocol version: %s" % record)
+
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("topic"), 0),
+            0,
+            KafkaPayload(None, http_request.data, []),
+            datetime.now(),
+        )
+
+        type_ = record[1]
+
+        all_entities = dataset.get_all_entities()
+        assert len(all_entities) > 0
+        entity = all_entities[
+            0
+        ]  # Tests which use this endpoint only send the events or transactions dataset which only have 1 entity
+        storage = entity.get_writable_storage()
+        assert storage is not None
+
+        if type_ == "insert":
+            from arroyo.processing.strategies.streaming import (
+                KafkaConsumerStrategyFactory,
+            )
+
+            from snuba.consumers.consumer import build_batch_writer, process_message
+
+            table_writer = storage.get_table_writer()
+            stream_loader = table_writer.get_stream_loader()
+            strategy = KafkaConsumerStrategyFactory(
+                stream_loader.get_pre_filter(),
+                functools.partial(
+                    process_message, stream_loader.get_processor(), "consumer_grouup"
+                ),
+                build_batch_writer(table_writer, metrics=metrics),
+                max_batch_size=1,
+                max_batch_time=1.0,
+                processes=None,
+                input_block_size=None,
+                output_block_size=None,
+            ).create_with_partitions(lambda offsets: None, {})
+            strategy.submit(message)
+            strategy.close()
+            strategy.join()
+        else:
+            from snuba.replacer import ReplacerWorker
+
+            worker = ReplacerWorker(storage, "consumer_group", metrics=metrics)
+            processed = worker.process_message(message)
+            if processed is not None:
+                batch = [processed]
+                worker.flush_batch(batch)
+
+        return ("ok", 200, {"Content-Type": "text/plain"})
+
+    @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
+    def eventstream(*, entity: Entity) -> RespTuple:
         record = json.loads(http_request.data)
 
         version = record[0]

@@ -17,6 +17,9 @@ class BadEntity(mock.MagicMock):
 
 
 class ExperimentalDataset(Dataset):
+    def __init__(self) -> None:
+        super().__init__(all_entities=[])
+
     @classmethod
     def is_experimental(cls) -> bool:
         return True
@@ -26,6 +29,9 @@ class ExperimentalDataset(Dataset):
 
 
 class BadDataset(Dataset):
+    def __init__(self) -> None:
+        super().__init__(all_entities=[])
+
     @classmethod
     def is_experimental(cls) -> bool:
         return False

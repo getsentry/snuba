@@ -5,7 +5,6 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.query.conditions import (
     BINARY_OPERATORS,
     ConditionFunctions,
@@ -30,9 +29,9 @@ class DiscoverDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(
             all_entities=[
-                get_entity(EntityKey.DISCOVER),
-                get_entity(EntityKey.DISCOVER_EVENTS),
-                get_entity(EntityKey.DISCOVER_TRANSACTIONS),
+                EntityKey.DISCOVER,
+                EntityKey.DISCOVER_EVENTS,
+                EntityKey.DISCOVER_TRANSACTIONS,
             ]
         )
 

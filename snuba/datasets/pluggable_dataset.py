@@ -4,7 +4,6 @@ from typing import Any
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 
 
 class PluggableDataset(Dataset):
@@ -22,9 +21,7 @@ class PluggableDataset(Dataset):
         all_entities: list[EntityKey],
         is_experimental: bool | None,
     ) -> None:
-        super().__init__(
-            all_entities=[get_entity(entity_key) for entity_key in all_entities]
-        )
+        super().__init__(all_entities=all_entities)
         self.name = name
         self.__is_experimental = is_experimental or False
 
