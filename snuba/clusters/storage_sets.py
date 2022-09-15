@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, FrozenSet, Iterator
+from typing import Any, FrozenSet, Iterator, Optional
 
 _HARDCODED_STORAGE_SET_KEYS = {
     "CDC": "cdc",
@@ -62,7 +62,7 @@ class StorageSetKey(metaclass=_StorageSetKey):
     Storage sets are assigned to clusters via configuration.
     """
 
-    def __init__(self, value: str):
+    def __init__(self, value: str, slice_id: Optional[int] = None):
         self.value = value
 
     def __hash__(self) -> int:
@@ -72,7 +72,10 @@ class StorageSetKey(metaclass=_StorageSetKey):
         return isinstance(other, StorageSetKey) and other.value == self.value
 
     def __repr__(self) -> str:
-        return f"StorageSetKey.{self.value.upper()}"
+        return f"slice(StorageSetKey.{self.value.upper()}, {self.slice_id})"
+
+    def for_slice(self, slice_id: Optional[int]) -> None:
+        self.slice_id = slice_id
 
 
 def register_storage_set_key(key: str) -> StorageSetKey:

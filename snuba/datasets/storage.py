@@ -39,7 +39,8 @@ class Storage(ABC):
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
 
-    def get_cluster(self) -> ClickhouseCluster:
+    def get_cluster(self, slice_id: Optional[int]) -> ClickhouseCluster:
+        self.__storage_set_key.for_slice(slice_id)
         return get_cluster(self.__storage_set_key)
 
     def get_schema(self) -> Schema:
