@@ -2026,9 +2026,7 @@ class TestApi(SimpleAPITest):
                 "data": {"received": time.mktime(self.base_time.timetuple())},
             },
         )
-        response = self.app.post(
-            "/tests/events/events/eventstream", data=json.dumps(event)
-        )
+        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
         assert response.status_code == 200
 
         query = {
@@ -2057,9 +2055,7 @@ class TestApi(SimpleAPITest):
                 ),
             },
         )
-        response = self.app.post(
-            "/tests/events/events/eventstream", data=json.dumps(event)
-        )
+        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
         assert response.status_code == 200
 
         result = json.loads(self.post(json.dumps(query)).data)
