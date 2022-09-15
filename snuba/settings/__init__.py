@@ -38,7 +38,7 @@ LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
     str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
 }
 # Storage names to apply dataset partitioning to
-PARTITIONED_STORAGES: Set[str] = {"migrations", "generic_metrics_distributions"}
+PARTITIONED_STORAGES: Set[str] = set()
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
