@@ -21,12 +21,13 @@ def migrations() -> None:
 
 
 @migrations.command()
-def list() -> None:
+@click.option("--partition-id")
+def list(partition_id: Optional[int]) -> None:
     """
     Lists migrations and their statuses
     """
     check_clickhouse_connections()
-    runner = Runner()
+    runner = Runner(partition_id)
     for group, group_migrations in runner.show_all():
         click.echo(group)
         for migration_id, status, blocking in group_migrations:
@@ -52,13 +53,16 @@ def list() -> None:
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
-def migrate(force: bool, log_level: Optional[str] = None) -> None:
+@click.option("--partition-id")
+def migrate(
+    force: bool, partition_id: Optional[int] = None, log_level: Optional[str] = None
+) -> None:
     """
     Runs all migrations. Blocking migrations will not be run unless --force is passed.
     """
     setup_logging(log_level)
     check_clickhouse_connections()
-    runner = Runner()
+    runner = Runner(partition_id)
 
     try:
         runner.run_all(force=force)
@@ -77,12 +81,14 @@ def migrate(force: bool, log_level: Optional[str] = None) -> None:
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
+@click.option("--partition-id")
 def run(
     group: str,
     migration_id: str,
     force: bool,
     fake: bool,
     dry_run: bool,
+    partition_id: Optional[int] = None,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -96,7 +102,7 @@ def run(
     if not dry_run:
         check_clickhouse_connections()
 
-    runner = Runner()
+    runner = Runner(partition_id)
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
 

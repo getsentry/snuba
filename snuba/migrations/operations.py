@@ -17,8 +17,12 @@ class SqlOperation(ABC):
     def storage_set(self) -> StorageSetKey:
         return self._storage_set
 
-    def execute(self, local: bool) -> None:
-        cluster = get_cluster(self._storage_set)
+    def execute(self, local: bool, partition_id: Optional[int]) -> None:
+        cluster = get_cluster(
+            self._storage_set.at_partition(partition_id)
+            if partition_id
+            else self._storage_set
+        )
 
         nodes = cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
 

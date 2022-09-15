@@ -60,8 +60,13 @@ class MigrationDetails(NamedTuple):
 
 
 class Runner:
-    def __init__(self) -> None:
-        migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
+    def __init__(self, partition_id: Optional[int]) -> None:
+        migrations_cluster = get_cluster(
+            StorageSetKey.MIGRATIONS.at_partition(partition_id)
+            if partition_id
+            else StorageSetKey.MIGRATIONS
+        )
+        self.__partition_id = partition_id
         self.__table_name = (
             LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
         )
@@ -209,6 +214,7 @@ class Runner:
             migration_id,
             logger,
             partial(self._update_migration_status, migration_key),
+            self.__partition_id,
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
 

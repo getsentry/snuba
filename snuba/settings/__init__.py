@@ -38,7 +38,7 @@ LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
     str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
 }
 # Storage names to apply dataset partitioning to
-PARTITIONED_STORAGES: Set[str] = set()
+PARTITIONED_STORAGES: Set[str] = {"migrations", "generic_metrics_distributions"}
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -68,6 +68,19 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "replays",
             "generic_metrics_sets",
             "generic_metrics_distributions",
+        },
+        "single_node": True,
+    },
+    {
+        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "user": os.environ.get("CLICKHOUSE_USER", "default"),
+        "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+        "database": os.environ.get("CLICKHOUSE_DATABASE", "slice_1_default"),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+        "storage_sets": {
+            "#slice(migrations,1)",
+            "#slice(generic_metrics_sets,1)",
         },
         "single_node": True,
     },

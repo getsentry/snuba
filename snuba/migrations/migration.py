@@ -134,7 +134,7 @@ class ClickhouseNodeMigration(Migration, ABC):
             self.__dry_run(self.forwards_local(), self.forwards_dist())
             return
 
-        migration_id, logger, update_status = context
+        migration_id, logger, update_status, partition_id = context
         logger.info(f"Running migration: {migration_id}")
 
         # The table does not exist before the first migration is run
@@ -142,9 +142,9 @@ class ClickhouseNodeMigration(Migration, ABC):
         if not self.is_first_migration():
             update_status(Status.IN_PROGRESS)
         for op in self.forwards_local():
-            op.execute(local=True)
+            op.execute(local=True, partition_id=partition_id)
         for op in self.forwards_dist():
-            op.execute(local=False)
+            op.execute(local=False, partition_id=partition_id)
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
@@ -153,13 +153,13 @@ class ClickhouseNodeMigration(Migration, ABC):
             self.__dry_run(self.backwards_local(), self.backwards_dist())
             return
 
-        migration_id, logger, update_status = context
+        migration_id, logger, update_status, partition_id = context
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
         for op in self.backwards_dist():
-            op.execute(local=False)
+            op.execute(local=False, partition_id=partition_id)
         for op in self.backwards_local():
-            op.execute(local=True)
+            op.execute(local=True, partition_id=partition_id)
         logger.info(f"Finished reversing: {migration_id}")
 
         # The migrations table will be destroyed if the first

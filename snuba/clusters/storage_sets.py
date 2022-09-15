@@ -74,6 +74,10 @@ class StorageSetKey(metaclass=_StorageSetKey):
     def __repr__(self) -> str:
         return f"StorageSetKey.{self.value.upper()}"
 
+    def at_partition(self, partition_id: int = 0) -> StorageSetKey:
+        key = register_storage_set_key(f"#slice({self.value.lower()},{partition_id})")
+        return key
+
 
 def register_storage_set_key(key: str) -> StorageSetKey:
     _REGISTERED_STORAGE_SET_KEYS[key.upper()] = key.lower()

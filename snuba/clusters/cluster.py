@@ -105,18 +105,7 @@ class Cluster(ABC, Generic[TWriterOptions]):
         self.__storage_sets = storage_sets
 
     def get_storage_set_keys(self) -> Set[StorageSetKey]:
-        all_storage_sets = set(key.value for key in StorageSetKey)
-
-        storage_set_keys = set()
-
-        for storage_set in self.__storage_sets:
-            # We ignore invalid storage set keys since new storage sets will
-            # need to be registered to configuration before they can be used
-            # in Snuba.
-            if storage_set in all_storage_sets:
-                storage_set_keys.add(StorageSetKey(storage_set))
-
-        return storage_set_keys
+        return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
     def get_reader(self) -> Reader:
@@ -413,6 +402,7 @@ def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
     res = _get_storage_set_cluster_map().get(storage_set_key, None)
+    # breakpoint()
     if res is None:
         raise UndefinedClickhouseCluster(
             f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"
