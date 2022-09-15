@@ -23,7 +23,7 @@ Adding a physical partition
 
 Add the logical:physical mapping
 --------------------------------
-To add a physical partition to the logical:physical mapping, or reshard, increment the
+To add a physical partition to the logical:physical mapping, or repartition, increment the
 value of ``settings.LOCAL_PHYSICAL_PARTITIONS`` and change
 the mapping of relevant partitions in ``settings.LOGICAL_PARTITION_MAPPING``.
 Every logical partition **must** be assigned to a physical partition and the
