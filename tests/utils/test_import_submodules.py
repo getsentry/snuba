@@ -43,16 +43,16 @@ class {prefix}(SomeBase):
     importlib.invalidate_caches()
 
 
-def test_no_import_no_lookup(temp_package_directory):
-    from tests.utils.test_package import SomeBase
+def test_no_import_no_lookup(temp_package_directory) -> None:
+    from tests.utils.test_package import SomeBase  # type: ignore
 
     for prefix in ["A", "B", "C"]:
         with pytest.raises(InvalidConfigKeyError):
             assert SomeBase.class_from_name(prefix).__name__ == prefix
 
 
-def test_import_submodules(temp_package_directory):
-    from tests.utils.test_package import SomeBase
+def test_import_submodules(temp_package_directory) -> None:
+    from tests.utils.test_package import SomeBase  # type: ignore
 
     import_submodules_in_directory(test_package_dir, "tests.utils.test_package")
     for prefix in ["A", "B", "C"]:
