@@ -1,3 +1,5 @@
+import importlib
+import os
 from abc import ABCMeta
 from typing import Any, Dict, Tuple, Type, cast
 
@@ -76,3 +78,15 @@ class RegisteredClass(ABCMeta):
             Type[Any],
             getattr(self, "_registry").get_class_from_name(name),
         )
+
+
+def import_submodules_in_directory(directory_path: str, package_root: str):
+    imported_modules = []
+    for fname in os.listdir(directory_path):
+        if fname == "__init__.py":
+            continue
+        module_name = fname.replace(".py", "")
+        module_str = f"{package_root}.{module_name}"
+        imported_modules.append(importlib.import_module(module_str))
+
+    return imported_modules
