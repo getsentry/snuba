@@ -2,6 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Sequence, Tuple
 
+from snuba import settings
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -18,6 +19,15 @@ class SqlOperation(ABC):
         return self._storage_set
 
     def execute(self, local: bool, partition_id: Optional[int]) -> None:
+        if (
+            partition_id is not None
+            and self._storage_set.value not in settings.PARTITIONED_STORAGE_SETS
+        ):
+            logging.info(
+                f"skipping migration on unpartitioned dataset {self._storage_set}, where partition_id is not none ({partition_id})"
+            )
+            return
+
         cluster = get_cluster(
             self._storage_set.at_partition(partition_id)
             if partition_id

@@ -402,7 +402,6 @@ def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
     res = _get_storage_set_cluster_map().get(storage_set_key, None)
-    # breakpoint()
     if res is None:
         raise UndefinedClickhouseCluster(
             f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"

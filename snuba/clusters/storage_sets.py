@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, FrozenSet, Iterator
+from typing import Any, FrozenSet, Iterator, Optional
+
+from snuba import settings
 
 _HARDCODED_STORAGE_SET_KEYS = {
     "CDC": "cdc",
@@ -74,7 +76,13 @@ class StorageSetKey(metaclass=_StorageSetKey):
     def __repr__(self) -> str:
         return f"StorageSetKey.{self.value.upper()}"
 
-    def at_partition(self, partition_id: int = 0) -> StorageSetKey:
+    def at_partition(self, partition_id: Optional[int] = None) -> StorageSetKey:
+        if (
+            not partition_id
+            or partition_id == 0
+            or self.value not in settings.PARTITIONED_STORAGE_SETS
+        ):
+            return self
         key = register_storage_set_key(f"#slice({self.value.lower()},{partition_id})")
         return key
 

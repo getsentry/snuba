@@ -66,8 +66,13 @@ class CodeMigration(Migration, ABC):
                 print(f"Non SQL operation - {desc}")
             return
 
-        migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
+        migration_id, logger, update_status, partition_id = context
+
+        if partition_id is not None:
+            logger.info(
+                f"Ignoring code migration {migration_id}, received partition ID {partition_id}"
+            )
+            return
         update_status(Status.IN_PROGRESS)
 
         for op in self.forwards_global():
@@ -83,7 +88,13 @@ class CodeMigration(Migration, ABC):
                 print(f"Non SQL operation - {desc}")
             return
 
-        migration_id, logger, update_status = context
+        migration_id, logger, update_status, partition_id = context
+        if partition_id is not None:
+            logger.info(
+                f"Ignoring code migration {migration_id}, received partition ID {partition_id}"
+            )
+            return
+
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
         for op in self.backwards_global():
