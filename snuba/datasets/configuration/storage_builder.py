@@ -16,6 +16,7 @@ from snuba.datasets.configuration.utils import (
     get_query_processors,
     parse_columns,
 )
+from snuba.datasets.configuration.validation.semantics import validate_storage_semantics
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import register_storage_key
@@ -49,6 +50,7 @@ def build_storage(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
     config = load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
+    validate_storage_semantics(config)
     storage_kwargs = __build_readable_storage_kwargs(config)
     if config[KIND] == "readable_storage":
         return ReadableTableStorage(**storage_kwargs)
