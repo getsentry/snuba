@@ -43,13 +43,19 @@ logger = logging.getLogger(__name__)
     multiple=True,
     required=True,
 )
+@click.option("--raw-events-topic", help="Topic to consume raw events from.")
+@click.option(
+    "--commit-log-topic",
+    help="Topic for committed offsets to be written to, triggering post-processing task(s)",
+)
 @click.option(
     "--consumer-group",
     default="snuba-consumers",
 )
 @click.option(
-    "--commit-log-topic",
-    help="Topic for committed offsets to be written to, triggering post-processing task(s)",
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--max-batch-size",
@@ -113,8 +119,10 @@ logger = logging.getLogger(__name__)
 )
 def multistorage_consumer(
     storage_names: Sequence[str],
-    consumer_group: str,
+    raw_events_topic: Optional[str],
     commit_log_topic: str,
+    consumer_group: str,
+    bootstrap_server: Sequence[str],
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -148,20 +156,23 @@ def multistorage_consumer(
         for key in (getattr(StorageKey, name.upper()) for name in storage_names)
     }
 
-    topics = {
-        storage.get_table_writer()
-        .get_stream_loader()
-        .get_default_topic_spec()
-        .topic_name
-        for storage in storages.values()
-    }
+    if raw_events_topic:
+        topic = Topic(raw_events_topic)
+    else:
+        topics = {
+            storage.get_table_writer()
+            .get_stream_loader()
+            .get_default_topic_spec()
+            .topic_name
+            for storage in storages.values()
+        }
 
-    # XXX: The ``StreamProcessor`` only supports a single topic at this time,
-    # but is easily modified. The topic routing in the processing strategy is a
-    # bit trickier (but also shouldn't be too bad.)
-    topic = Topic(topics.pop())
-    if topics:
-        raise ValueError("only one topic is supported")
+        # XXX: The ``StreamProcessor`` only supports a single topic at this time,
+        # but is easily modified. The topic routing in the processing strategy is a
+        # bit trickier (but also shouldn't be too bad.)
+        topic = Topic(topics.pop())
+        if topics:
+            raise ValueError("only one topic is supported")
 
     commit_log: Optional[Topic]
     if commit_log_topic:
@@ -214,6 +225,7 @@ def multistorage_consumer(
         strict_offset_reset=not no_strict_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
+        bootstrap_servers=bootstrap_server,
     )
 
     if cooperative_rebalancing is True:

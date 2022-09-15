@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.9.0
+
+### Various fixes & improvements
+
+- feat(slicing): add partition mapping (#3135) by @onewland
+- fix(MDC): Validate required fields and that no additional fields are added (#3137) by @rahul-kumar-saini
+- fix(MDC): Fix to ensure schema is in the correct place (#3136) by @evanh
+- feat(MDC): Validate configs in CI (#3128) by @rahul-kumar-saini
+- fix e2e tests for dogfood self-hosted changes (#3134) by @hubertdeng123
+- ref(MDC): Represent migrations in configuration (#3071) by @evanh
+- feat(transactions): Add app_start_type migration (#3124) by @philipphofmann
+- feat(upgrade): Similar query processors for both error storages (#3105) by @nikhars
+- ref(arroyo): Fix arroyo imports (#3132) by @lynnagara
+- fix(settings): Remove requirement of CDC and events to be on same cluster (#3126) by @nikhars
+- feat(discover): add group_ids to discover (#3104) by @udameli
+- ref(MDC): EntityKey enum to class (#3109) by @rahul-kumar-saini
+- feat(mdc): Load entity subscriptions from config (#3107) by @enochtangg
+- config(redis) set reinitialize_steps from settings (#3125) by @onewland
+- ref(MDC): consolidate query processors into one folder (#3098) by @volokluev
+- ref(EntityKey): Rename GROUPEDMESSAGES to GROUPEDMESSAGE (#3123) by @rahul-kumar-saini
+- feat(MDC): Generic Metrics Dataset loaded from Config (#3108) by @rahul-kumar-saini
+- ref: use internal pypi for prebuilt packages (#3100) by @asottile-sentry
+- feat: Add initial documentation for Dataset configuration (#3089) by @evanh
+- fix(mdc): use entity name for mapping when type is not sufficient (#3110) by @onewland
+- feat(migrations): Update ddl changes script with new path to snuba_migrations (#3103) by @lynnagara
+- ref(MDC): StorageKey enum to class (#3096) by @rahul-kumar-saini
+- feat(mdc) add configuration for generic metrics distributions (#3102) by @onewland
+- feat(mdc): Make translators, validators, and mappers registered classes (#3099) by @volokluev
+
+_Plus 32 more_
+
 ## 22.8.0
 
 ### Various fixes & improvements

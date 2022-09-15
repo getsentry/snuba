@@ -51,3 +51,26 @@ def test_topics_sync_in_settings_validator() -> None:
     # Restore the default settings Kafka topic map
     finally:
         all_settings["KAFKA_TOPIC_MAP"] = default_map
+
+
+def test_validation_catches_bad_partition_mapping() -> None:
+    all_settings = build_settings_dict()
+
+    assert all_settings["LOCAL_PHYSICAL_PARTITIONS"] == 1
+    part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
+    part_mapping["2"] = 1  # only slice 0 is valid if LOCAL_PHYSICAL_PARTITIONS is = 1
+
+    with pytest.raises(AssertionError):
+        validate_settings(all_settings)
+    part_mapping["2"] = 0
+
+
+def test_validation_catches_unmapped_logical_parts() -> None:
+    all_settings = build_settings_dict()
+
+    part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
+    del part_mapping["2"]
+
+    with pytest.raises(AssertionError):
+        validate_settings(all_settings)
+    part_mapping["2"] = 0
