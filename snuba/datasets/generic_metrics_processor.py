@@ -109,6 +109,7 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         tags = message["tags"]
         version = message.get("version", 1)
         assert isinstance(tags, Mapping), "Invalid tags type"
+        raw_values_index = self._get_raw_values_index(message)
 
         sorted_tag_items = sorted(tags.items())
         for key, value in sorted_tag_items:
@@ -118,14 +119,11 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
             if version == 1:
                 assert isinstance(value, int), "Tag value invalid"
                 indexed_values.append(value)
+                raw_values.append(raw_values_index.get(str(value), ""))
             elif version == 2:
                 assert isinstance(value, str), "Tag value invalid"
                 indexed_values.append(0)
                 raw_values.append(value)
-
-        if version == 1:
-            raw_values_index = self._get_raw_values_index(message)
-            raw_values = [raw_values_index.get(str(v), "") for v in indexed_values]
 
         processed = {
             "use_case_id": message["use_case_id"],
