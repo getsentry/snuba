@@ -25,8 +25,38 @@ def validate_storage_semantics(config: dict[str, Any]) -> None:
 
 
 def validate_storage_schema_semantics(schema: dict[str, Any]) -> None:
-    # TODO: Schema semantic validation
+    validate_column_semantics(schema["columns"])
     pass
+
+
+def validate_column_semantics(columns: list[dict[str, Any]]) -> None:
+
+    for col in columns:
+        __validate_schema_modifiers(col)
+        if col["type"] == "UInt":
+            if "args" not in col or list(col["args"].keys()) != ["size"]:
+                __raise(col["args"], "set of args for UInt")
+            if col["args"]["size"] not in (sizes := [8, 16, 32, 64, 128, 256]):
+                __raise(col["args"]["size"], f"UInt size {sizes}")
+        elif col["type"] == "Float":
+            if "args" not in col or list(col["args"].keys()) != ["size"]:
+                __raise(col["args"], "set of args for Float")
+            if col["args"]["size"] not in (sizes := [32, 64]):
+                __raise(col["args"]["size"], f"Float size {sizes}")
+        elif col["type"] == "Nested":
+            pass
+        elif col["type"] == "Array":
+            pass
+        elif col["type"] == "AggregateFunction":
+            pass
+
+
+def __validate_schema_modifiers(col: dict[str, Any]) -> None:
+    if "args" in col and "schema_modifiers" in col["args"]:
+        if not (modifiers := set(col["args"]["schema_modifiers"])).issubset(
+            {"readonly", "nullable"}
+        ):
+            __raise(modifiers.difference({"readonly", "nullable"}), "Schema Modifier")
 
 
 def validate_storage_query_processors_semantics(query_processors: list[str]) -> None:
@@ -77,5 +107,5 @@ def __validate_enum(value: str, type: Type[Enum]) -> None:
         __raise(value, type.__name__)
 
 
-def __raise(config_item: str, type: str) -> None:
+def __raise(config_item: Any, type: str) -> None:
     raise InvalidSemanticsError(f"{config_item} is not a valid {type}")
