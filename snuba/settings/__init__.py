@@ -29,9 +29,8 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-# The number of physical partitions that we will need to map resources to
-# for storage partitioning
-LOCAL_PHYSICAL_PARTITIONS = 1
+OVERRIDE_STORAGE_SET_KEYS: Mapping[str, Mapping[int, str]] = {}
+
 # Mapping of logical (key) to physical (value) partitions for storages
 # that are partitioned in Snuba resources
 LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {

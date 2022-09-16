@@ -403,7 +403,9 @@ class UndefinedClickhouseCluster(SerializableException):
     pass
 
 
-def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
+def get_cluster(
+    storage_set_key: StorageSetKey, slice_id: Optional[int]
+) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
     If the storage set key is not defined
@@ -412,6 +414,14 @@ def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
+
+    if slice_id:
+        sliced_key_name = settings.OVERRIDE_STORAGE_SET_KEYS[storage_set_key.value][
+            slice_id
+        ]
+        storage_set_key = StorageSetKey(sliced_key_name)
+
+    # we assume that below map will be updated accordingly with the new clusters
     res = _get_storage_set_cluster_map().get(storage_set_key, None)
     if res is None:
         raise UndefinedClickhouseCluster(
