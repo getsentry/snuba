@@ -1,6 +1,7 @@
 import importlib
 import os
 import shutil
+from typing import Any, Generator
 
 import pytest
 
@@ -14,7 +15,7 @@ test_package_dir = os.path.join(dir_path, "test_package")
 
 
 @pytest.fixture(scope="function")
-def temp_package_directory():
+def temp_package_directory() -> Generator[None, None, None]:
     os.mkdir(test_package_dir)
     init_file = """from snuba.utils.registered_class import RegisteredClass
 
@@ -43,7 +44,7 @@ class {prefix}(SomeBase):
     importlib.invalidate_caches()
 
 
-def test_no_import_no_lookup(temp_package_directory) -> None:
+def test_no_import_no_lookup(temp_package_directory: Any) -> None:
     from tests.utils.test_package import SomeBase  # type: ignore
 
     for prefix in ["A", "B", "C"]:
@@ -51,8 +52,8 @@ def test_no_import_no_lookup(temp_package_directory) -> None:
             assert SomeBase.class_from_name(prefix).__name__ == prefix
 
 
-def test_import_submodules(temp_package_directory) -> None:
-    from tests.utils.test_package import SomeBase  # type: ignore
+def test_import_submodules(temp_package_directory: Any) -> None:
+    from tests.utils.test_package import SomeBase
 
     import_submodules_in_directory(test_package_dir, "tests.utils.test_package")
     for prefix in ["A", "B", "C"]:

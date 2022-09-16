@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib
 import os
 from abc import ABCMeta
@@ -80,13 +82,17 @@ class RegisteredClass(ABCMeta):
         )
 
 
-def import_submodules_in_directory(directory_path: str, package_root: str):
-    imported_modules = []
+TModule = object
+
+
+def import_submodules_in_directory(
+    directory_path: str, package_root: str
+) -> list[TModule]:
+    imported_modules: list[object] = []
     for fname in os.listdir(directory_path):
         if fname == "__init__.py":
             continue
         module_name = fname.replace(".py", "")
         module_str = f"{package_root}.{module_name}"
         imported_modules.append(importlib.import_module(module_str))
-
     return imported_modules
