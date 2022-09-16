@@ -75,6 +75,7 @@ SET_MESSAGE_SHARED = {
 }
 
 SET_MESSAGE_TAG_VALUES_STRINGS = {
+    "version": 2,
     "use_case_id": "release-health",
     "org_id": 1,
     "project_id": 2,
@@ -86,20 +87,6 @@ SET_MESSAGE_TAG_VALUES_STRINGS = {
     # test enforce retention days of 30
     "retention_days": 22,
     "mapping_meta": MAPPING_META_TAG_VALUES_STRINGS,
-}
-
-SET_MESSAGE_TAG_VALUES_MIXED_STRINGS_INTS = {
-    "use_case_id": "release-health",
-    "org_id": 1,
-    "project_id": 2,
-    "metric_id": 1232341,
-    "type": "s",
-    "timestamp": timestamp,
-    "tags": {"10": "value-1", "20": 22, "30": 33},
-    "value": [324234, 345345, 456456, 567567],
-    # test enforce retention days of 30
-    "retention_days": 22,
-    "mapping_meta": MAPPING_META_TAG_VALUES_MIXED_STRINGS_INTS,
 }
 
 COUNTER_MESSAGE_SHARED = {
@@ -560,28 +547,6 @@ TEST_CASES_GENERIC = [
             }
         ],
         id="all tag values strings",
-    ),
-    pytest.param(
-        SET_MESSAGE_TAG_VALUES_MIXED_STRINGS_INTS,
-        [
-            {
-                "use_case_id": "release-health",
-                "org_id": 1,
-                "project_id": 2,
-                "metric_id": 1232341,
-                "timestamp": expected_timestamp,
-                "tags.key": [10, 20, 30],
-                "tags.indexed_value": [0, 22, 33],
-                "tags.raw_value": ["value-1", "value-2", "value-3"],
-                "metric_type": "set",
-                "set_values": [324234, 345345, 456456, 567567],
-                "materialization_version": 1,
-                "timeseries_id": ANY,
-                "retention_days": 30,
-                "granularities": [1, 2, 3],
-            }
-        ],
-        id="mixed tag values",
     ),
 ]
 

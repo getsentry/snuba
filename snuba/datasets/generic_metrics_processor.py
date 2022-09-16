@@ -107,31 +107,25 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         indexed_values: MutableSequence[int] = []
         raw_values: MutableSequence[str] = []
         tags = message["tags"]
+        version = message.get("version", 1)
         assert isinstance(tags, Mapping), "Invalid tags type"
 
         sorted_tag_items = sorted(tags.items())
         for key, value in sorted_tag_items:
-            assert key.isdigit() and (
-                isinstance(value, int) or isinstance(value, str)
-            ), "Tag key/value invalid"
-
+            assert key.isdigit(), "Tag key invalid"
             keys.append(int(key))
-            if isinstance(value, int):
+
+            if version == 1:
+                assert isinstance(value, int), "Tag value invalid"
                 indexed_values.append(value)
-                raw_values.append("")
-            elif isinstance(value, str):
+            elif version == 2:
+                assert isinstance(value, str), "Tag value invalid"
                 indexed_values.append(0)
                 raw_values.append(value)
 
-        raw_values_index = self._get_raw_values_index(message)
-        processed_raw_values: MutableSequence[str] = []
-        for offset, indexed_value in enumerate(indexed_values):
-            if indexed_value != 0:
-                processed_raw_values.append(
-                    raw_values_index.get(str(indexed_value), "")
-                )
-            else:
-                processed_raw_values.append(raw_values[offset])
+        if version == 1:
+            raw_values_index = self._get_raw_values_index(message)
+            raw_values = [raw_values_index.get(str(v), "") for v in indexed_values]
 
         processed = {
             "use_case_id": message["use_case_id"],
@@ -140,7 +134,7 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
             "metric_id": message["metric_id"],
             "timestamp": timestamp,
             "tags.key": keys,
-            "tags.raw_value": processed_raw_values,
+            "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
             **self._process_values(message),
             "materialization_version": 1,
