@@ -231,20 +231,6 @@ def multistorage_consumer(
     if cooperative_rebalancing is True:
         consumer_configuration["partition.assignment.strategy"] = "cooperative-sticky"
 
-    for storage_key in storage_keys[1:]:
-        if (
-            build_kafka_consumer_configuration(
-                storages[storage_key]
-                .get_table_writer()
-                .get_stream_loader()
-                .get_default_topic_spec()
-                .topic,
-                consumer_group,
-            )["bootstrap.servers"]
-            != consumer_configuration["bootstrap.servers"]
-        ):
-            raise ValueError("storages cannot be located on different Kafka clusters")
-
     metrics = MetricsWrapper(
         environment.metrics,
         "consumer",
