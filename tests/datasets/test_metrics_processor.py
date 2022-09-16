@@ -50,16 +50,6 @@ MAPPING_META_TAG_VALUES_STRINGS = {
     },
 }
 
-MAPPING_META_TAG_VALUES_MIXED_STRINGS_INTS = {
-    "c": {
-        "10": "tag-1",
-        "20": "tag-2",
-        "22": "value-2",
-        "30": "tag-3",
-    },
-    "d": {"33": "value-3"},
-}
-
 SET_MESSAGE_SHARED = {
     "use_case_id": "release-health",
     "org_id": 1,
