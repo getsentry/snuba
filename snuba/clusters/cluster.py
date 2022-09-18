@@ -421,7 +421,8 @@ def get_cluster(
         ]
         storage_set_key = StorageSetKey(sliced_key_name)
 
-    # we assume that below map will be updated accordingly with the new clusters
+    # we assume that below map will be updated accordingly with
+    # the new clusters and sliced StorageSetKeys
     res = _get_storage_set_cluster_map().get(storage_set_key, None)
     if res is None:
         raise UndefinedClickhouseCluster(

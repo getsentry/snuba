@@ -29,6 +29,7 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
+# Mapping of StorageSetKeys to a Mapping of slice id to sliced StorageSetKeys
 OVERRIDE_STORAGE_SET_KEYS: Mapping[str, Mapping[int, str]] = {}
 
 # Mapping of logical (key) to physical (value) partitions for storages
