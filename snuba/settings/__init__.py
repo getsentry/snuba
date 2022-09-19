@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
+from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -27,6 +28,17 @@ DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
+
+# The number of physical partitions that we will need to map resources to
+# for storage partitioning
+LOCAL_PHYSICAL_PARTITIONS = 1
+# Mapping of logical (key) to physical (value) partitions for storages
+# that are partitioned in Snuba resources
+LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
+    str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
+}
+# Storage names to apply dataset partitioning to
+PARTITIONED_STORAGES: Set[str] = set()
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -88,6 +100,7 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
+REDIS_REINITIALIZE_STEPS = 10
 
 USE_RESULT_CACHE = True
 
@@ -245,9 +258,12 @@ CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configu
 
 # File path glob for configs
 STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
+MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"
+ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False
+PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

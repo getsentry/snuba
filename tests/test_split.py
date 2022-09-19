@@ -9,6 +9,7 @@ from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
@@ -30,11 +31,13 @@ def setup_function(function) -> None:
 split_specs = [
     (
         "events",
+        "events",
         "event_id",
         "project_id",
         "timestamp",
     ),
     (
+        "transactions",
         "transactions",
         "event_id",
         "project_id",
@@ -44,17 +47,20 @@ split_specs = [
 
 
 @pytest.mark.parametrize(
-    "dataset_name, id_column, project_column, timestamp_column", split_specs
+    "dataset_name, entity_name, id_column, project_column, timestamp_column",
+    split_specs,
 )
 def test_no_split(
-    dataset_name: str, id_column: str, project_column: str, timestamp_column: str
+    dataset_name: str,
+    entity_name: str,
+    id_column: str,
+    project_column: str,
+    timestamp_column: str,
 ) -> None:
-    events = get_dataset(dataset_name)
+    entity_key = EntityKey(entity_name)
+    entity = get_entity(entity_key)
     query = ClickhouseQuery(
-        events.get_default_entity()
-        .get_all_storages()[0]
-        .get_schema()
-        .get_data_source(),
+        entity.get_all_storages()[0].get_schema().get_data_source(),
     )
 
     def do_query(
@@ -82,7 +88,7 @@ def test_no_split(
 
 
 def test_set_limit_on_split_query():
-    storage = get_dataset("events").get_default_entity().get_all_storages()[0]
+    storage = get_entity(EntityKey.EVENTS).get_all_storages()[0]
     query = ClickhouseQuery(
         Table("events", storage.get_schema().get_columns()),
         selected_columns=[
@@ -130,6 +136,7 @@ def test_set_limit_on_split_query():
 test_data_col = [
     (
         "events",
+        "events",
         "event_id",
         "project_id",
         "timestamp",
@@ -144,6 +151,7 @@ test_data_col = [
         ],
     ),
     (
+        "transactions",
         "transactions",
         "event_id",
         "project_id",
@@ -162,11 +170,12 @@ test_data_col = [
 
 
 @pytest.mark.parametrize(
-    "dataset_name, id_column, project_column, timestamp_column, first_query_data, second_query_data",
+    "dataset_name, entity_name, id_column, project_column, timestamp_column, first_query_data, second_query_data",
     test_data_col,
 )
 def test_col_split(
     dataset_name: str,
+    entity_name: str,
     id_column: str,
     project_column: str,
     timestamp_column: str,
@@ -190,12 +199,10 @@ def test_col_split(
         else:
             raise ValueError(f"Unexpected selected columns: {selected_col_names}")
 
-    events = get_dataset(dataset_name)
+    entity_key = EntityKey(entity_name)
+    entity = get_entity(entity_key)
     query = ClickhouseQuery(
-        events.get_default_entity()
-        .get_all_storages()[0]
-        .get_schema()
-        .get_data_source(),
+        entity.get_all_storages()[0].get_schema().get_data_source(),
         selected_columns=[
             SelectedExpression(name=col_name, expression=Column(None, None, col_name))
             for col_name in second_query_data[0].keys()

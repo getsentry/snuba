@@ -1,5 +1,7 @@
 from typing import Any, Mapping, MutableMapping
 
+from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
+
 
 class InvalidTopicError(ValueError):
     pass
@@ -71,7 +73,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
             raise ValueError(f"Invalid topic value {key}")
 
     # Validate cluster configuration
-    from snuba.clusters.storage_sets import JOINABLE_STORAGE_SETS, StorageSetKey
+    from snuba.clusters.storage_sets import StorageSetKey
 
     storage_set_to_cluster: MutableMapping[StorageSetKey, Any] = {}
 
@@ -84,22 +86,12 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
-    for group in JOINABLE_STORAGE_SETS:
-        clusters = [storage_set_to_cluster[storage_set] for storage_set in group]
-
-        first = clusters[0]
-        for cluster in clusters[1:]:
-            if first != cluster:
-                for property in [
-                    "host",
-                    "port",
-                    "user",
-                    "password",
-                    "database",
-                    "http_port",
-                    "single_node",
-                    "distributed_cluster_name",
-                ]:
-                    assert first.get(property) == cluster.get(
-                        property
-                    ), f"Invalid property: {property}"
+    for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
+        physical_part = locals["LOGICAL_PARTITION_MAPPING"].get(str(logical_part))
+        partition_count = locals["LOCAL_PHYSICAL_PARTITIONS"]
+        assert (
+            physical_part is not None
+        ), f"missing physical partition for logical partition {logical_part}"
+        assert (
+            physical_part < locals["LOCAL_PHYSICAL_PARTITIONS"]
+        ), f"physical partition for logical partition {logical_part} is {physical_part}, but only {partition_count} physical partitions exist"

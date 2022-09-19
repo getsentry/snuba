@@ -1,11 +1,15 @@
-from snuba.datasets.entities import EntityKey, factory
+from snuba.datasets.entities import factory
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import (
     get_all_entity_names,
     get_entity,
     get_entity_name,
+    initialize_entity_factory,
     reset_entity_factory,
 )
 from snuba.datasets.entity import Entity
+
+initialize_entity_factory()
 
 ENTITY_KEYS = [
     EntityKey.DISCOVER,

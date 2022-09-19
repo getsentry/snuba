@@ -1,7 +1,7 @@
 from typing import Optional, Sequence, TypeVar
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.join import (
     IndividualNode,

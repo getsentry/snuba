@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 import argparse
 import random
-from datetime import timedelta
 
-from snuba.datasets.entities.factory import get_entity_name
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
-from snuba.subscriptions.entity_subscription import ENTITY_KEY_TO_SUBSCRIPTION_MAPPER
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer
@@ -31,18 +31,27 @@ parser.add_argument(
     choices=["events"],
     default="events",
 )
+parser.add_argument(
+    "--entity",
+    type=str,
+    help="Entity for subscriptions",
+    dest="entity",
+    choices=["events"],
+    default="events",
+)
 parsed = parser.parse_args()
 
 dataset_name = parsed.dataset
 dataset = get_dataset(dataset_name)
-entity = dataset.get_default_entity()
-entity_key = get_entity_name(entity)
+entity_str = parsed.entity
+entity_key = EntityKey(entity_str)
+entity = get_entity(entity_key)
 storage = entity.get_writable_storage()
 assert storage is not None
 stream_loader = storage.get_table_writer().get_stream_loader()
 topic_spec = stream_loader.get_default_topic_spec()
 
-entity_subscription = ENTITY_KEY_TO_SUBSCRIPTION_MAPPER[entity_key](data_dict={})
+entity_subscription = get_entity_subscription(entity_key)(data_dict={})
 
 timer = Timer("mock-subscriptions")
 
@@ -52,8 +61,8 @@ for _ in range(parsed.number):
     subscription_data = SubscriptionData(
         query=f"MATCH ({entity_key.value}) SELECT count() AS count WHERE project_id = {project_id}",
         project_id=project_id,
-        time_window=timedelta(minutes=1),
-        resolution=timedelta(minutes=1),
+        time_window_sec=60,
+        resolution_sec=60,
         entity_subscription=entity_subscription,
     )
 

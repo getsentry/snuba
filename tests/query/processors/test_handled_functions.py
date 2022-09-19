@@ -2,7 +2,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -13,7 +13,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Argument, Column, FunctionCall, Lambda, Literal
 from snuba.query.logical import Query
-from snuba.query.processors import handled_functions
+from snuba.query.processors.logical import handled_functions
 from snuba.query.query_settings import HTTPQuerySettings
 
 
