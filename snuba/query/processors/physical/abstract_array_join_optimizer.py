@@ -1,7 +1,7 @@
 from itertools import combinations
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, TypeVar, Union
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -25,7 +25,7 @@ from snuba.query.matchers import (
 )
 
 
-class AbstractArrayJoinOptimizer(QueryProcessor):
+class AbstractArrayJoinOptimizer(ClickhouseQueryProcessor):
     def __init__(
         self,
         column_name: str,

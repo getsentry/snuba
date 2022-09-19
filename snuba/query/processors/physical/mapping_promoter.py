@@ -1,6 +1,6 @@
 from typing import Mapping, NamedTuple, Optional
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
@@ -64,7 +64,7 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
     )
 
 
-class MappingColumnPromoter(QueryProcessor):
+class MappingColumnPromoter(ClickhouseQueryProcessor):
     """
     Promotes expressions that access the value of a mapping column by
     replacing them with the corresponding promoted column provided in

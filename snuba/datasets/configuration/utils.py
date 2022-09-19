@@ -19,7 +19,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
@@ -67,7 +67,9 @@ QUERY_PROCESSORS: dict[str, Any] = {
 }
 
 
-def get_query_processors(query_processor_names: list[str]) -> list[QueryProcessor]:
+def get_query_processors(
+    query_processor_names: list[str],
+) -> list[ClickhouseQueryProcessor]:
     return [QUERY_PROCESSORS[name]() for name in query_processor_names]
 
 

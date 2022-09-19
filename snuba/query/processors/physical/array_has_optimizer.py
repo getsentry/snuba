@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import Expression
 from snuba.query.matchers import (
@@ -26,7 +26,7 @@ leverage the bloom filter index if they exist.
 """
 
 
-class ArrayHasOptimizer(QueryProcessor):
+class ArrayHasOptimizer(ClickhouseQueryProcessor):
     def __init__(self, array_columns: Sequence[str]):
         self.__array_has_pattern = FunctionCall(
             String("equals"),

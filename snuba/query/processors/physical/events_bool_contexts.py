@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.dsl import literals_tuple
@@ -11,7 +11,7 @@ from snuba.query.matchers import Column, FunctionCall, Literal, Or, String
 from snuba.query.query_settings import QuerySettings
 
 
-class EventsPromotedBooleanContextsProcessor(QueryProcessor):
+class EventsPromotedBooleanContextsProcessor(ClickhouseQueryProcessor):
     """
     When Discover started using contexts it turned out that, if we return
     promoted contexts through the contexts[...] syntax we have an inconsistency
@@ -73,7 +73,7 @@ class EventsPromotedBooleanContextsProcessor(QueryProcessor):
         query.transform_expressions(replace_exp)
 
 
-class EventsBooleanContextsProcessor(QueryProcessor):
+class EventsBooleanContextsProcessor(ClickhouseQueryProcessor):
     """
     Like EventsPromotedBooleanContextsProcessor but operates on the
     non promoted context fields to ensure the same results get returned

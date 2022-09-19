@@ -1,6 +1,6 @@
 from typing import Optional, Sequence, Set
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -123,7 +123,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Sequence[str]:
     return sorted(list(keys))
 
 
-class ArrayJoinKeyValueOptimizer(QueryProcessor):
+class ArrayJoinKeyValueOptimizer(ClickhouseQueryProcessor):
     """
     Applies two optimizations to reduce the performance impact of
     arrayJoin operations performed on mapping columns.

@@ -1,13 +1,13 @@
 from typing import Optional
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_configs
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitParameters
 
 
-class TableRateLimit(QueryProcessor):
+class TableRateLimit(ClickhouseQueryProcessor):
     """
     Set a rate limiter for individual tables.
     TODO: Do this at Cluster level instead.

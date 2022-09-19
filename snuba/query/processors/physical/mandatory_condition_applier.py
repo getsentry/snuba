@@ -1,10 +1,10 @@
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.query_settings import QuerySettings
 
 
-class MandatoryConditionApplier(QueryProcessor):
+class MandatoryConditionApplier(ClickhouseQueryProcessor):
 
     """
     Obtains mandatory conditions from a Query object’s underlying storage

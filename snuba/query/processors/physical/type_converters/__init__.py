@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Set
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import ConditionFunctions
 from snuba.query.exceptions import ValidationException
@@ -18,7 +18,7 @@ class ColumnTypeError(ValidationException):
     pass
 
 
-class BaseTypeConverter(QueryProcessor, ABC):
+class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
     def __init__(self, columns: Set[str], optimize_ordering: bool = False):
         self.columns = columns
         self.optimize_ordering = optimize_ordering

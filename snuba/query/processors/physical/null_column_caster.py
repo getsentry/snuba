@@ -1,7 +1,7 @@
 from typing import Dict, Sequence
 
 from snuba.clickhouse.columns import FlattenedColumn, SchemaModifiers
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -16,7 +16,7 @@ def _col_is_nullable(col: FlattenedColumn) -> bool:
     return False
 
 
-class NullColumnCaster(QueryProcessor):
+class NullColumnCaster(ClickhouseQueryProcessor):
     """
     In the case of merge tables (e.g. discover), if the column is nullable on
     one of the tables but not nullable in the other, clickhouse can throw an error.

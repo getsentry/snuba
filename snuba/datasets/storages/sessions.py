@@ -8,7 +8,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clusters.storage_sets import StorageSetKey
@@ -105,7 +105,7 @@ materialized_view_schema = TableSchema(
 )
 
 
-class MinuteResolutionProcessor(QueryProcessor):
+class MinuteResolutionProcessor(ClickhouseQueryProcessor):
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # NOTE: the product side is restricted to a 6h window, however it rounds
         # outwards, which extends the window to 7h.

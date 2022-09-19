@@ -23,7 +23,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
@@ -102,7 +102,10 @@ bucket_columns: Sequence[Column[SchemaModifiers]] = [
     Column("timeseries_id", UInt(32)),
 ]
 
-shared_query_processors: Sequence[QueryProcessor] = [TableRateLimit(), TupleUnaliaser()]
+shared_query_processors: Sequence[ClickhouseQueryProcessor] = [
+    TableRateLimit(),
+    TupleUnaliaser(),
+]
 
 sets_storage = ReadableTableStorage(
     storage_key=StorageKey.GENERIC_METRICS_SETS,

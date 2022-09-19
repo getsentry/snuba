@@ -1,4 +1,4 @@
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
@@ -24,7 +24,7 @@ CONDITION_PATTERN = condition_pattern(
 )
 
 
-class EmptyTagConditionProcessor(QueryProcessor):
+class EmptyTagConditionProcessor(ClickhouseQueryProcessor):
     """
     If queries have conditions of the form `ifNull(tags[key], '') =/!= ''` we can simplify this using
     the `has` function.

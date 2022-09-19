@@ -6,7 +6,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.query_settings import QuerySettings
 
 
-class QueryProcessor(ABC):
+class ClickhouseQueryProcessor(ABC):
     """
     A transformation applied to a Clickhouse Query. This transformation mutates the
     Query object in place.

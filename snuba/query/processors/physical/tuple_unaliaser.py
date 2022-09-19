@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import (
     Argument,
@@ -59,7 +59,7 @@ class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
         return exp
 
 
-class TupleUnaliaser(QueryProcessor):
+class TupleUnaliaser(ClickhouseQueryProcessor):
     """removes aliases of tuples nested inside other functions
 
         Due to a backwards incomaptibility issue in clickhouse from
