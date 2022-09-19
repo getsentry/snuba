@@ -606,14 +606,23 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset) -> RespTuple:
-        return _write_to_entity(entity=dataset.get_default_entity())
+        # This endpoint is only used by sentry, this will be deprecated after https://github.com/getsentry/sentry/pull/38877 is merged
+        all_entities = dataset.get_all_entities()
+        assert len(all_entities) > 0
+        entity = all_entities[0]
+        return _write_to_entity(entity=entity)
 
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
     def write_to_entity(*, entity: EntityType) -> RespTuple:
         return _write_to_entity(entity=entity)
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
-    def eventstream(*, dataset: Dataset) -> RespTuple:
+    def eventstream_v1(*, dataset: Dataset) -> RespTuple:
+        # This endpoint is only used by sentry, this will be deprecated after https://github.com/getsentry/sentry/pull/38877 is merged
+        return eventstream(entity=dataset.get_all_entities()[0])
+
+    @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
+    def eventstream(*, entity: Entity) -> RespTuple:
         record = json.loads(http_request.data)
 
         version = record[0]
@@ -629,7 +638,7 @@ if application.debug or application.testing:
 
         type_ = record[1]
 
-        storage = dataset.get_default_entity().get_writable_storage()
+        storage = entity.get_writable_storage()
         assert storage is not None
 
         if type_ == "insert":

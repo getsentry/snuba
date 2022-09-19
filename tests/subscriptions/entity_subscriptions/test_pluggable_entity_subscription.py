@@ -3,7 +3,8 @@ from uuid import UUID
 
 import pytest
 
-from snuba.datasets.entities.factory import get_entity_name
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     GenericMetricsSetsSubscription,
@@ -19,7 +20,7 @@ from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer
 
 dataset = get_dataset("generic_metrics")
-entity = dataset.get_default_entity()
+entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
 entity_key = get_entity_name(entity)
 storage = entity.get_writable_storage()
 assert storage is not None

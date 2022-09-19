@@ -6,22 +6,24 @@ import rapidjson
 
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
-from snuba.datasets.entities.factory import enforce_table_writer
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import enforce_table_writer, get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
 class TestHTTPBatchWriter:
     dataset = get_dataset("events")
+    entity = get_entity(EntityKey.EVENTS)
     metrics = DummyMetricsBackend(strict=True)
 
     def test_empty_batch(self) -> None:
-        enforce_table_writer(self.dataset.get_default_entity()).get_batch_writer(
-            metrics=self.metrics
-        ).write([])
+        enforce_table_writer(self.entity).get_batch_writer(metrics=self.metrics).write(
+            []
+        )
 
     def test_error_handling(self) -> None:
-        table_writer = enforce_table_writer(self.dataset.get_default_entity())
+        table_writer = enforce_table_writer(self.entity)
 
         with pytest.raises(ClickhouseWriterError) as error:
             table_writer.get_batch_writer(
@@ -53,9 +55,9 @@ class FakeQuery(FormattedQuery):
 def test_gzip_load() -> None:
     content = gzip.compress(DATA.encode("utf-8"))
 
-    dataset = get_dataset("groupedmessage")
+    entity = get_entity(EntityKey.GROUPEDMESSAGE)
     metrics = DummyMetricsBackend(strict=True)
-    writer = enforce_table_writer(dataset.get_default_entity()).get_bulk_writer(
+    writer = enforce_table_writer(entity).get_bulk_writer(
         metrics,
         "gzip",
         [
@@ -73,7 +75,7 @@ def test_gzip_load() -> None:
 
     writer.write([content])
 
-    cluster = dataset.get_default_entity().get_all_storages()[0].get_cluster()
+    cluster = entity.get_all_storages()[0].get_cluster()
     reader = cluster.get_reader()
 
     ret = reader.execute(FakeQuery([]))

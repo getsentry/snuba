@@ -1,6 +1,8 @@
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -24,7 +26,7 @@ def test_events_processing() -> None:
     }
 
     events_dataset = get_dataset("events")
-    events_entity = events_dataset.get_default_entity()
+    events_entity = get_entity(EntityKey.EVENTS)
 
     query, snql_anonymized = parse_snql_query(query_body["query"], events_dataset)
     request = Request(

@@ -12,4 +12,8 @@ class GroupAssigneeDataset(Dataset):
     """
 
     def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.GROUPASSIGNEE)
+        super().__init__(
+            all_entities=[
+                EntityKey.GROUPASSIGNEE,
+            ]
+        )

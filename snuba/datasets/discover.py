@@ -27,7 +27,13 @@ EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
 
 class DiscoverDataset(Dataset):
     def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.DISCOVER)
+        super().__init__(
+            all_entities=[
+                EntityKey.DISCOVER,
+                EntityKey.DISCOVER_EVENTS,
+                EntityKey.DISCOVER_TRANSACTIONS,
+            ]
+        )
 
     # XXX: This is temporary code that will eventually need to be ported to Sentry
     # since SnQL will require an entity to always be specified by the user.

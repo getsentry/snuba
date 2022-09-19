@@ -5,6 +5,8 @@ from snuba_sdk.legacy import json_to_snql
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.pipeline.processors import execute_all_clickhouse_processors
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
@@ -343,14 +345,13 @@ def test_alias_validation(
     query_body: MutableMapping[str, Any], expected_result: bool
 ) -> None:
     events = get_dataset("events")
+    events_entity = get_entity(EntityKey.EVENTS)
     request = json_to_snql(query_body, "events")
     request.validate()
     query, _ = parse_snql_query(str(request.query), events)
     settings = HTTPQuerySettings()
     query_plan = (
-        events.get_default_entity()
-        .get_query_pipeline_builder()
-        .build_planner(query, settings)
+        events_entity.get_query_pipeline_builder().build_planner(query, settings)
     ).build_best_plan()
     execute_all_clickhouse_processors(query_plan, settings)
 
