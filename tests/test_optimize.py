@@ -5,7 +5,7 @@ from typing import Callable, Mapping
 import pytest
 from freezegun import freeze_time
 
-from snuba import optimize, settings
+from snuba import optimize, settings, util
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -187,12 +187,18 @@ class TestOptimize:
         )
 
         tracker.update_all_partitions([part.name for part in partitions])
+
+        merging_partitions_info = optimize.get_current_merging_partitions_info(
+            clickhouse, database, table, partitions
+        )
+
         with freeze_time(current_time):
             optimize.optimize_partition_runner(
                 clickhouse=clickhouse,
                 database=database,
                 table=table,
                 partitions=[part.name for part in partitions],
+                current_merge_info=merging_partitions_info,
                 scheduler=scheduler,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",
@@ -251,6 +257,13 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     dummy_partition = "(90,'2022-03-28')"
     tracker.update_all_partitions([dummy_partition])
 
+    merging_partitions_info = optimize.get_current_merging_partitions_info(
+        clickhouse_pool,
+        database,
+        table,
+        [util.Part(dummy_partition, datetime(2022, 3, 28), 90, "90-20220328")],
+    )
+
     with freeze_time(
         last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(minutes=15)
     ):
@@ -261,6 +274,7 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
                 database=database,
                 table=table,
                 partitions=[dummy_partition],
+                current_merge_info=merging_partitions_info,
                 scheduler=scheduler,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",

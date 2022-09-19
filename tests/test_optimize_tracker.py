@@ -11,7 +11,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.optimize import BASE_SLEEP_TIME, run_optimize_cron_job
+from snuba.optimize import run_optimize_cron_job
 from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
 from snuba.processor import InsertBatch
 from snuba.redis import RedisClientKey, get_redis_client
@@ -229,7 +229,7 @@ def test_run_optimize_with_ongoing_merges() -> None:
             assert num_optimized == original_num_partitions
             assert mock_merge_ids.call_count == 1
 
-            sleep_mock.assert_called_with(BASE_SLEEP_TIME + 10)
+            sleep_mock.assert_called_with(settings.OPTIMIZE_BASE_SLEEP_TIME + 10)
             sleep_mock.call_count = (
                 num_merging_parititons  # only sleep on merging partitions
             )
