@@ -31,7 +31,7 @@ def get_active_partitions(
 
     response = clickhouse.execute(
         """
-        SELECT DISTINCT partition
+        SELECT DISTINCT partition, partition_id
         FROM system.parts
         WHERE database = %(database)s
         AND table = %(table)s
