@@ -12,7 +12,7 @@ from arroyo import Message
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
-from snuba import environment, settings
+from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
@@ -31,7 +31,6 @@ from snuba.replacers.replacer_processor import (
 from snuba.state import get_config
 from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
@@ -539,10 +538,4 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             self.__processing_time_counter.get_projects_exceeding_limit()
         )
         for project_id in projects_exceeding_limit:
-            metrics = MetricsWrapper(
-                environment.metrics, "replacer", tags={"group": self.__consumer_group}
-            )
-            metrics.increment(
-                "project_processing_time_exceeded_time_limit",
-                tags={"project_id": str(project_id)},
-            )
+            self.metrics.increment("project_processing_time_exceeded_time_limit")
