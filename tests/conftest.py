@@ -57,27 +57,29 @@ def pytest_configure() -> None:
 def run_migrations() -> Iterator[None]:
     from snuba.migrations.runner import Runner
 
-    Runner().run_all(force=True)
+    try:
+        Runner().run_all(force=True)
+        yield
+    finally:
+        for storage_key in get_all_storage_keys():
+            storage = get_storage(storage_key)
+            cluster = storage.get_cluster()
+            database = cluster.get_database()
 
-    yield
+            schema = storage.get_schema()
+            if isinstance(schema, WritableTableSchema):
+                table_name = schema.get_local_table_name()
 
-    for storage_key in get_all_storage_keys():
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-        database = cluster.get_database()
+                nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+                for node in nodes:
+                    connection = cluster.get_node_connection(
+                        ClickhouseClientSettings.MIGRATE, node
+                    )
+                    connection.execute(
+                        f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
+                    )
 
-        schema = storage.get_schema()
-        if isinstance(schema, WritableTableSchema):
-            table_name = schema.get_local_table_name()
-
-            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
-            for node in nodes:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
-                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
-
-    redis_client.flushdb()
+        redis_client.flushdb()
 
 
 @pytest.fixture(autouse=True)
