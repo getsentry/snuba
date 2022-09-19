@@ -30,3 +30,4 @@ urllib3==1.26.11
 pyuwsgi==2.0.20
 Werkzeug==2.2.2
 PyYAML==6.0
+uhashring~=2.1
