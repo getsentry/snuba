@@ -284,6 +284,8 @@ PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
 # avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
+# sleep time to wait for a merge to complete
+OPTIMIZE_BASE_SLEEP_TIME = 3000
 
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30

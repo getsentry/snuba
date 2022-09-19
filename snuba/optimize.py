@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import threading
 import time
@@ -11,6 +10,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.optimize_scheduler import OptimizeScheduler
 from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
+from snuba.settings import OPTIMIZE_BASE_SLEEP_TIME
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.optimize")
@@ -336,28 +336,6 @@ def optimize_partitions(
         PARTITION %(partition)s FINAL
     """
 
-    async def run_optimize_query(partition: str, query: str) -> None:
-        # Update tracker before running clickhouse.execute since its possible
-        # that the connection can get disconnected while the server is still
-        # executing the optimization. In that case we don't want to
-        # run optimization on the same partition twice.
-
-        if tracker:
-            tracker.update_scheduled_partitions(partition)
-
-        # if theres a merge in progress for this partition, wait for it to finish
-        if partition in current_merge_info:
-            sleep_time = current_merge_info[partition]["estimated_time"]
-            await asyncio.sleep(sleep_time)
-
-        start_time = time.time()
-        clickhouse.execute(query, retryable=False)
-        metrics.timing(
-            "optimized_part",
-            time.time() - start_time,
-            tags=_get_metrics_tags(table, clickhouse_host),
-        )
-
     if start_jitter is not None:
         logger.info(
             f"{threading.current_thread().name}: Jittering start time by"
@@ -365,7 +343,6 @@ def optimize_partitions(
         )
         time.sleep(start_jitter * 60)
 
-    coros = []
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
             logger.info(
@@ -383,9 +360,22 @@ def optimize_partitions(
         query = (query_template % args).strip()
         logger.info(f"Optimizing partition: {partition}")
 
-        coros.append(run_optimize_query(partition, query))
+        # Update tracker before running clickhouse.execute since its possible
+        # that the connection can get disconnected while the server is still
+        # executing the optimization. In that case we don't want to
+        # run optimization on the same partition twice.
+        if tracker:
+            tracker.update_scheduled_partitions(partition)
 
-    async def run_coros() -> None:
-        await asyncio.gather(*coros)
+        # if theres a merge in progress for this partition, wait for it to finish
+        if partition in current_merge_info:
+            est_sleep_time = current_merge_info[partition]["estimated_time"]
+            time.sleep(OPTIMIZE_BASE_SLEEP_TIME + est_sleep_time)
 
-    asyncio.run(run_coros())
+        start = time.time()
+        clickhouse.execute(query, retryable=False)
+        metrics.timing(
+            "optimized_part",
+            time.time() - start,
+            tags=_get_metrics_tags(table, clickhouse_host),
+        )
