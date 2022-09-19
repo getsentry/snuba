@@ -7,11 +7,11 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
-class BasicFunctionsProcessor(QueryProcessor):
+class BasicFunctionsProcessor(LogicalQueryProcessor):
     """
     Mimics the ad hoc function processing that happens today in utils.function_expr.
 

@@ -2,7 +2,7 @@ from typing import Optional
 
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_configs
 from snuba.state.rate_limit import (
@@ -16,7 +16,7 @@ from snuba.state.rate_limit import (
 DEFAULT_LIMIT = 1000
 
 
-class ObjectIDRateLimiterProcessor(QueryProcessor):
+class ObjectIDRateLimiterProcessor(LogicalQueryProcessor):
     """
     A generic rate limiter that searches a query for conditions on the given column.
     The values in that column are assumed to be an integer ID.
