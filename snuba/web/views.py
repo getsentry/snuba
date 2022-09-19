@@ -604,22 +604,9 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
-    def write(*, dataset: Dataset) -> RespTuple:
-        # This endpoint is only used by sentry, this will be deprecated after https://github.com/getsentry/sentry/pull/38877 is merged
-        all_entities = dataset.get_all_entities()
-        assert len(all_entities) > 0
-        entity = all_entities[0]
-        return _write_to_entity(entity=entity)
-
     @application.route("/tests/entities/<entity:entity>/insert", methods=["POST"])
     def write_to_entity(*, entity: EntityType) -> RespTuple:
         return _write_to_entity(entity=entity)
-
-    @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
-    def eventstream_v1(*, dataset: Dataset) -> RespTuple:
-        # This endpoint is only used by sentry, this will be deprecated after https://github.com/getsentry/sentry/pull/38877 is merged
-        return eventstream(entity=dataset.get_all_entities()[0])
 
     @application.route("/tests/<entity:entity>/eventstream", methods=["POST"])
     def eventstream(*, entity: Entity) -> RespTuple:
