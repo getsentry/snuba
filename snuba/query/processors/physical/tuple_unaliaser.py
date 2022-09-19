@@ -1,6 +1,5 @@
 from dataclasses import replace
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import (
     Argument,
@@ -13,6 +12,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

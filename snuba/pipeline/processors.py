@@ -2,10 +2,10 @@ from typing import Callable, Sequence
 
 import sentry_sdk
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

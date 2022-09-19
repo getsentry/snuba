@@ -1,8 +1,8 @@
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Literal, String
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

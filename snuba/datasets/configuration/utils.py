@@ -19,12 +19,12 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction

@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Set
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import ConditionFunctions
 from snuba.query.exceptions import ValidationException
@@ -11,6 +10,7 @@ from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param, String
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

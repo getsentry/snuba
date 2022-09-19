@@ -4,13 +4,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Generic, Mapping, Optional, Sequence, Tuple, TypeVar, Union
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.reader import Reader
 from snuba.web import QueryResult

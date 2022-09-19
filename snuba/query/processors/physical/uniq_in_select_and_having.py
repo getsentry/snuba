@@ -9,12 +9,12 @@ return an exception to the user but don't crash the clickhouse query node
 import logging
 from typing import Any, Dict, Sequence, cast
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Expression, FunctionCall, NoopVisitor
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Param, String
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 

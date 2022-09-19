@@ -8,7 +8,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clusters.storage_sets import StorageSetKey
@@ -23,6 +22,7 @@ from snuba.query.processors.physical.conditions_enforcer import (
     ProjectIdEnforcer,
 )
 from snuba.query.processors.physical.prewhere import PrewhereProcessor
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.streams.topics import Topic

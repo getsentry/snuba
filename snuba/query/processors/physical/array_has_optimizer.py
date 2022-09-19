@@ -1,6 +1,5 @@
 from typing import Sequence
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.expressions import Expression
 from snuba.query.matchers import (
@@ -13,6 +12,7 @@ from snuba.query.matchers import (
     Param,
     String,
 )
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 """

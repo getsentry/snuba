@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import MutableMapping, Optional, Set
 
 from snuba import environment, settings
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import (
     get_object_ids_in_query_ast,
@@ -13,6 +12,7 @@ from snuba.clickhouse.query_dsl.accessors import (
 from snuba.datasets.errors_replacer import ProjectsQueryFlags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.state import get_config

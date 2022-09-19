@@ -1,6 +1,5 @@
 from dataclasses import replace
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.dsl import literals_tuple
@@ -8,6 +7,7 @@ from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Literal, Or, String
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

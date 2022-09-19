@@ -3,7 +3,6 @@ from typing import Optional, Sequence
 import sentry_sdk
 
 from snuba import state
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster
@@ -26,6 +25,7 @@ from snuba.query.processors.physical.conditions_enforcer import (
 from snuba.query.processors.physical.mandatory_condition_applier import (
     MandatoryConditionApplier,
 )
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this

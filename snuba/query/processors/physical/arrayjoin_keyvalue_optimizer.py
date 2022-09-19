@@ -1,6 +1,5 @@
 from typing import Optional, Sequence, Set
 
-from snuba.clickhouse.processors import ClickhouseQueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -18,6 +17,7 @@ from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
+from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

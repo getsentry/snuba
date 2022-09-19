@@ -1,6 +1,5 @@
 from typing import Set
 
-from snuba.clickhouse.processors import CompositeQueryProcessor
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
@@ -13,6 +12,7 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
+from snuba.query.processors.physical.processors import CompositeQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
