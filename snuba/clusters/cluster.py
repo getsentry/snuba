@@ -404,7 +404,7 @@ class UndefinedClickhouseCluster(SerializableException):
 
 
 def get_cluster(
-    storage_set_key: StorageSetKey, slice_id: Optional[int]
+    storage_set_key: StorageSetKey, slice_id: Optional[int] = None
 ) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
