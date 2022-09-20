@@ -21,12 +21,10 @@ def test_no_import_no_lookup() -> None:
 def test_import_submodules_manually() -> None:
     from tests.utils.test_package_no_import import SomeBase
 
-    imported_modules = import_submodules_in_directory(
+    import_submodules_in_directory(
         os.path.join(dir_path, "test_package_no_import"),
         "tests.utils.test_package_no_import",
     )
-    # we should have imported the __init__ file and the a,b,c submodules
-    assert len(imported_modules) == 4
     for prefix in ["A", "B", "C"]:
         assert SomeBase.class_from_name(prefix).__name__ == prefix
 

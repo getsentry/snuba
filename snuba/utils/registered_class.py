@@ -95,6 +95,16 @@ def import_submodules_in_directory(
     directory_path: a path to the directory where all the RegisteredClass(es) are defined
     package_root: the module path minus the final module name
 
+    Recommendations / Cautions
+    --------------------------
+        Calling this function in your module definition performs IO operations (reading files) on import.
+        The only reason you need to call this is is to use a RegisteredClass, the only reason to use a
+        RegisteredClass is because you need to look up classes by string name at runtime.
+        If you don't need to do that please rethink as to why you need to dynamically import stuff.
+
+        It is recommended to call this at the end of the module once everything else that needs to be
+        initialized has been initialized.
+
 
     Example:
     --------
@@ -130,8 +140,13 @@ def import_submodules_in_directory(
     """
     imported_modules: list[object] = []
     for fname in os.listdir(directory_path):
+        # this is just a small performance optimization. importlib is smart enough
+        # to not infinite loop on re-importing __init__.py but we can just avoid
+        # that check. Whether this is called in an __init__.py or not, if we're executing
+        # this code, we've already imported the __init__.py
         if fname == "__init__.py":
             continue
+        # ------------------------------------------------------------------------
         module_name = fname.replace(".py", "")
         module_str = f"{package_root}.{module_name}"
         imported_modules.append(importlib.import_module(module_str))
