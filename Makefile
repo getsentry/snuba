@@ -38,3 +38,6 @@ watch-admin:
 
 validate-configs:
 	python3 snuba/validate_configs.py
+
+generate-config-docs:
+	python3 snuba/datasets/configuration/generate_config_docs.py

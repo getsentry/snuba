@@ -1,10 +1,15 @@
-Dataset
-========
+Dataset Schema
+==============
 
-A Dataset is a container of components necessary to ingest and read data from Clickhouse.
+Properties
+----------
 
-Fields
----------
+-  **version**
+-  **kind**
+-  **name** *(string)*
+-  **is_experimental** *(boolean)*
+-  **entities** *(object)*: Cannot contain additional properties.
 
-name : string
-    The name of the Dataset.
+   -  **all** *(array)*
+
+      -  **Items** *(string)*

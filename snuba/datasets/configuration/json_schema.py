@@ -195,6 +195,7 @@ ENTITY_TRANSLATION_MAPPERS = {
 # Full schemas:
 
 V1_WRITABLE_STORAGE_SCHEMA = {
+    "title": "Writable Storage Schema",
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
@@ -218,6 +219,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
 
 
 V1_READABLE_STORAGE_SCHEMA = {
+    "title": "Readable Storage Schema",
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
@@ -238,6 +240,7 @@ V1_READABLE_STORAGE_SCHEMA = {
 }
 
 V1_ENTITY_SCHEMA = {
+    "title": "Entity Schema",
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
@@ -265,6 +268,7 @@ V1_ENTITY_SCHEMA = {
 }
 
 V1_DATASET_SCHEMA = {
+    "title": "Dataset Schema",
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
@@ -288,6 +292,7 @@ V1_DATASET_SCHEMA = {
 }
 
 V1_ENTITY_SUBSCIPTION_SCHEMA = {
+    "title": "Entity Subscription Schema",
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
@@ -306,6 +311,7 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
 
 
 V1_MIGRATION_GROUP_SCHEMA = {
+    "title": "Migration Group Schema",
     "type": "object",
     "properties": {
         "version": {"const": "v1"},
