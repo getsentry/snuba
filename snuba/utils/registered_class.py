@@ -97,36 +97,36 @@ def import_submodules_in_directory(
 
 
     Example:
+    --------
+        imagine the following directory structure
 
-    imagine the following directory structure
+        snuba/
+        ├─ query_processors/
+        │  ├─ __init__.py
+        │  ├─ some_other_processor.py
+        │  ├─ some_processor.py
 
-    snuba/
-    ├─ query_processors/
-    │  ├─ __init__.py
-    │  ├─ some_other_processor.py
-    │  ├─ some_processor.py
+        __init__.py contains a RegisteredClass:
+        (it can be outside the __init__.py, there's no technical reason it has to but convention makes things convenient)
 
-    __init__.py contains a RegisteredClass:
-    (it can be outside the __init__.py, there's no technical reason it has to but convention makes things convenient)
+        >>> class QueryProcessor(metaclass=RegisteredClass):
+        >>>     pass
 
-    >>> class QueryProcessor(metaclass=RegisteredClass):
-    >>>     pass
+        The other files in the `query_processors` directory define subclasses of the QueryProcessor class.
 
-    The other files in the `query_processors` directory define subclasses of the QueryProcessor class.
+        In the `__init__.py` simply add:
 
-    In the `__init__.py` simply add:
+        >>> import_submodules_in_directory(
+        >>>     os.path.dirname(os.path.realpath(__file__)),
+        >>>     "snuba.query_processors.snuba"
+        >>> )
 
-    >>> import_submodules_in_directory(
-    >>>     os.path.dirname(os.path.realpath(__file__)),
-    >>>     "snuba.query_processors.snuba"
-    >>> )
+        As the __init__.py finishes importing, all the subclasses will be registered in the subdirectory, thus
 
-    As the __init__.py finishes importing, all the subclasses will be registered in the subdirectory, thus
+        >>> from snuba.query_processors import QueryProcessor
+        >>> QueryProcessor.class_from_name("some_other_processor")
 
-    >>> from snuba.query_processors import QueryProcessor
-    >>> QueryProcessor.class_from_name("some_other_processor")
-
-    will return the correct class just by virtue of having imported `QueryProcessor`
+        will return the correct class just by virtue of having imported `QueryProcessor`
     """
     imported_modules: list[object] = []
     for fname in os.listdir(directory_path):

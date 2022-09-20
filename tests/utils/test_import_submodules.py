@@ -1,7 +1,4 @@
-import importlib
 import os
-import shutil
-from typing import Any, Generator
 
 import pytest
 
@@ -11,50 +8,31 @@ from snuba.utils.registered_class import (
 )
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-test_package_dir = os.path.join(dir_path, "test_package")
 
 
-@pytest.fixture(scope="function")
-def temp_package_directory() -> Generator[None, None, None]:
-    os.mkdir(test_package_dir)
-    init_file = """from snuba.utils.registered_class import RegisteredClass
-
-class SomeBase(metaclass=RegisteredClass):
-    @classmethod
-    def config_key(cls):
-        return cls.__name__
-    """
-    with open(os.path.join(test_package_dir, "__init__.py"), "w") as f:
-        f.write(init_file)
-
-    for prefix in ["A", "B", "C"]:
-        with open(os.path.join(test_package_dir, f"{prefix.lower}.py"), "w") as f:
-            f.write(
-                f"""
-from tests.utils.test_package import SomeBase
-
-class {prefix}(SomeBase):
-    pass
-"""
-            )
-
-    importlib.invalidate_caches()
-    yield
-    shutil.rmtree(test_package_dir)
-    importlib.invalidate_caches()
-
-
-def test_no_import_no_lookup(temp_package_directory: Any) -> None:
-    from tests.utils.test_package import SomeBase  # type: ignore
+def test_no_import_no_lookup() -> None:
+    from tests.utils.test_package_no_import import SomeBase  # type: ignore
 
     for prefix in ["A", "B", "C"]:
         with pytest.raises(InvalidConfigKeyError):
             assert SomeBase.class_from_name(prefix).__name__ == prefix
 
 
-def test_import_submodules(temp_package_directory: Any) -> None:
-    from tests.utils.test_package import SomeBase
+def test_import_submodules_manually() -> None:
+    from tests.utils.test_package_no_import import SomeBase
 
-    import_submodules_in_directory(test_package_dir, "tests.utils.test_package")
+    imported_modules = import_submodules_in_directory(
+        os.path.join(dir_path, "test_package_no_import"),
+        "tests.utils.test_package_no_import",
+    )
+    # we should have imported the __init__ file and the a,b,c submodules
+    assert len(imported_modules) == 4
+    for prefix in ["A", "B", "C"]:
+        assert SomeBase.class_from_name(prefix).__name__ == prefix
+
+
+def test_import_submodules_automatically() -> None:
+    from tests.utils.test_package_auto_import import SomeBase
+
     for prefix in ["A", "B", "C"]:
         assert SomeBase.class_from_name(prefix).__name__ == prefix
