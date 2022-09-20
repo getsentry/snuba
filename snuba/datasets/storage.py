@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, NamedTuple, Optional, Sequence
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
     ClickhouseCluster,
@@ -16,6 +15,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerProcessor
 
@@ -80,7 +80,7 @@ class ReadableStorage(Storage):
     """
 
     @abstractmethod
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
         that are applied to queries after parsing and before running them on Clickhouse.
@@ -134,7 +134,7 @@ class ReadableTableStorage(ReadableStorage):
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
         schema: Schema,
-        query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
     ) -> None:
@@ -147,7 +147,7 @@ class ReadableTableStorage(ReadableStorage):
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         return self.__query_processors
 
     def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
@@ -163,7 +163,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
         schema: Schema,
-        query_processors: Sequence[QueryProcessor],
+        query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,

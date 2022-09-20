@@ -25,7 +25,7 @@ from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
@@ -218,7 +218,7 @@ class BaseEventsEntity(Entity, ABC):
             required_time_column="timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             TimeSeriesProcessor(
                 {"time": "timestamp", "rtime": "received"}, ("timestamp", "received")

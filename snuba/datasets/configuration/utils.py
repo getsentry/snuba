@@ -19,12 +19,12 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction
@@ -67,7 +67,9 @@ QUERY_PROCESSORS: dict[str, Any] = {
 }
 
 
-def get_query_processors(query_processor_names: list[str]) -> list[QueryProcessor]:
+def get_query_processors(
+    query_processor_names: list[str],
+) -> list[ClickhouseQueryProcessor]:
     return [QUERY_PROCESSORS[name]() for name in query_processor_names]
 
 

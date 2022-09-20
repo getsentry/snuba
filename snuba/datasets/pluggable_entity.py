@@ -11,7 +11,7 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
 from snuba.utils.schemas import SchemaModifiers
@@ -31,7 +31,7 @@ class PluggableEntity(Entity):
     """
 
     entity_key: EntityKey
-    query_processors: Sequence[QueryProcessor]
+    query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     readable_storage: ReadableTableStorage
     validators: Sequence[QueryValidator]
@@ -43,7 +43,7 @@ class PluggableEntity(Entity):
         default_factory=dict
     )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
 
     def get_data_model(self) -> EntityColumnSet:

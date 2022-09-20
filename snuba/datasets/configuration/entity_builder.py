@@ -17,7 +17,7 @@ from snuba.datasets.entities.entity_key import register_entity_key
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.granularity_processor import (
     MappedGranularityProcessor,
 )
@@ -34,7 +34,7 @@ from snuba.query.validation.validators import QueryValidator
 
 # TODO replace all the explicit mapping dictionaries below with the
 # registered class factory pattern (e.g. https://github.com/getsentry/snuba/pull/3044)
-_QP_MAPPING: dict[str, Type[QueryProcessor]] = {
+_QP_MAPPING: dict[str, Type[LogicalQueryProcessor]] = {
     "transform_tag_types": TagsTypeTransformer,
     "handle_mapped_granularities": MappedGranularityProcessor,
     "translate_time_series": TimeSeriesProcessor,
@@ -59,7 +59,7 @@ def _build_entity_validators(
 
 def _build_entity_query_processors(
     config_query_processors: list[dict[str, Any]],
-) -> Sequence[QueryProcessor]:
+) -> Sequence[LogicalQueryProcessor]:
     return [
         _QP_MAPPING[config_qp["processor"]](
             **(config_qp["args"] if config_qp.get("args") else {})

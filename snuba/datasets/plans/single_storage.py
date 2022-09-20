@@ -3,7 +3,6 @@ from typing import Optional, Sequence
 import sentry_sdk
 
 from snuba import state
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster
@@ -20,6 +19,7 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
     MandatoryConditionEnforcer,
 )
@@ -40,7 +40,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
     def __init__(
         self,
         cluster: ClickhouseCluster,
-        db_query_processors: Sequence[QueryProcessor],
+        db_query_processors: Sequence[ClickhouseQueryProcessor],
         splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         self.__cluster = cluster
@@ -102,7 +102,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self,
         storage: ReadableStorage,
         mappers: Optional[TranslationMappers] = None,
-        post_processors: Optional[Sequence[QueryProcessor]] = None,
+        post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
     ) -> None:
         # The storage the query is based on
         self.__storage = storage
@@ -175,7 +175,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     def __init__(
         self,
         selector: QueryStorageSelector,
-        post_processors: Optional[Sequence[QueryProcessor]] = None,
+        post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
     ) -> None:
         self.__selector = selector
         self.__post_processors = post_processors or []

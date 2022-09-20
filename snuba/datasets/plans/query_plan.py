@@ -4,13 +4,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Generic, Mapping, Optional, Sequence, Tuple, TypeVar, Union
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.reader import Reader
 from snuba.web import QueryResult
@@ -72,8 +72,8 @@ class ClickhouseQueryPlan(QueryPlan[Query]):
     # Per https://github.com/python/mypy/issues/10039, this has to be redeclared
     # to avoid a mypy error.
     execution_strategy: QueryPlanExecutionStrategy[Query]
-    plan_query_processors: Sequence[QueryProcessor]
-    db_query_processors: Sequence[QueryProcessor]
+    plan_query_processors: Sequence[ClickhouseQueryProcessor]
+    db_query_processors: Sequence[ClickhouseQueryProcessor]
 
 
 @dataclass(frozen=True)
@@ -83,8 +83,8 @@ class SubqueryProcessors:
     in a composite query.
     """
 
-    plan_processors: Sequence[QueryProcessor]
-    db_processors: Sequence[QueryProcessor]
+    plan_processors: Sequence[ClickhouseQueryProcessor]
+    db_processors: Sequence[ClickhouseQueryProcessor]
 
 
 @dataclass(frozen=True)
@@ -119,7 +119,10 @@ class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
 
     def get_plan_processors(
         self,
-    ) -> Tuple[Sequence[QueryProcessor], Mapping[str, Sequence[QueryProcessor]]]:
+    ) -> Tuple[
+        Sequence[ClickhouseQueryProcessor],
+        Mapping[str, Sequence[ClickhouseQueryProcessor]],
+    ]:
         """
         Returns the sequences of query processors to execute once per plan.
         This method is used for convenience to unpack the SubqueryProcessors
