@@ -88,6 +88,46 @@ TModule = object
 def import_submodules_in_directory(
     directory_path: str, package_root: str
 ) -> list[TModule]:
+    """Given a directory path, import all the modules in that directory.
+    This is meant to be used in concert with RegisteredClass(es) as a RegisteredClass
+    needs to be imported to be registered.
+
+    directory_path: a path to the directory where all the RegisteredClass(es) are defined
+    package_root: the module path minus the final module name
+
+
+    Example:
+
+    imagine the following directory structure
+
+    snuba/
+    ├─ query_processors/
+    │  ├─ __init__.py
+    │  ├─ some_other_processor.py
+    │  ├─ some_processor.py
+
+    __init__.py contains a RegisteredClass:
+    (it can be outside the __init__.py, there's no technical reason it has to but convention makes things convenient)
+
+    >>> class QueryProcessor(metaclass=RegisteredClass):
+    >>>     pass
+
+    The other files in the `query_processors` directory define subclasses of the QueryProcessor class.
+
+    In the `__init__.py` simply add:
+
+    >>> import_submodules_in_directory(
+    >>>     os.path.dirname(os.path.realpath(__file__)),
+    >>>     "snuba.query_processors.snuba"
+    >>> )
+
+    As the __init__.py finishes importing, all the subclasses will be registered in the subdirectory, thus
+
+    >>> from snuba.query_processors import QueryProcessor
+    >>> QueryProcessor.class_from_name("some_other_processor")
+
+    will return the correct class just by virtue of having imported `QueryProcessor`
+    """
     imported_modules: list[object] = []
     for fname in os.listdir(directory_path):
         if fname == "__init__.py":
