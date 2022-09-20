@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from snuba.clickhouse.query import Query
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

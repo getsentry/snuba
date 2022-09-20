@@ -13,7 +13,7 @@ from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import Or, Param, Pattern, String
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 

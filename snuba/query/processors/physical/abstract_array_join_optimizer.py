@@ -22,7 +22,7 @@ from snuba.query.matchers import (
     Pattern,
     String,
 )
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 
 
 class AbstractArrayJoinOptimizer(ClickhouseQueryProcessor):

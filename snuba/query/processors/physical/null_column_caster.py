@@ -5,7 +5,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.functions import AGGREGATION_FUNCTIONS
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

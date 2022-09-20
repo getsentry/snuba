@@ -9,7 +9,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.expressions import FunctionCall
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 

@@ -34,7 +34,7 @@ from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.subscriptions.utils import SchedulingWatermarkMode

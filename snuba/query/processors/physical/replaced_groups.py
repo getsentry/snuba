@@ -12,7 +12,7 @@ from snuba.clickhouse.query_dsl.accessors import (
 from snuba.datasets.errors_replacer import ProjectsQueryFlags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.state import get_config

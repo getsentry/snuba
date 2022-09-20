@@ -10,7 +10,7 @@ from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.reader import Reader
 from snuba.web import QueryResult

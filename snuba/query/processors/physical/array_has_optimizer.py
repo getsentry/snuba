@@ -12,7 +12,7 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 """

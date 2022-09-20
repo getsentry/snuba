@@ -15,7 +15,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerProcessor
 

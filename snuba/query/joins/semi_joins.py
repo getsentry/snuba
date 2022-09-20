@@ -12,7 +12,7 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column
-from snuba.query.processors.physical.processors import CompositeQueryProcessor
+from snuba.query.processors.physical import CompositeQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 

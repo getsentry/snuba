@@ -9,7 +9,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     mapping_pattern,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.query.processors.physical.processors import ClickhouseQueryProcessor
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
