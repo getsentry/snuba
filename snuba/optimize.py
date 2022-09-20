@@ -1,11 +1,12 @@
+import asyncio
 import logging
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Mapping, MutableSequence, Optional, Sequence
+from typing import Any, Dict, Mapping, MutableSequence, Optional, Sequence
 
 from snuba import environment, util
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.optimize_scheduler import OptimizeScheduler
@@ -40,15 +41,23 @@ def run_optimize(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
+    part_format = schema.get_part_format()
+    assert part_format is not None
 
     partitions = get_partitions_to_optimize(
         clickhouse, storage, database, table, before
     )
+
+    merging_partitions_info = get_current_merging_partitions_info(
+        clickhouse, database, table, partitions
+    )
+
     partition_names = [partition.name for partition in partitions]
 
     optimize_partitions(
         clickhouse=clickhouse,
         database=database,
+        current_merge_info=merging_partitions_info,
         table=table,
         partitions=partition_names,
     )
@@ -78,6 +87,8 @@ def run_optimize_cron_job(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
+    part_format = schema.get_part_format()
+    assert part_format
     optimize_scheduler = OptimizeScheduler(parallel=parallel)
 
     try:
@@ -88,6 +99,10 @@ def run_optimize_cron_job(
         partitions = get_partitions_to_optimize(
             clickhouse, storage, database, table, before
         )
+        merging_partitions_info = get_current_merging_partitions_info(
+            clickhouse, database, table, partitions
+        )
+
         if len(partitions) == 0:
             logger.info("No partitions need optimization")
             return 0
@@ -106,6 +121,7 @@ def run_optimize_cron_job(
         database=database,
         table=table,
         partitions=list(partitions_to_optimize),
+        current_merge_info=merging_partitions_info,
         tracker=tracker,
         scheduler=optimize_scheduler,
         clickhouse_host=clickhouse_host,
@@ -161,14 +177,15 @@ def get_partitions_to_optimize(
         """
         SELECT
             partition,
+            partition_id,
             count() AS c
         FROM system.parts
         WHERE active
         AND database = %(database)s
         AND table = %(table)s
-        GROUP BY partition
+        GROUP BY partition, partition_id
         HAVING c > 1
-        ORDER BY c DESC, partition
+        ORDER BY c DESC, partition, partition_id
         """,
         {"database": database, "table": table},
     )
@@ -190,11 +207,63 @@ def get_partitions_to_optimize(
     return parts
 
 
+def get_current_merging_partitions_info(
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    partitions: Sequence[util.Part],
+) -> Dict[str, Any]:
+    """
+    Returns a dictionary of partitions that are currently being merged.
+    """
+
+    merging_parts = clickhouse.execute(
+        """
+        SELECT
+            result_part_name,
+            max(elapsed),
+            min(progress),      -- get the slowest merge combination possible
+            count() AS c
+        FROM system.merges
+        WHERE database = %(database)s
+        AND table = %(table)s
+        GROUP BY result_part_name
+        ORDER BY c DESC, result_part_name
+        """,
+        {"database": database, "table": table},
+    )
+
+    return __build_merging_partitions_info(merging_parts, partitions)
+
+
+def __build_merging_partitions_info(
+    merge_resuts: ClickhouseResult, partitions: Sequence[util.Part]
+) -> Dict[str, Any]:
+
+    merge_partitions_ids = {}
+    for part, elapsed, progress, count in merge_resuts.results:
+        partition_id = part.split("_")[0]
+        merge_partitions_ids[partition_id] = {
+            "partition_id": partition_id,
+            "elapsed": elapsed,
+            "progress": progress,
+            "estimated_time": elapsed / (progress + 0.0001),
+        }
+
+    merging_partitions_info = {
+        part.name: merge_partitions_ids[part.partition_id]
+        for part in partitions
+        if part.partition_id in merge_partitions_ids
+    }
+    return merging_partitions_info
+
+
 def optimize_partition_runner(
     clickhouse: ClickhousePool,
     database: str,
     table: str,
     partitions: Sequence[str],
+    current_merge_info: Dict[str, Any],
     scheduler: OptimizeScheduler,
     tracker: OptimizedPartitionTracker,
     clickhouse_host: str,
@@ -229,6 +298,7 @@ def optimize_partition_runner(
                         database,
                         table,
                         schedule.partitions[i],
+                        current_merge_info,
                         schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
@@ -259,6 +329,7 @@ def optimize_partitions(
     database: str,
     table: str,
     partitions: Sequence[str],
+    current_merge_info: Dict[str, Any],
     cutoff_time: Optional[datetime] = None,
     tracker: Optional[OptimizedPartitionTracker] = None,
     clickhouse_host: Optional[str] = None,
@@ -269,6 +340,28 @@ def optimize_partitions(
         PARTITION %(partition)s FINAL
     """
 
+    async def run_optimize_query(partition: str, query: str) -> None:
+        # Update tracker before running clickhouse.execute since its possible
+        # that the connection can get disconnected while the server is still
+        # executing the optimization. In that case we don't want to
+        # run optimization on the same partition twice.
+
+        if tracker:
+            tracker.update_scheduled_partitions(partition)
+
+        # if theres a merge in progress for this partition, wait for it to finish
+        if partition in current_merge_info:
+            sleep_time = current_merge_info[partition]["estimated_time"]
+            await asyncio.sleep(sleep_time)
+
+        start_time = time.time()
+        clickhouse.execute(query, retryable=False)
+        metrics.timing(
+            "optimized_part",
+            time.time() - start_time,
+            tags=_get_metrics_tags(table, clickhouse_host),
+        )
+
     if start_jitter is not None:
         logger.info(
             f"{threading.current_thread().name}: Jittering start time by"
@@ -276,6 +369,7 @@ def optimize_partitions(
         )
         time.sleep(start_jitter * 60)
 
+    coros = []
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
             logger.info(
@@ -292,18 +386,10 @@ def optimize_partitions(
 
         query = (query_template % args).strip()
         logger.info(f"Optimizing partition: {partition}")
-        start = time.time()
 
-        # Update tracker before running clickhouse.execute since its possible
-        # that the connection can get disconnected while the server is still
-        # executing the optimization. In that case we don't want to
-        # run optimization on the same partition twice.
-        if tracker:
-            tracker.update_completed_partitions(partition)
+        coros.append(run_optimize_query(partition, query))
 
-        clickhouse.execute(query, retryable=False)
-        metrics.timing(
-            "optimized_part",
-            time.time() - start,
-            tags=_get_metrics_tags(table, clickhouse_host),
-        )
+    async def run_coros() -> None:
+        await asyncio.gather(*coros)
+
+    asyncio.run(run_coros())
