@@ -136,6 +136,7 @@ class ClickhouseNodeMigration(Migration, ABC):
 
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
+        print(f"Running migration: {migration_id}")
 
         # The table does not exist before the first migration is run
         # so do not update status yet
@@ -146,6 +147,7 @@ class ClickhouseNodeMigration(Migration, ABC):
         for op in self.forwards_dist():
             op.execute(local=False)
         logger.info(f"Finished: {migration_id}")
+        print(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
     def backwards(self, context: Context, dry_run: bool) -> None:

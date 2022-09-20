@@ -49,8 +49,8 @@ def pytest_configure() -> None:
             connection = clickhouse_cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
-            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-            connection.execute(f"CREATE DATABASE {database_name};")
+            # connection.execute(f"DROP DATABASE IF EXISTS {database_name} SYNC;")
+            connection.execute(f"CREATE DATABASE IF NOT EXISTS  {database_name};")
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +61,7 @@ def run_migrations() -> Iterator[None]:
         Runner().run_all(force=True)
         yield
     finally:
+        pass
         for storage_key in get_all_storage_keys():
             storage = get_storage(storage_key)
             cluster = storage.get_cluster()

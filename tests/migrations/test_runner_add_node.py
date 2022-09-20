@@ -1,5 +1,6 @@
 import importlib
 import os
+import time
 from copy import deepcopy
 
 import pytest
@@ -34,7 +35,7 @@ def setup_function() -> None:
             f"SELECT name FROM system.tables WHERE database = '{database}'"
         ).results
         for (table,) in data:
-            connection.execute(f"DROP TABLE IF EXISTS {table}")
+            connection.execute(f"DROP TABLE IF EXISTS {table} SYNC")
 
 
 def teardown_function() -> None:
@@ -46,11 +47,12 @@ def teardown_function() -> None:
 @pytest.mark.ci_only
 def test_add_node() -> None:
     host_name = os.environ.get("CLICKHOUSE_HOST", "localhost")
-    port = int(os.environ.get("CLICKHOUSE_PORT", 9000))
+    port = int(os.environ.get("CLICKHOUSE_PORT", 9004))
     user = "default"
     password = ""
     database = os.environ.get("CLICKHOUSE_DATABASE", "default")
-
+    print("running test_add_node")
+    print("connection", host_name, port, database)
     client = ClickhousePool(
         host_name,
         port,
@@ -58,7 +60,7 @@ def test_add_node() -> None:
         password,
         database,
     )
-
+    time.sleep(60)
     assert set(client.execute("SHOW TABLES").results) == set()
 
     runner.Runner.add_node(
@@ -70,9 +72,16 @@ def test_add_node() -> None:
         password=password,
         database=database,
     )
-
+    print("added node")
+    time.sleep(3600)
     assert set(client.execute("SHOW TABLES").results) == {
         ("outcomes_raw_local",),
         ("outcomes_hourly_local",),
         ("outcomes_mv_hourly_local",),
     }
+
+
+def test_nope() -> None:
+    print("running test_nope")
+    time.sleep(300)
+    assert False

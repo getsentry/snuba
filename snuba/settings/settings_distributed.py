@@ -3,11 +3,11 @@ import os
 CLUSTERS = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "port": int(os.environ.get("CLICKHOUSE_PORT", 9004)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8224)),
         "storage_sets": {
             "cdc",
             "discover",

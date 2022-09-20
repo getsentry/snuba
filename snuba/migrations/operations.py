@@ -1,4 +1,5 @@
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Sequence, Tuple
 
@@ -21,12 +22,15 @@ class SqlOperation(ABC):
         cluster = get_cluster(self._storage_set)
 
         nodes = cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
-
+        assert len(nodes) == 2
         for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
+            print("sending to connection", connection.host, connection.port)
+            print("executing", self.format_sql()[:175], "\n")
             connection.execute(self.format_sql())
+            time.sleep(0.1)
 
     @abstractmethod
     def format_sql(self) -> str:
@@ -111,7 +115,7 @@ class DropTable(SqlOperation):
         self.table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
+        return f"DROP TABLE IF EXISTS {self.table_name} SYNC;"
 
 
 class TruncateTable(SqlOperation):

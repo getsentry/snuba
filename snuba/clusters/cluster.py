@@ -209,6 +209,13 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         cache_partition_id: Optional[str] = None,
         query_settings_prefix: Optional[str] = None,
     ):
+        _fix_host = {
+            "cluster-one-sh-01": ("localhost", 9003, 8223),
+            "cluster-one-sh-query": ("localhost", 9004, 8224),
+            "localhost": ("localhost", 9004, 8224),
+        }
+        host, port, http_port = _fix_host[host]
+
         super().__init__(storage_sets)
         self.__host = host
         self.__port = port
@@ -334,8 +341,21 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
+        _fix_host = {
+            "cluster-one-sh-01": ("localhost", 9003),
+            "cluster-one-sh-query": ("localhost", 9004),
+            "localhost": ("localhost", 9004),
+        }
+
+        def fix(args):
+            host, port = _fix_host[args[0]]
+            args = list(args)
+            args[0] = host
+            args[1] = port
+            return tuple(args)
+
         return [
-            ClickhouseNode(*host)
+            ClickhouseNode(*fix(host))
             for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(
                 f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"

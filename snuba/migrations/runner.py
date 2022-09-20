@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
@@ -154,8 +155,12 @@ class Runner:
                 if migration.blocking:
                     raise MigrationError("Requires force to run blocking migrations")
 
+        print("pending migrations", pending_migrations)
         for migration_key in pending_migrations:
             self._run_migration_impl(migration_key, force=force)
+
+        print("All migrations completed successfully")
+        time.sleep(15)
 
     def run_migration(
         self,
@@ -327,6 +332,9 @@ class Runner:
                 "version": next_version,
             }
         ]
+        print(
+            "update_migration_status", statement, status.value, self.__connection.host
+        )
         self.__connection.execute(statement, data)
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:
@@ -414,6 +422,7 @@ class Runner:
                         if sql_op._storage_set in storage_sets:
                             sql = sql_op.format_sql()
                             logger.info(f"Executing {sql}")
+                            print("executing", sql)
                             clickhouse.execute(sql)
             elif isinstance(migration, CodeMigration):
                 for python_op in migration.forwards_global():
