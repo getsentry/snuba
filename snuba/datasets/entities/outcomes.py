@@ -7,7 +7,7 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
@@ -68,7 +68,7 @@ class OutcomesEntity(Entity):
             validate_data_model=ColumnValidationMode.WARN,
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             BasicFunctionsProcessor(),
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),

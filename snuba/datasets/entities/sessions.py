@@ -27,7 +27,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
@@ -282,7 +282,7 @@ class SessionsEntity(Entity):
             validate_data_model=ColumnValidationMode.WARN,
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             BasicFunctionsProcessor(),
             TimeSeriesProcessor(
@@ -316,7 +316,7 @@ class OrgSessionsEntity(Entity):
             required_time_column="started",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             BasicFunctionsProcessor(),
             TimeSeriesProcessor(

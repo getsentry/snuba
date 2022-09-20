@@ -24,7 +24,7 @@ from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.granularity_processor import (
     DEFAULT_MAPPED_GRANULARITY_ENUM,
     PERFORMANCE_GRANULARITIES,
@@ -105,7 +105,7 @@ class GenericMetricsEntity(Entity, ABC):
             required_time_column="timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             TagsTypeTransformer(),
             MappedGranularityProcessor(

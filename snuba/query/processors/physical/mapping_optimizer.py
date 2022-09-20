@@ -3,7 +3,6 @@ from enum import Enum
 from typing import Optional, Tuple
 
 from snuba import environment
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
@@ -25,6 +24,7 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, AnyOptionalString
 from snuba.query.matchers import Column as ColumnMatcher
 from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -41,7 +41,7 @@ class ConditionClass(Enum):
     NOT_OPTIMIZABLE = 3
 
 
-class MappingOptimizer(QueryProcessor):
+class MappingOptimizer(ClickhouseQueryProcessor):
     """
     Optimize tags conditions by relying on the tags_hash_map column.
     Such column is an array of hashes of `key=value` strings.

@@ -2,15 +2,15 @@ from typing import Callable, Sequence
 
 import sentry_sdk
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
 def _execute_clickhouse_processors(
-    processors: Callable[[ClickhouseQueryPlan], Sequence[QueryProcessor]],
+    processors: Callable[[ClickhouseQueryPlan], Sequence[ClickhouseQueryProcessor]],
     query_plan: ClickhouseQueryPlan,
     settings: QuerySettings,
 ) -> None:
