@@ -208,6 +208,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         distributed_cluster_name: Optional[str] = None,
         cache_partition_id: Optional[str] = None,
         query_settings_prefix: Optional[str] = None,
+        cluster_nodes: Optional[
+            Mapping[str, Sequence[Tuple[str, int, Optional[int], Optional[int]]]]
+        ] = None,
     ):
         super().__init__(storage_sets)
         self.__host = host
@@ -224,6 +227,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
         self.__query_settings_prefix = query_settings_prefix
+        self.__cluster_nodes = cluster_nodes
 
     def __str__(self) -> str:
         return str(self.__query_node)
@@ -334,6 +338,11 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
+        if self.__cluster_nodes and self.__cluster_nodes.get(cluster_name):
+            return [
+                ClickhouseNode(*node) for node in self.__cluster_nodes[cluster_name]
+            ]
+
         return [
             ClickhouseNode(*host)
             for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
@@ -366,6 +375,7 @@ CLUSTERS = [
         else None,
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
+        cluster_nodes=cluster.get("cluster_nodes"),
     )
     for cluster in settings.CLUSTERS
 ]

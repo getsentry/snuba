@@ -79,6 +79,56 @@ FULL_CONFIG = [
     },
 ]
 
+ALL_MINUS_MIGRATIONS = {*ALL_STORAGE_SETS}
+ALL_MINUS_MIGRATIONS.remove("migrations")
+
+CLUSTER_NODES_CONFIG = [
+    # migrations cluster, single node
+    {
+        "host": "host_4",
+        "port": 9001,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8123,
+        "storage_sets": {"migrations"},
+        "single_node": True,
+    },
+    # query cluster, one node with all distributed tables
+    {
+        "host": "host_5",
+        "port": 9002,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8153,
+        "storage_sets": {},
+        "single_node": False,
+        "cluster_name": "dist_hosts",
+        "distributed_cluster_name": "dist_hosts",
+        "cluster_nodes": {
+            "dist_hosts": [("host_5", 9002, 1, 1)],
+        },
+    },
+    # storage cluster, 1 shard, 2 replicas, all local tables
+    {
+        "host": "host_5",  # same as the query cluster above
+        "port": 9002,  # same as the query cluster above
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8153,  # same as the query cluster above
+        "storage_sets": {*ALL_MINUS_MIGRATIONS},
+        "single_node": False,
+        "cluster_name": "clickhouse_hosts",
+        "distributed_cluster_name": "dist_hosts",
+        "cluster_nodes": {
+            "clickhouse_hosts": [("host_6", 9003, 1, 1), ("host_7", 9004, 1, 2)],
+            "dist_hosts": [("host_5", 9002, 1, 1)],
+        },
+    },
+]
+
 
 def teardown_function() -> None:
     importlib.reload(settings)
@@ -160,6 +210,40 @@ def test_get_local_nodes() -> None:
         assert len(distributed_cluster.get_local_nodes()) == 2
         assert distributed_cluster.get_local_nodes()[0].host_name == "host_1"
         assert distributed_cluster.get_local_nodes()[1].host_name == "host_2"
+
+
+@patch("snuba.settings.CLUSTERS", CLUSTER_NODES_CONFIG)
+def test_get_local_nodes_hardcoded() -> None:
+    importlib.reload(cluster)
+
+    migrations_cluster = cluster.get_cluster(StorageSetKey("migrations"))
+    assert len(migrations_cluster.get_local_nodes()) == 1
+    assert migrations_cluster.get_local_nodes()[0].host_name == "host_4"
+    assert migrations_cluster.get_local_nodes()[0].port == 9001
+    assert migrations_cluster.get_local_nodes()[0].shard is None
+    assert migrations_cluster.get_local_nodes()[0].replica is None
+
+    storage_cluster = get_storage(StorageKey("errors")).get_cluster()
+    assert len(storage_cluster.get_local_nodes()) == 2
+    assert storage_cluster.get_local_nodes()[0].host_name == "host_6"
+    assert storage_cluster.get_local_nodes()[0].port == 9003
+    assert storage_cluster.get_local_nodes()[0].shard == 1
+    assert storage_cluster.get_local_nodes()[0].replica == 1
+
+    assert storage_cluster.get_local_nodes()[1].host_name == "host_7"
+    assert storage_cluster.get_local_nodes()[1].port == 9004
+    assert storage_cluster.get_local_nodes()[1].shard == 1
+    assert storage_cluster.get_local_nodes()[1].replica == 2
+
+
+@patch("snuba.settings.CLUSTERS", CLUSTER_NODES_CONFIG)
+def test_distributed_nodes_hardcoded() -> None:
+    importlib.reload(cluster)
+
+    storage_cluster = get_storage(StorageKey("errors")).get_cluster()
+    assert len(storage_cluster.get_distributed_nodes()) == 1
+    assert storage_cluster.get_distributed_nodes()[0].host_name == "host_5"
+    assert storage_cluster.get_distributed_nodes()[0].port == 9002
 
 
 def test_cache_connections() -> None:
