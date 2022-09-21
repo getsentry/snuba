@@ -21,7 +21,6 @@ jobs:
           make generate-config-docs
       - name: Build docs
         run: |
-          pip install virtualenv
           make snubadocs
       - uses: peaceiris/actions-gh-pages@v3.7.3
         name: Publish to GitHub Pages

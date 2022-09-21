@@ -4,20 +4,16 @@ Schemas:
 ---------
 
 .. toctree::
-   :maxdepth: 1
+	:maxdepth: 1
 
-<<<<<<< HEAD
-   dataset
-=======
-	./dataset
+	dataset
 
-	./entity
+	entity
 
-	./entity_subscription
+	entity_subscription
 
-	./migration_group
+	migration_group
 
-	./readable_storage
+	readable_storage
 
-	./writable_storage
->>>>>>> 62c19d18 (Add automatic generate config script)
+	writable_storage

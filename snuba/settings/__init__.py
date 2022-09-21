@@ -256,6 +256,8 @@ OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
 
+ROOT_REPO_PATH = f"{Path(__file__).parent.parent.parent.as_posix()}"
+
 # File path glob for configs
 STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"

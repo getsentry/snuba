@@ -19,5 +19,4 @@ jobs:
           make generate-config-docs
       - name: Build docs
         run: |
-          pip install virtualenv
           make snubadocs
