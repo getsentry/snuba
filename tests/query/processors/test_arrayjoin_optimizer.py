@@ -22,7 +22,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
     filter_key_values,
     filter_keys,

@@ -23,7 +23,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
@@ -35,8 +34,9 @@ from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.table_rate_limit import TableRateLimit
-from snuba.query.processors.tuple_unaliaser import TupleUnaliaser
+from snuba.query.processors.physical import ClickhouseQueryProcessor
+from snuba.query.processors.physical.table_rate_limit import TableRateLimit
+from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
@@ -102,7 +102,10 @@ bucket_columns: Sequence[Column[SchemaModifiers]] = [
     Column("timeseries_id", UInt(32)),
 ]
 
-shared_query_processors: Sequence[QueryProcessor] = [TableRateLimit(), TupleUnaliaser()]
+shared_query_processors: Sequence[ClickhouseQueryProcessor] = [
+    TableRateLimit(),
+    TupleUnaliaser(),
+]
 
 sets_storage = ReadableTableStorage(
     storage_key=StorageKey.GENERIC_METRICS_SETS,

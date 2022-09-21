@@ -4,13 +4,14 @@ from typing import Any, Mapping, Optional, Sequence
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
 from snuba.utils.schemas import SchemaModifiers
@@ -29,8 +30,8 @@ class PluggableEntity(Entity):
     provided readable storage.
     """
 
-    name: str
-    query_processors: Sequence[QueryProcessor]
+    entity_key: EntityKey
+    query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     readable_storage: ReadableTableStorage
     validators: Sequence[QueryValidator]
@@ -42,7 +43,7 @@ class PluggableEntity(Entity):
         default_factory=dict
     )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
 
     def get_data_model(self) -> EntityColumnSet:
@@ -80,7 +81,9 @@ class PluggableEntity(Entity):
         return self.writeable_storage
 
     def __eq__(self, other: Any) -> bool:
-        return isinstance(other, PluggableEntity) and self.name == other.name
+        return (
+            isinstance(other, PluggableEntity) and self.entity_key == other.entity_key
+        )
 
     def __hash__(self) -> int:
-        return hash(self.name)
+        return hash(self.entity_key)

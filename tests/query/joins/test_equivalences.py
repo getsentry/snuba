@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -29,7 +29,7 @@ TEST_CASES = [
         JoinClause(
             IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
             IndividualNode(
-                "gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
+                "gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)
             ),
             [
                 JoinCondition(
@@ -42,15 +42,15 @@ TEST_CASES = [
         ),
         {
             QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"): {
+            QualifiedCol(EntityKey.GROUPEDMESSAGE, "id"): {
                 QualifiedCol(EntityKey.EVENTS, "group_id"),
             },
             QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"): {
+            QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"): {
                 QualifiedCol(EntityKey.EVENTS, "project_id"),
             },
         },
@@ -75,7 +75,7 @@ TEST_CASES = [
                 None,
             ),
             IndividualNode(
-                "gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
+                "gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)
             ),
             [
                 JoinCondition(
@@ -88,27 +88,27 @@ TEST_CASES = [
         ),
         {
             QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "id"),
                 QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"): {
+            QualifiedCol(EntityKey.GROUPEDMESSAGE, "id"): {
                 QualifiedCol(EntityKey.EVENTS, "group_id"),
                 QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"),
             },
             QualifiedCol(EntityKey.GROUPASSIGNEE, "group_id"): {
                 QualifiedCol(EntityKey.EVENTS, "group_id"),
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "id"),
             },
             QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"),
                 QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"): {
+            QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"): {
                 QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
                 QualifiedCol(EntityKey.EVENTS, "project_id"),
             },
             QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"),
                 QualifiedCol(EntityKey.EVENTS, "project_id"),
             },
         },
@@ -121,7 +121,7 @@ TEST_CASES = [
                     "ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)
                 ),
                 IndividualNode(
-                    "gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)
+                    "gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)
                 ),
                 [
                     JoinCondition(
@@ -146,27 +146,27 @@ TEST_CASES = [
         ),
         {
             QualifiedCol(EntityKey.EVENTS, "group_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "id"): {
+            QualifiedCol(EntityKey.GROUPEDMESSAGE, "id"): {
                 QualifiedCol(EntityKey.EVENTS, "group_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "user_id"): {
+            QualifiedCol(EntityKey.GROUPEDMESSAGE, "user_id"): {
                 QualifiedCol(EntityKey.GROUPASSIGNEE, "user_id"),
             },
             QualifiedCol(EntityKey.GROUPASSIGNEE, "user_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "user_id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "user_id"),
             },
             QualifiedCol(EntityKey.EVENTS, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"),
                 QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
             },
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"): {
+            QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"): {
                 QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"),
                 QualifiedCol(EntityKey.EVENTS, "project_id"),
             },
             QualifiedCol(EntityKey.GROUPASSIGNEE, "project_id"): {
-                QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
+                QualifiedCol(EntityKey.GROUPEDMESSAGE, "project_id"),
                 QualifiedCol(EntityKey.EVENTS, "project_id"),
             },
         },
@@ -180,7 +180,7 @@ def test_find_equivalences(
     join: JoinClause[EntitySource], graph: EquivalenceGraph
 ) -> None:
     override_entity_map(EntityKey.EVENTS, Events())
-    override_entity_map(EntityKey.GROUPEDMESSAGES, GroupedMessage())
+    override_entity_map(EntityKey.GROUPEDMESSAGE, GroupedMessage())
     override_entity_map(EntityKey.GROUPASSIGNEE, GroupAssignee())
 
     assert get_equivalent_columns(join) == graph

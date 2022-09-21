@@ -7,7 +7,7 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.tags_expander import TagsExpanderProcessor
+from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 

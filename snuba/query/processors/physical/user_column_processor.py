@@ -1,0 +1,26 @@
+from snuba.clickhouse.query import Query
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.processors.physical import ClickhouseQueryProcessor
+from snuba.query.query_settings import QuerySettings
+
+
+class UserColumnProcessor(ClickhouseQueryProcessor):
+    """
+    Return null instead of empty user to align errors to events storage behavior.
+    This translation is applied as a column processor rather than a translator, so
+    that it will be properly applied to the promoted sentry:user tag.
+    """
+
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        def process_column(exp: Expression) -> Expression:
+            if isinstance(exp, Column):
+                if exp.column_name == "user":
+                    return FunctionCall(
+                        exp.alias,
+                        "nullIf",
+                        (Column(None, None, "user"), Literal(None, "")),
+                    )
+
+            return exp
+
+        query.transform_expressions(process_column)

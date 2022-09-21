@@ -4,7 +4,7 @@ import pytest
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.processors.mapping_optimizer import MappingOptimizer
+from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
 from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 
@@ -263,7 +263,7 @@ def test_useless_has_condition(
     input_query: ClickhouseQuery,
     expected_query: ClickhouseQuery,
 ) -> None:
-    from snuba.query.processors.empty_tag_condition_processor import (
+    from snuba.query.processors.physical.empty_tag_condition_processor import (
         EmptyTagConditionProcessor,
     )
 

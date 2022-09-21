@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
+from hashlib import md5
 from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +8,7 @@ import pytest
 import simplejson as json
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -546,6 +547,61 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
+    def test_transaction_group_ids_with_results(self) -> None:
+        unique = "100"
+        hash = md5(unique.encode("utf-8")).hexdigest()
+        group_id = int(hash[:16], 16)
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (discover)
+                    SELECT count() AS count BY time
+                    WHERE
+                        group_ids = {group_id} AND
+                        timestamp >= toDateTime('{self.base_time.isoformat()}') AND
+                        timestamp < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id})
+                    ORDER BY time ASC
+                    LIMIT 10000
+                    """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 1
+        assert data[0]["count"] == 1
+
+    def test_transaction_group_ids_with_no_results(self) -> None:
+        unique = "200"
+        hash = md5(unique.encode("utf-8")).hexdigest()
+        group_id = int(hash[:16], 16)
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (discover)
+                    SELECT count() AS count BY time
+                    WHERE
+                        group_ids = {group_id} AND
+                        timestamp >= toDateTime('{self.base_time.isoformat()}') AND
+                        timestamp < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id})
+                    ORDER BY time ASC
+                    LIMIT 10000
+                    """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 0
 
     def test_suspect_spans_data(self) -> None:
         response = self.post(

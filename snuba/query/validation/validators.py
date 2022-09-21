@@ -29,6 +29,12 @@ class QueryValidator(ABC, metaclass=RegisteredClass):
     """
     Contains validation logic that requires the entire query. An entity has one or more
     of these validators that it adds contextual information too.
+
+    WARNING!!!
+
+    This class assumes that all of its subclasses are in this same file in order for the
+    RegisteredClass functionality to work. If validators are defined in other files and
+    not imported, they would not be picked up and the `get_from_name` function would not work
     """
 
     @classmethod

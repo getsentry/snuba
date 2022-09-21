@@ -2,7 +2,7 @@ from functools import partial
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -53,7 +53,7 @@ def test_classify_and_replace() -> None:
 
 ENTITY_GROUP_JOIN = JoinClause(
     IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
-    IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None)),
+    IndividualNode("gr", EntitySource(EntityKey.GROUPEDMESSAGE, GROUPS_SCHEMA, None)),
     [
         JoinCondition(
             JoinConditionExpression("ev", "group_id"),
@@ -264,7 +264,7 @@ def test_add_equivalent_condition(
     expected_expr: Expression,
 ) -> None:
     override_entity_map(EntityKey.EVENTS, Events())
-    override_entity_map(EntityKey.GROUPEDMESSAGES, GroupedMessage())
+    override_entity_map(EntityKey.GROUPEDMESSAGE, GroupedMessage())
 
     query = CompositeQuery(
         from_clause=join_clause,

@@ -1,5 +1,5 @@
 from snuba.clickhouse.columns import Any, ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
@@ -63,7 +63,7 @@ def test_join_query() -> None:
 
     groups_query = LogicalQuery(
         Entity(
-            EntityKey.GROUPEDMESSAGES,
+            EntityKey.GROUPEDMESSAGE,
             ColumnSet([("id", UInt(32)), ("message", String())]),
         ),
         selected_columns=[

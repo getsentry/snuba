@@ -7,14 +7,14 @@ from unittest import mock
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaProducer
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.combined_scheduler_executor import (
     CombinedSchedulerExecutorFactory,
 )
 from snuba.subscriptions.data import PartitionId, SubscriptionData
-from snuba.subscriptions.entity_subscription import EventsSubscription
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import Tick
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration

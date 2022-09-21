@@ -46,16 +46,16 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
-from snuba.query.processors import QueryProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical import LogicalQueryProcessor
+from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.util import qualified_column
 
@@ -284,6 +284,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
                 ]
             ),
         ),
+        ("group_ids", Array(UInt(64, Modifiers(nullable=True)))),
     ]
 )
 
@@ -441,7 +442,7 @@ class DiscoverEntity(Entity):
             required_time_column="timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),

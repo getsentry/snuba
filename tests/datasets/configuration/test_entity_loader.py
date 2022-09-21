@@ -2,7 +2,7 @@ import pytest
 from jsonschema.exceptions import ValidationError
 
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_entity import PluggableEntity
 
@@ -14,7 +14,7 @@ def test_build_entity_from_config_matches_python_definition() -> None:
     py_sets_entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
 
     assert isinstance(config_sets_entity, PluggableEntity)
-    assert config_sets_entity.name == "generic_metrics_sets"
+    assert config_sets_entity.entity_key == EntityKey.GENERIC_METRICS_SETS
 
     for (config_qp, py_qp) in zip(
         config_sets_entity.get_query_processors(), py_sets_entity.get_query_processors()

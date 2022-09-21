@@ -10,8 +10,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
@@ -25,17 +25,17 @@ from snuba.query import ProcessableQuery
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.handled_functions import HandledFunctionsProcessor
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical import LogicalQueryProcessor
+from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.handled_functions import HandledFunctionsProcessor
+from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
@@ -201,7 +201,7 @@ class BaseEventsEntity(Entity, ABC):
             abstract_column_set=columns,
             join_relationships={
                 "grouped": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPEDMESSAGES,
+                    rhs_entity=EntityKey.GROUPEDMESSAGE,
                     columns=[("project_id", "project_id"), ("group_id", "id")],
                     join_type=JoinType.INNER,
                     equivalences=[],
@@ -218,7 +218,7 @@ class BaseEventsEntity(Entity, ABC):
             required_time_column="timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             TimeSeriesProcessor(
                 {"time": "timestamp", "rtime": "received"}, ("timestamp", "received")

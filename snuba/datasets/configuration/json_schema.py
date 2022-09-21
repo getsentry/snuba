@@ -3,14 +3,17 @@ from __future__ import annotations
 from typing import Any
 
 TYPE_STRING = {"type": "string"}
+TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
+TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
         "type": TYPE_STRING,
-        "args": {"type": "array", "items": TYPE_STRING},
+        "args": TYPE_STRING_ARRAY,
     },
+    "additionalProperties": False,
 }
 
 STREAM_LOADER_SCHEMA = {
@@ -23,9 +26,15 @@ STREAM_LOADER_SCHEMA = {
         "subscription_scheduler_mode": TYPE_NULLABLE_STRING,
         "subscription_result_topic": TYPE_NULLABLE_STRING,
         "replacement_topic": TYPE_NULLABLE_STRING,
-        "prefilter": FUNCTION_CALL_SCHEMA,
+        "pre_filter": FUNCTION_CALL_SCHEMA,
         "dlq_policy": FUNCTION_CALL_SCHEMA,
     },
+    "additionalProperties": False,
+}
+
+NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA = {
+    "type": ["array", "null"],
+    "items": TYPE_STRING,
 }
 
 ######
@@ -33,7 +42,7 @@ STREAM_LOADER_SCHEMA = {
 def make_column_schema(
     column_type: dict[str, Any], args: dict[str, Any]
 ) -> dict[str, Any]:
-    args["properties"]["schema_modifiers"] = {"type": "array", "items": TYPE_STRING}
+    args["properties"]["schema_modifiers"] = TYPE_STRING_ARRAY
     return {
         "type": "object",
         "properties": {
@@ -41,18 +50,29 @@ def make_column_schema(
             "type": column_type,
             "args": args,
         },
+        "additionalProperties": False,
     }
 
 
 NUMBER_SCHEMA = make_column_schema(
     column_type={"enum": ["UInt", "Float"]},
-    args={"type": "object", "properties": {"size": {"type": "number"}}},
+    args={
+        "type": "object",
+        "properties": {
+            "size": {"type": "number"},
+        },
+        "additionalProperties": False,
+    },
 )
 
 
 NO_ARG_SCHEMA = make_column_schema(
     column_type={"enum": ["String", "DateTime"]},
-    args={"type": "object", "properties": {}},
+    args={
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
 )
 
 
@@ -60,7 +80,11 @@ ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
-        "properties": {"type": TYPE_STRING, "arg": {"type": "number"}},
+        "properties": {
+            "type": TYPE_STRING,
+            "arg": {"type": "number"},
+        },
+        "additionalProperties": False,
     },
 )
 
@@ -78,9 +102,11 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
                         "type": {"enum": ["Float", "UUID", "UInt"]},
                         "arg": {"type": ["number", "null"]},
                     },
+                    "additionalProperties": False,
                 },
             },
         },
+        "additionalProperties": False,
     },
 )
 
@@ -98,6 +124,7 @@ NESTED_SCHEMA = make_column_schema(
         "properties": {
             "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
         },
+        "additionalProperties": False,
     },
 )
 
@@ -110,17 +137,17 @@ SCHEMA_SCHEMA = {
         "local_table_name": TYPE_STRING,
         "dist_table_name": TYPE_STRING,
     },
+    "additionalProperties": False,
 }
 ######
 
 STORAGE_SCHEMA = {
     "type": "object",
     "properties": {"key": TYPE_STRING, "set_key": TYPE_STRING},
+    "additionalProperties": False,
 }
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
-
-KIND_SCHEMA = {"enum": ["writable_storage", "readable_storage", "entity"]}
+STORAGE_QUERY_PROCESSORS_SCHEMA = TYPE_STRING_ARRAY
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
@@ -129,6 +156,7 @@ ENTITY_QUERY_PROCESSOR = {
         "args": {"type": "object"},  # args are a flexible dict
     },
     "required": ["processor"],
+    "additionalProperties": False,
 }
 
 ENTITY_VALIDATOR = {
@@ -138,6 +166,7 @@ ENTITY_VALIDATOR = {
         "args": {"type": "object"},  # args are a flexible dict
     },
     "required": ["validator"],
+    "additionalProperties": False,
 }
 
 ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
@@ -149,6 +178,7 @@ ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
             "args": {"type": "object"},
         },
         "required": ["mapper"],
+        "additionalProperties": False,
     },
 }
 
@@ -156,8 +186,10 @@ ENTITY_TRANSLATION_MAPPERS = {
     "type": "object",
     "properties": {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
+        "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
     },
+    "additionalProperties": False,
 }
 
 # Full schemas:
@@ -173,6 +205,15 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
+    "required": [
+        "version",
+        "kind",
+        "name",
+        "storage",
+        "schema",
+        "stream_loader",
+    ],
+    "additionalProperties": False,
 }
 
 
@@ -186,6 +227,14 @@ V1_READABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
     },
+    "required": [
+        "version",
+        "kind",
+        "name",
+        "storage",
+        "schema",
+    ],
+    "additionalProperties": False,
 }
 
 V1_ENTITY_SCHEMA = {
@@ -212,4 +261,71 @@ V1_ENTITY_SCHEMA = {
         "validators",
         "required_time_column",
     ],
+    "additionalProperties": False,
+}
+
+V1_DATASET_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"const": "v1"},
+        "kind": {"const": "dataset"},
+        "name": TYPE_STRING,
+        "is_experimental": {"type": "boolean"},
+        "entities": {
+            "type": "object",
+            "properties": {"all": TYPE_STRING_ARRAY},
+            "additionalProperties": False,
+            "required": ["all"],
+        },
+    },
+    "required": [
+        "version",
+        "kind",
+        "name",
+        "entities",
+    ],
+    "additionalProperties": False,
+}
+
+V1_ENTITY_SUBSCIPTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"const": "v1"},
+        "kind": {"const": "entity_subscription"},
+        "name": TYPE_STRING,
+        "max_allowed_aggregations": TYPE_NULLABLE_INTEGER,
+        "disallowed_aggregations": NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA,
+    },
+    "required": [
+        "version",
+        "kind",
+        "name",
+    ],
+    "additionalProperties": False,
+}
+
+
+V1_MIGRATION_GROUP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"const": "v1"},
+        "kind": {"const": "migration_group"},
+        "name": TYPE_STRING,
+        "optional": {"type": "boolean"},
+        "migrations": {
+            "type": "array",
+            "items": TYPE_STRING,
+        },
+    },
+    "required": ["name", "migrations"],
+    "additionalProperties": False,
+}
+
+V1_ALL_SCHEMAS = {
+    "dataset": V1_DATASET_SCHEMA,
+    "entity": V1_ENTITY_SCHEMA,
+    "entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA,
+    "readable_storage": V1_READABLE_STORAGE_SCHEMA,
+    "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
+    "migration_group": V1_MIGRATION_GROUP_SCHEMA,
 }

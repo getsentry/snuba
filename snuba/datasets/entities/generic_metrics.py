@@ -24,21 +24,21 @@ from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.processors import QueryProcessor
-from snuba.query.processors.granularity_processor import (
+from snuba.query.processors.logical import LogicalQueryProcessor
+from snuba.query.processors.logical.granularity_processor import (
     DEFAULT_MAPPED_GRANULARITY_ENUM,
     PERFORMANCE_GRANULARITIES,
     MappedGranularityProcessor,
 )
-from snuba.query.processors.object_id_rate_limiter import (
+from snuba.query.processors.logical.object_id_rate_limiter import (
     OrganizationRateLimiterProcessor,
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
     ReferrerRateLimiterProcessor,
 )
-from snuba.query.processors.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.tags_type_transformer import TagsTypeTransformer
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
+from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
+from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     QueryValidator,
@@ -105,7 +105,7 @@ class GenericMetricsEntity(Entity, ABC):
             required_time_column="timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             TagsTypeTransformer(),
             MappedGranularityProcessor(

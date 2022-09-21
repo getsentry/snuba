@@ -1,14 +1,16 @@
 import pytest
 
 from snuba import state
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.object_id_rate_limiter import ProjectRateLimiterProcessor
+from snuba.query.processors.logical.object_id_rate_limiter import (
+    ProjectRateLimiterProcessor,
+)
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state.rate_limit import PROJECT_RATE_LIMIT_NAME
 

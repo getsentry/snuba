@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -1175,8 +1175,8 @@ test_cases = [
                         right_node=IndividualNode(
                             "gm",
                             QueryEntity(
-                                EntityKey.GROUPEDMESSAGES,
-                                get_entity(EntityKey.GROUPEDMESSAGES).get_data_model(),
+                                EntityKey.GROUPEDMESSAGE,
+                                get_entity(EntityKey.GROUPEDMESSAGE).get_data_model(),
                             ),
                         ),
                         keys=[
@@ -1961,7 +1961,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
         "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
-        "bookmark": (EntityKey.GROUPEDMESSAGES, "first_release_id"),
+        "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
         "activity": (EntityKey.SESSIONS, "org_id"),
     }
 

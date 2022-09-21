@@ -3,10 +3,10 @@ from typing import Sequence
 from unittest.mock import Mock
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 
 EVENTS_SCHEMA = ColumnSet(
     [
@@ -38,7 +38,7 @@ GROUPS_ASSIGNEE = ColumnSet(
 
 
 class FakeEntity(Entity, ABC):
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return []
 
 
@@ -50,7 +50,7 @@ class Events(FakeEntity):
             abstract_column_set=EVENTS_SCHEMA,
             join_relationships={
                 "grouped": JoinRelationship(
-                    rhs_entity=EntityKey.GROUPEDMESSAGES,
+                    rhs_entity=EntityKey.GROUPEDMESSAGE,
                     columns=[("group_id", "id")],
                     join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],

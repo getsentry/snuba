@@ -8,7 +8,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clusters.storage_sets import StorageSetKey
@@ -18,9 +17,13 @@ from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.exceptions import ValidationException
-from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdEnforcer
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.table_rate_limit import TableRateLimit
+from snuba.query.processors.physical import ClickhouseQueryProcessor
+from snuba.query.processors.physical.conditions_enforcer import (
+    OrgIdEnforcer,
+    ProjectIdEnforcer,
+)
+from snuba.query.processors.physical.prewhere import PrewhereProcessor
+from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.streams.topics import Topic
 
@@ -102,7 +105,7 @@ materialized_view_schema = TableSchema(
 )
 
 
-class MinuteResolutionProcessor(QueryProcessor):
+class MinuteResolutionProcessor(ClickhouseQueryProcessor):
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # NOTE: the product side is restricted to a 6h window, however it rounds
         # outwards, which extends the window to 7h.
