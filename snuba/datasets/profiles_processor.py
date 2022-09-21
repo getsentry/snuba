@@ -17,15 +17,17 @@ class ProfilesMessageProcessor(MessageProcessor):
         try:
             if "version" in message:
                 additional_fields = {
-                    key: message["device"].get(key, "")
-                    for key in [
+                    f"device_{field}": message["device"].get(field, "")
+                    for field in [
                         "locale",
                         "classification",
                         "manufacturer",
                         "model",
-                        "architecture",
                     ]
                 }
+                additional_fields["architecture"] = message["device"].get(
+                    "architecture", "unknown"
+                )
                 additional_fields["version_name"] = message["release"]
 
                 for field in ["name", "version"]:
