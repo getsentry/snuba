@@ -6,7 +6,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
 
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARN")
 LOG_FORMAT = "%(asctime)s %(message)s"
 
 TESTING = False
