@@ -1,11 +1,11 @@
 from dataclasses import replace
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
-class ConsistencyEnforcerProcessor(QueryProcessor):
+class ConsistencyEnforcerProcessor(ClickhouseQueryProcessor):
     """
     This processor modifies the query to ensure that deduplication/merge happens when the query
     is run. This is done by setting the FINAL mode in clickhouse query.

@@ -2,7 +2,16 @@ import logging
 import zlib
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Iterable, Mapping, MutableMapping, Optional, Tuple
+from typing import (
+    Any,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Tuple,
+    Union,
+)
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
@@ -42,7 +51,7 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
     def _timeseries_id_token(
         self,
         message: Mapping[str, Any],
-        sorted_tag_items: Iterable[Tuple[str, int]],
+        sorted_tag_items: Iterable[Tuple[str, Union[int, str]]],
     ) -> bytearray:
         org_id: int = message["org_id"]
         project_id: int = message["project_id"]
@@ -53,7 +62,10 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
             buffer.extend(field.to_bytes(length=8, byteorder="little"))
         for (key, value) in sorted_tag_items:
             buffer.extend(bytes(key, "utf-8"))
-            buffer.extend(value.to_bytes(length=8, byteorder="little"))
+            if isinstance(value, int):
+                buffer.extend(value.to_bytes(length=8, byteorder="little"))
+            elif isinstance(value, str):
+                buffer.extend(bytes(value, "utf-8"))
 
         return buffer
 
@@ -86,24 +98,32 @@ class GenericMetricsBucketProcessor(MessageProcessor, ABC):
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(message["timestamp"]))
         assert timestamp is not None, "Invalid timestamp"
 
-        keys = []
-        indexed_values = []
-        tags = message["tags"]
-        assert isinstance(tags, Mapping), "Invalid tags type"
-
-        sorted_tag_items = sorted(tags.items())
-        for key, value in sorted_tag_items:
-            assert key.isdigit() and isinstance(value, int), "Tag key/value invalid"
-            keys.append(int(key))
-            indexed_values.append(value)
-
         try:
             retention_days = enforce_retention(message["retention_days"], timestamp)
         except EventTooOld:
             return None
 
+        keys = []
+        indexed_values: MutableSequence[int] = []
+        raw_values: MutableSequence[str] = []
+        tags = message["tags"]
+        version = message.get("version", 1)
+        assert isinstance(tags, Mapping), "Invalid tags type"
         raw_values_index = self._get_raw_values_index(message)
-        raw_values = [raw_values_index.get(str(v), "") for v in indexed_values]
+
+        sorted_tag_items = sorted(tags.items())
+        for key, value in sorted_tag_items:
+            assert key.isdigit(), "Tag key invalid"
+            keys.append(int(key))
+
+            if version == 1:
+                assert isinstance(value, int), "Tag value invalid"
+                indexed_values.append(value)
+                raw_values.append(raw_values_index.get(str(value), ""))
+            elif version == 2:
+                assert isinstance(value, str), "Tag value invalid"
+                indexed_values.append(0)
+                raw_values.append(value)
 
         processed = {
             "use_case_id": message["use_case_id"],

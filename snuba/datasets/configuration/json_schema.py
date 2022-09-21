@@ -273,8 +273,9 @@ V1_DATASET_SCHEMA = {
         "is_experimental": {"type": "boolean"},
         "entities": {
             "type": "object",
-            "properties": {"default": TYPE_STRING, "all": TYPE_STRING_ARRAY},
+            "properties": {"all": TYPE_STRING_ARRAY},
             "additionalProperties": False,
+            "required": ["all"],
         },
     },
     "required": [

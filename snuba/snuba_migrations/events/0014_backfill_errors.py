@@ -61,7 +61,7 @@ COLUMNS = [
     ("timestamp", "timestamp"),
     (
         "event_id",
-        "toUUID(UUIDNumToString(toFixedString(unhex(toString(event_id)), 16)))",
+        "toUUID(UUIDNumToString(toFixedString(unhex(toString(assumeNotNull(event_id))), 16)))",
     ),
     ("platform", "ifNull(`platform`, '')"),
     ("environment", "environment"),

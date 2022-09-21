@@ -1,11 +1,11 @@
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, Literal, SubscriptableReference
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
-class TagsTypeTransformer(QueryProcessor):
+class TagsTypeTransformer(LogicalQueryProcessor):
     """
     Converts string keys in subscriptable accesses to integers -- primarily
     used by the metrics and generic_metrics entities

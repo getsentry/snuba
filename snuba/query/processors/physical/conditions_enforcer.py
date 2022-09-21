@@ -1,7 +1,6 @@
 import logging
 from typing import Sequence
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Expression, Query
 from snuba.datasets.storage import ConditionChecker
 from snuba.query.conditions import (
@@ -14,6 +13,7 @@ from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import Or, Param, Pattern, String
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 
@@ -66,7 +66,7 @@ class OrgIdEnforcer(ConditionChecker):
         return _check_expression(EQ_CONDITION_PATTERN, expression, self.field_name)
 
 
-class MandatoryConditionEnforcer(QueryProcessor):
+class MandatoryConditionEnforcer(ClickhouseQueryProcessor):
     """
     Ensures the query contains a set of storage defined conditions on
     specific columns and blocks the query if this is not true.
