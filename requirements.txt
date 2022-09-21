@@ -9,7 +9,7 @@ datadog==0.21.0
 flake8==5.0.4
 Flask==2.2.2
 honcho==1.1.0
-jsonschema==4.9.1
+jsonschema==4.16.0
 Markdown==3.4.1
 packaging==21.3
 # Do not update parsimonious, there is a performance issue in newer versions
