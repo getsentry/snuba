@@ -1,10 +1,12 @@
+import os
 from abc import ABC, abstractmethod
 
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 
-class LogicalQueryProcessor(ABC):
+class LogicalQueryProcessor(ABC, metaclass=RegisteredClass):
     """
     A transformation applied to a Query. This depends on the query structure and
     on the request.query_settings. No additional context is provided.
@@ -20,6 +22,10 @@ class LogicalQueryProcessor(ABC):
     instance may be reused.
     """
 
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
     @abstractmethod
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # TODO: Now the query is moved around through the Request object, which
@@ -29,3 +35,8 @@ class LogicalQueryProcessor(ABC):
         # existing one in place. We can move towards an immutable structure
         # after changing Request.
         raise NotImplementedError
+
+
+import_submodules_in_directory(
+    os.path.dirname(os.path.realpath(__file__)), "snuba.query.processors.logical"
+)

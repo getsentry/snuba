@@ -1,12 +1,14 @@
-from typing import Dict, Sequence
+from typing import Dict, Sequence, TYPE_CHECKING
 
 from snuba.clickhouse.columns import FlattenedColumn, SchemaModifiers
 from snuba.clickhouse.query import Query
-from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.functions import AGGREGATION_FUNCTIONS
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
+
+if TYPE_CHECKING:
+    from snuba.datasets.storage import ReadableTableStorage
 
 
 def _col_is_nullable(col: FlattenedColumn) -> bool:
@@ -69,7 +71,7 @@ class NullColumnCaster(ClickhouseQueryProcessor):
 
         return mismatched_col_name_to_col
 
-    def __init__(self, merge_table_sources: Sequence[ReadableTableStorage]):
+    def __init__(self, merge_table_sources: Sequence["ReadableTableStorage"]):
         """
         Args:
             merge_table_sources: sequence of the storages which make up the merge table,
