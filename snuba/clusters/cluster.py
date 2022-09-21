@@ -20,7 +20,11 @@ from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
+from snuba.clusters.storage_sets import (
+    DEV_STORAGE_SETS,
+    StorageSetKey,
+    register_storage_set_key,
+)
 from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
@@ -103,20 +107,12 @@ class Cluster(ABC, Generic[TWriterOptions]):
 
     def __init__(self, storage_sets: Set[str]):
         self.__storage_sets = storage_sets
+        # register the cluster's storage sets
+        for storage_set in storage_sets:
+            register_storage_set_key(storage_set)
 
     def get_storage_set_keys(self) -> Set[StorageSetKey]:
-        all_storage_sets = set(key.value for key in StorageSetKey)
-
-        storage_set_keys = set()
-
-        for storage_set in self.__storage_sets:
-            # We ignore invalid storage set keys since new storage sets will
-            # need to be registered to configuration before they can be used
-            # in Snuba.
-            if storage_set in all_storage_sets:
-                storage_set_keys.add(StorageSetKey(storage_set))
-
-        return storage_set_keys
+        return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
     def get_reader(self) -> Reader:
