@@ -41,8 +41,8 @@ repos:
     hooks:
       - id: validate-configs-syntax
         name: validate-configs-syntax
-        entry: python3 ./snuba/validate_configs.py
-        language: system
-        pass_filenames: false
+        entry: python3 -m snuba.validate_configs
+        language: python
+        additional_dependencies: [ 'jsonschema', 'pyyaml' ]
 default_language_version:
   python: python3.8
