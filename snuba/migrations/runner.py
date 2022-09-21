@@ -434,3 +434,69 @@ class Runner:
             elif isinstance(migration, CodeMigration):
                 for python_op in migration.forwards_global():
                     python_op.execute_new_node(storage_sets)
+
+    @classmethod
+    def create_tables(
+        self,
+        node_type: ClickhouseNodeType,
+        host_name: str,
+        port: int,
+        user: str,
+        password: str,
+        database: str,
+        new_port: int,
+        table_names: Optional[str],
+        dry_run: bool = False,
+    ) -> None:
+        """
+        Create tables on a new node in a cluster by using the existing create table
+        statement from an existing node in a cluster. This can be done for a new shard
+        or new replica.
+        """
+        client_settings = ClickhouseClientSettings.QUERY.value
+        clickhouse = ClickhousePool(
+            host_name,
+            port,
+            user,
+            password,
+            database,
+            client_settings=client_settings.settings,
+            send_receive_timeout=client_settings.timeout,
+        )
+
+        # TODO: assert that the new node is not in the system.clusters definitions yet
+
+        if table_names:
+            ch_table_names = table_names.split(",")
+        else:
+            ch_table_names = [
+                result[0] for result in clickhouse.execute("SHOW TABLES").results
+            ]
+
+        show_table_statments = {}
+
+        for name in ch_table_names:
+            ((curr_create_table_statement,),) = clickhouse.execute(
+                f"SHOW CREATE TABLE {database}.{name}"
+            ).results
+            show_table_statments[name] = curr_create_table_statement
+
+        new_client_settings = ClickhouseClientSettings.MIGRATE.value
+        new_clickhouse_node = ClickhousePool(
+            host_name,
+            new_port,
+            user,
+            password,
+            database,
+            client_settings=new_client_settings.settings,
+            send_receive_timeout=new_client_settings.timeout,
+        )
+
+        # TODO: print out the system.macros for the new node
+
+        for table_name, statement in show_table_statments.items():
+            print(f"creating {table_name}...")
+            if dry_run:
+                print(f"create table statement: \n {statement}")
+                return
+            new_clickhouse_node.execute(statement)
