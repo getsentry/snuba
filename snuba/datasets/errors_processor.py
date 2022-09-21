@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import _strptime  # NOQA fixes _strptime deferred import issue
 
@@ -278,7 +278,8 @@ class ErrorsProcessor(MessageProcessor):
                 if stack is None:
                     continue
 
-                stack_types.append(_unicodify(stack.get("type", None)))
+                stack_type = _unicodify(stack.get("type", None))
+                stack_types.append(stack_type)
                 stack_values.append(_unicodify(stack.get("value", None)))
 
                 mechanism = stack.get("mechanism", None) or {}
@@ -301,6 +302,11 @@ class ErrorsProcessor(MessageProcessor):
                     frame_stack_levels.append(stack_level)
 
                 stack_level += 1
+                output[
+                    "exception_frames.empty.js_console"
+                ] = stack_type is not None and self.suspected_console_errors(
+                    mechanism, stack_type, frames
+                )
 
         output["exception_stacks.type"] = stack_types
         output["exception_stacks.value"] = stack_values
@@ -344,3 +350,37 @@ class ErrorsProcessor(MessageProcessor):
             if i:
                 sdk_integrations.append(i)
         output["sdk_integrations"] = sdk_integrations
+
+    def suspected_console_errors(
+        self, mechanism: Dict[str, Any], stack_type: str, frames: Sequence[Any]
+    ) -> bool:
+        def is_suspicious_frame(frame: Dict[str, Any]) -> bool:
+            function = _unicodify(frame.get("function", None))
+            filename = _unicodify(frame.get("filename", None))
+            return function == "?" and filename == "<anonymous>"
+
+        def has_suspicious_frames(frames: Sequence[Any]) -> bool:
+            if len(frames) == 2 and is_suspicious_frame(frames[0]):
+                return True
+            return all(is_suspicious_frame(frame) for frame in frames)
+
+        if (
+            not frames
+            or not mechanism
+            or mechanism.get("type") != "onerror"
+            or mechanism.get("handled")
+        ):
+            return False
+
+        has_short_stacktrace = len(frames) <= 2
+        is_suspicious_error = stack_type.lower() in [
+            "syntaxerror",
+            "referenceerror",
+            "typeerror",
+        ]
+
+        return (
+            has_short_stacktrace
+            and is_suspicious_error
+            and has_suspicious_frames(frames)
+        )
