@@ -34,8 +34,8 @@ class ProfilesMessageProcessor(MessageProcessor):
                     additional_fields[field] = message["os"][field]
             else:
                 additional_fields = {
-                    key: message.get(f"device_{key}", "")
-                    for key in ["locale", "classification", "manufacturer", "model"]
+                    f"device_{field}": message.get(f"device_{field}", "")
+                    for field in ["locale", "classification", "manufacturer", "model"]
                 }
                 additional_fields["architecture"] = message.get(
                     "architecture", "unknown"
