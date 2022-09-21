@@ -105,18 +105,7 @@ class Cluster(ABC, Generic[TWriterOptions]):
         self.__storage_sets = storage_sets
 
     def get_storage_set_keys(self) -> Set[StorageSetKey]:
-        all_storage_sets = set(key.value for key in StorageSetKey)
-
-        storage_set_keys = set()
-
-        for storage_set in self.__storage_sets:
-            # We ignore invalid storage set keys since new storage sets will
-            # need to be registered to configuration before they can be used
-            # in Snuba.
-            if storage_set in all_storage_sets:
-                storage_set_keys.add(StorageSetKey(storage_set))
-
-        return storage_set_keys
+        return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
     def get_reader(self) -> Reader:
@@ -370,6 +359,26 @@ CLUSTERS = [
     for cluster in settings.CLUSTERS
 ]
 
+# PARTITIONED_CLUSTERS = [
+#     ClickhouseCluster(
+#         host=cluster["host"],
+#         port=cluster["port"],
+#         user=cluster.get("user", "default"),
+#         password=cluster.get("password", ""),
+#         database=cluster.get("database", "default"),
+#         http_port=cluster["http_port"],
+#         storage_sets={c[0] for c in cluster["storage_sets"]},
+#         single_node=cluster["single_node"],
+#         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
+#         distributed_cluster_name=cluster["distributed_cluster_name"]
+#         if "distributed_cluster_name" in cluster
+#         else None,
+#         cache_partition_id=cluster.get("cache_partition_id"),
+#         query_settings_prefix=cluster.get("query_settings_prefix"),
+#     )
+#     for cluster in settings.PARTITIONED_CLUSTERS
+# ]
+
 _registered_storage_sets = [
     storage_set
     for cluster in CLUSTERS
@@ -399,11 +408,46 @@ def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
     return _STORAGE_SET_CLUSTER_MAP
 
 
+def _build_partitioned_cluster(cluster):
+
+    return ClickhouseCluster(
+        host=cluster["host"],
+        port=cluster["port"],
+        user=cluster.get("user", "default"),
+        password=cluster.get("password", ""),
+        database=cluster.get("database", "default"),
+        http_port=cluster["http_port"],
+        storage_sets={c[0] for c in cluster["storage_sets"]},
+        single_node=cluster["single_node"],
+        cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
+        distributed_cluster_name=cluster["distributed_cluster_name"]
+        if "distributed_cluster_name" in cluster
+        else None,
+        cache_partition_id=cluster.get("cache_partition_id"),
+        query_settings_prefix=cluster.get("query_settings_prefix"),
+    )
+
+
+def _get_partitioned_storage_set_cluster_map() -> Dict[
+    StorageSetKey, ClickhouseCluster
+]:
+    _PARTITIONED_STORAGE_SET_CLUSTER_MAP = {}
+    for c in settings.PARTITIONED_CLUSTERS:
+        for storage_set in c["storage_sets"]:
+            _PARTITIONED_STORAGE_SET_CLUSTER_MAP[
+                storage_set
+            ] = _build_partitioned_cluster(c)
+
+    return _PARTITIONED_STORAGE_SET_CLUSTER_MAP
+
+
 class UndefinedClickhouseCluster(SerializableException):
     pass
 
 
-def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
+def get_cluster(
+    storage_set_key: StorageSetKey, partition_id: Optional[int] = None
+) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
     If the storage set key is not defined
@@ -412,9 +456,16 @@ def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
-    res = _get_storage_set_cluster_map().get(storage_set_key, None)
-    if res is None:
-        raise UndefinedClickhouseCluster(
-            f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"
+
+    if partition_id:
+        res = _get_partitioned_storage_set_cluster_map().get(
+            (storage_set_key, partition_id), None
         )
+
+    else:
+        res = _get_storage_set_cluster_map().get(storage_set_key, None)
+        if res is None:
+            raise UndefinedClickhouseCluster(
+                f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"
+            )
     return res

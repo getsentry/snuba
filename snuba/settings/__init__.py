@@ -40,6 +40,8 @@ LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
 # Storage names to apply dataset partitioning to
 PARTITIONED_STORAGES: Set[str] = set()
 
+PARTITIONED_CLUSTERS: Sequence[Mapping[str, Any]] = []
+
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
