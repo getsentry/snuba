@@ -107,7 +107,7 @@ class Cluster(ABC, Generic[TWriterOptions]):
 
     def __init__(self, storage_sets: Set[str]):
         self.__storage_sets = storage_sets
-        # register storage set keys for this cluster
+        # register the cluster's storage sets
         for storage_set in storage_sets:
             register_storage_set_key(storage_set)
 
