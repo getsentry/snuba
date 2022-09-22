@@ -447,12 +447,16 @@ def get_cluster(
     if partition_id:
         part_storage_set_cluster_map = _get_partitioned_storage_set_cluster_map()
         res = part_storage_set_cluster_map.get((storage_set_key, partition_id), None)
+        if res is None:
+            raise UndefinedClickhouseCluster(
+                f"{(storage_set_key, partition_id)} is not defined in the PARTITIONED_CLUSTERS setting for this environment"
+            )
 
     else:
         storage_set_cluster_map = _get_storage_set_cluster_map()
         res = storage_set_cluster_map.get(storage_set_key, None)
         if res is None:
             raise UndefinedClickhouseCluster(
-                f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"
+                f"{storage_set_key} is not defined in the CLUSTERS setting for this environment"
             )
     return res
