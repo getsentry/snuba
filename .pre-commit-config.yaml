@@ -44,6 +44,7 @@ repos:
         entry: python3 -m snuba.validate_configs
         language: python
         additional_dependencies: [ 'jsonschema', 'pyyaml' ]
-        files: 'snuba/datasets/configuration/*'
+        pass_filenames: false
+        files: 'snuba/datasets/configuration/.*'
 default_language_version:
   python: python3.8
