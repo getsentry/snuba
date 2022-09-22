@@ -9,7 +9,6 @@ from snuba.clickhouse.columns import (
     Nested,
     UInt,
 )
-from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba.function_call_mappers import (
     AggregateCurriedFunctionMapper,
     AggregateFunctionMapper,
@@ -19,25 +18,15 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.clusters.cluster import get_cluster
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.partitioning import (
-    map_logical_partition_to_physical_partition,
-    map_org_id_to_logical_partition,
-    map_physical_partition_to_storage_set,
+from snuba.datasets.plans.partitioned_storage import (
+    ColumnBasedStoragePartitionSelector,
+    PartitionedStorageQueryPlanBuilder,
 )
-from snuba.datasets.plans.partitioned_storage import PartitionedStorageQueryPlanBuilder
-from snuba.datasets.storage import (
-    PartitionedReadableTableStorage,
-    QueryPartitionSelection,
-    StoragePartitionSelector,
-    WritableTableStorage,
-)
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.granularity_processor import (
     DEFAULT_MAPPED_GRANULARITY_ENUM,
@@ -53,7 +42,6 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import (
     EntityRequiredColumnValidator,
     QueryValidator,
@@ -75,7 +63,7 @@ class GenericMetricsEntity(Entity, ABC):
 
     def __init__(
         self,
-        readable_storage: PartitionedReadableTableStorage,
+        readable_storage: ReadableTableStorage,
         writable_storage: Optional[WritableTableStorage],
         value_schema: ColumnSet,
         mappers: TranslationMappers,
@@ -93,8 +81,9 @@ class GenericMetricsEntity(Entity, ABC):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=PartitionedStorageQueryPlanBuilder(
                     storage=readable_storage,
-                    storage_partition_selector=GenericMetricsStoragePartitionSelector(
-                        readable_storage.get_storage_set_key(),
+                    storage_partition_selector=ColumnBasedStoragePartitionSelector(
+                        readable_storage,
+                        "org_id",
                     ),
                     mappers=TranslationMappers(
                         subscriptables=[
@@ -223,32 +212,3 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
                 ],
             ),
         )
-
-
-class GenericMetricsStoragePartitionSelector(StoragePartitionSelector):
-    """
-    Storage partition selector for the generic metrics storage. This is needed
-    because the generic metrics storage can be partitioned and we would need to
-    know which partition to use for a specific query.
-    """
-
-    def __init__(self, base_storage_set: StorageSetKey) -> None:
-        self.__base_storage_set = base_storage_set
-
-    def select_storage(
-        self, query: Query, query_settings: QuerySettings
-    ) -> QueryPartitionSelection:
-        org_ids = get_object_ids_in_query_ast(query, "org_id")
-        assert org_ids is not None
-        assert len(org_ids) == 1
-        org_id = org_ids.pop()
-
-        selected_storage_set = map_physical_partition_to_storage_set(
-            self.__base_storage_set,
-            map_logical_partition_to_physical_partition(
-                map_org_id_to_logical_partition(org_id)
-            ),
-        )
-        cluster = get_cluster(selected_storage_set)
-
-        return QueryPartitionSelection(selected_storage_set, cluster)

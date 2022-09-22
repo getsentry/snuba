@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -158,45 +157,6 @@ class ReadableTableStorage(ReadableStorage):
         return self.__mandatory_condition_checkers
 
 
-class PartitionedReadableTableStorage(ReadableStorage):
-    """
-    A table storage that represents either a table or a view.
-    """
-
-    def __init__(
-        self,
-        storage_key: StorageKey,
-        storage_set_key: StorageSetKey,
-        schema: Schema,
-        query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
-        mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
-    ) -> None:
-        self.__storage_key = storage_key
-        self.__query_processors = query_processors or []
-        self.__query_splitters = query_splitters or []
-        self.__mandatory_condition_checkers = mandatory_condition_checkers or []
-        super().__init__(storage_set_key, schema)
-
-    def get_storage_key(self) -> StorageKey:
-        return self.__storage_key
-
-    def get_storage_set_key(self) -> StorageSetKey:
-        raise NotImplementedError
-
-    def get_cluster(self) -> ClickhouseCluster:
-        raise NotImplementedError
-
-    def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
-        return self.__query_processors
-
-    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
-        return self.__query_splitters
-
-    def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
-        return self.__mandatory_condition_checkers
-
-
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
         self,
@@ -253,24 +213,4 @@ class QueryStorageSelector(ABC):
     def select_storage(
         self, query: Query, query_settings: QuerySettings
     ) -> StorageAndMappers:
-        raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class QueryPartitionSelection:
-    storage_set: StorageSetKey
-    cluster: ClickhouseCluster
-
-
-class StoragePartitionSelector(ABC):
-    """
-    The component provided by a dataset and used at the beginning of the
-    execution of a query to pick the storage set a query should be executed
-    onto.
-    """
-
-    @abstractmethod
-    def select_storage(
-        self, query: Query, query_settings: QuerySettings
-    ) -> QueryPartitionSelection:
         raise NotImplementedError

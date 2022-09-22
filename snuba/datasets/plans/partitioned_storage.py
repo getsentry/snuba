@@ -1,8 +1,15 @@
+from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
 import sentry_sdk
 
+from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.clusters.cluster import ClickhouseCluster, get_cluster
+from snuba.datasets.partitioning import (
+    map_logical_partition_to_physical_partition,
+    map_org_id_to_logical_partition,
+)
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -12,7 +19,7 @@ from snuba.datasets.plans.single_storage import (
     get_query_data_source,
 )
 from snuba.datasets.plans.translator.query import QueryTranslator
-from snuba.datasets.storage import ReadableStorage, StoragePartitionSelector
+from snuba.datasets.storage import ReadableStorage
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
@@ -23,6 +30,49 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
 )
 from snuba.query.query_settings import QuerySettings
 from snuba.util import with_span
+
+
+class StoragePartitionSelector(ABC):
+    """
+    The component provided by a dataset and used at the beginning of the
+    execution of a query to pick the storage set a query should be executed
+    onto.
+    """
+
+    @abstractmethod
+    def select_storage(
+        self, query: LogicalQuery, query_settings: QuerySettings
+    ) -> ClickhouseCluster:
+        raise NotImplementedError
+
+
+class ColumnBasedStoragePartitionSelector(StoragePartitionSelector):
+    """
+    Storage partition selector for the generic metrics storage. This is needed
+    because the generic metrics storage can be partitioned and we would need to
+    know which partition to use for a specific query.
+    """
+
+    def __init__(
+        self, storage: ReadableStorage, partition_key_column_name: str
+    ) -> None:
+        self.storage = storage
+        self.partition_key_column_name = partition_key_column_name
+
+    def select_storage(
+        self, query: LogicalQuery, query_settings: QuerySettings
+    ) -> ClickhouseCluster:
+        org_ids = get_object_ids_in_query_ast(query, self.partition_key_column_name)
+        assert org_ids is not None
+        assert len(org_ids) == 1
+        org_id = org_ids.pop()
+
+        physical_partition = map_logical_partition_to_physical_partition(
+            map_org_id_to_logical_partition(org_id)
+        )
+        cluster = get_cluster(self.storage, physical_partition)
+
+        return cluster
 
 
 class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
@@ -50,9 +100,7 @@ class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         with sentry_sdk.start_span(
             op="build_plan.partitioned_storage", description="select_storage"
         ):
-            query_partition_selection = (
-                self.__storage_partition_selector.select_storage(query, settings)
-            )
+            cluster = self.__storage_partition_selector.select_storage(query, settings)
 
         with sentry_sdk.start_span(
             op="build_plan.partitioned_storage", description="translate"
@@ -88,7 +136,7 @@ class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 db_query_processors=db_query_processors,
                 storage_set_key=self.__storage.get_storage_set_key(),
                 execution_strategy=SimpleQueryPlanExecutionStrategy(
-                    cluster=query_partition_selection.cluster,
+                    cluster=cluster,
                     db_query_processors=db_query_processors,
                     splitters=self.__storage.get_query_splitters(),
                 ),
