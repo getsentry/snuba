@@ -285,7 +285,6 @@ TRANSACTIONS_COLUMNS = ColumnSet(
             ),
         ),
         ("group_ids", Array(UInt(64, Modifiers(nullable=True)))),
-        ("app_start_type", String(Modifiers(nullable=True))),
     ]
 )
 
