@@ -79,6 +79,29 @@ FULL_CONFIG = [
     },
 ]
 
+PARTITIONED_CLUSTERS_CONFIG = [
+    {
+        "host": "host_slice",
+        "port": 9000,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8123,
+        "storage_sets": {("generic_metrics_distributions", 0)},
+        "single_node": True,
+    },
+    {
+        "host": "host_slice",
+        "port": 9001,
+        "user": "default",
+        "password": "",
+        "database": "slice_1_default",
+        "http_port": 8124,
+        "storage_sets": {("generic_metrics_distributions", 1)},
+        "single_node": True,
+    },
+]
+
 
 def teardown_function() -> None:
     importlib.reload(settings)
@@ -196,3 +219,15 @@ def test_cache_connections() -> None:
     assert cluster_1.get_query_connection(
         cluster.ClickhouseClientSettings.QUERY
     ) != cluster_3.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+
+
+@patch("snuba.settings.PARTITIONED_CLUSTERS", PARTITIONED_CLUSTERS_CONFIG)
+def test_partitioned_cluster() -> None:
+    importlib.reload(cluster)
+
+    res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 1)
+
+    assert res_cluster.is_single_node() == True
+    assert res_cluster.get_database() == "slice_1_default"
+    assert res_cluster.get_host() == "host_slice"
+    assert res_cluster.get_port() == 9001
