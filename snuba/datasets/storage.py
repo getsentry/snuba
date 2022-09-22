@@ -39,8 +39,8 @@ class Storage(ABC):
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
 
-    def get_cluster(self, partition_id: Optional[int] = None) -> ClickhouseCluster:
-        return get_cluster(self.__storage_set_key, partition_id)
+    def get_cluster(self) -> ClickhouseCluster:
+        return get_cluster(self.__storage_set_key)
 
     def get_schema(self) -> Schema:
         return self.__schema
