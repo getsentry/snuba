@@ -189,6 +189,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
     span_id = "8841662216cc598b" if not span_id else span_id
     unique = "100"
     primary_hash = md5(unique.encode("utf-8")).hexdigest()
+    app_start_type = "warm.prewarmed"
 
     return {
         "project_id": PROJECT_ID,
@@ -229,6 +230,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
                     "exclusive_time": 1.2,
                 },
                 "device": {"online": True, "charging": True, "model_id": "Galaxy"},
+                "app": {"start_type": app_start_type},
             },
             "measurements": {
                 "lcp": {"value": 32.129},

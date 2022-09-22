@@ -37,6 +37,7 @@ class TransactionEvent:
     geo: Mapping[str, str]
     status: str
     transaction_source: Optional[str]
+    app_start_type: str
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
@@ -134,6 +135,7 @@ class TransactionEvent:
                             "hash": "a" * 16,
                             "exclusive_time": 1.2345,
                         },
+                        "app": {"start_type": self.app_start_type},
                         "experiments": {"test1": 1, "test2": 2},
                     },
                     "tags": [
@@ -236,6 +238,7 @@ class TransactionEvent:
             "spans.group": [span[1] for span in spans],
             "spans.exclusive_time": [0 for span in spans],
             "spans.exclusive_time_32": [span[2] for span in spans],
+            "app_start_type": self.app_start_type,
         }
 
         if self.ipv4:
@@ -278,6 +281,7 @@ class TestTransactionsProcessor:
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
             transaction_source="url",
+            app_start_type="warm",
         )
         payload = message.serialize()
         # Force an invalid event
@@ -316,6 +320,7 @@ class TestTransactionsProcessor:
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
             transaction_source="url",
+            app_start_type="warm",
         )
         payload = message.serialize()
         # Force an invalid event
@@ -357,6 +362,7 @@ class TestTransactionsProcessor:
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
             transaction_source="url",
+            app_start_type="warm",
         )
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
@@ -397,6 +403,7 @@ class TestTransactionsProcessor:
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
             transaction_source="url",
+            app_start_type="warm",
         )
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
@@ -444,6 +451,7 @@ class TestTransactionsProcessor:
             http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
             transaction_source="",
+            app_start_type="warm",
         )
 
         payload_base = message.serialize()
