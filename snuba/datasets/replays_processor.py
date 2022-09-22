@@ -115,6 +115,9 @@ class ReplaysProcessor(MessageProcessor):
 
         processed["error_ids"] = self.__process_error_ids(replay_event.get("error_ids"))
 
+        # Archived can only be 1 or null.
+        processed["is_archived"] = 1 if replay_event.get("is_archived") else None
+
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
