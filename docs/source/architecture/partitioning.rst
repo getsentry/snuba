@@ -30,6 +30,14 @@ Every logical partition **must** be assigned to a physical partition and the
 valid values of physical partitions are in the range
 of ``[0,settings.LOCAL_PHYSICAL_PARTITIONS)``.
 
+Defining partitioned clusters
+--------------------------------
+To add a cluster with an associated (storage set key, partition) pair, add cluster definitions
+to ``settings.PARTITIONED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
+regular cluster definitions in ``settings.CLUSTERS``. In the ``storage_sets`` field, partitioned storage
+sets should be added in the form of ``(StorageSetKey, partition_id)`` where partition_id is in
+the range ``[0,settings.LOCAL_PHYSICAL_PARTITIONS)``.
+
 
 TODO: adding storages, migrating subscriptions, etc.
 ----------------------------------------------------
