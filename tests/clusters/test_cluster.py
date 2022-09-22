@@ -231,3 +231,12 @@ def test_partitioned_cluster() -> None:
     assert res_cluster.get_database() == "slice_1_default"
     assert res_cluster.get_host() == "host_slice"
     assert res_cluster.get_port() == 9001
+
+    res_cluster_default = cluster.get_cluster(
+        StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 0
+    )
+
+    assert res_cluster_default.is_single_node() == True
+    assert res_cluster_default.get_database() == "default"
+    assert res_cluster_default.get_host() == "host_slice"
+    assert res_cluster_default.get_port() == 9000

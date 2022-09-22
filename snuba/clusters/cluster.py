@@ -396,7 +396,6 @@ def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
 
 
 def _build_partitioned_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
-
     return ClickhouseCluster(
         host=cluster["host"],
         port=cluster["port"],
@@ -415,15 +414,20 @@ def _build_partitioned_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
     )
 
 
+_PARTITIONED_STORAGE_SET_CLUSTER_MAP: Dict[
+    Tuple[StorageSetKey, int], ClickhouseCluster
+] = {}
+
+
 def _get_partitioned_storage_set_cluster_map() -> Dict[
     Tuple[StorageSetKey, int], ClickhouseCluster
 ]:
-    _PARTITIONED_STORAGE_SET_CLUSTER_MAP = {}
-    for cluster in settings.PARTITIONED_CLUSTERS:
-        for storage_set_tuple in cluster["storage_sets"]:
-            _PARTITIONED_STORAGE_SET_CLUSTER_MAP[
-                (StorageSetKey(storage_set_tuple[0]), storage_set_tuple[1])
-            ] = _build_partitioned_cluster(cluster)
+    if len(_PARTITIONED_STORAGE_SET_CLUSTER_MAP) == 0:
+        for cluster in settings.PARTITIONED_CLUSTERS:
+            for storage_set_tuple in cluster["storage_sets"]:
+                _PARTITIONED_STORAGE_SET_CLUSTER_MAP[
+                    (StorageSetKey(storage_set_tuple[0]), storage_set_tuple[1])
+                ] = _build_partitioned_cluster(cluster)
 
     return _PARTITIONED_STORAGE_SET_CLUSTER_MAP
 
@@ -444,7 +448,7 @@ def get_cluster(
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
 
-    if partition_id:
+    if partition_id is not None:
         part_storage_set_cluster_map = _get_partitioned_storage_set_cluster_map()
         res = part_storage_set_cluster_map.get((storage_set_key, partition_id), None)
         if res is None:
