@@ -41,7 +41,6 @@ columns = ColumnSet(
         ("title", String(Modifiers(readonly=True))),
         ("url", String(Modifiers(nullable=True))),
         ("urls", Array(String())),
-        ("is_archived", UInt(8, Modifiers(nullable=True))),
         ### common sentry event columns
         ("project_id", UInt(64)),
         # release/environment info
