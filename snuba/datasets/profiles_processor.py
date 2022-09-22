@@ -16,70 +16,9 @@ class ProfilesMessageProcessor(MessageProcessor):
     ) -> Optional[ProcessedMessage]:
         try:
             if "version" in message:
-                additional_fields = {
-                    f"device_{field}": message["device"].get(field, "")
-                    for field in [
-                        "locale",
-                        "classification",
-                        "manufacturer",
-                        "model",
-                    ]
-                }
-                additional_fields["architecture"] = message["device"].get(
-                    "architecture", "unknown"
-                )
-                additional_fields["version_name"] = message["release"]
-
-                for field in ["name", "version", "build_number"]:
-                    additional_fields[f"device_os_{field}"] = message["os"].get(field)
-
-                transaction = message["transactions"][0]
-                additional_fields.update(
-                    {
-                        "transaction_id": transaction["id"],
-                        "transaction_name": transaction["name"],
-                        "trace_id": transaction["trace_id"],
-                        "duration_ns": int(
-                            transaction["relative_end_ns"]
-                            - transaction["relative_start_ns"]
-                        ),
-                        "profile_id": str(UUID(message["event_id"])),
-                    }
-                )
+                processed = _normalize_sample_format(message, metadata)
             else:
-                additional_fields = {
-                    f"device_{field}": message.get(f"device_{field}", "")
-                    for field in ["locale", "classification", "manufacturer", "model"]
-                }
-                additional_fields["architecture"] = message.get(
-                    "architecture", "unknown"
-                )
-                additional_fields["version_name"] = message["version_name"]
-                additional_fields["device_os_name"] = message["device_os_name"]
-                additional_fields["device_os_version"] = message["device_os_version"]
-                additional_fields["duration_ns"] = message["duration_ns"]
-                additional_fields["transaction_name"] = message["transaction_name"]
-                additional_fields["transaction_id"] = str(
-                    UUID(message["transaction_id"])
-                )
-                additional_fields["trace_id"] = str(UUID(message["trace_id"]))
-                additional_fields["profile_id"] = str(UUID(message["profile_id"]))
-
-            processed = {
-                "android_api_level": message.get("android_api_level"),
-                "device_os_build_number": message.get("device_os_build_number"),
-                "environment": message.get("environment"),
-                "offset": metadata.offset,
-                "organization_id": message["organization_id"],
-                "partition": metadata.partition,
-                "platform": message["platform"],
-                "profile": "",  # deprecated
-                "project_id": message["project_id"],
-                "received": datetime.utcfromtimestamp(message["received"]),
-                "retention_days": message["retention_days"],
-                "version_code": message.get("version_code", ""),
-            }
-            processed.update(additional_fields)
+                processed = _normalize_legacy_format(message, metadata)
         except IndexError:
             metrics.increment("invalid_transaction")
             return None
@@ -90,3 +29,72 @@ class ProfilesMessageProcessor(MessageProcessor):
             metrics.increment("missing_field")
             return None
         return InsertBatch([processed], None)
+
+
+def _normalize_legacy_format(
+    message: Mapping[str, Any], metadata: KafkaMessageMetadata
+) -> Mapping[str, Any]:
+    return {
+        "android_api_level": message.get("android_api_level"),
+        "architecture": message.get("architecture", "unknown"),
+        "device_classification": message["device_classification"],
+        "device_locale": message["device_locale"],
+        "device_manufacturer": message["device_manufacturer"],
+        "device_model": message["device_model"],
+        "device_os_build_number": message.get("device_os_build_number"),
+        "device_os_name": message["device_os_name"],
+        "device_os_version": message["device_os_version"],
+        "duration_ns": message["duration_ns"],
+        "environment": message.get("environment"),
+        "offset": metadata.offset,
+        "organization_id": message["organization_id"],
+        "partition": metadata.partition,
+        "platform": message["platform"],
+        "profile": "",  # deprecated
+        "profile_id": str(UUID(message["profile_id"])),
+        "project_id": message["project_id"],
+        "received": datetime.utcfromtimestamp(message["received"]),
+        "retention_days": message["retention_days"],
+        "trace_id": str(UUID(message["trace_id"])),
+        "transaction_id": str(UUID(message["transaction_id"])),
+        "transaction_name": message["transaction_name"],
+        "version_code": message["version_code"],
+        "version_name": message["version_name"],
+    }
+
+
+def _normalize_sample_format(
+    message: Mapping[str, Any], metadata: KafkaMessageMetadata
+) -> Mapping[str, Any]:
+    transaction = message["transactions"][0]
+    device = message["device"]
+    os = message["os"]
+    return {
+        "android_api_level": message.get("android_api_level"),
+        "architecture": device.get("architecture", "unknown"),
+        "device_classification": device.get("classification", ""),
+        "device_locale": device.get("locale", ""),
+        "device_manufacturer": device.get("manufacturer", ""),
+        "device_model": device.get("model", ""),
+        "device_os_build_number": os.get("build_number"),
+        "device_os_name": os.get("name", ""),
+        "device_os_version": os.get("version", ""),
+        "duration_ns": int(
+            transaction["relative_end_ns"] - transaction["relative_start_ns"]
+        ),
+        "environment": message.get("environment"),
+        "offset": metadata.offset,
+        "organization_id": message["organization_id"],
+        "partition": metadata.partition,
+        "platform": message["platform"],
+        "profile": "",  # deprecated
+        "profile_id": str(UUID(message["event_id"])),
+        "project_id": message["project_id"],
+        "received": datetime.utcfromtimestamp(message["received"]),
+        "retention_days": message["retention_days"],
+        "trace_id": str(UUID(transaction["trace_id"])),
+        "transaction_id": str(UUID(transaction["id"])),
+        "transaction_name": transaction["name"],
+        "version_code": message.get("version_code", ""),
+        "version_name": message["release"],
+    }
