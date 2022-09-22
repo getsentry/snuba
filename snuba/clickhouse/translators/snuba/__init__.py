@@ -1,7 +1,9 @@
+import os
 from abc import ABC, abstractmethod
 
 from snuba.clickhouse.query import Expression
 from snuba.query.expressions import ExpressionVisitor, FunctionCall
+from snuba.utils.registered_class import import_submodules_in_directory
 
 
 class SnubaClickhouseTranslator(ExpressionVisitor[Expression], ABC):
@@ -41,3 +43,9 @@ class SnubaClickhouseStrictTranslator(SnubaClickhouseTranslator):
     @abstractmethod
     def translate_function_strict(self, exp: FunctionCall) -> FunctionCall:
         raise NotImplementedError
+
+
+__this_file_path = os.path.dirname(os.path.realpath(__file__))
+
+
+import_submodules_in_directory(__this_file_path, "snuba.clickhouse.translators.snuba")

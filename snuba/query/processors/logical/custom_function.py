@@ -5,7 +5,7 @@ from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.parser.expressions import parse_clickhouse_function
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import ParamType, SignatureValidator
@@ -37,7 +37,7 @@ def partial_function(body: str, constants: Sequence[Tuple[str, Any]]) -> Express
     return replace_in_expression(parsed, constants_lookup)
 
 
-class CustomFunction(QueryProcessor):
+class CustomFunction(LogicalQueryProcessor):
     """
     Defines a custom snuba function.
     The custom function has a name, a signature in the form of a list of

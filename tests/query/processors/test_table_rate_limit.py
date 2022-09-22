@@ -1,9 +1,9 @@
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.data_source.simple import Table
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
@@ -57,7 +57,7 @@ test_data = [
 
 @pytest.mark.parametrize("processor, query, limit_to_set, params", test_data)
 def test_table_rate_limit(
-    processor: QueryProcessor,
+    processor: ClickhouseQueryProcessor,
     query: Query,
     limit_to_set: str,
     params: RateLimitParameters,

@@ -46,7 +46,7 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
@@ -442,7 +442,7 @@ class DiscoverEntity(Entity):
             required_time_column="timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),
