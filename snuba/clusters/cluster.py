@@ -403,7 +403,9 @@ def _build_partitioned_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
-        storage_sets={storage_tuple[0] for storage_tuple in cluster["storage_sets"]},
+        storage_sets={
+            storage_tuple[0] for storage_tuple in cluster["storage_set_partitions"]
+        },
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
         distributed_cluster_name=cluster["distributed_cluster_name"]
@@ -424,7 +426,7 @@ def _get_partitioned_storage_set_cluster_map() -> Dict[
 ]:
     if len(_PARTITIONED_STORAGE_SET_CLUSTER_MAP) == 0:
         for cluster in settings.PARTITIONED_CLUSTERS:
-            for storage_set_tuple in cluster["storage_sets"]:
+            for storage_set_tuple in cluster["storage_set_partitions"]:
                 _PARTITIONED_STORAGE_SET_CLUSTER_MAP[
                     (StorageSetKey(storage_set_tuple[0]), storage_set_tuple[1])
                 ] = _build_partitioned_cluster(cluster)

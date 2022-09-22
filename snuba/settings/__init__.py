@@ -40,8 +40,6 @@ LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
 # Storage names to apply dataset partitioning to
 PARTITIONED_STORAGES: Set[str] = set()
 
-PARTITIONED_CLUSTERS: Sequence[Mapping[str, Any]] = []
-
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
@@ -75,6 +73,16 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     },
 ]
 
+# Storage set keys should be defined either in CLUSTERS
+# or PARTITIONED_CLUSTERS. CLUSTERS will define clusters
+# which are not partitioned, i.e. are associated with
+# only one partition_id (0).
+
+# We define partitioned clusters, i.e. clusters that reside
+# on multiple physical partitions (partition ids), in
+# PARTITIONED_CLUSTERS. We define all associated
+# (storage set, partition id) pairs here.
+PARTITIONED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Dogstatsd Options
 DOGSTATSD_HOST = None

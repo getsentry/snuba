@@ -87,7 +87,7 @@ PARTITIONED_CLUSTERS_CONFIG = [
         "password": "",
         "database": "default",
         "http_port": 8123,
-        "storage_sets": {("generic_metrics_distributions", 0)},
+        "storage_set_partitions": {("generic_metrics_distributions", 0)},
         "single_node": True,
     },
     {
@@ -97,7 +97,7 @@ PARTITIONED_CLUSTERS_CONFIG = [
         "password": "",
         "database": "slice_1_default",
         "http_port": 8124,
-        "storage_sets": {("generic_metrics_distributions", 1)},
+        "storage_set_partitions": {("generic_metrics_distributions", 1)},
         "single_node": True,
     },
 ]
