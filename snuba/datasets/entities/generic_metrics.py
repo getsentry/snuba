@@ -82,8 +82,8 @@ class GenericMetricsEntity(Entity, ABC):
                 query_plan_builder=PartitionedStorageQueryPlanBuilder(
                     storage=readable_storage,
                     storage_partition_selector=ColumnBasedStoragePartitionSelector(
-                        readable_storage,
-                        "org_id",
+                        storage_set=readable_storage.get_storage_set_key(),
+                        partition_key_column_name="org_id",
                     ),
                     mappers=TranslationMappers(
                         subscriptables=[

@@ -6,6 +6,7 @@ import sentry_sdk
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.partitioning import (
     map_logical_partition_to_physical_partition,
     map_org_id_to_logical_partition,
@@ -54,9 +55,9 @@ class ColumnBasedStoragePartitionSelector(StoragePartitionSelector):
     """
 
     def __init__(
-        self, storage: ReadableStorage, partition_key_column_name: str
+        self, storage_set: StorageSetKey, partition_key_column_name: str
     ) -> None:
-        self.storage = storage
+        self.storage_set = storage_set
         self.partition_key_column_name = partition_key_column_name
 
     def select_storage(
@@ -70,7 +71,7 @@ class ColumnBasedStoragePartitionSelector(StoragePartitionSelector):
         physical_partition = map_logical_partition_to_physical_partition(
             map_org_id_to_logical_partition(org_id)
         )
-        cluster = get_cluster(self.storage, physical_partition)
+        cluster = get_cluster(self.storage_set, physical_partition)
 
         return cluster
 
