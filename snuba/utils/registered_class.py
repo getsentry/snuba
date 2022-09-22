@@ -144,7 +144,7 @@ def import_submodules_in_directory(
         # to not infinite loop on re-importing __init__.py but we can just avoid
         # that check. Whether this is called in an __init__.py or not, if we're executing
         # this code, we've already imported the __init__.py
-        if fname == "__init__.py":
+        if fname == "__init__.py" or not fname.endswith(".py"):
             continue
         # ------------------------------------------------------------------------
         module_name = fname.replace(".py", "")
