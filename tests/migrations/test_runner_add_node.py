@@ -27,10 +27,12 @@ def setup_function() -> None:
     importlib.reload(runner)
 
     # Drop all tables
+    print("realoaded cluster", settings.CLUSTERS)
     for c in cluster.CLUSTERS:
         connection = c.get_query_connection(cluster.ClickhouseClientSettings.MIGRATE)
         database = c.get_database()
 
+        print("dropping connection", connection.host, connection.port)
         data = connection.execute(
             f"SELECT name FROM system.tables WHERE database = '{database}'"
         ).results
@@ -47,7 +49,7 @@ def teardown_function() -> None:
 @pytest.mark.ci_only
 def test_add_node() -> None:
     host_name = os.environ.get("CLICKHOUSE_HOST", "localhost")
-    port = int(os.environ.get("CLICKHOUSE_PORT", 9004))
+    port = int(os.environ.get("CLICKHOUSE_PORT", 9005))
     user = "default"
     password = ""
     database = os.environ.get("CLICKHOUSE_DATABASE", "default")

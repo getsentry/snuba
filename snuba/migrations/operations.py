@@ -22,14 +22,20 @@ class SqlOperation(ABC):
         cluster = get_cluster(self._storage_set)
 
         nodes = cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
-        assert len(nodes) == 2
         for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
             print("sending to connection", connection.host, connection.port)
             print("executing", self.format_sql()[:175], "\n")
-            connection.execute(self.format_sql())
+            connection.execute(
+                self.format_sql(),
+                settings={
+                    "mutations_sync": 2,
+                    "replication_alter_partitions_sync": 2,
+                    "database_atomic_wait_for_drop_and_detach_synchronously": 1,
+                },
+            )
             time.sleep(0.1)
 
     @abstractmethod

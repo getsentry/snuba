@@ -335,6 +335,7 @@ class Runner:
         print(
             "update_migration_status", statement, status.value, self.__connection.host
         )
+        print("update_migration_status data", data)
         self.__connection.execute(statement, data)
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:

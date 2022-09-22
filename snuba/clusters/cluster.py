@@ -43,7 +43,13 @@ class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
     MIGRATE = ClickhouseClientSettingsType(
-        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
+        {
+            "load_balancing": "in_order",
+            "replication_alter_partitions_sync": 2,
+            "mutations_sync": 2,
+            "database_atomic_wait_for_drop_and_detach_synchronously": 1,
+        },
+        10000,
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
@@ -212,9 +218,11 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         _fix_host = {
             "cluster-one-sh-01": ("localhost", 9003, 8223),
             "cluster-one-sh-query": ("localhost", 9004, 8224),
-            "localhost": ("localhost", 9004, 8224),
+            "cluster-one-sh-query2": ("localhost", 9005, 8225),
+            "localhost": ("localhost", 9005, 8225),
         }
-        host, port, http_port = _fix_host[host]
+        if host in _fix_host:
+            host, port, http_port = _fix_host[host]
 
         super().__init__(storage_sets)
         self.__host = host
@@ -344,7 +352,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         _fix_host = {
             "cluster-one-sh-01": ("localhost", 9003),
             "cluster-one-sh-query": ("localhost", 9004),
-            "localhost": ("localhost", 9004),
+            "cluster-one-sh-query2": ("localhost", 9005),
+            "localhost": ("localhost", 9005),
         }
 
         def fix(args):

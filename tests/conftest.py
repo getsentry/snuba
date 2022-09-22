@@ -49,7 +49,7 @@ def pytest_configure() -> None:
             connection = clickhouse_cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
-            # connection.execute(f"DROP DATABASE IF EXISTS {database_name} SYNC;")
+            connection.execute(f"DROP DATABASE IF EXISTS {database_name} SYNC;")
             connection.execute(f"CREATE DATABASE IF NOT EXISTS  {database_name};")
 
 
@@ -61,7 +61,7 @@ def run_migrations() -> Iterator[None]:
         Runner().run_all(force=True)
         yield
     finally:
-        pass
+        print("cleaning up migrations")
         for storage_key in get_all_storage_keys():
             storage = get_storage(storage_key)
             cluster = storage.get_cluster()
@@ -76,6 +76,7 @@ def run_migrations() -> Iterator[None]:
                     connection = cluster.get_node_connection(
                         ClickhouseClientSettings.MIGRATE, node
                     )
+                    print("cleaning up table", table_name, connection.host)
                     connection.execute(
                         f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
                     )
