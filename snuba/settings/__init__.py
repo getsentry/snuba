@@ -76,12 +76,16 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 # Storage set keys should be defined either in CLUSTERS
 # or PARTITIONED_CLUSTERS. CLUSTERS will define clusters
 # which are not partitioned, i.e. are associated with
-# only one partition_id (0).
+# only the default partition_id (0). CLUSTERS is defined in
+# the default way, without adding partition id in
+# the storage_sets field.
 
 # We define partitioned clusters, i.e. clusters that reside
 # on multiple physical partitions (partition ids), in
 # PARTITIONED_CLUSTERS. We define all associated
-# (storage set, partition id) pairs here.
+# (storage set, partition id) pairs in PARTITIONED_CLUSTERS
+# in the storage_sets field. Other fields are defined
+# in the same way as they are in CLUSTERS.
 PARTITIONED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Dogstatsd Options
