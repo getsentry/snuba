@@ -1,0 +1,35 @@
+<yandex>
+    <remote_servers>
+        <query_cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </query_cluster>
+        <migrations_cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse-01</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </migrations_cluster>
+
+        <storage_cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse-02</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <replica>
+                    <host>clickhouse-03</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </storage_cluster>
+    </remote_servers>
+</yandex>
