@@ -16,10 +16,8 @@ class ProfilesMessageProcessor(MessageProcessor):
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         try:
-            received = datetime.fromutctimestamp(message["received"])
-            retention_days = enforce_retention(
-                message["project_id"], message["retention_days"], received
-            )
+            received = datetime.utcfromtimestamp(message["received"])
+            retention_days = enforce_retention(message["retention_days"], received)
 
             if "version" in message:
                 processed = _normalize_sample_format(
