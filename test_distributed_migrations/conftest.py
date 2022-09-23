@@ -1,6 +1,8 @@
 import importlib
 import time
 
+import pytest
+
 from snuba import settings
 from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
@@ -9,6 +11,7 @@ from snuba.migrations import runner
 from snuba.settings import settings_test_distributed_migrations
 
 
+@pytest.mark.ci_only
 def pytest_configure() -> None:
     """
     Set up the Sentry SDK to avoid errors hidden by configuration.
@@ -50,7 +53,7 @@ def pytest_configure() -> None:
 
         database_name = cluster_node["database"]
 
-        ClickhouseClientSettings.MIGRATE.value.timeout = 50000
+        # ClickhouseClientSettings.MIGRATE.value.timeout = 50000
         # create the test database
         clickhouse_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
