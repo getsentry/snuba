@@ -111,7 +111,7 @@ class DropTable(SqlOperation):
         self.table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name} SYNC;"
+        return f"DROP TABLE IF EXISTS {self.table_name};"
 
 
 class TruncateTable(SqlOperation):
