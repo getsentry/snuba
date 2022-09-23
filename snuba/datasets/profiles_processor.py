@@ -4,6 +4,7 @@ from uuid import UUID
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.event_format import EventTooOld, enforce_retention
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -15,10 +16,22 @@ class ProfilesMessageProcessor(MessageProcessor):
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         try:
+            received = datetime.fromutctimestamp(message["received"])
+            retention_days = enforce_retention(
+                message["project_id"], message["retention_days"], received
+            )
+
             if "version" in message:
-                processed = _normalize_sample_format(message, metadata)
+                processed = _normalize_sample_format(
+                    message, metadata, retention_days, received
+                )
             else:
-                processed = _normalize_legacy_format(message, metadata)
+                processed = _normalize_legacy_format(
+                    message, metadata, retention_days, received
+                )
+        except EventTooOld:
+            metrics.increment("event_too_old")
+            return None
         except IndexError:
             metrics.increment("invalid_transaction")
             return None
@@ -32,7 +45,10 @@ class ProfilesMessageProcessor(MessageProcessor):
 
 
 def _normalize_legacy_format(
-    message: Mapping[str, Any], metadata: KafkaMessageMetadata
+    message: Mapping[str, Any],
+    metadata: KafkaMessageMetadata,
+    retention_days: int,
+    received: datetime,
 ) -> Mapping[str, Any]:
     return {
         "android_api_level": message.get("android_api_level"),
@@ -54,7 +70,7 @@ def _normalize_legacy_format(
         "profile_id": str(UUID(message["profile_id"])),
         "project_id": message["project_id"],
         "received": datetime.utcfromtimestamp(message["received"]),
-        "retention_days": message["retention_days"],
+        "retention_days": retention_days,
         "trace_id": str(UUID(message["trace_id"])),
         "transaction_id": str(UUID(message["transaction_id"])),
         "transaction_name": message["transaction_name"],
@@ -64,7 +80,10 @@ def _normalize_legacy_format(
 
 
 def _normalize_sample_format(
-    message: Mapping[str, Any], metadata: KafkaMessageMetadata
+    message: Mapping[str, Any],
+    metadata: KafkaMessageMetadata,
+    retention_days: int,
+    received: datetime,
 ) -> Mapping[str, Any]:
     transaction = message["transactions"][0]
     device = message["device"]
@@ -90,8 +109,8 @@ def _normalize_sample_format(
         "profile": "",  # deprecated
         "profile_id": str(UUID(message["event_id"])),
         "project_id": message["project_id"],
-        "received": datetime.utcfromtimestamp(message["received"]),
-        "retention_days": message["retention_days"],
+        "received": received,
+        "retention_days": retention_days,
         "trace_id": str(UUID(transaction["trace_id"])),
         "transaction_id": str(UUID(transaction["id"])),
         "transaction_name": transaction["name"],
