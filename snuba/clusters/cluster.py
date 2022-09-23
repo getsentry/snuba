@@ -443,8 +443,15 @@ def get_cluster(
 ) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
-    If the storage set key is not defined
-    in the CLUSTERS config, it will raise an UndefinedClickhouseCluster Exception.
+    If passing in a partitioned storage set, a slice_id must be specified.
+    This ID will be used to return the matching cluster in PARTITIONED_CLUSTERS.
+    If passing in an unpartitioned storage set, a slice_id should not be
+    specified. The StorageSetKey will be used to return the matching
+    cluster in CLUSTERS.
+
+    If the storage set key is not defined either in CLUSTERS or in
+    PARTITIONED_CLUSTERS, then an UndefinedClickhouseCluster Exception
+    will be raised.
     """
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
