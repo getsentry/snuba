@@ -13,6 +13,11 @@ setup-git:
 test:
 	SNUBA_SETTINGS=test pytest -vv -v -m "not ci_only"
 
+test-distributed-migrations:
+    docker-compose -f docker-compose.gcb.clusters.yml down
+    SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.clusters.yml run --rm snuba-test
+
+
 tests: test
 
 api-tests:
