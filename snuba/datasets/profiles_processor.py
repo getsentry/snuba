@@ -4,7 +4,7 @@ from uuid import UUID
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.event_format import EventTooOld, enforce_retention
+from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
