@@ -81,7 +81,7 @@ class GenericMetricsEntity(Entity, ABC):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=PartitionedStorageQueryPlanBuilder(
                     storage=readable_storage,
-                    storage_partition_selector=ColumnBasedStoragePartitionSelector(
+                    storage_cluster_selector=ColumnBasedStoragePartitionSelector(
                         storage_set=readable_storage.get_storage_set_key(),
                         partition_key_column_name="org_id",
                     ),

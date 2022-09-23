@@ -33,7 +33,7 @@ from snuba.query.query_settings import QuerySettings
 from snuba.util import with_span
 
 
-class StoragePartitionSelector(ABC):
+class StorageClusterSelector(ABC):
     """
     The component provided by a dataset and used at the beginning of the
     execution of a query to pick the storage set a query should be executed
@@ -41,13 +41,13 @@ class StoragePartitionSelector(ABC):
     """
 
     @abstractmethod
-    def select_storage(
+    def select_cluster(
         self, query: LogicalQuery, query_settings: QuerySettings
     ) -> ClickhouseCluster:
         raise NotImplementedError
 
 
-class ColumnBasedStoragePartitionSelector(StoragePartitionSelector):
+class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
     """
     Storage partition selector for the generic metrics storage. This is needed
     because the generic metrics storage can be partitioned and we would need to
@@ -60,7 +60,7 @@ class ColumnBasedStoragePartitionSelector(StoragePartitionSelector):
         self.storage_set = storage_set
         self.partition_key_column_name = partition_key_column_name
 
-    def select_storage(
+    def select_cluster(
         self, query: LogicalQuery, query_settings: QuerySettings
     ) -> ClickhouseCluster:
         org_ids = get_object_ids_in_query_ast(query, self.partition_key_column_name)
@@ -85,12 +85,12 @@ class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     def __init__(
         self,
         storage: ReadableStorage,
-        storage_partition_selector: StoragePartitionSelector,
+        storage_cluster_selector: StorageClusterSelector,
         mappers: Optional[TranslationMappers] = None,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
     ) -> None:
         self.__storage = storage
-        self.__storage_partition_selector = storage_partition_selector
+        self.__storage_cluster_selector = storage_cluster_selector
         self.__mappers = mappers if mappers is not None else TranslationMappers()
         self.__post_processors = post_processors or []
 
@@ -101,7 +101,7 @@ class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         with sentry_sdk.start_span(
             op="build_plan.partitioned_storage", description="select_storage"
         ):
-            cluster = self.__storage_partition_selector.select_storage(query, settings)
+            cluster = self.__storage_cluster_selector.select_cluster(query, settings)
 
         with sentry_sdk.start_span(
             op="build_plan.partitioned_storage", description="translate"
