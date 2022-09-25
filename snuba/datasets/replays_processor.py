@@ -235,5 +235,4 @@ class ReplaysProcessor(MessageProcessor):
             return InsertBatch([processed], None)
         except Exception:
             metrics.increment("consumer_error")
-            logger.exception("replay event could not be processed.")
-            return None
+            raise

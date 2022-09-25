@@ -144,6 +144,9 @@ jobs:
 
       - name: Publish images for cache
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
+        # outside contributors won't be able to push to the docker registry
+        # ignore the failures in this step
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Useful to speed up CI
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
@@ -203,6 +206,9 @@ jobs:
       - name: Publish
         # Forks cannot push to the getsentry org
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
+        # outside contributors won't be able to push to the docker registry
+        # ignore the failures in this step
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Useful to speed up PRs
           docker push ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }}

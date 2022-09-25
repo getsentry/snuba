@@ -1,0 +1,4 @@
+name: "Snuba CodeQL Config"
+
+paths-ignore:
+  - "**/tests/**"
