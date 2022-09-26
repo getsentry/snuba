@@ -1,6 +1,6 @@
 from tempfile import TemporaryDirectory
 
-import jsonschema2md  # type: ignore
+import jsonschema2md
 
 from snuba import settings
 from snuba.datasets.configuration.json_schema import V1_ALL_SCHEMAS
