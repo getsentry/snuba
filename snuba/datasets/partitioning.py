@@ -17,6 +17,7 @@ def map_org_id_to_logical_partition(org_id: int) -> int:
 def map_logical_partition_to_physical_partition(logical_partition: int) -> int:
     """
     Maps a logical partition to a physical partition.
-    # TODO: This is a placeholder for now.
     """
-    return 0
+    from snuba.settings import LOGICAL_PARTITION_MAPPING
+
+    return LOGICAL_PARTITION_MAPPING[str(logical_partition)]
