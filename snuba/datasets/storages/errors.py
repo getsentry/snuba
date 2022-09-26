@@ -55,4 +55,7 @@ storage = WritableTableStorage(
         promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
         state_name=ReplacerState.ERRORS,
     ),
+    writer_options={
+        "input_format_skip_unknown_fields": 1,
+    },
 )
