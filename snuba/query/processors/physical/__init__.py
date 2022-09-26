@@ -1,14 +1,12 @@
-import os
 from abc import ABC, abstractmethod
 
 from snuba.clickhouse.query import Query
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.query_settings import QuerySettings
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 
-class ClickhouseQueryProcessor(ABC, metaclass=RegisteredClass):
+class ClickhouseQueryProcessor(ABC):
     """
     A transformation applied to a Clickhouse Query. This transformation mutates the
     Query object in place.
@@ -22,10 +20,6 @@ class ClickhouseQueryProcessor(ABC, metaclass=RegisteredClass):
     Processors are designed to be stateless. There is no guarantee whether the same
     instance will be reused.
     """
-
-    @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
 
     @abstractmethod
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
@@ -49,8 +43,3 @@ class CompositeQueryProcessor(ABC):
         self, query: CompositeQuery[Table], query_settings: QuerySettings
     ) -> None:
         raise NotImplementedError
-
-
-import_submodules_in_directory(
-    os.path.dirname(os.path.realpath(__file__)), "snuba.query.processors.physical"
-)
