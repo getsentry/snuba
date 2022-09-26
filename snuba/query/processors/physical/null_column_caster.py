@@ -1,4 +1,4 @@
-from typing import Dict, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Sequence
 
 from snuba.clickhouse.columns import FlattenedColumn, SchemaModifiers
 from snuba.clickhouse.query import Query
