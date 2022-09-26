@@ -134,6 +134,34 @@ def test_get_pending_migrations() -> None:
     assert len(runner._get_pending_migrations()) == total_migrations - 1
 
 
+def test_get_pending_migrations_for_group() -> None:
+    runner = Runner()
+    group = "events"
+    migration_group_count = len(get_group_loader(group).get_migrations())
+    assert len(runner._get_pending_migrations_for_group(group)) == migration_group_count
+
+    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
+    assert len(runner._get_pending_migrations_for_group("system")) == 0
+
+
+def test_run_all_with_group() -> None:
+    runner = Runner()
+    group = "events"
+    event_migration_count = len(get_group_loader(group).get_migrations())
+    system_migration_count = len(get_group_loader("system").get_migrations())
+
+    with pytest.raises(MigrationError):
+        runner.run_all(force=False, group=group)
+
+    runner.run_all(force=True, group=group)
+
+    # pending system migrations run with any group
+    expected_pending_count = (
+        get_total_migration_count() - event_migration_count - system_migration_count
+    )
+    assert len(runner._get_pending_migrations()) == expected_pending_count
+
+
 def test_run_all() -> None:
     runner = Runner()
     assert len(runner._get_pending_migrations()) == get_total_migration_count()
