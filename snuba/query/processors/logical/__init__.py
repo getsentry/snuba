@@ -1,9 +1,14 @@
 import os
 from abc import ABC, abstractmethod
+from typing import cast
 
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+
+
+class ProcessorUnsupportedFromConfig(Exception):
+    pass
 
 
 class LogicalQueryProcessor(ABC, metaclass=RegisteredClass):
@@ -22,9 +27,16 @@ class LogicalQueryProcessor(ABC, metaclass=RegisteredClass):
     instance may be reused.
     """
 
+    def __init__(self) -> None:
+        pass
+
     @classmethod
-    def config_key(cls) -> str:
-        return cls.__name__
+    def get_from_name(cls, name: str) -> "LogicalQueryProcessor":
+        return cast("LogicalQueryProcessor", cls.class_from_name(name))
+
+    @classmethod
+    def from_kwargs(cls, **kwargs: str) -> "LogicalQueryProcessor":
+        return cls(**kwargs)
 
     @abstractmethod
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:

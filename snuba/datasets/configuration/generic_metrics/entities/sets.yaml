@@ -48,7 +48,7 @@ query_processors:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
   -
-    processor: referrer_rate_limit
+    processor: referrer_rate_limiter
   -
     processor: org_rate_limiter
     args:
