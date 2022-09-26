@@ -11,11 +11,13 @@ snuba/
 │  │  │  ├─ a.py
 │  │  │  ├─ b.py
 │  │  │  ├─ c.py
+│  │  │  ├─ garbage
 │  │  ├─ test_package_auto_import/ <-- RegisteredClass no auto importing
 │  │  │  ├─ __init__.py <-- import_submodules_in_directory called here
 │  │  │  ├─ a.py
 │  │  │  ├─ b.py
 │  │  │  ├─ c.py
+│  │  │  ├─ garbage
 
 the files in the subdirectories are absolutely the same except that test_package_auto_import calls
 `import_submodules_in_directory` in the __init__.py file.

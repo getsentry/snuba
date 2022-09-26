@@ -174,7 +174,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             get_config(USE_CONFIG_BUILT_STORAGES, 0)
             and storage_key in self._config_built_storages
         ):
-            logger.info(f"Using config built storage: {storage_key.value}")
             return self._config_built_storages[storage_key]
         return self._all_storages[storage_key]
 

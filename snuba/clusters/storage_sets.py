@@ -20,8 +20,6 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "PROFILES": "profiles",
     "FUNCTIONS": "functions",
     "REPLAYS": "replays",
-    "GENERIC_METRICS_SETS": "generic_metrics_sets",
-    "GENERIC_METRICS_DISTRIBUTIONS": "generic_metrics_distributions",
 }
 
 

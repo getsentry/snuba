@@ -24,7 +24,6 @@ _PARENT_SUBSCRIPTION_CLASS_MAPPING: Mapping[str, Type[EntitySubscription]] = {
 def build_entity_subscription_from_config(
     file_path: str,
 ) -> Type[PluggableEntitySubscription]:
-    logger.info(f"building entity from {file_path}")
     config_data = load_configuration_data(
         file_path, {"entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA}
     )
