@@ -141,6 +141,10 @@ def consumer(
     logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
 
+    from structlog import get_logger
+
+    get_logger().info(msg="hello, world!")
+
     metrics = MetricsWrapper(
         environment.metrics,
         "consumer",
