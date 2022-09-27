@@ -150,6 +150,13 @@ def multistorage_consumer(
     setup_logging(log_level)
     setup_sentry()
 
+    import structlog
+    from structlog import get_logger
+    from structlog.processors import JSONRenderer
+
+    structlog.configure(processors=[JSONRenderer()])
+    get_logger().info("hello", a="world", b=2)
+
     logger.info("Consumer Starting")
     storages = {
         key: get_writable_storage(key)
