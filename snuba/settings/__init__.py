@@ -7,7 +7,7 @@ from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
-LOG_FORMAT = "%(asctime)s %(message)s"
+LOG_FORMAT = "%(levelname)s %(asctime)s %(message)s"
 
 TESTING = False
 DEBUG = True
