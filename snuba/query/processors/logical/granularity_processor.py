@@ -15,6 +15,10 @@ DEFAULT_GRANULARITY_RAW = 60
 class GranularityProcessor(LogicalQueryProcessor):
     """Use the granularity set on the query to filter on the granularity column"""
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "granularity"
+
     @staticmethod
     def __get_granularity(query: Query) -> int:
         """Find the best fitting granularity for this query"""
@@ -89,6 +93,10 @@ class MappedGranularityProcessor(LogicalQueryProcessor):
             mapping.raw for mapping in self._accepted_granularities
         ]
         self._default_granularity_enum = default_granularity
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "handle_mapped_granularities"
 
     def __get_granularity(self, query: Query) -> int:
         """Find the best fitting granularity for this query"""
