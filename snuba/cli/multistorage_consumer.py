@@ -156,6 +156,7 @@ def multistorage_consumer(
 
     structlog.configure(processors=[JSONRenderer()])
     get_logger().info("hello", a="world", b=2)
+    get_logger().warn("this is a warning", a="world", b=2)
 
     logger.info("Consumer Starting")
     storages = {
