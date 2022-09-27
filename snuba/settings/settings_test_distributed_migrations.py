@@ -15,7 +15,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     #     "distributed_cluster_name": "query_cluster",
     # },
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "clickhouse-01"),
+        "host": "clickhouse-01",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -29,9 +29,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "distributed_cluster_name": "migrations_cluster",  # distributed cluster has to be the same as migrations cluster??
     },
     {
-        "host": os.environ.get(
-            "CLICKHOUSE_HOST", "clickhouse-01"
-        ),  # must be the same as cluster above
+        "host": "clickhouse-01",  # must be the same as cluster above
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),

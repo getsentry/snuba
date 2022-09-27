@@ -26,7 +26,7 @@ def teardown_function() -> None:
 @pytest.mark.ci_only
 def test_add_node() -> None:
     print("starting test add node")
-    host_name = os.environ.get("CLICKHOUSE_HOST", "clickhouse-04")
+    host_name = "clickhouse-04"
     port = int(os.environ.get("CLICKHOUSE_PORT", 9000))
     user = "default"
     password = ""

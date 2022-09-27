@@ -21,7 +21,7 @@ def pytest_configure() -> None:
         settings.TESTING
     ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
-    print("setting up test cluster")
+    print("setting up test cluster!")
 
     setup_sentry()
 
@@ -31,6 +31,7 @@ def pytest_configure() -> None:
     importlib.reload(runner)
 
     print("waiting 60 seconds for clickhouse to start")
+    print(settings.CLUSTERS)
     time.sleep(60)  # wait for clickhouse to start
 
     for cluster_node in settings.CLUSTERS:
