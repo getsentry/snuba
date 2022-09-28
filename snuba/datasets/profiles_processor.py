@@ -51,7 +51,7 @@ def _normalize_legacy_format(
     return {
         "android_api_level": message.get("android_api_level"),
         "architecture": message.get("architecture", "unknown"),
-        "device_classification": message["device_classification"],
+        "device_classification": message.get("device_classification", ""),
         "device_locale": message["device_locale"],
         "device_manufacturer": message["device_manufacturer"],
         "device_model": message["device_model"],
