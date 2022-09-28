@@ -365,10 +365,6 @@ def config_changes() -> RespTuple:
 
 @application.route("/health")
 def health() -> Response:
-    logging.info("test info log")
-    logging.warn("test warn log")
-    logging.debug("test debug log")
-
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
     clickhouse_health = check_clickhouse(ignore_experimental=True) if thorough else True
