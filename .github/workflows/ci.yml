@@ -227,6 +227,8 @@ jobs:
     strategy:
       matrix:
         snuba_settings: ["test", "test_distributed"]
+        clickhouse_variants: [docker-compose.gcb.yml,
+            docker-compose.clickhouse.21.8.gcb.yml]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -252,7 +254,8 @@ jobs:
 
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }}
+          docker-compose -f {{matrix.clickhouse_variants}} run --rm snuba-test
 
       - name: Upload to codecov
         run: |
