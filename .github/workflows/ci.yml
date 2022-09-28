@@ -226,7 +226,6 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ["test", "test_distributed"]
         clickhouse_image: ['yandex/clickhouse-server:20.3.9.70',
                            'altinity/clickhouse-server:21.8.13.1.altinitystable']
     steps:
@@ -255,7 +254,49 @@ jobs:
       - name: Docker Snuba tests
         run: |
           export CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} &&
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} \
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test \
+          docker-compose -f docker-compose.gcb.yml run  --rm \
+          snuba-test
+
+      - name: Upload to codecov
+        run: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
+
+  tests-distributed:
+    needs: [ linting, snuba-image ]
+    name: Tests and code coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        clickhouse_image: ['yandex/clickhouse-server:20.3.9.70']
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+
+      - name: Pull snuba CI images
+        run: |
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:latest || true
+
+      - name: Build snuba docker image for CI
+        run: |
+          docker build . \
+            -t snuba-test \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --target testing
+
+      - name: Docker set up
+        run: |
+          docker network create --attachable cloudbuild
+
+      - name: Docker Snuba tests
+        run: |
+          export CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} &&
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed \
           docker-compose -f docker-compose.gcb.yml run  --rm \
           snuba-test
 
