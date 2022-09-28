@@ -227,8 +227,10 @@ jobs:
     strategy:
       matrix:
         snuba_settings: ["test", "test_distributed"]
-        clickhouse_variants: [docker-compose.gcb.yml,
-            docker-compose.clickhouse.21.8.gcb.yml]
+        #clickhouse_variants: [docker-compose.gcb.yml,
+        #    docker-compose.clickhouse.21.8.gcb.yml]
+        clickhouse_image: ['yandex/clickhouse-server:20.3.9.70',
+                           'altinity/clickhouse-server:21.8.13.1.altinitystable']
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -255,7 +257,8 @@ jobs:
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} \
-          docker-compose -f ${{ matrix.clickhouse_variants }} run --rm \
+          docker-compose -f docker-compose.gcb.yml \
+          run -e CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} --rm \
           snuba-test
 
       - name: Upload to codecov
