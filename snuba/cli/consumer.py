@@ -141,13 +141,6 @@ def consumer(
     logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
 
-    import structlog
-    from structlog import get_logger
-    from structlog.processors import JSONRenderer
-
-    structlog.configure(processors=[JSONRenderer()])
-    get_logger().info("hello", a="world", b=2)
-
     metrics = MetricsWrapper(
         environment.metrics,
         "consumer",
