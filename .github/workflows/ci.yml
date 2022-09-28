@@ -255,7 +255,7 @@ jobs:
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }}
-          docker-compose -f {{matrix.clickhouse_variants}} run --rm snuba-test
+          docker-compose -f {{ matrix.clickhouse_variants }} run --rm snuba-test
 
       - name: Upload to codecov
         run: |
