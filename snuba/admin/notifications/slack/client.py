@@ -1,11 +1,11 @@
-import logging
 from typing import Any, MutableMapping, Optional
 
 import requests
+import structlog
 
 from snuba import settings
 
-logger = logging.getLogger("snuba.admin.notifications.slack")
+logger = structlog.getLogger().bind(module=__name__)
 
 
 class SlackClient(object):
