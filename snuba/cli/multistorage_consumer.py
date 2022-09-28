@@ -9,6 +9,7 @@ from arroyo import Topic, configure_metrics
 from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
 from arroyo.processing import StreamProcessor
 from confluent_kafka import Producer as ConfluentKafkaProducer
+from structlog import get_logger
 
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
@@ -150,13 +151,8 @@ def multistorage_consumer(
     setup_logging(log_level)
     setup_sentry()
 
-    import structlog
-    from structlog import get_logger
-    from structlog.processors import JSONRenderer
-
-    structlog.configure(processors=[JSONRenderer()])
     get_logger().info("hello", a="world", b=2)
-    get_logger().msg("this is a warning", a="world", b=2, severity="WARN")
+    get_logger().warn("this is a warning", a="world", b=2)
 
     logger.info("Consumer Starting")
     storages = {
