@@ -515,5 +515,5 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                         tick_subscription.tick_message.timestamp,
                     )
                 }
-                logger.info("Committing remaining offset: %r", offset)
+                logger.info("Committing offset: %r", offset)
                 self.__commit(offset)

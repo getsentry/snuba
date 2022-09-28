@@ -495,5 +495,5 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             offset = {message.partition: Position(message.offset, message.timestamp)}
 
-            logger.info("Committing remaining offset: %r", offset)
+            logger.info("Committing offset: %r", offset)
             self.__commit(offset)
