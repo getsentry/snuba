@@ -45,7 +45,7 @@ columns = ColumnSet(
         ### common sentry event columns
         ("project_id", UInt(64)),
         # release/environment info
-        ("platform", String(Modifiers(nullable=True))),
+        ("platform", String(Modifiers(nullable=False))),
         ("environment", String(Modifiers(nullable=True))),
         ("release", String(Modifiers(nullable=True))),
         ("dist", String(Modifiers(nullable=True))),
