@@ -300,10 +300,6 @@ jobs:
           docker-compose -f docker-compose.gcb.yml run  --rm \
           snuba-test
 
-      - name: Upload to codecov
-        run: |
-          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
-
   sentry:
     needs: [snuba-image]
     runs-on: ubuntu-latest
