@@ -256,10 +256,9 @@ jobs:
 
       - name: Docker Snuba tests
         run: |
-          export CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} ||
+          export CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} &&
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} \
-          docker-compose -f docker-compose.gcb.yml \
-          run -e CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} --rm \
+          docker-compose -f docker-compose.gcb.yml run  --rm \
           snuba-test
 
       - name: Upload to codecov
