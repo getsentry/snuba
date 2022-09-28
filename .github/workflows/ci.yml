@@ -227,8 +227,6 @@ jobs:
     strategy:
       matrix:
         snuba_settings: ["test", "test_distributed"]
-        #clickhouse_variants: [docker-compose.gcb.yml,
-        #    docker-compose.clickhouse.21.8.gcb.yml]
         clickhouse_image: ['yandex/clickhouse-server:20.3.9.70',
                            'altinity/clickhouse-server:21.8.13.1.altinitystable']
     steps:
