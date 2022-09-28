@@ -426,14 +426,14 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             self.__queue.popleft()
 
             if tick_subscription.offset_to_commit:
-                self.__commit(
-                    {
-                        tick_subscription.tick_message.partition: Position(
-                            tick_subscription.offset_to_commit,
-                            tick_subscription.tick_message.timestamp,
-                        )
-                    }
-                )
+                offset = {
+                    tick_subscription.tick_message.partition: Position(
+                        tick_subscription.offset_to_commit,
+                        tick_subscription.tick_message.timestamp,
+                    )
+                }
+                logger.info("Committing offset: %r", offset)
+                self.__commit(offset)
 
     def submit(self, message: Message[CommittableTick]) -> None:
         assert not self.__closed
@@ -462,13 +462,13 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         # If there are no subscriptions for a tick, immediately commit if an offset
         # to commit is provided.
         if len(encoded_tasks) == 0 and message.payload.offset_to_commit is not None:
-            self.__commit(
-                {
-                    message.partition: Position(
-                        message.payload.offset_to_commit, message.timestamp
-                    )
-                }
-            )
+            offset = {
+                message.partition: Position(
+                    message.payload.offset_to_commit, message.timestamp
+                )
+            }
+            logger.info("Committing offset: %r", offset)
+            self.__commit(offset)
             return
 
         # Record the amount of time between the message timestamp and when scheduling
@@ -509,11 +509,11 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             tick_subscription.subscription_future.result(remaining)
 
             if tick_subscription.offset_to_commit is not None:
-                self.__commit(
-                    {
-                        tick_subscription.tick_message.partition: Position(
-                            tick_subscription.offset_to_commit,
-                            tick_subscription.tick_message.timestamp,
-                        )
-                    }
-                )
+                offset = {
+                    tick_subscription.tick_message.partition: Position(
+                        tick_subscription.offset_to_commit,
+                        tick_subscription.tick_message.timestamp,
+                    )
+                }
+                logger.info("Committing remaining offset: %r", offset)
+                self.__commit(offset)

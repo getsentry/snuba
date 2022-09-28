@@ -441,6 +441,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
             or force is True
         ):
             if self.__commit_data:
+                logger.info("Committing offsets: %r", self.__commit_data)
                 self.__commit(self.__commit_data)
                 self.__last_committed = now
                 self.__commit_data = {}
@@ -492,6 +493,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             future.result(remaining)
 
-            self.__commit(
-                {message.partition: Position(message.offset, message.timestamp)}
-            )
+            offset = {message.partition: Position(message.offset, message.timestamp)}
+
+            logger.info("Committing remaining offset: %r", offset)
+            self.__commit(offset)
