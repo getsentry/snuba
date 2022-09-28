@@ -229,6 +229,7 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.
     """
+    settings.OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
     storage = get_writable_storage(StorageKey.ERRORS)
     cluster = storage.get_cluster()
     clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
