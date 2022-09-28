@@ -29,7 +29,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
 
-logger = structlog.getLogger().bind(module=__name__)
+logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 

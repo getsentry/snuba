@@ -5,7 +5,7 @@ import structlog
 
 from snuba import settings
 
-logger = structlog.getLogger().bind(module=__name__)
+logger = structlog.get_logger().bind(module=__name__)
 
 
 class SlackClient(object):

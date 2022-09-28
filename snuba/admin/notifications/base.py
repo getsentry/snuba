@@ -49,7 +49,7 @@ class NotificationBase(ABC):
 
 class RuntimeConfigLogClient(NotificationBase):
     def __init__(self) -> None:
-        self.logger = structlog.getLogger().bind(module=__name__)
+        self.logger = structlog.get_logger().bind(module=__name__)
 
     def _get_value_text(
         self,
@@ -90,7 +90,7 @@ class RuntimeConfigLogClient(NotificationBase):
         self.logger.info(
             event="value_updated",
             user=user,
-            action=action,
+            action=action.value,
             option=data["option"],
             old=data["old"],
             new=data["new"],
