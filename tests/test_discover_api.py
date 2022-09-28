@@ -191,17 +191,7 @@ class TestDiscoverApi(BaseApiTest):
             ),
             entity="discover_transactions",
         )
-        data = json.loads(response.data)
-
         assert response.status_code == 200
-        assert data["data"] == [
-            {
-                "type": "transaction",
-                "count": 0,
-                "uniq_group_id": 0,
-                "uniq_ex_stacks": None,
-            }
-        ]
 
         response = self.post(
             json.dumps(
