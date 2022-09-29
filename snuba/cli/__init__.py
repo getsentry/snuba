@@ -3,9 +3,13 @@ import time
 from pkgutil import walk_packages
 
 import click
+import sentry_sdk
 
-logging.basicConfig(level=getattr(logging, "INFO"), format="%(asctime)s %(message)s")
-logger = logging.getLogger("snuba_startup")
+from snuba.environment import setup_logging, setup_sentry
+
+setup_sentry()
+setup_logging("INFO")
+logger = logging.getLogger("snuba_init")
 
 start = time.perf_counter()
 logger.info("Initializing Snuba...")
@@ -25,11 +29,13 @@ def main() -> None:
     `OoO'  o   O `OoO'o `OoO' `OoO'o"""
 
 
-for loader, module_name, is_pkg in walk_packages(__path__, __name__ + "."):
-    logger.info(f"Loading module {module_name}")
-    module = __import__(module_name, globals(), locals(), ["__name__"])
-    cmd = getattr(module, module_name.rsplit(".", 1)[-1])
-    if isinstance(cmd, click.Command):
-        main.add_command(cmd)
+with sentry_sdk.start_transaction(op="snuba_init", name="Snuba CLI Initialization"):
+    for loader, module_name, is_pkg in walk_packages(__path__, __name__ + "."):
+        logger.info(f"Loading module {module_name}")
+        with sentry_sdk.start_span(op="import", description=module_name):
+            module = __import__(module_name, globals(), locals(), ["__name__"])
+            cmd = getattr(module, module_name.rsplit(".", 1)[-1])
+            if isinstance(cmd, click.Command):
+                main.add_command(cmd)
 
 logger.info(f"Snuba initialization took {time.perf_counter() - start}s")

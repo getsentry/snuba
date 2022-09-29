@@ -4,9 +4,11 @@ import logging
 from glob import glob
 from typing import Generator
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.configuration.storage_builder import build_storage
+from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import get_config
@@ -34,7 +36,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         self._config_built_storages = {
             storage.get_storage_key(): storage
             for storage in [
-                build_storage(config_file)
+                build_storage_from_config(config_file)
                 for config_file in glob(
                     settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
                 )
@@ -197,7 +199,8 @@ _STORAGE_FACTORY: _StorageFactory | None = None
 def _storage_factory() -> _StorageFactory:
     global _STORAGE_FACTORY
     if _STORAGE_FACTORY is None:
-        _STORAGE_FACTORY = _StorageFactory()
+        with sentry_sdk.start_span(op="function", description="Load Storage Factory"):
+            _STORAGE_FACTORY = _StorageFactory()
     return _STORAGE_FACTORY
 
 

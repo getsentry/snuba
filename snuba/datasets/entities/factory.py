@@ -1,6 +1,8 @@
 from glob import glob
 from typing import Generator, MutableMapping, Optional, Sequence, Type
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities.entity_key import EntityKey
@@ -120,7 +122,8 @@ _ENT_FACTORY: Optional[_EntityFactory] = None
 def _ent_factory() -> _EntityFactory:
     global _ENT_FACTORY
     if _ENT_FACTORY is None:
-        _ENT_FACTORY = _EntityFactory()
+        with sentry_sdk.start_span(op="function", description="Load Entity Factory"):
+            _ENT_FACTORY = _EntityFactory()
     return _ENT_FACTORY
 
 

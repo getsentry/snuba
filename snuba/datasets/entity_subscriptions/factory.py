@@ -1,5 +1,7 @@
 from typing import Generator, Mapping, MutableMapping, Sequence, Type
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
@@ -97,7 +99,10 @@ _ENT_SUB_FACTORY = None
 def _ent_sub_factory() -> _EntitySubscriptionFactory:
     global _ENT_SUB_FACTORY
     if _ENT_SUB_FACTORY is None:
-        _ENT_SUB_FACTORY = _EntitySubscriptionFactory()
+        with sentry_sdk.start_span(
+            op="function", description="Load Entity Subscription Factory"
+        ):
+            _ENT_SUB_FACTORY = _EntitySubscriptionFactory()
     return _ENT_SUB_FACTORY
 
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from glob import glob
 from typing import Generator, Type
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.datasets.configuration.dataset_builder import build_dataset_from_config
 from snuba.datasets.dataset import Dataset
@@ -111,7 +113,8 @@ def _ds_factory() -> _DatasetFactory:
     # This function can be acessed by many threads at once. It is okay if more than one thread recreates the same object.
     global _DS_FACTORY
     if _DS_FACTORY is None:
-        _DS_FACTORY = _DatasetFactory()
+        with sentry_sdk.start_span(op="function", description="Load Dataset Factory"):
+            _DS_FACTORY = _DatasetFactory()
     return _DS_FACTORY
 
 
