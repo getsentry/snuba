@@ -214,7 +214,9 @@ class TestCleanup:
         table = storage.get_table_writer().get_schema().get_local_table_name()
         database = storage.get_cluster().get_database()
 
-        parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
+        parts = cleanup.get_partitions(
+            clickhouse, storage, database, table, PartitionType.ALL
+        )
         assert parts == []
 
         # Pick a time a few minutes after midnight
@@ -225,7 +227,9 @@ class TestCleanup:
         # Note that without rounding the base time to midnight, base - retention > last_day(timestamp)
         timestamp = datetime(2021, 10, 25)
         write_processed_messages(storage, [create_event_row_for_date(timestamp, 90)])
-        parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
+        parts = cleanup.get_partitions(
+            clickhouse, storage, database, table, PartitionType.ALL
+        )
 
         assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(timestamp), 90)
