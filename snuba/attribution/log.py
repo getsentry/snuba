@@ -19,7 +19,7 @@ from snuba.utils.streams.topics import Topic
 
 from .appid import AppID
 
-kfk = None
+kfk: Producer | None = None
 
 
 @dataclass(frozen=True)

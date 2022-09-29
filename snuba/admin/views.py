@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import logging
 from typing import Any, List, Optional, Sequence, Tuple, cast
 
 import simplejson as json
+import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 
 from snuba import state
@@ -29,7 +29,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
@@ -49,7 +49,9 @@ def handle_invalid_json(exception: UnauthorizedException) -> Response:
 
 @application.before_request
 def authorize() -> None:
+    logger.debug("authorize.entered")
     user = authorize_request()
+    logger.info("authorize.finished", user=user)
     g.user = user
 
 

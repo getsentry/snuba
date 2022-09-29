@@ -41,6 +41,7 @@ Usage:
 >>> recvd_exception_dict = rapidjson.loads(recv())
 >>> raise SerializableException.from_dict(recvd_exception_dict) # this will be an instance of MyException
 """
+from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
 
@@ -75,7 +76,7 @@ class _ExceptionRegistry:
         return self.__mapping.get(cls_name)
 
 
-_REGISTRY = None
+_REGISTRY: _ExceptionRegistry | None = None
 
 
 def _get_registry() -> _ExceptionRegistry:
@@ -98,7 +99,7 @@ class SerializableException(Exception):
         self,
         message: Optional[str] = None,
         should_report: bool = True,
-        **extra_data: JsonSerializable
+        **extra_data: JsonSerializable,
     ) -> None:
         self.message = message or ""
         self.extra_data = extra_data or {}
@@ -124,7 +125,7 @@ class SerializableException(Exception):
             return defined_exception(
                 message=edict.get("__message__", ""),
                 should_report=edict.get("__should_report__", True),
-                **edict.get("__extra_data__", {})
+                **edict.get("__extra_data__", {}),
             )
         # if an exception is created from a dictionary which is not in the registry,
         # create a new Exception type with that name and message dynamically.
@@ -135,7 +136,7 @@ class SerializableException(Exception):
             type(edict["__name__"], (cls,), {})(
                 message=edict.get("__message__", ""),
                 should_report=edict.get("__should_report__", True),
-                **edict.get("__extra_data__", {})
+                **edict.get("__extra_data__", {}),
             ),
         )
 

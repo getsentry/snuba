@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -89,8 +91,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 PARTITIONED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Dogstatsd Options
-DOGSTATSD_HOST = None
-DOGSTATSD_PORT = None
+DOGSTATSD_HOST: str | None = None
+DOGSTATSD_PORT: int | None = None
 DOGSTATSD_SAMPLING_RATES = {
     "subscriptions.receive_latency": 0.1,
     "subscriptions.process_message": 0.1,
@@ -108,7 +110,7 @@ CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASS", "")
 # Redis Options
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 
-REDIS_CLUSTER_STARTUP_NODES = None
+REDIS_CLUSTER_STARTUP_NODES: list[dict[str, Any]] | None = None
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
@@ -125,8 +127,8 @@ RECORD_QUERIES = False
 CONFIG_MEMOIZE_TIMEOUT = 10
 
 # Sentry Options
-SENTRY_DSN = "https://ba91403d8b944ce4867387984fd2fbff@o921932.ingest.sentry.io/5868848"
-SENTRY_TRACE_SAMPLE_RATE = 1.0
+SENTRY_DSN: str | None = None
+SENTRY_TRACE_SAMPLE_RATE = 0
 
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
@@ -280,6 +282,9 @@ DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
 PREFER_PLUGGABLE_ENTITIES = False
 PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
+
+# Counter utility class window size in minutes
+COUNTER_WINDOW_SIZE = timedelta(minutes=10)
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
