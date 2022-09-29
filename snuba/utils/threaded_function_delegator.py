@@ -86,9 +86,7 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
                     if self.__callback_func is not None:
                         self.__callback_func(primary_result, other_results)
                 except Exception as error:
-                    if self.__ignore_secondary_exceptions:
-                        logger.warning(error, exc_info=True)
-                    else:
+                    if not self.__ignore_secondary_exceptions:
                         logger.exception(error)
 
             executor.submit(execute_callback)
