@@ -220,12 +220,12 @@ class TestCleanup:
         assert parts == []
 
         # Pick a time a few minutes after midnight
-        base = datetime(2022, 1, 29, 0, 4, 37)
+        base = datetime.utcnow().replace(hour=0, minute=5, second=0, microsecond=0)
         current_time.return_value = base
 
         # Insert an event that is outside retention, but its last day is just inside retention
         # Note that without rounding the base time to midnight, base - retention > last_day(timestamp)
-        timestamp = datetime(2021, 10, 25)
+        timestamp = base - timedelta(days=91)
         write_processed_messages(storage, [create_event_row_for_date(timestamp, 90)])
         parts = cleanup.get_partitions(
             clickhouse, storage, database, table, PartitionType.ALL
