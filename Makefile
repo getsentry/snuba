@@ -14,9 +14,10 @@ test:
 	SNUBA_SETTINGS=test pytest -vv tests -v -m "not ci_only"
 
 test-distributed-migrations:
-	docker-compose -f docker-compose.gcb.clusters.yml down
-	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.clusters.yml run --rm snuba-test
-
+	docker build . -t snuba-test
+	docker-compose -f docker-compose.gcb.yml down
+	SNUBA_SETTINGS=test_distributed docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
+	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
 
 tests: test
 

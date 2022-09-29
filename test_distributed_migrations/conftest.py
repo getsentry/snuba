@@ -1,4 +1,5 @@
 import importlib
+import json
 import time
 
 import pytest
@@ -30,9 +31,16 @@ def pytest_configure() -> None:
     importlib.reload(cluster)
     importlib.reload(runner)
 
-    print("waiting 60 seconds for clickhouse to start")
-    print(settings.CLUSTERS)
-    time.sleep(60)  # wait for clickhouse to start
+    print("waiting 30 seconds for clickhouse to start")
+    print(
+        "\nclusters:\n",
+        json.dumps(
+            settings.CLUSTERS,
+            indent=4,
+            default=lambda x: list(x) if isinstance(x, set) else x.__dict__,
+        ),
+    )
+    time.sleep(30)  # wait for clickhouse to start
 
     for cluster_node in settings.CLUSTERS:
         clickhouse_cluster = ClickhouseCluster(
