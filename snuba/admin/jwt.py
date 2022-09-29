@@ -12,11 +12,16 @@ AUDIENCE: Optional[str] = None
 
 @dataclass
 class AdminUser:
+    """
+    Basic encapsulation of a user of the admin panel. In the future,
+    should be extended to contain permissions among other things
+    """
+
     email: str
     id: str
 
 
-def certs() -> Any:
+def _certs() -> Any:
     """Returns a dictionary of current Google public key certificates for
     validating Google-signed JWTs. Since these change rarely, the result
     is cached on first request for faster subsequent responses.
@@ -30,7 +35,7 @@ def certs() -> Any:
     return CERTS
 
 
-def get_metadata(item_name: str) -> str:
+def _get_metadata(item_name: str) -> str:
     """Returns a string with the project metadata value for the item_name.
     See https://cloud.google.com/compute/docs/storing-retrieving-metadata for
     possible item_name values.
@@ -47,25 +52,27 @@ def get_metadata(item_name: str) -> str:
     return metadata
 
 
-def audience() -> str:
+def _audience() -> str:
     """Returns the audience value (the JWT 'aud' property) for the current
     running instance. Since this involves a metadata lookup, the result is
     cached when first requested for faster future responses.
     """
     global AUDIENCE
     if AUDIENCE is None:
-        project_number = get_metadata("numeric-project-id")
-        project_id = get_metadata("project-id")
+        project_number = _get_metadata("numeric-project-id")
+        project_id = _get_metadata("project-id")
         AUDIENCE = "/projects/{}/apps/{}".format(project_number, project_id)
     return AUDIENCE
 
 
 def validate_assertion(assertion: str) -> AdminUser:
-    """Checks that the JWT assertion is valid (properly signed, for the
-    correct audience) and if so, returns strings for the requesting user's
-    email and a persistent user ID. If not valid, returns None for each field.
+    """
+    Checks that the JWT assertion is valid (properly signed, for the
+    correct audience) and if so, returns an AdminUser.
+
+    If not, an exception will be raised
     """
     from jose import jwt
 
-    info = jwt.decode(assertion, certs(), algorithms=["ES256"], audience=audience())
+    info = jwt.decode(assertion, _certs(), algorithms=["ES256"], audience=_audience())
     return AdminUser(email=info["email"], id=info["id"])
