@@ -67,8 +67,9 @@ class TestCleanup:
             return datetime(rounded.year, rounded.month, rounded.day)
 
         # In prod the dates have hours/seconds etc.
-        today = datetime.utcnow()
-        base = today - timedelta((today.weekday() + 1) % 7)
+        # today = datetime.utcnow()
+        # base = today - timedelta((today.weekday() + 1) % 7)
+        base = datetime(1999, 12, 26, 1, 14, 35)
         current_time.return_value = base
 
         storage = get_writable_storage(storage_key)
@@ -215,7 +216,7 @@ class TestCleanup:
         database = storage.get_cluster().get_database()
 
         parts = cleanup.get_partitions(
-            clickhouse, storage, database, table, PartitionType.ALL
+            clickhouse, storage, database, table, PartitionType.ACTIVE
         )
         assert parts == []
 
@@ -228,7 +229,7 @@ class TestCleanup:
         timestamp = base - timedelta(days=91)
         write_processed_messages(storage, [create_event_row_for_date(timestamp, 90)])
         parts = cleanup.get_partitions(
-            clickhouse, storage, database, table, PartitionType.ALL
+            clickhouse, storage, database, table, PartitionType.ACTIVE
         )
 
         assert [(p.date, p.retention_days) for p in parts] == [
