@@ -74,7 +74,7 @@ def _build_entity_translation_mappers(
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
-    with sentry_sdk.start_span(op="function", description="Build Entity") as span:
+    with sentry_sdk.start_span(op="build", description="Entity") as span:
         span.set_tag("entity", config["name"])
         return PluggableEntity(
             entity_key=register_entity_key(config["name"]),

@@ -16,10 +16,11 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
-        initialize_storage_factory()
-        self._entity_map: MutableMapping[EntityKey, Entity] = {}
-        self._name_map: MutableMapping[Type[Entity], EntityKey] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(op="initialize", description="Entity Factory"):
+            initialize_storage_factory()
+            self._entity_map: MutableMapping[EntityKey, Entity] = {}
+            self._name_map: MutableMapping[Type[Entity], EntityKey] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
 
@@ -122,8 +123,7 @@ _ENT_FACTORY: Optional[_EntityFactory] = None
 def _ent_factory() -> _EntityFactory:
     global _ENT_FACTORY
     if _ENT_FACTORY is None:
-        with sentry_sdk.start_span(op="function", description="Load Entity Factory"):
-            _ENT_FACTORY = _EntityFactory()
+        _ENT_FACTORY = _EntityFactory()
     return _ENT_FACTORY
 
 

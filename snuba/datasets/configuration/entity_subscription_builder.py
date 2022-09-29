@@ -29,9 +29,7 @@ def build_entity_subscription_from_config(
     config = load_configuration_data(
         file_path, {"entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA}
     )
-    with sentry_sdk.start_span(
-        op="function", description="Build Entity Subscription"
-    ) as span:
+    with sentry_sdk.start_span(op="build", description="Entity Subscription") as span:
         span.set_tag("entity_subscription", config["name"])
 
         PluggableEntitySubscription.name = config["name"]

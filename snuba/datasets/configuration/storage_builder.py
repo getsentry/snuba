@@ -51,7 +51,7 @@ def build_storage_from_config(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
     config = load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
-    with sentry_sdk.start_span(op="function", description="Build Storage") as span:
+    with sentry_sdk.start_span(op="build", description="Storage") as span:
         span.set_tag("storage", config["name"])
         storage_kwargs = __build_readable_storage_kwargs(config)
         if config[KIND] == "readable_storage":

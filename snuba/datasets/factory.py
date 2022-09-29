@@ -17,10 +17,11 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
     def __init__(self) -> None:
-        initialize_entity_factory()
-        self._dataset_map: dict[str, Dataset] = {}
-        self._name_map: dict[Type[Dataset], str] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(op="initialize", description="Dataset Factory"):
+            initialize_entity_factory()
+            self._dataset_map: dict[str, Dataset] = {}
+            self._name_map: dict[Type[Dataset], str] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
 
@@ -113,8 +114,7 @@ def _ds_factory() -> _DatasetFactory:
     # This function can be acessed by many threads at once. It is okay if more than one thread recreates the same object.
     global _DS_FACTORY
     if _DS_FACTORY is None:
-        with sentry_sdk.start_span(op="function", description="Load Dataset Factory"):
-            _DS_FACTORY = _DatasetFactory()
+        _DS_FACTORY = _DatasetFactory()
     return _DS_FACTORY
 
 

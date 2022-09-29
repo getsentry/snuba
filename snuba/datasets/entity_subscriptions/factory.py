@@ -18,11 +18,14 @@ class _EntitySubscriptionFactory(
     ConfigComponentFactory[Type[EntitySubscription], EntityKey]
 ):
     def __init__(self) -> None:
-        self._entity_subscription_map: MutableMapping[
-            EntityKey, Type[EntitySubscription]
-        ] = {}
-        self._name_map: MutableMapping[Type[EntitySubscription], EntityKey] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(
+            op="initialize", description="Entity Subscription Factory"
+        ):
+            self._entity_subscription_map: MutableMapping[
+                EntityKey, Type[EntitySubscription]
+            ] = {}
+            self._name_map: MutableMapping[Type[EntitySubscription], EntityKey] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
         from snuba.datasets.entity_subscriptions.entity_subscription import (
@@ -101,10 +104,7 @@ _ENT_SUB_FACTORY: _EntitySubscriptionFactory | None = None
 def _ent_sub_factory() -> _EntitySubscriptionFactory:
     global _ENT_SUB_FACTORY
     if _ENT_SUB_FACTORY is None:
-        with sentry_sdk.start_span(
-            op="function", description="Load Entity Subscription Factory"
-        ):
-            _ENT_SUB_FACTORY = _EntitySubscriptionFactory()
+        _ENT_SUB_FACTORY = _EntitySubscriptionFactory()
     return _ENT_SUB_FACTORY
 
 

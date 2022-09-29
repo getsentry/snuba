@@ -21,15 +21,16 @@ USE_CONFIG_BUILT_STORAGES = "use_config_built_storages"
 
 class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def __init__(self) -> None:
-        self._config_built_storages: dict[StorageKey, Storage] = {}
-        self._writable_storages: dict[StorageKey, Storage] = {}
-        self._dev_writable_storages: dict[StorageKey, Storage] = {}
-        self._cdc_storages: dict[StorageKey, Storage] = {}
-        self._dev_cdc_storages: dict[StorageKey, Storage] = {}
-        self._non_writable_storages: dict[StorageKey, Storage] = {}
-        self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
-        self._all_storages: dict[StorageKey, Storage] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(op="initialize", description="Storage Factory"):
+            self._config_built_storages: dict[StorageKey, Storage] = {}
+            self._writable_storages: dict[StorageKey, Storage] = {}
+            self._dev_writable_storages: dict[StorageKey, Storage] = {}
+            self._cdc_storages: dict[StorageKey, Storage] = {}
+            self._dev_cdc_storages: dict[StorageKey, Storage] = {}
+            self._non_writable_storages: dict[StorageKey, Storage] = {}
+            self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
+            self._all_storages: dict[StorageKey, Storage] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
 
@@ -199,8 +200,7 @@ _STORAGE_FACTORY: _StorageFactory | None = None
 def _storage_factory() -> _StorageFactory:
     global _STORAGE_FACTORY
     if _STORAGE_FACTORY is None:
-        with sentry_sdk.start_span(op="function", description="Load Storage Factory"):
-            _STORAGE_FACTORY = _StorageFactory()
+        _STORAGE_FACTORY = _StorageFactory()
     return _STORAGE_FACTORY
 
 
