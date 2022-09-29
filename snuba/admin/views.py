@@ -50,9 +50,10 @@ def handle_invalid_json(exception: UnauthorizedException) -> Response:
 @application.before_request
 def authorize() -> None:
     logger.debug("authorize.entered")
-    user = authorize_request()
-    logger.info("authorize.finished", user=user)
-    g.user = user
+    if request.endpoint != "health":
+        user = authorize_request()
+        logger.info("authorize.finished", user=user)
+        g.user = user
 
 
 @application.route("/")
