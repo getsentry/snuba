@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import Sequence
 
 from snuba import util
@@ -8,6 +9,11 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 
 logger = logging.getLogger("snuba.cleanup")
+
+
+class PartitionType(Enum):
+    ACTIVE = "active"
+    ALL = "all"
 
 
 def run_cleanup(
@@ -19,26 +25,40 @@ def run_cleanup(
 
     table = storage.get_table_writer().get_schema().get_local_table_name()
 
-    active_parts = get_active_partitions(clickhouse, storage, database, table)
-    stale_parts = filter_stale_partitions(active_parts)
+    all_parts = get_partitions(clickhouse, storage, database, table, PartitionType.ALL)
+    stale_parts = filter_stale_partitions(all_parts)
     drop_partitions(clickhouse, database, table, stale_parts, dry_run=dry_run)
     return len(stale_parts)
 
 
-def get_active_partitions(
-    clickhouse: ClickhousePool, storage: WritableTableStorage, database: str, table: str
+def get_partitions(
+    clickhouse: ClickhousePool,
+    storage: WritableTableStorage,
+    database: str,
+    table: str,
+    partition_type: PartitionType,
 ) -> Sequence[util.Part]:
-
-    response = clickhouse.execute(
-        """
-        SELECT DISTINCT partition
-        FROM system.parts
-        WHERE database = %(database)s
-        AND table = %(table)s
-        AND active = 1
-        """,
-        {"database": database, "table": table},
-    )
+    if partition_type == PartitionType.ACTIVE:
+        response = clickhouse.execute(
+            """
+            SELECT DISTINCT partition
+            FROM system.parts
+            WHERE database = %(database)s
+            AND table = %(table)s
+            AND active = 1
+            """,
+            {"database": database, "table": table},
+        )
+    else:
+        response = clickhouse.execute(
+            """
+            SELECT DISTINCT partition
+            FROM system.parts
+            WHERE database = %(database)s
+            AND table = %(table)s
+            """,
+            {"database": database, "table": table},
+        )
 
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
