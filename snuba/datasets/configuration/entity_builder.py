@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import logging
-from typing import Any, Sequence, Type
+from typing import Any, Sequence
 
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -18,34 +17,7 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
-from snuba.query.processors.logical.granularity_processor import (
-    MappedGranularityProcessor,
-)
-from snuba.query.processors.logical.object_id_rate_limiter import (
-    OrganizationRateLimiterProcessor,
-    ProjectRateLimiterProcessor,
-    ProjectReferrerRateLimiter,
-    ReferrerRateLimiterProcessor,
-)
-from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
-from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
-from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.validation.validators import QueryValidator
-
-# TODO replace all the explicit mapping dictionaries below with the
-# registered class factory pattern (e.g. https://github.com/getsentry/snuba/pull/3044)
-_QP_MAPPING: dict[str, Type[LogicalQueryProcessor]] = {
-    "transform_tag_types": TagsTypeTransformer,
-    "handle_mapped_granularities": MappedGranularityProcessor,
-    "translate_time_series": TimeSeriesProcessor,
-    "referrer_rate_limit": ReferrerRateLimiterProcessor,
-    "org_rate_limiter": OrganizationRateLimiterProcessor,
-    "project_referrer_rate_limiter": ProjectReferrerRateLimiter,
-    "project_rate_limiter": ProjectRateLimiterProcessor,
-    "resource_quota_limiter": ResourceQuotaProcessor,
-}
-
-logger = logging.getLogger("snuba.entity_builder")
 
 
 def _build_entity_validators(
@@ -61,7 +33,7 @@ def _build_entity_query_processors(
     config_query_processors: list[dict[str, Any]],
 ) -> Sequence[LogicalQueryProcessor]:
     return [
-        _QP_MAPPING[config_qp["processor"]](
+        LogicalQueryProcessor.get_from_name(config_qp["processor"]).from_kwargs(
             **(config_qp["args"] if config_qp.get("args") else {})
         )
         for config_qp in config_query_processors

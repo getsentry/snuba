@@ -14,6 +14,10 @@ class TagsExpanderProcessor(LogicalQueryProcessor):
     valid column name.
     """
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "tags_expander"
+
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             # This is intentionally not configurable in order to discourage creating

@@ -40,14 +40,12 @@ from snuba.state.cache.abstract import (
 )
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
-    GLOBAL_RATE_LIMIT_NAME,
     ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
     TABLE_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
     RateLimitStatsContainer,
-    get_global_rate_limit_params,
 )
 from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import ExceptionAwareCodec
@@ -280,15 +278,6 @@ def _record_rate_limit_metrics(
     reader: Reader,
     stats: MutableMapping[str, Any],
 ) -> None:
-    global_rate_limit_stats = rate_limit_stats_container.get_stats(
-        GLOBAL_RATE_LIMIT_NAME
-    )
-    if global_rate_limit_stats is not None:
-        metrics.gauge(
-            name="global_concurrent",
-            value=global_rate_limit_stats.concurrent,
-            tags={"table": stats.get("clickhouse_table", "")},
-        )
     # This is a temporary metric that will be removed once the organization
     # rate limit has been tuned.
     org_rate_limit_stats = rate_limit_stats_container.get_stats(
@@ -338,14 +327,6 @@ def execute_query_with_rate_limits(
     clickhouse_query_settings: MutableMapping[str, Any],
     robust: bool,
 ) -> Result:
-    # Global rate limiter is added at the end of the chain to be
-    # the last for evaluation.
-    # This allows us not to borrow capacity from the global quota
-    # during the evaluation if one of the more specific limiters
-    # (like the project rate limiter) rejects the query first.
-    if state.get_config("enable_global_rate_limiter", 1):
-        query_settings.add_rate_limit(get_global_rate_limit_params())
-
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
     with RateLimitAggregator(
