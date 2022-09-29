@@ -51,18 +51,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             agg_storage as functions_ro_storage,
         )
         from snuba.datasets.storages.functions import raw_storage as functions_storage
-        from snuba.datasets.storages.generic_metrics import (
-            distributions_bucket_storage as gen_metrics_dists_bucket_storage,
-        )
-        from snuba.datasets.storages.generic_metrics import (
-            distributions_storage as gen_metrics_dists_aggregate_storage,
-        )
-        from snuba.datasets.storages.generic_metrics import (
-            sets_bucket_storage as gen_metrics_sets_bucket_storage,
-        )
-        from snuba.datasets.storages.generic_metrics import (
-            sets_storage as gen_metrics_sets_aggregate_storage,
-        )
         from snuba.datasets.storages.groupassignees import (
             storage as groupassignees_storage,
         )
@@ -128,9 +116,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     errors_v2_storage,
                     profiles_writable_storage,
                     functions_storage,
-                    gen_metrics_sets_bucket_storage,
                     replays_storage,
-                    gen_metrics_dists_bucket_storage,
                     metrics_distributions_storage,
                     metrics_sets_storage,
                     metrics_counters_storage,
@@ -157,12 +143,17 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     metrics_distributions_storage,
                     metrics_org_counters_storage,
                     metrics_sets_storage,
-                    gen_metrics_sets_aggregate_storage,
-                    gen_metrics_dists_aggregate_storage,
                 ]
             },
             **(self._dev_non_writable_storages if settings.ENABLE_DEV_FEATURES else {}),
         }
+
+        for key, storage in self._config_built_storages.items():
+            if isinstance(storage, ReadableTableStorage):
+                self._non_writable_storages[key] = storage
+            else:
+                self._writable_storages[key] = storage
+
         self._all_storages = {**self._writable_storages, **self._non_writable_storages}
 
     def iter_all(self) -> Generator[Storage, None, None]:

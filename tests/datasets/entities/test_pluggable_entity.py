@@ -13,7 +13,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.metrics import TagsTypeTransformer
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.pluggable_entity import PluggableEntity
@@ -143,12 +142,7 @@ def test_generic_metrics_sets_vs_pluggable_similar_pipeline_behavior(
         "dataset": "generic_metrics",
     }
 
-    # the pipeline modifies the query in the request so we need to construct
-    # two separate ones
     request = build_request(query_body=query_body)
-    request2 = build_request(query_body=query_body)
-
-    sets_entity: GenericMetricsSetsEntity = GenericMetricsSetsEntity()
 
     RESULT_MAP: MutableMapping[str, Query] = {}
 
@@ -158,12 +152,8 @@ def test_generic_metrics_sets_vs_pluggable_similar_pipeline_behavior(
         RESULT_MAP[output_name] = query
         return QueryResult({}, {"experiments": {}, "sql": "", "stats": {}})
 
-    sets_entity.get_query_pipeline_builder().build_execution_pipeline(
-        request=request, runner=partial(query_runner, output_name="existing")
-    ).execute()
-
     pluggable_sets_entity.get_query_pipeline_builder().build_execution_pipeline(
-        request=request2, runner=partial(query_runner, output_name="pluggable")
+        request=request, runner=partial(query_runner, output_name="pluggable")
     ).execute()
 
     (match, failure_test) = RESULT_MAP["existing"].equals(RESULT_MAP["pluggable"])

@@ -2,56 +2,7 @@ from __future__ import annotations
 
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
-from snuba.datasets.storages.factory import get_config_built_storages
-from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage,
-    distributions_storage,
-    sets_bucket_storage,
-    sets_storage,
-)
 from snuba.datasets.table_storage import KafkaStreamLoader
-
-CONFIG_BUILT_STORAGES = get_config_built_storages()
-
-
-def test_config_file_discovery() -> None:
-    assert all(
-        storage.get_storage_key() in CONFIG_BUILT_STORAGES
-        for storage in [
-            distributions_bucket_storage,
-            distributions_storage,
-            sets_bucket_storage,
-            sets_storage,
-        ]
-    )
-    assert len(CONFIG_BUILT_STORAGES) == 4
-
-
-def test_distributions_storage() -> None:
-    _deep_compare_storages(
-        distributions_storage,
-        CONFIG_BUILT_STORAGES[distributions_storage.get_storage_key()],
-    )
-
-
-def test_distributions_bucket_storage() -> None:
-    _deep_compare_storages(
-        distributions_bucket_storage,
-        CONFIG_BUILT_STORAGES[distributions_bucket_storage.get_storage_key()],
-    )
-
-
-def test_sets_storage() -> None:
-    _deep_compare_storages(
-        sets_storage, CONFIG_BUILT_STORAGES[sets_storage.get_storage_key()]
-    )
-
-
-def test_sets_bucket_storage() -> None:
-    _deep_compare_storages(
-        sets_bucket_storage,
-        CONFIG_BUILT_STORAGES[sets_bucket_storage.get_storage_key()],
-    )
 
 
 def _deep_compare_storages(old: Storage, new: Storage) -> None:

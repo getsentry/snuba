@@ -40,10 +40,6 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         )
         from snuba.datasets.entities.events import EventsEntity
         from snuba.datasets.entities.functions import FunctionsEntity
-        from snuba.datasets.entities.generic_metrics import (
-            GenericMetricsDistributionsEntity,
-            GenericMetricsSetsEntity,
-        )
         from snuba.datasets.entities.metrics import (
             MetricsCountersEntity,
             MetricsDistributionsEntity,
@@ -77,13 +73,10 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
                 EntityKey.PROFILES: ProfilesEntity(),
                 EntityKey.FUNCTIONS: FunctionsEntity(),
                 EntityKey.REPLAYS: ReplaysEntity(),
-                EntityKey.GENERIC_METRICS_SETS: GenericMetricsSetsEntity(),
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS: GenericMetricsDistributionsEntity(),
             }
         )
 
-        if settings.PREFER_PLUGGABLE_ENTITIES:
-            self._entity_map.update(self._config_built_entities)
+        self._entity_map.update(self._config_built_entities)
 
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 
