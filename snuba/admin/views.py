@@ -5,6 +5,7 @@ from typing import Any, List, Optional, Sequence, Tuple, cast
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
+from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import state
 from snuba.admin.auth import UnauthorizedException, authorize_request
@@ -45,6 +46,12 @@ def handle_invalid_json(exception: UnauthorizedException) -> Response:
         401,
         {"Content-Type": "application/json"},
     )
+
+
+@application.before_request
+def set_logging_context() -> None:
+    clear_contextvars()
+    bind_contextvars(endpoint=request.endpoint, user_ip=request.remote_addr)
 
 
 @application.before_request
