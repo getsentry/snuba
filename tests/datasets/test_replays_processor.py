@@ -23,7 +23,7 @@ class ReplayEvent:
     is_archived: int | None
     timestamp: float
     replay_start_timestamp: float | None
-    platform: str
+    platform: str | None
     environment: str
     release: str
     dist: str
@@ -233,7 +233,7 @@ class TestReplaysProcessor:
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             replay_start_timestamp=None,
-            platform="python",
+            platform=None,
             dist="",
             urls=[],
             is_archived=None,
