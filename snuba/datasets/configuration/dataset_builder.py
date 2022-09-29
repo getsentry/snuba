@@ -12,8 +12,7 @@ DATASET_VALIDATION_SCHEMAS = {"dataset": V1_DATASET_SCHEMA}
 
 def build_dataset_from_config(config_file_path: str) -> PluggableDataset:
     config = load_configuration_data(config_file_path, DATASET_VALIDATION_SCHEMAS)
-    with sentry_sdk.start_span(op="build", description="Dataset") as span:
-        span.set_tag("dataset", config["name"])
+    with sentry_sdk.start_span(op="build", description=f"Dataset: {config['name']}"):
         return PluggableDataset(
             name=config["name"],
             all_entities=[EntityKey(key) for key in config["entities"]["all"]],
