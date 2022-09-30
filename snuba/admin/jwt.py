@@ -1,24 +1,14 @@
-from dataclasses import dataclass
 from typing import Any, Optional
 
 import structlog
+
+from snuba.admin.user import AdminUser
 
 logger = structlog.get_logger().bind(module=__name__)
 
 
 CERTS: Optional[Any] = None
 AUDIENCE: Optional[str] = None
-
-
-@dataclass
-class AdminUser:
-    """
-    Basic encapsulation of a user of the admin panel. In the future,
-    should be extended to contain permissions among other things
-    """
-
-    email: str
-    id: str
 
 
 def _certs() -> Any:

@@ -5,7 +5,8 @@ from typing import Callable
 from flask import request
 
 from snuba import settings
-from snuba.admin.jwt import AdminUser, validate_assertion
+from snuba.admin.jwt import validate_assertion
+from snuba.admin.user import AdminUser
 
 
 class UnauthorizedException(Exception):
