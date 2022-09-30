@@ -229,6 +229,7 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.
     """
+    prev_job_cutoff_time = settings.OPTIMIZE_JOB_CUTOFF_TIME
     settings.OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
     storage = get_writable_storage(StorageKey.ERRORS)
     cluster = storage.get_cluster()
@@ -264,3 +265,4 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
             )
 
     tracker.delete_all_states()
+    settings.OPTIMIZE_JOB_CUTOFF_TIME = prev_job_cutoff_time
