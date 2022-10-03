@@ -1387,24 +1387,6 @@ class TestApi(SimpleAPITest):
         assert "timing" in result
         assert "timestamp" in result["timing"]
 
-    def test_global_rate_limiting(self) -> None:
-        state.set_config("global_concurrent_limit", 0)
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                    "selected_columns": ["project"],
-                }
-            )
-        )
-        assert response.status_code == 429
-        data = json.loads(response.data)
-        assert data["error"]["message"] == "global concurrent of 1 exceeds limit of 0"
-
     def test_project_rate_limiting(self) -> None:
         # All projects except project 1 are allowed
         state.set_config("project_concurrent_limit", 1)

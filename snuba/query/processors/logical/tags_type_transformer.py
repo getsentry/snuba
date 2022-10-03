@@ -11,6 +11,10 @@ class TagsTypeTransformer(LogicalQueryProcessor):
     used by the metrics and generic_metrics entities
     """
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "transform_tag_types"
+
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_expression(exp: Expression) -> Expression:
             if not isinstance(exp, SubscriptableReference):

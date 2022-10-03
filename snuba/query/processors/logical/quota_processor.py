@@ -17,6 +17,10 @@ class ResourceQuotaProcessor(LogicalQueryProcessor):
     def __init__(self, project_field: str):
         self.__project_field = project_field
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "resource_quota_limiter"
+
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         enabled = get_config(ENABLED_CONFIG, 1)
         if not enabled:

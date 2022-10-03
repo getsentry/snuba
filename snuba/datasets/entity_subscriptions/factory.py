@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Generator, Mapping, MutableMapping, Sequence, Type
 
 from snuba import settings
@@ -91,7 +93,7 @@ class InvalidEntitySubscriptionError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-_ENT_SUB_FACTORY = None
+_ENT_SUB_FACTORY: _EntitySubscriptionFactory | None = None
 
 
 def _ent_sub_factory() -> _EntitySubscriptionFactory:
