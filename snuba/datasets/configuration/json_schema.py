@@ -10,6 +10,7 @@ TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
 TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
+
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -221,14 +222,32 @@ STORAGE_SCHEMA = {
     "additionalProperties": False,
 }
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = TYPE_STRING_ARRAY
+STORAGE_QUERY_PROCESSOR = {
+    "type": "object",
+    "properties": {
+        "processor": {
+            "type": "string",
+            "description": "Name of ClickhouseQueryProcessor class responsible for the transformation applied to a query.",
+        },
+        "args": {
+            "type": "object",
+            "description": "Key/value mappings required to instantiate QueryProcessor class.",
+        },  # args are a flexible dict
+    },
+    "required": ["processor"],
+    "additionalProperties": False,
+}
+
+
+STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
+
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Name of QueryProcessor class responsible for the transformation applied to a query.",
+            "description": "Name of LogicalQueryProcessor class responsible for the transformation applied to a query.",
         },
         "args": {
             "type": "object",
@@ -296,13 +315,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": {
-            "type": "array",
-            "items": {
-                "type": "string",
-            },
-            "description": "Names of QueryProcessor class which represents a transformation applied to the ClickHouse query",
-        },
+        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
     "required": [
@@ -326,13 +339,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "name": {"type": "string", "description": "Name of the readable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": {
-            "type": "array",
-            "items": {
-                "type": "string",
-            },
-            "description": "Names of QueryProcess class which represents a transformation applied to the ClickHouse query",
-        },
+        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
     },
     "required": [
         "version",
