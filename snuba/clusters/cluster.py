@@ -457,7 +457,7 @@ def get_cluster(
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
 
-    if partition_id is not None and partition_id >= 0:
+    if partition_id is not None:
         part_storage_set_cluster_map = _get_partitioned_storage_set_cluster_map()
         res = part_storage_set_cluster_map.get((storage_set_key, partition_id), None)
         if res is None:
