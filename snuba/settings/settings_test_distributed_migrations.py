@@ -3,7 +3,7 @@ from typing import Any, Mapping, Sequence
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "host": "clickhouse-query",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -15,7 +15,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "distributed_cluster_name": "query_cluster",
     },
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "host": "clickhouse-query",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -27,7 +27,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "single_node": True,
     },
     {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "host": "clickhouse-query",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
