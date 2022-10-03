@@ -40,9 +40,6 @@ REGISTERED_STORAGE_KEYS: dict[str, str] = {}
 class _StorageKey(type):
     def __getattr__(cls, attr: str) -> "StorageKey":
         if attr not in HARDCODED_STORAGE_KEYS and attr not in REGISTERED_STORAGE_KEYS:
-            import pdb
-
-            pdb.set_trace()
             raise AttributeError(attr)
 
         return StorageKey(attr.lower())
