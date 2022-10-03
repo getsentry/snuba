@@ -8,6 +8,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.partitioning import (
+    is_storage_set_partitioned,
     map_logical_partition_to_physical_partition,
     map_org_id_to_logical_partition,
 )
@@ -63,6 +64,13 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
     def select_cluster(
         self, query: LogicalQuery, query_settings: QuerySettings
     ) -> ClickhouseCluster:
+        """
+        Selects the cluster to use for a query if the storage set is partitioned.
+        If the storage set is not partitioned, it returns the default cluster.
+        """
+        if not is_storage_set_partitioned(self.storage_set):
+            return get_cluster(self.storage_set)
+
         org_ids = get_object_ids_in_query_ast(query, self.partition_key_column_name)
         assert org_ids is not None
         assert len(org_ids) == 1
