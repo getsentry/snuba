@@ -249,8 +249,6 @@ class TransactionEvent:
 
         if self.has_app_ctx:
             ret["app_start_type"] = self.app_start_type
-        else:
-            ret["app_start_type"] = None
 
         if self.ipv4:
             ret["ip_address_v4"] = self.ipv4
