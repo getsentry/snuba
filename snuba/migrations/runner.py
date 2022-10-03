@@ -436,7 +436,7 @@ class Runner:
                     python_op.execute_new_node(storage_sets)
 
     @classmethod
-    def create_tables(
+    def copy_tables(
         self,
         node_type: ClickhouseNodeType,
         host_name: str,
