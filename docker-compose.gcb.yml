@@ -6,7 +6,6 @@ services:
       - redis_cluster
       - kafka
       - clickhouse
-      - clickhouse-query
       - zookeeper
     image: '$SNUBA_IMAGE'
     profiles: ["run_test"]
