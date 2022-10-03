@@ -63,23 +63,23 @@ jobs:
         with:
           github-token: ${{ steps.token.outputs.token }}
 
-  typing:
-    name: "mypy typing"
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v2
-        name: Checkout code
-      - uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          make install-python-dependencies
-      - name: Run mypy
-        run: |
-          make backend-typing
+  # typing:
+  #   name: "mypy typing"
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 5
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #       name: Checkout code
+  #     - uses: actions/setup-python@v2
+  #       with:
+  #         python-version: 3.8
+  #     - name: Install dependencies
+  #       run: |
+  #         python -m pip install --upgrade pip
+  #         make install-python-dependencies
+  #     - name: Run mypy
+  #       run: |
+  #         make backend-typing
 
   # config-validation:
   #   name: "Dataset Config Validation"
@@ -226,7 +226,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ["test", "test_distributed", "test_distributed_migrations"]
+        snuba_settings: ["test_distributed_migrations"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code

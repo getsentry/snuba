@@ -24,7 +24,7 @@ services:
       - '/.artifacts/pytest.junit.xml'
     environment:
       SNUBA_SETTINGS: '$SNUBA_SETTINGS'
-      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HOST: clickhouse-query
       USE_REDIS_CLUSTER: '1'
       REDIS_HOST: 'redis1'
       REDIS_PORT: 6379
