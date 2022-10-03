@@ -25,6 +25,7 @@ from snuba.datasets.generic_metrics_processor import (
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.query.processors.physical import ClickhouseQueryProcessor
+from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction
@@ -69,6 +70,7 @@ CONF_TO_PROCESSOR: dict[str, Any] = {
 QUERY_PROCESSORS: dict[str, Any] = {
     "TableRateLimit": TableRateLimit,
     "TupleUnaliaser": TupleUnaliaser,
+    "MappingOptimizer": MappingOptimizer,
 }
 
 
