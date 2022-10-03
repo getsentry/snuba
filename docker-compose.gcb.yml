@@ -65,12 +65,9 @@ services:
 
   # nodes for multi-node clickhouse cluster
   clickhouse-query:
-    depends_on:
-      - zookeeper
     image: 'clickhouse/clickhouse-server:21.8'
     profiles: ["multi_node"]
     volumes:
-      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
       - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
     ulimits:
       nofile:
