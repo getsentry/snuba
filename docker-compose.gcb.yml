@@ -5,7 +5,7 @@ services:
     depends_on:
       - redis_cluster
       - kafka
-      - clickhouse-query
+      - clickhouse
       - zookeeper
     image: '$SNUBA_IMAGE'
     profiles: ["run_test"]
@@ -24,7 +24,7 @@ services:
       - '/.artifacts/pytest.junit.xml'
     environment:
       SNUBA_SETTINGS: '$SNUBA_SETTINGS'
-      CLICKHOUSE_HOST: clickhouse-query
+      CLICKHOUSE_HOST: clickhouse
       USE_REDIS_CLUSTER: '1'
       REDIS_HOST: 'redis1'
       REDIS_PORT: 6379
@@ -116,7 +116,7 @@ services:
       nofile:
         soft: 262144
         hard: 262144
-  clickhouse-query:
+  clickhouse:
     depends_on:
       - zookeeper
     image: 'clickhouse/clickhouse-server:21.8'
