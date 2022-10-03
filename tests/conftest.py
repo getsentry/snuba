@@ -1,4 +1,6 @@
 import json
+import os
+import time
 from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
@@ -22,6 +24,18 @@ def pytest_configure() -> None:
     ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
     setup_sentry()
+
+    if os.environ.get("SNUBA_SETTINGS") == "test_distributed_migrations":
+        print(
+            "\nclusters:\n",
+            json.dumps(
+                settings.CLUSTERS,
+                indent=4,
+                default=lambda x: list(x) if isinstance(x, set) else x.__dict__,
+            ),
+        )
+        print("waiting 30 seconds for clickhouse to start")
+        time.sleep(30)  # wait for clickhouse to start
 
     for cluster in settings.CLUSTERS:
         clickhouse_cluster = ClickhouseCluster(

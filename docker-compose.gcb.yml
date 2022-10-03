@@ -70,9 +70,9 @@ services:
     image: 'clickhouse/clickhouse-server:21.8'
     profiles: ["multi_node"]
     volumes:
-      - ./test_distributed_migrations/config/clickhouse/macros-01.xml:/etc/clickhouse-server/config.d/macros.xml
-      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
-      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/macros-01.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
     ulimits:
       nofile:
         soft: 262144
@@ -83,9 +83,9 @@ services:
     image: 'clickhouse/clickhouse-server:21.8'
     profiles: ["multi_node"]
     volumes:
-      - ./test_distributed_migrations/config/clickhouse/macros-02.xml:/etc/clickhouse-server/config.d/macros.xml
-      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
-      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/macros-02.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
     ulimits:
       nofile:
         soft: 262144
@@ -96,9 +96,9 @@ services:
     image: 'clickhouse/clickhouse-server:21.8'
     profiles: ["multi_node"]
     volumes:
-      - ./test_distributed_migrations/config/clickhouse/macros-03.xml:/etc/clickhouse-server/config.d/macros.xml
-      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
-      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/macros-03.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
     ulimits:
       nofile:
         soft: 262144
@@ -109,9 +109,9 @@ services:
     image: 'clickhouse/clickhouse-server:21.8'
     profiles: ["multi_node"]
     volumes:
-      - ./test_distributed_migrations/config/clickhouse/macros-04.xml:/etc/clickhouse-server/config.d/macros.xml
-      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
-      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/macros-04.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./tests/test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
     ulimits:
       nofile:
         soft: 262144

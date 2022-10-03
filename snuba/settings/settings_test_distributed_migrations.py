@@ -1,6 +1,8 @@
 import os
 from typing import Any, Mapping, Sequence
 
+from snuba.settings.settings_test import *  # noqa
+
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     # {
     #     "host": os.environ.get("CLICKHOUSE_HOST", "clickhouse"),

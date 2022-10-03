@@ -15,9 +15,9 @@ test:
 
 test-distributed-migrations:
 	docker build . -t snuba-test
-	docker-compose -f docker-compose.gcb.yml down
-	SNUBA_SETTINGS=test_distributed docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
-	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+	SNUBA_IMAGE=snuba-test docker-compose -f docker-compose.gcb.yml down
+	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
+	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=tests/test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
 
 tests: test
 
