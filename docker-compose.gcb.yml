@@ -6,6 +6,7 @@ services:
       - redis_cluster
       - kafka
       - clickhouse
+      - clickhouse-query
       - zookeeper
     image: '$SNUBA_IMAGE'
     profiles: ["run_test"]
@@ -64,6 +65,16 @@ services:
         hard: 262144
 
   # nodes for multi-node clickhouse cluster
+  clickhouse-query:
+    image: 'clickhouse/clickhouse-server:21.8'
+    profiles: ["multi_node"]
+    volumes:
+      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
   clickhouse-01:
     depends_on:
       - zookeeper
