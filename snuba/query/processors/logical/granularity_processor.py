@@ -4,7 +4,7 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidGranularityException
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 #: Granularities for which a materialized view exist, in ascending order
@@ -12,8 +12,12 @@ GRANULARITIES_AVAILABLE = (10, 60, 60 * 60, 24 * 60 * 60)
 DEFAULT_GRANULARITY_RAW = 60
 
 
-class GranularityProcessor(QueryProcessor):
+class GranularityProcessor(LogicalQueryProcessor):
     """Use the granularity set on the query to filter on the granularity column"""
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "granularity"
 
     @staticmethod
     def __get_granularity(query: Query) -> int:
@@ -56,7 +60,7 @@ PERFORMANCE_GRANULARITIES: Mapping[int, int] = {
 DEFAULT_MAPPED_GRANULARITY_ENUM = 1
 
 
-class MappedGranularityProcessor(QueryProcessor):
+class MappedGranularityProcessor(LogicalQueryProcessor):
     """
     Use the granularity set on the query to filter on the granularity column,
     supporting generic-metrics style enum mapping (e.g. input granularity of 60s
@@ -89,6 +93,10 @@ class MappedGranularityProcessor(QueryProcessor):
             mapping.raw for mapping in self._accepted_granularities
         ]
         self._default_granularity_enum = default_granularity
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "handle_mapped_granularities"
 
     def __get_granularity(self, query: Query) -> int:
         """Find the best fitting granularity for this query"""

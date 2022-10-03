@@ -6,7 +6,7 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import (
     ColumnValidationMode,
@@ -57,7 +57,7 @@ class Entity(Describable, ABC):
         )
 
     @abstractmethod
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
         that are applied to queries after parsing and before running them on the storage.

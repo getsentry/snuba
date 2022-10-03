@@ -27,7 +27,7 @@ from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query import ProcessableQuery
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
@@ -199,7 +199,7 @@ class BaseTransactionsEntity(Entity, ABC):
             required_time_column="finish_ts",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             TimeSeriesProcessor(
                 {"time": "finish_ts"}, ("start_ts", "finish_ts", "timestamp")

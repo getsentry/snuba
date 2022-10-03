@@ -14,13 +14,13 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import SignatureValidator
 
 
-class HandledFunctionsProcessor(QueryProcessor):
+class HandledFunctionsProcessor(LogicalQueryProcessor):
     """
     Adds the isHandled and notHandled snuba functions.
 
@@ -41,6 +41,10 @@ class HandledFunctionsProcessor(QueryProcessor):
 
     def __init__(self, column: str):
         self.__column = column
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "handled_functions"
 
     def validate_parameters(self, exp: FunctionCall, entity: QueryEntity) -> None:
         validator = SignatureValidator([])

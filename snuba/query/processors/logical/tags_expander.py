@@ -2,17 +2,21 @@ from dataclasses import replace
 
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
-class TagsExpanderProcessor(QueryProcessor):
+class TagsExpanderProcessor(LogicalQueryProcessor):
     """
     Transforms the special syntax we provide to expand the tags column into a call
     to arrayJoin so that, after this query processor, tags_key and tags_value special
     columns are not treated as a special case but they are valid expressions on a
     valid column name.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "tags_expander"
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_expression(exp: Expression) -> Expression:

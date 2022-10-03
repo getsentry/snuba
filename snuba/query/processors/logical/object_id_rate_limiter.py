@@ -2,7 +2,7 @@ from typing import Optional
 
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_configs
 from snuba.state.rate_limit import (
@@ -16,7 +16,7 @@ from snuba.state.rate_limit import (
 DEFAULT_LIMIT = 1000
 
 
-class ObjectIDRateLimiterProcessor(QueryProcessor):
+class ObjectIDRateLimiterProcessor(LogicalQueryProcessor):
     """
     A generic rate limiter that searches a query for conditions on the given column.
     The values in that column are assumed to be an integer ID.
@@ -44,6 +44,10 @@ class ObjectIDRateLimiterProcessor(QueryProcessor):
             if ex.rate_limit_name == self.rate_limit_name:
                 return True
         return False
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "object_id_rate_limiter"
 
     def get_object_id(
         self, query: Query, query_settings: QuerySettings
@@ -135,6 +139,10 @@ class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
 
         query_settings.add_rate_limit(rate_limit)
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "only_if_configured_rate_limiter"
+
 
 class OrganizationRateLimiterProcessor(ObjectIDRateLimiterProcessor):
     """
@@ -150,6 +158,10 @@ class OrganizationRateLimiterProcessor(ObjectIDRateLimiterProcessor):
             "org_per_second_limit",
             "org_concurrent_limit",
         )
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "org_rate_limiter"
 
 
 class ProjectReferrerRateLimiter(OnlyIfConfiguredRateLimitProcessor):
@@ -179,6 +191,10 @@ class ProjectReferrerRateLimiter(OnlyIfConfiguredRateLimitProcessor):
         obj_id = str(obj_ids.pop())
         return str(obj_id)
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "project_referrer_rate_limiter"
+
 
 class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
     """This is more of a load shedder than a rate limiter. we limit a specific
@@ -192,6 +208,10 @@ class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
             "referrer_concurrent_limit",
             query_settings_field="referrer",
         )
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "referrer_rate_limiter"
 
     def get_object_id(self, query: Query, query_settings: QuerySettings) -> str:
         return query_settings.referrer
@@ -211,3 +231,7 @@ class ProjectRateLimiterProcessor(ObjectIDRateLimiterProcessor):
             "project_per_second_limit",
             "project_concurrent_limit",
         )
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "project_rate_limiter"

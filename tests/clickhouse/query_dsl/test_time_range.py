@@ -1,6 +1,8 @@
 from datetime import datetime
 
 from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
@@ -23,8 +25,9 @@ def test_get_time_range() -> None:
         """
 
     events = get_dataset("events")
+    entity = get_entity(EntityKey.EVENTS)
     query, _ = parse_snql_query(body, events)
-    processors = events.get_default_entity().get_query_processors()
+    processors = entity.get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
             processor.process_query(query, HTTPQuerySettings())

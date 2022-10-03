@@ -8,4 +8,8 @@ class OutcomesRawDataset(Dataset):
     """
 
     def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.OUTCOMES_RAW)
+        super().__init__(
+            all_entities=[
+                EntityKey.OUTCOMES_RAW,
+            ]
+        )

@@ -2,7 +2,7 @@ import concurrent.futures
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Optional, Type
+from typing import Callable, Optional
 
 from pkg_resources import resource_string
 
@@ -34,13 +34,11 @@ class RedisCache(Cache[TValue]):
         prefix: str,
         codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
-        timeout_exception: Type[Exception] = ExecutionTimeoutError,
     ) -> None:
         self.__client = client
         self.__prefix = prefix
         self.__codec = codec
         self.__executor = executor
-        self.__timeout_exception = timeout_exception
 
         # TODO: This should probably be lazily instantiated, rather than
         # automatically happening at startup.
@@ -259,7 +257,7 @@ class RedisCache(Cache[TValue]):
                     # If the effective timeout was the remaining task timeout,
                     # this means that the client responsible for generating the
                     # cache value didn't do so before it promised to.
-                    raise self.__timeout_exception(
+                    raise ExecutionTimeoutError(
                         "result not available before execution deadline"
                     )
                 else:

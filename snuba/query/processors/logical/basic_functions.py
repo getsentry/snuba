@@ -7,16 +7,20 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
 
-class BasicFunctionsProcessor(QueryProcessor):
+class BasicFunctionsProcessor(LogicalQueryProcessor):
     """
     Mimics the ad hoc function processing that happens today in utils.function_expr.
 
     This exists only to preserve the current Snuba syntax and only works on the new AST.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "basic_functions"
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def process_functions(exp: Expression) -> Expression:

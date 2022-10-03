@@ -4,7 +4,6 @@ from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
 
-from snuba.clickhouse.processors import CompositeQueryProcessor, QueryProcessor
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
@@ -27,6 +26,10 @@ from snuba.query.joins.equivalence_adder import add_equivalent_conditions
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.physical import (
+    ClickhouseQueryProcessor,
+    CompositeQueryProcessor,
+)
 from snuba.query.query_settings import QuerySettings
 from snuba.web import QueryResult
 
@@ -273,7 +276,10 @@ class CompositeDataSourcePlan(NamedTuple):
 
     def get_db_processors(
         self,
-    ) -> Tuple[Sequence[QueryProcessor], Mapping[str, Sequence[QueryProcessor]]]:
+    ) -> Tuple[
+        Sequence[ClickhouseQueryProcessor],
+        Mapping[str, Sequence[ClickhouseQueryProcessor]],
+    ]:
         return (
             self.root_processors.db_processors
             if self.root_processors is not None
@@ -354,8 +360,8 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
 
     def __init__(
         self,
-        root_processors: Sequence[QueryProcessor],
-        aliased_processors: Mapping[str, Sequence[QueryProcessor]],
+        root_processors: Sequence[ClickhouseQueryProcessor],
+        aliased_processors: Mapping[str, Sequence[ClickhouseQueryProcessor]],
         query_settings: QuerySettings,
     ) -> None:
         self.__root_processors = root_processors
@@ -363,7 +369,9 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
         self.__settings = query_settings
 
     def __process_simple_query(
-        self, clickhouse_query: ClickhouseQuery, processors: Sequence[QueryProcessor]
+        self,
+        clickhouse_query: ClickhouseQuery,
+        processors: Sequence[ClickhouseQueryProcessor],
     ) -> None:
         for clickhouse_processor in processors:
             with sentry_sdk.start_span(
@@ -407,8 +415,8 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
     def __init__(
         self,
         cluster: ClickhouseCluster,
-        root_processors: Sequence[QueryProcessor],
-        aliased_processors: Mapping[str, Sequence[QueryProcessor]],
+        root_processors: Sequence[ClickhouseQueryProcessor],
+        aliased_processors: Mapping[str, Sequence[ClickhouseQueryProcessor]],
         composite_processors: Sequence[CompositeQueryProcessor],
     ) -> None:
         self.__cluster = cluster

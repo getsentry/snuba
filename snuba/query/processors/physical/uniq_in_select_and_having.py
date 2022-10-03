@@ -9,12 +9,12 @@ return an exception to the user but don't crash the clickhouse query node
 import logging
 from typing import Any, Dict, Sequence, cast
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Expression, FunctionCall, NoopVisitor
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Param, String
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 
@@ -38,7 +38,7 @@ class _ExpressionOrAliasMatcher(NoopVisitor):
                 self.found_expressions[i] = True
 
 
-class UniqInSelectAndHavingProcessor(QueryProcessor):
+class UniqInSelectAndHavingProcessor(ClickhouseQueryProcessor):
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         having_clause = query.get_having()
         if not having_clause:

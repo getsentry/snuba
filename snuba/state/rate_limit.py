@@ -20,7 +20,6 @@ ORGANIZATION_RATE_LIMIT_NAME = "organization"
 PROJECT_RATE_LIMIT_NAME = "project"
 PROJECT_REFERRER_RATE_LIMIT_NAME = "project_referrer"
 REFERRER_RATE_LIMIT_NAME = "referrer"
-GLOBAL_RATE_LIMIT_NAME = "global"
 TABLE_RATE_LIMIT_NAME = "table"
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -252,23 +251,6 @@ def rate_limit(
             logger.exception(ex)
 
 
-def get_global_rate_limit_params() -> RateLimitParameters:
-    """
-    Returns the configuration object for the global rate limit
-    """
-
-    (per_second, concurr) = state.get_configs(
-        [("global_per_second_limit", None), ("global_concurrent_limit", 1000)]
-    )
-
-    return RateLimitParameters(
-        rate_limit_name=GLOBAL_RATE_LIMIT_NAME,
-        bucket="global",
-        per_second_limit=per_second,
-        concurrent_limit=concurr,
-    )
-
-
 def _record_metrics(
     exc: RateLimitExceeded, rate_limit_param: RateLimitParameters
 ) -> None:
@@ -284,11 +266,8 @@ def _record_metrics(
     """
     scope = str(exc.extra_data.get("scope", ""))
     name = str(exc.extra_data.get("name", ""))
-    if scope == GLOBAL_RATE_LIMIT_NAME or scope == TABLE_RATE_LIMIT_NAME:
-        tags = {"scope": scope, "type": name}
-        if scope == TABLE_RATE_LIMIT_NAME:
-            tags["table"] = rate_limit_param.bucket
-
+    if scope == TABLE_RATE_LIMIT_NAME:
+        tags = {"scope": scope, "type": name, "table": rate_limit_param.bucket}
         metrics.increment("rate-limited", tags=tags)
 
 

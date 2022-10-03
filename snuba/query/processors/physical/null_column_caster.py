@@ -1,12 +1,14 @@
-from typing import Dict, Sequence
+from typing import TYPE_CHECKING, Dict, Sequence
 
 from snuba.clickhouse.columns import FlattenedColumn, SchemaModifiers
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.functions import AGGREGATION_FUNCTIONS
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
+
+if TYPE_CHECKING:
+    from snuba.datasets.storage import ReadableTableStorage
 
 
 def _col_is_nullable(col: FlattenedColumn) -> bool:
@@ -16,7 +18,7 @@ def _col_is_nullable(col: FlattenedColumn) -> bool:
     return False
 
 
-class NullColumnCaster(QueryProcessor):
+class NullColumnCaster(ClickhouseQueryProcessor):
     """
     In the case of merge tables (e.g. discover), if the column is nullable on
     one of the tables but not nullable in the other, clickhouse can throw an error.
@@ -69,7 +71,7 @@ class NullColumnCaster(QueryProcessor):
 
         return mismatched_col_name_to_col
 
-    def __init__(self, merge_table_sources: Sequence[ReadableTableStorage]):
+    def __init__(self, merge_table_sources: Sequence["ReadableTableStorage"]):
         """
         Args:
             merge_table_sources: sequence of the storages which make up the merge table,

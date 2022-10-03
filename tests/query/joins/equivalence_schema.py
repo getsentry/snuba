@@ -6,7 +6,7 @@ from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 
 EVENTS_SCHEMA = ColumnSet(
     [
@@ -38,7 +38,7 @@ GROUPS_ASSIGNEE = ColumnSet(
 
 
 class FakeEntity(Entity, ABC):
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return []
 
 

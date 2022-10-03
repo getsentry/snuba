@@ -7,15 +7,12 @@ project = "Snuba"
 copyright = "2021, Sentry Team and Contributors"
 author = "Sentry Team and Contributors"
 
-release = "22.9.0.dev0"
+release = "22.10.0.dev0"
 
 
 # -- General configuration ---------------------------------------------------
 
-extensions = [
-    "sphinx.ext.githubpages",
-    "sphinx.ext.intersphinx",
-]
+extensions = ["sphinx.ext.githubpages", "sphinx.ext.intersphinx", "myst_parser"]
 
 # This is relative to this directory.
 templates_path = ["_templates"]
@@ -24,7 +21,11 @@ templates_path = ["_templates"]
 # directories to ignore when looking for source files.
 exclude_patterns = ["build"]
 
-source_suffix = ".rst"
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".txt": "markdown",
+    ".md": "markdown",
+}
 
 # -- Options for HTML output -------------------------------------------------
 

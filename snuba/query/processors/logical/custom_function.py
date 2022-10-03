@@ -5,7 +5,10 @@ from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.parser.expressions import parse_clickhouse_function
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import (
+    LogicalQueryProcessor,
+    ProcessorUnsupportedFromConfig,
+)
 from snuba.query.query_settings import QuerySettings
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import ParamType, SignatureValidator
@@ -37,8 +40,15 @@ def partial_function(body: str, constants: Sequence[Tuple[str, Any]]) -> Express
     return replace_in_expression(parsed, constants_lookup)
 
 
-class CustomFunction(QueryProcessor):
+class CustomFunction(LogicalQueryProcessor):
     """
+    WARNING
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        This query processor is not referencable from config
+
+        TODO: either make it work or remove it
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     Defines a custom snuba function.
     The custom function has a name, a signature in the form of a list of
     parameter names and types, an expanded expression which is the body
@@ -80,6 +90,16 @@ class CustomFunction(QueryProcessor):
             self.__param_names, param_types = zip(*signature)
         self.__body = body
         self.__validator = SignatureValidator(param_types)
+
+    @classmethod
+    def config_key(cls) -> str:
+        return "__unsupported__:custom_function"
+
+    @classmethod
+    def from_kwargs(cls, **kwargs: str) -> LogicalQueryProcessor:
+        raise ProcessorUnsupportedFromConfig(
+            f"{cls.__name__} is cannot be referenced from configuration because it has a constructor with a python object parameter, either change the constructor to take a basic type (e.g. str, int) or reconsider using this processor"
+        )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def apply_function(expression: Expression) -> Expression:
