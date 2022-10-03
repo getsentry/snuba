@@ -79,7 +79,7 @@ FULL_CONFIG = [
     },
 ]
 
-PARTITIONED_CLUSTERS_CONFIG = [
+SLICED_CLUSTERS_CONFIG = [
     {
         "host": "host_slice",
         "port": 9000,
@@ -87,7 +87,7 @@ PARTITIONED_CLUSTERS_CONFIG = [
         "password": "",
         "database": "default",
         "http_port": 8123,
-        "storage_set_partitions": {("generic_metrics_distributions", 0)},
+        "storage_set_slices": {("generic_metrics_distributions", 0)},
         "single_node": True,
     },
     {
@@ -97,7 +97,7 @@ PARTITIONED_CLUSTERS_CONFIG = [
         "password": "",
         "database": "slice_1_default",
         "http_port": 8124,
-        "storage_set_partitions": {("generic_metrics_distributions", 1)},
+        "storage_set_slices": {("generic_metrics_distributions", 1)},
         "single_node": True,
     },
 ]
@@ -221,8 +221,8 @@ def test_cache_connections() -> None:
     ) != cluster_3.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
 
 
-@patch("snuba.settings.PARTITIONED_CLUSTERS", PARTITIONED_CLUSTERS_CONFIG)
-def test_partitioned_cluster() -> None:
+@patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
+def test_sliced_cluster() -> None:
     importlib.reload(cluster)
 
     res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 1)
