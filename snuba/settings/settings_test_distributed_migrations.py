@@ -4,20 +4,20 @@ from typing import Any, Mapping, Sequence
 from snuba.settings.settings_test import *  # noqa
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
-    # {
-    #     "host": os.environ.get("CLICKHOUSE_HOST", "clickhouse"),
-    #     "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-    #     "user": os.environ.get("CLICKHOUSE_USER", "default"),
-    #     "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
-    #     "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-    #     "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
-    #     "storage_sets": {},
-    #     "single_node": False,
-    #     "cluster_name": "query_cluster",
-    #     "distributed_cluster_name": "query_cluster",
-    # },
     {
-        "host": "clickhouse-01",
+        "host": "clickhouse-query",
+        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "user": os.environ.get("CLICKHOUSE_USER", "default"),
+        "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+        "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
+        "storage_sets": {},
+        "single_node": False,
+        "cluster_name": "query_cluster",
+        "distributed_cluster_name": "query_cluster",
+    },
+    {
+        "host": "clickhouse-query",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -28,10 +28,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         },
         "single_node": True,
         "cluster_name": "migrations_cluster",
-        "distributed_cluster_name": "migrations_cluster",  # distributed cluster has to be the same as migrations cluster??
+        "distributed_cluster_name": "query_cluster",
     },
     {
-        "host": "clickhouse-01",  # must be the same as cluster above
+        "host": "clickhouse-query",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -59,6 +59,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         },
         "single_node": False,
         "cluster_name": "storage_cluster",
-        "distributed_cluster_name": "migrations_cluster",
+        "distributed_cluster_name": "query_cluster",
     },
 ]

@@ -31,7 +31,6 @@ def pytest_configure() -> None:
     importlib.reload(cluster)
     importlib.reload(runner)
 
-    print("waiting 30 seconds for clickhouse to start")
     print(
         "\nclusters:\n",
         json.dumps(
@@ -40,6 +39,7 @@ def pytest_configure() -> None:
             default=lambda x: list(x) if isinstance(x, set) else x.__dict__,
         ),
     )
+    print("waiting 30 seconds for clickhouse to start")
     time.sleep(30)  # wait for clickhouse to start
 
     for cluster_node in settings.CLUSTERS:
@@ -62,7 +62,6 @@ def pytest_configure() -> None:
 
         database_name = cluster_node["database"]
 
-        # ClickhouseClientSettings.MIGRATE.value.timeout = 50000
         # create the test database
         clickhouse_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
@@ -76,4 +75,5 @@ def pytest_configure() -> None:
 def run_setup_migrations() -> None:
     from snuba.migrations.runner import Runner
 
+    print("running setup migrations for distributed tests")
     Runner().run_all(force=True)
