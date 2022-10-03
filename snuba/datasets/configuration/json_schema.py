@@ -239,7 +239,7 @@ STORAGE_QUERY_PROCESSOR = {
 }
 
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": TYPE_STRING}
+STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": STORAGE_QUERY_PROCESSOR}
 
 
 ENTITY_QUERY_PROCESSOR = {
@@ -315,7 +315,6 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
     "required": [
