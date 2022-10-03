@@ -2,20 +2,20 @@ import os
 from typing import Any, Mapping, Sequence
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
+    # {
+    #     "host": "clickhouse-query",
+    #     "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+    #     "user": os.environ.get("CLICKHOUSE_USER", "default"),
+    #     "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+    #     "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
+    #     "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
+    #     "storage_sets": {},
+    #     "single_node": False,
+    #     "cluster_name": "query_cluster",
+    #     "distributed_cluster_name": "query_cluster",
+    # },
     {
-        "host": "clickhouse-query",
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-        "user": os.environ.get("CLICKHOUSE_USER", "default"),
-        "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
-        "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
-        "storage_sets": {},
-        "single_node": False,
-        "cluster_name": "query_cluster",
-        "distributed_cluster_name": "query_cluster",
-    },
-    {
-        "host": "clickhouse-query",
+        "host": "clickhouse-01",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -24,10 +24,12 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "storage_sets": {
             "migrations",
         },
-        "single_node": True,
+        "single_node": False,
+        "cluster_name": "migrations_cluster",
+        "distributed_cluster_name": "migrations_cluster",
     },
     {
-        "host": "clickhouse-query",
+        "host": "clickhouse-01",
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -55,6 +57,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         },
         "single_node": False,
         "cluster_name": "storage_cluster",
-        "distributed_cluster_name": "query_cluster",
+        "distributed_cluster_name": "migrations_cluster",
     },
 ]
