@@ -14,7 +14,7 @@ TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "description": "Name of class key"},
+        "type": {"type": "string", "description": "Name of class config key"},
         "args": {"type": "array", "items": {"type": "string"}, "description": ""},
     },
     "additionalProperties": False,
@@ -56,7 +56,7 @@ STREAM_LOADER_SCHEMA = {
             "properties": {
                 "type": {
                     "type": "string",
-                    "description": "Name of StreamMessageFilter class key",
+                    "description": "Name of StreamMessageFilter class config key",
                 },
                 "args": {
                     "type": "object",

@@ -46,7 +46,7 @@ stream_loader:
   processor: GenericSetsMetricsProcessor
   default_topic: snuba-generic-metrics
   pre_filter:
-    type: kafka_header_select_filter
+    type: kafka_header_select
     args:
       header_key: metric_type
       header_value: s

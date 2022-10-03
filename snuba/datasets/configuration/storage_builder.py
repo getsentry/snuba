@@ -10,12 +10,12 @@ from snuba.datasets.configuration.json_schema import (
 )
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
-    CONF_TO_PREFILTER,
     generate_policy_creator,
     get_query_processors,
     parse_columns,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import register_storage_key
@@ -81,13 +81,15 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     ).from_kwargs()
     default_topic = Topic(loader_config["default_topic"])
     # optionals
-    pre_filter = (
-        CONF_TO_PREFILTER[loader_config[PRE_FILTER]["type"]](
+    pre_filter = None
+    if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None:
+        pre_filter = StreamMessageFilter.get_from_name(
+            loader_config[PRE_FILTER]["type"]
+        ).from_kwargs(
             **loader_config[PRE_FILTER]["args"]
+            if loader_config[PRE_FILTER].get("args")
+            else {}
         )
-        if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None
-        else None
-    )
     replacement_topic = __get_topic(loader_config, "replacement_topic")
     commit_log_topic = __get_topic(loader_config, "commit_log_topic")
     subscription_scheduled_topic = __get_topic(

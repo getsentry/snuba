@@ -1,6 +1,6 @@
 from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.message_filters import KafkaHeaderFilterWithBypass
+from snuba.datasets.message_filters import KafkaHeaderWithBypassFilter
 from snuba.datasets.processors.transactions_processor import (
     TransactionsMessageProcessor,
 )
@@ -33,7 +33,7 @@ storage = WritableTableStorage(
     query_processors=query_processors,
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=TransactionsMessageProcessor(),
-        pre_filter=KafkaHeaderFilterWithBypass("transaction_forwarder", "0", 100),
+        pre_filter=KafkaHeaderWithBypassFilter("transaction_forwarder", "0", 100),
         default_topic=Topic.TRANSACTIONS,
         commit_log_topic=Topic.TRANSACTIONS_COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
