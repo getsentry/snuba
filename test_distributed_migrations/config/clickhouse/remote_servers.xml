@@ -1,13 +1,5 @@
 <yandex>
     <remote_servers>
-        <query_cluster>
-            <shard>
-                <replica>
-                    <host>clickhouse</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
-        </query_cluster>
         <migrations_cluster>
             <shard>
                 <replica>
@@ -16,8 +8,8 @@
                 </replica>
             </shard>
         </migrations_cluster>
-
         <storage_cluster>
+            <internal_replication>true</internal_replication>
             <shard>
                 <replica>
                     <host>clickhouse-02</host>

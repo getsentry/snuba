@@ -57,3 +57,15 @@ def test_add_node() -> None:
         ("outcomes_hourly_local",),
         ("outcomes_mv_hourly_local",),
     }
+
+    migrations_client = ClickhousePool(
+        host="clickhouse-01",
+        port=9000,
+        user="default",
+        password="",
+        database="default",
+    )
+
+    assert set(migrations_client.execute("SHOW TABLES").results) == {
+        ("migrations_local",),
+    }
