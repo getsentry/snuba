@@ -3,7 +3,7 @@
         <query_cluster>
             <shard>
                 <replica>
-                    <host>clickhouse</host>
+                    <host>clickhouse-query</host>
                     <port>9000</port>
                 </replica>
             </shard>
