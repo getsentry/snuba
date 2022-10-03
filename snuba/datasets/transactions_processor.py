@@ -248,6 +248,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             if context in contexts:
                 del contexts[context]
 
+        processed["app_start_type"] = None
         appContext = contexts.get("app")
         if appContext is not None:
             appStartType = appContext.get("start_type")
@@ -394,7 +395,8 @@ class TransactionsMessageProcessor(MessageProcessor):
         # The app_start_type is promoted as a column on a query level, no need to store it again
         # in the context array.
         app_ctx = sanitized_context.get("app", {})
-        app_ctx.pop("start_type", None)
+        if app_ctx is not None:
+            app_ctx.pop("start_type", None)
 
         skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
             processed["project_id"], set()
