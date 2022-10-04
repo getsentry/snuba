@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Sequence, Set, Tuple
 
 from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
@@ -144,6 +144,11 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 # Processor/Writer Options
 
+# Mapping of (logical topic names, slice id) pairs to physical topic names
+# This is for Kafka topics that are associated
+# with multiple slices
+SLICED_KAFKA_TOPICS: Mapping[Tuple[str, int], str] = {}
+
 BROKER_CONFIG: Mapping[str, Any] = {
     # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
@@ -160,7 +165,7 @@ KAFKA_TOPIC_MAP: Mapping[str, str] = {
     "snuba-transactions-commit-log": "snuba-commit-log",
 }
 
-# Mapping of default Kafka topic name to broker config
+# Mapping of physical Kafka topic name to broker config
 KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000

@@ -74,3 +74,19 @@ def test_validation_catches_unmapped_logical_parts() -> None:
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
     part_mapping["2"] = 0
+
+
+def test_validation_catches_bad_topic_mapping() -> None:
+
+    all_settings = build_settings_dict()
+    topic_mapping = all_settings["SLICED_KAFKA_TOPICS"]
+
+    # Failed to add all sliced topic configs
+    all_settings["LOCAL_SLICES"] = 2
+    topic_mapping[("events", 1)] = "events-1"
+
+    with pytest.raises(AssertionError):
+        validate_settings(all_settings)
+
+    del topic_mapping[("events", 1)]
+    all_settings["LOCAL_SLICES"] = 1

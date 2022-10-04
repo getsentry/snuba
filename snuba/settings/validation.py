@@ -95,3 +95,14 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         assert (
             physical_part < locals["LOCAL_SLICES"]
         ), f"physical slice for logical partition {logical_part} is {physical_part}, but only {partition_count} physical slices exist"
+
+    # build a set of sliced Kafka logical topics
+    sliced_topics = set()
+    for topic_tuple in locals["SLICED_KAFKA_TOPICS"]:
+        sliced_topics.add(topic_tuple[0])
+
+    for logical_topic_name in sliced_topics:
+        for slice_num in range(0, locals["LOCAL_SLICES"]):
+            assert (logical_topic_name, slice_num) in locals[
+                "SLICED_KAFKA_TOPICS"
+            ], f"missing physical topic for logical Kafka topic {logical_topic_name}"
