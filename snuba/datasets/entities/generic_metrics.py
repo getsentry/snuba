@@ -19,10 +19,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.partitioned_storage import (
-    ColumnBasedStoragePartitionSelector,
-    PartitionedStorageQueryPlanBuilder,
-)
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -79,12 +76,8 @@ class GenericMetricsEntity(Entity, ABC):
         super().__init__(
             storages=storages,
             query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=PartitionedStorageQueryPlanBuilder(
-                    storage=readable_storage,
-                    storage_cluster_selector=ColumnBasedStoragePartitionSelector(
-                        storage_set=readable_storage.get_storage_set_key(),
-                        partition_key_column_name="org_id",
-                    ),
+                query_plan_builder=SingleStorageQueryPlanBuilder(
+                    readable_storage,
                     mappers=TranslationMappers(
                         subscriptables=[
                             SubscriptableMapper(
