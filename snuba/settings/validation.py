@@ -88,10 +88,10 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
 
     for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
         physical_part = locals["LOGICAL_PARTITION_MAPPING"].get(str(logical_part))
-        partition_count = locals["LOCAL_PHYSICAL_PARTITIONS"]
+        partition_count = locals["LOCAL_SLICES"]
         assert (
             physical_part is not None
-        ), f"missing physical partition for logical partition {logical_part}"
+        ), f"missing physical slice for logical partition {logical_part}"
         assert (
-            physical_part < locals["LOCAL_PHYSICAL_PARTITIONS"]
-        ), f"physical partition for logical partition {logical_part} is {physical_part}, but only {partition_count} physical partitions exist"
+            physical_part < locals["LOCAL_SLICES"]
+        ), f"physical slice for logical partition {logical_part} is {physical_part}, but only {partition_count} physical slices exist"
