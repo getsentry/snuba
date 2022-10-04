@@ -1,12 +1,20 @@
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional, Sequence
 
+from snuba import settings
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
+from snuba.datasets.plans.partitioned_storage import (
+    ColumnBasedStoragePartitionSelector,
+    PartitionedStorageQueryPlanBuilder,
+)
+from snuba.datasets.plans.query_plan import (
+    ClickhouseQueryPlan,
+    ClickhouseQueryPlanBuilder,
+)
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -42,6 +50,9 @@ class PluggableEntity(Entity):
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
     )
+    # partition_key_column_name is used in data slicing (the value in this storage column
+    # will be used to "choose" slices)
+    partition_key_column_name: Optional[str] = None
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -58,11 +69,28 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        return SimplePipelineBuilder(
-            query_plan_builder=SingleStorageQueryPlanBuilder(
+        storage_set_key = self.readable_storage.get_storage_set_key()
+
+        if storage_set_key.value in settings.SLICED_STORAGES:
+            assert (
+                self.partition_key_column_name is not None
+            ), "partition key column name must be defined for a sliced storage"
+            query_plan_builder: ClickhouseQueryPlanBuilder = (
+                PartitionedStorageQueryPlanBuilder(
+                    storage=self.readable_storage,
+                    mappers=self.translation_mappers,
+                    storage_cluster_selector=ColumnBasedStoragePartitionSelector(
+                        storage_set=storage_set_key,
+                        partition_key_column_name=self.partition_key_column_name,
+                    ),
+                )
+            )
+        else:
+            query_plan_builder = SingleStorageQueryPlanBuilder(
                 storage=self.readable_storage, mappers=self.translation_mappers
             )
-        )
+
+        return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
     def get_all_storages(self) -> Sequence[Storage]:
         return (
