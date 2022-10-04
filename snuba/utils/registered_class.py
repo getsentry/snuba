@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 from abc import ABCMeta
 from typing import Any, Dict, Tuple, Type, cast
 
@@ -162,3 +163,17 @@ def import_submodules_in_directory(
         module_str = f"{package_root}.{module_name}"
         imported_modules.append(importlib.import_module(module_str))
     return imported_modules
+
+
+CAMEL_CASE_RE = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def camel_to_snake(name: str) -> str:
+    """
+    Utility function for configuration.
+
+    When registering classes, usually the config key is the class name itself. However
+    the YAML syntax we have uses snake case, so this is a utility function to convert
+    a camel case class (DatasetMessageProcessor) to snake case (dataset_message_processor).
+    """
+    return CAMEL_CASE_RE.sub("_", name).lower()

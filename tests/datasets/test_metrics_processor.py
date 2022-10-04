@@ -6,8 +6,10 @@ import pytest
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.generic_metrics_processor import GenericSetsMetricsProcessor
-from snuba.datasets.metrics_aggregate_processor import (
+from snuba.datasets.processors.generic_metrics_processor import (
+    GenericSetsMetricsProcessor,
+)
+from snuba.datasets.processors.metrics_aggregate_processor import (
     CounterAggregateProcessor,
     DistributionsAggregateProcessor,
     MetricsAggregateProcessor,
@@ -17,7 +19,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     _literal,
     timestamp_to_bucket,
 )
-from snuba.datasets.metrics_bucket_processor import (
+from snuba.datasets.processors.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
     PolymorphicMetricsProcessor,
@@ -373,7 +375,7 @@ def test_metrics_aggregate_processor(
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
     with patch(
-        "snuba.datasets.metrics_aggregate_processor.timestamp_to_bucket",
+        "snuba.datasets.processors.metrics_aggregate_processor.timestamp_to_bucket",
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         assert (
@@ -479,7 +481,7 @@ def test_metrics_polymorphic_processor(
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
     with patch(
-        "snuba.datasets.metrics_aggregate_processor.timestamp_to_bucket",
+        "snuba.datasets.processors.metrics_aggregate_processor.timestamp_to_bucket",
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         expected_polymorphic_result = (

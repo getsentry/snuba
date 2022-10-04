@@ -13,8 +13,10 @@ from jsonschema.exceptions import ValidationError
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
 from snuba.datasets.configuration.storage_builder import build_stream_loader
 from snuba.datasets.configuration.utils import generate_policy_creator
-from snuba.datasets.generic_metrics_processor import GenericSetsMetricsProcessor
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.datasets.processors.generic_metrics_processor import (
+    GenericSetsMetricsProcessor,
+)
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 

@@ -11,11 +11,11 @@ from snuba.datasets.configuration.json_schema import (
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
     CONF_TO_PREFILTER,
-    CONF_TO_PROCESSOR,
     generate_policy_creator,
     get_query_processors,
     parse_columns,
 )
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import register_storage_key
@@ -76,7 +76,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
-    processor = CONF_TO_PROCESSOR[loader_config["processor"]]()
+    processor = DatasetMessageProcessor.get_from_name(loader_config["processor"])()
     default_topic = Topic(loader_config["default_topic"])
 
     # optionals

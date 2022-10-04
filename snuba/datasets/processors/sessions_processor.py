@@ -5,11 +5,11 @@ from typing import Any, Mapping, Optional
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import enforce_retention
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
     MAX_UINT32,
     NIL_UUID,
     InsertBatch,
-    MessageProcessor,
     ProcessedMessage,
     _collapse_uint16,
     _collapse_uint32,
@@ -28,7 +28,7 @@ STATUS_MAPPING = {
 metrics = MetricsWrapper(environment.metrics, "sessions.processor")
 
 
-class SessionsProcessor(MessageProcessor):
+class SessionsProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:

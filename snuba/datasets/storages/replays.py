@@ -9,7 +9,7 @@ from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, IPv4, IPv
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.replays_processor import ReplaysProcessor
+from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
