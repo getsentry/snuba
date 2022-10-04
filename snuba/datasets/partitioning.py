@@ -16,9 +16,9 @@ def map_org_id_to_logical_partition(org_id: int) -> int:
     return org_id % SENTRY_LOGICAL_PARTITIONS
 
 
-def map_logical_partition_to_physical_partition(logical_partition: int) -> int:
+def map_logical_partition_to_slice(logical_partition: int) -> int:
     """
-    Maps a logical partition to a physical partition.
+    Maps a logical partition to a slice.
     """
     from snuba.settings import LOGICAL_PARTITION_MAPPING
 
@@ -29,6 +29,6 @@ def is_storage_set_partitioned(storage_set: StorageSetKey) -> bool:
     """
     Returns whether the storage set is partitioned.
     """
-    from snuba.settings import PARTITIONED_STORAGES
+    from snuba.settings import SLICED_STORAGES
 
-    return True if storage_set.value in PARTITIONED_STORAGES else False
+    return True if storage_set.value in SLICED_STORAGES else False
