@@ -288,7 +288,7 @@ class ProjectsQueryFlags:
         """
         s_project_ids = set(project_ids)
 
-        p = redis_clients["replacements_store"].pipeline()
+        p = redis_client.pipeline()
 
         with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
             cls._query_redis(s_project_ids, state_name, p)
