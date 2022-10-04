@@ -18,7 +18,7 @@ from snuba.query.processors.physical.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.redis import redis_client
+from snuba.redis import redis_clients
 from snuba.replacers.replacer_processor import ReplacerState
 
 
@@ -120,7 +120,7 @@ def query_with_multiple_group_ids() -> ClickhouseQuery:
 
 
 def teardown_function() -> None:
-    redis_client.flushdb()
+    redis_clients["replacements_store"].flushdb()
 
 
 def test_with_turbo(query: ClickhouseQuery) -> None:

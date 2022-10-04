@@ -10,7 +10,7 @@ from arroyo.backends.kafka import KafkaProducer
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
 from snuba.datasets.factory import get_dataset
-from snuba.redis import redis_client
+from snuba.redis import redis_clients
 from snuba.subscriptions.combined_scheduler_executor import (
     CombinedSchedulerExecutorFactory,
 )
@@ -21,6 +21,8 @@ from snuba.utils.streams.configuration_builder import build_kafka_producer_confi
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.backends.metrics import TestingMetricsBackend
+
+redis_client = redis_clients["subscription_store"]
 
 
 def create_subscription() -> None:

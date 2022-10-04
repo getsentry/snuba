@@ -12,7 +12,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.optimize import run_optimize_cron_job
 from snuba.optimize_tracker import OptimizedPartitionTracker
-from snuba.redis import redis_client
+from snuba.redis import redis_clients
 
 
 @click.command()
@@ -103,7 +103,7 @@ def optimize(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     tracker = OptimizedPartitionTracker(
-        redis_client=redis_client,
+        redis_client=redis_clients["misc"],
         host=clickhouse_host,
         port=clickhouse_port,
         database=database,

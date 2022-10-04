@@ -7,7 +7,9 @@ from arroyo.processing.strategies.dead_letter_queue import (
     InvalidMessages,
 )
 
-from snuba.redis import redis_client
+from snuba.redis import redis_clients
+
+redis_client = redis_clients["misc"]
 
 
 class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy):

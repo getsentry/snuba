@@ -3,7 +3,16 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
+from typing import (
+    Any,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Set,
+    TypedDict,
+    TypeVar,
+)
 
 from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
@@ -108,6 +117,22 @@ CLICKHOUSE_TRACE_USER = os.environ.get("CLICKHOUSE_TRACE_USER", "default")
 CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASS", "")
 
 # Redis Options
+
+
+class RedisClusterConfig(TypedDict):
+    use_redis_cluster: bool
+
+    cluster_startup_nodes: list[dict[str, Any]] | None
+    host: str
+    port: int
+    password: str | None
+    db: int
+    reinitialize_steps: int
+
+
+# The default cluster is configured using these global constants. If a config
+# for a particular usecase in REDIS_CLUSTERS is missing/null, the default
+# cluster is used.
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 
 REDIS_CLUSTER_STARTUP_NODES: list[dict[str, Any]] | None = None
@@ -117,6 +142,25 @@ REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
+
+T = TypeVar("T")
+
+
+class RedisClusters(TypedDict):
+    cache: RedisClusterConfig | None
+    rate_limiter: RedisClusterConfig | None
+    subscription_store: RedisClusterConfig | None
+    replacements_store: RedisClusterConfig | None
+    misc: RedisClusterConfig | None
+
+
+REDIS_CLUSTERS: RedisClusters = {
+    "cache": None,
+    "rate_limiter": None,
+    "subscription_store": None,
+    "replacements_store": None,
+    "misc": None,
+}
 
 USE_RESULT_CACHE = True
 

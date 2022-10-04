@@ -17,12 +17,14 @@ from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.optimize import run_optimize
-from snuba.redis import redis_client
+from snuba.redis import redis_clients
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
+
+redis_client = redis_clients["replacements_store"]
 
 CONSUMER_GROUP = "consumer_group"
 

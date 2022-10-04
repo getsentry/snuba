@@ -11,8 +11,10 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.optimize import run_optimize_cron_job
 from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
 from snuba.processor import InsertBatch
-from snuba.redis import redis_client
+from snuba.redis import redis_clients
 from tests.helpers import write_processed_messages
+
+redis_client = redis_clients["replacements_store"]
 
 
 @pytest.mark.parametrize(

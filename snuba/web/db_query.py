@@ -32,7 +32,7 @@ from snuba.querylog.query_metadata import (
     SnubaQueryMetadata,
 )
 from snuba.reader import Reader, Result
-from snuba.redis import redis_client
+from snuba.redis import redis_clients
 from snuba.state.cache.abstract import (
     Cache,
     ExecutionTimeoutError,
@@ -84,7 +84,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # reader when running a query.
 cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
-        redis_client,
+        redis_clients["cache"],
         "snuba-query-cache:",
         ResultCacheCodec(),
         ThreadPoolExecutor(),
@@ -435,7 +435,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
                     else ExecutionTimeoutError
                 )
                 cache_partitions[partition_id] = RedisCache(
-                    redis_client,
+                    redis_clients["cache"],
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
                     ThreadPoolExecutor(),
