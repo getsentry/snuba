@@ -30,7 +30,7 @@ Every logical partition **must** be assigned to a slice and the
 valid values of slices are in the range
 of ``[0,settings.LOCAL_SLICES)``.
 
-Defining sliced clusters
+Defining sliced ClickHouse clusters
 --------------------------------
 To add a cluster with an associated (storage set key, slice) pair, add cluster definitions
 to ``settings.SLICED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
