@@ -31,7 +31,7 @@ valid values of slices are in the range
 of ``[0,settings.LOCAL_SLICES)``.
 
 Defining sliced ClickHouse clusters
---------------------------------
+-----------------------------------
 To add a cluster with an associated (storage set key, slice) pair, add cluster definitions
 to ``settings.SLICED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
 regular cluster definitions in ``settings.CLUSTERS``. In the ``storage_set_slices`` field, sliced storage
