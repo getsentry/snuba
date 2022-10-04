@@ -33,11 +33,7 @@ from snuba.querylog.query_metadata import (
 )
 from snuba.reader import Reader, Result
 from snuba.redis import redis_clients
-from snuba.state.cache.abstract import (
-    Cache,
-    ExecutionTimeoutError,
-    TigerExecutionTimeoutError,
-)
+from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
@@ -429,17 +425,11 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
             # during the first query. So, for the vast majority of queries, the overhead
             # of acquiring the lock is not needed.
             if partition_id not in cache_partitions:
-                exception = (
-                    TigerExecutionTimeoutError
-                    if "tiger" in partition_id
-                    else ExecutionTimeoutError
-                )
                 cache_partitions[partition_id] = RedisCache(
                     redis_clients["cache"],
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
                     ThreadPoolExecutor(),
-                    exception,
                 )
 
     return cache_partitions[
@@ -711,7 +701,7 @@ def raw_query(
                             sentry_sdk.set_tag("timeout", "network")
                 elif isinstance(
                     cause,
-                    (TimeoutError, ExecutionTimeoutError, TigerExecutionTimeoutError),
+                    (TimeoutError, ExecutionTimeoutError),
                 ):
                     if scope.span:
                         sentry_sdk.set_tag("timeout", "cache_timeout")
