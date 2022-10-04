@@ -47,7 +47,9 @@ stream_loader:
   default_topic: snuba-generic-metrics
   pre_filter:
     type: kafka_header_select_filter
-    args: [metric_type, d]
+    args:
+      header_key: metric_type
+      header_value: d
   commit_log_topic: snuba-generic-metrics-distributions-commit-log
   subscription_scheduler_mode: global
   subscription_scheduled_topic: scheduled-subscriptions-generic-metrics-distributions

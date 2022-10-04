@@ -58,8 +58,7 @@ STREAM_LOADER_SCHEMA = {
                     "description": "Name of StreamMessageFilter class key",
                 },
                 "args": {
-                    "type": "array",
-                    "items": {"type": "string"},
+                    "type": "object",
                     "description": "Key/value mappings required to instantiate StreamMessageFilter class.",
                 },
             },
