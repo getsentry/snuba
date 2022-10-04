@@ -1,5 +1,6 @@
 from typing import Any, Optional
 
+import requests
 import structlog
 
 from snuba.admin.user import AdminUser
@@ -16,7 +17,6 @@ def _certs() -> Any:
     validating Google-signed JWTs. Since these change rarely, the result
     is cached on first request for faster subsequent responses.
     """
-    import requests
 
     global CERTS
     if CERTS is None:
@@ -30,8 +30,6 @@ def _get_metadata(item_name: str) -> str:
     See https://cloud.google.com/compute/docs/storing-retrieving-metadata for
     possible item_name values.
     """
-    import requests
-
     endpoint = "http://metadata.google.internal"
     path = "/computeMetadata/v1/project/"
     path += item_name
