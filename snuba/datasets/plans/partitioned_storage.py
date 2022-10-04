@@ -76,10 +76,10 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
         assert len(org_ids) == 1
         org_id = org_ids.pop()
 
-        physical_partition = map_logical_partition_to_slice(
+        slice_id = map_logical_partition_to_slice(
             map_org_id_to_logical_partition(org_id)
         )
-        cluster = get_cluster(self.storage_set, physical_partition)
+        cluster = get_cluster(self.storage_set, slice_id)
 
         return cluster
 

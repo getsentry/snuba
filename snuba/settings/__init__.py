@@ -34,8 +34,8 @@ CLICKHOUSE_MAX_POOL_SIZE = 25
 # The number of physical partitions that we will need to map resources to
 # for storage partitioning
 LOCAL_SLICES = 1
-# Mapping of logical (key) to physical (value) partitions for storages
-# that are partitioned in Snuba resources
+# Mapping of logical partitions (key) to physical slices (value)
+# for storages that are partitioned in Snuba resources
 LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
     str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
 }
