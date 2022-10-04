@@ -124,6 +124,44 @@ class TruncateTable(SqlOperation):
         return f"TRUNCATE TABLE IF EXISTS {self.__table_name};"
 
 
+class ModifyTableTTL(SqlOperation):
+    """
+    Modify TTL of a table
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        reference_column: str,
+        ttl_days: int,
+    ):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+        self.__reference_column = reference_column
+        self.__ttl_days = ttl_days
+
+    def format_sql(self) -> str:
+        return (
+            f"ALTER TABLE {self.__table_name} MODIFY TTL "
+            f"{self.__reference_column} + "
+            f"toIntervalDay({self.__ttl_days});"
+        )
+
+
+class RemoveTableTTL(SqlOperation):
+    """
+    Remove TTL from a table.
+    """
+
+    def __init__(self, storage_set: StorageSetKey, table_name: str):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+
+    def format_sql(self) -> str:
+        return f"ALTER TABLE {self.__table_name} REMOVE TTL;"
+
+
 class AddColumn(SqlOperation):
     """
     Adds a column to a table.
