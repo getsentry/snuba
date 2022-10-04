@@ -1,5 +1,5 @@
 import json
-from typing import Any, Callable, Generator, Iterator, Tuple, Union, cast
+from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -9,7 +9,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
-from snuba.redis import RedisClientType, redis_clients
+from snuba.redis import all_redis_clients
 
 
 def pytest_configure() -> None:
@@ -79,8 +79,7 @@ def run_migrations() -> Iterator[None]:
                         f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
                     )
 
-        for client in redis_clients.values():
-            redis_client = cast(RedisClientType, client)
+        for redis_client in all_redis_clients():
             redis_client.flushdb()
 
 

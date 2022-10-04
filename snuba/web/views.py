@@ -54,7 +54,7 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.redis import RedisClientType, redis_clients
+from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
@@ -666,8 +666,7 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset) -> RespTuple:
         truncate_dataset(dataset)
-        for client in redis_clients.values():
-            redis_client = cast(RedisClientType, client)
+        for redis_client in all_redis_clients():
             redis_client.flushdb()
 
         return ("ok", 200, {"Content-Type": "text/plain"})

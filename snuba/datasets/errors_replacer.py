@@ -38,7 +38,7 @@ from snuba.datasets.events_processor_base import (
 )
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
-from snuba.redis import redis_clients
+from snuba.redis import get_redis_client
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import (
     ReplacementMessage,
@@ -57,7 +57,7 @@ In theory this will be needed only during the events to errors migration.
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "errors.replacer")
-redis_client = redis_clients["replacements_store"]
+redis_client = get_redis_client("replacements_store")
 
 
 @dataclass(frozen=True)

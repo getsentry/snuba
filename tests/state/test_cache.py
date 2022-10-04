@@ -11,14 +11,14 @@ from unittest import mock
 import pytest
 import rapidjson
 
-from snuba.redis import RedisClientType, redis_clients
+from snuba.redis import RedisClientType, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.serializable_exception import SerializableException
 from tests.assertions import assert_changes, assert_does_not_change
 
-redis_client = redis_clients["misc"]
+redis_client = get_redis_client("misc")
 
 
 def execute(function: Callable[[], Any]) -> Future[Any]:

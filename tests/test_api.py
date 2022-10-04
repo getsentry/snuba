@@ -24,7 +24,7 @@ from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch
-from snuba.redis import RedisClientType, redis_clients
+from snuba.redis import RedisClientType, get_redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
@@ -2056,7 +2056,7 @@ class TestApi(SimpleAPITest):
         table = writer.get_schema().get_table_name()
 
         assert table not in clickhouse.execute("SHOW TABLES").results
-        assert self.redis_db_size(redis_clients["replacements_store"]) == 0
+        assert self.redis_db_size(get_redis_client("replacements_store")) == 0
 
         # No data in events table
         assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) == 0
@@ -2216,7 +2216,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             len(
                 list(
                     RedisSubscriptionDataStore(
-                        redis_clients["subscription_store"],
+                        get_redis_client("subscription_store"),
                         entity_key,
                         partition,
                     ).all()
@@ -2329,7 +2329,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
             len(
                 list(
                     RedisSubscriptionDataStore(
-                        redis_clients["subscription_store"],
+                        get_redis_client("subscription_store"),
                         entity_key,
                         partition,
                     ).all()
@@ -2344,7 +2344,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         assert resp.status_code == 202, resp
         assert (
             RedisSubscriptionDataStore(
-                redis_clients["subscription_store"],
+                get_redis_client("subscription_store"),
                 entity_key,
                 partition,
             ).all()

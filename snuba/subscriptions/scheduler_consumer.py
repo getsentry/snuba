@@ -16,7 +16,7 @@ from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.redis import redis_clients
+from snuba.redis import get_redis_client
 from snuba.state import get_config
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
@@ -34,7 +34,7 @@ from snuba.utils.types import Interval, InvalidRangeError
 logger = logging.getLogger(__name__)
 
 commit_codec = CommitCodec()
-redis_client = redis_clients["subscription_store"]
+redis_client = get_redis_client("subscription_store")
 
 
 class MessageDetails(NamedTuple):

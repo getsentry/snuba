@@ -10,7 +10,7 @@ from snuba.datasets.entity_subscriptions.entity_subscription import (
 )
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
-from snuba.redis import redis_clients
+from snuba.redis import get_redis_client
 from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
@@ -68,7 +68,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_clients["subscription_store"],
+                    get_redis_client("subscription_store"),
                     self.entity_key,
                     identifier.partition,
                 ).all(),
@@ -267,7 +267,7 @@ class TestMetricsCountersSubscriptionCreator:
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_clients["subscription_store"],
+                    get_redis_client("subscription_store"),
                     entity_key,
                     identifier.partition,
                 ).all(),
@@ -302,7 +302,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             cast(
                 List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
-                    redis_clients["subscription_store"],
+                    get_redis_client("subscription_store"),
                     self.entity_key,
                     identifier.partition,
                 ).all(),
@@ -315,7 +315,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         )
         assert (
             RedisSubscriptionDataStore(
-                redis_clients["subscription_store"],
+                get_redis_client("subscription_store"),
                 self.entity_key,
                 identifier.partition,
             ).all()

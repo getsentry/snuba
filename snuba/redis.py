@@ -2,7 +2,7 @@ from __future__ import absolute_import, annotations
 
 import time
 from functools import wraps
-from typing import Any, Callable, TypedDict, TypeVar, Union, cast
+from typing import Any, Callable, Iterable, Literal, TypedDict, TypeVar, Union, cast
 
 from redis.client import StrictRedis
 from redis.cluster import ClusterNode, NodesManager, RedisCluster
@@ -126,7 +126,12 @@ class RedisClients(TypedDict):
     misc: RedisClientType
 
 
-redis_clients: RedisClients = {
+RedisClientKey = Literal[
+    "cache", "rate_limiter", "subscription_store", "replacements_store", "misc"
+]
+
+
+_redis_clients: RedisClients = {
     "cache": _initialize_specialized_redis_cluster(settings.REDIS_CLUSTERS["cache"]),
     "rate_limiter": _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["rate_limiter"]
@@ -139,3 +144,11 @@ redis_clients: RedisClients = {
     ),
     "misc": _initialize_specialized_redis_cluster(settings.REDIS_CLUSTERS["misc"]),
 }
+
+
+def get_redis_client(name: RedisClientKey) -> RedisClientType:
+    return _redis_clients[name]
+
+
+def all_redis_clients() -> Iterable[RedisClientType]:
+    return cast(Iterable[RedisClientType], _redis_clients.values())
