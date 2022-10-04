@@ -80,6 +80,7 @@ class TestReplacer:
 
     def _clear_redis_and_force_merge(self) -> None:
         redis_client.flushdb()
+        redis_clients["cache"].flushdb()
         cluster = self.storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         run_optimize(clickhouse, self.storage, cluster.get_database())

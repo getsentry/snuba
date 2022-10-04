@@ -40,10 +40,14 @@ REDIS_CLUSTERS = {
         "host": "localhost",
         "port": 6379,
         "password": None,
-        "db": i + 1,
+        "db": i,
         "reinitialize_steps": 10,
     }
-    for i, key in enumerate(
-        ["cache", "rate_limiter", "subscription_store", "replacements_store", "misc"]
-    )
+    for i, key in [
+        (1, "cache"),
+        (2, "rate_limiter"),
+        (3, "subscription_store"),
+        (4, "replacements_store"),
+        (5, "misc"),
+    ]
 }
