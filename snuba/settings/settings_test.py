@@ -32,3 +32,18 @@ ENFORCE_RETENTION = True
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(days=1)
 
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
+
+REDIS_CLUSTERS = {
+    key: {
+        "use_redis_cluster": False,
+        "cluster_startup_nodes": None,
+        "host": "localhost",
+        "port": 6379,
+        "password": None,
+        "db": i + 1,
+        "reinitialize_steps": 10,
+    }
+    for i, key in enumerate(
+        ["cache", "rate_limiter", "subscription_store", "replacements_store", "misc"]
+    )
+}
