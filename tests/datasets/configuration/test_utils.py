@@ -41,7 +41,7 @@ def test_generate_policy_creator() -> None:
 def test_build_stream_loader() -> None:
     loader = build_stream_loader(
         {
-            "processor": "generic_sets_metrics_processor",
+            "processor": "GenericSetsMetricsProcessor",
             "default_topic": "snuba-generic-metrics",
             "pre_filter": {
                 "type": "kafka_header_select_filter",

@@ -6,11 +6,7 @@ from typing import Any, Optional, Type, cast
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import MessageProcessor, ProcessedMessage
-from snuba.utils.registered_class import (
-    RegisteredClass,
-    camel_to_snake,
-    import_submodules_in_directory,
-)
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 
 class MessageProcessorUnsupportedFromConfig(Exception):
@@ -39,7 +35,7 @@ class DatasetMessageProcessor(MessageProcessor, metaclass=RegisteredClass):
 
     @classmethod
     def config_key(cls) -> str:
-        return camel_to_snake(cls.__name__)
+        return cls.__name__
 
     @abstractmethod
     def process_message(
