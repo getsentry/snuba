@@ -80,11 +80,10 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         loader_config["processor"]
     ).from_kwargs()
     default_topic = Topic(loader_config["default_topic"])
-
     # optionals
     pre_filter = (
         CONF_TO_PREFILTER[loader_config[PRE_FILTER]["type"]](
-            *loader_config[PRE_FILTER]["args"]
+            **loader_config[PRE_FILTER]["args"]
         )
         if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None
         else None

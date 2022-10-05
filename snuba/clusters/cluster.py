@@ -395,7 +395,7 @@ def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
     return _STORAGE_SET_CLUSTER_MAP
 
 
-def _build_partitioned_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
+def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
     return ClickhouseCluster(
         host=cluster["host"],
         port=cluster["port"],
@@ -404,7 +404,7 @@ def _build_partitioned_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
         storage_sets={
-            storage_tuple[0] for storage_tuple in cluster["storage_set_partitions"]
+            storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]
         },
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
@@ -416,22 +416,20 @@ def _build_partitioned_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
     )
 
 
-_PARTITIONED_STORAGE_SET_CLUSTER_MAP: Dict[
-    Tuple[StorageSetKey, int], ClickhouseCluster
-] = {}
+_SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[StorageSetKey, int], ClickhouseCluster] = {}
 
 
-def _get_partitioned_storage_set_cluster_map() -> Dict[
+def _get_sliced_storage_set_cluster_map() -> Dict[
     Tuple[StorageSetKey, int], ClickhouseCluster
 ]:
-    if len(_PARTITIONED_STORAGE_SET_CLUSTER_MAP) == 0:
-        for cluster in settings.PARTITIONED_CLUSTERS:
-            for storage_set_tuple in cluster["storage_set_partitions"]:
-                _PARTITIONED_STORAGE_SET_CLUSTER_MAP[
+    if len(_SLICED_STORAGE_SET_CLUSTER_MAP) == 0:
+        for cluster in settings.SLICED_CLUSTERS:
+            for storage_set_tuple in cluster["storage_set_slices"]:
+                _SLICED_STORAGE_SET_CLUSTER_MAP[
                     (StorageSetKey(storage_set_tuple[0]), storage_set_tuple[1])
-                ] = _build_partitioned_cluster(cluster)
+                ] = _build_sliced_cluster(cluster)
 
-    return _PARTITIONED_STORAGE_SET_CLUSTER_MAP
+    return _SLICED_STORAGE_SET_CLUSTER_MAP
 
 
 class UndefinedClickhouseCluster(SerializableException):
@@ -439,30 +437,30 @@ class UndefinedClickhouseCluster(SerializableException):
 
 
 def get_cluster(
-    storage_set_key: StorageSetKey, partition_id: Optional[int] = None
+    storage_set_key: StorageSetKey, slice_id: Optional[int] = None
 ) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
-    If passing in a partitioned storage set, a slice_id must be specified.
-    This ID will be used to return the matching cluster in PARTITIONED_CLUSTERS.
-    If passing in an unpartitioned storage set, a slice_id should not be
+    If passing in a sliced storage set, a slice_id must be specified.
+    This ID will be used to return the matching cluster in SLICED_CLUSTERS.
+    If passing in an non-sliced storage set, a slice_id should not be
     specified. The StorageSetKey will be used to return the matching
     cluster in CLUSTERS.
 
     If the storage set key is not defined either in CLUSTERS or in
-    PARTITIONED_CLUSTERS, then an UndefinedClickhouseCluster Exception
+    SLICED_CLUSTERS, then an UndefinedClickhouseCluster Exception
     will be raised.
     """
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
 
-    if partition_id is not None:
-        part_storage_set_cluster_map = _get_partitioned_storage_set_cluster_map()
-        res = part_storage_set_cluster_map.get((storage_set_key, partition_id), None)
+    if slice_id is not None:
+        part_storage_set_cluster_map = _get_sliced_storage_set_cluster_map()
+        res = part_storage_set_cluster_map.get((storage_set_key, slice_id), None)
         if res is None:
             raise UndefinedClickhouseCluster(
-                f"{(storage_set_key, partition_id)} is not defined in the PARTITIONED_CLUSTERS setting for this environment"
+                f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment"
             )
 
     else:
