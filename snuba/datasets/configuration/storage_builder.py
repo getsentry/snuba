@@ -76,7 +76,9 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
-    processor = DatasetMessageProcessor.get_from_name(loader_config["processor"])()
+    processor = DatasetMessageProcessor.get_from_name(
+        loader_config["processor"]
+    ).from_kwargs()
     default_topic = Topic(loader_config["default_topic"])
     # optionals
     pre_filter = (
