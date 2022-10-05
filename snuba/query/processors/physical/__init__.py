@@ -29,7 +29,7 @@ class ClickhouseQueryProcessor(ABC, metaclass=RegisteredClass):
         return cls(**kwargs)
 
     @classmethod
-    def config_key(cls):
+    def config_key(cls) -> str:
         return cls.__name__
 
     @abstractmethod
