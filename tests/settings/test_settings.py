@@ -1,9 +1,12 @@
+import importlib
 from copy import deepcopy
 from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 
 from snuba import settings
+from snuba.settings import validation
 from snuba.settings.validation import InvalidTopicError, validate_settings
 from snuba.utils.streams.topics import Topic
 
@@ -53,26 +56,33 @@ def test_topics_sync_in_settings_validator() -> None:
         all_settings["KAFKA_TOPIC_MAP"] = default_map
 
 
+@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
 def test_validation_catches_bad_partition_mapping() -> None:
+    importlib.reload(validation)
     all_settings = build_settings_dict()
 
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    part_mapping["cdc"][2] = 1
+    part_mapping["events"] = {0: 0, 1: 0}
+    part_mapping["events"][0] = 1
     # only slice 0 is valid in this case
-    # since cdc is not a sliced storage set
+    # since cdc is not a sliced storage
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
-    part_mapping["cdc"][2] = 0
+
+    del part_mapping["events"]
 
 
+@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
 def test_validation_catches_unmapped_logical_parts() -> None:
+    importlib.reload(validation)
     all_settings = build_settings_dict()
 
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    del part_mapping["cdc"][2]
+    part_mapping["events"] = {0: 0, 1: 0}
+    del part_mapping["events"][1]
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
 
-    part_mapping["cdc"][2] = 0
+    del part_mapping["events"]

@@ -5,7 +5,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
-from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -31,37 +30,14 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-# Mapping storage set key to a mapping of logical partition
+# Mapping storage key to a mapping of logical partition
 # to slice id
-LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {
-    storage_set: {x: 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)}
-    for storage_set in {
-        "cdc",
-        "discover",
-        "events",
-        "events_ro",
-        "metrics",
-        "migrations",
-        "outcomes",
-        "querylog",
-        "sessions",
-        "transactions",
-        "transactions_ro",
-        "transactions_v2",
-        "errors_v2",
-        "errors_v2_ro",
-        "profiles",
-        "functions",
-        "replays",
-        "generic_metrics_sets",
-        "generic_metrics_distributions",
-    }
-}
+LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
-# Mapping of storage set key to slice count
-# Only includes storage sets that are
+# Mapping of storage key to slice count
+# Only includes storages that are
 # assocated with multiple slices
-SLICED_STORAGE_SETS: Mapping[str, int] = {}
+SLICED_STORAGES: Mapping[str, int] = {}
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {

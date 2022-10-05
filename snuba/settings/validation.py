@@ -7,6 +7,10 @@ class InvalidTopicError(ValueError):
     pass
 
 
+slice_count_validation_msg = """physical slice for storage {0}'s logical partition {1} is {2},
+            but only {3} physical slices are assigned to {0}"""
+
+
 def validate_settings(locals: Mapping[str, Any]) -> None:
     if locals.get("QUERIES_TOPIC"):
         raise ValueError("QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead.")
@@ -86,23 +90,22 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
-    for storage_set in locals["LOGICAL_PARTITION_MAPPING"]:
-        storage_set_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage_set]
+    for storage in locals["LOGICAL_PARTITION_MAPPING"]:
+        storage_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage]
 
-        # check if this is a sliced storage set
-        if storage_set in locals["SLICED_STORAGE_SETS"]:
-            defined_slice_count = locals["SLICED_STORAGE_SETS"][storage_set]
+        # check if this is a sliced storage
+        if storage in locals["SLICED_STORAGES"]:
+            defined_slice_count = locals["SLICED_STORAGES"][storage]
         else:
             defined_slice_count = 1
 
         for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
-            slice_id = storage_set_mapping.get(logical_part)
+            slice_id = storage_mapping.get(logical_part)
 
             assert (
                 slice_id is not None
-            ), f"missing physical slice for {storage_set}'s logical partition {logical_part}"
+            ), f"missing physical slice for storage {storage}'s logical partition {logical_part}"
 
-            assert (
-                slice_id < defined_slice_count
-            ), f"""physical slice for storage set {storage_set}'s logical partition {logical_part} is {slice_id},
-            but only {defined_slice_count} physical slices are assigned to {storage_set}"""
+            assert slice_id < defined_slice_count, slice_count_validation_msg.format(
+                storage, logical_part, slice_id, defined_slice_count
+            )
