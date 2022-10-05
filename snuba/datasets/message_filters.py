@@ -22,8 +22,9 @@ class StreamMessageFilter(ABC, Generic[TPayload], metaclass=RegisteredClass):
     messages during consumption but potentially for other use cases as well.
     """
 
-    def __init__(self) -> None:
-        pass
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
 
     @classmethod
     def get_from_name(cls, name: str) -> "StreamMessageFilter[TPayload]":
@@ -39,10 +40,6 @@ class StreamMessageFilter(ABC, Generic[TPayload], metaclass=RegisteredClass):
 
 
 class PassthroughKafkaFilter(StreamMessageFilter[KafkaPayload]):
-    @classmethod
-    def config_key(cls) -> str:
-        return "passthrough_kafka"
-
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
         return False
 
@@ -57,10 +54,6 @@ class KafkaHeaderFilter(StreamMessageFilter[KafkaPayload]):
 
     header_key: str
     header_value: str
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "kakfa_header"
 
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
         for key, value in message.payload.headers:
@@ -83,10 +76,6 @@ class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
 
     header_key: str
     header_value: str
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "kafka_header_select"
 
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
         for key, value in message.payload.headers:
@@ -118,10 +107,6 @@ class KafkaHeaderWithBypassFilter(KafkaHeaderFilter):
     consecutive_drop_limit: int
     consecutive_drop_count: int = 0
 
-    @classmethod
-    def config_key(cls) -> str:
-        return "kafka_header_with_bypass"
-
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
         if not super().should_drop(message):
             self.consecutive_drop_count = 0
@@ -146,10 +131,6 @@ class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
 
     def __init__(self, postgres_table: str) -> None:
         self.__postgres_table = postgres_table
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "cdc_table_name_message"
 
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
         assert (
