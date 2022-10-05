@@ -18,10 +18,11 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.RemoveTableTTL(StorageSetKey.SESSIONS, "sessions_raw_local"),
-            operations.RemoveTableTTL(StorageSetKey.SESSIONS, "sessions_hourly_local"),
-        ]
+        """
+        Removing a TTL is not supported by Clickhouse version 20.3. So there is
+        no backwards migration.
+        """
+        return []
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
