@@ -65,7 +65,7 @@ def test_validation_catches_bad_partition_mapping() -> None:
     part_mapping["events"] = {0: 0, 1: 0}
     part_mapping["events"][0] = 1
     # only slice 0 is valid in this case
-    # since cdc is not a sliced storage
+    # since events is not a sliced storage
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
