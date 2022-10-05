@@ -1,6 +1,9 @@
 from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import KafkaHeaderFilterWithBypass
+from snuba.datasets.processors.transactions_processor import (
+    TransactionsMessageProcessor,
+)
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -11,7 +14,6 @@ from snuba.datasets.storages.transactions_common import (
     query_splitters,
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 

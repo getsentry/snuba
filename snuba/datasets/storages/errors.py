@@ -1,8 +1,8 @@
 from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer
 from snuba.datasets.message_filters import KafkaHeaderFilterWithBypass
+from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.errors_common import (

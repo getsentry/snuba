@@ -19,9 +19,9 @@ from snuba.datasets.events_format import (
     extract_user,
     override_and_enforce_retention,
 )
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
     InsertBatch,
-    MessageProcessor,
     ProcessedMessage,
     _as_dict_safe,
     _ensure_valid_date,
@@ -44,7 +44,7 @@ SpanDict = Dict[str, Any]
 RetentionDays = int
 
 
-class TransactionsMessageProcessor(MessageProcessor):
+class TransactionsMessageProcessor(DatasetMessageProcessor):
     PROMOTED_TAGS = {
         "environment",
         "sentry:release",

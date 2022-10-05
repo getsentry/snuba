@@ -19,10 +19,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets.generic_metrics_processor import (
-    GenericDistributionsMetricsProcessor,
-    GenericSetsMetricsProcessor,
-)
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
@@ -62,10 +58,6 @@ def generate_policy_creator(
 # TODO: Replace these dictionaries with something better - Factories maybe
 CONF_TO_PREFILTER: dict[str, Any] = {
     "kafka_header_select_filter": KafkaHeaderSelectFilter
-}
-CONF_TO_PROCESSOR: dict[str, Any] = {
-    "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor,
-    "generic_sets_metrics_processor": GenericSetsMetricsProcessor,
 }
 QUERY_PROCESSORS: dict[str, Any] = {
     "TableRateLimit": TableRateLimit,

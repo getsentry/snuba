@@ -6,12 +6,8 @@ from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import InputType, is_set_message
-from snuba.processor import (
-    AggregateInsertBatch,
-    MessageProcessor,
-    ProcessedMessage,
-    _ensure_valid_date,
-)
+from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.processor import AggregateInsertBatch, ProcessedMessage, _ensure_valid_date
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
@@ -41,7 +37,7 @@ def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
     return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
 
 
-class MetricsAggregateProcessor(MessageProcessor, ABC):
+class MetricsAggregateProcessor(DatasetMessageProcessor, ABC):
     TEN_SECONDS = 10
     ONE_MINUTE = 60
     ONE_HOUR = 3600

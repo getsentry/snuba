@@ -17,12 +17,8 @@ from snuba.datasets.metrics_messages import (
     values_for_distribution_message,
     values_for_set_message,
 )
-from snuba.processor import (
-    InsertBatch,
-    MessageProcessor,
-    ProcessedMessage,
-    _ensure_valid_date,
-)
+from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
 
 DISABLED_MATERIALIZATION_VERSION = 1
 ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
@@ -30,7 +26,7 @@ ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
 logger = logging.getLogger(__name__)
 
 
-class MetricsBucketProcessor(MessageProcessor, ABC):
+class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         raise NotImplementedError
