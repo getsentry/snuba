@@ -24,7 +24,7 @@ STREAM_LOADER_SCHEMA = {
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Class name for Processor. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
+            "description": "Config key for Processor. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
         },
         "default_topic": {
             "type": "string",
