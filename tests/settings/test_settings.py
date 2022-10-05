@@ -56,21 +56,23 @@ def test_topics_sync_in_settings_validator() -> None:
 def test_validation_catches_bad_partition_mapping() -> None:
     all_settings = build_settings_dict()
 
-    assert all_settings["LOCAL_SLICES"] == 1
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    part_mapping["2"] = 1  # only slice 0 is valid if LOCAL_PHYSICAL_PARTITIONS is = 1
+    part_mapping["cdc"][2] = 1
+    # only slice 0 is valid in this case
+    # since cdc is not a sliced storage set
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
-    part_mapping["2"] = 0
+    part_mapping["cdc"][2] = 0
 
 
 def test_validation_catches_unmapped_logical_parts() -> None:
     all_settings = build_settings_dict()
 
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    del part_mapping["2"]
+    del part_mapping["cdc"][2]
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
-    part_mapping["2"] = 0
+
+    part_mapping["cdc"][2] = 0

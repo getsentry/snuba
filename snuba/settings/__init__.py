@@ -31,16 +31,37 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-# The number of physical partitions that we will need to map resources to
-# for storage partitioning
-LOCAL_SLICES = 1
-# Mapping of logical (key) to physical (value) partitions for storages
-# that are partitioned in Snuba resources
-LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
-    str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
+# Mapping storage set key to a mapping of logical partition
+# to slice id
+LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {
+    storage_set: {x: 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)}
+    for storage_set in {
+        "cdc",
+        "discover",
+        "events",
+        "events_ro",
+        "metrics",
+        "migrations",
+        "outcomes",
+        "querylog",
+        "sessions",
+        "transactions",
+        "transactions_ro",
+        "transactions_v2",
+        "errors_v2",
+        "errors_v2_ro",
+        "profiles",
+        "functions",
+        "replays",
+        "generic_metrics_sets",
+        "generic_metrics_distributions",
+    }
 }
-# Storage names to apply dataset partitioning to
-SLICED_STORAGES: Set[str] = set()
+
+# Mapping of storage set key to slice count
+# Only includes storage sets that are
+# assocated with multiple slices
+SLICED_STORAGE_SETS: Mapping[str, int] = {}
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {

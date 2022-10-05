@@ -86,12 +86,23 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
-    for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
-        physical_part = locals["LOGICAL_PARTITION_MAPPING"].get(str(logical_part))
-        partition_count = locals["LOCAL_SLICES"]
-        assert (
-            physical_part is not None
-        ), f"missing physical slice for logical partition {logical_part}"
-        assert (
-            physical_part < locals["LOCAL_SLICES"]
-        ), f"physical slice for logical partition {logical_part} is {physical_part}, but only {partition_count} physical slices exist"
+    for storage_set in locals["LOGICAL_PARTITION_MAPPING"]:
+        storage_set_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage_set]
+
+        # check if this is a sliced storage set
+        if storage_set in locals["SLICED_STORAGE_SETS"]:
+            defined_slice_count = locals["SLICED_STORAGE_SETS"][storage_set]
+        else:
+            defined_slice_count = 1
+
+        for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
+            slice_id = storage_set_mapping.get(logical_part)
+
+            assert (
+                slice_id is not None
+            ), f"missing physical slice for {storage_set}'s logical partition {logical_part}"
+
+            assert (
+                slice_id < defined_slice_count
+            ), f"""physical slice for storage set {storage_set}'s logical partition {logical_part} is {slice_id},
+            but only {defined_slice_count} physical slices are assigned to {storage_set}"""
