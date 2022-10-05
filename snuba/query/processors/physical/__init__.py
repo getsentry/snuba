@@ -28,6 +28,10 @@ class ClickhouseQueryProcessor(ABC, metaclass=RegisteredClass):
     def from_kwargs(cls, **kwargs: str) -> "ClickhouseQueryProcessor":
         return cls(**kwargs)
 
+    @classmethod
+    def config_key(cls):
+        return cls.__name__
+
     @abstractmethod
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # TODO: Consider making the Query immutable.
