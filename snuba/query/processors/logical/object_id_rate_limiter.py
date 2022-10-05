@@ -45,10 +45,6 @@ class ObjectIDRateLimiterProcessor(LogicalQueryProcessor):
                 return True
         return False
 
-    @classmethod
-    def config_key(cls) -> str:
-        return "object_id_rate_limiter"
-
     def get_object_id(
         self, query: Query, query_settings: QuerySettings
     ) -> Optional[str]:
@@ -139,10 +135,6 @@ class OnlyIfConfiguredRateLimitProcessor(ObjectIDRateLimiterProcessor):
 
         query_settings.add_rate_limit(rate_limit)
 
-    @classmethod
-    def config_key(cls) -> str:
-        return "only_if_configured_rate_limiter"
-
 
 class OrganizationRateLimiterProcessor(ObjectIDRateLimiterProcessor):
     """
@@ -158,10 +150,6 @@ class OrganizationRateLimiterProcessor(ObjectIDRateLimiterProcessor):
             "org_per_second_limit",
             "org_concurrent_limit",
         )
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "org_rate_limiter"
 
 
 class ProjectReferrerRateLimiter(OnlyIfConfiguredRateLimitProcessor):
@@ -191,10 +179,6 @@ class ProjectReferrerRateLimiter(OnlyIfConfiguredRateLimitProcessor):
         obj_id = str(obj_ids.pop())
         return str(obj_id)
 
-    @classmethod
-    def config_key(cls) -> str:
-        return "project_referrer_rate_limiter"
-
 
 class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
     """This is more of a load shedder than a rate limiter. we limit a specific
@@ -208,10 +192,6 @@ class ReferrerRateLimiterProcessor(OnlyIfConfiguredRateLimitProcessor):
             "referrer_concurrent_limit",
             query_settings_field="referrer",
         )
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "referrer_rate_limiter"
 
     def get_object_id(self, query: Query, query_settings: QuerySettings) -> str:
         return query_settings.referrer
@@ -231,7 +211,3 @@ class ProjectRateLimiterProcessor(ObjectIDRateLimiterProcessor):
             "project_per_second_limit",
             "project_concurrent_limit",
         )
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "project_rate_limiter"

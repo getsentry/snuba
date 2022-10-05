@@ -3,4 +3,4 @@ def test_auto_import():
         FunctionCallMapper,
     )
 
-    assert FunctionCallMapper.get_from_name("aggregate_function") is not None
+    assert FunctionCallMapper.get_from_name("AggregateFunctionMapper") is not None
