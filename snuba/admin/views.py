@@ -10,6 +10,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from snuba import state
 from snuba.admin.auth import UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.migration_groups import MigrationGroupData
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
@@ -26,6 +27,8 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.migrations.groups import get_group_loader
+from snuba.migrations.runner import get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -71,6 +74,17 @@ def root() -> Response:
 @application.route("/health")
 def health() -> Response:
     return Response("OK", 200)
+
+
+@application.route("/migrations/groups")
+def migrations_groups() -> Response:
+    res: List[MigrationGroupData] = []
+    for migration_group in get_active_migration_groups():
+        group_migrations = get_group_loader(migration_group).get_migrations()
+        res.append(
+            MigrationGroupData(group=migration_group, migration_ids=group_migrations)
+        )
+    return make_response(jsonify(res), 200)
 
 
 @application.route("/clickhouse_queries")
