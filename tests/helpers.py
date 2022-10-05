@@ -3,9 +3,8 @@ from typing import Any, Mapping, MutableSequence, Sequence, Union
 
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storage import WritableStorage
-from snuba.processor import InsertBatch, ProcessedMessage
+from snuba.processor import InsertBatch, InsertEvent, ProcessedMessage
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 

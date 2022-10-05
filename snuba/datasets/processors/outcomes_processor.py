@@ -6,9 +6,9 @@ from sentry_relay import DataCategory
 
 from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
     InsertBatch,
-    MessageProcessor,
     ProcessedMessage,
     _ensure_valid_date,
     _unicodify,
@@ -34,7 +34,7 @@ CLIENT_DISCARD_REASONS = frozenset(
 )
 
 
-class OutcomesProcessor(MessageProcessor):
+class OutcomesProcessor(DatasetMessageProcessor):
     def process_message(
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:

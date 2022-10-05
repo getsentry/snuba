@@ -8,7 +8,7 @@ from hashlib import md5
 from typing import Any, Mapping
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.replays_processor import ReplaysProcessor
+from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.processor import InsertBatch
 from snuba.util import force_bytes
 

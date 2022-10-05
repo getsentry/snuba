@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.functions_processor import FunctionsMessageProcessor
+from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
 from snuba.processor import InsertBatch
 
 

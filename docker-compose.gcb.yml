@@ -8,12 +8,14 @@ services:
       - clickhouse
       - zookeeper
     image: '$SNUBA_IMAGE'
+    profiles: ["run_test"]
     volumes:
       - '.artifacts:/.artifacts'
     command:
       - '-m'
       - 'pytest'
       - '-vv'
+      - '${TEST_LOCATION:-tests}'
       - '--cov'
       - '.'
       - '--cov-report'
@@ -60,6 +62,73 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+
+  # nodes for multi-node clickhouse cluster
+  clickhouse-query:
+    depends_on:
+      - zookeeper
+    image: 'yandex/clickhouse-server:20.3.9.70'
+    profiles: ["multi_node"]
+    volumes:
+      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+  clickhouse-01:
+    depends_on:
+      - zookeeper
+    image: 'yandex/clickhouse-server:20.3.9.70'
+    profiles: ["multi_node"]
+    volumes:
+      - ./test_distributed_migrations/config/clickhouse/macros-01.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+  clickhouse-02:
+    depends_on:
+      - zookeeper
+    image: 'yandex/clickhouse-server:20.3.9.70'
+    profiles: ["multi_node"]
+    volumes:
+      - ./test_distributed_migrations/config/clickhouse/macros-02.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+  clickhouse-03:
+    depends_on:
+      - zookeeper
+    image: 'yandex/clickhouse-server:20.3.9.70'
+    profiles: ["multi_node"]
+    volumes:
+      - ./test_distributed_migrations/config/clickhouse/macros-03.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+  clickhouse-04:
+    depends_on:
+      - zookeeper
+    image: 'yandex/clickhouse-server:20.3.9.70'
+    profiles: ["multi_node"]
+    volumes:
+      - ./test_distributed_migrations/config/clickhouse/macros-04.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
+      - ./test_distributed_migrations/config/clickhouse/remote_servers.xml:/etc/clickhouse-server/config.d/remote_servers.xml
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
   redis1: &redis_config
     image: redis:5.0-alpine
     command:

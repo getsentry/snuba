@@ -23,12 +23,14 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.metrics_aggregate_processor import (
+from snuba.datasets.processors.metrics_aggregate_processor import (
     CounterAggregateProcessor,
     DistributionsAggregateProcessor,
     SetsAggregateProcessor,
 )
-from snuba.datasets.metrics_bucket_processor import PolymorphicMetricsProcessor
+from snuba.datasets.processors.metrics_bucket_processor import (
+    PolymorphicMetricsProcessor,
+)
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema, WriteFormat
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
