@@ -78,11 +78,10 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     processor = DatasetMessageProcessor.get_from_name(loader_config["processor"])()
     default_topic = Topic(loader_config["default_topic"])
-
     # optionals
     pre_filter = (
         CONF_TO_PREFILTER[loader_config[PRE_FILTER]["type"]](
-            *loader_config[PRE_FILTER]["args"]
+            **loader_config[PRE_FILTER]["args"]
         )
         if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None
         else None

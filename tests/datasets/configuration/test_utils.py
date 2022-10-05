@@ -45,7 +45,7 @@ def test_build_stream_loader() -> None:
             "default_topic": "snuba-generic-metrics",
             "pre_filter": {
                 "type": "kafka_header_select_filter",
-                "args": ["metric_type", "s"],
+                "args": {"header_key": "metric_type", "header_value": "s"},
             },
             "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
             "subscription_scheduler_mode": "global",

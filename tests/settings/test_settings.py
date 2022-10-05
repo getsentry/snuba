@@ -56,7 +56,7 @@ def test_topics_sync_in_settings_validator() -> None:
 def test_validation_catches_bad_partition_mapping() -> None:
     all_settings = build_settings_dict()
 
-    assert all_settings["LOCAL_PHYSICAL_PARTITIONS"] == 1
+    assert all_settings["LOCAL_SLICES"] == 1
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
     part_mapping["2"] = 1  # only slice 0 is valid if LOCAL_PHYSICAL_PARTITIONS is = 1
 
