@@ -105,7 +105,7 @@ def test_invalid_query_processor() -> None:
     }
     with pytest.raises(ValidationError) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert e.value.message == "5 is not of type 'string'"
+    assert e.value.message == "5 is not of type 'object'"
 
 
 def test_unexpected_key() -> None:

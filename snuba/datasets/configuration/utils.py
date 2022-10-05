@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Optional, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -21,11 +21,17 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.query.processors.physical import ClickhouseQueryProcessor
+from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
+
+
+class QueryProcessorDefinition(TypedDict):
+    processor: str
+    args: Optional[dict[str, Any]]
 
 
 def generate_policy_creator(
@@ -56,13 +62,17 @@ CONF_TO_PREFILTER: dict[str, Any] = {
 QUERY_PROCESSORS: dict[str, Any] = {
     "TableRateLimit": TableRateLimit,
     "TupleUnaliaser": TupleUnaliaser,
+    "MappingOptimizer": MappingOptimizer,
 }
 
 
 def get_query_processors(
-    query_processor_names: list[str],
+    query_processor_objects: list[QueryProcessorDefinition],
 ) -> list[ClickhouseQueryProcessor]:
-    return [QUERY_PROCESSORS[name]() for name in query_processor_names]
+    return [
+        QUERY_PROCESSORS[qp["processor"]](**qp.get("args", {}))
+        for qp in query_processor_objects
+    ]
 
 
 def __parse_simple(
