@@ -23,6 +23,16 @@ ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
 
+# Migrations Groups that are allowed to be managed
+# in the snuba admin tool.
+ADMIN_ALLOWED_MIGRATION_GROUPS = {
+    "system",
+    "generic_metrics",
+    "profiles",
+    "functions",
+    "replays",
+}
+
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
