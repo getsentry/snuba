@@ -8,7 +8,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.partitioning import (
-    is_storage_set_partitioned,
+    is_storage_partitioned,
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
 )
@@ -22,6 +22,7 @@ from snuba.datasets.plans.single_storage import (
 )
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.storage import ReadableStorage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
@@ -56,8 +57,12 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
     """
 
     def __init__(
-        self, storage_set: StorageSetKey, partition_key_column_name: str
+        self,
+        storage: StorageKey,
+        storage_set: StorageSetKey,
+        partition_key_column_name: str,
     ) -> None:
+        self.storage = storage
         self.storage_set = storage_set
         self.partition_key_column_name = partition_key_column_name
 
@@ -68,7 +73,7 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
         Selects the cluster to use for a query if the storage set is partitioned.
         If the storage set is not partitioned, it returns the default cluster.
         """
-        if not is_storage_set_partitioned(self.storage_set):
+        if not is_storage_partitioned(self.storage):
             return get_cluster(self.storage_set)
 
         org_ids = get_object_ids_in_query_ast(query, self.partition_key_column_name)
@@ -77,7 +82,7 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
         org_id = org_ids.pop()
 
         slice_id = map_logical_partition_to_slice(
-            map_org_id_to_logical_partition(org_id)
+            self.storage, map_org_id_to_logical_partition(org_id)
         )
         cluster = get_cluster(self.storage_set, slice_id)
 
