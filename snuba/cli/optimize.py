@@ -103,7 +103,7 @@ def optimize(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     tracker = OptimizedPartitionTracker(
-        redis_client=get_redis_client(RedisClientKey.MISC),
+        redis_client=get_redis_client(RedisClientKey.OPTIMIZE),
         host=clickhouse_host,
         port=clickhouse_port,
         database=database,

@@ -142,7 +142,9 @@ class RedisClusters(TypedDict):
     rate_limiter: RedisClusterConfig | None
     subscription_store: RedisClusterConfig | None
     replacements_store: RedisClusterConfig | None
-    misc: RedisClusterConfig | None
+    config: RedisClusterConfig | None
+    dlq: RedisClusterConfig | None
+    optimize: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -150,7 +152,9 @@ REDIS_CLUSTERS: RedisClusters = {
     "rate_limiter": None,
     "subscription_store": None,
     "replacements_store": None,
-    "misc": None,
+    "config": None,
+    "dlq": None,
+    "optimize": None,
 }
 
 USE_RESULT_CACHE = True

@@ -9,7 +9,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
 
 from snuba.redis import RedisClientKey, get_redis_client
 
-redis_client = get_redis_client(RedisClientKey.MISC)
+redis_client = get_redis_client(RedisClientKey.DLQ)
 
 
 class StatefulCountInvalidMessagePolicy(CountInvalidMessagePolicy):

@@ -31,7 +31,7 @@ metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
 kfk: Producer | None = None
-rds = get_redis_client(RedisClientKey.MISC)
+rds = get_redis_client(RedisClientKey.CONFIG)
 
 ratelimit_prefix = "snuba-ratelimit:"
 query_lock_prefix = "snuba-query-lock:"

@@ -48,6 +48,8 @@ REDIS_CLUSTERS = {
         (2, "rate_limiter"),
         (3, "subscription_store"),
         (4, "replacements_store"),
-        (5, "misc"),
+        (5, "config"),
+        (6, "dlq"),
+        (7, "optimize"),
     ]
 }

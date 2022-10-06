@@ -124,7 +124,9 @@ class RedisClientKey(Enum):
     RATE_LIMITER = "rate_limiter"
     SUBSCRIPTION_STORE = "subscription_store"
     REPLACEMENTS_STORE = "replacements_store"
-    MISC = "misc"
+    CONFIG = "config"
+    DLQ = "dlq"
+    OPTIMIZE = "optimize"
 
 
 _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
@@ -140,8 +142,14 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     RedisClientKey.REPLACEMENTS_STORE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["replacements_store"]
     ),
-    RedisClientKey.MISC: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["misc"]
+    RedisClientKey.CONFIG: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["config"]
+    ),
+    RedisClientKey.DLQ: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["dlq"]
+    ),
+    RedisClientKey.OPTIMIZE: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["optimize"]
     ),
 }
 

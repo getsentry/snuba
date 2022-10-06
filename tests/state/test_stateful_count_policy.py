@@ -17,7 +17,7 @@ from arroyo.types import Message, Partition, Topic
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.stateful_count import StatefulCountInvalidMessagePolicy
 
-redis_client = get_redis_client(RedisClientKey.MISC)
+redis_client = get_redis_client(RedisClientKey.DLQ)
 
 CONSUMER_GROUP_NAME = "test-consumer-group"
 REDIS_KEY = f"dlq:{CONSUMER_GROUP_NAME}"

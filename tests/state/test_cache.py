@@ -18,7 +18,7 @@ from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.serializable_exception import SerializableException
 from tests.assertions import assert_changes, assert_does_not_change
 
-redis_client = get_redis_client(RedisClientKey.MISC)
+redis_client = get_redis_client(RedisClientKey.CACHE)
 
 
 def execute(function: Callable[[], Any]) -> Future[Any]:
