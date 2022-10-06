@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import pytest
+
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -53,45 +55,23 @@ SLICED_CLUSTERS_CONFIG = [
     },
 ]
 
-
-@patch("snuba.settings.SLICED_STORAGES", {"generic_metrics_distributions": 2})
-@patch("snuba.settings.LOGICAL_PARTITION_MAPPING", MOCK_LOGICAL_PART_MAPPING)
-@patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
-def test_column_based_partition_selector_slice_1() -> None:
-    """
-    Tests that the column based partition selector selects the right cluster
-    for a query.
-    """
-    query = LogicalQuery(
-        QueryEntity(
-            DISTS_ENTITY_KEY,
-            get_entity(DISTS_ENTITY_KEY).get_data_model(),
-        ),
-        selected_columns=[],
-        condition=binary_condition(
-            "equals",
-            Column("_snuba_org_id", None, "org_id"),
-            Literal(None, 1),
-        ),
-    )
-
-    settings = HTTPQuerySettings()
-    selector = ColumnBasedStoragePartitionSelector(
-        DISTS_STORAGE_KEY,
-        DISTS_STORAGE_SET_KEY,
-        "org_id",
-    )
-    cluster = selector.select_cluster(query, settings)
-
+test_data = [
     # org_id 1 should be assigned to slice 1 because (1 % 256 == logical partition 1) and
     # all odd logical partitions are assigned to slice 1
-    assert cluster.get_database() == SLICE_1_DATABASE_VALUE
+    pytest.param(1, SLICE_1_DATABASE_VALUE, id="odd org ID slice"),
+    # org_id 500 should be assigned to slice 0 because (500 % 256 == logical partition 244) and
+    # all even logical partitions are assigned to slice 0
+    pytest.param(500, SLICE_0_DATABASE_VALUE, id="even org iD slice"),
+]
 
 
 @patch("snuba.settings.SLICED_STORAGES", {"generic_metrics_distributions": 2})
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", MOCK_LOGICAL_PART_MAPPING)
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
-def test_column_based_partition_selector_slice_0() -> None:
+@pytest.mark.parametrize("org_id, expected_slice_db", test_data)
+def test_column_based_partition_selector_slice_1(
+    org_id: int, expected_slice_db: str
+) -> None:
     """
     Tests that the column based partition selector selects the right cluster
     for a query.
@@ -105,7 +85,7 @@ def test_column_based_partition_selector_slice_0() -> None:
         condition=binary_condition(
             "equals",
             Column("_snuba_org_id", None, "org_id"),
-            Literal(None, 500),
+            Literal(None, org_id),
         ),
     )
 
@@ -117,6 +97,4 @@ def test_column_based_partition_selector_slice_0() -> None:
     )
     cluster = selector.select_cluster(query, settings)
 
-    # org_id 500 should be assigned to slice 0 because (500 % 256 == logical partition 244) and
-    # all even logical partitions are assigned to slice 0
-    assert cluster.get_database() == SLICE_0_DATABASE_VALUE
+    assert cluster.get_database() == expected_slice_db
