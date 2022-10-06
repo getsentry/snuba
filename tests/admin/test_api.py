@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
@@ -13,6 +15,43 @@ def admin_api() -> FlaskClient:
     from snuba.admin.views import application
 
     return application.test_client()
+
+
+def test_list_migration_status(admin_api: FlaskClient) -> None:
+    response = admin_api.get("/migrations/system/list")
+    assert response.status_code == 200
+    expected_json = [
+        {"blocking": False, "migration_id": "0001_migrations", "status": "completed"}
+    ]
+    assert json.loads(response.data) == expected_json
+
+    # invalid migration group
+    response = admin_api.get("/migrations/bad_group/list")
+    assert response.status_code == 400
+
+    response = admin_api.get("/migrations/sessions/list")
+    assert response.status_code == 200
+    expected_json = [
+        {"blocking": False, "migration_id": "0001_sessions", "status": "completed"},
+        {
+            "blocking": False,
+            "migration_id": "0002_sessions_aggregates",
+            "status": "completed",
+        },
+        {
+            "blocking": False,
+            "migration_id": "0003_sessions_matview",
+            "status": "completed",
+        },
+    ]
+
+    def sort_by_migration_id(migration: Any) -> Any:
+        return migration["migration_id"]
+
+    sorted_response = sorted(json.loads(response.data), key=sort_by_migration_id)
+    sorted_expected_json = sorted(expected_json, key=sort_by_migration_id)
+
+    assert sorted_response == sorted_expected_json
 
 
 def test_get_configs(admin_api: FlaskClient) -> None:
