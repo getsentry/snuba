@@ -90,14 +90,13 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
-    for storage in locals["LOGICAL_PARTITION_MAPPING"]:
-        storage_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage]
+    for storage in locals["SLICED_STORAGES"]:
+        assert (
+            storage in locals["LOGICAL_PARTITION_MAPPING"]
+        ), "sliced mapping must be defined for sliced storage {storage}"
 
-        # check if this is a sliced storage
-        if storage in locals["SLICED_STORAGES"]:
-            defined_slice_count = locals["SLICED_STORAGES"][storage]
-        else:
-            defined_slice_count = 1
+        storage_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage]
+        defined_slice_count = locals["SLICED_STORAGES"][storage]
 
         for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
             slice_id = storage_mapping.get(logical_part)

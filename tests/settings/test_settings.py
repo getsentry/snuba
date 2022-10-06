@@ -61,16 +61,19 @@ def test_validation_catches_bad_partition_mapping() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
 
+    sliced_storages = all_settings["SLICED_STORAGES"]
+    sliced_storages["events"] = 2
+
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    part_mapping["events"] = {0: 0, 1: 0}
-    part_mapping["events"][0] = 1
-    # only slice 0 is valid in this case
-    # since events is not a sliced storage
+    part_mapping["events"] = {0: 2, 1: 0}
+    # only slices 0 and 1 are valid in this case
+    # since events has 2 slices only
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
 
     del part_mapping["events"]
+    del sliced_storages["events"]
 
 
 @patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
@@ -78,11 +81,31 @@ def test_validation_catches_unmapped_logical_parts() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
 
+    sliced_storages = all_settings["SLICED_STORAGES"]
+    sliced_storages["events"] = 2
+
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    part_mapping["events"] = {0: 0, 1: 0}
+    part_mapping["events"] = {0: 1, 1: 0}
     del part_mapping["events"][1]
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
 
     del part_mapping["events"]
+    del sliced_storages["events"]
+
+
+@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
+def test_validation_catches_empty_slice_mapping() -> None:
+    importlib.reload(validation)
+    all_settings = build_settings_dict()
+
+    sliced_storages = all_settings["SLICED_STORAGES"]
+    sliced_storages["events"] = 2
+
+    # forget to add slice mapping for events
+
+    with pytest.raises(AssertionError):
+        validate_settings(all_settings)
+
+    del sliced_storages["events"]
