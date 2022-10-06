@@ -10,7 +10,7 @@ from typing import ChainMap as TypingChainMap
 from typing import Iterator, MutableMapping, Optional, Sequence, Type
 
 from snuba import environment, state
-from snuba.redis import get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -24,7 +24,7 @@ TABLE_RATE_LIMIT_NAME = "table"
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
-rds = get_redis_client("rate_limiter")
+rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
 
 @dataclass(frozen=True)

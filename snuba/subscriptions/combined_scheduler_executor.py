@@ -16,7 +16,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.redis import get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.executor_consumer import SubscriptionExecutorProcessingFactory
@@ -28,7 +28,7 @@ from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 
-redis_client = get_redis_client("subscription_store")
+redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
 class TopicConfig(NamedTuple):

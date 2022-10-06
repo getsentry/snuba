@@ -22,7 +22,7 @@ from snuba.clusters.cluster import (
 from snuba.datasets.errors_replacer import Replacement as ErrorReplacement
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
-from snuba.redis import get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
@@ -36,7 +36,7 @@ from snuba.utils.rate_limiter import RateLimiter
 logger = logging.getLogger("snuba.replacer")
 
 executor = ThreadPoolExecutor()
-redis_client = get_redis_client("replacements_store")
+redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 NODES_REFRESH_PERIOD = 10
 
 RESET_CHECK_CONFIG = "consumer_groups_to_reset_offset_check"

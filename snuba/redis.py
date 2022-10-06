@@ -1,8 +1,9 @@
 from __future__ import absolute_import, annotations
 
 import time
+from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Iterable, Literal, TypedDict, TypeVar, Union, cast
+from typing import Any, Callable, Iterable, Mapping, TypeVar, Union, cast
 
 from redis.client import StrictRedis
 from redis.cluster import ClusterNode, NodesManager, RedisCluster
@@ -118,31 +119,30 @@ def _initialize_specialized_redis_cluster(
     return _initialize_redis_cluster(config)
 
 
-class RedisClients(TypedDict):
-    cache: RedisClientType
-    rate_limiter: RedisClientType
-    subscription_store: RedisClientType
-    replacements_store: RedisClientType
-    misc: RedisClientType
+class RedisClientKey(Enum):
+    CACHE = "cache"
+    RATE_LIMITER = "rate_limiter"
+    SUBSCRIPTION_STORE = "subscription_store"
+    REPLACEMENTS_STORE = "replacements_store"
+    MISC = "misc"
 
 
-RedisClientKey = Literal[
-    "cache", "rate_limiter", "subscription_store", "replacements_store", "misc"
-]
-
-
-_redis_clients: RedisClients = {
-    "cache": _initialize_specialized_redis_cluster(settings.REDIS_CLUSTERS["cache"]),
-    "rate_limiter": _initialize_specialized_redis_cluster(
+_redis_clients: Mapping[RedisClientKey, RedisClientType] = {
+    RedisClientKey.CACHE: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["cache"]
+    ),
+    RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["rate_limiter"]
     ),
-    "subscription_store": _initialize_specialized_redis_cluster(
+    RedisClientKey.SUBSCRIPTION_STORE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["subscription_store"]
     ),
-    "replacements_store": _initialize_specialized_redis_cluster(
+    RedisClientKey.REPLACEMENTS_STORE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["replacements_store"]
     ),
-    "misc": _initialize_specialized_redis_cluster(settings.REDIS_CLUSTERS["misc"]),
+    RedisClientKey.MISC: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["misc"]
+    ),
 }
 
 

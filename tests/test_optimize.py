@@ -13,10 +13,10 @@ from snuba.optimize import _get_metrics_tags, optimize_partition_runner
 from snuba.optimize_scheduler import OptimizedSchedulerTimeout, OptimizeScheduler
 from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.processor import InsertBatch
-from snuba.redis import get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from tests.helpers import write_processed_messages
 
-redis_client = get_redis_client("replacements_store")
+redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 last_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 

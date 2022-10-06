@@ -17,14 +17,14 @@ from snuba.datasets.events_processor_base import ReplacementType
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.optimize import run_optimize
-from snuba.redis import get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
 
-redis_client = get_redis_client("replacements_store")
+redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 CONSUMER_GROUP = "consumer_group"
 
@@ -80,7 +80,7 @@ class TestReplacer:
 
     def _clear_redis_and_force_merge(self) -> None:
         redis_client.flushdb()
-        get_redis_client("cache").flushdb()
+        get_redis_client(RedisClientKey.CACHE).flushdb()
         cluster = self.storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         run_optimize(clickhouse, self.storage, cluster.get_database())

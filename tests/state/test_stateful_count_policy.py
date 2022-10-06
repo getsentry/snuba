@@ -14,10 +14,10 @@ from arroyo.processing.strategies.dead_letter_queue import (
 )
 from arroyo.types import Message, Partition, Topic
 
-from snuba.redis import get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.stateful_count import StatefulCountInvalidMessagePolicy
 
-redis_client = get_redis_client("misc")
+redis_client = get_redis_client(RedisClientKey.MISC)
 
 CONSUMER_GROUP_NAME = "test-consumer-group"
 REDIS_KEY = f"dlq:{CONSUMER_GROUP_NAME}"

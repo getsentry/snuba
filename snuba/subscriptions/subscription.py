@@ -4,7 +4,7 @@ from uuid import UUID, uuid1
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import enforce_table_writer, get_entity
-from snuba.redis import get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import (
     PartitionId,
     SubscriptionData,
@@ -15,7 +15,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 
-redis_client = get_redis_client("subscription_store")
+redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
 class SubscriptionCreator:
