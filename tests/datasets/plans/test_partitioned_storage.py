@@ -69,9 +69,7 @@ test_data = [
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", MOCK_LOGICAL_PART_MAPPING)
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
 @pytest.mark.parametrize("org_id, expected_slice_db", test_data)
-def test_column_based_partition_selector_slice_1(
-    org_id: int, expected_slice_db: str
-) -> None:
+def test_column_based_partition_selector(org_id: int, expected_slice_db: str) -> None:
     """
     Tests that the column based partition selector selects the right cluster
     for a query.
