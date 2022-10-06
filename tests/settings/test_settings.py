@@ -1,9 +1,12 @@
+import importlib
 from copy import deepcopy
 from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 
 from snuba import settings
+from snuba.settings import validation
 from snuba.settings.validation import InvalidTopicError, validate_settings
 from snuba.utils.streams.topics import Topic
 
@@ -53,40 +56,56 @@ def test_topics_sync_in_settings_validator() -> None:
         all_settings["KAFKA_TOPIC_MAP"] = default_map
 
 
+@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
 def test_validation_catches_bad_partition_mapping() -> None:
+    importlib.reload(validation)
     all_settings = build_settings_dict()
 
-    assert all_settings["LOCAL_SLICES"] == 1
+    sliced_storages = all_settings["SLICED_STORAGES"]
+    sliced_storages["events"] = 2
+
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    part_mapping["2"] = 1  # only slice 0 is valid if LOCAL_PHYSICAL_PARTITIONS is = 1
+    part_mapping["events"] = {0: 2, 1: 0}
+    # only slices 0 and 1 are valid in this case
+    # since events has 2 slices only
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
-    part_mapping["2"] = 0
+
+    del part_mapping["events"]
+    del sliced_storages["events"]
 
 
+@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
 def test_validation_catches_unmapped_logical_parts() -> None:
+    importlib.reload(validation)
     all_settings = build_settings_dict()
+
+    sliced_storages = all_settings["SLICED_STORAGES"]
+    sliced_storages["events"] = 2
 
     part_mapping = all_settings["LOGICAL_PARTITION_MAPPING"]
-    del part_mapping["2"]
+    part_mapping["events"] = {0: 1, 1: 0}
+    del part_mapping["events"][1]
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
-    part_mapping["2"] = 0
+
+    del part_mapping["events"]
+    del sliced_storages["events"]
 
 
-def test_validation_catches_bad_topic_mapping() -> None:
-
+@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
+def test_validation_catches_empty_slice_mapping() -> None:
+    importlib.reload(validation)
     all_settings = build_settings_dict()
-    topic_mapping = all_settings["SLICED_KAFKA_TOPICS"]
 
-    # Failed to add all sliced topic configs
-    all_settings["LOCAL_SLICES"] = 2
-    topic_mapping[("events", 1)] = "events-1"
+    sliced_storages = all_settings["SLICED_STORAGES"]
+    sliced_storages["events"] = 2
+
+    # forget to add slice mapping for events
 
     with pytest.raises(AssertionError):
         validate_settings(all_settings)
 
-    del topic_mapping[("events", 1)]
-    all_settings["LOCAL_SLICES"] = 1
+    del sliced_storages["events"]

@@ -10,10 +10,11 @@ TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
 TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
+
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "description": "Name of class key"},
+        "type": {"type": "string", "description": "FunctionCall class name"},
         "args": {"type": "array", "items": {"type": "string"}, "description": ""},
     },
     "additionalProperties": False,
@@ -24,7 +25,7 @@ STREAM_LOADER_SCHEMA = {
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Class name for Processor. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
+            "description": "Processor class name. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
         },
         "default_topic": {
             "type": "string",
@@ -55,7 +56,7 @@ STREAM_LOADER_SCHEMA = {
             "properties": {
                 "type": {
                     "type": "string",
-                    "description": "Name of StreamMessageFilter class key",
+                    "description": "StreamMessageFilter class name",
                 },
                 "args": {
                     "type": "object",
@@ -220,14 +221,32 @@ STORAGE_SCHEMA = {
     "additionalProperties": False,
 }
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = TYPE_STRING_ARRAY
+STORAGE_QUERY_PROCESSOR = {
+    "type": "object",
+    "properties": {
+        "processor": {
+            "type": "string",
+            "description": "Name of ClickhouseQueryProcessor class responsible for the transformation applied to a query.",
+        },
+        "args": {
+            "type": "object",
+            "description": "Key/value mappings required to instantiate QueryProcessor class.",
+        },  # args are a flexible dict
+    },
+    "required": ["processor"],
+    "additionalProperties": False,
+}
+
+
+STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": STORAGE_QUERY_PROCESSOR}
+
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Name of QueryProcessor class responsible for the transformation applied to a query.",
+            "description": "Name of LogicalQueryProcessor class responsible for the transformation applied to a query.",
         },
         "args": {
             "type": "object",
@@ -243,7 +262,7 @@ ENTITY_VALIDATOR = {
     "properties": {
         "validator": {
             "type": "string",
-            "description": "Name of Validator class config key",
+            "description": "Validator class name",
         },
         "args": {
             "type": "object",
@@ -261,7 +280,7 @@ ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
         "properties": {
             "mapper": {
                 "type": "string",
-                "description": "Name of Mapper class config key",
+                "description": "Mapper class name",
             },
             "args": {
                 "type": "object",
@@ -295,13 +314,6 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": {
-            "type": "array",
-            "items": {
-                "type": "string",
-            },
-            "description": "Names of QueryProcessor class which represents a transformation applied to the ClickHouse query",
-        },
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
     "required": [
@@ -325,13 +337,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "name": {"type": "string", "description": "Name of the readable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": {
-            "type": "array",
-            "items": {
-                "type": "string",
-            },
-            "description": "Names of QueryProcess class which represents a transformation applied to the ClickHouse query",
-        },
+        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
     },
     "required": [
         "version",

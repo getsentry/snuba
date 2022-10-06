@@ -16,12 +16,13 @@ from snuba.datasets.events_format import (
     extract_user,
     override_and_enforce_retention,
 )
-from snuba.datasets.events_processor_base import REPLACEMENT_EVENT_TYPES, InsertEvent
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
+    REPLACEMENT_EVENT_TYPES,
     InsertBatch,
+    InsertEvent,
     InvalidMessageType,
     InvalidMessageVersion,
-    MessageProcessor,
     ProcessedMessage,
     ReplacementBatch,
     _as_dict_safe,
@@ -36,7 +37,7 @@ from snuba.processor import (
 logger = logging.getLogger(__name__)
 
 
-class ErrorsProcessor(MessageProcessor):
+class ErrorsProcessor(DatasetMessageProcessor):
     def __init__(self, promoted_tag_columns: Mapping[str, str]):
         self._promoted_tag_columns = promoted_tag_columns
 

@@ -43,10 +43,10 @@ schema:
   dist_table_name: generic_metric_sets_raw_dist
 
 stream_loader:
-  processor: generic_sets_metrics_processor
+  processor: GenericSetsMetricsProcessor
   default_topic: snuba-generic-metrics
   pre_filter:
-    type: kafka_header_select_filter
+    type: KafkaHeaderSelectFilter
     args:
       header_key: metric_type
       header_value: s

@@ -6,8 +6,8 @@ from arroyo.backends.kafka import KafkaPayload
 
 from snuba.datasets.message_filters import (
     KafkaHeaderFilter,
-    KafkaHeaderFilterWithBypass,
     KafkaHeaderSelectFilter,
+    KafkaHeaderWithBypassFilter,
 )
 
 test_data = [
@@ -64,7 +64,7 @@ def test_kafka_filter_header_should_drop(
 
 
 def test_kafka_filter_header_with_bypass() -> None:
-    header_filter = KafkaHeaderFilterWithBypass("should_drop", "1", 5)
+    header_filter = KafkaHeaderWithBypassFilter("should_drop", "1", 5)
     message = Message(
         Partition(Topic("random"), 1),
         1,

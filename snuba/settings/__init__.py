@@ -5,7 +5,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Sequence, Set, Tuple
 
-from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -31,16 +30,15 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-# The number of physical partitions that we will need to map resources to
-# for storage partitioning
-LOCAL_SLICES = 1
-# Mapping of logical (key) to physical (value) partitions for storages
-# that are partitioned in Snuba resources
-LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
-    str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
-}
-# Storage names to apply dataset partitioning to
-SLICED_STORAGES: Set[str] = set()
+# Mapping of storage key to slice count
+# Only includes storages that are
+# assocated with multiple slices
+SLICED_STORAGES: Mapping[str, int] = {}
+
+# Mapping storage key to a mapping of logical partition
+# to slice id
+LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
+
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -144,10 +142,6 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 # Processor/Writer Options
 
-# Mapping of (logical topic names, slice id) pairs to physical topic names
-# This is for Kafka topics that are associated
-# with multiple slices
-SLICED_KAFKA_TOPICS: Mapping[Tuple[str, int], str] = {}
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
@@ -165,8 +159,16 @@ KAFKA_TOPIC_MAP: Mapping[str, str] = {
     "snuba-transactions-commit-log": "snuba-commit-log",
 }
 
-# Mapping of physical Kafka topic name to broker config
+# Mapping of (logical topic names, slice id) pairs to custom physical topic names
+# This is only for sliced Kafka topics
+SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
+
+# Mapping of default Kafka topic name to broker config
 KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
+
+# Mapping of physical Kafka topic names to broker config
+# This is only for sliced Kafka topics
+SLICED_KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
