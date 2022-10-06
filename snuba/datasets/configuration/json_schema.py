@@ -384,6 +384,12 @@ V1_ENTITY_SCHEMA = {
                 "description": "The name of the required time column specifed in schema"
             },
         },
+        "partition_key_column_name": {
+            **TYPE_STRING,
+            **{
+                "description": "The column name, if this entity is partitioned, to select slice"
+            },
+        },
     },
     "required": [
         "version",

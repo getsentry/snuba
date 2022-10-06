@@ -219,3 +219,4 @@ validators:
     args:
       required_filter_columns: ["org_id", "project_id"]
 required_time_column: timestamp
+partition_key_column_name: org_id
