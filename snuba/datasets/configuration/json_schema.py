@@ -2,16 +2,20 @@ from __future__ import annotations
 
 from typing import Any
 
+# Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
+# please ensure you add a description key in the same level and succinctly describe the property.
+
 TYPE_STRING = {"type": "string"}
 TYPE_STRING_ARRAY = {"type": "array", "items": TYPE_STRING}
 TYPE_NULLABLE_INTEGER = {"type": ["integer", "null"]}
 TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 
+
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
-        "type": TYPE_STRING,
-        "args": TYPE_STRING_ARRAY,
+        "type": {"type": "string", "description": "FunctionCall class name"},
+        "args": {"type": "array", "items": {"type": "string"}, "description": ""},
     },
     "additionalProperties": False,
 }
@@ -19,17 +23,68 @@ FUNCTION_CALL_SCHEMA = {
 STREAM_LOADER_SCHEMA = {
     "type": "object",
     "properties": {
-        "processor": TYPE_STRING,
-        "default_topic": TYPE_STRING,
-        "commit_log_topic": TYPE_NULLABLE_STRING,
-        "subscription_scheduled_topic": TYPE_NULLABLE_STRING,
-        "subscription_scheduler_mode": TYPE_NULLABLE_STRING,
-        "subscription_result_topic": TYPE_NULLABLE_STRING,
-        "replacement_topic": TYPE_NULLABLE_STRING,
-        "pre_filter": FUNCTION_CALL_SCHEMA,
-        "dlq_policy": FUNCTION_CALL_SCHEMA,
+        "processor": {
+            "type": "string",
+            "description": "Processor class name. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
+        },
+        "default_topic": {
+            "type": "string",
+            "description": "Name of the Kafka topic to consume from",
+        },
+        "commit_log_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the commit log Kafka topic",
+        },
+        "subscription_scheduled_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the subscroption scheduled Kafka topic",
+        },
+        "subscription_scheduler_mode": {
+            "type": ["string", "null"],
+            "description": "The subscription scheduler mode used (e.g. partition or global). This must be specified if subscriptions are supported for this storage",
+        },
+        "subscription_result_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the subscription result Kafka topic",
+        },
+        "replacement_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the replacements Kafka topic",
+        },
+        "pre_filter": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "description": "StreamMessageFilter class name",
+                },
+                "args": {
+                    "type": "object",
+                    "description": "Key/value mappings required to instantiate StreamMessageFilter class.",
+                },
+            },
+            "additionalProperties": False,
+            "description": "Name of class which filter messages incoming from stream",
+        },
+        "dlq_policy": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "description": "DLQ policy type",
+                },
+                "args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Key/value mappings required to instantiate DLQ class (e.g. topic name).",
+                },
+            },
+            "additionalProperties": False,
+            "description": "Name of class which filter messages incoming from stream",
+        },
     },
     "additionalProperties": False,
+    "description": "The stream loader for a writing to ClickHouse. This provides what is needed to start a Kafka consumer and fill in the ClickHouse table.",
 }
 
 NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA = {
@@ -128,14 +183,24 @@ NESTED_SCHEMA = make_column_schema(
     },
 )
 
-SCHEMA_COLUMNS = {"type": "array", "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]}}
+SCHEMA_COLUMNS = {
+    "type": "array",
+    "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]},
+    "description": "Objects (or nested objects) representing columns containg a name, type and args",
+}
 
 SCHEMA_SCHEMA = {
     "type": "object",
     "properties": {
         "columns": SCHEMA_COLUMNS,
-        "local_table_name": TYPE_STRING,
-        "dist_table_name": TYPE_STRING,
+        "local_table_name": {
+            "type": "string",
+            "description": "The local table name in a single-node ClickHouse",
+        },
+        "dist_table_name": {
+            "type": "string",
+            "description": "The distributed table name in distributed ClickHouse",
+        },
     },
     "additionalProperties": False,
 }
@@ -143,17 +208,50 @@ SCHEMA_SCHEMA = {
 
 STORAGE_SCHEMA = {
     "type": "object",
-    "properties": {"key": TYPE_STRING, "set_key": TYPE_STRING},
+    "properties": {
+        "key": {
+            "type": "string",
+            "description": "A unique key identifier for the storage",
+        },
+        "set_key": {
+            "type": "string",
+            "description": "A unique key identifier for a collection of storages located in the same cluster.",
+        },
+    },
     "additionalProperties": False,
 }
 
-STORAGE_QUERY_PROCESSORS_SCHEMA = TYPE_STRING_ARRAY
+STORAGE_QUERY_PROCESSOR = {
+    "type": "object",
+    "properties": {
+        "processor": {
+            "type": "string",
+            "description": "Name of ClickhouseQueryProcessor class responsible for the transformation applied to a query.",
+        },
+        "args": {
+            "type": "object",
+            "description": "Key/value mappings required to instantiate QueryProcessor class.",
+        },  # args are a flexible dict
+    },
+    "required": ["processor"],
+    "additionalProperties": False,
+}
+
+
+STORAGE_QUERY_PROCESSORS_SCHEMA = {"type": "array", "items": STORAGE_QUERY_PROCESSOR}
+
 
 ENTITY_QUERY_PROCESSOR = {
     "type": "object",
     "properties": {
-        "processor": TYPE_STRING,
-        "args": {"type": "object"},  # args are a flexible dict
+        "processor": {
+            "type": "string",
+            "description": "Name of LogicalQueryProcessor class responsible for the transformation applied to a query.",
+        },
+        "args": {
+            "type": "object",
+            "description": "Key/value mappings required to instantiate QueryProcessor class.",
+        },  # args are a flexible dict
     },
     "required": ["processor"],
     "additionalProperties": False,
@@ -162,8 +260,14 @@ ENTITY_QUERY_PROCESSOR = {
 ENTITY_VALIDATOR = {
     "type": "object",
     "properties": {
-        "validator": TYPE_STRING,
-        "args": {"type": "object"},  # args are a flexible dict
+        "validator": {
+            "type": "string",
+            "description": "Validator class name",
+        },
+        "args": {
+            "type": "object",
+            "description": "Key/value mappings required to instantiate Validator class",
+        },  # args are a flexible dict
     },
     "required": ["validator"],
     "additionalProperties": False,
@@ -174,8 +278,14 @@ ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
     "items": {
         "type": "object",
         "properties": {
-            "mapper": TYPE_STRING,
-            "args": {"type": "object"},
+            "mapper": {
+                "type": "string",
+                "description": "Mapper class name",
+            },
+            "args": {
+                "type": "object",
+                "description": "Key/value mappings required to instantiate Mapper class",
+            },
         },
         "required": ["mapper"],
         "additionalProperties": False,
@@ -184,6 +294,7 @@ ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
 
 ENTITY_TRANSLATION_MAPPERS = {
     "type": "object",
+    "description": "Represents the set of rules used to translates different expression types",
     "properties": {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
@@ -195,14 +306,14 @@ ENTITY_TRANSLATION_MAPPERS = {
 # Full schemas:
 
 V1_WRITABLE_STORAGE_SCHEMA = {
+    "title": "Writable Storage Schema",
     "type": "object",
     "properties": {
-        "version": {"const": "v1"},
-        "kind": {"const": "writable_storage"},
-        "name": TYPE_STRING,
+        "version": {"const": "v1", "description": "Version of schema"},
+        "kind": {"const": "writable_storage", "description": "Component kind"},
+        "name": {"type": "string", "description": "Name of the writable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
-        "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
     },
     "required": [
@@ -218,11 +329,12 @@ V1_WRITABLE_STORAGE_SCHEMA = {
 
 
 V1_READABLE_STORAGE_SCHEMA = {
+    "title": "Readable Storage Schema",
     "type": "object",
     "properties": {
-        "version": {"const": "v1"},
-        "kind": {"const": "readable_storage"},
-        "name": TYPE_STRING,
+        "version": {"const": "v1", "description": "Version of schema"},
+        "kind": {"const": "readable_storage", "description": "Component kind"},
+        "name": {"type": "string", "description": "Name of the readable storage"},
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
@@ -238,18 +350,40 @@ V1_READABLE_STORAGE_SCHEMA = {
 }
 
 V1_ENTITY_SCHEMA = {
+    "title": "Entity Schema",
     "type": "object",
     "properties": {
-        "version": {"const": "v1"},
-        "kind": {"const": "entity"},
+        "version": {"const": "v1", "description": "Version of schema"},
+        "kind": {"const": "entity", "description": "Component kind"},
         "schema": SCHEMA_COLUMNS,
-        "name": TYPE_STRING,
-        "readable_storage": TYPE_STRING,
-        "writable_storage": TYPE_NULLABLE_STRING,
-        "query_processors": {"type": "array", "items": ENTITY_QUERY_PROCESSOR},
+        "name": {**TYPE_STRING, **{"description": "Name of the entity"}},
+        "readable_storage": {
+            **TYPE_STRING,
+            **{
+                "description": "Name of a ReadableStorage class which provides an abstraction to read from a table or a view in ClickHouse"
+            },
+        },
+        "writable_storage": {
+            "type": ["string", "null"],
+            "description": "Name of a WritableStorage class which provides an abstraction to write to a table in ClickHouse",
+        },
+        "query_processors": {
+            "type": "array",
+            "items": ENTITY_QUERY_PROCESSOR,
+            "description": "Represents a transformation applied to the ClickHouse query",
+        },
         "translation_mappers": ENTITY_TRANSLATION_MAPPERS,
-        "validators": {"type": "array", "items": ENTITY_VALIDATOR},
-        "required_time_column": TYPE_STRING,
+        "validators": {
+            "type": "array",
+            "items": ENTITY_VALIDATOR,
+            "description": "The validation logic used on the ClickHouse query",
+        },
+        "required_time_column": {
+            **TYPE_STRING,
+            **{
+                "description": "The name of the required time column specifed in schema"
+            },
+        },
     },
     "required": [
         "version",
@@ -265,15 +399,25 @@ V1_ENTITY_SCHEMA = {
 }
 
 V1_DATASET_SCHEMA = {
+    "title": "Dataset Schema",
     "type": "object",
     "properties": {
-        "version": {"const": "v1"},
-        "kind": {"const": "dataset"},
-        "name": TYPE_STRING,
-        "is_experimental": {"type": "boolean"},
+        "version": {"const": "v1", "description": "Version of schema"},
+        "kind": {"const": "dataset", "description": "Component kind"},
+        "name": {"type": "string", "description": "Name of the dataset"},
+        "is_experimental": {
+            "type": "boolean",
+            "description": "Marks the dataset as experimental. Healthchecks failing on this dataset will not block deploys and affect Snuba server's SLOs",
+        },
         "entities": {
             "type": "object",
-            "properties": {"all": TYPE_STRING_ARRAY},
+            "properties": {
+                "all": {
+                    "type": "array",
+                    "items": TYPE_STRING,
+                    "description": "Names of entities associated with this dataset",
+                },
+            },
             "additionalProperties": False,
             "required": ["all"],
         },
@@ -288,13 +432,23 @@ V1_DATASET_SCHEMA = {
 }
 
 V1_ENTITY_SUBSCIPTION_SCHEMA = {
+    "title": "Entity Subscription Schema",
     "type": "object",
     "properties": {
-        "version": {"const": "v1"},
-        "kind": {"const": "entity_subscription"},
-        "name": TYPE_STRING,
-        "max_allowed_aggregations": TYPE_NULLABLE_INTEGER,
-        "disallowed_aggregations": NULLABLE_DISALLOWED_AGGREGATIONS_SCHEMA,
+        "version": {"const": "v1", "description": "Version of schema"},
+        "kind": {"const": "entity_subscription", "description": "Component kind"},
+        "name": {"type": "string", "description": "Name of the entity subscription"},
+        "max_allowed_aggregations": {
+            "type": ["integer", "null"],
+            "description": "Maximum number of allowed aggregations",
+        },
+        "disallowed_aggregations": {
+            "type": ["array", "null"],
+            "items": {
+                "type": "string",
+            },
+            "description": "Name of aggregation clauses that are not allowed",
+        },
     },
     "required": [
         "version",
@@ -306,15 +460,20 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
 
 
 V1_MIGRATION_GROUP_SCHEMA = {
+    "title": "Migration Group Schema",
     "type": "object",
     "properties": {
-        "version": {"const": "v1"},
-        "kind": {"const": "migration_group"},
-        "name": TYPE_STRING,
-        "optional": {"type": "boolean"},
+        "version": {"const": "v1", "description": "Version of schema"},
+        "kind": {"const": "migration_group", "description": "Component kind"},
+        "name": {"type": "string", "description": "Name of the migration group"},
+        "optional": {
+            "type": "boolean",
+            "description": "Flag to determine if migration group is optional",
+        },
         "migrations": {
             "type": "array",
-            "items": TYPE_STRING,
+            "items": {"type": "string", "description": "Names of migrations"},
+            "description": "Names of migrations to be applied in group",
         },
     },
     "required": ["name", "migrations"],

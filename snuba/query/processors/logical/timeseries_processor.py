@@ -92,6 +92,10 @@ class TimeSeriesProcessor(LogicalQueryProcessor):
             ),
         )
 
+    @classmethod
+    def config_key(cls) -> str:
+        return "translate_time_series"
+
     def __group_time_column(
         self, exp: Expression, granularity: Optional[int]
     ) -> Expression:

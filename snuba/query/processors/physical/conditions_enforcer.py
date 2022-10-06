@@ -2,7 +2,7 @@ import logging
 from typing import Sequence
 
 from snuba.clickhouse.query import Expression, Query
-from snuba.datasets.storage import ConditionChecker
+from snuba.datasets.common.condition_checker import ConditionChecker
 from snuba.query.conditions import (
     ConditionFunctions,
     condition_pattern,

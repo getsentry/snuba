@@ -5,13 +5,14 @@ from uuid import UUID
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
-from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "profiles.processor")
 
 
-class ProfilesMessageProcessor(MessageProcessor):
+class ProfilesMessageProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -51,7 +52,7 @@ def _normalize_legacy_format(
     return {
         "android_api_level": message.get("android_api_level"),
         "architecture": message.get("architecture", "unknown"),
-        "device_classification": message["device_classification"],
+        "device_classification": message.get("device_classification", ""),
         "device_locale": message["device_locale"],
         "device_manufacturer": message["device_manufacturer"],
         "device_model": message["device_model"],

@@ -54,10 +54,21 @@ class RegisteredClass(ABCMeta):
                 return "sub_class"
 
 
-        assert SomeGenericClass.from_name("sub_class") is Subclass
+        assert SomeGenericClass.class_from_name("sub_class") is Subclass
 
     Notes:
-        The base class cannot be looked up by name, only subclasses
+        -   The base class cannot be looked up by name, only subclasses
+        -   The `class_from_name` function cannot be typed due to the constraints of python metaclases.
+            In order to  get around this limitation, the following workaround is used
+
+            class SomeGenericClass(metaclass=RegisteredClass):
+
+                # the `get_from_name` naming is used as convention
+                @classmethod
+                def get_from_name(cls, name: str) -> "SomeGenericClass":
+                    return typing.cast("SomeGenericClass", cls.class_from_name(name))
+
+
     """
 
     def config_key(cls) -> str:
