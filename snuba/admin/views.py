@@ -88,6 +88,10 @@ def migrations_groups() -> Response:
 
 @application.route("/migrations/<group>/list")
 def migrations_groups_list(group: str) -> Response:
+
+    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+        return make_response(jsonify({"error": "Group not allowed"}), 400)
+
     runner = Runner()
     for runner_group, runner_group_migrations in runner.show_all():
         if runner_group == MigrationGroup(group):
