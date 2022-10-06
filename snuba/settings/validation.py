@@ -105,6 +105,8 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 slice_id is not None
             ), f"missing physical slice for storage {storage}'s logical partition {logical_part}"
 
-            assert slice_id < defined_slice_count, slice_count_validation_msg.format(
+            assert (
+                slice_id >= 0 and slice_id < defined_slice_count
+            ), slice_count_validation_msg.format(
                 storage, logical_part, slice_id, defined_slice_count
             )
