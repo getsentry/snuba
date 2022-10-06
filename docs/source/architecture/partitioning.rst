@@ -39,5 +39,17 @@ sets should be added in the form of ``(StorageSetKey, slice_id)`` where slice_id
 the range ``[0,settings.SLICED_STORAGES[storage])`` for relevant storages.
 
 
-TODO: adding storages, migrating subscriptions, etc.
+Preparing the storage for sharding
+----------------------------------
+A storage that should be sharded requires setting the partition key column that will be used
+to calculate the logical partition and ultimately the slice ID for how to query the destination
+data.
+
+This is done with the `partition_key_column_name` property in the storage schema (we do not
+support sharded storages for non-YAML based entities). You can see an example of how one
+might shard by organization_id in generic_metrics_sets and generic_metrics_distributions
+dataset YAML files.
+
+
+TODO: handling subscriptions, etc.
 ----------------------------------------------------
