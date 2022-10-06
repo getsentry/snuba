@@ -19,7 +19,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import UUID, AggregateFunction
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -49,13 +48,6 @@ def generate_policy_creator(
         return produce_policy_creator
     # TODO: Add rest of DLQ policy types
     return None
-
-
-# TODO: Add rest of prefilters and processors
-# TODO: Replace these dictionaries with something better - Factories maybe
-CONF_TO_PREFILTER: dict[str, Any] = {
-    "kafka_header_select_filter": KafkaHeaderSelectFilter
-}
 
 
 def get_query_processors(

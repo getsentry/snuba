@@ -14,7 +14,7 @@ TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "description": "Name of class key"},
+        "type": {"type": "string", "description": "FunctionCall class name"},
         "args": {"type": "array", "items": {"type": "string"}, "description": ""},
     },
     "additionalProperties": False,
@@ -25,7 +25,7 @@ STREAM_LOADER_SCHEMA = {
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Config key for Processor. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
+            "description": "Processor class name. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
         },
         "default_topic": {
             "type": "string",
@@ -56,7 +56,7 @@ STREAM_LOADER_SCHEMA = {
             "properties": {
                 "type": {
                     "type": "string",
-                    "description": "Name of StreamMessageFilter class key",
+                    "description": "StreamMessageFilter class name",
                 },
                 "args": {
                     "type": "object",
@@ -262,7 +262,7 @@ ENTITY_VALIDATOR = {
     "properties": {
         "validator": {
             "type": "string",
-            "description": "Name of Validator class config key",
+            "description": "Validator class name",
         },
         "args": {
             "type": "object",
@@ -280,7 +280,7 @@ ENTITY_TRANSLATION_MAPPER_SUB_LIST = {
         "properties": {
             "mapper": {
                 "type": "string",
-                "description": "Name of Mapper class config key",
+                "description": "Mapper class name",
             },
             "args": {
                 "type": "object",
