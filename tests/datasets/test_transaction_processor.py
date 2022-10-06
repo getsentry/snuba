@@ -6,7 +6,9 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.transactions_processor import TransactionsMessageProcessor
+from snuba.datasets.processors.transactions_processor import (
+    TransactionsMessageProcessor,
+)
 from snuba.processor import InsertBatch
 from snuba.state import set_config
 

@@ -2,7 +2,7 @@ from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.profiles_processor import ProfilesMessageProcessor
+from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey

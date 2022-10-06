@@ -11,8 +11,8 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.processors.sessions_processor import SessionsProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
-from snuba.datasets.sessions_processor import SessionsProcessor
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings

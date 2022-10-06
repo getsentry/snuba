@@ -4,11 +4,12 @@ from typing import Tuple
 import pytest
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.errors_processor import ErrorsProcessor
-from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.processors.errors_processor import ErrorsProcessor
+from snuba.datasets.processors.transactions_processor import (
+    TransactionsMessageProcessor,
+)
 from snuba.datasets.storages.errors_common import promoted_tag_columns
-from snuba.datasets.transactions_processor import TransactionsMessageProcessor
-from snuba.processor import MessageProcessor
+from snuba.processor import InsertEvent, MessageProcessor
 from tests.fixtures import get_raw_error_message, get_raw_transaction_message
 
 test_data = [

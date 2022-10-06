@@ -16,9 +16,9 @@ from snuba.datasets.events_format import (
     extract_extra_tags,
     extract_user,
 )
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
     InsertBatch,
-    MessageProcessor,
     ProcessedMessage,
     _as_dict_safe,
     _ensure_valid_date,
@@ -41,7 +41,7 @@ LIST_ELEMENT_LIMIT = 1000
 USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
-class ReplaysProcessor(MessageProcessor):
+class ReplaysProcessor(DatasetMessageProcessor):
     def __extract_timestamp(self, field: int) -> datetime:
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
