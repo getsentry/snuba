@@ -26,6 +26,8 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.runner import Runner
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -71,6 +73,27 @@ def root() -> Response:
 @application.route("/health")
 def health() -> Response:
     return Response("OK", 200)
+
+
+@application.route("/migrations/<group>/list")
+def migrations_groups(group: str) -> Response:
+    runner = Runner()
+    for runner_group, runner_group_migrations in runner.show_all():
+        if runner_group == MigrationGroup(group):
+            return make_response(
+                jsonify(
+                    [
+                        {
+                            "migration_id": migration_id,
+                            "status": status.value,
+                            "blocking": blocking,
+                        }
+                        for migration_id, status, blocking in runner_group_migrations
+                    ]
+                ),
+                200,
+            )
+    return make_response(jsonify({"error": "Invalid group"}), 400)
 
 
 @application.route("/clickhouse_queries")
