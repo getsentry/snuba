@@ -4,6 +4,7 @@ import ClickhouseMigrations from "./clickhouse_migrations";
 import ClickhouseQueries from "./clickhouse_queries";
 import TracingQueries from "./tracing";
 import SnQLToSQL from "./snql_to_sql";
+import Kafka from "./kafka";
 
 function Placeholder(props: any) {
   return null;
@@ -36,6 +37,11 @@ const NAV_ITEMS = [
     id: "auditlog",
     display: "📝 Audit Log",
     component: AuditLog,
+  },
+  {
+    id: "kafka",
+    display: "🪵 Kafka",
+    component: Kafka,
   },
 ];
 
