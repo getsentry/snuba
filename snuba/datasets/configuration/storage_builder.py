@@ -28,7 +28,7 @@ from snuba.datasets.table_storage import (
     build_kafka_stream_loader_from_settings,
 )
 from snuba.subscriptions.utils import SchedulingWatermarkMode
-from snuba.utils.streams.topics import Topic
+from snuba.utils.streams.topics import Topic, register_topic
 
 KIND = "kind"
 WRITABLE_STORAGE = "writable_storage"
@@ -94,7 +94,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     processor = DatasetMessageProcessor.get_from_name(
         loader_config["processor"]
     ).from_kwargs()
-    default_topic = Topic(loader_config["default_topic"])
+    default_topic = register_topic(loader_config["default_topic"])
     # optionals
     pre_filter = None
     if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None:
@@ -134,7 +134,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
 
 def __get_topic(stream_loader_config: dict[str, Any], name: str | None) -> Topic | None:
     return (
-        Topic(stream_loader_config[name])
+        register_topic(stream_loader_config[name])
         if name in stream_loader_config and stream_loader_config[name] is not None
         else None
     )
