@@ -1,8 +1,14 @@
 from typing import Any, Mapping, MutableMapping
 
+from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
+
 
 class InvalidTopicError(ValueError):
     pass
+
+
+slice_count_validation_msg = """physical slice for storage {0}'s logical partition {1} is {2},
+            but only {3} physical slices are assigned to {0}"""
 
 
 def validate_settings(locals: Mapping[str, Any]) -> None:
@@ -71,7 +77,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
             raise ValueError(f"Invalid topic value {key}")
 
     # Validate cluster configuration
-    from snuba.clusters.storage_sets import JOINABLE_STORAGE_SETS, StorageSetKey
+    from snuba.clusters.storage_sets import StorageSetKey
 
     storage_set_to_cluster: MutableMapping[StorageSetKey, Any] = {}
 
@@ -84,22 +90,23 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
-    for group in JOINABLE_STORAGE_SETS:
-        clusters = [storage_set_to_cluster[storage_set] for storage_set in group]
+    for storage in locals["SLICED_STORAGES"]:
+        assert (
+            storage in locals["LOGICAL_PARTITION_MAPPING"]
+        ), "sliced mapping must be defined for sliced storage {storage}"
 
-        first = clusters[0]
-        for cluster in clusters[1:]:
-            if first != cluster:
-                for property in [
-                    "host",
-                    "port",
-                    "user",
-                    "password",
-                    "database",
-                    "http_port",
-                    "single_node",
-                    "distributed_cluster_name",
-                ]:
-                    assert first.get(property) == cluster.get(
-                        property
-                    ), f"Invalid property: {property}"
+        storage_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage]
+        defined_slice_count = locals["SLICED_STORAGES"][storage]
+
+        for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
+            slice_id = storage_mapping.get(logical_part)
+
+            assert (
+                slice_id is not None
+            ), f"missing physical slice for storage {storage}'s logical partition {logical_part}"
+
+            assert (
+                slice_id >= 0 and slice_id < defined_slice_count
+            ), slice_count_validation_msg.format(
+                storage, logical_part, slice_id, defined_slice_count
+            )

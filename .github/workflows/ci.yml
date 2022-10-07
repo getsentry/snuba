@@ -29,6 +29,10 @@ jobs:
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
       - name: Setup pre-commit
         run: make setup-git
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install-python-dependencies
       - uses: getsentry/paths-filter@v2
         id: files
         with:
@@ -77,6 +81,24 @@ jobs:
         run: |
           make backend-typing
 
+  config-validation:
+    name: "Dataset Config Validation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install-python-dependencies
+      - name: Validate configs
+        run: |
+          make validate-configs
+
   snuba-image:
     name: Build snuba CI image
     runs-on: ubuntu-latest
@@ -122,6 +144,9 @@ jobs:
 
       - name: Publish images for cache
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
+        # outside contributors won't be able to push to the docker registry
+        # ignore the failures in this step
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Useful to speed up CI
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
@@ -181,6 +206,9 @@ jobs:
       - name: Publish
         # Forks cannot push to the getsentry org
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
+        # outside contributors won't be able to push to the docker registry
+        # ignore the failures in this step
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Useful to speed up PRs
           docker push ${SNUBA_IMAGE}:${{ steps.branch.outputs.branch }}
@@ -198,7 +226,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ["test", "test_distributed"]
+        snuba_settings: ["test", "test_distributed", "test_distributed_migrations"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -225,6 +253,13 @@ jobs:
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+        if: ${{ matrix.snuba_settings != 'test_distributed_migrations' }}
+
+      - name: Docker Snuba Multi-Node Tests
+        run: |
+          SNUBA_SETTINGS=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+        if: ${{ matrix.snuba_settings == 'test_distributed_migrations' }}
 
       - name: Upload to codecov
         run: |

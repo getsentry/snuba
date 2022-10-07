@@ -8,16 +8,16 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.processors.sessions_processor import SessionsProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
-from snuba.datasets.sessions_processor import SessionsProcessor
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.exceptions import ValidationException
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
     OrgIdEnforcer,
     ProjectIdEnforcer,
@@ -105,7 +105,7 @@ materialized_view_schema = TableSchema(
 )
 
 
-class MinuteResolutionProcessor(QueryProcessor):
+class MinuteResolutionProcessor(ClickhouseQueryProcessor):
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         # NOTE: the product side is restricted to a 6h window, however it rounds
         # outwards, which extends the window to 7h.

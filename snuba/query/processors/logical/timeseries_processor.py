@@ -10,12 +10,12 @@ from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param, String
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.util import parse_datetime
 
 
-class TimeSeriesProcessor(QueryProcessor):
+class TimeSeriesProcessor(LogicalQueryProcessor):
     """
     Firstly, translate the time group columns of the dataset to use the correct columns and granularity rounding.
     Secondly, if there are conditions on the defined parse columns, change the literal to be a datetime instead of a string.

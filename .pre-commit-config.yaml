@@ -37,5 +37,14 @@ repos:
     hooks:
       - id: no-commit-to-branch
         args: ['--branch', 'master']
+  - repo: local
+    hooks:
+      - id: validate-configs-syntax
+        name: validate-configs-syntax
+        entry: python3 -m snuba.validate_configs
+        language: python
+        additional_dependencies: [ 'jsonschema', 'pyyaml' ]
+        pass_filenames: false
+        files: 'snuba/datasets/configuration/.*'
 default_language_version:
   python: python3.8

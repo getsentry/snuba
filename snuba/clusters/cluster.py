@@ -20,7 +20,11 @@ from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
+from snuba.clusters.storage_sets import (
+    DEV_STORAGE_SETS,
+    StorageSetKey,
+    register_storage_set_key,
+)
 from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
@@ -43,7 +47,13 @@ class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
     MIGRATE = ClickhouseClientSettingsType(
-        {"load_balancing": "in_order", "replication_alter_partitions_sync": 2}, 10000
+        {
+            "load_balancing": "in_order",
+            "replication_alter_partitions_sync": 2,
+            "mutations_sync": 2,
+            "database_atomic_wait_for_drop_and_detach_synchronously": 1,
+        },
+        10000,
     )
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
@@ -103,20 +113,12 @@ class Cluster(ABC, Generic[TWriterOptions]):
 
     def __init__(self, storage_sets: Set[str]):
         self.__storage_sets = storage_sets
+        # register the cluster's storage sets
+        for storage_set in storage_sets:
+            register_storage_set_key(storage_set)
 
     def get_storage_set_keys(self) -> Set[StorageSetKey]:
-        all_storage_sets = set(key.value for key in StorageSetKey)
-
-        storage_set_keys = set()
-
-        for storage_set in self.__storage_sets:
-            # We ignore invalid storage set keys since new storage sets will
-            # need to be registered to configuration before they can be used
-            # in Snuba.
-            if storage_set in all_storage_sets:
-                storage_set_keys.add(StorageSetKey(storage_set))
-
-        return storage_set_keys
+        return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
     def get_reader(self) -> Reader:
@@ -399,22 +401,79 @@ def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
     return _STORAGE_SET_CLUSTER_MAP
 
 
+def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
+    return ClickhouseCluster(
+        host=cluster["host"],
+        port=cluster["port"],
+        user=cluster.get("user", "default"),
+        password=cluster.get("password", ""),
+        database=cluster.get("database", "default"),
+        http_port=cluster["http_port"],
+        storage_sets={
+            storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]
+        },
+        single_node=cluster["single_node"],
+        cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
+        distributed_cluster_name=cluster["distributed_cluster_name"]
+        if "distributed_cluster_name" in cluster
+        else None,
+        cache_partition_id=cluster.get("cache_partition_id"),
+        query_settings_prefix=cluster.get("query_settings_prefix"),
+    )
+
+
+_SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[StorageSetKey, int], ClickhouseCluster] = {}
+
+
+def _get_sliced_storage_set_cluster_map() -> Dict[
+    Tuple[StorageSetKey, int], ClickhouseCluster
+]:
+    if len(_SLICED_STORAGE_SET_CLUSTER_MAP) == 0:
+        for cluster in settings.SLICED_CLUSTERS:
+            for storage_set_tuple in cluster["storage_set_slices"]:
+                _SLICED_STORAGE_SET_CLUSTER_MAP[
+                    (StorageSetKey(storage_set_tuple[0]), storage_set_tuple[1])
+                ] = _build_sliced_cluster(cluster)
+
+    return _SLICED_STORAGE_SET_CLUSTER_MAP
+
+
 class UndefinedClickhouseCluster(SerializableException):
     pass
 
 
-def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
+def get_cluster(
+    storage_set_key: StorageSetKey, slice_id: Optional[int] = None
+) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
-    If the storage set key is not defined
-    in the CLUSTERS config, it will raise an UndefinedClickhouseCluster Exception.
+    If passing in a sliced storage set, a slice_id must be specified.
+    This ID will be used to return the matching cluster in SLICED_CLUSTERS.
+    If passing in an non-sliced storage set, a slice_id should not be
+    specified. The StorageSetKey will be used to return the matching
+    cluster in CLUSTERS.
+
+    If the storage set key is not defined either in CLUSTERS or in
+    SLICED_CLUSTERS, then an UndefinedClickhouseCluster Exception
+    will be raised.
     """
     assert (
         storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
     ), f"Storage set {storage_set_key} is disabled"
-    res = _get_storage_set_cluster_map().get(storage_set_key, None)
-    if res is None:
-        raise UndefinedClickhouseCluster(
-            f"{storage_set_key} is not a defined in the CLUSTERS setting for this environment"
-        )
+
+    if slice_id is not None:
+        part_storage_set_cluster_map = _get_sliced_storage_set_cluster_map()
+        res = part_storage_set_cluster_map.get((storage_set_key, slice_id), None)
+        if res is None:
+            raise UndefinedClickhouseCluster(
+                f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment"
+            )
+
+    else:
+        storage_set_cluster_map = _get_storage_set_cluster_map()
+        res = storage_set_cluster_map.get(storage_set_key, None)
+        if res is None:
+            raise UndefinedClickhouseCluster(
+                f"{storage_set_key} is not defined in the CLUSTERS setting for this environment"
+            )
     return res

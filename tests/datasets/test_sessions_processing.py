@@ -6,6 +6,8 @@ from snuba_sdk.legacy import json_to_snql
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.sessions import raw_schema, read_schema
 from snuba.query import SelectedExpression
@@ -35,6 +37,8 @@ def test_sessions_processing() -> None:
     }
 
     sessions = get_dataset("sessions")
+    sessions_entity = get_entity(EntityKey.SESSIONS)
+
     query, snql_anonymized = parse_snql_query(query_body["query"], sessions)
     request = Request(
         id="a",
@@ -90,7 +94,7 @@ def test_sessions_processing() -> None:
         ]
         return QueryResult({}, {})
 
-    sessions.get_default_entity().get_query_pipeline_builder().build_execution_pipeline(
+    sessions_entity.get_query_pipeline_builder().build_execution_pipeline(
         request, query_runner
     ).execute()
 
@@ -195,6 +199,7 @@ def test_select_storage(
     query_body: MutableMapping[str, Any], is_subscription: bool, expected_table: str
 ) -> None:
     sessions = get_dataset("sessions")
+    sessions_entity = get_entity(EntityKey.SESSIONS)
     request = json_to_snql(query_body, "sessions")
     request.validate()
     query, snql_anonymized = parse_snql_query(str(request.query), sessions)
@@ -219,6 +224,6 @@ def test_select_storage(
         assert query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})
 
-    sessions.get_default_entity().get_query_pipeline_builder().build_execution_pipeline(
+    sessions_entity.get_query_pipeline_builder().build_execution_pipeline(
         request, query_runner
     ).execute()

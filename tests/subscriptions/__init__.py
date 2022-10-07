@@ -3,12 +3,13 @@ import uuid
 from datetime import datetime, timedelta
 
 from snuba import settings
-from snuba.datasets.entities.factory import get_entity_name
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
-from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.processor import InsertEvent
 from tests.helpers import write_unprocessed_events
 
 
@@ -18,7 +19,8 @@ class BaseSubscriptionTest:
         self.platforms = ["a", "b"]
         self.minutes = 20
         self.dataset = get_dataset("events")
-        self.entity_key = get_entity_name(self.dataset.get_default_entity())
+        self.entity = get_entity(EntityKey.EVENTS)
+        self.entity_key = get_entity_name(self.entity)
 
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0

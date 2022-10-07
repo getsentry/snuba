@@ -28,7 +28,7 @@ def list() -> None:
     check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
-        click.echo(group.value)
+        click.echo(group)
         for migration_id, status, blocking in group_migrations:
             symbol = {
                 Status.COMPLETED: "X",
@@ -49,19 +49,25 @@ def list() -> None:
 
 @migrations.command()
 @click.option("--force", is_flag=True)
+@click.option("--group", help="Migration group")
 @click.option(
     "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
 )
-def migrate(force: bool, log_level: Optional[str] = None) -> None:
+def migrate(
+    force: bool, group: Optional[str] = None, log_level: Optional[str] = None
+) -> None:
     """
-    Runs all migrations. Blocking migrations will not be run unless --force is passed.
+    If group is specified, runs all the migrations for a group (including any pending
+    system migrations), otherwise runs all migrations for all groups.
+
+    Blocking migrations will not be run unless --force is passed.
     """
     setup_logging(log_level)
     check_clickhouse_connections()
     runner = Runner()
 
     try:
-        runner.run_all(force=force)
+        runner.run_all(force=force, group=group)
     except MigrationError as e:
         raise click.ClickException(str(e))
 

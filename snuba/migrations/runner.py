@@ -21,7 +21,12 @@ from snuba.migrations.errors import (
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
+from snuba.migrations.groups import (
+    OPTIONAL_GROUPS,
+    REGISTERED_GROUPS_LOOKUP,
+    MigrationGroup,
+    get_group_loader,
+)
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
@@ -33,14 +38,10 @@ DIST_TABLE_NAME = "migrations_dist"
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
-
     return [
         group
-        for group in MigrationGroup
-        if not (
-            group in OPTIONAL_GROUPS
-            and group.value in settings.SKIPPED_MIGRATION_GROUPS
-        )
+        for group in REGISTERED_GROUPS_LOOKUP
+        if not (group in OPTIONAL_GROUPS and group in settings.SKIPPED_MIGRATION_GROUPS)
     ]
 
 
@@ -49,7 +50,7 @@ class MigrationKey(NamedTuple):
     migration_id: str
 
     def __str__(self) -> str:
-        return f"{self.group.value}: {self.migration_id}"
+        return f"{self.group}: {self.migration_id}"
 
 
 class MigrationDetails(NamedTuple):
@@ -87,7 +88,7 @@ class Runner:
             data = self.__connection.execute(
                 f"SELECT status, timestamp FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s",
                 {
-                    "group": migration_key.group.value,
+                    "group": migration_key.group,
                     "migration_id": migration_key.migration_id,
                 },
             ).results
@@ -135,14 +136,25 @@ class Runner:
 
         return migrations
 
-    def run_all(self, *, force: bool = False) -> None:
+    def run_all(self, *, force: bool = False, group: Optional[str] = None) -> None:
         """
-        Run all pending migrations. Throws an error if any migration is in progress.
+        If group is specified, runs all pending migrations for that specific group. Makes
+        sure to run any pending system migrations first so that the migrations table is
+        created before running migrations for other groups. Throw an error if any migration
+        is in progress.
+
+        If no group is specified, run all pending migrations. Throws an error if any
+        migration is in progress.
 
         Requires force to run blocking migrations.
         """
 
-        pending_migrations = self._get_pending_migrations()
+        if not group:
+            pending_migrations = self._get_pending_migrations()
+        else:
+            pending_migrations = self._get_pending_migrations_for_group(
+                "system"
+            ) + self._get_pending_migrations_for_group(group)
 
         # Do not run migrations if any are blocking
         if not force:
@@ -281,34 +293,39 @@ class Runner:
         """
         migrations: List[MigrationKey] = []
 
+        for group in get_active_migration_groups():
+            group_migrations = self._get_pending_migrations_for_group(group)
+            migrations.extend(group_migrations)
+
+        return migrations
+
+    def _get_pending_migrations_for_group(self, group: str) -> List[MigrationKey]:
+        """
+        Gets pending migrations list for a specific group
+        """
         migration_status = self._get_migration_status()
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in get_active_migration_groups():
-            group_loader = get_group_loader(group)
-            group_migrations: List[MigrationKey] = []
+        group_loader = get_group_loader(group)
+        group_migrations: List[MigrationKey] = []
 
-            for migration_id in group_loader.get_migrations():
-                migration_key = MigrationKey(group, migration_id)
-                status = get_status(migration_key)
-                if status == Status.IN_PROGRESS:
-                    raise MigrationInProgress(str(migration_key))
-                if status == Status.NOT_STARTED:
-                    group_migrations.append(migration_key)
-                elif status == Status.COMPLETED and len(group_migrations):
-                    # We should never have a completed migration after a pending one for that group
-                    missing_migrations = ", ".join(
-                        [m.migration_id for m in group_migrations]
-                    )
-                    raise InvalidMigrationState(
-                        f"Missing migrations: {missing_migrations}"
-                    )
+        for migration_id in group_loader.get_migrations():
+            migration_key = MigrationKey(group, migration_id)
+            status = get_status(migration_key)
+            if status == Status.IN_PROGRESS:
+                raise MigrationInProgress(str(migration_key))
+            if status == Status.NOT_STARTED:
+                group_migrations.append(migration_key)
+            elif status == Status.COMPLETED and len(group_migrations):
+                # We should never have a completed migration after a pending one for that group
+                missing_migrations = ", ".join(
+                    [m.migration_id for m in group_migrations]
+                )
+                raise InvalidMigrationState(f"Missing migrations: {missing_migrations}")
 
-            migrations.extend(group_migrations)
-
-        return migrations
+        return group_migrations
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
@@ -319,7 +336,7 @@ class Runner:
         statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         data = [
             {
-                "group": migration_key.group.value,
+                "group": migration_key.group,
                 "migration_id": migration_key.migration_id,
                 "timestamp": datetime.now(),
                 "status": status.value,
@@ -332,7 +349,7 @@ class Runner:
         result = self.__connection.execute(
             f"SELECT version FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
             {
-                "group": migration_key.group.value,
+                "group": migration_key.group,
                 "migration_id": migration_key.migration_id,
             },
         ).results
@@ -348,10 +365,7 @@ class Runner:
             "("
             + (
                 ", ".join(
-                    [
-                        escape_string(group.value)
-                        for group in get_active_migration_groups()
-                    ]
+                    [escape_string(group) for group in get_active_migration_groups()]
                 )
             )
             + ")"

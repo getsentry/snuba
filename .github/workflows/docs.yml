@@ -15,10 +15,12 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: '3.8'
-
-      - name: Build docs
+      - name: Generate config schema docs
         run: |
           pip install virtualenv
+          make generate-config-docs
+      - name: Build docs
+        run: |
           make snubadocs
       - uses: peaceiris/actions-gh-pages@v3.7.3
         name: Publish to GitHub Pages

@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, NamedTuple, Optional, Sequence
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
     ClickhouseCluster,
@@ -9,13 +8,14 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.common.condition_checker import ConditionChecker
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.query.expressions import Expression
 from snuba.query.logical import Query
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerProcessor
 
@@ -46,28 +46,6 @@ class Storage(ABC):
         return self.__schema
 
 
-class ConditionChecker(ABC):
-    """
-    Checks if an expression matches a specific shape and content.
-
-    These are declared by storages as mandatory conditions that are
-    supposed to be in the query before it is executed for the query
-    to be acceptable.
-
-    This system is meant to be a failsafe mechanism to prevent
-    bugs in any step of query processing to generate queries that are
-    missing project_id and org_id conditions from the query.
-    """
-
-    @abstractmethod
-    def get_id(self) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
-    def check(self, expression: Expression) -> bool:
-        raise NotImplementedError
-
-
 class ReadableStorage(Storage):
     """
     ReadableStorage is an abstraction on anything we can run a query onto in our
@@ -80,7 +58,7 @@ class ReadableStorage(Storage):
     """
 
     @abstractmethod
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
         that are applied to queries after parsing and before running them on Clickhouse.
@@ -134,7 +112,7 @@ class ReadableTableStorage(ReadableStorage):
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
         schema: Schema,
-        query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
     ) -> None:
@@ -147,7 +125,7 @@ class ReadableTableStorage(ReadableStorage):
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         return self.__query_processors
 
     def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
@@ -163,7 +141,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
         schema: Schema,
-        query_processors: Sequence[QueryProcessor],
+        query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,

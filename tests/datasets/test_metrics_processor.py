@@ -6,8 +6,10 @@ import pytest
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.generic_metrics_processor import GenericSetsMetricsProcessor
-from snuba.datasets.metrics_aggregate_processor import (
+from snuba.datasets.processors.generic_metrics_processor import (
+    GenericSetsMetricsProcessor,
+)
+from snuba.datasets.processors.metrics_aggregate_processor import (
     CounterAggregateProcessor,
     DistributionsAggregateProcessor,
     MetricsAggregateProcessor,
@@ -17,7 +19,7 @@ from snuba.datasets.metrics_aggregate_processor import (
     _literal,
     timestamp_to_bucket,
 )
-from snuba.datasets.metrics_bucket_processor import (
+from snuba.datasets.processors.metrics_bucket_processor import (
     CounterMetricsProcessor,
     DistributionsMetricsProcessor,
     PolymorphicMetricsProcessor,
@@ -42,6 +44,14 @@ MAPPING_META_COMMON = {
     "d": {"33": "value-3"},
 }
 
+MAPPING_META_TAG_VALUES_STRINGS = {
+    "c": {
+        "10": "tag-1",
+        "20": "tag-2",
+        "30": "tag-3",
+    },
+}
+
 SET_MESSAGE_SHARED = {
     "use_case_id": "release-health",
     "org_id": 1,
@@ -54,6 +64,21 @@ SET_MESSAGE_SHARED = {
     # test enforce retention days of 30
     "retention_days": 22,
     "mapping_meta": MAPPING_META_COMMON,
+}
+
+SET_MESSAGE_TAG_VALUES_STRINGS = {
+    "version": 2,
+    "use_case_id": "release-health",
+    "org_id": 1,
+    "project_id": 2,
+    "metric_id": 1232341,
+    "type": "s",
+    "timestamp": timestamp,
+    "tags": {"10": "value-1", "20": "value-2", "30": "value-3"},
+    "value": [324234, 345345, 456456, 567567],
+    # test enforce retention days of 30
+    "retention_days": 22,
+    "mapping_meta": MAPPING_META_TAG_VALUES_STRINGS,
 }
 
 COUNTER_MESSAGE_SHARED = {
@@ -350,7 +375,7 @@ def test_metrics_aggregate_processor(
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
     with patch(
-        "snuba.datasets.metrics_aggregate_processor.timestamp_to_bucket",
+        "snuba.datasets.processors.metrics_aggregate_processor.timestamp_to_bucket",
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         assert (
@@ -456,7 +481,7 @@ def test_metrics_polymorphic_processor(
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
     with patch(
-        "snuba.datasets.metrics_aggregate_processor.timestamp_to_bucket",
+        "snuba.datasets.processors.metrics_aggregate_processor.timestamp_to_bucket",
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         expected_polymorphic_result = (
@@ -491,7 +516,30 @@ TEST_CASES_GENERIC = [
                 "granularities": [1, 2, 3],
             }
         ],
-    )
+        id="all tag values ints",
+    ),
+    pytest.param(
+        SET_MESSAGE_TAG_VALUES_STRINGS,
+        [
+            {
+                "use_case_id": "release-health",
+                "org_id": 1,
+                "project_id": 2,
+                "metric_id": 1232341,
+                "timestamp": expected_timestamp,
+                "tags.key": [10, 20, 30],
+                "tags.indexed_value": [0, 0, 0],
+                "tags.raw_value": ["value-1", "value-2", "value-3"],
+                "metric_type": "set",
+                "set_values": [324234, 345345, 456456, 567567],
+                "materialization_version": 1,
+                "timeseries_id": ANY,
+                "retention_days": 30,
+                "granularities": [1, 2, 3],
+            }
+        ],
+        id="all tag values strings",
+    ),
 ]
 
 

@@ -1,37 +1,14 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from enum import Enum
+from glob import glob
 from importlib import import_module
 from typing import Sequence
 
+from snuba import settings
+from snuba.datasets.configuration.migration_parser import load_migration_group
 from snuba.migrations.errors import MigrationDoesNotExist
 from snuba.migrations.migration import Migration
-
-
-class MigrationGroup(Enum):
-    SYSTEM = "system"
-    EVENTS = "events"
-    TRANSACTIONS = "transactions"
-    DISCOVER = "discover"
-    OUTCOMES = "outcomes"
-    METRICS = "metrics"
-    SESSIONS = "sessions"
-    QUERYLOG = "querylog"
-    PROFILES = "profiles"
-    FUNCTIONS = "functions"
-    REPLAYS = "replays"
-    GENERIC_METRICS = "generic_metrics"
-
-
-# Migration groups are mandatory by default, unless they are on this list
-OPTIONAL_GROUPS = {
-    MigrationGroup.METRICS,
-    MigrationGroup.SESSIONS,
-    MigrationGroup.QUERYLOG,
-    MigrationGroup.PROFILES,
-    MigrationGroup.FUNCTIONS,
-    MigrationGroup.REPLAYS,
-    MigrationGroup.GENERIC_METRICS,
-}
 
 
 class GroupLoader(ABC):
@@ -71,6 +48,27 @@ class DirectoryLoader(GroupLoader, ABC):
             return module.Migration()  # type: ignore
         except ModuleNotFoundError:
             raise MigrationDoesNotExist("Invalid migration ID")
+
+
+class ConfigurationLoader(DirectoryLoader):
+    """
+    Loads migration groups from YAML configuration files.
+    """
+
+    def __init__(
+        self, path_to_migration_group_config: str, migration_path: str | None = None
+    ) -> None:
+        self.migration_group = load_migration_group(path_to_migration_group_config)
+        self.migration_group_name = self.migration_group["name"]
+        self.migration_names = [
+            str(migration) for migration in self.migration_group["migrations"]
+        ]
+        self.optional = self.migration_group.get("optional", False)
+        migration_path = migration_path or "snuba.snuba_migrations"
+        super().__init__(f"{migration_path}.{self.migration_group_name}")
+
+    def get_migrations(self) -> Sequence[str]:
+        return self.migration_names
 
 
 class SystemLoader(DirectoryLoader):
@@ -128,6 +126,7 @@ class TransactionsLoader(DirectoryLoader):
             "0014_transactions_remove_flattened_columns",
             "0015_transactions_add_source_column",
             "0016_transactions_add_group_ids_column",
+            "0017_transactions_add_app_start_type_column",
         ]
 
 
@@ -175,6 +174,7 @@ class ReplaysLoader(DirectoryLoader):
             "0003_alter_url_allow_null",
             "0004_add_error_ids_column",
             "0005_add_urls_user_agent_replay_start_timestamp",
+            "0006_add_is_archived_column",
         ]
 
 
@@ -257,39 +257,57 @@ class FunctionsLoader(DirectoryLoader):
         return ["0001_functions"]
 
 
-class GenericMetricsLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.generic_metrics")
+MigrationGroup = str
 
-    def get_migrations(self) -> Sequence[str]:
-        return [
-            "0001_sets_aggregate_table",
-            "0002_sets_raw_table",
-            "0003_sets_mv",
-            "0004_sets_raw_add_granularities",
-            "0005_sets_replace_mv",
-            "0006_sets_raw_add_granularities_dist_table",
-            "0007_distributions_aggregate_table",
-            "0008_distributions_raw_table",
-            "0009_distributions_mv",
-        ]
-
-
-_REGISTERED_GROUPS = {
-    MigrationGroup.SYSTEM: SystemLoader(),
-    MigrationGroup.EVENTS: EventsLoader(),
-    MigrationGroup.TRANSACTIONS: TransactionsLoader(),
-    MigrationGroup.DISCOVER: DiscoverLoader(),
-    MigrationGroup.METRICS: MetricsLoader(),
-    MigrationGroup.OUTCOMES: OutcomesLoader(),
-    MigrationGroup.SESSIONS: SessionsLoader(),
-    MigrationGroup.QUERYLOG: QuerylogLoader(),
-    MigrationGroup.PROFILES: ProfilesLoader(),
-    MigrationGroup.FUNCTIONS: FunctionsLoader(),
-    MigrationGroup.REPLAYS: ReplaysLoader(),
-    MigrationGroup.GENERIC_METRICS: GenericMetricsLoader(),
+CONFIG_BUILT_MIGRATIONS = {
+    MigrationGroup(loader.migration_group_name): loader
+    for loader in [
+        ConfigurationLoader(config_file)
+        for config_file in glob(settings.MIGRATION_CONFIG_FILES_GLOB, recursive=True)
+    ]
 }
 
 
+# This is a list instead of a dictionary to preserve the order
+# of existing migrations. For example, the discover migrations
+# need to run after the events/transactions migrations.
+REGISTERED_GROUPS: list[tuple[str, GroupLoader]] = [
+    ("system", SystemLoader()),
+    ("events", EventsLoader()),
+    ("transactions", TransactionsLoader()),
+    ("discover", DiscoverLoader()),
+    ("metrics", MetricsLoader()),
+    ("outcomes", OutcomesLoader()),
+    ("sessions", SessionsLoader()),
+    ("querylog", QuerylogLoader()),
+    ("profiles", ProfilesLoader()),
+    ("functions", FunctionsLoader()),
+    ("replays", ReplaysLoader()),
+]
+
+# TODO: config defined migrations are not run in any particular order.
+# In the future we will need the ability to ensure migrations run in
+# the right order.
+REGISTERED_GROUPS.extend(
+    [(name, loader) for name, loader in CONFIG_BUILT_MIGRATIONS.items()]
+)
+
+REGISTERED_GROUPS_LOOKUP = {k: v for (k, v) in REGISTERED_GROUPS}
+
+# Migration groups are mandatory by default, unless they are on this list
+OPTIONAL_GROUPS = {
+    "metrics",
+    "sessions",
+    "querylog",
+    "profiles",
+    "functions",
+    "replays",
+}
+
+OPTIONAL_GROUPS.update(
+    set([m for m in CONFIG_BUILT_MIGRATIONS if CONFIG_BUILT_MIGRATIONS[m].optional])
+)
+
+
 def get_group_loader(group: MigrationGroup) -> GroupLoader:
-    return _REGISTERED_GROUPS[group]
+    return REGISTERED_GROUPS_LOOKUP[group]

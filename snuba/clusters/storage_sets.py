@@ -1,8 +1,52 @@
-from enum import Enum
-from typing import FrozenSet
+from __future__ import annotations
+
+from typing import Any, FrozenSet, Iterator
+
+_HARDCODED_STORAGE_SET_KEYS = {
+    "CDC": "cdc",
+    "DISCOVER": "discover",
+    "EVENTS": "events",
+    "EVENTS_RO": "events_ro",
+    "METRICS": "metrics",
+    "MIGRATIONS": "migrations",
+    "OUTCOMES": "outcomes",
+    "QUERYLOG": "querylog",
+    "SESSIONS": "sessions",
+    "TRANSACTIONS": "transactions",
+    "TRANSACTIONS_RO": "transactions_ro",
+    "TRANSACTIONS_V2": "transactions_v2",
+    "ERRORS_V2": "errors_v2",
+    "ERRORS_V2_RO": "errors_v2_ro",
+    "PROFILES": "profiles",
+    "FUNCTIONS": "functions",
+    "REPLAYS": "replays",
+}
 
 
-class StorageSetKey(Enum):
+_REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
+
+
+class _StorageSetKey(type):
+    def __getattr__(self, attr: str) -> "StorageSetKey":
+        if (
+            attr not in _HARDCODED_STORAGE_SET_KEYS
+            and attr not in _REGISTERED_STORAGE_SET_KEYS
+        ):
+            raise AttributeError(attr)
+
+        return StorageSetKey(attr.lower())
+
+    def __iter__(self) -> Iterator[StorageSetKey]:
+        return iter(
+            StorageSetKey(value)
+            for value in {
+                **_HARDCODED_STORAGE_SET_KEYS,
+                **_REGISTERED_STORAGE_SET_KEYS,
+            }.values()
+        )
+
+
+class StorageSetKey(metaclass=_StorageSetKey):
     """
     A storage set key is a unique identifier for a storage set.
 
@@ -16,25 +60,22 @@ class StorageSetKey(Enum):
     Storage sets are assigned to clusters via configuration.
     """
 
-    CDC = "cdc"
-    DISCOVER = "discover"
-    EVENTS = "events"
-    EVENTS_RO = "events_ro"
-    METRICS = "metrics"
-    MIGRATIONS = "migrations"
-    OUTCOMES = "outcomes"
-    QUERYLOG = "querylog"
-    SESSIONS = "sessions"
-    TRANSACTIONS = "transactions"
-    TRANSACTIONS_RO = "transactions_ro"
-    TRANSACTIONS_V2 = "transactions_v2"
-    ERRORS_V2 = "errors_v2"
-    ERRORS_V2_RO = "errors_v2_ro"
-    PROFILES = "profiles"
-    FUNCTIONS = "functions"
-    REPLAYS = "replays"
-    GENERIC_METRICS_SETS = "generic_metrics_sets"
-    GENERIC_METRICS_DISTRIBUTIONS = "generic_metrics_distributions"
+    def __init__(self, value: str):
+        self.value = value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, StorageSetKey) and other.value == self.value
+
+    def __repr__(self) -> str:
+        return f"StorageSetKey.{self.value.upper()}"
+
+
+def register_storage_set_key(key: str) -> StorageSetKey:
+    _REGISTERED_STORAGE_SET_KEYS[key.upper()] = key.lower()
+    return StorageSetKey(key)
 
 
 # Storage sets enabled only when development features are enabled.

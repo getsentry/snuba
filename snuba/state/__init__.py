@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, annotations
 
 import logging
 import time
@@ -30,7 +30,7 @@ from snuba.utils.streams.topics import Topic
 metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
-kfk = None
+kfk: Producer | None = None
 rds = redis_client
 
 ratelimit_prefix = "snuba-ratelimit:"

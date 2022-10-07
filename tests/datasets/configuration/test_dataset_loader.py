@@ -11,8 +11,4 @@ def test_build_entity_from_config_matches_python_definition() -> None:
     ):
         assert py_entity.__class__ == config_entity.__class__
 
-    assert (
-        config_dataset.get_default_entity().__class__
-        == py_dataset.get_default_entity().__class__
-    )
     assert config_dataset.is_experimental() == py_dataset.is_experimental()

@@ -6,7 +6,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.replays import storage as replays_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
@@ -38,7 +38,7 @@ class ReplaysEntity(Entity):
             validate_data_model=ColumnValidationMode.WARN,
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return [
             BasicFunctionsProcessor(),
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),

@@ -14,13 +14,13 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import SignatureValidator
 
 
-class HandledFunctionsProcessor(QueryProcessor):
+class HandledFunctionsProcessor(LogicalQueryProcessor):
     """
     Adds the isHandled and notHandled snuba functions.
 

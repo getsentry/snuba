@@ -8,7 +8,7 @@ from hashlib import md5
 from typing import Any, Mapping, Tuple
 
 from snuba import settings
-from snuba.datasets.events_processor_base import InsertEvent
+from snuba.processor import InsertEvent
 
 PROJECT_ID = 70156
 ORG_ID = 1123
@@ -187,6 +187,8 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
     event_received = now - timedelta(seconds=1)
     trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
     span_id = "8841662216cc598b" if not span_id else span_id
+    unique = "100"
+    primary_hash = md5(unique.encode("utf-8")).hexdigest()
 
     return {
         "project_id": PROJECT_ID,
@@ -195,6 +197,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
         "datetime": end_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         "platform": "python",
         "retention_days": settings.DEFAULT_RETENTION_DAYS,
+        "group_ids": [int(primary_hash[:16], 16)],
         "data": {
             "received": calendar.timegm(event_received.timetuple()),
             "type": "transaction",

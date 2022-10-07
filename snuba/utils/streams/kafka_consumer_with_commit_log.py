@@ -2,12 +2,14 @@ from typing import Any, Mapping, Optional
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
-from arroyo.synchronized import Commit, commit_codec
+from arroyo.commit import Commit, CommitCodec
 from arroyo.types import Position
 from arroyo.utils.retries import RetryPolicy
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
+
+commit_codec = CommitCodec()
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer):

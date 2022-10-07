@@ -17,13 +17,12 @@ from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity, get_entity_name
-from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, InsertEvent, ReplacementType
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
@@ -1387,24 +1386,6 @@ class TestApi(SimpleAPITest):
         assert "timing" in result
         assert "timestamp" in result["timing"]
 
-    def test_global_rate_limiting(self) -> None:
-        state.set_config("global_concurrent_limit", 0)
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                    "selected_columns": ["project"],
-                }
-            )
-        )
-        assert response.status_code == 429
-        data = json.loads(response.data)
-        assert data["error"]["message"] == "global concurrent of 1 exceeds limit of 0"
-
     def test_project_rate_limiting(self) -> None:
         # All projects except project 1 are allowed
         state.set_config("project_concurrent_limit", 1)
@@ -2341,7 +2322,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         subscription_id = data["subscription_id"]
         partition = subscription_id.split("/", 1)[0]
 
-        entity_key = get_entity_name(self.dataset.get_default_entity())
+        entity_key = EntityKey.EVENTS
 
         assert (
             len(

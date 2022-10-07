@@ -1,7 +1,6 @@
 from typing import Optional, Sequence, Set
 
 from snuba import environment, settings
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.accessors import get_columns_in_expression
 from snuba.query.conditions import (
@@ -10,6 +9,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.expressions import FunctionCall
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -29,7 +29,7 @@ ALLOWED_OPERATORS = [
 metrics = MetricsWrapper(environment.metrics, "prewhere")
 
 
-class PrewhereProcessor(QueryProcessor):
+class PrewhereProcessor(ClickhouseQueryProcessor):
     """
     Moves top level conditions into the pre-where clause according to
     the list of candidates provided by the query data source.
