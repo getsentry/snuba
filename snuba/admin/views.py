@@ -14,6 +14,7 @@ from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -77,6 +78,11 @@ def health() -> Response:
 def clickhouse_queries() -> Response:
     res = [q.to_json() for q in SystemQuery.all_queries()]
     return make_response(jsonify(res), 200)
+
+
+@application.route("/kafka")
+def kafka_topics() -> Response:
+    return make_response(jsonify(get_broker_data()), 200)
 
 
 # Sample cURL command:
