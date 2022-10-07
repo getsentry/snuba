@@ -272,7 +272,7 @@ query is actually executed, so all the timing and stats details described for
 successful query are present.
 
 
-Sending a Subscription query
+Creating a Subscription query
 =============================
 
 Send the payload as a POST to  ``localhost:1218/[DATASET NAME]/[ENTITY NAME]/subscriptions``.
