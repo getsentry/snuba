@@ -91,7 +91,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 pass
 
 
-def validate_sliced_settings(locals: Mapping[str, Any]) -> None:
+def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
 
     for storage in locals["SLICED_STORAGES"]:
         assert (
