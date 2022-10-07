@@ -18,12 +18,11 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, InsertEvent, ReplacementType
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest

@@ -8,7 +8,7 @@ from hashlib import md5
 from typing import Any, Mapping, Tuple
 
 from snuba import settings
-from snuba.datasets.events_processor_base import InsertEvent
+from snuba.processor import InsertEvent
 
 PROJECT_ID = 70156
 ORG_ID = 1123

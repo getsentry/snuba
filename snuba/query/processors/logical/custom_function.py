@@ -93,7 +93,7 @@ class CustomFunction(LogicalQueryProcessor):
 
     @classmethod
     def config_key(cls) -> str:
-        return "__unsupported__:custom_function"
+        return "__unsupported__:CustomFunction"
 
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> LogicalQueryProcessor:

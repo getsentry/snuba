@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Mapping, Optional
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.profiles_processor import ProfilesMessageProcessor
+from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.processor import InsertBatch
 
 
