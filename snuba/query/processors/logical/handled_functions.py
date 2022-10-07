@@ -42,10 +42,6 @@ class HandledFunctionsProcessor(LogicalQueryProcessor):
     def __init__(self, column: str):
         self.__column = column
 
-    @classmethod
-    def config_key(cls) -> str:
-        return "handled_functions"
-
     def validate_parameters(self, exp: FunctionCall, entity: QueryEntity) -> None:
         validator = SignatureValidator([])
         try:

@@ -89,4 +89,5 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         )
         if "writable_storage" in config_data
         else None,
+        partition_key_column_name=config_data["partition_key_column_name"],
     )

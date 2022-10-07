@@ -14,7 +14,10 @@ TYPE_NULLABLE_STRING = {"type": ["string", "null"]}
 FUNCTION_CALL_SCHEMA = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "description": "FunctionCall class name"},
+        "type": {
+            "type": "string",
+            "description": "Name of FunctionCall class config key",
+        },
         "args": {"type": "array", "items": {"type": "string"}, "description": ""},
     },
     "additionalProperties": False,
@@ -25,7 +28,7 @@ STREAM_LOADER_SCHEMA = {
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Processor class name. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
+            "description": "Name of Processor class config key. Responsible for converting an incoming message body from the event stream into a row or statement to be inserted or executed against clickhouse",
         },
         "default_topic": {
             "type": "string",
@@ -37,7 +40,7 @@ STREAM_LOADER_SCHEMA = {
         },
         "subscription_scheduled_topic": {
             "type": ["string", "null"],
-            "description": "Name of the subscroption scheduled Kafka topic",
+            "description": "Name of the subscription scheduled Kafka topic",
         },
         "subscription_scheduler_mode": {
             "type": ["string", "null"],
@@ -56,7 +59,7 @@ STREAM_LOADER_SCHEMA = {
             "properties": {
                 "type": {
                     "type": "string",
-                    "description": "StreamMessageFilter class name",
+                    "description": "Name of StreamMessageFilter class config key",
                 },
                 "args": {
                     "type": "object",
@@ -226,7 +229,7 @@ STORAGE_QUERY_PROCESSOR = {
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Name of ClickhouseQueryProcessor class responsible for the transformation applied to a query.",
+            "description": "Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.",
         },
         "args": {
             "type": "object",
@@ -246,7 +249,7 @@ ENTITY_QUERY_PROCESSOR = {
     "properties": {
         "processor": {
             "type": "string",
-            "description": "Name of LogicalQueryProcessor class responsible for the transformation applied to a query.",
+            "description": "Name of LogicalQueryProcessor class config key. Responsible for the transformation applied to a query.",
         },
         "args": {
             "type": "object",
@@ -382,6 +385,12 @@ V1_ENTITY_SCHEMA = {
             **TYPE_STRING,
             **{
                 "description": "The name of the required time column specifed in schema"
+            },
+        },
+        "partition_key_column_name": {
+            **TYPE_STRING,
+            **{
+                "description": "The column name, if this entity is partitioned, to select slice"
             },
         },
     },
