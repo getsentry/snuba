@@ -92,7 +92,6 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
 
 
 def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
-
     for storage in locals["SLICED_STORAGES"]:
         assert (
             storage in locals["LOGICAL_PARTITION_MAPPING"]

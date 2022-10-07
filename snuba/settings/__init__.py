@@ -272,7 +272,6 @@ LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 # for any corresponding sliced storages defined above,
 # with the applicable number of slices in mind.
 
-
 # Storage set keys should be defined either in CLUSTERS
 # or SLICED_CLUSTERS. CLUSTERS will define clusters
 # which are not sliced, i.e. are associated with
