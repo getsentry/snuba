@@ -31,6 +31,10 @@ class LogicalQueryProcessor(ABC, metaclass=RegisteredClass):
         pass
 
     @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
+    @classmethod
     def get_from_name(cls, name: str) -> "LogicalQueryProcessor":
         return cast("LogicalQueryProcessor", cls.class_from_name(name))
 

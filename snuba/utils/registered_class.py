@@ -47,14 +47,15 @@ class RegisteredClass(ABCMeta):
     """Metaclass for making classes that can be looked up by name
     Usage:
         class SomeGenericClass(metaclass=RegisteredClass):
-            pass
+            @classmethod
+            def config_key(cls) -> str:
+                return cls.__name__
 
         class Subclass(SomeGenericClass):
-            def config_key(self) -> str:
-                return "sub_class"
+            pass
 
 
-        assert SomeGenericClass.class_from_name("sub_class") is Subclass
+        assert SomeGenericClass.class_from_name("Subclass") is Subclass
 
     Notes:
         -   The base class cannot be looked up by name, only subclasses

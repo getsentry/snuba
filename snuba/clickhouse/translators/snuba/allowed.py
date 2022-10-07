@@ -67,7 +67,7 @@ class FunctionCallMapper(
 
     @classmethod
     def config_key(cls) -> str:
-        return "function_call_mapper_base"
+        return cls.__name__
 
     @classmethod
     def get_from_name(cls, name: str) -> Type["FunctionCallMapper"]:
@@ -82,7 +82,7 @@ class CurriedFunctionCallMapper(
 ):
     @classmethod
     def config_key(cls) -> str:
-        return "curried_function_call_mapper_base"
+        return cls.__name__
 
     @classmethod
     def get_from_name(cls, name: str) -> Type["CurriedFunctionCallMapper"]:
@@ -107,7 +107,7 @@ class SubscriptableReferenceMapper(
 
     @classmethod
     def config_key(cls) -> str:
-        return "subref_mapper_base"
+        return cls.__name__
 
     @classmethod
     def get_from_name(cls, name: str) -> Type["SubscriptableReferenceMapper"]:

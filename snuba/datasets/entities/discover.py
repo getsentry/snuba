@@ -71,10 +71,6 @@ class DefaultNoneColumnMapper(ColumnMapper):
 
     columns: ColumnSet
 
-    @classmethod
-    def config_key(cls) -> str:
-        return "default_none_column"
-
     def attempt_map(
         self,
         expression: Column,
@@ -100,10 +96,6 @@ class DefaultNoneFunctionMapper(FunctionCallMapper):
 
     function_names: Set[str]
 
-    @classmethod
-    def config_key(cls) -> str:
-        return "default_none_function"
-
     def __post_init__(self) -> None:
         self.function_match = FunctionCallMatch(
             Or([StringMatch(func) for func in self.function_names])
@@ -126,10 +118,6 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     If a function is being called on a column that doesn't exist, or is being
     called on NULL, change the entire function to be NULL.
     """
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "default_if_null"
 
     function_match = FunctionCallMatch(
         StringMatch("identity"), (LiteralMatch(value=Any(type(None))),)
@@ -168,10 +156,6 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
 
     function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
 
-    @classmethod
-    def config_key(_cls) -> str:
-        return "default_if_null_curried_function"
-
     def attempt_map(
         self,
         expression: CurriedFunctionCall,
@@ -201,10 +185,6 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
     """
 
     subscript_names: Set[str]
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "default_none_subscript"
 
     def attempt_map(
         self,
