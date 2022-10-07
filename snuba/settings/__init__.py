@@ -258,8 +258,7 @@ COUNTER_WINDOW_SIZE = timedelta(minutes=10)
 # Slicing Configuration
 
 # Mapping of storage key to slice count
-# Only includes storages that are
-# assocated with multiple slices
+# This is only for sliced storages
 SLICED_STORAGES: Mapping[str, int] = {}
 
 # Mapping storage key to a mapping of logical partition
