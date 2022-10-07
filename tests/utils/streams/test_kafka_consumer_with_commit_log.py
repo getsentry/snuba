@@ -5,7 +5,8 @@ from typing import Iterator
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
-from arroyo.synchronized import Commit, commit_codec
+from arroyo.backends.kafka.commit import CommitCodec
+from arroyo.commit import Commit
 from arroyo.types import Position
 
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
@@ -67,7 +68,7 @@ def test_commit_log_consumer() -> None:
         commit_message = commit_log_producer.messages[0]
         assert commit_message.topic() == "commit-log"
 
-        assert commit_codec.decode(
+        assert CommitCodec().decode(
             KafkaPayload(
                 commit_message.key(),
                 commit_message.value(),

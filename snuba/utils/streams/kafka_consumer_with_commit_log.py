@@ -2,7 +2,8 @@ from typing import Any, Mapping, Optional
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
-from arroyo.commit import Commit, CommitCodec
+from arroyo.backends.kafka.commit import CommitCodec
+from arroyo.commit import Commit
 from arroyo.types import Position
 from arroyo.utils.retries import RetryPolicy
 from confluent_kafka import KafkaError
