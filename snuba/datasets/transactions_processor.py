@@ -248,11 +248,11 @@ class TransactionsMessageProcessor(MessageProcessor):
             if context in contexts:
                 del contexts[context]
 
-        appContext = contexts.get("app")
-        if appContext is not None:
-            appStartType = appContext.get("start_type")
-            if appStartType is not None:
-                processed["app_start_type"] = appStartType
+        app_context = contexts.get("app")
+        if app_context is not None:
+            app_start_type = app_context.get("start_type")
+            if app_start_type is not None:
+                processed["app_start_type"] = app_start_type
 
         sanitized_contexts = self._sanitize_contexts(processed, event_dict)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
