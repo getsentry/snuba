@@ -113,7 +113,7 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
                 storage, logical_part, slice_id, defined_slice_count
             )
 
-    for physical_topic in locals["SLICED_KAFKA_TOPIC_MAP"].values():
+    for topic_tuple in locals["SLICED_KAFKA_TOPIC_MAP"]:
         assert (
-            physical_topic in locals["SLICED_KAFKA_BROKER_CONFIG"]
-        ), f"missing broker config definition for sliced physical topic name {physical_topic}"
+            topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]
+        ), f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"

@@ -115,11 +115,11 @@ def test_validation_catches_empty_slice_mapping() -> None:
     del sliced_storages["events"]
 
 
-def test_validation_catches_unmapped_physical_topic() -> None:
+def test_validation_catches_unmapped_topic_pair() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
 
-    # We forgot to add broker config for the physical topic name
+    # We forgot to add broker config for the (topic, slice id) pair
     sliced_topics = all_settings["SLICED_KAFKA_TOPIC_MAP"]
     sliced_topics[("events", 1)] = "events-1"
 

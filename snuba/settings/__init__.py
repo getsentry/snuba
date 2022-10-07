@@ -289,9 +289,9 @@ SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 # This is only for sliced Kafka topics
 SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 
-# Mapping of physical Kafka topic names to broker config
+# Mapping of (logical topic names, slice id) pairs to broker config
 # This is only for sliced Kafka topics
-SLICED_KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
+SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
