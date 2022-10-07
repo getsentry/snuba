@@ -1,5 +1,6 @@
 import RuntimeConfig from "./runtime_config";
 import AuditLog from "./runtime_config/auditlog";
+import ClickhouseMigrations from "./clickhouse_migrations";
 import ClickhouseQueries from "./clickhouse_queries";
 import TracingQueries from "./tracing";
 import SnQLToSQL from "./snql_to_sql";
@@ -20,6 +21,11 @@ const NAV_ITEMS = [
     id: "clickhouse",
     display: "🏚️ System Queries",
     component: ClickhouseQueries,
+  },
+  {
+    id: "clickhouse-migrations",
+    display: "🚧 ClickHouse Migrations",
+    component: ClickhouseMigrations,
   },
   {
     id: "tracing",

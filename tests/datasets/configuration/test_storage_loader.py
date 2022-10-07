@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import os
+import tempfile
+
+from snuba.datasets.configuration.storage_builder import build_storage
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.factory import get_config_built_storages
+
+# this has to be done before the storage import because there's a cyclical dependency error
+CONFIG_BUILT_STORAGES = get_config_built_storages()
+
+
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage,
     distributions_storage,
@@ -10,8 +19,6 @@ from snuba.datasets.storages.generic_metrics import (
     sets_storage,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
-
-CONFIG_BUILT_STORAGES = get_config_built_storages()
 
 
 def test_config_file_discovery() -> None:
@@ -107,3 +114,42 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
     assert (
         old.get_subscription_scheduler_mode() == new.get_subscription_scheduler_mode()
     )
+
+
+def test_processor_with_constructor():
+    yml_text = """
+version: v1
+kind: readable_storage
+name: test-processor-with-constructor
+
+storage:
+  key: test-storage
+  set_key: test-storage-set
+
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+    ]
+  local_table_name: "test"
+  dist_table_name: "test"
+
+query_processors:
+  -
+    processor: MappingOptimizer
+    args:
+      column_name: a
+      hash_map_name: hashmap
+      killswitch: kill
+
+"""
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        filename = os.path.join(tmpdirname, "file.yaml")
+        with open(filename, "w") as f:
+            f.write(yml_text)
+        storage = build_storage(filename)
+        assert len(storage.get_query_processors()) == 1
+        qp = storage.get_query_processors()[0]
+        assert qp._MappingOptimizer__column_name == "a"
+        assert qp._MappingOptimizer__hash_map_name == "hashmap"
+        assert qp._MappingOptimizer__killswitch == "kill"

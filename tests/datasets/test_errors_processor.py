@@ -5,9 +5,8 @@ from uuid import UUID
 import pytz
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.errors_processor import ErrorsProcessor
-from snuba.datasets.events_processor_base import InsertEvent
-from snuba.processor import InsertBatch
+from snuba.datasets.processors.errors_processor import ErrorsProcessor
+from snuba.processor import InsertBatch, InsertEvent
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 

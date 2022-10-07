@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Sequence, Set
 
-from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -31,16 +30,14 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-# The number of physical partitions that we will need to map resources to
-# for storage partitioning
-LOCAL_PHYSICAL_PARTITIONS = 1
-# Mapping of logical (key) to physical (value) partitions for storages
-# that are partitioned in Snuba resources
-LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
-    str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
-}
-# Storage names to apply dataset partitioning to
-PARTITIONED_STORAGES: Set[str] = set()
+# Mapping storage key to a mapping of logical partition
+# to slice id
+LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
+
+# Mapping of storage key to slice count
+# Only includes storages that are
+# assocated with multiple slices
+SLICED_STORAGES: Mapping[str, int] = {}
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -76,19 +73,19 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 ]
 
 # Storage set keys should be defined either in CLUSTERS
-# or PARTITIONED_CLUSTERS. CLUSTERS will define clusters
-# which are not partitioned, i.e. are associated with
-# only the default partition_id (0). CLUSTERS is defined in
-# the default way, without adding partition id in
+# or SLICED_CLUSTERS. CLUSTERS will define clusters
+# which are not sliced, i.e. are associated with
+# only the default slice_id (0). CLUSTERS is defined in
+# the default way, without adding slice id in
 # the storage_sets field.
 
-# We define partitioned clusters, i.e. clusters that reside
-# on multiple physical partitions (partition ids), in
-# PARTITIONED_CLUSTERS. We define all associated
-# (storage set, partition id) pairs in PARTITIONED_CLUSTERS
+# We define sliced clusters, i.e. clusters that reside
+# on multiple physical partitions (slice ids), in
+# SLICED_CLUSTERS. We define all associated
+# (storage set, slice id) pairs in SLICED_CLUSTERS
 # in the storage_sets field. Other fields are defined
 # in the same way as they are in CLUSTERS.
-PARTITIONED_CLUSTERS: Sequence[Mapping[str, Any]] = []
+SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Dogstatsd Options
 DOGSTATSD_HOST: str | None = None
@@ -244,12 +241,6 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
 # Enable replays ingestion
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
-
-# Place the actual time we start ingesting on the new version.
-ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 3, 23, 0, 0, 0)
-TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
-    2022, 2, 18, 0, 0, 0
-)
 
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
