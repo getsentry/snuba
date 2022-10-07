@@ -265,16 +265,22 @@ SLICED_STORAGES: Mapping[str, int] = {}
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
+# The slice configs below are the "SLICED" versions to
+# the equivalent default settings above. For example,
+# "SLICED_KAFKA_TOPIC_MAP" is the "SLICED" version of
+# "KAFKA_TOPIC_MAP". These should be filled out
+# for any corresponding sliced storages defined above,
+# with the applicable number of slices in mind.
+
+
 # Storage set keys should be defined either in CLUSTERS
 # or SLICED_CLUSTERS. CLUSTERS will define clusters
 # which are not sliced, i.e. are associated with
 # only the default slice_id (0). CLUSTERS is defined in
 # the default way, without adding slice id in
-# the storage_sets field.
-
-# We define sliced clusters, i.e. clusters that reside
-# on multiple physical partitions (slice ids), in
-# SLICED_CLUSTERS. We define all associated
+# the storage_sets field. We define sliced clusters,
+# i.e. clusters that reside on multiple slices
+# in SLICED_CLUSTERS. We define all associated
 # (storage set, slice id) pairs in SLICED_CLUSTERS
 # in the storage_sets field. Other fields are defined
 # in the same way as they are in CLUSTERS.
