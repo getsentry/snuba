@@ -90,6 +90,9 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
+
+def validate_sliced_settings(locals: Mapping[str, Any]) -> None:
+
     for storage in locals["SLICED_STORAGES"]:
         assert (
             storage in locals["LOGICAL_PARTITION_MAPPING"]
@@ -111,7 +114,7 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 storage, logical_part, slice_id, defined_slice_count
             )
 
-    # build a set of sliced Kafka logical topics
-    sliced_topics = set()
-    for topic_tuple in locals["SLICED_KAFKA_TOPIC_MAP"]:
-        sliced_topics.add(topic_tuple[0])
+    for physical_topic in locals["SLICED_KAFKA_TOPIC_MAP"].values():
+        assert (
+            physical_topic in locals["SLICED_KAFKA_BROKER_CONFIG"]
+        ), f"missing broker config definition for sliced physical topic name {physical_topic}"
