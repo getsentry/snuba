@@ -6,7 +6,7 @@ import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
-from arroyo.commit import CommitCodec
+from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
