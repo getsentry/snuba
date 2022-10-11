@@ -19,8 +19,6 @@ steps:
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: replacer
       - image: us.gcr.io/sentryio/snuba:{sha}
-        name: transactions-consumer
-      - image: us.gcr.io/sentryio/snuba:{sha}
         name: transactions-consumer-new
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: sessions-consumer
