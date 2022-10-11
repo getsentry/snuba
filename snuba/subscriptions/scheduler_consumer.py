@@ -6,7 +6,7 @@ import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
-from arroyo.commit import CommitCodec
+from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
@@ -16,7 +16,7 @@ from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_config
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
@@ -34,6 +34,7 @@ from snuba.utils.types import Interval, InvalidRangeError
 logger = logging.getLogger(__name__)
 
 commit_codec = CommitCodec()
+redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
 class MessageDetails(NamedTuple):

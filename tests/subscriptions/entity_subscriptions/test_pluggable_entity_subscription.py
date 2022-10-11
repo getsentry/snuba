@@ -13,7 +13,7 @@ from snuba.datasets.entity_subscriptions.pluggable_entity_subscription import (
     PluggableEntitySubscription,
 )
 from snuba.datasets.factory import get_dataset
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
@@ -29,6 +29,8 @@ topic_spec = stream_loader.get_default_topic_spec()
 data = {"organization": 1}
 
 timer = Timer("test_pluggable_entity_subscription")
+
+redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
 def subscription_data_builder(
