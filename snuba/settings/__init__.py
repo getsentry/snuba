@@ -3,7 +3,16 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Sequence, Set, TypedDict, TypeVar
+from typing import (
+    Any,
+    Mapping,
+    MutableMapping,
+    Sequence,
+    Set,
+    Tuple,
+    TypedDict,
+    TypeVar,
+)
 
 from snuba.settings.validation import validate_settings
 
@@ -29,15 +38,6 @@ DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
-
-# Mapping storage key to a mapping of logical partition
-# to slice id
-LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
-
-# Mapping of storage key to slice count
-# Only includes storages that are
-# assocated with multiple slices
-SLICED_STORAGES: Mapping[str, int] = {}
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -71,21 +71,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "single_node": True,
     },
 ]
-
-# Storage set keys should be defined either in CLUSTERS
-# or SLICED_CLUSTERS. CLUSTERS will define clusters
-# which are not sliced, i.e. are associated with
-# only the default slice_id (0). CLUSTERS is defined in
-# the default way, without adding slice id in
-# the storage_sets field.
-
-# We define sliced clusters, i.e. clusters that reside
-# on multiple physical partitions (slice ids), in
-# SLICED_CLUSTERS. We define all associated
-# (storage set, slice id) pairs in SLICED_CLUSTERS
-# in the storage_sets field. Other fields are defined
-# in the same way as they are in CLUSTERS.
-SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Dogstatsd Options
 DOGSTATSD_HOST: str | None = None
@@ -179,6 +164,7 @@ BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 # Processor/Writer Options
+
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
@@ -315,6 +301,45 @@ PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
 
 # Counter utility class window size in minutes
 COUNTER_WINDOW_SIZE = timedelta(minutes=10)
+
+
+# Slicing Configuration
+
+# Mapping of storage key to slice count
+# This is only for sliced storages
+SLICED_STORAGES: Mapping[str, int] = {}
+
+# Mapping storage key to a mapping of logical partition
+# to slice id
+LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
+
+# The slice configs below are the "SLICED" versions to
+# the equivalent default settings above. For example,
+# "SLICED_KAFKA_TOPIC_MAP" is the "SLICED" version of
+# "KAFKA_TOPIC_MAP". These should be filled out
+# for any corresponding sliced storages defined above,
+# with the applicable number of slices in mind.
+
+# Storage set keys should be defined either in CLUSTERS
+# or SLICED_CLUSTERS. CLUSTERS will define clusters
+# which are not sliced, i.e. are associated with
+# only the default slice_id (0). CLUSTERS is defined in
+# the default way, without adding slice id in
+# the storage_sets field. We define sliced clusters,
+# i.e. clusters that reside on multiple slices
+# in SLICED_CLUSTERS. We define all associated
+# (storage set, slice id) pairs in SLICED_CLUSTERS
+# in the storage_sets field. Other fields are defined
+# in the same way as they are in CLUSTERS.
+SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
+
+# Mapping of (logical topic names, slice id) pairs to custom physical topic names
+# This is only for sliced Kafka topics
+SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
+
+# Mapping of (logical topic names, slice id) pairs to broker config
+# This is only for sliced Kafka topics
+SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

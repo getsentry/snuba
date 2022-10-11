@@ -7,7 +7,11 @@ import pytest
 
 from snuba import settings
 from snuba.settings import validation
-from snuba.settings.validation import InvalidTopicError, validate_settings
+from snuba.settings.validation import (
+    InvalidTopicError,
+    validate_settings,
+    validate_slicing_settings,
+)
 from snuba.utils.streams.topics import Topic
 
 
@@ -70,7 +74,7 @@ def test_validation_catches_bad_partition_mapping() -> None:
     # since events has 2 slices only
 
     with pytest.raises(AssertionError):
-        validate_settings(all_settings)
+        validate_slicing_settings(all_settings)
 
     del part_mapping["events"]
     del sliced_storages["events"]
@@ -89,7 +93,7 @@ def test_validation_catches_unmapped_logical_parts() -> None:
     del part_mapping["events"][1]
 
     with pytest.raises(AssertionError):
-        validate_settings(all_settings)
+        validate_slicing_settings(all_settings)
 
     del part_mapping["events"]
     del sliced_storages["events"]
@@ -103,9 +107,23 @@ def test_validation_catches_empty_slice_mapping() -> None:
     sliced_storages = all_settings["SLICED_STORAGES"]
     sliced_storages["events"] = 2
 
-    # forget to add slice mapping for events
+    # We forgot to add logical:slice mapping for events
 
     with pytest.raises(AssertionError):
-        validate_settings(all_settings)
+        validate_slicing_settings(all_settings)
 
     del sliced_storages["events"]
+
+
+def test_validation_catches_unmapped_topic_pair() -> None:
+    importlib.reload(validation)
+    all_settings = build_settings_dict()
+
+    # We forgot to add broker config for the (topic, slice id) pair
+    sliced_topics = all_settings["SLICED_KAFKA_TOPIC_MAP"]
+    sliced_topics[("events", 1)] = "events-1"
+
+    with pytest.raises(AssertionError):
+        validate_slicing_settings(all_settings)
+
+    del sliced_topics[("events", 1)]

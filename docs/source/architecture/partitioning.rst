@@ -50,6 +50,19 @@ support sharded storages for non-YAML based entities). You can see an example of
 might shard by organization_id in generic_metrics_sets and generic_metrics_distributions
 dataset YAML files.
 
+Configuring sliced Kafka topics
+---------------------------------
+In order to define a "sliced" Kafka topic, add ``(default logical topic name, slice id)`` to
+``settings.SLICED_KAFKA_TOPIC_MAP``. This tuple should be mapped to a custom physical topic
+name of the form ``logical_topic_name-slice_id``. Make sure to add the corresponding broker
+configuration details to ``settings.SLICED_KAFKA_BROKER_CONFIG``. Here, use the same tuple
+``(default logical topic name, slice id)`` as the key, and the broker config info as the value.
+
+Example configurations:
+``SLICED_KAFKA_TOPIC_MAP`` = {("snuba-generic-metrics", 1): "snuba-generic-metrics-1"}
+``SLICED_KAFKA_BROKER_CONFIG`` = {("snuba-generic-metrics", 1): BROKER_CONFIG}
+
+
 
 TODO: handling subscriptions, etc.
 ----------------------------------------------------
