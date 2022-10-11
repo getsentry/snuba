@@ -106,7 +106,7 @@ def record_attribution(attr_data: AttributionData) -> None:
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
             settings.KAFKA_TOPIC_MAP.get(
-                Topic.ATTRIBUTION.value, Topic.ATTRIBUTION.value
+                Topic.SNUBA_ATTRIBUTION.value, Topic.SNUBA_ATTRIBUTION.value
             ),
             data_str.encode("utf-8"),
             on_delivery=_record_attribution_delivery_callback,

@@ -586,7 +586,7 @@ def test_produce_scheduled_subscription_message() -> None:
     strategy = ProduceScheduledSubscriptionMessage(
         schedulers,
         producer,
-        KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
+        KafkaTopicSpec(SnubaTopic.SCHEDULED_SUBSCRIPTIONS_EVENTS),
         commit,
         None,
         metrics_backend,
@@ -687,7 +687,7 @@ def test_produce_stale_message() -> None:
     strategy = ProduceScheduledSubscriptionMessage(
         schedulers,
         producer,
-        KafkaTopicSpec(SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS),
+        KafkaTopicSpec(SnubaTopic.SCHEDULED_SUBSCRIPTIONS_EVENTS),
         commit,
         stale_threshold_seconds,
         metrics_backend,
