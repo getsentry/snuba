@@ -1,6 +1,6 @@
 from dataclasses import replace
 from datetime import timedelta
-from typing import Callable, Mapping, NamedTuple, Optional, Sequence, cast
+from typing import Mapping, NamedTuple, Optional, Sequence, cast
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -8,7 +8,7 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Position
+from arroyo.types import Commit
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -214,7 +214,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
 
     def create_with_partitions(
         self,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
         execute_step = self.__executor_factory.create_with_partitions(
