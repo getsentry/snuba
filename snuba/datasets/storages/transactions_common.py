@@ -10,6 +10,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
+from snuba.datasets.plans.splitters.strategies import TimeSplitQueryStrategy
 from snuba.query.processors.physical.array_has_optimizer import ArrayHasOptimizer
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
@@ -38,7 +39,6 @@ from snuba.query.processors.physical.type_converters.uuid_column_processor impor
 from snuba.query.processors.physical.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
-from snuba.web.split import TimeSplitQueryStrategy
 
 columns = ColumnSet(
     [
