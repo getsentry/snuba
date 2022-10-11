@@ -33,7 +33,7 @@ def assert_valid_policy_creator(
 def test_generate_policy_creator() -> None:
     assert_valid_policy_creator(
         generate_policy_creator(
-            {"type": "produce", "args": [Topic.DEAD_LETTER_GENERIC_METRICS.value]}
+            {"type": "produce", "args": [Topic.SNUBA_DEAD_LETTER_GENERIC_METRICS.value]}
         )
     )
 
@@ -58,24 +58,24 @@ def test_build_stream_loader() -> None:
         }
     )
     assert isinstance(loader.get_processor(), GenericSetsMetricsProcessor)
-    assert loader.get_default_topic_spec().topic == Topic.GENERIC_METRICS
+    assert loader.get_default_topic_spec().topic == Topic.SNUBA_GENERIC_METRICS
     assert isinstance(loader.get_pre_filter(), KafkaHeaderSelectFilter)
     commit_log_topic_spec = loader.get_commit_log_topic_spec()
     assert (
         commit_log_topic_spec is not None
-        and commit_log_topic_spec.topic == Topic.GENERIC_METRICS_SETS_COMMIT_LOG
+        and commit_log_topic_spec.topic == Topic.SNUBA_GENERIC_METRICS_SETS_COMMIT_LOG
     )
     assert loader.get_subscription_scheduler_mode() == SchedulingWatermarkMode.GLOBAL
     scheduled_topic_spec = loader.get_subscription_scheduled_topic_spec()
     assert (
         scheduled_topic_spec is not None
         and scheduled_topic_spec.topic
-        == Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS
+        == Topic.SCHEDULED_SUBSCRIPTIONS_GENERIC_METRICS_SETS
     )
     result_topic_spec = loader.get_subscription_result_topic_spec()
     assert (
         result_topic_spec is not None
-        and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS
+        and result_topic_spec.topic == Topic.GENERIC_METRICS_SETS_SUBSCRIPTION_RESULTS
     )
     assert_valid_policy_creator(loader.get_dead_letter_queue_policy_creator())
 

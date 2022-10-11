@@ -33,10 +33,10 @@ storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=TransactionsMessageProcessor(),
         default_topic=Topic.TRANSACTIONS,
-        commit_log_topic=Topic.TRANSACTIONS_COMMIT_LOG,
+        commit_log_topic=Topic.SNUBA_TRANSACTIONS_COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
-        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS,
-        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_TRANSACTIONS,
+        subscription_scheduled_topic=Topic.SCHEDULED_SUBSCRIPTIONS_TRANSACTIONS,
+        subscription_result_topic=Topic.TRANSACTIONS_SUBSCRIPTION_RESULTS,
     ),
     query_splitters=query_splitters,
     mandatory_condition_checkers=mandatory_condition_checkers,
