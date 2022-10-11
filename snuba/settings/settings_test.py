@@ -44,12 +44,12 @@ REDIS_CLUSTERS = {
         "reinitialize_steps": 10,
     }
     for i, key in [
-        (1, "cache"),
-        (2, "rate_limiter"),
-        (3, "subscription_store"),
-        (4, "replacements_store"),
-        (5, "config"),
-        (6, "dlq"),
-        (7, "optimize"),
+        (2, "cache"),
+        (3, "rate_limiter"),
+        (4, "subscription_store"),
+        (5, "replacements_store"),
+        (6, "config"),
+        (7, "dlq"),
+        (8, "optimize"),
     ]
 }
