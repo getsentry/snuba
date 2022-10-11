@@ -57,7 +57,7 @@ from snuba.utils.serializable_exception import (
     SerializableException,
     SerializableExceptionDict,
 )
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryException, QueryResult, constants
 
 MAX_HASH_PLUS_ONE = 16**32  # Max value of md5 hash
 metrics = MetricsWrapper(environment.metrics, "db_query")
@@ -717,12 +717,15 @@ def raw_query(
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     error_code = cause.code
-                    scope.fingerprint = [
+                    fingerprint = [
                         "{{default}}",
                         str(cause.code),
                         query_metadata.dataset,
-                        query_metadata.request.referrer,
                     ]
+                    if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                        fingerprint.append(query_metadata.request.referrer)
+
+                    scope.fingerprint = fingerprint
                     if scope.span:
                         if cause.code == errors.ErrorCodes.TOO_SLOW:
                             sentry_sdk.set_tag("timeout", "predicted")
