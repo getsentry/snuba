@@ -57,7 +57,7 @@ def test_scheduler_consumer() -> None:
     from snuba.datasets.entity_subscriptions.entity_subscription import (
         EventsSubscription,
     )
-    from snuba.redis import redis_client
+    from snuba.redis import RedisClientKey, get_redis_client
     from snuba.subscriptions.data import PartitionId, SubscriptionData
     from snuba.subscriptions.store import RedisSubscriptionDataStore
 
@@ -65,7 +65,9 @@ def test_scheduler_consumer() -> None:
     partition_index = 0
 
     store = RedisSubscriptionDataStore(
-        redis_client, entity_key, PartitionId(partition_index)
+        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+        entity_key,
+        PartitionId(partition_index),
     )
     store.create(
         uuid.uuid4(),

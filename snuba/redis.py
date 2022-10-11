@@ -1,8 +1,9 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, annotations
 
 import time
+from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Union, cast
+from typing import Any, Callable, Iterable, Mapping, TypeVar, Union, cast
 
 from redis.client import StrictRedis
 from redis.cluster import ClusterNode, NodesManager, RedisCluster
@@ -43,19 +44,17 @@ class RetryingStrictRedisCluster(RedisCluster):  # type: ignore #  Missing type 
 RANDOM_SLEEP_MAX = 50
 KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE = "All slots are not"
 
-RedisInitFunction = Callable[[], RedisClientType]
+RedisInitFunction = TypeVar("RedisInitFunction", bound=Callable[..., Any])
 
 
 def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]:
-    def _retry_inner(
-        func: Callable[[], RedisClientType]
-    ) -> Callable[[], RedisClientType]:
+    def _retry_inner(func: RedisInitFunction) -> RedisInitFunction:
         @wraps(func)
-        def wrapper() -> RedisClientType:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             retry_counter = 0
             while retry_counter < max_retries:
                 try:
-                    return func()
+                    return func(*args, **kwargs)
                 except RedisClusterException as e:
                     if KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE in str(e):
                         # Exponentially increase the sleep starting from
@@ -67,35 +66,97 @@ def _retry(max_retries: int) -> Callable[[RedisInitFunction], RedisInitFunction]
                     raise
             raise FailedClusterInitization("Init failed")
 
-        return wrapper
+        return cast(RedisInitFunction, wrapper)
 
     return _retry_inner
 
 
 @_retry(max_retries=settings.REDIS_INIT_MAX_RETRIES)
-def _initialize_redis_cluster() -> RedisClientType:
-    if settings.USE_REDIS_CLUSTER:
-        startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
+def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClientType:
+    if config["use_redis_cluster"]:
+        startup_nodes = config["cluster_startup_nodes"]
         if startup_nodes is None:
-            startup_nodes = [{"host": settings.REDIS_HOST, "port": settings.REDIS_PORT}]
+            startup_nodes = [{"host": config["host"], "port": config["port"]}]
         startup_cluster_nodes = [
             ClusterNode(n["host"], n["port"]) for n in startup_nodes
         ]
         return RetryingStrictRedisCluster(
             startup_nodes=startup_cluster_nodes,
             socket_keepalive=True,
-            password=settings.REDIS_PASSWORD,
+            password=config["password"],
             max_connections_per_node=True,
-            reinitialize_steps=settings.REDIS_REINITIALIZE_STEPS,
+            reinitialize_steps=config["reinitialize_steps"],
         )
     else:
         return StrictRedis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            password=settings.REDIS_PASSWORD,
-            db=settings.REDIS_DB,
+            host=config["host"],
+            port=config["port"],
+            password=config["password"],
+            db=config["db"],
             socket_keepalive=True,
         )
 
 
-redis_client: RedisClientType = _initialize_redis_cluster()
+_default_redis_client: RedisClientType = _initialize_redis_cluster(
+    {
+        "use_redis_cluster": settings.USE_REDIS_CLUSTER,
+        "cluster_startup_nodes": settings.REDIS_CLUSTER_STARTUP_NODES,
+        "host": settings.REDIS_HOST,
+        "port": settings.REDIS_PORT,
+        "password": settings.REDIS_PASSWORD,
+        "db": settings.REDIS_DB,
+        "reinitialize_steps": settings.REDIS_REINITIALIZE_STEPS,
+    }
+)
+
+
+def _initialize_specialized_redis_cluster(
+    config: settings.RedisClusterConfig | None,
+) -> RedisClientType:
+    if config is None:
+        return _default_redis_client
+
+    return _initialize_redis_cluster(config)
+
+
+class RedisClientKey(Enum):
+    CACHE = "cache"
+    RATE_LIMITER = "rate_limiter"
+    SUBSCRIPTION_STORE = "subscription_store"
+    REPLACEMENTS_STORE = "replacements_store"
+    CONFIG = "config"
+    DLQ = "dlq"
+    OPTIMIZE = "optimize"
+
+
+_redis_clients: Mapping[RedisClientKey, RedisClientType] = {
+    RedisClientKey.CACHE: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["cache"]
+    ),
+    RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["rate_limiter"]
+    ),
+    RedisClientKey.SUBSCRIPTION_STORE: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["subscription_store"]
+    ),
+    RedisClientKey.REPLACEMENTS_STORE: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["replacements_store"]
+    ),
+    RedisClientKey.CONFIG: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["config"]
+    ),
+    RedisClientKey.DLQ: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["dlq"]
+    ),
+    RedisClientKey.OPTIMIZE: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["optimize"]
+    ),
+}
+
+
+def get_redis_client(name: RedisClientKey) -> RedisClientType:
+    return _redis_clients[name]
+
+
+def all_redis_clients() -> Iterable[RedisClientType]:
+    return cast(Iterable[RedisClientType], _redis_clients.values())
