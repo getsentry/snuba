@@ -89,7 +89,7 @@ class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
         return {"organization": self.organization}
 
 
-class BaseEventsSubscription(EntitySubscriptionValidation, EntitySubscription, ABC):
+class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None
     ) -> Sequence[Expression]:
@@ -112,11 +112,7 @@ class BaseEventsSubscription(EntitySubscriptionValidation, EntitySubscription, A
         return {}
 
 
-class EventsSubscription(BaseEventsSubscription):
-    ...
-
-
-class TransactionsSubscription(BaseEventsSubscription):
+class TransactionsSubscription(EntitySubscription):
     ...
 
 
