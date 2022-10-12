@@ -20,7 +20,6 @@ CLUSTERS = [
             "sessions",
             "transactions",
             "transactions_v2",
-            "transactions_ro",
             "errors_v2",
             "errors_v2_ro",
             "profiles",

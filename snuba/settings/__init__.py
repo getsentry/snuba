@@ -69,7 +69,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "sessions",
             "transactions",
             "transactions_v2",
-            "transaction_ro",
             "errors_v2",
             "errors_v2_ro",
             "profiles",
