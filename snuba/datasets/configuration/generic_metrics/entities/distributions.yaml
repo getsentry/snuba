@@ -110,7 +110,7 @@ translation_mappers:
         column_to_map: value
         from_name: minIf
         to_name: minMergeIf
-        aggr_col_name: minIf
+        aggr_col_name: min
     -
       mapper: AggregateFunctionMapper
       args:
