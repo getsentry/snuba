@@ -98,7 +98,9 @@ class BaseTransactionsEntity(Entity, ABC):
         pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=get_storage(StorageKey.TRANSACTIONS),
-                mappers=transaction_translator,
+                mappers=transaction_translator
+                if custom_mappers is None
+                else transaction_translator.concat(custom_mappers),
             )
         )
 
