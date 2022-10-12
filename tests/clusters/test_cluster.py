@@ -23,7 +23,6 @@ ENABLED_STORAGE_SETS = {
 
 ALL_STORAGE_SETS = {
     "outcomes",
-    "transactions_ro",
     *ENABLED_STORAGE_SETS,
 }
 
