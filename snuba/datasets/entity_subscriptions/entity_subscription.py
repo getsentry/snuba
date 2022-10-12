@@ -112,7 +112,7 @@ class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
         return {}
 
 
-class TransactionsSubscription(EntitySubscription):
+class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription):
     ...
 
 
