@@ -102,7 +102,7 @@ jobs:
   snuba-image:
     name: Build snuba CI image
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
@@ -226,7 +226,8 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ["test", "test_distributed", "test_distributed_migrations"]
+        snuba_settings:
+          ["test", "test_distributed", "test_distributed_migrations"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
