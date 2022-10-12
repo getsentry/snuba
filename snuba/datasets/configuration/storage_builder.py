@@ -11,6 +11,7 @@ from snuba.datasets.configuration.json_schema import (
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
     generate_policy_creator,
+    get_mandatory_condition_checkers,
     get_query_processors,
     get_query_splitters,
     parse_columns,
@@ -37,6 +38,7 @@ STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
 QUERY_SPLITTERS = "query_splitters"
+MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
@@ -76,6 +78,11 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         QUERY_SPLITTERS: get_query_splitters(
             config[QUERY_SPLITTERS] if QUERY_SPLITTERS in config else []
         ),
+        MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
+            config[MANDATORY_CONDITION_CHECKERS]
+            if MANDATORY_CONDITION_CHECKERS in config
+            else []
+        )
         # TODO: Rest of readable storage optional args
     }
 

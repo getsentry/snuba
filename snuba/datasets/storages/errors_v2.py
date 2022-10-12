@@ -16,10 +16,10 @@ from snuba.datasets.storages.errors_common import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.condition_checkers import ProjectIdEnforcer
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.physical.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.physical.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
