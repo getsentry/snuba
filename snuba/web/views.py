@@ -629,7 +629,7 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from arroyo.processing.strategies.streaming import (
+            from arroyo.processing.strategies.factory import (
                 KafkaConsumerStrategyFactory,
             )
 
