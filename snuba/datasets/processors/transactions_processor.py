@@ -248,6 +248,12 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             if context in contexts:
                 del contexts[context]
 
+        app_context = contexts.get("app")
+        if app_context is not None:
+            app_start_type = app_context.get("start_type")
+            if app_start_type is not None:
+                processed["app_start_type"] = app_start_type
+
         sanitized_contexts = self._sanitize_contexts(processed, event_dict)
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             sanitized_contexts
@@ -384,6 +390,12 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # so there is no need to store it again in the context array.
         transaction_ctx.pop("hash", None)
         transaction_ctx.pop("exclusive_time", None)
+
+        # The app_start_type is promoted as a column on a query level, no need to store it again
+        # in the context array.
+        app_ctx = sanitized_context.get("app", {})
+        if app_ctx is not None:
+            app_ctx.pop("start_type", None)
 
         skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
             processed["project_id"], set()

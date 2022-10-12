@@ -39,6 +39,14 @@ class TransactionEvent:
     geo: Mapping[str, str]
     status: str
     transaction_source: Optional[str]
+    app_start_type: str = "warm"
+    has_app_ctx: bool = True
+
+    def get_app_context(self) -> Optional[Mapping[str, str]]:
+        if self.has_app_ctx:
+            return {"start_type": self.app_start_type}
+        else:
+            return None
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
@@ -136,6 +144,7 @@ class TransactionEvent:
                             "hash": "a" * 16,
                             "exclusive_time": 1.2345,
                         },
+                        "app": self.get_app_context(),
                         "experiments": {"test1": 1, "test2": 2},
                     },
                     "tags": [
@@ -240,6 +249,9 @@ class TransactionEvent:
             "spans.exclusive_time_32": [span[2] for span in spans],
         }
 
+        if self.has_app_ctx:
+            ret["app_start_type"] = self.app_start_type
+
         if self.ipv4:
             ret["ip_address_v4"] = self.ipv4
         else:
@@ -253,9 +265,9 @@ class TestTransactionsProcessor:
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
 
-    def test_skip_non_transactions(self) -> None:
+    def __get_transaction_event(self) -> TransactionEvent:
         start, finish = self.__get_timestamps()
-        message = TransactionEvent(
+        return TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
@@ -281,6 +293,9 @@ class TestTransactionsProcessor:
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
             transaction_source="url",
         )
+
+    def test_skip_non_transactions(self) -> None:
+        message = self.__get_transaction_event()
         payload = message.serialize()
         # Force an invalid event
         payload[2]["data"]["type"] = "error"
@@ -292,33 +307,7 @@ class TestTransactionsProcessor:
         assert processor.process_message(payload, meta) is None
 
     def test_missing_trace_context(self) -> None:
-        start, finish = self.__get_timestamps()
-        message = TransactionEvent(
-            event_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            trace_id="7400045b25c443b885914600aa83ad04",
-            span_id="8841662216cc598b",
-            group_ids=[100, 200],
-            transaction_name="/organizations/:orgId/issues/",
-            status="cancelled",
-            op="navigation",
-            timestamp=finish,
-            start_timestamp=start,
-            platform="python",
-            dist="",
-            user_name="me",
-            user_id="myself",
-            user_email="me@myself.com",
-            ipv4="127.0.0.1",
-            ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
-            http_method="POST",
-            http_referer="tagstore.something",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
-            transaction_source="url",
-        )
+        message = self.__get_transaction_event()
         payload = message.serialize()
         # Force an invalid event
         del payload[2]["data"]["contexts"]
@@ -333,33 +322,8 @@ class TestTransactionsProcessor:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
 
-        start, finish = self.__get_timestamps()
-        message = TransactionEvent(
-            event_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            trace_id="7400045b25c443b885914600aa83ad04",
-            span_id="8841662216cc598b",
-            group_ids=[100, 200],
-            transaction_name="/organizations/:orgId/issues/",
-            status="cancelled",
-            op="navigation",
-            timestamp=finish,
-            start_timestamp=start,
-            platform="python",
-            dist="",
-            user_name="me",
-            user_id="myself",
-            user_email="me@myself.com",
-            ipv4="127.0.0.1",
-            ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
-            http_method="POST",
-            http_referer="tagstore.something",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
-            transaction_source="url",
-        )
+        message = self.__get_transaction_event()
+
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
@@ -373,33 +337,7 @@ class TestTransactionsProcessor:
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
         set_config("max_spans_per_transaction", 1)
 
-        start, finish = self.__get_timestamps()
-        message = TransactionEvent(
-            event_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            trace_id="7400045b25c443b885914600aa83ad04",
-            span_id="8841662216cc598b",
-            group_ids=[100, 200],
-            transaction_name="/organizations/:orgId/issues/",
-            status="cancelled",
-            op="navigation",
-            timestamp=finish,
-            start_timestamp=start,
-            platform="python",
-            dist="",
-            user_name="me",
-            user_id="myself",
-            user_email="me@myself.com",
-            ipv4="127.0.0.1",
-            ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
-            http_method="POST",
-            http_referer="tagstore.something",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
-            transaction_source="url",
-        )
+        message = self.__get_transaction_event()
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
@@ -420,33 +358,8 @@ class TestTransactionsProcessor:
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
 
     def test_missing_transaction_source(self) -> None:
-        start, finish = self.__get_timestamps()
-        message = TransactionEvent(
-            event_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            trace_id="7400045b25c443b885914600aa83ad04",
-            span_id="8841662216cc598b",
-            group_ids=[100, 200],
-            transaction_name="/organizations/:orgId/issues/",
-            status="cancelled",
-            op="navigation",
-            timestamp=finish,
-            start_timestamp=start,
-            platform="python",
-            dist="",
-            user_name="me",
-            user_id="myself",
-            user_email="me@myself.com",
-            ipv4="127.0.0.1",
-            ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
-            http_method="POST",
-            http_referer="tagstore.something",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
-            transaction_source="",
-        )
+        message = self.__get_transaction_event()
+        message.transaction_source = ""
 
         payload_base = message.serialize()
         payload_wo_transaction_info = deepcopy(payload_base)
@@ -472,3 +385,18 @@ class TestTransactionsProcessor:
             payload_wo_source, meta
         )
         assert actual_message.rows[0]["transaction_source"] == ""
+
+    def test_app_ctx_none(self) -> None:
+        old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+
+        message = self.__get_transaction_event()
+        message.has_app_ctx = False
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        assert TransactionsMessageProcessor().process_message(
+            message.serialize(), meta
+        ) == InsertBatch([message.build_result(meta)], None)
+        settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
