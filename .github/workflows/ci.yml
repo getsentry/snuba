@@ -113,7 +113,7 @@ jobs:
         id: branch
         # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
         # it can be used as a docker tag
-        run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
+        run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
       # We are only using ghcr here for CI as `setup-gcloud` is a bit slow
       # Should revisit this when we move off of google cloud build (we may want to move these to GCR)
@@ -177,7 +177,7 @@ jobs:
         id: branch
         # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
         # it can be used as a docker tag
-        run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
+        run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
       - name: enable arm64 building
         run: docker run --rm --privileged tonistiigi/binfmt --install arm64
