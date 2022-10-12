@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from arroyo.backends.kafka.consumer import KafkaPayload
-from arroyo.processing.strategies.streaming.factory import KafkaConsumerStrategyFactory
+from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
 from arroyo.types import Message, Partition, Topic
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery, StringNode
