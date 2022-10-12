@@ -1,14 +1,18 @@
+from __future__ import annotations
+
+import os
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from typing import Callable, Optional, Type, cast
 
 from snuba.clickhouse.query import Query
 from snuba.query.query_settings import QuerySettings
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 from snuba.web import QueryResult
 
 SplitQueryRunner = Callable[[Query, QuerySettings], QueryResult]
 
 
-class QuerySplitStrategy(ABC):
+class QuerySplitStrategy(ABC, metaclass=RegisteredClass):
     """
     Implements a query split algorithm. It works in a similar way as a
     QueryExecutionStrategy, it takes a query, request.query_settings and a query runner
@@ -41,3 +45,20 @@ class QuerySplitStrategy(ABC):
         return None when the query is not supported by this strategy.
         """
         raise NotImplementedError
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["QuerySplitStrategy"]:
+        return cast(Type["QuerySplitStrategy"], cls.class_from_name(name))
+
+    @classmethod
+    def from_kwargs(cls, **kwargs: str) -> QuerySplitStrategy:
+        return cls(**kwargs)
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
+
+import_submodules_in_directory(
+    os.path.dirname(os.path.realpath(__file__)), "snuba.datasets.plans.splitters"
+)

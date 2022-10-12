@@ -8,7 +8,7 @@ from typing import Optional
 from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
-from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
+from snuba.datasets.plans.splitters import QuerySplitStrategy, SplitQueryRunner
 from snuba.query import OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,

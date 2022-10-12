@@ -9,7 +9,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.common.condition_checker import ConditionChecker
-from snuba.datasets.plans.split_strategy import QuerySplitStrategy
+from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
