@@ -113,7 +113,13 @@ class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
 
 
 class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription):
-    ...
+    def get_entity_subscription_conditions_for_snql(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Expression]:
+        return []
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {}
 
 
 class MetricsCountersSubscription(SessionsSubscription):
