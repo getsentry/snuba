@@ -16,7 +16,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Commit, Position
+from arroyo.types import Commit
 
 from snuba import state
 from snuba.consumers.utils import get_partition_count
@@ -431,9 +431,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             self.__queue.popleft()
 
-            self.__commit(
-                {message.partition: Position(message.next_offset, message.timestamp)}
-            )
+            self.__commit({message.partition: message.position_to_commit})
 
     def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         assert not self.__closed
@@ -468,7 +466,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             future.result(remaining)
 
-            offset = {message.partition: Position(message.offset, message.timestamp)}
+            offset = {message.partition: message.position_to_commit}
 
             logger.info("Committing offset: %r", offset)
             self.__commit(offset, force=True)
