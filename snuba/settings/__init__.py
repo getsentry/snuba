@@ -82,6 +82,46 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     },
 ]
 
+ALLOWED_TOPICS: Set[str] = {
+    "events",
+    "event-replacements",
+    "transactions",
+    "snuba-commit-log",
+    "snuba-transactions-commit-log",
+    "snuba-sessions-commit-log",
+    "snuba-metrics-commit-log",
+    "cdc",
+    "snuba-metrics",
+    "outcomes",
+    "ingest-sessions",
+    "snuba-queries",
+    "scheduled-subscriptions-events",
+    "scheduled-subscriptions-transactions",
+    "scheduled-subscriptions-sessions",
+    "scheduled-subscriptions-metrics",
+    "scheduled-subscriptions-generic-metrics-sets",
+    "scheduled-subscriptions-generic-metrics-distributions",
+    "events-subscription-results",
+    "transactions-subscription-results",
+    "sessions-subscription-results",
+    "metrics-subscription-results",
+    "generic-metrics-sets-subscription-results",
+    "generic-metrics-distributions-subscription-results",
+    "snuba-dead-letter-inserts",
+    "processed-profiles",
+    "snuba-attribution",
+    "profiles-call-tree",
+    "ingest-replay-events",
+    "snuba-replay-events",
+    "snuba-dead-letter-replays",
+    "snuba-generic-metrics",
+    "snuba-generic-metrics-sets-commit-log",
+    "snuba-generic-metrics-distributions-commit-log",
+    "snuba-dead-letter-generic-metrics",
+    "snuba-dead-letter-sessions",
+    "snuba-dead-letter-metrics",
+}
+
 # Dogstatsd Options
 DOGSTATSD_HOST: str | None = None
 DOGSTATSD_PORT: int | None = None

@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Optional, Set
 
 from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 
@@ -28,45 +28,9 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
             "DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead."
         )
 
-    topic_names = {
-        "events",
-        "event-replacements",
-        "transactions",
-        "snuba-commit-log",
-        "snuba-transactions-commit-log",
-        "snuba-sessions-commit-log",
-        "snuba-metrics-commit-log",
-        "cdc",
-        "snuba-metrics",
-        "outcomes",
-        "ingest-sessions",
-        "snuba-queries",
-        "scheduled-subscriptions-events",
-        "scheduled-subscriptions-transactions",
-        "scheduled-subscriptions-sessions",
-        "scheduled-subscriptions-metrics",
-        "scheduled-subscriptions-generic-metrics-sets",
-        "scheduled-subscriptions-generic-metrics-distributions",
-        "events-subscription-results",
-        "transactions-subscription-results",
-        "sessions-subscription-results",
-        "metrics-subscription-results",
-        "generic-metrics-sets-subscription-results",
-        "generic-metrics-distributions-subscription-results",
-        "snuba-dead-letter-inserts",
-        "processed-profiles",
-        "snuba-attribution",
-        "profiles-call-tree",
-        "ingest-replay-events",
-        "snuba-replay-events",
-        "snuba-dead-letter-replays",
-        "snuba-generic-metrics",
-        "snuba-generic-metrics-sets-commit-log",
-        "snuba-generic-metrics-distributions-commit-log",
-        "snuba-dead-letter-generic-metrics",
-        "snuba-dead-letter-sessions",
-        "snuba-dead-letter-metrics",
-    }
+    topic_names: Optional[Set[str]] = locals.get("ALLOWED_TOPICS")
+    if not topic_names:
+        topic_names = set()
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
         if key not in topic_names:
