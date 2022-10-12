@@ -32,7 +32,7 @@ from snuba.querylog.query_metadata import (
     SnubaQueryMetadata,
 )
 from snuba.reader import Reader, Result
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
@@ -51,7 +51,7 @@ from snuba.utils.serializable_exception import (
     SerializableException,
     SerializableExceptionDict,
 )
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryException, QueryResult, constants
 
 MAX_HASH_PLUS_ONE = 16**32  # Max value of md5 hash
 metrics = MetricsWrapper(environment.metrics, "db_query")
@@ -80,7 +80,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # reader when running a query.
 cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
-        redis_client,
+        get_redis_client(RedisClientKey.CACHE),
         "snuba-query-cache:",
         ResultCacheCodec(),
         ThreadPoolExecutor(),
@@ -426,7 +426,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
             # of acquiring the lock is not needed.
             if partition_id not in cache_partitions:
                 cache_partitions[partition_id] = RedisCache(
-                    redis_client,
+                    get_redis_client(RedisClientKey.CACHE),
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
                     ThreadPoolExecutor(),
@@ -688,7 +688,15 @@ def raw_query(
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     error_code = cause.code
-                    scope.fingerprint = ["{{default}}", str(cause.code)]
+                    fingerprint = [
+                        "{{default}}",
+                        str(cause.code),
+                        query_metadata.dataset,
+                    ]
+                    if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                        fingerprint.append(query_metadata.request.referrer)
+
+                    scope.fingerprint = fingerprint
                     if scope.span:
                         if cause.code == errors.ErrorCodes.TOO_SLOW:
                             sentry_sdk.set_tag("timeout", "predicted")

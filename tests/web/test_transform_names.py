@@ -7,8 +7,8 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
+from snuba.processor import InsertEvent
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal

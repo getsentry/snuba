@@ -9,10 +9,11 @@ from unittest import mock
 import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload, KafkaProducer
+from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.commit import Commit
 from arroyo.errors import ConsumerError
-from arroyo.synchronized import Commit, commit_codec
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
@@ -31,6 +32,8 @@ from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend
+
+commit_codec = CommitCodec()
 
 
 def test_scheduler_consumer() -> None:
@@ -54,7 +57,7 @@ def test_scheduler_consumer() -> None:
     from snuba.datasets.entity_subscriptions.entity_subscription import (
         EventsSubscription,
     )
-    from snuba.redis import redis_client
+    from snuba.redis import RedisClientKey, get_redis_client
     from snuba.subscriptions.data import PartitionId, SubscriptionData
     from snuba.subscriptions.store import RedisSubscriptionDataStore
 
@@ -62,7 +65,9 @@ def test_scheduler_consumer() -> None:
     partition_index = 0
 
     store = RedisSubscriptionDataStore(
-        redis_client, entity_key, PartitionId(partition_index)
+        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+        entity_key,
+        PartitionId(partition_index),
     )
     store.create(
         uuid.uuid4(),

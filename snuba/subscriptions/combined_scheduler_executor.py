@@ -1,6 +1,6 @@
 from dataclasses import replace
 from datetime import timedelta
-from typing import Callable, Mapping, NamedTuple, Optional, Sequence, cast
+from typing import Mapping, NamedTuple, Optional, Sequence, cast
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -8,7 +8,7 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Position
+from arroyo.types import Commit
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -16,7 +16,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.executor_consumer import SubscriptionExecutorProcessingFactory
@@ -27,6 +27,8 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
+
+redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
 class TopicConfig(NamedTuple):
@@ -212,7 +214,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
 
     def create_with_partitions(
         self,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[Tick]:
         execute_step = self.__executor_factory.create_with_partitions(

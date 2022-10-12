@@ -4,7 +4,7 @@ from typing import Callable, Collection, Optional, Tuple
 
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
@@ -19,6 +19,8 @@ from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.subscriptions.subscriptions_utils import create_entity_subscription
+
+redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
 class TestSubscriptionScheduler:

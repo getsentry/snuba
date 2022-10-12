@@ -6,7 +6,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.datasets.factory import get_dataset
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
@@ -74,7 +74,9 @@ for _ in range(parsed.number):
 
 # Print all subscriptions currently registered
 stores = [
-    RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(i))
+    RedisSubscriptionDataStore(
+        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE), entity_key, PartitionId(i)
+    )
     for i in range(topic_spec.partitions_number)
 ]
 

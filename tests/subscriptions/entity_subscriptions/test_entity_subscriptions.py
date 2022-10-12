@@ -90,17 +90,7 @@ TESTS_CONDITIONS_SNQL_METHOD = [
     ),
     pytest.param(
         TransactionsSubscription(data_dict={}),
-        [
-            binary_condition(
-                ConditionFunctions.LTE,
-                FunctionCall(
-                    None,
-                    "ifNull",
-                    (Column(None, None, "offset"), Literal(None, 0)),
-                ),
-                Literal(None, 5),
-            )
-        ],
+        [],
         True,
         id="Transactions subscription with offset of type SNQL",
     ),

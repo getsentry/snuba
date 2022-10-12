@@ -7,7 +7,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
 )
-from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
+from snuba.datasets.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings

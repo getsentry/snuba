@@ -7,6 +7,10 @@ class InvalidTopicError(ValueError):
     pass
 
 
+slice_count_validation_msg = """physical slice for storage {0}'s logical partition {1} is {2},
+            but only {3} physical slices are assigned to {0}"""
+
+
 def validate_settings(locals: Mapping[str, Any]) -> None:
     if locals.get("QUERIES_TOPIC"):
         raise ValueError("QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead.")
@@ -86,12 +90,30 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
                 # that are not defined in StorageSetKey.
                 pass
 
-    for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
-        physical_part = locals["LOGICAL_PARTITION_MAPPING"].get(str(logical_part))
-        partition_count = locals["LOCAL_SLICES"]
+
+def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
+    for storage in locals["SLICED_STORAGES"]:
         assert (
-            physical_part is not None
-        ), f"missing physical slice for logical partition {logical_part}"
+            storage in locals["LOGICAL_PARTITION_MAPPING"]
+        ), "sliced mapping must be defined for sliced storage {storage}"
+
+        storage_mapping = locals["LOGICAL_PARTITION_MAPPING"][storage]
+        defined_slice_count = locals["SLICED_STORAGES"][storage]
+
+        for logical_part in range(0, SENTRY_LOGICAL_PARTITIONS):
+            slice_id = storage_mapping.get(logical_part)
+
+            assert (
+                slice_id is not None
+            ), f"missing physical slice for storage {storage}'s logical partition {logical_part}"
+
+            assert (
+                slice_id >= 0 and slice_id < defined_slice_count
+            ), slice_count_validation_msg.format(
+                storage, logical_part, slice_id, defined_slice_count
+            )
+
+    for topic_tuple in locals["SLICED_KAFKA_TOPIC_MAP"]:
         assert (
-            physical_part < locals["LOCAL_SLICES"]
-        ), f"physical slice for logical partition {logical_part} is {physical_part}, but only {partition_count} physical slices exist"
+            topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]
+        ), f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"

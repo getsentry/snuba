@@ -18,13 +18,12 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.events_processor_base import InsertEvent, ReplacementType
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.processor import InsertBatch
-from snuba.redis import redis_client
+from snuba.processor import InsertBatch, InsertEvent, ReplacementType
+from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
@@ -149,7 +148,7 @@ class SimpleAPITest(BaseApiTest):
                     )
         self.write_events(events)
 
-    def redis_db_size(self) -> int:
+    def redis_db_size(self, redis_client: RedisClientType) -> int:
         # dbsize could be an integer for a single node cluster or a dictionary
         # with one key value pair per node for a multi node cluster
         dbsize: int | dict[str, int] = redis_client.dbsize()
@@ -2056,7 +2055,9 @@ class TestApi(SimpleAPITest):
         table = writer.get_schema().get_table_name()
 
         assert table not in clickhouse.execute("SHOW TABLES").results
-        assert self.redis_db_size() == 0
+        assert (
+            self.redis_db_size(get_redis_client(RedisClientKey.REPLACEMENTS_STORE)) == 0
+        )
 
         # No data in events table
         assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) == 0
@@ -2216,7 +2217,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             len(
                 list(
                     RedisSubscriptionDataStore(
-                        redis_client,
+                        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                         entity_key,
                         partition,
                     ).all()
@@ -2329,7 +2330,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
             len(
                 list(
                     RedisSubscriptionDataStore(
-                        redis_client,
+                        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                         entity_key,
                         partition,
                     ).all()
@@ -2344,7 +2345,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         assert resp.status_code == 202, resp
         assert (
             RedisSubscriptionDataStore(
-                redis_client,
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                 entity_key,
                 partition,
             ).all()

@@ -5,13 +5,14 @@ import simplejson as json
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
-class QuerylogProcessor(MessageProcessor):
+class QuerylogProcessor(DatasetMessageProcessor):
     def __to_json_string(self, map: Mapping[str, Any]) -> str:
         return json.dumps({k: v for k, v in sorted(map.items())})
 

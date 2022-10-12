@@ -32,13 +32,14 @@ from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.datasets.events_processor_base import (
-    REPLACEMENT_EVENT_TYPES,
-    ReplacementType,
-)
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.processor import InvalidMessageType, _hashify
-from snuba.redis import redis_client
+from snuba.processor import (
+    REPLACEMENT_EVENT_TYPES,
+    InvalidMessageType,
+    ReplacementType,
+    _hashify,
+)
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import (
     ReplacementMessage,
@@ -57,6 +58,7 @@ In theory this will be needed only during the events to errors migration.
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "errors.replacer")
+redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 
 @dataclass(frozen=True)

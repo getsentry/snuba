@@ -21,12 +21,8 @@ from snuba.datasets.metrics_messages import (
     values_for_distribution_message,
     values_for_set_message,
 )
-from snuba.processor import (
-    InsertBatch,
-    MessageProcessor,
-    ProcessedMessage,
-    _ensure_valid_date,
-)
+from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +32,7 @@ GRANULARITY_ONE_HOUR = 2
 GRANULARITY_ONE_DAY = 3
 
 
-class GenericMetricsBucketProcessor(MessageProcessor, ABC):
+class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
     @abstractmethod
     def _should_process(self, message: Mapping[str, Any]) -> bool:
         raise NotImplementedError

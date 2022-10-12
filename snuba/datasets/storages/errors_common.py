@@ -9,6 +9,10 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
+from snuba.datasets.plans.splitters.strategies import (
+    ColumnSplitQueryStrategy,
+    TimeSplitQueryStrategy,
+)
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
@@ -46,7 +50,6 @@ from snuba.query.processors.physical.uniq_in_select_and_having import (
 )
 from snuba.query.processors.physical.user_column_processor import UserColumnProcessor
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
     "event_id",

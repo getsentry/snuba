@@ -10,6 +10,10 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.plans.splitters.strategies import (
+    ColumnSplitQueryStrategy,
+    TimeSplitQueryStrategy,
+)
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.errors import storage as error_storage
@@ -36,7 +40,6 @@ from snuba.query.processors.physical.type_converters.hexint_column_processor imp
 from snuba.query.processors.physical.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
-from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 columns = ColumnSet(
     [
