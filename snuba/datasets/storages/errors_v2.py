@@ -1,7 +1,6 @@
 from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_replacer import ErrorsReplacer
-from snuba.datasets.message_filters import KafkaHeaderFilter
 from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
@@ -111,7 +110,6 @@ storage = WritableTableStorage(
     mandatory_condition_checkers=[ProjectIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=ErrorsProcessor(promoted_tag_columns),
-        pre_filter=KafkaHeaderFilter("transaction_forwarder", "1"),
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,
         commit_log_topic=Topic.COMMIT_LOG,
