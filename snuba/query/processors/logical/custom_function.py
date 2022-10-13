@@ -146,7 +146,7 @@ class _CustomFunction(LogicalQueryProcessor):
 
 
 class ApdexProcessor(LogicalQueryProcessor):
-    def __init__(self):
+    def __init__(self) -> None:
         self.__processor = _CustomFunction(
             "apdex",
             [("column", ColType({UInt})), ("satisfied", LiteralType({int}))],
@@ -155,7 +155,7 @@ class ApdexProcessor(LogicalQueryProcessor):
             ),
         )
 
-    def process_query(self, query: Query, settings: QuerySettings):
+    def process_query(self, query: Query, settings: QuerySettings) -> None:
         return self.__processor.process_query(query, settings)
 
 
@@ -175,5 +175,5 @@ class FailureRateProcessor(LogicalQueryProcessor):
             ),
         )
 
-    def process_query(self, query: Query, settings: QuerySettings):
+    def process_query(self, query: Query, settings: QuerySettings) -> None:
         return self.__processor.process_query(query, settings)
