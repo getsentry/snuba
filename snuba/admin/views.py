@@ -6,6 +6,7 @@ import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
+from werkzeug.routing import BaseConverter
 
 from snuba import settings, state
 from snuba.admin.auth import UnauthorizedException, authorize_request
@@ -28,12 +29,10 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.migrations.groups import MigrationGroup, get_group_loader
-from snuba.migrations.runner import Runner, MigrationKey, get_active_migration_groups
+from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
-from werkzeug.routing import BaseConverter
-
 
 logger = structlog.get_logger().bind(module=__name__)
 
