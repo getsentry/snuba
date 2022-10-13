@@ -3,6 +3,7 @@ from typing import Any, Optional
 import requests
 import structlog
 
+from snuba import settings
 from snuba.admin.user import AdminUser
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -25,32 +26,8 @@ def _certs() -> Any:
     return CERTS
 
 
-def _get_metadata(item_name: str) -> str:
-    """Returns a string with the project metadata value for the item_name.
-    See https://cloud.google.com/compute/docs/storing-retrieving-metadata for
-    possible item_name values.
-    """
-    endpoint = "http://metadata.google.internal"
-    path = "/computeMetadata/v1/project/"
-    path += item_name
-    response = requests.get(
-        "{}{}".format(endpoint, path), headers={"Metadata-Flavor": "Google"}
-    )
-    metadata = response.text
-    return metadata
-
-
 def _audience() -> str:
-    """Returns the audience value (the JWT 'aud' property) for the current
-    running instance. Since this involves a metadata lookup, the result is
-    cached when first requested for faster future responses.
-    """
-    global AUDIENCE
-    if AUDIENCE is None:
-        project_number = _get_metadata("numeric-project-id")
-        project_id = _get_metadata("project-id")
-        AUDIENCE = "/projects/{}/apps/{}".format(project_number, project_id)
-    return AUDIENCE
+    return settings.ADMIN_AUTH_JWT_AUDIENCE
 
 
 def validate_assertion(assertion: str) -> AdminUser:
