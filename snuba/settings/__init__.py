@@ -185,11 +185,7 @@ BROKER_CONFIG: Mapping[str, Any] = {
 }
 
 # Mapping of default Kafka topic name to custom names
-KAFKA_TOPIC_MAP: Mapping[str, str] = {
-    # TODO: Remove once we are done splitting transactions from the shared events topic
-    "transactions": "events",
-    "snuba-transactions-commit-log": "snuba-commit-log",
-}
+KAFKA_TOPIC_MAP: Mapping[str, str] = {}
 
 # Mapping of default Kafka topic name to broker config
 KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
