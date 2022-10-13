@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stdout
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
@@ -139,13 +141,24 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     fake = request.args.get("fake", False, type=str_to_bool)
     dry_run = request.args.get("dry_run", False, type=str_to_bool)
 
-    try:
+    def do_action() -> None:
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
         else:
             runner.reverse_migration(
                 migration_key, force=force, fake=fake, dry_run=dry_run
             )
+
+    try:
+        if dry_run:
+            # temporarily redirect stdout to a buffer so we can return it
+            with io.StringIO() as output:
+                with redirect_stdout(output):
+                    do_action()
+                return make_response(jsonify({"stdout": output.getvalue()}), 200)
+        else:
+            do_action()
+
     except KeyError as err:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
