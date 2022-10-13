@@ -28,7 +28,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.migrations.groups import MigrationGroup, get_group_loader
-from snuba.migrations.runner import get_active_migration_groups
+from snuba.migrations.runner import Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -84,6 +84,31 @@ def migrations_groups() -> Response:
             group_migrations = get_group_loader(migration_group).get_migrations()
             res.append({"group": migration_group, "migration_ids": group_migrations})
     return make_response(jsonify(res), 200)
+
+
+@application.route("/migrations/<group>/list")
+def migrations_groups_list(group: str) -> Response:
+
+    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+        return make_response(jsonify({"error": "Group not allowed"}), 400)
+
+    runner = Runner()
+    for runner_group, runner_group_migrations in runner.show_all():
+        if runner_group == MigrationGroup(group):
+            return make_response(
+                jsonify(
+                    [
+                        {
+                            "migration_id": migration_id,
+                            "status": status.value,
+                            "blocking": blocking,
+                        }
+                        for migration_id, status, blocking in runner_group_migrations
+                    ]
+                ),
+                200,
+            )
+    return make_response(jsonify({"error": "Invalid group"}), 400)
 
 
 @application.route("/clickhouse_queries")
