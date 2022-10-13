@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Generator, Mapping, MutableMapping, Sequence, Type
 
-from snuba import settings
 from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
 )
@@ -49,16 +48,15 @@ class _EntitySubscriptionFactory(
             }
         )
 
-        if settings.PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS:
-            self._entity_subscription_map.update(
-                {
-                    key: build_entity_subscription_from_config(path)
-                    for (
-                        key,
-                        path,
-                    ) in entity_subscription_to_config_path_mapping.items()
-                }
-            )
+        self._entity_subscription_map.update(
+            {
+                key: build_entity_subscription_from_config(path)
+                for (
+                    key,
+                    path,
+                ) in entity_subscription_to_config_path_mapping.items()
+            }
+        )
 
         self._name_map = {v: k for k, v in self._entity_subscription_map.items()}
 
