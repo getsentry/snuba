@@ -139,9 +139,9 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         with patch.object(Runner, method) as mock_run_migration:
             # fake migration
             response = admin_api.post(
-                f"/migrations/system/{action}/0001_migrations?fake=1&force=true"
+                f"/migrations/system/{action}/0001_migrations?fake=1&force=true&dry_run=yes"
             )
             assert response.status_code == 200
             mock_run_migration.assert_called_once_with(
-                migration_key, force=True, fake=True, dry_run=False
+                migration_key, force=True, fake=True, dry_run=True
             )

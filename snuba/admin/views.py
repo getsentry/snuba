@@ -28,6 +28,7 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
@@ -145,8 +146,17 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
             runner.reverse_migration(
                 migration_key, force=force, fake=fake, dry_run=dry_run
             )
-    except KeyError:
+    except KeyError as err:
+        logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
+    except MigrationError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "migration error: " + err.message}), 400)
+    except ClickhouseError as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": "clickhouse error: " + err.message}), 400
+        )
 
     return Response("OK", 200)
 
