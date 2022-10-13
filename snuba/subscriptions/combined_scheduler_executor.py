@@ -5,6 +5,7 @@ from typing import Mapping, NamedTuple, Optional, Sequence, cast
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
@@ -109,9 +110,7 @@ def build_scheduler_executor_consumer(
     )
 
     return StreamProcessor(
-        tick_consumer,
-        Topic(commit_log_topic.topic_name),
-        factory,
+        tick_consumer, Topic(commit_log_topic.topic_name), factory, ONCE_PER_SECOND
     )
 
 
