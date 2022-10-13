@@ -30,6 +30,7 @@ ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
+ADMIN_AUTH_JWT_AUDIENCE = ""
 
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
