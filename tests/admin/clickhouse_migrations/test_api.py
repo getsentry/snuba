@@ -108,8 +108,8 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
         # invalid migration group
         response = admin_api.post(f"/migrations/invalid_group/{action}/0001_migrations")
-        assert response.status_code == 500
-        assert json.loads(response.data) == {"error": "KeyError('invalid_group')"}
+        assert response.status_code == 400
+        assert json.loads(response.data) == {"error": "Group not found"}
 
         with patch.object(Runner, method) as mock_run_migration:
             response = admin_api.post(f"/migrations/system/{action}/0001_migrations")
@@ -117,7 +117,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert response.data == b"OK"
             migration_key = MigrationKey(group="system", migration_id="0001_migrations")
             mock_run_migration.assert_called_once_with(
-                migration_key, force=False, fake=False
+                migration_key, force=False, fake=False, dry_run=False
             )
 
         with patch.object(Runner, method) as mock_run_migration:
@@ -133,7 +133,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             )
             assert response.status_code == 200
             mock_run_migration.assert_called_once_with(
-                migration_key, force=True, fake=False
+                migration_key, force=True, fake=False, dry_run=False
             )
 
         with patch.object(Runner, method) as mock_run_migration:
@@ -143,5 +143,5 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             )
             assert response.status_code == 200
             mock_run_migration.assert_called_once_with(
-                migration_key, force=True, fake=True
+                migration_key, force=True, fake=True, dry_run=False
             )

@@ -136,14 +136,17 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
 
     force = request.args.get("force", False, type=str_to_bool)
     fake = request.args.get("fake", False, type=str_to_bool)
+    dry_run = request.args.get("dry_run", False, type=str_to_bool)
 
     try:
         if action == "run":
-            runner.run_migration(migration_key, force=force, fake=fake)
+            runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
         else:
-            runner.reverse_migration(migration_key, force=force, fake=fake)
-    except Exception as e:
-        return make_response(jsonify({"error": repr(e)}), 500)
+            runner.reverse_migration(
+                migration_key, force=force, fake=fake, dry_run=dry_run
+            )
+    except KeyError:
+        return make_response(jsonify({"error": "Group not found"}), 400)
 
     return Response("OK", 200)
 
