@@ -33,6 +33,8 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
 
+# from snuba.settings import SLICED_KAFKA_TOPIC_MAP
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,6 +80,7 @@ class ConsumerBuilder:
         max_batch_time_ms: int,
         metrics: MetricsBackend,
         parallel_collect: bool,
+        slice_id: Optional[int] = None,
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
@@ -94,12 +97,18 @@ class ConsumerBuilder:
             .topic
         )
 
+        # if slice_id is not None:
+        # physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic, slice_id)]
+        # this will require registration of topic key
+        # topic = register(physical_topic)
+
         self.broker_config = get_default_kafka_configuration(
-            topic, bootstrap_servers=kafka_params.bootstrap_servers
+            topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
         )
         logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
         self.producer_broker_config = build_kafka_producer_configuration(
             topic,
+            slice_id,
             bootstrap_servers=kafka_params.bootstrap_servers,
             override_params={
                 "partitioner": "consistent",
@@ -173,13 +182,24 @@ class ConsumerBuilder:
         self.__commit_retry_policy = commit_retry_policy
 
     def __build_consumer(
-        self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
+        self,
+        strategy_factory: ProcessingStrategyFactory[KafkaPayload],
+        slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
-        configuration = build_kafka_consumer_configuration(
+
+        topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
             .get_default_topic_spec()
-            .topic,
+            .topic
+        )
+
+        # if slice_id is not None:
+        # topic = SLICED_KAFKA_TOPIC_MAP[(topic, slice_id)]
+        # register
+
+        configuration = build_kafka_consumer_configuration(
+            topic,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
@@ -273,8 +293,12 @@ class ConsumerBuilder:
 
         return strategy_factory
 
-    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
+    def build_base_consumer(
+        self, slice_id: Optional[int] = None
+    ) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(self.__build_streaming_strategy_factory())
+        return self.__build_consumer(
+            self.__build_streaming_strategy_factory(), slice_id
+        )
