@@ -4,9 +4,21 @@ import operator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import Any, Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterator,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from snuba import settings
+from snuba.utils.registered_class import RegisteredClass
 
 TVisited = TypeVar("TVisited")
 # dataclasses have their own built in repr, we override it
@@ -25,7 +37,7 @@ class _Expression:
     alias: Optional[str]
 
 
-class Expression(_Expression, ABC):
+class Expression(_Expression, ABC, metaclass=RegisteredClass):
     """
     A node in the Query AST. This can be a leaf or an intermediate node.
     It represents an expression that can be resolved to a value. This
@@ -34,6 +46,14 @@ class Expression(_Expression, ABC):
 
     All expressions can have an optional alias.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["Expression"]:
+        return cast(Type["Expression"], cls.class_from_name(name))
 
     @abstractmethod
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:

@@ -299,6 +299,7 @@ ENTITY_TRANSLATION_MAPPERS = {
     "type": "object",
     "description": "Represents the set of rules used to translates different expression types",
     "properties": {
+        "columns": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
