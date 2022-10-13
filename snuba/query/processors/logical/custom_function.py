@@ -45,13 +45,18 @@ def partial_function(body: str, constants: Sequence[Tuple[str, Any]]) -> Express
     return replace_in_expression(parsed, constants_lookup)
 
 
-class CustomFunction(LogicalQueryProcessor):
+class _CustomFunction(LogicalQueryProcessor):
     """
     WARNING
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         This query processor is not referencable from config
 
-        TODO: either make it work or remove it
+        If you want to define a custom function processor accessible from config,
+        wrap this class in a class that has __init__ arguments which can be
+        expressed in the YAML
+
+        Example: ApdexProcessor, FailureRateProcessor
+
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     Defines a custom snuba function.
@@ -142,7 +147,7 @@ class CustomFunction(LogicalQueryProcessor):
 
 class ApdexProcessor(LogicalQueryProcessor):
     def __init__(self):
-        self.__processor = CustomFunction(
+        self.__processor = _CustomFunction(
             "apdex",
             [("column", ColType({UInt})), ("satisfied", LiteralType({int}))],
             simple_function(
@@ -156,7 +161,7 @@ class ApdexProcessor(LogicalQueryProcessor):
 
 class FailureRateProcessor(LogicalQueryProcessor):
     def __init__(self) -> None:
-        self.__processor = CustomFunction(
+        self.__processor = _CustomFunction(
             "failure_rate",
             [],
             partial_function(

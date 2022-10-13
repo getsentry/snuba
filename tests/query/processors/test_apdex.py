@@ -11,7 +11,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import divide, multiply, plus
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.performance_expressions import apdex_processor
+from snuba.query.processors.logical.custom_function import ApdexProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 
 
@@ -83,7 +83,7 @@ def test_apdex_format_expressions() -> None:
         ],
     )
 
-    apdex_processor().process_query(unprocessed, HTTPQuerySettings())
+    ApdexProcessor().process_query(unprocessed, HTTPQuerySettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
     ret = unprocessed.get_selected_columns()[1].expression.accept(
