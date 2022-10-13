@@ -22,6 +22,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
+from snuba.settings import SLICED_KAFKA_TOPIC_MAP
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
@@ -32,8 +33,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
-
-# from snuba.settings import SLICED_KAFKA_TOPIC_MAP
+from snuba.utils.streams.topics import register_topic
 
 logger = logging.getLogger(__name__)
 
@@ -97,10 +97,10 @@ class ConsumerBuilder:
             .topic
         )
 
-        # if slice_id is not None:
-        # physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic, slice_id)]
-        # this will require registration of topic key
-        # topic = register(physical_topic)
+        if slice_id is not None:
+            physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
+            # this will require registration of the physical topic key
+            topic = register_topic(physical_topic)
 
         self.broker_config = get_default_kafka_configuration(
             topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
@@ -135,14 +135,32 @@ class ConsumerBuilder:
                 self.replacements_topic = None
 
         self.commit_log_topic: Optional[Topic]
-        if kafka_params.commit_log_topic is not None:
-            self.commit_log_topic = Topic(kafka_params.commit_log_topic)
-        else:
-            commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
-            if commit_log_topic_spec is not None:
-                self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
+
+        if slice_id is not None:
+            if kafka_params.commit_log_topic is not None:
+                physical_commit_log_topic = SLICED_KAFKA_TOPIC_MAP[
+                    (kafka_params.commit_log_topic, slice_id)
+                ]
+                self.commit_log_topic = Topic(physical_commit_log_topic)
             else:
-                self.commit_log_topic = None
+                commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
+                if commit_log_topic_spec is not None:
+                    physical_commit_log_topic = SLICED_KAFKA_TOPIC_MAP[
+                        (commit_log_topic_spec.topic_name, slice_id)
+                    ]
+                    self.commit_log_topic = Topic(physical_commit_log_topic)
+                else:
+                    self.commit_log_topic = None
+
+        else:
+            if kafka_params.commit_log_topic is not None:
+                self.commit_log_topic = Topic(kafka_params.commit_log_topic)
+            else:
+                commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
+                if commit_log_topic_spec is not None:
+                    self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
+                else:
+                    self.commit_log_topic = None
 
         self.stats_callback = stats_callback
 
