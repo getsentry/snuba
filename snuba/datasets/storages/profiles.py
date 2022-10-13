@@ -38,7 +38,6 @@ readable_columns = ColumnSet(
         ("transaction_id", UUID()),
         ("profile_id", UUID()),
         ("received", DateTime()),
-        ("profile", String()),
         ("android_api_level", UInt(32, Modifiers(nullable=True))),
         ("device_classification", String()),
         ("device_locale", String()),
