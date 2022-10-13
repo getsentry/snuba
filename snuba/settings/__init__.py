@@ -68,7 +68,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "querylog",
             "sessions",
             "transactions",
-            "transactions_ro",
             "transactions_v2",
             "errors_v2",
             "errors_v2_ro",
@@ -305,9 +304,6 @@ STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
-
-PREFER_PLUGGABLE_ENTITIES = False
-PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
 
 # Counter utility class window size in minutes
 COUNTER_WINDOW_SIZE = timedelta(minutes=10)

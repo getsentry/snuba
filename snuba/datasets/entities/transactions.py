@@ -1,7 +1,6 @@
 from abc import ABC
 from typing import Optional, Sequence
 
-from snuba import settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -11,13 +10,11 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.logical.object_id_rate_limiter import (
@@ -32,7 +29,6 @@ from snuba.query.processors.performance_expressions import (
     apdex_processor,
     failure_rate_processor,
 )
-from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 transaction_translator = TranslationMappers(
@@ -94,43 +90,18 @@ transaction_translator = TranslationMappers(
 )
 
 
-class TransactionsQueryStorageSelector(QueryStorageSelector):
-    def __init__(self, mappers: TranslationMappers) -> None:
-        self.__transactions_table = get_writable_storage(StorageKey.TRANSACTIONS)
-        self.__transactions_ro_table = get_storage(StorageKey.TRANSACTIONS_RO)
-        self.__mappers = mappers
-
-    def select_storage(
-        self, query: Query, query_settings: QuerySettings
-    ) -> StorageAndMappers:
-        readonly_referrer = (
-            query_settings.referrer
-            in settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS
-        )
-        use_readonly_storage = readonly_referrer or state.get_config(
-            "enable_transactions_readonly_table", False
-        )
-        storage = (
-            self.__transactions_ro_table
-            if use_readonly_storage
-            else self.__transactions_table
-        )
-        return StorageAndMappers(storage, self.__mappers)
-
-
 class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
 
         pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=TransactionsQueryStorageSelector(
-                    mappers=transaction_translator
-                    if custom_mappers is None
-                    else transaction_translator.concat(custom_mappers)
-                )
-            ),
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=get_storage(StorageKey.TRANSACTIONS),
+                mappers=transaction_translator
+                if custom_mappers is None
+                else transaction_translator.concat(custom_mappers),
+            )
         )
 
         super().__init__(
