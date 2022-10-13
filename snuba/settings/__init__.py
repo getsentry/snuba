@@ -85,9 +85,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 DOGSTATSD_HOST: str | None = None
 DOGSTATSD_PORT: int | None = None
 DOGSTATSD_SAMPLING_RATES = {
-    "subscriptions.receive_latency": 0.1,
-    "subscriptions.process_message": 0.1,
-    "subscriptions.executor.latency": 0.1,
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
