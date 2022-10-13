@@ -8,8 +8,8 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.logical.custom_function import (
-    CustomFunction,
     InvalidCustomFunctionCall,
+    _CustomFunction,
     partial_function,
     simple_function,
 )
@@ -146,7 +146,7 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("query, expected_query", TEST_CASES)
 def test_format_expressions(query: Query, expected_query: Query) -> None:
-    processor = CustomFunction(
+    processor = _CustomFunction(
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         partial_function(
@@ -206,7 +206,7 @@ INVALID_QUERIES = [
 
 @pytest.mark.parametrize("query", INVALID_QUERIES)
 def test_invalid_call(query: Query) -> None:
-    processor = CustomFunction(
+    processor = _CustomFunction(
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         simple_function("f_call_impl(param1, inner_call(param2))"),
