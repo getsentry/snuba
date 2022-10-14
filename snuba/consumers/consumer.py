@@ -338,7 +338,7 @@ def build_batch_writer(
 
     assert not (replacements_producer is None) ^ (replacements_topic is None)
     supports_replacements = replacements_producer is not None
-    slice_id = table_writer.get_slice()
+    slice_id = table_writer.get_slice_id()
 
     writer = table_writer.get_batch_writer(
         metrics,
