@@ -95,7 +95,7 @@ class WritableStorage(Storage):
     """
 
     @abstractmethod
-    def get_table_writer(self, slice_id: Optional[int]) -> TableWriter:
+    def get_table_writer(self, slice_id: Optional[int] = None) -> TableWriter:
         """
         Returns the TableWriter if the Storage has one.
         """
