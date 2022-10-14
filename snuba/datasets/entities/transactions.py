@@ -17,6 +17,10 @@ from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.custom_function import (
+    ApdexProcessor,
+    FailureRateProcessor,
+)
 from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
@@ -25,10 +29,6 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.processors.performance_expressions import (
-    apdex_processor,
-    failure_rate_processor,
-)
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 transaction_translator = TranslationMappers(
@@ -121,8 +121,8 @@ class BaseTransactionsEntity(Entity, ABC):
             ),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            apdex_processor(),
-            failure_rate_processor(),
+            ApdexProcessor(),
+            FailureRateProcessor(),
             ReferrerRateLimiterProcessor(),
             ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),
