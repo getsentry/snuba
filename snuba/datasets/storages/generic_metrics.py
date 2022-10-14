@@ -171,7 +171,7 @@ distributions_bucket_storage = WritableTableStorage(
     schema=WritableTableSchema(
         columns=ColumnSet([*common_columns, *bucket_columns]),
         local_table_name="generic_metric_distributions_raw_local",
-        dist_table_name="generic_metric_distributions_raw_local",
+        dist_table_name="generic_metric_distributions_raw_dist",
         storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
     ),
     query_processors=[],

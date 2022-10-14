@@ -40,7 +40,7 @@ schema:
       { name: timeseries_id, type: UInt, args: { size: 32 } },
     ]
   local_table_name: generic_metric_distributions_raw_local
-  dist_table_name: generic_metric_distributions_raw_local
+  dist_table_name: generic_metric_distributions_raw_dist
 
 stream_loader:
   processor: GenericDistributionsMetricsProcessor
