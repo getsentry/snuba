@@ -5,8 +5,10 @@ from unittest.mock import patch
 import pytest
 
 from snuba import settings
+from snuba.datasets.configuration.validation.post_loader import (
+    validate_topics_with_settings,
+)
 from snuba.datasets.storages.factory import _storage_factory
-from snuba.datasets.storages.validation import validate_topics_with_settings
 from snuba.settings import validation
 from snuba.settings.validation import (
     InvalidTopicError,
