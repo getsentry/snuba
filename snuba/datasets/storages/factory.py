@@ -7,9 +7,9 @@ from typing import Generator
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage
+from snuba.datasets.configuration.validation.post_loader import validate_storages
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.datasets.storages.validation import validate_storages
 from snuba.state import get_config
 from snuba.utils.config_component_factory import ConfigComponentFactory
 
