@@ -5,6 +5,7 @@ from typing import Callable, Optional, Sequence
 
 from arroyo import Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
@@ -216,7 +217,7 @@ class ConsumerBuilder:
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
-        return StreamProcessor(consumer, self.raw_topic, strategy_factory)
+        return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
 
     def __build_streaming_strategy_factory(
         self,

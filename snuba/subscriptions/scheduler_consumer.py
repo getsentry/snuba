@@ -7,6 +7,7 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
+from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
@@ -261,6 +262,7 @@ class SchedulerBuilder:
             self.__build_tick_consumer(),
             Topic(self.__commit_log_topic_spec.topic_name),
             self.__build_strategy_factory(),
+            IMMEDIATE,
         )
 
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:

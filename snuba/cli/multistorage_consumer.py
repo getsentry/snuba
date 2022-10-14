@@ -7,6 +7,7 @@ import click
 import rapidjson
 from arroyo import Topic, configure_metrics
 from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
+from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
@@ -306,6 +307,7 @@ def multistorage_consumer(
             producer=dead_letter_producer,
             topic=dead_letter_queue,
         ),
+        IMMEDIATE,
     )
 
     def handler(signum: int, frame: Any) -> None:
