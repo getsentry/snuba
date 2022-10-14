@@ -1,13 +1,8 @@
 from abc import ABC, abstractmethod
-from enum import Enum
 
-from snuba.migrations.migration import Migration
+from snuba.migrations.groups import get_group_loader
+from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
-
-
-class MigrationAction(Enum):
-    FORWARDS = "forwards"
-    BACKWARDS = "backwards"
 
 
 class MigrationPolicy(ABC):
@@ -21,7 +16,11 @@ class MigrationPolicy(ABC):
     """
 
     @abstractmethod
-    def allows(migration: Migration, action: MigrationAction) -> bool:
+    def can_run(self, migration_key: MigrationKey) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def can_reverse(self, migration_key: MigrationKey) -> bool:
         raise NotImplementedError
 
 
@@ -30,7 +29,10 @@ class ReadOnlyPolicy(MigrationPolicy):
     No migration is allowed to be run or reversed.
     """
 
-    def allows(migration: Migration, action: MigrationAction) -> bool:
+    def can_run(self, migration_key: MigrationKey) -> bool:
+        return False
+
+    def can_reverse(self, migration_key: MigrationKey) -> bool:
         return False
 
 
@@ -44,13 +46,20 @@ class WriteSafeAndPendingPolicy(MigrationPolicy):
     determine if the migration is safe or not.
     """
 
-    def allows(migration: Migration, action: MigrationAction) -> bool:
-        if action == MigrationAction.BACKWARDS:
-            # todo: actually handle getting the status
-            if migration.status == Status.IN_PROGRESS:
-                return True
-            return False
+    def _get_status(self, migration_key: MigrationKey) -> Status:
+        status, _ = Runner().get_status(migration_key)
+        return status
+
+    def can_run(self, migration_key: MigrationKey) -> bool:
+        migration = get_group_loader(migration_key.group).load_migration(
+            migration_key.migration_id
+        )
         return False if migration.blocking else True
+
+    def can_reverse(self, migration_key: MigrationKey) -> bool:
+        if self._get_status(migration_key) == Status.IN_PROGRESS:
+            return True
+        return False
 
 
 class WriteAllPolicy(MigrationPolicy):
@@ -59,5 +68,8 @@ class WriteAllPolicy(MigrationPolicy):
     ClickhouseNodeMigration (SQL) migrations
     """
 
-    def allows(migration: Migration, action: MigrationAction) -> bool:
+    def can_run(self, migration_key: MigrationKey) -> bool:
+        return True
+
+    def can_reverse(self, migration_key: MigrationKey) -> bool:
         return True
