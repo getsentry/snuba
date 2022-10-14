@@ -1,18 +1,18 @@
 import importlib
-from copy import deepcopy
 from typing import Any, Dict
 from unittest.mock import patch
 
 import pytest
 
 from snuba import settings
+from snuba.datasets.storages.factory import _storage_factory
+from snuba.datasets.storages.validation import validate_topics_with_settings
 from snuba.settings import validation
 from snuba.settings.validation import (
     InvalidTopicError,
     validate_settings,
     validate_slicing_settings,
 )
-from snuba.utils.streams.topics import Topic
 
 
 def build_settings_dict() -> Dict[str, Any]:
@@ -39,25 +39,12 @@ def test_invalid_storage() -> None:
         cluster[0]["storage_sets"].remove("non_existing_storage")
 
 
-def test_topics_sync_in_settings_validator() -> None:
-    all_settings = build_settings_dict()
-    # Make a copy of the default Kafka topic map from settings
-    default_map = deepcopy(all_settings["KAFKA_TOPIC_MAP"])
-    # Overwrite topic map temporarily to include all defined topic names
-    all_settings["KAFKA_TOPIC_MAP"] = {t.value: {} for t in Topic}
-
-    # Validate settings with the new topic map to check
-    # whether all defined topic names correspond to the
-    # topic names in the settings validator
+def test_topics_sync_with_settings() -> None:
     try:
-        validate_settings(all_settings)
+        _storage_factory()
+        validate_topics_with_settings()
     except InvalidTopicError:
-        pytest.fail(
-            "Defined Kafka Topics are not in sync with topic names in validator"
-        )
-    # Restore the default settings Kafka topic map
-    finally:
-        all_settings["KAFKA_TOPIC_MAP"] = default_map
+        pytest.fail("Defined Kafka Topics are not in sync with topic names in settings")
 
 
 @patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
