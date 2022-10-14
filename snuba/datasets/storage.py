@@ -95,7 +95,7 @@ class WritableStorage(Storage):
     """
 
     @abstractmethod
-    def get_table_writer(self) -> TableWriter:
+    def get_table_writer(self, slice_id: Optional[int]) -> TableWriter:
         """
         Returns the TableWriter if the Storage has one.
         """
@@ -159,6 +159,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             mandatory_condition_checkers,
         )
         assert isinstance(schema, WritableTableSchema)
+
         self.__table_writer = TableWriter(
             storage_set=storage_set_key,
             write_schema=schema,
@@ -167,9 +168,12 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             writer_options=writer_options,
             write_format=write_format,
         )
+
         self.__ignore_write_errors = ignore_write_errors
 
-    def get_table_writer(self) -> TableWriter:
+    def get_table_writer(self, slice_id: Optional[int] = None) -> TableWriter:
+        if slice_id is not None:
+            self.__table_writer.add_slice(slice_id)
         return self.__table_writer
 
     def get_is_write_error_ignorable(self) -> bool:

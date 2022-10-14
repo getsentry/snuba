@@ -215,6 +215,15 @@ class TableWriter:
         self.__replacer_processor = replacer_processor
         self.__writer_options = writer_options
         self.__write_format = write_format
+        self.__slice_id: Optional[int] = None
+
+    def add_slice(self, slice_id: int) -> None:
+        self.__slice_id = slice_id
+
+    def get_slice(self) -> int:
+        if self.__slice_id is not None:
+            return self.__slice_id
+        return 0
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
@@ -225,6 +234,7 @@ class TableWriter:
         options: ClickhouseWriterOptions = None,
         table_name: Optional[str] = None,
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
+        slice_id: Optional[int] = None,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
         if self.__write_format == WriteFormat.JSON:
@@ -240,7 +250,7 @@ class TableWriter:
             raise TypeError("unknown table format", self.__write_format)
         options = self.__update_writer_options(options)
 
-        return get_cluster(self.__storage_set).get_batch_writer(
+        return get_cluster(self.__storage_set, slice_id).get_batch_writer(
             metrics,
             insert_statement,
             encoding=None,

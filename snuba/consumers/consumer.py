@@ -338,10 +338,12 @@ def build_batch_writer(
 
     assert not (replacements_producer is None) ^ (replacements_topic is None)
     supports_replacements = replacements_producer is not None
+    slice_id = table_writer.get_slice()
 
     writer = table_writer.get_batch_writer(
         metrics,
         {"load_balancing": "in_order", "insert_distributed_sync": 1},
+        slice_id=slice_id,
     )
 
     def build_writer() -> ProcessedMessageBatchWriter:
