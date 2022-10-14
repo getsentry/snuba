@@ -19,46 +19,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_storage,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
-
-
-def test_config_file_discovery() -> None:
-    assert all(
-        storage.get_storage_key() in CONFIG_BUILT_STORAGES
-        for storage in [
-            distributions_bucket_storage,
-            distributions_storage,
-            sets_bucket_storage,
-            sets_storage,
-        ]
-    )
-    assert len(CONFIG_BUILT_STORAGES) == 4
-
-
-def test_distributions_storage() -> None:
-    _deep_compare_storages(
-        distributions_storage,
-        CONFIG_BUILT_STORAGES[distributions_storage.get_storage_key()],
-    )
-
-
-def test_distributions_bucket_storage() -> None:
-    _deep_compare_storages(
-        distributions_bucket_storage,
-        CONFIG_BUILT_STORAGES[distributions_bucket_storage.get_storage_key()],
-    )
-
-
-def test_sets_storage() -> None:
-    _deep_compare_storages(
-        sets_storage, CONFIG_BUILT_STORAGES[sets_storage.get_storage_key()]
-    )
-
-
-def test_sets_bucket_storage() -> None:
-    _deep_compare_storages(
-        sets_bucket_storage,
-        CONFIG_BUILT_STORAGES[sets_bucket_storage.get_storage_key()],
-    )
+from tests.datasets.configuration.utils import ConfigurationTest
 
 
 def _deep_compare_storages(old: Storage, new: Storage) -> None:
@@ -116,8 +77,44 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
     )
 
 
-def test_processor_with_constructor():
-    yml_text = """
+class TestStorageConfiguration(ConfigurationTest):
+    def test_config_file_discovery(self) -> None:
+        assert all(
+            storage.get_storage_key() in CONFIG_BUILT_STORAGES
+            for storage in [
+                distributions_bucket_storage,
+                distributions_storage,
+                sets_bucket_storage,
+                sets_storage,
+            ]
+        )
+        assert len(CONFIG_BUILT_STORAGES) == 4
+
+    def test_distributions_storage(self) -> None:
+        _deep_compare_storages(
+            distributions_storage,
+            CONFIG_BUILT_STORAGES[distributions_storage.get_storage_key()],
+        )
+
+    def test_distributions_bucket_storage(self) -> None:
+        _deep_compare_storages(
+            distributions_bucket_storage,
+            CONFIG_BUILT_STORAGES[distributions_bucket_storage.get_storage_key()],
+        )
+
+    def test_sets_storage(self) -> None:
+        _deep_compare_storages(
+            sets_storage, CONFIG_BUILT_STORAGES[sets_storage.get_storage_key()]
+        )
+
+    def test_sets_bucket_storage(self) -> None:
+        _deep_compare_storages(
+            sets_bucket_storage,
+            CONFIG_BUILT_STORAGES[sets_bucket_storage.get_storage_key()],
+        )
+
+    def test_processor_with_constructor(self) -> None:
+        yml_text = """
 version: v1
 kind: readable_storage
 name: test-processor-with-constructor
@@ -143,13 +140,13 @@ query_processors:
       killswitch: kill
 
 """
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        filename = os.path.join(tmpdirname, "file.yaml")
-        with open(filename, "w") as f:
-            f.write(yml_text)
-        storage = build_storage(filename)
-        assert len(storage.get_query_processors()) == 1
-        qp = storage.get_query_processors()[0]
-        assert qp._MappingOptimizer__column_name == "a"
-        assert qp._MappingOptimizer__hash_map_name == "hashmap"
-        assert qp._MappingOptimizer__killswitch == "kill"
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            filename = os.path.join(tmpdirname, "file.yaml")
+            with open(filename, "w") as f:
+                f.write(yml_text)
+            storage = build_storage(filename)
+            assert len(storage.get_query_processors()) == 1
+            qp = storage.get_query_processors()[0]
+            assert getattr(qp, "_MappingOptimizer__column_name") == "a"
+            assert getattr(qp, "_MappingOptimizer__hash_map_name") == "hashmap"
+            assert getattr(qp, "_MappingOptimizer__killswitch") == "kill"
