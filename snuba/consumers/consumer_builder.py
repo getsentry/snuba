@@ -98,8 +98,10 @@ class ConsumerBuilder:
         )
 
         if slice_id is not None:
-            physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
-            # this will require registration of the physical topic key
+            physical_topic = SLICED_KAFKA_TOPIC_MAP.get(
+                (topic.value, slice_id), topic.value
+            )
+            # this will require registration of the physical topic
             topic = register_topic(physical_topic)
 
         self.broker_config = get_default_kafka_configuration(
@@ -136,31 +138,26 @@ class ConsumerBuilder:
 
         self.commit_log_topic: Optional[Topic]
 
-        if slice_id is not None:
-            if kafka_params.commit_log_topic is not None:
+        if kafka_params.commit_log_topic is not None:
+            if slice_id is not None:
                 physical_commit_log_topic = SLICED_KAFKA_TOPIC_MAP[
                     (kafka_params.commit_log_topic, slice_id)
                 ]
                 self.commit_log_topic = Topic(physical_commit_log_topic)
             else:
-                commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
-                if commit_log_topic_spec is not None:
+                self.commit_log_topic = Topic(kafka_params.commit_log_topic)
+        else:
+            commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
+            if commit_log_topic_spec is not None:
+                if slice_id is not None:
                     physical_commit_log_topic = SLICED_KAFKA_TOPIC_MAP[
                         (commit_log_topic_spec.topic_name, slice_id)
                     ]
                     self.commit_log_topic = Topic(physical_commit_log_topic)
                 else:
-                    self.commit_log_topic = None
-
-        else:
-            if kafka_params.commit_log_topic is not None:
-                self.commit_log_topic = Topic(kafka_params.commit_log_topic)
-            else:
-                commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
-                if commit_log_topic_spec is not None:
                     self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
-                else:
-                    self.commit_log_topic = None
+            else:
+                self.commit_log_topic = None
 
         self.stats_callback = stats_callback
 
@@ -205,6 +202,7 @@ class ConsumerBuilder:
         slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
 
+        # retrieves the default logical topic
         topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
@@ -212,14 +210,18 @@ class ConsumerBuilder:
             .topic
         )
 
-        # if slice_id is not None:
-        # topic = SLICED_KAFKA_TOPIC_MAP[(topic, slice_id)]
-        # register
+        # get the physical topic in case of slicing
+        if slice_id is not None:
+            physical_topic = SLICED_KAFKA_TOPIC_MAP.get(
+                (topic.value, slice_id), topic.value
+            )
+            topic = register_topic(physical_topic)
 
         configuration = build_kafka_consumer_configuration(
             topic,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
+            slice_id=slice_id,
             auto_offset_reset=self.auto_offset_reset,
             strict_offset_reset=self.strict_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
