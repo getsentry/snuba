@@ -13,10 +13,12 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literals_array
 from snuba.query.expressions import Column, Literal
-from snuba.query.processors.physical.conditions_enforcer import (
-    MandatoryConditionEnforcer,
+from snuba.query.processors.condition_checkers.checkers import (
     OrgIdEnforcer,
     ProjectIdEnforcer,
+)
+from snuba.query.processors.physical.conditions_enforcer import (
+    MandatoryConditionEnforcer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config

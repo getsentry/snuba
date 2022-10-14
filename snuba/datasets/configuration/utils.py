@@ -20,6 +20,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets.plans.splitters import QuerySplitStrategy
+from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import UUID, AggregateFunction
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -33,6 +34,11 @@ class QueryProcessorDefinition(TypedDict):
 
 class QuerySplitterDefinition(TypedDict):
     splitter: str
+    args: dict[str, Any]
+
+
+class MandatoryConditionCheckerDefinition(TypedDict):
+    condition: str
     args: dict[str, Any]
 
 
@@ -75,6 +81,17 @@ def get_query_splitters(
             **qs.get("args", {})
         )
         for qs in query_splitter_objects
+    ]
+
+
+def get_mandatory_condition_checkers(
+    mandatory_condition_checkers_objects: list[MandatoryConditionCheckerDefinition],
+) -> list[ConditionChecker]:
+    return [
+        ConditionChecker.get_from_name(mc["condition"]).from_kwargs(
+            **mc.get("args", {})
+        )
+        for mc in mandatory_condition_checkers_objects
     ]
 
 
