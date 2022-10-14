@@ -98,9 +98,9 @@ class ConsumerBuilder:
         )
 
         if slice_id is not None:
-            physical_topic = SLICED_KAFKA_TOPIC_MAP.get(
-                (topic.value, slice_id), topic.value
-            )
+            # there should be some sort of assertion to check
+            # whether the slice_id passed is valid for this storage
+            physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
             # this will require registration of the physical topic
             topic = register_topic(physical_topic)
 
@@ -212,9 +212,7 @@ class ConsumerBuilder:
 
         # get the physical topic in case of slicing
         if slice_id is not None:
-            physical_topic = SLICED_KAFKA_TOPIC_MAP.get(
-                (topic.value, slice_id), topic.value
-            )
+            physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
             topic = register_topic(physical_topic)
 
         configuration = build_kafka_consumer_configuration(
