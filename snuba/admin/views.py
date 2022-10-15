@@ -150,14 +150,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
             )
 
     try:
-        if dry_run:
-            # temporarily redirect stdout to a buffer so we can return it
-            with io.StringIO() as output:
-                with redirect_stdout(output):
-                    do_action()
-                return make_response(jsonify({"stdout": output.getvalue()}), 200)
-        else:
-            do_action()
+        # temporarily redirect stdout to a buffer so we can return it
+        with io.StringIO() as output:
+            with redirect_stdout(output):
+                do_action()
+            return make_response(jsonify({"stdout": output.getvalue()}), 200)
 
     except KeyError as err:
         logger.error(err, exc_info=True)

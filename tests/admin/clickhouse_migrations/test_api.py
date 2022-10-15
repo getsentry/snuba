@@ -114,7 +114,6 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         with patch.object(Runner, method) as mock_run_migration:
             response = admin_api.post(f"/migrations/system/{action}/0001_migrations")
             assert response.status_code == 200
-            assert response.data == b"OK"
             migration_key = MigrationKey(group="system", migration_id="0001_migrations")
             mock_run_migration.assert_called_once_with(
                 migration_key, force=False, fake=False, dry_run=False
@@ -153,10 +152,10 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
             mock_run_migration.side_effect = print_something
             response = admin_api.post(
-                f"/migrations/system/{action}/0001_migrations?fake=1&force=true&dry_run=yes"
+                f"/migrations/system/{action}/0001_migrations?fake=0&force=false&dry_run=yes"
             )
             assert response.status_code == 200
             assert json.loads(response.data) == {"stdout": "a dry run\n"}
             mock_run_migration.assert_called_once_with(
-                migration_key, force=True, fake=True, dry_run=True
+                migration_key, force=False, fake=False, dry_run=True
             )
