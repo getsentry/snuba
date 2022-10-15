@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.10.0
+
+### Various fixes & improvements
+
+- build: Actually increase the right CI timeout (#3264) by @lynnagara
+- feat: Always pass a commit policy to Arroyo stream processor (#3257) by @lynnagara
+- fix(gen-metrics): distributed table name wrong in config (#3260) by @onewland
+- feat(TDC): Make custom function processors accessible from config (#3256) by @volokluev
+- ref: Small settings cleanup (#3251) by @lynnagara
+- fix(TDC) Make ConditionChecker a RegisteredClass (#3248) by @evanh
+- ref(mdc): Remove dead code (#3252) by @lynnagara
+- fix(JWT): stop trying to get JWT audience dynamically, hard-code in config (#3255) by @onewland
+- ref: Remove filtering of error and transaction messages (#3249) by @lynnagara
+- ref: Remove default mapping of "transaction" topic to "events" (#3250) by @lynnagara
+- ref: Use message.position_to_commit from arroyo (#3246) by @lynnagara
+- cleanup(mdc): remove flag for enabling/disabling datasets from config (#3224) by @onewland
+-  ref(admin): add migration groups list endpoint (#3231) by @dbanda
+- cleanup(transactions): remove transactions_ro from the codebase (#3244) by @volokluev
+- fix(MDC): Incorrect column name in Gen Metrics (#3245) by @rahul-kumar-saini
+- build: Arroyo 1.0.7 (#3243) by @lynnagara
+- build: Increase timeout minutes in CI (#3242) by @lynnagara
+- ref(admin): add migration_groups API (#3227) by @MeredithAnya
+- fix: Remove filtering on offset for transactions subscriptions (#3239) by @lynnagara
+- build: Remove old transaction consumer from Freight (#3237) by @lynnagara
+- ref(ci): fix set-output / set-state deprecation (#3240) by @asottile-sentry
+- fix(TDC) Make QuerySplitStrategy a RegisteredClass (#3238) by @evanh
+- feat(transactions): app_start_type reading/writing V2 (#3209) by @philipphofmann
+- fix(grouping): Group clickhouse errors by referrer (#3121) by @untitaker
+
+_Plus 76 more_
+
 ## 22.9.0
 
 ### Various fixes & improvements
