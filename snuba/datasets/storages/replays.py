@@ -89,10 +89,8 @@ schema = WritableTableSchema(
 def produce_policy_creator() -> DeadLetterQueuePolicy:
     """Produce all bad messages to dead-letter topic."""
     return ProduceInvalidMessagePolicy(
-        KafkaProducer(
-            build_kafka_producer_configuration(Topic.SNUBA_DEAD_LETTER_REPLAYS)
-        ),
-        KafkaTopic(Topic.SNUBA_DEAD_LETTER_REPLAYS.value),
+        KafkaProducer(build_kafka_producer_configuration(Topic.DEAD_LETTER_REPLAYS)),
+        KafkaTopic(Topic.DEAD_LETTER_REPLAYS.value),
     )
 
 
@@ -104,7 +102,7 @@ storage = WritableTableStorage(
     mandatory_condition_checkers=[ProjectIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=ReplaysProcessor(),
-        default_topic=Topic.INGEST_REPLAY_EVENTS,
+        default_topic=Topic.REPLAYEVENTS,
         dead_letter_queue_policy_creator=produce_policy_creator,
     ),
 )

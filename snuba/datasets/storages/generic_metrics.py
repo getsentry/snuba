@@ -48,11 +48,9 @@ def produce_policy_creator() -> DeadLetterQueuePolicy:
     """
     return ProduceInvalidMessagePolicy(
         KafkaProducer(
-            build_kafka_producer_configuration(
-                Topic.DEAD_LETTER_GSNUBA_DEAD_LETTER_GENERIC_METRICSENERIC_METRICS
-            )
+            build_kafka_producer_configuration(Topic.DEAD_LETTER_GENERIC_METRICS)
         ),
-        KafkaTopic(Topic.SNUBA_DEAD_LETTER_GENERIC_METRICS.value),
+        KafkaTopic(Topic.DEAD_LETTER_GENERIC_METRICS.value),
     )
 
 
@@ -139,12 +137,12 @@ sets_bucket_storage = WritableTableStorage(
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=GenericSetsMetricsProcessor(),
-        default_topic=Topic.SNUBA_GENERIC_METRICS,
+        default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
-        commit_log_topic=Topic.SNUBA_GENERIC_METRICS_SETS_COMMIT_LOG,
-        subscription_scheduled_topic=Topic.SCHEDULED_SUBSCRIPTIONS_GENERIC_METRICS_SETS,
+        commit_log_topic=Topic.GENERIC_METRICS_SETS_COMMIT_LOG,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
-        subscription_result_topic=Topic.GENERIC_METRICS_SETS_SUBSCRIPTION_RESULTS,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_SETS,
         pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.SET.value),
     ),
 )
@@ -179,12 +177,12 @@ distributions_bucket_storage = WritableTableStorage(
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=GenericDistributionsMetricsProcessor(),
-        default_topic=Topic.SNUBA_GENERIC_METRICS,
+        default_topic=Topic.GENERIC_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
-        commit_log_topic=Topic.SNUBA_GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG,
-        subscription_scheduled_topic=Topic.SCHEDULED_SUBSCRIPTIONS_GENERIC_METRICS_DISTRIBUTIONS,
+        commit_log_topic=Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
-        subscription_result_topic=Topic.GENERIC_METRICS_DISTRIBUTIONS_SUBSCRIPTION_RESULTS,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS_DISTRIBUTIONS,
         pre_filter=KafkaHeaderSelectFilter("metric_type", InputType.DISTRIBUTION.value),
     ),
 )

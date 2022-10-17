@@ -7,7 +7,6 @@ from typing import Generator
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage
-from snuba.datasets.configuration.validation.post_loader import validate_storages
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import get_config
@@ -29,7 +28,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
         self._all_storages: dict[StorageKey, Storage] = {}
         self.__initialize()
-        validate_storages()
 
     def __initialize(self) -> None:
 

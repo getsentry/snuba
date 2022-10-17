@@ -339,9 +339,7 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         ).execute()
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
-            settings.KAFKA_TOPIC_MAP.get(
-                Topic.SNUBA_QUERIES.value, Topic.SNUBA_QUERIES.value
-            ),
+            settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),
             data.encode("utf-8"),
             on_delivery=_record_query_delivery_callback,
         )

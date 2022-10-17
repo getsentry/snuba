@@ -15,7 +15,7 @@ from snuba.utils.streams.topics import Topic
 
 def test_get_partition_count() -> None:
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [Topic.SCHEDULED_SUBSCRIPTIONS_TRANSACTIONS])
+    create_topics(admin_client, [Topic.SUBSCRIPTION_SCHEDULED_TRANSACTIONS])
 
     entity = get_entity(EntityKey("transactions"))
     storage = entity.get_writable_storage()
