@@ -7,12 +7,12 @@ from snuba.migrations.status import Status
 
 class MigrationPolicy(ABC):
     """
-    A MigrationPolicy implements an `is_allowed` method
-    that determines whether or not a migration can be applied
-    from snuba admin.
+    A MigrationPolicy implements `can_run` and
+    `can_reverse` methods that determines whether or not
+    a migration can be run or reversed from snuba admin.
 
     A policy can be used by a migration group to determine the
-    level of access a group has to run migrations.
+    level of access a group has to run/reverse migrations.
     """
 
     @abstractmethod
@@ -38,17 +38,12 @@ class ReadOnlyPolicy(MigrationPolicy):
 
 class WriteSafeAndPendingPolicy(MigrationPolicy):
     """
-    Safe migrations can be run in addition to dangerous migrations that
-    are in a pending state. All backwards migrations are considered
-    dangerous in this policy.
+    Migrations can be run that are non-blocking, as determined
+    by the `blocking` attribute set on a migration.
 
-    This policy defers to the `blocking` attribute for a migration to
-    determine if the migration is safe or not.
+    Reversing a migration is considered blocking by this policy,
+    and only migrations in a pending state can be reversed.
     """
-
-    def _get_status(self, migration_key: MigrationKey) -> Status:
-        status, _ = Runner().get_status(migration_key)
-        return status
 
     def can_run(self, migration_key: MigrationKey) -> bool:
         migration = get_group_loader(migration_key.group).load_migration(
@@ -57,7 +52,8 @@ class WriteSafeAndPendingPolicy(MigrationPolicy):
         return False if migration.blocking else True
 
     def can_reverse(self, migration_key: MigrationKey) -> bool:
-        if self._get_status(migration_key) == Status.IN_PROGRESS:
+        status, _ = Runner().get_status(migration_key)
+        if status == Status.IN_PROGRESS:
             return True
         return False
 
