@@ -5,18 +5,18 @@ import pytest
 
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import (
+    AllMigrationsPolicy,
     MigrationPolicy,
-    ReadOnlyPolicy,
-    WriteAllPolicy,
-    WriteSafeAndPendingPolicy,
+    NoMigrationsPolicy,
+    NonBlockingMigrationsPolicy,
 )
 from snuba.migrations.runner import MigrationKey
 from snuba.migrations.status import Status
 
 POLICIES: Mapping[str, MigrationPolicy] = {
-    "read_only": ReadOnlyPolicy(),
-    "write_pending": WriteSafeAndPendingPolicy(),
-    "write_all": WriteAllPolicy(),
+    "no_migrations": NoMigrationsPolicy(),
+    "non_blocking_migrations": NonBlockingMigrationsPolicy(),
+    "all_migrations": AllMigrationsPolicy(),
 }
 
 
@@ -41,44 +41,44 @@ class TestMigrationPolicies:
             pytest.param(
                 code_migration_key(),
                 "run",
-                "read_only",
+                "no_migrations",
                 False,
-                id="ReadOnly Code Migration",
+                id="NoMigrationsPolicy Code Migration",
             ),
             pytest.param(
                 sql_migration_key(),
                 "run",
-                "read_only",
+                "no_migrations",
                 False,
-                id="ReadOnly SQL Migration",
+                id="NoMigrationsPolicy SQL Migration",
             ),
             pytest.param(
                 code_migration_key(),
                 "run",
-                "write_pending",
+                "non_blocking_migrations",
                 False,
-                id="WriteSafeAndPending Code Migration",
+                id="NonBlockingMigrations Code Migration",
             ),
             pytest.param(
                 sql_migration_key(),
                 "run",
-                "write_pending",
+                "non_blocking_migrations",
                 True,
-                id="WriteSafeAndPending SQL Migration",
+                id="NonBlockingMigrations SQL Migration",
             ),
             pytest.param(
                 code_migration_key(),
                 "run",
-                "write_all",
+                "all_migrations",
                 True,
-                id="WriteAll Code Migration",
+                id="AllMigrations Code Migration",
             ),
             pytest.param(
                 sql_migration_key(),
                 "reverse",
-                "write_all",
+                "all_migrations",
                 True,
-                id="WriteAll SQL Migration",
+                id="AllMigrations SQL Migration",
             ),
         ],
     )
@@ -98,4 +98,8 @@ class TestMigrationPolicies:
         migration_key = MigrationKey(
             MigrationGroup("events"), "0016_drop_legacy_events"
         )
-        assert WriteSafeAndPendingPolicy().can_reverse(migration_key) == True
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
+
+        # if forward migration was blocking, reverse not allowed even when pending
+        migration_key = code_migration_key()
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == False
