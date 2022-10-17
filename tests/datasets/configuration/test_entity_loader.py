@@ -73,7 +73,7 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 def test_entity_loader_for_enitity_with_column_mappers() -> None:
     pluggable_entity = build_entity_from_config(
-        "tests/datasets/configuration/entity_with_column_mappers.yaml"
+        "tests/datasets/configuration/entity_with_ip_column_mappers.yaml"
     )
     column_mappers = pluggable_entity.translation_mappers.columns
 
@@ -83,9 +83,6 @@ def test_entity_loader_for_enitity_with_column_mappers() -> None:
 
     # Check that nested expressions were loaded correctly in ColumnToFunction
     assert len(column_to_function.to_function_params) == 2
-    function_call = get_object_in_list_by_class(
-        column_to_function.to_function_params, FunctionCall
-    )
     function_call = next(
         (
             fc
@@ -95,7 +92,7 @@ def test_entity_loader_for_enitity_with_column_mappers() -> None:
         None,
     )
     assert function_call is not None
-    assert len(function_call.parameters) == 2
+    assert len(function_call.parameters) == 1
     assert any(isinstance(param, Column) for param in function_call.parameters)
     assert any(isinstance(param, Literal) for param in function_call.parameters)
 

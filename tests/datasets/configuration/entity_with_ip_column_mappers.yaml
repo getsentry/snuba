@@ -26,36 +26,6 @@ translation_mappers:
         from_table_name:
         from_col_name: ip_address
         to_function_name: coalesce
-        to_function_params:
-          -
-            expression: FunctionCall
-            args:
-              alias:
-              function_name: IPv4NumToString
-              parameters:
-                -
-                  expression: Column
-                  args:
-                    alias:
-                    table_name:
-                    column_name: ip_address_v6
-                -
-                  expression: Literal
-                  args:
-                    alias:
-                    value: placeholder
-          -
-            expression: FunctionCall
-            args:
-              alias:
-              function_name: extra
-              parameters:
-                -
-                  expression: Column
-                  args:
-                    alias:
-                    table_name:
-                    column_name: another_placeholder
     -
       mapper: ColumnToMapping
       args:

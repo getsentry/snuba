@@ -17,7 +17,6 @@ from snuba.datasets.entities.entity_key import register_entity_key
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.expressions import Expression
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
 
@@ -42,39 +41,12 @@ def _build_entity_query_processors(
     ]
 
 
-def _parse_expressions(expressions_config: list[dict[str, Any]]) -> list[Expression]:
-    expressions_config = expressions_config.copy()
-    expressions: list[Expression] = []
-    for expression_config in expressions_config:
-        expression_name = expression_config["expression"]
-        if expression_name == "FunctionCall":
-            parameters = tuple(
-                _parse_expressions(expression_config["args"]["parameters"])
-            )
-            expression_config["args"]["parameters"] = parameters
-        expressions.append(
-            Expression.get_from_name(expression_name)(**expression_config["args"])
-        )
-    return expressions
-
-
-def _pre_process_column_mapper_config(sub_config: dict[str, Any]) -> dict[str, Any]:
-    # TODO: Will need to add support for ColumnToCurriedFunction when migrating sessions dataset to config
-    if sub_config["mapper"] == "ColumnToFunction":
-        sub_config["args"]["to_function_params"] = tuple(
-            _parse_expressions(sub_config["args"]["to_function_params"])
-        )
-    return sub_config
-
-
 def _build_entity_translation_mappers(
     config_translation_mappers: dict[str, Any],
 ) -> TranslationMappers:
     columns_mappers: list[ColumnMapper] = (
         [
-            ColumnMapper.get_from_name(col_config["mapper"])(
-                **_pre_process_column_mapper_config(col_config)["args"]
-            )
+            ColumnMapper.get_from_name(col_config["mapper"])(**col_config["args"])
             for col_config in config_translation_mappers["columns"]
         ]
         if "columns" in config_translation_mappers
