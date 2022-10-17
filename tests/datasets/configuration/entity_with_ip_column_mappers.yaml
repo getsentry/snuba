@@ -21,7 +21,7 @@ query_processors:
 translation_mappers:
   columns:
     -
-      mapper: ColumnToFunction
+      mapper: ColumnToIPAddress
       args:
         from_table_name:
         from_col_name: ip_address
