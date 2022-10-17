@@ -1,0 +1,96 @@
+version: v1
+kind: entity
+name: transactions
+
+schema: []
+
+readable_storage: transactions
+writable_storage: transactions
+
+query_processors:
+  [
+    {
+      processor: TimeSeriesProcessor,
+      args:
+        {
+          time_group_columns: { time: finish_ts },
+          time_parse_columns: [start_ts, finish_ts, timestamp],
+        },
+    },
+    { processor: TagsExpanderProcessor },
+    { processor: BasicFunctionsProcessor },
+    { processor: ApdexProcessor },
+    { processor: FailureRateProcessor },
+    { processor: ReferrerRateLimiterProcessor },
+    {
+      processor: ProjectReferrerRateLimiter,
+      args: { project_column: project_id },
+    },
+    {
+      processor: ProjectRateLimiterProcessor,
+      args: { project_column: project_id },
+    },
+    { processor: ResourceQuotaProcessor, args: { project_field: project_id } },
+  ]
+
+translation_mappers:
+  {
+    functions: [],
+    columns: [],
+    subscriptables:
+      [
+        {
+          mapper: SubscriptableMapper,
+          args:
+            {
+              from_column_table,
+              from_column_name: tags,
+              to_nested_col_table,
+              to_nested_col_name: tags,
+            },
+        },
+        {
+          mapper: SubscriptableMapper,
+          args:
+            {
+              from_column_table,
+              from_column_name: contexts,
+              to_nested_col_table,
+              to_nested_col_name: contexts,
+            },
+        },
+        {
+          mapper: SubscriptableMapper,
+          args:
+            {
+              from_column_table,
+              from_column_name: measurements,
+              to_nested_col_table,
+              to_nested_col_name: measurements,
+              nullable: True,
+            },
+        },
+        {
+          mapper: SubscriptableMapper,
+          args:
+            {
+              from_column_table,
+              from_column_name: span_op_breakdowns,
+              to_nested_col_table,
+              to_nested_col_name: span_op_breakdowns,
+              nullable: True,
+            },
+        },
+      ],
+  }
+
+validators:
+  [
+    {
+      validator: EntityRequiredColumnValidator,
+      args: { required_filter_columns: [project_id] },
+    },
+  ]
+
+required_time_column: finish_ts
+partition_key_column_name:
