@@ -40,6 +40,7 @@ _HARDCODED_TOPICS = {
     "SNUBA_SESSIONS_COMMIT_LOG": "snuba-sessions-commit-log",
     "SCHEDULED_SUBSCRIPTIONS_SESSIONS": "scheduled-subscriptions-sessions",
     "SESSIONS_SUBSCRIPTIONS_RESULTS": "sessions-subscription-results",
+    "SNUBA_REPLAY_EVENTS": "snuba-replay-events",
 }
 
 _REGISTERED_TOPICS: dict[str, str] = {}
