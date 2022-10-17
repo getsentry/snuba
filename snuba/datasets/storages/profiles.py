@@ -12,9 +12,7 @@ from snuba.query.processors.condition_checkers.checkers import (
     ProjectIdEnforcer,
 )
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
-from snuba.query.processors.physical.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
+from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 from snuba.utils.streams.topics import Topic
 
 PROFILES_LOCAL_TABLE_NAME = "profiles_local"

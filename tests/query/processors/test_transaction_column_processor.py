@@ -4,9 +4,7 @@ from snuba.clickhouse.query import Query
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.physical.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
+from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 
 
