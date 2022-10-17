@@ -264,7 +264,7 @@ class ConsumerBuilder:
             Callable[[MessageProcessor], MessageProcessor]
         ] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
-        table_writer = self.storage.get_table_writer(slice_id)
+        table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
 
         processor = stream_loader.get_processor()
