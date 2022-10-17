@@ -12,7 +12,7 @@ from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, FunctionCall
 
 
 def test_build_entity_from_config_matches_python_definition() -> None:
@@ -94,7 +94,6 @@ def test_entity_loader_for_enitity_with_column_mappers() -> None:
     assert function_call is not None
     assert len(function_call.parameters) == 1
     assert any(isinstance(param, Column) for param in function_call.parameters)
-    assert any(isinstance(param, Literal) for param in function_call.parameters)
 
     # Check that other column mappers (which do not contain expressions) were loaded correctly
     column_to_mapping = get_object_in_list_by_class(column_mappers, ColumnToMapping)
