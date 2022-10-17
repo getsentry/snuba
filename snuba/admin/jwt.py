@@ -40,4 +40,4 @@ def validate_assertion(assertion: str) -> AdminUser:
     from jose import jwt
 
     info = jwt.decode(assertion, _certs(), algorithms=["ES256"], audience=_audience())
-    return AdminUser(email=info["email"], id=info["id"])
+    return AdminUser(email=info["email"], id=info["sub"])
