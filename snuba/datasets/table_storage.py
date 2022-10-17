@@ -215,13 +215,6 @@ class TableWriter:
         self.__replacer_processor = replacer_processor
         self.__writer_options = writer_options
         self.__write_format = write_format
-        # self.__slice_id: Optional[int] = None
-
-    # def add_slice_id(self, slice_id: int) -> None:
-    #     self.__slice_id = slice_id
-
-    # def get_slice_id(self) -> Optional[int]:
-    #     return self.__slice_id
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
