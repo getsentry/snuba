@@ -54,8 +54,8 @@ def test_executor_consumer() -> None:
     End to end integration test
     """
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.SCHEDULED_SUBSCRIPTIONS_EVENTS])
-    create_topics(admin_client, [SnubaTopic.EVENTS_SUBSCRIPTION_RESULTS])
+    create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_SCHEDULED_EVENTS])
+    create_topics(admin_client, [SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS])
 
     dataset_name = "events"
     entity_name = "events"

@@ -49,7 +49,7 @@ def test_combined_scheduler_and_executor() -> None:
     commit = mock.Mock()
 
     producer = KafkaProducer(
-        build_kafka_producer_configuration(SnubaTopic.EVENTS_SUBSCRIPTION_RESULTS)
+        build_kafka_producer_configuration(SnubaTopic.SUBSCRIPTION_RESULTS_EVENTS)
     )
 
     with closing(producer):
