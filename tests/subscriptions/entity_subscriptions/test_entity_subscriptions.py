@@ -12,7 +12,7 @@ from snuba.datasets.entity_subscriptions.entity_subscription import (
 )
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, Literal
 
 TESTS = [
     pytest.param(
@@ -68,17 +68,7 @@ TESTS = [
 TESTS_CONDITIONS_SNQL_METHOD = [
     pytest.param(
         EventsSubscription(data_dict={}),
-        [
-            binary_condition(
-                ConditionFunctions.LTE,
-                FunctionCall(
-                    None,
-                    "ifNull",
-                    (Column(None, None, "offset"), Literal(None, 0)),
-                ),
-                Literal(None, 5),
-            )
-        ],
+        [],
         True,
         id="Events subscription with offset of type SNQL",
     ),
