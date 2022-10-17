@@ -37,6 +37,9 @@ _HARDCODED_TOPICS = {
     "SNUBA_DEAD_LETTER_SESSIONS": "snuba-dead-letter-sessions",
     "SNUBA_DEAD_LETTER_GENERIC_METRICS": "snuba-dead-letter-generic-metrics",
     "SNUBA_DEAD_LETTER_REPLAYS": "snuba-dead-letter-replays",
+    "SNUBA_SESSIONS_COMMIT_LOG": "snuba-sessions-commit-log",
+    "SCHEDULED_SUBSCRIPTIONS_SESSIONS": "scheduled-subscriptions-sessions",
+    "SESSIONS_SUBSCRIPTIONS_RESULTS": "sessions-subscription-results",
 }
 
 _REGISTERED_TOPICS: dict[str, str] = {}
