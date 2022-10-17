@@ -112,10 +112,10 @@ storage = WritableTableStorage(
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,
-        commit_log_topic=Topic.COMMIT_LOG,
+        commit_log_topic=Topic.SNUBA_COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.PARTITION,
-        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_EVENTS,
-        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
+        subscription_scheduled_topic=Topic.SCHEDULED_SUBSCRIPTIONS_EVENTS,
+        subscription_result_topic=Topic.EVENTS_SUBSCRIPTION_RESULTS,
     ),
     replacer_processor=ErrorsReplacer(
         schema=schema,
