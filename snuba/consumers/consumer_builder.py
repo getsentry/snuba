@@ -285,6 +285,7 @@ class ConsumerBuilder:
                     self.producer if self.replacements_topic is not None else None
                 ),
                 replacements_topic=self.replacements_topic,
+                slice_id=slice_id,
             )
             if self.__mock_parameters is None
             else build_mock_batch_writer(
