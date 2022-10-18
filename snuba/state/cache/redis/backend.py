@@ -7,6 +7,7 @@ from typing import Callable, Optional
 from pkg_resources import resource_string
 
 from redis.exceptions import ResponseError
+from snuba import environment
 from snuba.redis import RedisClientType
 from snuba.state import get_config
 from snuba.state.cache.abstract import (
@@ -17,9 +18,11 @@ from snuba.state.cache.abstract import (
 )
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
 logger = logging.getLogger(__name__)
+metrics = MetricsWrapper(environment.metrics, "read_through_cache")
 
 
 RESULT_VALUE = 0
@@ -136,6 +139,7 @@ class RedisCache(Cache[TValue]):
 
         if timer is not None:
             timer.mark("cache_get")
+        metric_tags = timer.tags if timer is not None else {}
 
         # This updates the stats object and querylog
         record_cache_hit_type(result[0])
@@ -143,6 +147,7 @@ class RedisCache(Cache[TValue]):
         if result[0] == RESULT_VALUE:
             # If we got a cache hit, this is easy -- we just return it.
             logger.debug("Immediately returning result from cache hit.")
+            metrics.increment("cache_hit", tags=metric_tags)
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
 
@@ -169,8 +174,10 @@ class RedisCache(Cache[TValue]):
                     [self.__codec.encode(value), get_config("cache_expiry_sec", 1)]
                 )
             except concurrent.futures.TimeoutError as error:
+                metrics.increment("execute_timeout", tags=metric_tags)
                 raise TimeoutError("timed out waiting for value") from error
             except Exception as e:
+                metrics.increment("execute_error", tags=metric_tags)
                 error_value = SerializableException.from_standard_exception_instance(e)
                 argv.extend(
                     [
@@ -200,6 +207,7 @@ class RedisCache(Cache[TValue]):
                         ],
                         argv,
                     )
+                    metrics.increment("cache_set_success", tags=metric_tags)
                 except ResponseError:
                     # An error response here indicates that we overran our
                     # deadline, or there was some other issue when trying to
@@ -224,6 +232,8 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 effective_timeout,
             )
+            queue_len = self.__client.llen(build_notify_queue_key(task_ident))
+            metrics.gauge("notify_queye_len", queue_len, tags=metric_tags)
             notification_received = (
                 self.__client.blpop(
                     build_notify_queue_key(task_ident), effective_timeout
@@ -235,6 +245,7 @@ class RedisCache(Cache[TValue]):
                 timer.mark("dedupe_wait")
 
             if notification_received:
+                metrics.increment("notification_received", tags=metric_tags)
                 # There should be a value waiting for us at the result key.
                 raw_value, upsteam_error_payload = self.__client.mget(
                     [result_key, error_key]
@@ -243,12 +254,15 @@ class RedisCache(Cache[TValue]):
                 # for generating the cache value errored while generating it.
                 if raw_value is None:
                     if upsteam_error_payload:
+                        metrics.increment("readthrough_error", tags=metric_tags)
                         return self.__codec.decode(upsteam_error_payload)
-
-                    raise ExecutionError(
-                        "no value at key: this means the original process executing the query crashed before the exception could be handled or an error was thrown setting the cache result"
-                    )
+                    else:
+                        metrics.increment("no_value_at_key", tags=metric_tags)
+                        raise ExecutionError(
+                            "no value at key: this means the original process executing the query crashed before the exception could be handled or an error was thrown setting the cache result"
+                        )
                 else:
+                    metrics.increment("readthrough_value", tags=metric_tags)
                     return self.__codec.decode(raw_value)
             else:
                 # We timed out waiting for the notification -- something went
@@ -257,6 +271,7 @@ class RedisCache(Cache[TValue]):
                     # If the effective timeout was the remaining task timeout,
                     # this means that the client responsible for generating the
                     # cache value didn't do so before it promised to.
+                    metrics.increment("notification_wait_timeout", tags=metric_tags)
                     raise ExecutionTimeoutError(
                         "result not available before execution deadline"
                     )
@@ -265,6 +280,9 @@ class RedisCache(Cache[TValue]):
                     # method, that means that our timeout was stricter
                     # (smaller) than the execution timeout. The other client
                     # may still be working, but we're not waiting.
+                    metrics.increment(
+                        "notification_timeout_too_strict", tags=metric_tags
+                    )
                     raise TimeoutError("timed out waiting for result")
         else:
             raise ValueError("unexpected result from script")

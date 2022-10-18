@@ -72,6 +72,10 @@ class Timer:
 
         return self.__data
 
+    @property
+    def tags(self):
+        return self.__tags
+
     def for_json(self) -> TimerData:
         return self.finish()
 
