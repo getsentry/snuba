@@ -23,21 +23,27 @@ reset_dataset_factory()
 from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
 from snuba.datasets.entities.transactions import TransactionsEntity
 
-
-def test_build_entity_from_config_matches_python_definition() -> None:
-    _config_matches_python_definition(
+test_data = [
+    pytest.param(
         "snuba/datasets/configuration/generic_metrics/entities/sets.yaml",
         GenericMetricsSetsEntity,
         EntityKey.GENERIC_METRICS_SETS,
-    )
-    _config_matches_python_definition(
+        id="Generic Metrics Sets",
+    ),
+    pytest.param(
         "snuba/datasets/configuration/transactions/entities/transactions.yaml",
         TransactionsEntity,
         EntityKey.TRANSACTIONS,
-    )
+        id="Transactions",
+    ),
+]
 
 
-def _config_matches_python_definition(
+@pytest.mark.parametrize(
+    "config_path, entity, entity_key",
+    test_data,
+)
+def test_config_matches_python_definition(
     config_path: str, entity: Type[Entity], entity_key: EntityKey
 ) -> None:
     config_entity = build_entity_from_config(config_path)

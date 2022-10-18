@@ -4,6 +4,7 @@ name: transactions
 
 schema:
   [
+    { name: project_id, type: UInt, args: { size: 64 } },
     { name: event_id, type: UUID },
     { name: trace_id, type: UUID, args: { schema_modifiers: [nullable] } },
     { name: span_id, type: UInt, args: { size: 64 } },
