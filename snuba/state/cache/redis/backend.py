@@ -233,7 +233,7 @@ class RedisCache(Cache[TValue]):
                 effective_timeout,
             )
             queue_len = self.__client.llen(build_notify_queue_key(task_ident))
-            metrics.gauge("notify_queye_len", queue_len, tags=metric_tags)
+            metrics.gauge("notify_queue_len", queue_len, tags=metric_tags)
             notification_received = (
                 self.__client.blpop(
                     build_notify_queue_key(task_ident), effective_timeout
