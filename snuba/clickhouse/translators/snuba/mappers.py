@@ -135,6 +135,21 @@ class ColumnToIPAddress(ColumnToFunction):
 
 
 @dataclass(frozen=True)
+class ColumnToNullIf(ColumnToFunction):
+    """
+    Custom column mapper for mapping columns to null.
+    TODO: Can remove when we support dynamic expression parsing in config
+    """
+
+    def __init__(self, from_table_name: Optional[str], from_col_name: str) -> None:
+        to_function_params: Tuple[ColumnExpr, LiteralExpr] = (
+            ColumnExpr(None, from_table_name, from_col_name),
+            LiteralExpr(None, ""),
+        )
+        super().__init__(from_table_name, from_col_name, "nullIf", to_function_params)
+
+
+@dataclass(frozen=True)
 class ColumnToCurriedFunction(ColumnToExpression):
     """
     Maps a column into a curried function expression that preserves the alias.
