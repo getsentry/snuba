@@ -6,13 +6,15 @@ from jsonschema.exceptions import ValidationError
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
+    ColumnToIPAddress,
     ColumnToMapping,
+    ColumnToNullIf,
 )
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_entity import PluggableEntity
-from snuba.query.expressions import Column, FunctionCall
+from snuba.query.expressions import Column, FunctionCall, Literal
 
 
 def test_build_entity_from_config_matches_python_definition() -> None:
@@ -73,20 +75,22 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 def test_entity_loader_for_enitity_with_column_mappers() -> None:
     pluggable_entity = build_entity_from_config(
-        "tests/datasets/configuration/entity_with_ip_column_mappers.yaml"
+        "tests/datasets/configuration/entity_with_column_mappers.yaml"
     )
     column_mappers = pluggable_entity.translation_mappers.columns
 
-    # Check that ColumnToFunction mapper was successfully loaded from config
-    column_to_function = get_object_in_list_by_class(column_mappers, ColumnToFunction)
-    assert isinstance(column_to_function, ColumnToFunction)
+    # Check that ColumnToIpAdress mapper was successfully loaded from config
+    column_to_ip_address = get_object_in_list_by_class(
+        column_mappers, ColumnToIPAddress
+    )
+    assert isinstance(column_to_ip_address, ColumnToFunction)
 
-    # Check that nested expressions were loaded correctly in ColumnToFunction
-    assert len(column_to_function.to_function_params) == 2
+    # Check that nested expressions were loaded correctly in ColumnToIPAddress
+    assert len(column_to_ip_address.to_function_params) == 2
     function_call = next(
         (
             fc
-            for fc in column_to_function.to_function_params
+            for fc in column_to_ip_address.to_function_params
             if isinstance(fc, FunctionCall) and fc.function_name == "IPv4NumToString"
         ),
         None,
@@ -94,6 +98,20 @@ def test_entity_loader_for_enitity_with_column_mappers() -> None:
     assert function_call is not None
     assert len(function_call.parameters) == 1
     assert any(isinstance(param, Column) for param in function_call.parameters)
+
+    # Check that ColumnToNullIf mapper was successfully loaded from config
+    column_to_user_null_if = get_object_in_list_by_class(column_mappers, ColumnToNullIf)
+    assert isinstance(column_to_user_null_if, ColumnToFunction)
+
+    # Check that expressions were loaded correctly in ColumnToNullIf
+    assert len(column_to_user_null_if.to_function_params) == 2
+    assert any(
+        isinstance(param, Column) for param in column_to_user_null_if.to_function_params
+    )
+    assert any(
+        isinstance(param, Literal)
+        for param in column_to_user_null_if.to_function_params
+    )
 
     # Check that other column mappers (which do not contain expressions) were loaded correctly
     column_to_mapping = get_object_in_list_by_class(column_mappers, ColumnToMapping)
