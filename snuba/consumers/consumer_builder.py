@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
-from arroyo import Topic
+from arroyo import Topic as ArroyoTopic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
@@ -33,6 +33,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
+from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.utils.streams.topics import register_topic
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,33 @@ class ProcessingParameters:
 class MockParameters:
     avg_write_latency: int
     std_deviation: int
+
+
+def get_sliced_snuba_topic(
+    topic: SnubaTopic, slice_id: Optional[int] = None
+) -> SnubaTopic:
+
+    if slice_id is not None:
+        # there should be some sort of assertion to check
+        # whether the slice_id passed is valid for this storage
+        physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
+        # this will require registration of the physical topic
+        topic = register_topic(physical_topic)
+
+    return topic
+
+
+def get_sliced_arroyo_topic(
+    passed_topic: str, slice_id: Optional[int] = None
+) -> ArroyoTopic:
+
+    if slice_id is not None:
+        physical_topic = SLICED_KAFKA_TOPIC_MAP[(passed_topic, slice_id)]
+        set_topic = ArroyoTopic(physical_topic)
+    else:
+        set_topic = ArroyoTopic(passed_topic)
+
+    return set_topic
 
 
 class ConsumerBuilder:
@@ -97,12 +125,7 @@ class ConsumerBuilder:
             .topic
         )
 
-        if slice_id is not None:
-            # there should be some sort of assertion to check
-            # whether the slice_id passed is valid for this storage
-            physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
-            # this will require registration of the physical topic
-            topic = register_topic(physical_topic)
+        topic = get_sliced_snuba_topic(topic, slice_id)
 
         self.broker_config = get_default_kafka_configuration(
             topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
@@ -120,42 +143,36 @@ class ConsumerBuilder:
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
-        self.raw_topic: Topic
+        self.raw_topic: ArroyoTopic
         if kafka_params.raw_topic is not None:
-            self.raw_topic = Topic(kafka_params.raw_topic)
+            self.raw_topic = ArroyoTopic(kafka_params.raw_topic)
         else:
-            self.raw_topic = Topic(stream_loader.get_default_topic_spec().topic_name)
+            self.raw_topic = ArroyoTopic(
+                stream_loader.get_default_topic_spec().topic_name
+            )
 
-        self.replacements_topic: Optional[Topic]
+        self.replacements_topic: Optional[ArroyoTopic]
         if kafka_params.replacements_topic is not None:
-            self.replacements_topic = Topic(kafka_params.replacements_topic)
+            self.replacements_topic = ArroyoTopic(kafka_params.replacements_topic)
         else:
             replacement_topic_spec = stream_loader.get_replacement_topic_spec()
             if replacement_topic_spec is not None:
-                self.replacements_topic = Topic(replacement_topic_spec.topic_name)
+                self.replacements_topic = ArroyoTopic(replacement_topic_spec.topic_name)
             else:
                 self.replacements_topic = None
 
-        self.commit_log_topic: Optional[Topic]
+        self.commit_log_topic: Optional[ArroyoTopic]
 
         if kafka_params.commit_log_topic is not None:
-            if slice_id is not None:
-                physical_commit_log_topic = SLICED_KAFKA_TOPIC_MAP[
-                    (kafka_params.commit_log_topic, slice_id)
-                ]
-                self.commit_log_topic = Topic(physical_commit_log_topic)
-            else:
-                self.commit_log_topic = Topic(kafka_params.commit_log_topic)
+            self.commit_log_topic = get_sliced_arroyo_topic(
+                kafka_params.commit_log_topic, slice_id
+            )
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
-                if slice_id is not None:
-                    physical_commit_log_topic = SLICED_KAFKA_TOPIC_MAP[
-                        (commit_log_topic_spec.topic_name, slice_id)
-                    ]
-                    self.commit_log_topic = Topic(physical_commit_log_topic)
-                else:
-                    self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
+                self.commit_log_topic = get_sliced_arroyo_topic(
+                    commit_log_topic_spec.topic_name, slice_id
+                )
             else:
                 self.commit_log_topic = None
 
@@ -210,10 +227,7 @@ class ConsumerBuilder:
             .topic
         )
 
-        # get the physical topic in case of slicing
-        if slice_id is not None:
-            physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
-            topic = register_topic(physical_topic)
+        topic = get_sliced_snuba_topic(topic, slice_id)
 
         configuration = build_kafka_consumer_configuration(
             topic,
