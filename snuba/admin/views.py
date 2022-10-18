@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stdout
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
+from werkzeug.routing import BaseConverter
 
 from snuba import settings, state
 from snuba.admin.auth import UnauthorizedException, authorize_request
@@ -27,8 +30,9 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
-from snuba.migrations.runner import Runner, get_active_migration_groups
+from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -109,6 +113,62 @@ def migrations_groups_list(group: str) -> Response:
                 200,
             )
     return make_response(jsonify({"error": "Invalid group"}), 400)
+
+
+class MigrationActionConverter(BaseConverter):
+    regex = r"(?:run|reverse)"
+
+
+application.url_map.converters["migration_action"] = MigrationActionConverter
+
+
+@application.route(
+    "/migrations/<group>/<migration_action:action>/<migration_id>",
+    methods=["POST"],
+)
+def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
+    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+        return make_response(jsonify({"error": "Group not allowed"}), 400)
+
+    runner = Runner()
+    migration_group = MigrationGroup(group)
+    migration_key = MigrationKey(migration_group, migration_id)
+
+    def str_to_bool(s: str) -> bool:
+        return s.strip().lower() in ("yes", "true", "t", "1")
+
+    force = request.args.get("force", False, type=str_to_bool)
+    fake = request.args.get("fake", False, type=str_to_bool)
+    dry_run = request.args.get("dry_run", False, type=str_to_bool)
+
+    def do_action() -> None:
+        if action == "run":
+            runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
+        else:
+            runner.reverse_migration(
+                migration_key, force=force, fake=fake, dry_run=dry_run
+            )
+
+    try:
+        # temporarily redirect stdout to a buffer so we can return it
+        with io.StringIO() as output:
+            with redirect_stdout(output):
+                do_action()
+            return make_response(jsonify({"stdout": output.getvalue()}), 200)
+
+    except KeyError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "Group not found"}), 400)
+    except MigrationError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "migration error: " + err.message}), 400)
+    except ClickhouseError as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": "clickhouse error: " + err.message}), 400
+        )
+
+    return Response("OK", 200)
 
 
 @application.route("/clickhouse_queries")
