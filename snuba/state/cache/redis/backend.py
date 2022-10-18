@@ -207,12 +207,12 @@ class RedisCache(Cache[TValue]):
                         ],
                         argv,
                     )
-                    metrics.increment("cache_set_success", tags=metric_tags)
                 except ResponseError:
                     # An error response here indicates that we overran our
                     # deadline, or there was some other issue when trying to
                     # put the result value in the cache. This doesn't affect
                     # _our_ evaluation of the task, so log it and move on.
+                    metrics.increment("cache_set_fail", tags=metric_tags)
                     logger.warning("Error setting cache result!", exc_info=True)
                 else:
                     if timer is not None:
@@ -245,7 +245,6 @@ class RedisCache(Cache[TValue]):
                 timer.mark("dedupe_wait")
 
             if notification_received:
-                metrics.increment("notification_received", tags=metric_tags)
                 # There should be a value waiting for us at the result key.
                 raw_value, upsteam_error_payload = self.__client.mget(
                     [result_key, error_key]
@@ -262,7 +261,6 @@ class RedisCache(Cache[TValue]):
                             "no value at key: this means the original process executing the query crashed before the exception could be handled or an error was thrown setting the cache result"
                         )
                 else:
-                    metrics.increment("readthrough_value", tags=metric_tags)
                     return self.__codec.decode(raw_value)
             else:
                 # We timed out waiting for the notification -- something went
