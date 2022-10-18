@@ -135,9 +135,9 @@ class ColumnToIPAddress(ColumnToFunction):
 
 
 @dataclass(frozen=True)
-class ColumnToUserNullIf(ColumnToFunction):
+class ColumnToNullIf(ColumnToFunction):
     """
-    Custom column mapper for mapping user columns to null.
+    Custom column mapper for mapping columns to null.
     TODO: Can remove when we support dynamic expression parsing in config
     """
 

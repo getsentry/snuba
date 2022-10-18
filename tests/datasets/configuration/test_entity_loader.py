@@ -8,7 +8,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
     ColumnToIPAddress,
     ColumnToMapping,
-    ColumnToUserNullIf,
+    ColumnToNullIf,
 )
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities.entity_key import EntityKey
@@ -75,7 +75,7 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 def test_entity_loader_for_enitity_with_column_mappers() -> None:
     pluggable_entity = build_entity_from_config(
-        "tests/datasets/configuration/entity_with_ip_column_mappers.yaml"
+        "tests/datasets/configuration/entity_with_column_mappers.yaml"
     )
     column_mappers = pluggable_entity.translation_mappers.columns
 
@@ -99,13 +99,11 @@ def test_entity_loader_for_enitity_with_column_mappers() -> None:
     assert len(function_call.parameters) == 1
     assert any(isinstance(param, Column) for param in function_call.parameters)
 
-    # Check that ColumnToIpAdress mapper was successfully loaded from config
-    column_to_user_null_if = get_object_in_list_by_class(
-        column_mappers, ColumnToUserNullIf
-    )
+    # Check that ColumnToNullIf mapper was successfully loaded from config
+    column_to_user_null_if = get_object_in_list_by_class(column_mappers, ColumnToNullIf)
     assert isinstance(column_to_user_null_if, ColumnToFunction)
 
-    # Check that nested expressions were loaded correctly in ColumnToUserNullIf
+    # Check that expressions were loaded correctly in ColumnToNullIf
     assert len(column_to_user_null_if.to_function_params) == 2
     assert any(
         isinstance(param, Column) for param in column_to_user_null_if.to_function_params
