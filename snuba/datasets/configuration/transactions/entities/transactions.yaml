@@ -2,7 +2,121 @@ version: v1
 kind: entity
 name: transactions
 
-schema: []
+schema:
+  [
+    { name: event_id, type: UUID },
+    { name: trace_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: span_id, type: UInt, args: { size: 64 } },
+    { name: transaction_name, type: String },
+    {
+      name: transaction_hash,
+      type: UInt,
+      args: { size: 64, schema_modifiers: [readonly] },
+    },
+    { name: transaction_op, type: String },
+    { name: transaction_status, type: UInt, args: { size: 8 } },
+    { name: start_ts, type: DateTime },
+    { name: start_ms, type: UInt, args: { size: 16 } },
+    { name: finish_ts, type: DateTime },
+    { name: finish_ms, type: UInt, args: { size: 16 } },
+    { name: duration, type: UInt, args: { size: 32 } },
+    { name: platform, type: String },
+    { name: environment, type: String, args: { schema_modifiers: [nullable] } },
+    { name: release, type: String, args: { schema_modifiers: [nullable] } },
+    { name: dist, type: String, args: { schema_modifiers: [nullable] } },
+    { name: ip_address_v4, type: IPv4, args: { schema_modifiers: [nullable] } },
+    { name: ip_address_v6, type: IPv6, args: { schema_modifiers: [nullable] } },
+    { name: user, type: String },
+    {
+      name: user_hash,
+      type: UInt,
+      args: { size: 64, schema_modifiers: [readonly] },
+    },
+    { name: user_id, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user_name, type: String, args: { schema_modifiers: [nullable] } },
+    { name: user_email, type: String, args: { schema_modifiers: [nullable] } },
+    { name: sdk_name, type: String },
+    { name: sdk_version, type: String },
+    { name: http_method, type: String, args: { schema_modifiers: [nullable] } },
+    {
+      name: http_referer,
+      type: String,
+      args: { schema_modifiers: [nullable] },
+    },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    {
+      name: _tags_hash_map,
+      type: Array,
+      args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
+    },
+    {
+      name: contexts,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    {
+      name: measurements,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: String },
+              { name: value, type: Float, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: span_op_breakdowns,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: String },
+              { name: value, type: Float, args: { size: 64 } },
+            ],
+        },
+    },
+    {
+      name: spans,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: op, type: String },
+              { name: group, type: UInt, args: { size: 64 } },
+              { name: exclusive_time, type: Float, args: { size: 64 } },
+              { name: exclusive_time_32, type: Float, args: { size: 32 } },
+            ],
+        },
+    },
+    { name: partition, type: UInt, args: { size: 16 } },
+    { name: offset, type: UInt, args: { size: 64 } },
+    { name: message_timestamp, type: DateTime },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: deleted, type: UInt, args: { size: 8 } },
+    { name: type, type: String, args: { schema_modifiers: [readonly] } },
+    { name: message, type: String, args: { schema_modifiers: [readonly] } },
+    { name: title, type: String, args: { schema_modifiers: [readonly] } },
+    { name: transaction_source, type: String },
+    { name: timestamp, type: DateTime, args: { schema_modifiers: [readonly] } },
+    { name: group_ids, type: Array, args: { type: UInt, arg: 64 } },
+    { name: app_start_type, type: String },
+  ]
 
 readable_storage: transactions
 writable_storage: transactions
@@ -238,4 +352,3 @@ validators:
   ]
 
 required_time_column: finish_ts
-partition_key_column_name:
