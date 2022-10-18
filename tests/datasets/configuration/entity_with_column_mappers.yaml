@@ -30,8 +30,7 @@ translation_mappers:
       mapper: ColumnToNullIf
       args:
         from_table_name:
-        from_col_name: user
-        to_function_name: nullIf
+        from_col_name: userColumnToNullIf
     -
       mapper: ColumnToMapping
       args:

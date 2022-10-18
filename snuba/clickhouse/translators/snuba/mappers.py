@@ -141,16 +141,12 @@ class ColumnToNullIf(ColumnToFunction):
     TODO: Can remove when we support dynamic expression parsing in config
     """
 
-    def __init__(
-        self, from_table_name: Optional[str], from_col_name: str, to_function_name: str
-    ) -> None:
+    def __init__(self, from_table_name: Optional[str], from_col_name: str) -> None:
         to_function_params: Tuple[ColumnExpr, LiteralExpr] = (
             ColumnExpr(None, from_table_name, from_col_name),
             LiteralExpr(None, ""),
         )
-        super().__init__(
-            from_table_name, from_col_name, to_function_name, to_function_params
-        )
+        super().__init__(from_table_name, from_col_name, "nullIf", to_function_params)
 
 
 @dataclass(frozen=True)
