@@ -147,7 +147,6 @@ class RedisCache(Cache[TValue]):
         if result[0] == RESULT_VALUE:
             # If we got a cache hit, this is easy -- we just return it.
             logger.debug("Immediately returning result from cache hit.")
-            metrics.increment("cache_hit", tags=metric_tags)
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
 
@@ -232,8 +231,6 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 effective_timeout,
             )
-            queue_len = self.__client.llen(build_notify_queue_key(task_ident))
-            metrics.gauge("notify_queue_len", queue_len, tags=metric_tags)
             notification_received = (
                 self.__client.blpop(
                     build_notify_queue_key(task_ident), effective_timeout
