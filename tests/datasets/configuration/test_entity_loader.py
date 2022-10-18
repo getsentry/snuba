@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Type
 
 import pytest
 from jsonschema.exceptions import ValidationError
@@ -12,44 +12,59 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity import Entity
+from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.query.expressions import Column, FunctionCall, Literal
 
+reset_dataset_factory()
+
+
+from snuba.datasets.entities.generic_metrics import GenericMetricsSetsEntity
+from snuba.datasets.entities.transactions import TransactionsEntity
+
 
 def test_build_entity_from_config_matches_python_definition() -> None:
-    config_sets_entity = build_entity_from_config(
-        "snuba/datasets/configuration/generic_metrics/entities/sets.yaml"
+    _config_matches_python_definition(
+        "snuba/datasets/configuration/generic_metrics/entities/sets.yaml",
+        GenericMetricsSetsEntity,
+        EntityKey.GENERIC_METRICS_SETS,
     )
-    py_sets_entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
+    _config_matches_python_definition(
+        "snuba/datasets/configuration/transactions/entities/transactions.yaml",
+        TransactionsEntity,
+        EntityKey.TRANSACTIONS,
+    )
 
-    assert isinstance(config_sets_entity, PluggableEntity)
-    assert config_sets_entity.entity_key == EntityKey.GENERIC_METRICS_SETS
+
+def _config_matches_python_definition(
+    config_path: str, entity: Type[Entity], entity_key: EntityKey
+) -> None:
+    config_entity = build_entity_from_config(config_path)
+    py_entity = entity()
+
+    assert isinstance(config_entity, PluggableEntity)
+    assert config_entity.entity_key == entity_key
 
     for (config_qp, py_qp) in zip(
-        config_sets_entity.get_query_processors(), py_sets_entity.get_query_processors()
+        config_entity.get_query_processors(), py_entity.get_query_processors()
     ):
         assert (
             config_qp.__class__ == py_qp.__class__
         ), "query processor mismatch between configuration-loaded sets and python-defined"
 
     for (config_v, py_v) in zip(
-        config_sets_entity.get_validators(), py_sets_entity.get_validators()
+        config_entity.get_validators(), py_entity.get_validators()
     ):
         assert (
             config_v.__class__ == py_v.__class__
         ), "validator mismatch between configuration-loaded sets and python-defined"
 
-    assert config_sets_entity.get_all_storages() == py_sets_entity.get_all_storages()
-    assert (
-        config_sets_entity.get_writable_storage()
-        == py_sets_entity.get_writable_storage()
-    )
-    assert (
-        config_sets_entity.required_time_column == py_sets_entity.required_time_column
-    )
+    assert config_entity.get_all_storages() == py_entity.get_all_storages()
+    assert config_entity.get_writable_storage() == py_entity.get_writable_storage()
+    assert config_entity.required_time_column == py_entity.required_time_column
 
-    assert config_sets_entity.get_data_model() == py_sets_entity.get_data_model()
+    assert config_entity.get_data_model() == py_entity.get_data_model()
 
 
 def test_bad_configuration_broken_query_processor() -> None:
