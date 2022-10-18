@@ -22,7 +22,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
-from snuba.settings import SLICED_KAFKA_TOPIC_MAP
+from snuba.settings import SLICED_KAFKA_TOPIC_MAP, SLICED_STORAGES
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
@@ -65,16 +65,23 @@ class MockParameters:
     std_deviation: int
 
 
+def validate_passed_slice(
+    storage_key: StorageKey, slice_id: Optional[int] = None
+) -> None:
+    # make sure this is a storage that is sliced
+    # and that the slice id passed in is valid
+    if slice_id is not None:
+        assert storage_key.value in SLICED_STORAGES
+        assert slice_id < SLICED_STORAGES[storage_key.value]
+
+
 def get_sliced_snuba_topic(
     topic: SnubaTopic, slice_id: Optional[int] = None
 ) -> SnubaTopic:
-
     if slice_id is not None:
-        # there should be some sort of assertion to check
-        # whether the slice_id passed is valid for this storage
         physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
         # this will require registration of the physical topic
-        topic = register_topic(physical_topic)
+        return register_topic(physical_topic)
 
     return topic
 
@@ -82,7 +89,6 @@ def get_sliced_snuba_topic(
 def get_sliced_arroyo_topic(
     passed_topic: str, slice_id: Optional[int] = None
 ) -> ArroyoTopic:
-
     if slice_id is not None:
         physical_topic = SLICED_KAFKA_TOPIC_MAP[(passed_topic, slice_id)]
         set_topic = ArroyoTopic(physical_topic)
@@ -125,6 +131,7 @@ class ConsumerBuilder:
             .topic
         )
 
+        validate_passed_slice(storage_key, slice_id)
         topic = get_sliced_snuba_topic(topic, slice_id)
 
         self.broker_config = get_default_kafka_configuration(
