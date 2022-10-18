@@ -27,6 +27,12 @@ translation_mappers:
         from_col_name: ip_address
         to_function_name: coalesce
     -
+      mapper: ColumnToUserNullIf
+      args:
+        from_table_name:
+        from_col_name: user
+        to_function_name: nullIf
+    -
       mapper: ColumnToMapping
       args:
         from_table_name:
