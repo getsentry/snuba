@@ -161,14 +161,8 @@ translation_mappers:
             },
         },
         {
-          mapper: ColumnToFunction,
-          args:
-            {
-              from_table_name,
-              from_col_name: "user",
-              to_function_name: "nullIf",
-              to_function_params: [],
-            },
+          mapper: ColumnToNullIf,
+          args: { from_table_name, from_col_name: "user" },
         },
         {
           mapper: ColumnToLiteral,
