@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from snuba.datasets.configuration.storage_builder import build_storage
+from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.factory import get_config_built_storages
@@ -147,7 +147,7 @@ query_processors:
         filename = os.path.join(tmpdirname, "file.yaml")
         with open(filename, "w") as f:
             f.write(yml_text)
-        storage = build_storage(filename)
+        storage = build_storage_from_config(filename)
         assert len(storage.get_query_processors()) == 1
         qp = storage.get_query_processors()[0]
         assert qp._MappingOptimizer__column_name == "a"
