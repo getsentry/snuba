@@ -142,10 +142,10 @@ class ColumnToNullIf(ColumnToFunction):
     """
 
     def __init__(
-        self, from_table_name: str, from_col_name: str, to_function_name: str
+        self, from_table_name: Optional[str], from_col_name: str, to_function_name: str
     ) -> None:
         to_function_params: Tuple[ColumnExpr, LiteralExpr] = (
-            ColumnExpr(None, None, "user"),
+            ColumnExpr(None, from_table_name, from_col_name),
             LiteralExpr(None, ""),
         )
         super().__init__(
