@@ -102,7 +102,7 @@ jobs:
   snuba-image:
     name: Build snuba CI image
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
@@ -223,7 +223,7 @@ jobs:
     needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       matrix:
         snuba_settings:
