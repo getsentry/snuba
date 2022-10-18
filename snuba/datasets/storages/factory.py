@@ -102,9 +102,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         )
         from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
-        from snuba.datasets.storages.transactions_ro import (
-            storage as transactions_ro_storage,
-        )
         from snuba.datasets.storages.transactions_v2 import (
             storage as transactions_v2_storage,
         )
@@ -152,7 +149,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     outcomes_hourly_storage,
                     sessions_hourly_storage,
                     org_sessions_hourly_storage,
-                    transactions_ro_storage,
                     profiles_writable_storage,
                     functions_ro_storage,
                     errors_v2_ro_storage,

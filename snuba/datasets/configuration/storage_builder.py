@@ -12,12 +12,14 @@ from snuba.datasets.configuration.json_schema import (
 )
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
-    CONF_TO_PREFILTER,
-    CONF_TO_PROCESSOR,
     generate_policy_creator,
+    get_mandatory_condition_checkers,
     get_query_processors,
+    get_query_splitters,
     parse_columns,
 )
+from snuba.datasets.message_filters import StreamMessageFilter
+from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import register_storage_key
@@ -37,6 +39,8 @@ SCHEMA = "schema"
 STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
+QUERY_SPLITTERS = "query_splitters"
+MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
@@ -74,22 +78,29 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),
+        QUERY_SPLITTERS: get_query_splitters(
+            config[QUERY_SPLITTERS] if QUERY_SPLITTERS in config else []
+        ),
+        MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
+            config[MANDATORY_CONDITION_CHECKERS]
+            if MANDATORY_CONDITION_CHECKERS in config
+            else []
+        )
         # TODO: Rest of readable storage optional args
     }
 
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
-    processor = CONF_TO_PROCESSOR[loader_config["processor"]]()
+    processor = DatasetMessageProcessor.get_from_name(
+        loader_config["processor"]
+    ).from_kwargs()
     default_topic = Topic(loader_config["default_topic"])
-
     # optionals
-    pre_filter = (
-        CONF_TO_PREFILTER[loader_config[PRE_FILTER]["type"]](
-            *loader_config[PRE_FILTER]["args"]
-        )
-        if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None
-        else None
-    )
+    pre_filter = None
+    if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None:
+        pre_filter = StreamMessageFilter.get_from_name(
+            loader_config[PRE_FILTER]["type"]
+        ).from_kwargs(**loader_config[PRE_FILTER].get("args", {}))
     replacement_topic = __get_topic(loader_config, "replacement_topic")
     commit_log_topic = __get_topic(loader_config, "commit_log_topic")
     subscription_scheduled_topic = __get_topic(

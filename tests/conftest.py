@@ -9,7 +9,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
-from snuba.redis import redis_client
+from snuba.redis import all_redis_clients
 
 
 def pytest_configure() -> None:
@@ -79,7 +79,8 @@ def run_migrations() -> Iterator[None]:
                         f"TRUNCATE TABLE IF EXISTS {database}.{table_name}"
                     )
 
-        redis_client.flushdb()
+        for redis_client in all_redis_clients():
+            redis_client.flushdb()
 
 
 @pytest.fixture(autouse=True)

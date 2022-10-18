@@ -270,3 +270,44 @@ A Clickhouse error would have a similar structure. The ``type`` field will say
 Contrarily to the query validation errors, in case of Clickhouse errors, the
 query is actually executed, so all the timing and stats details described for
 successful query are present.
+
+
+Creating a Subscription query
+=============================
+
+Send the payload as a POST to  ``localhost:1218/[DATASET NAME]/[ENTITY NAME]/subscriptions``.
+
+Request Format
+===============
+
+A subscription query would generally have this payload format::
+
+    {
+        "project_id": 42,
+        "time_window" : 150,
+        "resolution" : 60,
+        "query" : "MATCH (events) SELECT ...."
+    }
+
+project_id, resolution, time_window are all specified as separate fields
+in the subscription payload by the user, alongside the query. This allows
+us to pre-build one subscription query and vary these as separate parameters.
+
+'time_window' becomes part of the query condition (i.e the WHERE), and the
+subscription query will look at the past 'time_window' seconds (as specified
+by the window) of events. For example, if 'time_window' = 60, the
+subscription query will select rows whose timestamp column's values fall in
+the range of [start - 60 seconds, start) where 'start' is defined as
+the timestamp at which the subscription was created. As 'time_window'
+increases, the larger the range of accepted values for the relevant
+timestamp column.
+
+'project_id' becomes part of the query condition, and the query will filter
+records by matching on the specified id.
+
+'resolution' is used to determine when the scheduler creates tasks so that
+the executor can run subscription queries. The scheduler can either schedule
+the subscription immediately, or can schedule subscriptions with
+a jitter (see JitteredTaskBuilder defintion for more details). For scheduling,
+a running timestamp is maintained and in the case of immediate scheduling,
+a subscription task is scheduled every 'resolution' seconds.

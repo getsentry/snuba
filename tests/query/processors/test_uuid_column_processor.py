@@ -14,9 +14,7 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.physical.type_converters import ColumnTypeError
-from snuba.query.processors.physical.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
+from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 from snuba.query.query_settings import HTTPQuerySettings
 
 tests = [

@@ -1,6 +1,9 @@
 from dataclasses import replace
 from typing import Any, Mapping, Sequence, Tuple
 
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
+
+from snuba.clickhouse.columns import UInt
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -11,6 +14,8 @@ from snuba.query.processors.logical import (
 )
 from snuba.query.query_settings import QuerySettings
 from snuba.query.validation import InvalidFunctionCall
+from snuba.query.validation.signature import Column as ColType
+from snuba.query.validation.signature import Literal as LiteralType
 from snuba.query.validation.signature import ParamType, SignatureValidator
 
 
@@ -40,13 +45,18 @@ def partial_function(body: str, constants: Sequence[Tuple[str, Any]]) -> Express
     return replace_in_expression(parsed, constants_lookup)
 
 
-class CustomFunction(LogicalQueryProcessor):
+class _CustomFunction(LogicalQueryProcessor):
     """
     WARNING
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         This query processor is not referencable from config
 
-        TODO: either make it work or remove it
+        If you want to define a custom function processor accessible from config,
+        wrap this class in a class that has __init__ arguments which can be
+        expressed in the YAML
+
+        Example: ApdexProcessor, FailureRateProcessor
+
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     Defines a custom snuba function.
@@ -93,7 +103,7 @@ class CustomFunction(LogicalQueryProcessor):
 
     @classmethod
     def config_key(cls) -> str:
-        return "__unsupported__:custom_function"
+        return "__unsupported__:CustomFunction"
 
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> LogicalQueryProcessor:
@@ -133,3 +143,37 @@ class CustomFunction(LogicalQueryProcessor):
                 return expression
 
         query.transform_expressions(apply_function)
+
+
+class ApdexProcessor(LogicalQueryProcessor):
+    def __init__(self) -> None:
+        self.__processor = _CustomFunction(
+            "apdex",
+            [("column", ColType({UInt})), ("satisfied", LiteralType({int}))],
+            simple_function(
+                "divide(plus(countIf(lessOrEquals(column, satisfied)), divide(countIf(and(greater(column, satisfied), lessOrEquals(column, multiply(satisfied, 4)))), 2)), count())"
+            ),
+        )
+
+    def process_query(self, query: Query, settings: QuerySettings) -> None:
+        return self.__processor.process_query(query, settings)
+
+
+class FailureRateProcessor(LogicalQueryProcessor):
+    def __init__(self) -> None:
+        self.__processor = _CustomFunction(
+            "failure_rate",
+            [],
+            partial_function(
+                # We use and(notEquals...) here instead of in(tuple(...)) because it's possible to get an impossible query that sets transaction_status to NULL.
+                # Clickhouse returns an error if an expression such as NULL in (0, 1, 2) appears.
+                "divide(countIf(and(notEquals(transaction_status, ok), and(notEquals(transaction_status, cancelled), notEquals(transaction_status, unknown)))), count())",
+                [
+                    (code, SPAN_STATUS_NAME_TO_CODE[code])
+                    for code in ("ok", "cancelled", "unknown")
+                ],
+            ),
+        )
+
+    def process_query(self, query: Query, settings: QuerySettings) -> None:
+        return self.__processor.process_query(query, settings)

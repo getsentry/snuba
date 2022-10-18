@@ -10,35 +10,33 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
+from snuba.datasets.plans.splitters.strategies import TimeSplitQueryStrategy
+from snuba.query.processors.condition_checkers.checkers import ProjectIdEnforcer
 from snuba.query.processors.physical.array_has_optimizer import ArrayHasOptimizer
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.physical.arrayjoin_optimizer import ArrayJoinOptimizer
 from snuba.query.processors.physical.bloom_filter_optimizer import BloomFilterOptimizer
-from snuba.query.processors.physical.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.physical.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
 from snuba.query.processors.physical.events_bool_contexts import (
     EventsBooleanContextsProcessor,
 )
+from snuba.query.processors.physical.hexint_column_processor import (
+    HexIntArrayColumnProcessor,
+    HexIntColumnProcessor,
+)
 from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.physical.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.physical.prewhere import PrewhereProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
-from snuba.query.processors.physical.type_converters.hexint_column_processor import (
-    HexIntArrayColumnProcessor,
-    HexIntColumnProcessor,
-)
-from snuba.query.processors.physical.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
 from snuba.query.processors.physical.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
-from snuba.web.split import TimeSplitQueryStrategy
+from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 
 columns = ColumnSet(
     [

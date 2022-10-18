@@ -16,7 +16,7 @@ from arroyo.utils.clock import TestingClock
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.scheduler import SubscriptionScheduler
@@ -541,7 +541,9 @@ def test_produce_scheduled_subscription_message() -> None:
     producer = broker.get_producer()
 
     store = RedisSubscriptionDataStore(
-        redis_client, entity_key, PartitionId(partition_index)
+        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+        entity_key,
+        PartitionId(partition_index),
     )
 
     # Create 2 subscriptions
@@ -653,7 +655,9 @@ def test_produce_stale_message() -> None:
     producer = broker.get_producer()
 
     store = RedisSubscriptionDataStore(
-        redis_client, entity_key, PartitionId(partition_index)
+        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+        entity_key,
+        PartitionId(partition_index),
     )
 
     # Create subscription

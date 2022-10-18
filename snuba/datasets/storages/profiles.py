@@ -2,19 +2,17 @@ from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.profiles_processor import ProfilesMessageProcessor
+from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.physical.conditions_enforcer import (
+from snuba.query.processors.condition_checkers.checkers import (
     OrgIdEnforcer,
     ProjectIdEnforcer,
 )
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
-from snuba.query.processors.physical.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
+from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 from snuba.utils.streams.topics import Topic
 
 PROFILES_LOCAL_TABLE_NAME = "profiles_local"

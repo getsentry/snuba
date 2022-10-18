@@ -85,8 +85,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
             }
         )
 
-        if settings.PREFER_PLUGGABLE_ENTITIES:
-            self._entity_map.update(self._config_built_entities)
+        self._entity_map.update(self._config_built_entities)
 
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 

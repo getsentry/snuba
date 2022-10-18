@@ -3,7 +3,7 @@ from datetime import datetime
 from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 
-from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
+from snuba.datasets.message_filters import CdcTableNameMessageFilter
 
 
 def test_table_name_filter() -> None:

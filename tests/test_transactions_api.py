@@ -131,6 +131,7 @@ class TestTransactionsApi(BaseApiTest):
                                                 "op": "http",
                                                 "status": "0",
                                             },
+                                            "app": {"start_type": "warm"},
                                         },
                                         "measurements": {
                                             "lcp": {"value": 32.129},

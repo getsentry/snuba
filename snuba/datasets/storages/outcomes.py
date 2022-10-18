@@ -2,12 +2,12 @@ from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.outcomes_processor import OutcomesProcessor
+from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.physical.conditions_enforcer import OrgIdEnforcer
+from snuba.query.processors.condition_checkers.checkers import OrgIdEnforcer
 from snuba.query.processors.physical.prewhere import PrewhereProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.utils.streams.topics import Topic

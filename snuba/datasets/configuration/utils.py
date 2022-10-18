@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -19,17 +19,27 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets.generic_metrics_processor import (
-    GenericDistributionsMetricsProcessor,
-    GenericSetsMetricsProcessor,
-)
-from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.datasets.plans.splitters import QuerySplitStrategy
+from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.query.processors.physical.table_rate_limit import TableRateLimit
-from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.utils.schemas import UUID, AggregateFunction
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
+
+
+class QueryProcessorDefinition(TypedDict):
+    processor: str
+    args: dict[str, Any]
+
+
+class QuerySplitterDefinition(TypedDict):
+    splitter: str
+    args: dict[str, Any]
+
+
+class MandatoryConditionCheckerDefinition(TypedDict):
+    condition: str
+    args: dict[str, Any]
 
 
 def generate_policy_creator(
@@ -52,25 +62,37 @@ def generate_policy_creator(
     return None
 
 
-# TODO: Add rest of prefilters and processors
-# TODO: Replace these dictionaries with something better - Factories maybe
-CONF_TO_PREFILTER: dict[str, Any] = {
-    "kafka_header_select_filter": KafkaHeaderSelectFilter
-}
-CONF_TO_PROCESSOR: dict[str, Any] = {
-    "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor,
-    "generic_sets_metrics_processor": GenericSetsMetricsProcessor,
-}
-QUERY_PROCESSORS: dict[str, Any] = {
-    "TableRateLimit": TableRateLimit,
-    "TupleUnaliaser": TupleUnaliaser,
-}
-
-
 def get_query_processors(
-    query_processor_names: list[str],
+    query_processor_objects: list[QueryProcessorDefinition],
 ) -> list[ClickhouseQueryProcessor]:
-    return [QUERY_PROCESSORS[name]() for name in query_processor_names]
+    return [
+        ClickhouseQueryProcessor.get_from_name(qp["processor"]).from_kwargs(
+            **qp.get("args", {})
+        )
+        for qp in query_processor_objects
+    ]
+
+
+def get_query_splitters(
+    query_splitter_objects: list[QuerySplitterDefinition],
+) -> list[QuerySplitStrategy]:
+    return [
+        QuerySplitStrategy.get_from_name(qs["splitter"]).from_kwargs(
+            **qs.get("args", {})
+        )
+        for qs in query_splitter_objects
+    ]
+
+
+def get_mandatory_condition_checkers(
+    mandatory_condition_checkers_objects: list[MandatoryConditionCheckerDefinition],
+) -> list[ConditionChecker]:
+    return [
+        ConditionChecker.get_from_name(mc["condition"]).from_kwargs(
+            **mc.get("args", {})
+        )
+        for mc in mandatory_condition_checkers_objects
+    ]
 
 
 def __parse_simple(

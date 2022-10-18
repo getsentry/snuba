@@ -13,8 +13,10 @@ from jsonschema.exceptions import ValidationError
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
 from snuba.datasets.configuration.storage_builder import build_stream_loader
 from snuba.datasets.configuration.utils import generate_policy_creator
-from snuba.datasets.generic_metrics_processor import GenericSetsMetricsProcessor
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.datasets.processors.generic_metrics_processor import (
+    GenericSetsMetricsProcessor,
+)
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
 
@@ -39,11 +41,11 @@ def test_generate_policy_creator() -> None:
 def test_build_stream_loader() -> None:
     loader = build_stream_loader(
         {
-            "processor": "generic_sets_metrics_processor",
+            "processor": "GenericSetsMetricsProcessor",
             "default_topic": "snuba-generic-metrics",
             "pre_filter": {
-                "type": "kafka_header_select_filter",
-                "args": ["metric_type", "s"],
+                "type": "KafkaHeaderSelectFilter",
+                "args": {"header_key": "metric_type", "header_value": "s"},
             },
             "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
             "subscription_scheduler_mode": "global",
@@ -103,7 +105,7 @@ def test_invalid_query_processor() -> None:
     }
     with pytest.raises(ValidationError) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
-    assert e.value.message == "5 is not of type 'string'"
+    assert e.value.message == "5 is not of type 'object'"
 
 
 def test_unexpected_key() -> None:

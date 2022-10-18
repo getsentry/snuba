@@ -15,7 +15,7 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.processors.physical.type_converters.uuid_array_column_processor import (
+from snuba.query.processors.physical.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
 from snuba.query.query_settings import HTTPQuerySettings

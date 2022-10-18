@@ -1,8 +1,7 @@
 from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer
-from snuba.datasets.message_filters import KafkaHeaderFilter
+from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.errors_common import (
@@ -16,15 +15,18 @@ from snuba.datasets.storages.errors_common import (
 )
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.condition_checkers.checkers import ProjectIdEnforcer
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.physical.conditions_enforcer import ProjectIdEnforcer
 from snuba.query.processors.physical.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
 from snuba.query.processors.physical.events_bool_contexts import (
     EventsBooleanContextsProcessor,
+)
+from snuba.query.processors.physical.hexint_column_processor import (
+    HexIntColumnProcessor,
 )
 from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.physical.mapping_promoter import MappingColumnPromoter
@@ -38,19 +40,14 @@ from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.physical.type_condition_optimizer import (
     TypeConditionOptimizer,
 )
-from snuba.query.processors.physical.type_converters.hexint_column_processor import (
-    HexIntColumnProcessor,
-)
-from snuba.query.processors.physical.type_converters.uuid_array_column_processor import (
-    UUIDArrayColumnProcessor,
-)
-from snuba.query.processors.physical.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
 from snuba.query.processors.physical.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
 from snuba.query.processors.physical.user_column_processor import UserColumnProcessor
+from snuba.query.processors.physical.uuid_array_column_processor import (
+    UUIDArrayColumnProcessor,
+)
+from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
@@ -111,7 +108,6 @@ storage = WritableTableStorage(
     mandatory_condition_checkers=[ProjectIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=ErrorsProcessor(promoted_tag_columns),
-        pre_filter=KafkaHeaderFilter("transaction_forwarder", "1"),
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,
         commit_log_topic=Topic.COMMIT_LOG,

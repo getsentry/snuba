@@ -6,6 +6,7 @@ import sentry_sdk
 
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
+    ColumnMapper,
     CurriedFunctionCallMapper,
     FunctionCallMapper,
     SubscriptableReferenceMapper,
@@ -45,6 +46,14 @@ def _build_entity_query_processors(
 def _build_entity_translation_mappers(
     config_translation_mappers: dict[str, Any],
 ) -> TranslationMappers:
+    columns_mappers: list[ColumnMapper] = (
+        [
+            ColumnMapper.get_from_name(col_config["mapper"])(**col_config["args"])
+            for col_config in config_translation_mappers["columns"]
+        ]
+        if "columns" in config_translation_mappers
+        else []
+    )
     function_mappers: list[FunctionCallMapper] = [
         FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
         for fm_config in config_translation_mappers["functions"]
@@ -57,15 +66,16 @@ def _build_entity_translation_mappers(
     ]
     curried_function_mappers: list[CurriedFunctionCallMapper] = (
         [
-            CurriedFunctionCallMapper.get_from_name(fm_config["mapper"])(
-                **fm_config["args"]
+            CurriedFunctionCallMapper.get_from_name(curr_config["mapper"])(
+                **curr_config["args"]
             )
-            for fm_config in config_translation_mappers["curried_functions"]
+            for curr_config in config_translation_mappers["curried_functions"]
         ]
         if "curried_functions" in config_translation_mappers
         else []
     )
     return TranslationMappers(
+        columns=columns_mappers,
         functions=function_mappers,
         subscriptables=subscriptable_mappers,
         curried_functions=curried_function_mappers,
@@ -90,4 +100,5 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
             )
             if "writable_storage" in config
             else None,
+            partition_key_column_name=config["partition_key_column_name"],
         )

@@ -13,6 +13,10 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
+from snuba.datasets.plans.splitters.strategies import (
+    ColumnSplitQueryStrategy,
+    TimeSplitQueryStrategy,
+)
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
@@ -21,7 +25,6 @@ from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.reader import Reader
 from snuba.web import QueryResult
-from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 
 def setup_function(function) -> None:

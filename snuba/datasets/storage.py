@@ -8,13 +8,13 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.common.condition_checker import ConditionChecker
-from snuba.datasets.plans.split_strategy import QuerySplitStrategy
+from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.logical import Query
+from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.replacers.replacer_processor import ReplacerProcessor

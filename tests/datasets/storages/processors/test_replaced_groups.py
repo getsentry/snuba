@@ -10,7 +10,7 @@ from snuba.datasets.errors_replacer import (
     set_project_exclude_groups,
     set_project_needs_final,
 )
-from snuba.datasets.events_processor_base import ReplacementType
+from snuba.processor import ReplacementType
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -18,7 +18,7 @@ from snuba.query.processors.physical.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import ReplacerState
 
 
@@ -120,7 +120,7 @@ def query_with_multiple_group_ids() -> ClickhouseQuery:
 
 
 def teardown_function() -> None:
-    redis_client.flushdb()
+    get_redis_client(RedisClientKey.REPLACEMENTS_STORE).flushdb()
 
 
 def test_with_turbo(query: ClickhouseQuery) -> None:

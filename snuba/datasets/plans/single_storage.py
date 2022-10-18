@@ -12,7 +12,7 @@ from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
 )
-from snuba.datasets.plans.split_strategy import QuerySplitStrategy
+from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
