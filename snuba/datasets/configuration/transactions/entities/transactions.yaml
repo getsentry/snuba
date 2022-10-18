@@ -35,7 +35,6 @@ query_processors:
 
 translation_mappers:
   {
-    functions: [],
     columns: [],
     subscriptables:
       [
