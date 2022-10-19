@@ -22,7 +22,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.utils.schemas import UUID, AggregateFunction
+from snuba.utils.schemas import IPv4, IPv6, UUID, AggregateFunction
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -108,6 +108,10 @@ def __parse_simple(
         return Column(col["name"], DateTime(modifiers))
     elif col["type"] == "UUID":
         return Column(col["name"], UUID(modifiers))
+    elif col["type"] == "IPv4":
+        return Column(col["name"], IPv4(modifiers))
+    elif col["type"] == "IPv6":
+        return Column(col["name"], IPv6(modifiers))
     raise
 
 
@@ -122,6 +126,8 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
         "String": String,
         "DateTime": DateTime,
         "UUID": UUID,
+        "IPv4": IPv4,
+        "IPv6": IPv6,
     }
 
     for col in columns:

@@ -39,6 +39,7 @@ PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
 QUERY_SPLITTERS = "query_splitters"
 MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
+WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
@@ -57,6 +58,9 @@ def build_storage(
     if config[KIND] == "readable_storage":
         return ReadableTableStorage(**storage_kwargs)
     storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
+    storage_kwargs[WRITER_OPTIONS] = (
+        config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
+    )
     return WritableTableStorage(**storage_kwargs)
 
 
@@ -82,7 +86,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             config[MANDATORY_CONDITION_CHECKERS]
             if MANDATORY_CONDITION_CHECKERS in config
             else []
-        )
+        ),
         # TODO: Rest of readable storage optional args
     }
 

@@ -30,7 +30,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         self.__initialize()
 
     def __initialize(self) -> None:
-
         self._config_built_storages = {
             storage.get_storage_key(): storage
             for storage in [
@@ -167,7 +166,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
 
     def get(self, storage_key: StorageKey) -> Storage:
         if (
-            get_config(USE_CONFIG_BUILT_STORAGES, 0)
+            get_config(USE_CONFIG_BUILT_STORAGES, 1)
             and storage_key in self._config_built_storages
         ):
             return self._config_built_storages[storage_key]
