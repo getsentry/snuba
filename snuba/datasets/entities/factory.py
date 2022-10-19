@@ -1,6 +1,8 @@
 from glob import glob
 from typing import Generator, MutableMapping, Optional, Sequence, Type
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.datasets.entities.entity_key import EntityKey
@@ -14,10 +16,11 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
-        initialize_storage_factory()
-        self._entity_map: MutableMapping[EntityKey, Entity] = {}
-        self._name_map: MutableMapping[Type[Entity], EntityKey] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(op="initialize", description="Entity Factory"):
+            initialize_storage_factory()
+            self._entity_map: MutableMapping[EntityKey, Entity] = {}
+            self._name_map: MutableMapping[Type[Entity], EntityKey] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
 

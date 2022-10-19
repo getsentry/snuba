@@ -3,6 +3,8 @@ from __future__ import annotations
 from glob import glob
 from typing import Generator, Type
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.datasets.configuration.dataset_builder import build_dataset_from_config
 from snuba.datasets.dataset import Dataset
@@ -15,10 +17,11 @@ from snuba.utils.serializable_exception import SerializableException
 
 class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
     def __init__(self) -> None:
-        initialize_entity_factory()
-        self._dataset_map: dict[str, Dataset] = {}
-        self._name_map: dict[Type[Dataset], str] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(op="initialize", description="Dataset Factory"):
+            initialize_entity_factory()
+            self._dataset_map: dict[str, Dataset] = {}
+            self._name_map: dict[Type[Dataset], str] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
 
