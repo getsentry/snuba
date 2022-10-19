@@ -332,12 +332,18 @@ def merge_sorted_ops(
 ) -> Sequence[SqlOperation]:
 
     merged_ops = list(local_ops) + list(dist_ops)
+    # assert len(local_ops) == len(dist_ops)
     local_first_ops = [AddColumn, CreateTable, AddIndex, CreateMaterializedView]
     dist_first_ops = [DropColumn, DropTable, DropIndex]
 
     graph: Dict[SqlOperation, List[SqlOperation]] = {op: [] for op in merged_ops}
 
     # form a happens-before graph
+    for prev_op, next_op in zip(dist_ops[:-1], dist_ops[1:]):
+        graph[next_op].append(prev_op)
+    for prev_op, next_op in zip(local_ops[:-1], local_ops[1:]):
+        graph[next_op].append(prev_op)
+
     for a in dist_ops:
         for b in local_ops:
             for op in local_first_ops:
@@ -354,12 +360,16 @@ def merge_sorted_ops(
         output = []
         visited: Set[SqlOperation] = set()
 
-        def visit(node: SqlOperation) -> None:
+        def visit(node: SqlOperation, seen_in_loop: Set[SqlOperation] = set()) -> None:
+            seen_in_loop.add(node)
             if node not in visited:
                 for child in graph[node]:
+                    if child in seen_in_loop:
+                        raise ValueError(f"cycle detected: stack: {seen_in_loop}")
                     visit(child)
                 visited.add(node)
                 output.append(node)
+            seen_in_loop.remove(node)
 
         for node in ops:
             visit(node)

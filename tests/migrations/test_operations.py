@@ -141,33 +141,65 @@ def test_insert_into_select() -> None:
 
 
 def test_merge_sorted_ops() -> None:
-    op1 = DropColumn(StorageSetKey.EVENTS, "test_table_dist", "test")
-    op2 = DropColumn(StorageSetKey.EVENTS, "test_table_local", "test")
+    drop_col_dist = DropColumn(StorageSetKey.EVENTS, "test_table_dist", "test")
+    drop_col_local = DropColumn(StorageSetKey.EVENTS, "test_table_local", "test")
 
-    assert merge_sorted_ops(dist_ops=[op1], local_ops=[op2]) == [op1, op2]
+    assert merge_sorted_ops(dist_ops=[drop_col_dist], local_ops=[drop_col_local]) == [
+        drop_col_dist,
+        drop_col_local,
+    ]
 
-    op3 = AddColumn(
+    add_col_dist = AddColumn(
         StorageSetKey.EVENTS,
         "test_table_dist",
         Column("test", String(Modifiers(nullable=True))),
         after="id",
     )
-    op4 = AddColumn(
+    add_col_local = AddColumn(
         StorageSetKey.EVENTS,
         "test_table_local",
         Column("test", String(Modifiers(nullable=True))),
         after="id",
     )
-    assert merge_sorted_ops(dist_ops=[op3], local_ops=[op4]) == [op4, op3]
-
-    assert merge_sorted_ops(dist_ops=[op1, op3], local_ops=[op2, op4]) == [
-        op1,
-        op2,
-        op4,
-        op3,
+    assert merge_sorted_ops(dist_ops=[add_col_dist], local_ops=[add_col_local]) == [
+        add_col_local,
+        add_col_dist,
     ]
 
-    # op5 = CreateTable(StorageSetKey.EVENTS, "test_table_dist", None, None)
-    # op6 = CreateTable(StorageSetKey.EVENTS, "test_table_local", None, None)
-    # op7 = DropTable(StorageSetKey.EVENTS, "test_table_dist")
-    # op8 = DropTable(StorageSetKey.EVENTS, "test_table_local")
+    assert merge_sorted_ops(
+        dist_ops=[drop_col_dist, add_col_dist],
+        local_ops=[drop_col_local, add_col_local],
+    ) == [
+        drop_col_dist,
+        drop_col_local,
+        add_col_local,
+        add_col_dist,
+    ]
+
+    dummy_engine = ReplacingMergeTree(
+        storage_set=StorageSetKey.EVENTS,
+        order_by="version",
+    )
+
+    create_table_dist = CreateTable(
+        StorageSetKey.EVENTS, "test_table_dist", [], dummy_engine
+    )
+    create_table_local = CreateTable(
+        StorageSetKey.EVENTS, "test_table_local", [], dummy_engine
+    )
+    drop_table_dist = DropTable(StorageSetKey.EVENTS, "test_table_dist")
+    drop_table_local = DropTable(StorageSetKey.EVENTS, "test_table_local")
+
+    assert merge_sorted_ops(
+        dist_ops=[create_table_dist, add_col_dist, drop_col_dist, drop_table_dist],
+        local_ops=[create_table_local, add_col_local, drop_col_local, drop_table_local],
+    ) == [
+        create_table_local,
+        add_col_local,
+        create_table_dist,
+        add_col_dist,
+        drop_col_dist,
+        drop_col_local,
+        drop_table_dist,
+        drop_table_local,
+    ]
