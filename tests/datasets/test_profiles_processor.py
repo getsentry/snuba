@@ -48,7 +48,6 @@ class SampleProfileEvent:
             "environment": "production",
             "organization_id": 123456789,
             "platform": "cocoa",
-            "profile": "",
             "profile_id": self.event_id,
             "project_id": 987654321,
             "retention_days": 30,
@@ -92,7 +91,6 @@ class ProfileEvent:
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         result = asdict(self)
-        result["profile"] = ""
         result["received"] = datetime.utcfromtimestamp(self.received)
         result["offset"] = meta.offset
         result["partition"] = meta.partition

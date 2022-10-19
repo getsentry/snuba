@@ -11,4 +11,5 @@ def test_entity_key() -> None:
     assert REGISTERED_ENTITY_KEYS == {
         "GENERIC_METRICS_DISTRIBUTIONS": "generic_metrics_distributions",
         "GENERIC_METRICS_SETS": "generic_metrics_sets",
+        "TRANSACTIONS": "transactions",
     }

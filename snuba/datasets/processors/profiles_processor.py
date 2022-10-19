@@ -65,7 +65,6 @@ def _normalize_legacy_format(
         "organization_id": message["organization_id"],
         "partition": metadata.partition,
         "platform": message["platform"],
-        "profile": "",  # deprecated
         "profile_id": str(UUID(message["profile_id"])),
         "project_id": message["project_id"],
         "received": datetime.utcfromtimestamp(message["received"]),
@@ -105,7 +104,6 @@ def _normalize_sample_format(
         "organization_id": message["organization_id"],
         "partition": metadata.partition,
         "platform": message["platform"],
-        "profile": "",  # deprecated
         "profile_id": str(UUID(message["event_id"])),
         "project_id": message["project_id"],
         "received": received,
