@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stdout
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
+from functools import wraps
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 import structlog
@@ -79,6 +80,17 @@ def health() -> Response:
     return Response("OK", 200)
 
 
+def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]:
+    @wraps(f)
+    def check_group_perms(*args: Any, **kwargs: Any) -> Response:
+        group = kwargs["group"]
+        if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+            return make_response(jsonify({"error": "Group not allowed"}), 400)
+        return f(*args, **kwargs)
+
+    return check_group_perms
+
+
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
     res: List[Mapping[str, MigrationGroup | Sequence[str]]] = []
@@ -92,11 +104,8 @@ def migrations_groups() -> Response:
 
 
 @application.route("/migrations/<group>/list")
+@check_migration_perms
 def migrations_groups_list(group: str) -> Response:
-
-    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-        return make_response(jsonify({"error": "Group not allowed"}), 400)
-
     runner = Runner()
     for runner_group, runner_group_migrations in runner.show_all():
         if runner_group == MigrationGroup(group):
@@ -127,10 +136,8 @@ application.url_map.converters["migration_action"] = MigrationActionConverter
     "/migrations/<group>/<migration_action:action>/<migration_id>",
     methods=["POST"],
 )
+@check_migration_perms
 def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
-    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-        return make_response(jsonify({"error": "Group not allowed"}), 400)
-
     runner = Runner()
     try:
         migration_group = MigrationGroup(group)
