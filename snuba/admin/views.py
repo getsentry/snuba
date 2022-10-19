@@ -34,6 +34,12 @@ from snuba.datasets.factory import (
 )
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.policies import (
+    AllMigrationsPolicy,
+    MigrationPolicy,
+    NoMigrationsPolicy,
+    NonBlockingMigrationsPolicy,
+)
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
@@ -86,6 +92,21 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
         group = kwargs["group"]
         if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
             return make_response(jsonify({"error": "Group not allowed"}), 400)
+
+        if "action" in kwargs:
+            action = kwargs["action"]
+            migration_id = kwargs["migration_id"]
+            migration_key = MigrationKey(group, migration_id)
+            if action == "run":
+                if not POLICIES[action].can_run(migration_key):
+                    return make_response(
+                        jsonify({"error": "Group not allowed run policy"}), 400
+                    )
+            elif action == "reverse":
+                if not POLICIES[action].can_reverse(migration_key):
+                    return make_response(
+                        jsonify({"error": "Group not allowed reverse policy"}), 400
+                    )
         return f(*args, **kwargs)
 
     return check_group_perms
