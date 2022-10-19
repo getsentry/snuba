@@ -166,10 +166,7 @@ def rate_limit(
     # it is fine to only perform this cleanup for the shard of the current
     # query, because on average there will be many other queries that hit other
     # shards and perform cleanup there.
-    stale_queries = pipe.zremrangebyscore(
-        query_bucket, "-inf", "({:f}".format(now - rate_history_s)
-    )
-    metrics.increment("rate_limit.stale", stale_queries, tags={"bucket": query_bucket})
+    pipe.zremrangebyscore(query_bucket, "-inf", "({:f}".format(now - rate_history_s))
 
     # Now for the tricky bit:
     # ======================
