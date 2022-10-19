@@ -92,7 +92,7 @@ class RateLimitStatsContainer:
         return ChainMap(*grouped_stats)
 
 
-def _get_bucket_key(prefix: str, bucket: str, shard_id: int):
+def _get_bucket_key(prefix: str, bucket: str, shard_id: int) -> str:
     shard_suffix = ""
     if shard_id > 0:
         # special case shard 0 so that it is backwards-compatible with the
