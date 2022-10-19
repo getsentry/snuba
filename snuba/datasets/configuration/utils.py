@@ -22,7 +22,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.utils.schemas import IPv4, IPv6, UUID, AggregateFunction
+from snuba.utils.schemas import UUID, AggregateFunction, IPv4, IPv6
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
