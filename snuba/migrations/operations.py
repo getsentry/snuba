@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -325,3 +325,45 @@ class RunPython:
 
     def description(self) -> Optional[str]:
         return self.__description
+
+
+def merge_sorted_ops(
+    dist_ops: Sequence[SqlOperation], local_ops: Sequence[SqlOperation]
+) -> Sequence[SqlOperation]:
+
+    merged_ops = list(local_ops) + list(dist_ops)
+    local_first_ops = [AddColumn, CreateTable, AddIndex, CreateMaterializedView]
+    dist_first_ops = [DropColumn, DropTable, DropIndex]
+
+    graph: Dict[SqlOperation, List[SqlOperation]] = {op: [] for op in merged_ops}
+
+    # form a happens-before graph
+    for a in dist_ops:
+        for b in local_ops:
+            for op in local_first_ops:
+                if isinstance(a, op) and isinstance(b, op):
+                    graph[a].append(b)
+            for op in dist_first_ops:
+                if isinstance(a, op) and isinstance(b, op):
+                    graph[b].append(a)
+
+    def topological_sort(
+        ops: Sequence[SqlOperation],
+        graph: Dict[SqlOperation, List[SqlOperation]],
+    ) -> Sequence[SqlOperation]:
+        output = []
+        visited: Set[SqlOperation] = set()
+
+        def visit(node: SqlOperation) -> None:
+            if node not in visited:
+                for child in graph[node]:
+                    visit(child)
+                visited.add(node)
+                output.append(node)
+
+        for node in ops:
+            visit(node)
+
+        return output
+
+    return topological_sort(merged_ops, graph)

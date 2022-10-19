@@ -16,6 +16,7 @@ from snuba.migrations.operations import (
     ModifyColumn,
     RenameTable,
     TruncateTable,
+    merge_sorted_ops,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
 
@@ -137,3 +138,36 @@ def test_insert_into_select() -> None:
         ).format_sql()
         == "INSERT INTO dest (a2, b2) SELECT a1, b1 FROM src;"
     )
+
+
+def test_merge_sorted_ops() -> None:
+    op1 = DropColumn(StorageSetKey.EVENTS, "test_table_dist", "test")
+    op2 = DropColumn(StorageSetKey.EVENTS, "test_table_local", "test")
+
+    assert merge_sorted_ops(dist_ops=[op1], local_ops=[op2]) == [op1, op2]
+
+    op3 = AddColumn(
+        StorageSetKey.EVENTS,
+        "test_table_dist",
+        Column("test", String(Modifiers(nullable=True))),
+        after="id",
+    )
+    op4 = AddColumn(
+        StorageSetKey.EVENTS,
+        "test_table_local",
+        Column("test", String(Modifiers(nullable=True))),
+        after="id",
+    )
+    assert merge_sorted_ops(dist_ops=[op3], local_ops=[op4]) == [op4, op3]
+
+    assert merge_sorted_ops(dist_ops=[op1, op3], local_ops=[op2, op4]) == [
+        op1,
+        op2,
+        op4,
+        op3,
+    ]
+
+    # op5 = CreateTable(StorageSetKey.EVENTS, "test_table_dist", None, None)
+    # op6 = CreateTable(StorageSetKey.EVENTS, "test_table_local", None, None)
+    # op7 = DropTable(StorageSetKey.EVENTS, "test_table_dist")
+    # op8 = DropTable(StorageSetKey.EVENTS, "test_table_local")
