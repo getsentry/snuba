@@ -28,7 +28,6 @@ profile_columns = EntityColumnSet(
         Column("transaction_id", UUID()),
         Column("profile_id", UUID()),
         Column("received", DateTime()),
-        Column("profile", String()),
         Column("android_api_level", UInt(32, Modifiers(nullable=True))),
         Column("device_classification", String()),
         Column("device_locale", String()),

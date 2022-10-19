@@ -136,10 +136,7 @@ def rate_limit(
 
     pipe = rds.pipeline(transaction=False)
     # cleanup old query timestamps past our retention window
-    stale_queries = pipe.zremrangebyscore(
-        bucket, "-inf", "({:f}".format(now - rate_history_s)
-    )
-    metrics.increment("rate_limit.stale", stale_queries, tags={"bucket": bucket})
+    pipe.zremrangebyscore(bucket, "-inf", "({:f}".format(now - rate_history_s))
 
     # Now for the tricky bit:
     # ======================
