@@ -48,9 +48,7 @@ def produce_policy_creator() -> DeadLetterQueuePolicy:
     """
     return ProduceInvalidMessagePolicy(
         KafkaProducer(
-            build_kafka_producer_configuration(
-                Topic.DEAD_LETTER_GSNUBA_DEAD_LETTER_GENERIC_METRICSENERIC_METRICS
-            )
+            build_kafka_producer_configuration(Topic.SNUBA_DEAD_LETTER_GENERIC_METRICS)
         ),
         KafkaTopic(Topic.SNUBA_DEAD_LETTER_GENERIC_METRICS.value),
     )

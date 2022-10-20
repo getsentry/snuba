@@ -33,8 +33,6 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
-from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.utils.streams.topics import register_topic
 
 logger = logging.getLogger(__name__)
 
@@ -75,18 +73,7 @@ def validate_passed_slice(
         assert slice_id < SLICED_STORAGES[storage_key.value]
 
 
-def get_sliced_snuba_topic(
-    topic: SnubaTopic, slice_id: Optional[int] = None
-) -> SnubaTopic:
-    if slice_id is not None:
-        physical_topic = SLICED_KAFKA_TOPIC_MAP[(topic.value, slice_id)]
-        # this will require registration of the physical topic
-        return register_topic(physical_topic)
-
-    return topic
-
-
-def get_sliced_arroyo_topic(
+def get_physical_arroyo_topic(
     passed_topic: str, slice_id: Optional[int] = None
 ) -> ArroyoTopic:
     if slice_id is not None:
@@ -132,7 +119,6 @@ class ConsumerBuilder:
         )
 
         validate_passed_slice(storage_key, slice_id)
-        topic = get_sliced_snuba_topic(topic, slice_id)
 
         self.broker_config = get_default_kafka_configuration(
             topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
@@ -171,13 +157,13 @@ class ConsumerBuilder:
         self.commit_log_topic: Optional[ArroyoTopic]
 
         if kafka_params.commit_log_topic is not None:
-            self.commit_log_topic = get_sliced_arroyo_topic(
+            self.commit_log_topic = get_physical_arroyo_topic(
                 kafka_params.commit_log_topic, slice_id
             )
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
-                self.commit_log_topic = get_sliced_arroyo_topic(
+                self.commit_log_topic = get_physical_arroyo_topic(
                     commit_log_topic_spec.topic_name, slice_id
                 )
             else:
@@ -234,8 +220,6 @@ class ConsumerBuilder:
             .topic
         )
 
-        topic = get_sliced_snuba_topic(topic, slice_id)
-
         configuration = build_kafka_consumer_configuration(
             topic,
             bootstrap_servers=self.bootstrap_servers,
@@ -276,7 +260,11 @@ class ConsumerBuilder:
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
-        return StreamProcessor(consumer, self.raw_topic, strategy_factory, IMMEDIATE)
+        # Can we assume that the raw topic would be mapped
+        # to a physical topic in the sliced context?
+        physical_topic = get_physical_arroyo_topic(self.raw_topic.name, slice_id)
+
+        return StreamProcessor(consumer, physical_topic, strategy_factory, IMMEDIATE)
 
     def __build_streaming_strategy_factory(
         self,
