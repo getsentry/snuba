@@ -117,7 +117,7 @@ class MinuteResolutionProcessor(ClickhouseQueryProcessor):
 
 
 kafka_stream_loader = build_kafka_stream_loader_from_settings(
-    processor=SessionsProcessor(), default_topic=Topic.INGEST_SESSIONS
+    processor=SessionsProcessor(), default_topic=Topic.SESSIONS
 )
 
 raw_storage = WritableTableStorage(

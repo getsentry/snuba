@@ -64,10 +64,8 @@ def produce_policy_creator() -> DeadLetterQueuePolicy:
     Produce all bad messages to dead-letter topic.
     """
     return ProduceInvalidMessagePolicy(
-        KafkaProducer(
-            build_kafka_producer_configuration(Topic.SNUBA_DEAD_LETTER_METRICS)
-        ),
-        KafkaTopic(Topic.SNUBA_DEAD_LETTER_METRICS.value),
+        KafkaProducer(build_kafka_producer_configuration(Topic.DEAD_LETTER_METRICS)),
+        KafkaTopic(Topic.DEAD_LETTER_METRICS.value),
     )
 
 
@@ -92,11 +90,11 @@ polymorphic_bucket = WritableTableStorage(
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=PolymorphicMetricsProcessor(),
-        default_topic=Topic.SNUBA_METRICS,
-        commit_log_topic=Topic.SNUBA_METRICS_COMMIT_LOG,
+        default_topic=Topic.METRICS,
+        commit_log_topic=Topic.METRICS_COMMIT_LOG,
         subscription_scheduler_mode=SchedulingWatermarkMode.GLOBAL,
-        subscription_scheduled_topic=Topic.SCHEDULED_SUBSCRIPTIONS_METRICS,
-        subscription_result_topic=Topic.METRICS_SUBSCRIPTION_RESULTS,
+        subscription_scheduled_topic=Topic.SUBSCRIPTION_SCHEDULED_METRICS,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
     ),
 )
@@ -130,7 +128,7 @@ sets_storage = WritableTableStorage(
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         SetsAggregateProcessor(),
-        default_topic=Topic.SNUBA_METRICS,
+        default_topic=Topic.METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
@@ -153,7 +151,7 @@ counters_storage = WritableTableStorage(
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         CounterAggregateProcessor(),
-        default_topic=Topic.SNUBA_METRICS,
+        default_topic=Topic.METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,
@@ -207,7 +205,7 @@ distributions_storage = WritableTableStorage(
     query_processors=[ArrayJoinKeyValueOptimizer("tags"), TableRateLimit()],
     stream_loader=build_kafka_stream_loader_from_settings(
         DistributionsAggregateProcessor(),
-        default_topic=Topic.SNUBA_METRICS,
+        default_topic=Topic.METRICS,
         dead_letter_queue_policy_creator=produce_policy_creator,
     ),
     write_format=WriteFormat.VALUES,

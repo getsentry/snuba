@@ -71,6 +71,6 @@ storage = WritableTableStorage(
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=QuerylogProcessor(),
-        default_topic=Topic.SNUBA_QUERIES,
+        default_topic=Topic.QUERYLOG,
     ),
 )

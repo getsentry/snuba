@@ -59,7 +59,7 @@ raw_storage = WritableTableStorage(
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=FunctionsMessageProcessor(),
-        default_topic=Topic.PROFILES_CALL_TREE,
+        default_topic=Topic.PROFILES_FUNCTIONS,
     ),
 )
 

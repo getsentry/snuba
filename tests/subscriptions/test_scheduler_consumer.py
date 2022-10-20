@@ -41,7 +41,7 @@ def test_scheduler_consumer() -> None:
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.SNUBA_COMMIT_LOG])
+    create_topics(admin_client, [SnubaTopic.COMMIT_LOG])
 
     metrics_backend = TestingMetricsBackend()
     entity_name = "events"
