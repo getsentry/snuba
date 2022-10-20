@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stdout
-from functools import wraps
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
-from werkzeug.routing import BaseConverter
 
 from snuba import settings, state
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
@@ -20,6 +18,10 @@ from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_queryl
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
+from snuba.admin.migrations_policies import (
+    MigrationActionConverter,
+    check_migration_perms,
+)
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -34,12 +36,6 @@ from snuba.datasets.factory import (
 )
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
-from snuba.migrations.policies import (
-    AllMigrationsPolicy,
-    MigrationPolicy,
-    NoMigrationsPolicy,
-    NonBlockingMigrationsPolicy,
-)
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
@@ -86,32 +82,6 @@ def health() -> Response:
     return Response("OK", 200)
 
 
-def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]:
-    @wraps(f)
-    def check_group_perms(*args: Any, **kwargs: Any) -> Response:
-        group = kwargs["group"]
-        if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-            return make_response(jsonify({"error": "Group not allowed"}), 400)
-
-        if "action" in kwargs:
-            action = kwargs["action"]
-            migration_id = kwargs["migration_id"]
-            migration_key = MigrationKey(group, migration_id)
-            if action == "run":
-                if not POLICIES[action].can_run(migration_key):
-                    return make_response(
-                        jsonify({"error": "Group not allowed run policy"}), 400
-                    )
-            elif action == "reverse":
-                if not POLICIES[action].can_reverse(migration_key):
-                    return make_response(
-                        jsonify({"error": "Group not allowed reverse policy"}), 400
-                    )
-        return f(*args, **kwargs)
-
-    return check_group_perms
-
-
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
     res: List[Mapping[str, MigrationGroup | Sequence[str]]] = []
@@ -144,10 +114,6 @@ def migrations_groups_list(group: str) -> Response:
                 200,
             )
     return make_response(jsonify({"error": "Invalid group"}), 400)
-
-
-class MigrationActionConverter(BaseConverter):
-    regex = r"(?:run|reverse)"
 
 
 application.url_map.converters["migration_action"] = MigrationActionConverter

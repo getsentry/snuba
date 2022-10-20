@@ -9,6 +9,7 @@ from flask.testing import FlaskClient
 
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner
+from snuba.migrations.status import Status
 
 
 @pytest.fixture
@@ -19,14 +20,15 @@ def admin_api() -> FlaskClient:
 
 
 def test_migration_groups(admin_api: FlaskClient) -> None:
-    with patch("snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", {}):
+    with patch("snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", dict()):
         response = admin_api.get("/migrations/groups")
 
     assert response.status_code == 200
     assert json.loads(response.data) == []
 
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", {"system", "generic_metrics"}
+        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+        {"system": "AllMigrationsPolicy", "generic_metrics": "NoMigrationsPolicy"},
     ):
         response = admin_api.get("/migrations/groups")
 
@@ -47,7 +49,11 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
 
 def test_list_migration_status(admin_api: FlaskClient) -> None:
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", {"system", "generic_metrics"}
+        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+        {
+            "system": "NonBlockingMigrationsPolicy",
+            "generic_metrics": "NoMigrationsPolicy",
+        },
     ):
         response = admin_api.get("/migrations/system/list")
         assert response.status_code == 200
@@ -69,7 +75,11 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
         assert response.status_code == 400
 
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", {"sessions", "generic_metrics"}
+        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+        {
+            "sessions": "NonBlockingMigrationsPolicy",
+            "generic_metrics": "NoMigrationsPolicy",
+        },
     ):
         response = admin_api.get("/migrations/sessions/list")
     assert response.status_code == 200
@@ -103,14 +113,24 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
     method = "run_migration" if action == "run" else "reverse_migration"
 
     with patch(
-        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", {"system", "invalid_group"}
+        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+        {
+            "system": "AllMigrationsPolicy",
+            "invalid_but_allowed_group": "AllMigrationsPolicy",
+            "generic_metrics": "NoMigrationsPolicy",
+            "events": "NonBlockingMigrationsPolicy",
+        },
     ):
         # invalid action
-        response = admin_api.post("/migrations/system/invalid_action/0001_migrations/")
+        response = admin_api.post(
+            "/migrations/system/invalid_but_allowed_group/0001_migrations/"
+        )
         assert response.status_code == 404
 
         # invalid migration group
-        response = admin_api.post(f"/migrations/invalid_group/{action}/0001_migrations")
+        response = admin_api.post(
+            f"/migrations/invalid_but_allowed_group/{action}/0001_migrations"
+        )
         assert response.status_code == 400
         assert json.loads(response.data) == {"error": "Group not found"}
 
@@ -129,6 +149,16 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             response = admin_api.post(f"/migrations/sessions/{action}/0001_sessions")
             assert response.status_code == 400
             assert json.loads(response.data) == {"error": "Group not allowed"}
+            assert mock_run_migration.call_count == 0
+
+            # not allowed migration group policy
+            response = admin_api.post(
+                f"/migrations/generic_metrics/{action}/0003_sets_mv"
+            )
+            assert response.status_code == 400
+            assert json.loads(response.data) == {
+                "error": f"Group not allowed {action} policy"
+            }
             assert mock_run_migration.call_count == 0
 
             # forced migration
@@ -164,3 +194,45 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             mock_run_migration.assert_called_once_with(
                 migration_key, force=False, fake=False, dry_run=True
             )
+
+        with patch.object(Runner, method) as mock_run_migration:
+            # not allowed non blocking
+            response = admin_api.post(
+                f"/migrations/events/{action}/0014_backfill_errors"
+            )
+            assert response.status_code == 400
+            assert json.loads(response.data) == {
+                "error": f"Group not allowed {action} policy"
+            }
+            assert mock_run_migration.call_count == 0
+
+            if action == "run":
+                # allowed non blocking
+                response = admin_api.post(
+                    f"/migrations/events/{action}/0015_truncate_events"
+                )
+                assert response.status_code == 200
+                migration_key = MigrationKey(
+                    group="events", migration_id="0015_truncate_events"
+                )
+                mock_run_migration.assert_called_once_with(
+                    migration_key, force=False, fake=False, dry_run=False
+                )
+
+            if action == "reverse":
+                with patch.object(Runner, method) as mock_run_migration:
+                    # allowed non blocking
+                    with patch(
+                        "snuba.migrations.runner.Runner.get_status",
+                        return_value=(Status.IN_PROGRESS, None),
+                    ):
+                        migration_key = MigrationKey(
+                            group="events", migration_id="0016_drop_legacy_events"
+                        )
+                        response = admin_api.post(
+                            f"/migrations/events/{action}/0016_drop_legacy_events"
+                        )
+                        assert response.status_code == 200
+                        mock_run_migration.assert_called_once_with(
+                            migration_key, force=False, fake=False, dry_run=False
+                        )
