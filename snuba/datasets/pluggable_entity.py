@@ -95,6 +95,7 @@ class PluggableEntity(Entity):
         return (
             [self.readable_storage]
             if not self.writeable_storage
+            or self.writeable_storage == self.readable_storage
             else [self.readable_storage, self.writeable_storage]
         )
 

@@ -95,24 +95,30 @@ def get_mandatory_condition_checkers(
     ]
 
 
+NUMBER_COLUMN_TYPES = {"UInt": UInt, "Float": Float}
+
+SIMPLE_COLUMN_TYPES = {
+    **NUMBER_COLUMN_TYPES,
+    "String": String,
+    "DateTime": DateTime,
+    "UUID": UUID,
+    "IPv4": IPv4,
+    "IPv6": IPv6,
+}
+
+
 def __parse_simple(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> Column[SchemaModifiers]:
-    if col["type"] == "UInt":
-        return Column(col["name"], UInt(col["args"]["size"], modifiers))
-    elif col["type"] == "Float":
-        return Column(col["name"], Float(col["args"]["size"], modifiers))
-    elif col["type"] == "String":
-        return Column(col["name"], String(modifiers))
-    elif col["type"] == "DateTime":
-        return Column(col["name"], DateTime(modifiers))
-    elif col["type"] == "UUID":
-        return Column(col["name"], UUID(modifiers))
-    elif col["type"] == "IPv4":
-        return Column(col["name"], IPv4(modifiers))
-    elif col["type"] == "IPv6":
-        return Column(col["name"], IPv6(modifiers))
-    raise
+    return Column(col["name"], SIMPLE_COLUMN_TYPES[col["type"]](modifiers))
+
+
+def __parse_number(
+    col: dict[str, Any], modifiers: SchemaModifiers | None
+) -> Column[SchemaModifiers]:
+    return Column(
+        col["name"], NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
+    )
 
 
 def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]]:
@@ -120,26 +126,17 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
 
     cols: list[Column[SchemaModifiers]] = []
 
-    SIMPLE_COLUMN_TYPES = {
-        "UInt": UInt,
-        "Float": Float,
-        "String": String,
-        "DateTime": DateTime,
-        "UUID": UUID,
-        "IPv4": IPv4,
-        "IPv6": IPv6,
-    }
-
     for col in columns:
-        modifiers = None
+        column: Column[SchemaModifiers] | None = None
+        modifiers: SchemaModifiers | None = None
         if "args" in col and "schema_modifiers" in col["args"]:
             modifiers = SchemaModifiers(
                 "nullable" in col["args"]["schema_modifiers"],
                 "readonly" in col["args"]["schema_modifiers"],
             )
-
-        column: Column[SchemaModifiers] | None = None
-        if col["type"] in SIMPLE_COLUMN_TYPES:
+        if col["type"] in NUMBER_COLUMN_TYPES:
+            column = __parse_number(col, modifiers)
+        elif col["type"] in SIMPLE_COLUMN_TYPES:
             column = __parse_simple(col, modifiers)
         elif col["type"] == "Nested":
             column = Column(
