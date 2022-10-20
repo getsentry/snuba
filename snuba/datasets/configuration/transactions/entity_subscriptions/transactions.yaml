@@ -1,0 +1,7 @@
+version: v1
+kind: entity_subscription
+name: transactions_subscription
+type: simple
+
+max_allowed_aggregations: 1
+disallowed_aggregations: ["groupby", "having", "orderby"]

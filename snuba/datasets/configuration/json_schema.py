@@ -446,7 +446,14 @@ V1_ENTITY_SUBSCIPTION_SCHEMA = {
     "type": "object",
     "properties": {
         "version": {"const": "v1", "description": "Version of schema"},
-        "kind": {"const": "entity_subscription", "description": "Component kind"},
+        "kind": {
+            "const": "entity_subscription",
+            "description": "Component kind",
+        },
+        "type": {
+            "type": ["string", "null"],
+            "description": "Type of entity subscription [simple | complex]",
+        },
         "name": {"type": "string", "description": "Name of the entity subscription"},
         "max_allowed_aggregations": {
             "type": ["integer", "null"],

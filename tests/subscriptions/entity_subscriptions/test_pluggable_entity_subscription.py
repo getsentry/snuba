@@ -10,7 +10,7 @@ from snuba.datasets.entity_subscriptions.entity_subscription import (
     GenericMetricsSetsSubscription,
 )
 from snuba.datasets.entity_subscriptions.pluggable_entity_subscription import (
-    PluggableEntitySubscription,
+    PluggableEntitySubscriptionComplex,
 )
 from snuba.datasets.factory import get_dataset
 from snuba.redis import RedisClientKey, get_redis_client
@@ -47,15 +47,15 @@ def subscription_data_builder(
 
 @pytest.fixture
 def pluggable_sets_entity_subscription() -> EntitySubscription:
-    PluggableEntitySubscription.name = "generic_metrics_sets_subscription"
-    PluggableEntitySubscription.MAX_ALLOWED_AGGREGATIONS = 3
-    PluggableEntitySubscription.disallowed_aggregations = ["having", "orderby"]
-    assert issubclass(PluggableEntitySubscription, EntitySubscription)
-    return PluggableEntitySubscription(data_dict=data)
+    PluggableEntitySubscriptionComplex.name = "generic_metrics_sets_subscription"
+    PluggableEntitySubscriptionComplex.MAX_ALLOWED_AGGREGATIONS = 3
+    PluggableEntitySubscriptionComplex.disallowed_aggregations = ["having", "orderby"]
+    assert issubclass(PluggableEntitySubscriptionComplex, EntitySubscription)
+    return PluggableEntitySubscriptionComplex(data_dict=data)
 
 
 def test_entity_subscription_generic_metrics_sets_regular_vs_pluggable(
-    pluggable_sets_entity_subscription: PluggableEntitySubscription,
+    pluggable_sets_entity_subscription: PluggableEntitySubscriptionComplex,
 ) -> None:
     sets_entity_subscription = GenericMetricsSetsSubscription(data_dict=data)
 

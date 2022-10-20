@@ -1,15 +1,30 @@
 from typing import Sequence
 
-from snuba.datasets.entity_subscriptions.entity_subscription import SessionsSubscription
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    ComplexEntitySubscription,
+    SimpleEntitySubscription,
+)
 
 
-class PluggableEntitySubscription(SessionsSubscription):
+class PluggableEntitySubscriptionComplex(ComplexEntitySubscription):
     """
-    PluggableEntitySubscription is a version of EntitySubscription that is design to be populated by
+    PluggableEntitySubscriptionComplex is a version of EntitySubscription that is design to be populated by
     static YAML-based configuration files.
 
-    TODO: This always extends SessionsSubscription for now.
-    We will need to add functionality to extend other base classes in the future
+    TODO: This temporary and always extends ComplexEntitySubscription for now.
+    """
+
+    name: str
+    MAX_ALLOWED_AGGREGATIONS: int
+    disallowed_aggregations: Sequence[str]
+
+
+class PluggableEntitySubscriptionSimple(SimpleEntitySubscription):
+    """
+    PluggableEntitySubscriptionSimple is a version of EntitySubscription that is design to be populated by
+    static YAML-based configuration files.
+
+    TODO: This temporary and always extends ComplexEntitySubscription for now.
     """
 
     name: str

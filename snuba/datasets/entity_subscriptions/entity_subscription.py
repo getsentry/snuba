@@ -62,9 +62,17 @@ class EntitySubscriptionValidation:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
 
-class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
-    MAX_ALLOWED_AGGREGATIONS: int = 2
+class SimpleEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
+    def get_entity_subscription_conditions_for_snql(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Expression]:
+        return []
 
+    def to_dict(self) -> Mapping[str, Any]:
+        return {}
+
+
+class ComplexEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
     def __init__(self, data_dict: Mapping[str, Any]) -> None:
         super().__init__(data_dict)
         try:
@@ -89,41 +97,33 @@ class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
         return {"organization": self.organization}
 
 
-class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
-    def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
-    ) -> Sequence[Expression]:
-        return []
-
-    def to_dict(self) -> Mapping[str, Any]:
-        return {}
+class EventsSubscription(SimpleEntitySubscription):
+    pass
 
 
-class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription):
-    def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
-    ) -> Sequence[Expression]:
-        return []
-
-    def to_dict(self) -> Mapping[str, Any]:
-        return {}
+class TransactionsSubscription(SimpleEntitySubscription):
+    pass
 
 
-class MetricsCountersSubscription(SessionsSubscription):
+class SessionsSubscription(ComplexEntitySubscription):
+    MAX_ALLOWED_AGGREGATIONS: int = 2
+
+
+class MetricsCountersSubscription(ComplexEntitySubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 3
     disallowed_aggregations = ["having", "orderby"]
 
 
-class MetricsSetsSubscription(SessionsSubscription):
+class MetricsSetsSubscription(ComplexEntitySubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 3
     disallowed_aggregations = ["having", "orderby"]
 
 
-class GenericMetricsSetsSubscription(SessionsSubscription):
+class GenericMetricsSetsSubscription(ComplexEntitySubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 3
     disallowed_aggregations = ["having", "orderby"]
 
 
-class GenericMetricsDistributionsSubscription(SessionsSubscription):
+class GenericMetricsDistributionsSubscription(ComplexEntitySubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 3
     disallowed_aggregations = ["having", "orderby"]
