@@ -125,7 +125,7 @@ NUMBER_SCHEMA = make_column_schema(
 
 
 NO_ARG_SCHEMA = make_column_schema(
-    column_type={"enum": ["String", "DateTime"]},
+    column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6"]},
     args={
         "type": "object",
         "properties": {},
@@ -303,6 +303,7 @@ ENTITY_TRANSLATION_MAPPERS = {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
+        "columns": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
     },
     "additionalProperties": False,
 }
@@ -389,10 +390,8 @@ V1_ENTITY_SCHEMA = {
             },
         },
         "partition_key_column_name": {
-            **TYPE_STRING,
-            **{
-                "description": "The column name, if this entity is partitioned, to select slice"
-            },
+            "type": ["string", "null"],
+            "description": "The column name, if this entity is partitioned, to select slice",
         },
     },
     "required": [
