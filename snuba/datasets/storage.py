@@ -159,7 +159,6 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             mandatory_condition_checkers,
         )
         assert isinstance(schema, WritableTableSchema)
-
         self.__table_writer = TableWriter(
             storage_set=storage_set_key,
             write_schema=schema,
