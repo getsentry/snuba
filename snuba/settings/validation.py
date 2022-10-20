@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping, Optional, Set
+from typing import Any, Mapping, MutableMapping
 
 from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
 
@@ -27,18 +27,6 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
         raise ValueError(
             "DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead."
         )
-
-    topic_names: Optional[Set[str]] = locals.get("ALLOWED_TOPICS")
-    if not topic_names:
-        topic_names = set()
-
-    for key in locals["KAFKA_TOPIC_MAP"].keys():
-        if key not in topic_names:
-            raise InvalidTopicError(f"Invalid topic value: {key}")
-
-    for key in locals["KAFKA_BROKER_CONFIG"].keys():
-        if key not in topic_names:
-            raise ValueError(f"Invalid topic value {key}")
 
     # Validate cluster configuration
     from snuba.clusters.storage_sets import StorageSetKey
