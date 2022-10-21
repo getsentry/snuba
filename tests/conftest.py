@@ -124,11 +124,14 @@ def _build_snql_post_methods(
     return simple_post
 
 
+SnubaSetConfig = Callable[[str, Any], None]
+
+
 @pytest.fixture
-def snuba_set_config(request) -> Callable[[str, Any], None]:
+def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
     finalizers_registered = set()
 
-    def set_config(key: str, value: Any):
+    def set_config(key: str, value: Any) -> None:
         # should register finalizer only once because 1) we don't have to undo
         # every single value change step-by-step 2) teardown-order via pytest
         # finalizers is poorly understood
@@ -143,6 +146,6 @@ def snuba_set_config(request) -> Callable[[str, Any], None]:
 
 
 @pytest.fixture
-def disable_query_cache(snuba_set_config) -> None:
+def disable_query_cache(snuba_set_config: SnubaSetConfig) -> None:
     snuba_set_config("use_cache", False)
     snuba_set_config("use_readthrough_query_cache", 0)
