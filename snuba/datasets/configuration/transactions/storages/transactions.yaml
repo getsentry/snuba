@@ -115,6 +115,7 @@ schema:
     ]
   local_table_name: transactions_local
   dist_table_name: transactions_dist
+  part_format: [retention_days, date]
 
 query_processors:
   -

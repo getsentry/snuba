@@ -28,6 +28,7 @@ from snuba.datasets.table_storage import (
     build_kafka_stream_loader_from_settings,
 )
 from snuba.subscriptions.utils import SchedulingWatermarkMode
+from snuba.util import PartSegment
 from snuba.utils.streams.topics import Topic
 
 KIND = "kind"
@@ -67,18 +68,32 @@ def build_storage_from_config(
         return WritableTableStorage(**storage_kwargs)
 
 
+def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
+    schema_class = (
+        WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
+    )
+    part_formats = None
+    if "part_format" in config[SCHEMA]:
+        part_formats = []
+        for part in config[SCHEMA]["part_format"]:
+            for part_format in PartSegment:
+                if part == part_format.value:
+                    part_formats.append(part_format)
+
+    return schema_class(
+        columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
+        local_table_name=config[SCHEMA]["local_table_name"],
+        dist_table_name=config[SCHEMA]["dist_table_name"],
+        storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
+        part_format=part_formats,
+    )
+
+
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
-        SCHEMA: (
-            WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
-        )(
-            columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
-            local_table_name=config[SCHEMA]["local_table_name"],
-            dist_table_name=config[SCHEMA]["dist_table_name"],
-            storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
-        ),
+        SCHEMA: __build_storage_schema(config),
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),

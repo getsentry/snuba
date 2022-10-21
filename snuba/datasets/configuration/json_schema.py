@@ -204,6 +204,11 @@ SCHEMA_SCHEMA = {
             "type": "string",
             "description": "The distributed table name in distributed ClickHouse",
         },
+        "part_format": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "The format of the parts in Clickhouse. Used in the cleanup job.",
+        },
     },
     "additionalProperties": False,
 }
