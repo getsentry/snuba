@@ -188,3 +188,56 @@ def test_rate_limit_failures(vals: Tuple[int, int, int]) -> None:
             bucket, now - state.rate_lookback_s, now + state.rate_lookback_s
         )
         assert count == 0
+
+
+def test_rate_limit_v2_cluster(snuba_set_config):
+    params = RateLimitParameters("foo", "foo", None, 4)
+
+    # Start 4 concurrent "queries"... concurrent limit maxed out
+    with RateLimitAggregator([params] * 4):
+        # Exceed concurrent rate limit
+        with pytest.raises(RateLimitExceeded):
+            with RateLimitAggregator([params] * 4):
+                pass
+
+        # switch over to new cluster
+        snuba_set_config("rate_limit_use_v2_cluster", 1.0)
+
+        # since we switched over to a new cluster, the limit is
+        # practically reset
+        with RateLimitAggregator([params] * 4):
+            pass
+
+        snuba_set_config("rate_limit_use_v2_cluster", 0.0)
+
+        # assert that rollback succeeds and we exceed the limit
+        # again (since we're talking to the old cluster again)
+        with pytest.raises(RateLimitExceeded):
+            with RateLimitAggregator([params] * 4):
+                pass
+
+
+def test_rate_limit_v2_cluster_inconsistency(snuba_set_config):
+    params = RateLimitParameters("foo", "foo", None, 4)
+
+    # max out rate limit
+    with RateLimitAggregator([params] * 4):
+        snuba_set_config("rate_limit_use_v2_cluster", 1.0)
+
+    # asserted that rate limiter does not crash if cluster is switched
+    # halfway through (since the routing decision is only made once)
+
+    # check that rollback does not crash either
+    with RateLimitAggregator([params] * 4):
+        snuba_set_config("rate_limit_use_v2_cluster", 0.0)
+
+    with pytest.raises(RateLimitExceeded):
+        with RateLimitAggregator([params] * 5):
+            snuba_set_config("rate_limit_use_v2_cluster", 1.0)
+
+    snuba_set_config("rate_limit_use_v2_cluster", 0.0)
+
+    # assert that rate limits don't get "stuck" when clusters are switched
+    # while a query is rejected, and we can still run queries after
+    with RateLimitAggregator([params] * 4):
+        pass

@@ -19,6 +19,7 @@ from snuba.utils.serializable_exception import SerializableException
 from tests.assertions import assert_changes, assert_does_not_change
 
 redis_client = get_redis_client(RedisClientKey.CACHE)
+redis_client_v2 = get_redis_client(RedisClientKey.CACHE_V2)
 
 
 def execute(function: Callable[[], Any]) -> Future[Any]:
@@ -298,3 +299,35 @@ def test_notify_queue_ttl() -> None:
         assert pop_calls == num_waiters
     finally:
         redis_client.flushdb()
+
+
+def test_multiple_redis_keys(request, snuba_set_config):
+    backend = RedisCache(
+        [redis_client, redis_client_v2],
+        "test",
+        PassthroughCodec(),
+        ThreadPoolExecutor(),
+    )
+
+    # ensure that in slow test environments, the cache does not expire halfway
+    # through the test
+    snuba_set_config("cache_expiry_sec", 1000)
+
+    backend.set("foo-key", b"hello")
+
+    assert backend.get("foo-key") == b"hello"
+    assert redis_client.get("test{foo-key}") == b"hello"
+
+    snuba_set_config("cache_use_v2_cluster", 1.0)
+
+    assert backend.get("foo-key") is None
+    assert redis_client.get("test{foo-key}") == b"hello"
+
+    backend.set("foo-key", b"hello2")
+
+    assert backend.get("foo-key") == b"hello2"
+    assert redis_client_v2.get("test{foo-key}") == b"hello2"
+    assert redis_client.get("test{foo-key}") == b"hello"
+
+    snuba_set_config("cache_use_v2_cluster", 0.0)
+    assert backend.get("foo-key") == b"hello"
