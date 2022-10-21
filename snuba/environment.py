@@ -1,8 +1,8 @@
-from __future__ import absolute_import, annotations
+from __future__ import absolute_import
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Optional
 
 import sentry_sdk
 import structlog
@@ -70,12 +70,6 @@ def setup_logging(level: Optional[str] = None) -> None:
     )
 
 
-def _traces_sampler(sampling_context: dict[str, Any]) -> int:
-    if sampling_context["transaction_context"]["op"] == "snuba_init":
-        return 1
-    return settings.SENTRY_TRACE_SAMPLE_RATE
-
-
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
@@ -86,7 +80,7 @@ def setup_sentry() -> None:
             RedisIntegration(),
         ],
         release=os.getenv("SNUBA_RELEASE"),
-        traces_sampler=_traces_sampler,
+        traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
     )
 
 
