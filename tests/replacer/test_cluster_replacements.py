@@ -54,7 +54,9 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
 
 
 @pytest.fixture
-def override_cluster(monkeypatch) -> Callable[[bool], FakeClickhouseCluster]:
+def override_cluster(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[bool], FakeClickhouseCluster]:
     def override(healthy: bool) -> FakeClickhouseCluster:
         test_cluster = _build_cluster(healthy=healthy)
         monkeypatch.setattr(cluster, "CLUSTERS", [test_cluster])
