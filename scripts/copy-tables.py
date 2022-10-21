@@ -11,7 +11,7 @@ SETTINGS = {
 }
 
 
-def _get_client(host, port, user, password, database):
+def _get_client(host, port, user, password, database) -> Client:
     return Client(
         host=host,
         port=port,
@@ -22,7 +22,7 @@ def _get_client(host, port, user, password, database):
     )
 
 
-def verify_zk_replica_path(client, database, tables):
+def verify_zk_replica_path(client, database, tables) -> None:
     """
     Before we copy over table statements from other nodes, we need to make sure
     that the current zookeeper paths use the macros defined and align with the path
@@ -55,7 +55,7 @@ def verify_zk_replica_path(client, database, tables):
         print(f"Zookeeper replica paths verified for table: {table} ! :)")
 
 
-def copy_tables(source_client, new_client, tables, database, dry_run):
+def copy_tables(source_client, new_client, tables, database, dry_run) -> None:
 
     verify_zk_replica_path(source_client, args.database, tables)
 
@@ -101,8 +101,8 @@ if __name__ == "__main__":
     )
 
     new_client = _get_client(
-        host=args.source_host,
-        port=args.source_port,
+        host=args.new_host,
+        port=args.new_port,
         user=args.user,
         password=args.password,
         database=args.database,
