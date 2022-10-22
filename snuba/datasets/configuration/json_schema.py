@@ -436,6 +436,7 @@ V1_DATASET_SCHEMA = {
         "kind",
         "name",
         "entities",
+        "is_experimental",
     ],
     "additionalProperties": False,
 }
