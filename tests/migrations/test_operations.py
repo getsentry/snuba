@@ -14,10 +14,13 @@ from snuba.migrations.operations import (
     DropTable,
     InsertIntoSelect,
     ModifyColumn,
+    ModifyTableTTL,
+    RemoveTableTTL,
     RenameTable,
     TruncateTable,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
+from snuba.utils.schemas import DateTime
 
 
 def test_create_table() -> None:
@@ -136,4 +139,46 @@ def test_insert_into_select() -> None:
             StorageSetKey.EVENTS, "dest", ["a2", "b2"], "src", ["a1", "b1"]
         ).format_sql()
         == "INSERT INTO dest (a2, b2) SELECT a1, b1 FROM src;"
+    )
+
+
+def test_modify_ttl() -> None:
+    """
+    Test that modifying and removing of TTLs are formatted correctly.
+    """
+    columns: Sequence[Column[Modifiers]] = [
+        Column("id", String()),
+        Column("name", String(Modifiers(nullable=True))),
+        Column("version", UInt(64)),
+        Column("timestamp", DateTime()),
+    ]
+
+    CreateTable(
+        StorageSetKey.EVENTS,
+        "test_table",
+        columns,
+        ReplacingMergeTree(
+            storage_set=StorageSetKey.EVENTS,
+            version_column="version",
+            order_by="version",
+            settings={"index_granularity": "256"},
+        ),
+    )
+
+    assert (
+        ModifyTableTTL(
+            StorageSetKey.EVENTS,
+            "test_table",
+            "timestamp",
+            90,
+        ).format_sql()
+        == "ALTER TABLE test_table MODIFY TTL timestamp + toIntervalDay(90);"
+    )
+
+    assert (
+        RemoveTableTTL(
+            StorageSetKey.EVENTS,
+            "test_table",
+        ).format_sql()
+        == "ALTER TABLE test_table REMOVE TTL;"
     )
