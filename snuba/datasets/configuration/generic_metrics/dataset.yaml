@@ -5,4 +5,5 @@ name: generic_metrics
 is_experimental: false
 
 entities:
-  all: [generic_metrics_sets, generic_metrics_distributions]
+  - generic_metrics_sets
+  - generic_metrics_distributions

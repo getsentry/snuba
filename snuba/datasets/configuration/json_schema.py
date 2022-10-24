@@ -419,16 +419,9 @@ V1_DATASET_SCHEMA = {
             "description": "Marks the dataset as experimental. Healthchecks failing on this dataset will not block deploys and affect Snuba server's SLOs",
         },
         "entities": {
-            "type": "object",
-            "properties": {
-                "all": {
-                    "type": "array",
-                    "items": TYPE_STRING,
-                    "description": "Names of entities associated with this dataset",
-                },
-            },
-            "additionalProperties": False,
-            "required": ["all"],
+            "type": "array",
+            "items": TYPE_STRING,
+            "description": "Names of entities associated with this dataset",
         },
     },
     "required": [
@@ -436,6 +429,7 @@ V1_DATASET_SCHEMA = {
         "kind",
         "name",
         "entities",
+        "is_experimental",
     ],
     "additionalProperties": False,
 }
