@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Type
 
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity import Entity
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity import Entity, EntitySubscription
 from snuba.datasets.partitioning import is_storage_partitioned
 from snuba.datasets.plans.partitioned_storage import (
     ColumnBasedStoragePartitionSelector,
@@ -54,7 +53,7 @@ class PluggableEntity(Entity):
     # partition_key_column_name is used in data slicing (the value in this storage column
     # will be used to "choose" slices)
     partition_key_column_name: Optional[str] = None
-    entity_subscription: Optional[EntitySubscription] = None
+    entity_subscription: Optional[Type[EntitySubscription]] = None
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors

@@ -444,9 +444,22 @@ V1_ENTITY_SCHEMA = {
             "type": ["string", "null"],
             "description": "The column name, if this entity is partitioned, to select slice",
         },
-        "has_subscriptions": {
-            "type": "boolean",
-            "description": "Marks the entity has subscriptions",
+        "subscriptions": {
+            "type": "object",
+            "description": "Specifies whether entity has subscriptions enabled",
+            "properties": {
+                "max_allowed_aggregations": {
+                    "type": "integer",
+                    "description": "The max number of allowed of aggregations in subscription",
+                },
+                "disallowed_aggregations": {
+                    "type": "array",
+                    "items": TYPE_STRING,
+                    "description": "The disallowed aggregation clauses in subscription query",
+                },
+            },
+            "required": ["max_allowed_aggregations", "disallowed_aggregations"],
+            "additionalProperties": False,
         },
     },
     "required": [

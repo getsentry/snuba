@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Type
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -20,11 +20,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entity import Entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    BaseEntitySubscription,
-    EntitySubscription,
-)
+from snuba.datasets.entity import BaseEntitySubscription, Entity, EntitySubscription
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -56,7 +52,7 @@ class MetricsEntity(Entity, ABC):
         mappers: TranslationMappers,
         abstract_column_set: Optional[ColumnSet] = None,
         validators: Optional[Sequence[QueryValidator]] = None,
-        entity_subscription: Optional[EntitySubscription] = None,
+        entity_subscription: Optional[Type[EntitySubscription]] = None,
     ) -> None:
         writable_storage = (
             get_writable_storage(writable_storage_key) if writable_storage_key else None
@@ -120,6 +116,8 @@ class MetricsEntity(Entity, ABC):
 
 class MetricsSetsEntity(MetricsEntity):
     def __init__(self) -> None:
+        BaseEntitySubscription.max_allowed_aggregations = 3
+        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
         super().__init__(
             writable_storage_key=StorageKey.METRICS_RAW,
             readable_storage_key=StorageKey.METRICS_SETS,
@@ -132,12 +130,14 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
-            entity_subscription=BaseEntitySubscription(),
+            entity_subscription=BaseEntitySubscription,
         )
 
 
 class MetricsCountersEntity(MetricsEntity):
     def __init__(self) -> None:
+        BaseEntitySubscription.max_allowed_aggregations = 3
+        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
         super().__init__(
             writable_storage_key=StorageKey.METRICS_RAW,
             readable_storage_key=StorageKey.METRICS_COUNTERS,
@@ -148,7 +148,7 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
-            entity_subscription=BaseEntitySubscription(),
+            entity_subscription=BaseEntitySubscription,
         )
 
 

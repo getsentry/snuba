@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Type
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -18,11 +18,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entity import Entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    BaseEntitySubscription,
-    EntitySubscription,
-)
+from snuba.datasets.entity import BaseEntitySubscription, Entity, EntitySubscription
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
@@ -69,7 +65,7 @@ class GenericMetricsEntity(Entity, ABC):
         value_schema: ColumnSet,
         mappers: TranslationMappers,
         validators: Optional[Sequence[QueryValidator]] = None,
-        entity_subscription: Optional[EntitySubscription] = None,
+        entity_subscription: Optional[Type[EntitySubscription]] = None,
     ) -> None:
         storages = [readable_storage]
         if writable_storage:
@@ -133,10 +129,12 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
 
     def __init__(self) -> None:
         assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
+        BaseEntitySubscription.max_allowed_aggregations = 3
+        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
-            entity_subscription=BaseEntitySubscription(),
+            entity_subscription=BaseEntitySubscription,
             value_schema=ColumnSet(
                 [
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
@@ -158,11 +156,13 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
 
     def __init__(self) -> None:
         assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
+        BaseEntitySubscription.max_allowed_aggregations = 3
+        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
-            entity_subscription=BaseEntitySubscription(),
+            entity_subscription=BaseEntitySubscription,
             value_schema=ColumnSet(
                 [
                     Column(

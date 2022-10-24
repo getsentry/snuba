@@ -30,7 +30,7 @@ def test_build_entity_subscription_from_config() -> None:
 
     assert config_sets.name == "generic_metrics_sets_subscription"
 
-    assert config_sets.MAX_ALLOWED_AGGREGATIONS == py_sets.MAX_ALLOWED_AGGREGATIONS
+    assert config_sets.max_allowed_aggregations == py_sets.max_allowed_aggregations
     assert config_sets.disallowed_aggregations == py_sets.disallowed_aggregations
     assert (
         config_sets.get_entity_subscription_conditions_for_snql()

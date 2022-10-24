@@ -13,5 +13,5 @@ class PluggableEntitySubscription(SessionsSubscription):
     """
 
     name: str
-    MAX_ALLOWED_AGGREGATIONS: int
+    max_allowed_aggregations: int
     disallowed_aggregations: Sequence[str]

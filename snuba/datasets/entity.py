@@ -1,18 +1,29 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Mapping, Optional, Sequence, Type, Union
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
+from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.join import JoinRelationship
+from snuba.query.data_source.simple import Entity as EntityDS
+from snuba.query.exceptions import InvalidQueryException
+from snuba.query.expressions import Column, Expression, Literal
+from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityContainsColumnsValidator,
+    NoTimeBasedConditionValidator,
     QueryValidator,
+    SubscriptionAllowedClausesValidator,
 )
 from snuba.utils.describer import Describable, Description, Property
 from snuba.utils.schemas import ColumnSet
@@ -35,7 +46,7 @@ class Entity(Describable, ABC):
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
         validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
-        entity_subscription: Optional[EntitySubscription],
+        entity_subscription: Optional[Type[EntitySubscription]],
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
@@ -165,3 +176,79 @@ class Entity(Describable, ABC):
                 Description(header="Relationships", content=relationships),
             ],
         )
+
+
+class InvalidSubscriptionError(Exception):
+    pass
+
+
+@dataclass
+class EntitySubscription(ABC):
+    organization: Optional[int] = None
+    max_allowed_aggregations: Optional[int] = None
+    disallowed_aggregations: Optional[Sequence[str]] = None
+
+    @abstractmethod
+    def get_entity_subscription_conditions_for_snql(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Expression]:
+        """
+        Returns a list of extra conditions that are entity specific and required for the
+        snql subscriptions
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
+        """
+        Applies entity specific validations on query argument passed
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_dict(self) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+
+class EntitySubscriptionValidation:
+    def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
+        # TODO: Support composite queries with multiple entities.
+        from_clause = query.get_from_clause()
+        if not isinstance(from_clause, EntityDS):
+            raise InvalidSubscriptionError("Only simple queries are supported")
+        entity = get_entity(from_clause.key)
+
+        SubscriptionAllowedClausesValidator(
+            self.max_allowed_aggregations, self.disallowed_aggregations
+        ).validate(query)
+        if entity.required_time_column:
+            NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
+
+
+class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
+    def __init__(self, data_dict: Mapping[str, Any] = {}) -> None:
+        if "organization" in data_dict:
+            try:
+                self.organization: int = data_dict["organization"]
+            except KeyError:
+                raise InvalidQueryException(
+                    "organization param is required for any query over sessions entity"
+                )
+
+    def get_entity_subscription_conditions_for_snql(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Expression]:
+        if self.organization:
+            return [
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "org_id"),
+                    Literal(None, self.organization),
+                ),
+            ]
+        return []
+
+    def to_dict(self) -> Mapping[str, Any]:
+        if self.organization:
+            return {"organization": self.organization}
+        return {}

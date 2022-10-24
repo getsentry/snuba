@@ -48,7 +48,7 @@ def subscription_data_builder(
 @pytest.fixture
 def pluggable_sets_entity_subscription() -> EntitySubscription:
     PluggableEntitySubscription.name = "generic_metrics_sets_subscription"
-    PluggableEntitySubscription.MAX_ALLOWED_AGGREGATIONS = 3
+    PluggableEntitySubscription.max_allowed_aggregations = 3
     PluggableEntitySubscription.disallowed_aggregations = ["having", "orderby"]
     assert issubclass(PluggableEntitySubscription, EntitySubscription)
     return PluggableEntitySubscription(data_dict=data)

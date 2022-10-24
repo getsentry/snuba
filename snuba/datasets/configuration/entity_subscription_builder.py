@@ -22,7 +22,7 @@ def build_entity_subscription_from_config(
         op="build", description=f"Entity Subscription: {config['name']}"
     ):
         PluggableEntitySubscription.name = config["name"]
-        PluggableEntitySubscription.MAX_ALLOWED_AGGREGATIONS = config[
+        PluggableEntitySubscription.max_allowed_aggregations = config[
             "max_allowed_aggregations"
         ]
         PluggableEntitySubscription.disallowed_aggregations = config[

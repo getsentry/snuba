@@ -9,10 +9,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entity import Entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    BaseEntitySubscription,
-)
+from snuba.datasets.entity import BaseEntitySubscription, Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -106,6 +103,12 @@ class BaseTransactionsEntity(Entity, ABC):
                 else transaction_translator.concat(custom_mappers),
             )
         )
+        BaseEntitySubscription.max_allowed_aggregations = 1
+        BaseEntitySubscription.disallowed_aggregations = [
+            "groupby",
+            "having",
+            "orderby",
+        ]
 
         super().__init__(
             storages=[storage],
@@ -115,7 +118,7 @@ class BaseTransactionsEntity(Entity, ABC):
             writable_storage=storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
-            entity_subscription=BaseEntitySubscription(),
+            entity_subscription=BaseEntitySubscription,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

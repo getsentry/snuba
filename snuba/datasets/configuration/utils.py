@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Optional, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -19,6 +19,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
 from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -166,3 +167,15 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
         assert column is not None
         cols.append(column)
     return cols
+
+
+def parse_entity_subscription(config: dict[str, Any]) -> Optional[EntitySubscription]:
+    if "subscriptions" in config:
+        BaseEntitySubscription.max_allowed_aggregations = config["subscriptions"][
+            "max_allowed_aggregations"
+        ]
+        BaseEntitySubscription.disallowed_aggregations = config["subscriptions"][
+            "disallowed_aggregations"
+        ]
+        return BaseEntitySubscription
+    return None
