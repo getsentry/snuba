@@ -18,6 +18,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage,
     sets_storage,
 )
+from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
 
@@ -36,11 +37,20 @@ def _deep_compare_storages(old: Storage, new: Storage) -> None:
         old.get_cluster().get_storage_set_keys()
         == new.get_cluster().get_storage_set_keys()
     )
-    assert (
-        old.get_mandatory_condition_checkers() == new.get_mandatory_condition_checkers()
+
+    assert len(old.get_mandatory_condition_checkers()) == len(
+        new.get_mandatory_condition_checkers()
+    ) and set(
+        [checker.get_id() for checker in old.get_mandatory_condition_checkers()]
+    ) == set(
+        [checker.get_id() for checker in new.get_mandatory_condition_checkers()]
     )
-    assert len(old.get_query_processors()) == len(new.get_query_processors())
-    assert old.get_query_splitters() == new.get_query_splitters()
+    assert len(old.get_query_processors()) == len(new.get_query_processors()) and set(
+        [processor.config_key() for processor in old.get_query_processors()]
+    ) == set([processor.config_key() for processor in new.get_query_processors()])
+    assert len(old.get_query_splitters()) == len(new.get_query_splitters()) and set(
+        [splitter.config_key() for splitter in old.get_query_splitters()]
+    ) == set([splitter.config_key() for splitter in new.get_query_splitters()])
     schema_old, schema_new = old.get_schema(), new.get_schema()
     assert schema_old.get_columns().columns == schema_new.get_columns().columns
 
@@ -78,40 +88,26 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 
 
 class TestStorageConfiguration(ConfigurationTest):
+    python_storages: list[ReadableTableStorage] = [
+        distributions_bucket_storage,
+        distributions_storage,
+        sets_bucket_storage,
+        sets_storage,
+        transactions,
+    ]
+
     def test_config_file_discovery(self) -> None:
         assert all(
             storage.get_storage_key() in CONFIG_BUILT_STORAGES
-            for storage in [
-                distributions_bucket_storage,
-                distributions_storage,
-                sets_bucket_storage,
-                sets_storage,
-            ]
+            for storage in self.python_storages
         )
-        assert len(CONFIG_BUILT_STORAGES) == 4
+        assert len(CONFIG_BUILT_STORAGES) == len(self.python_storages)
 
-    def test_distributions_storage(self) -> None:
-        _deep_compare_storages(
-            distributions_storage,
-            CONFIG_BUILT_STORAGES[distributions_storage.get_storage_key()],
-        )
-
-    def test_distributions_bucket_storage(self) -> None:
-        _deep_compare_storages(
-            distributions_bucket_storage,
-            CONFIG_BUILT_STORAGES[distributions_bucket_storage.get_storage_key()],
-        )
-
-    def test_sets_storage(self) -> None:
-        _deep_compare_storages(
-            sets_storage, CONFIG_BUILT_STORAGES[sets_storage.get_storage_key()]
-        )
-
-    def test_sets_bucket_storage(self) -> None:
-        _deep_compare_storages(
-            sets_bucket_storage,
-            CONFIG_BUILT_STORAGES[sets_bucket_storage.get_storage_key()],
-        )
+    def test_compare_storages(self) -> None:
+        for storage in self.python_storages:
+            _deep_compare_storages(
+                storage, CONFIG_BUILT_STORAGES[storage.get_storage_key()]
+            )
 
     def test_processor_with_constructor(self) -> None:
         yml_text = """

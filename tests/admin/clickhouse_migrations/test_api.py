@@ -83,6 +83,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
             "migration_id": "0003_sessions_matview",
             "status": "completed",
         },
+        {"blocking": False, "migration_id": "0004_sessions_ttl", "status": "completed"},
     ]
 
     def sort_by_migration_id(migration: Any) -> Any:
