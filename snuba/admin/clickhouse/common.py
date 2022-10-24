@@ -110,3 +110,21 @@ def get_ro_query_node_connection(
 
     CLUSTER_CONNECTIONS[storage_name] = connection
     return connection
+
+
+def validate_ro_query(sql_query: str) -> None:
+    """
+    Simple validation to ensure query only attempts read queries.
+
+    Raises InvalidCustomQuery if query is invalid or not allowed.
+    """
+    sql_query = " ".join(sql_query.split())
+    lowered = sql_query.lower().strip()
+
+    if not lowered.startswith("select"):
+        raise InvalidCustomQuery("Only SELECT queries are allowed")
+
+    disallowed_keywords = ["insert", ";"]
+    for kw in disallowed_keywords:
+        if kw in lowered:
+            raise InvalidCustomQuery(f"{kw} is not allowed in the query")

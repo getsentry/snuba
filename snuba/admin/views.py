@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stdout
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 import structlog
@@ -15,6 +15,7 @@ from snuba.admin.auth import UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
+from snuba.admin.clickhouse.querylog import run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
@@ -247,23 +248,45 @@ def clickhouse_trace_query() -> Response:
             ),
             400,
         )
+    return __run_query(
+        run_query_and_get_trace, {"storage_name": storage, "query": raw_sql}
+    )
 
+
+@application.route("/clickhouse_querylog_query", methods=["POST"])
+def clickhouse_querylog_query() -> Response:
+    req = json.loads(request.data)
     try:
-        result = run_query_and_get_trace(storage, raw_sql)
-        trace_output = result.trace_output
-        return make_response(jsonify({"trace_output": trace_output}), 200)
-    except InvalidCustomQuery as err:
+        raw_sql = req["sql"]
+    except KeyError as e:
         return make_response(
             jsonify(
                 {
                     "error": {
-                        "type": "validation",
-                        "message": err.message or "Invalid query",
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
                     }
                 }
             ),
             400,
         )
+    return __run_query(run_querylog_query, {"query": raw_sql})
+
+
+def __run_query(
+    query_runner: Callable[..., Response], kwargs: dict[str, Any]
+) -> Response:
+    try:
+        result = query_runner(**kwargs)
+        rows = []
+        rows, columns = cast(List[List[str]], result.results), result.meta
+
+        if columns:
+            res = {}
+            res["column_names"] = [name for name, _ in columns]
+            res["rows"] = [[str(col) for col in row] for row in rows]
+
+            return make_response(jsonify(res), 200)
     except ClickhouseError as err:
         details = {
             "type": "clickhouse",
