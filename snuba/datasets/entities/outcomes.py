@@ -66,6 +66,7 @@ class OutcomesEntity(Entity):
             required_time_column="timestamp",
             # WARN mode logged way too many events to Sentry
             validate_data_model=ColumnValidationMode.WARN,
+            entity_subscription=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

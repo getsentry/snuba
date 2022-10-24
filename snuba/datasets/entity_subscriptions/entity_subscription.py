@@ -62,6 +62,36 @@ class EntitySubscriptionValidation:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
 
+class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
+    def __init__(self, data_dict: Mapping[str, Any] = {}) -> None:
+        super().__init__(data_dict)
+        if "organization" in data_dict:
+            try:
+                self.organization: int = data_dict["organization"]
+            except KeyError:
+                raise InvalidQueryException(
+                    "organization param is required for any query over sessions entity"
+                )
+
+    def get_entity_subscription_conditions_for_snql(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Expression]:
+        if hasattr(self, "organization"):
+            return [
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "org_id"),
+                    Literal(None, self.organization),
+                ),
+            ]
+        return []
+
+    def to_dict(self) -> Mapping[str, Any]:
+        if hasattr(self, "organization"):
+            return {"organization": self.organization}
+        return {}
+
+
 class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 2
 

@@ -21,6 +21,10 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    BaseEntitySubscription,
+    EntitySubscription,
+)
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -52,6 +56,7 @@ class MetricsEntity(Entity, ABC):
         mappers: TranslationMappers,
         abstract_column_set: Optional[ColumnSet] = None,
         validators: Optional[Sequence[QueryValidator]] = None,
+        entity_subscription: Optional[EntitySubscription] = None,
     ) -> None:
         writable_storage = (
             get_writable_storage(writable_storage_key) if writable_storage_key else None
@@ -97,6 +102,7 @@ class MetricsEntity(Entity, ABC):
             writable_storage=writable_storage,
             validators=validators,
             required_time_column="timestamp",
+            entity_subscription=entity_subscription,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
@@ -126,6 +132,7 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
+            entity_subscription=BaseEntitySubscription(),
         )
 
 
@@ -141,6 +148,7 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
+            entity_subscription=BaseEntitySubscription(),
         )
 
 

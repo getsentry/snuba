@@ -444,6 +444,10 @@ V1_ENTITY_SCHEMA = {
             "type": ["string", "null"],
             "description": "The column name, if this entity is partitioned, to select slice",
         },
+        "has_subscriptions": {
+            "type": "boolean",
+            "description": "Marks the entity has subscriptions",
+        },
     },
     "required": [
         "version",

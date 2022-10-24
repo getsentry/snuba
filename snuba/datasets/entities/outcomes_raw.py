@@ -33,6 +33,7 @@ class OutcomesRawEntity(Entity):
             writable_storage=None,
             validators=[EntityRequiredColumnValidator({"org_id"})],
             required_time_column="timestamp",
+            entity_subscription=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

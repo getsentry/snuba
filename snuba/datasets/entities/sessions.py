@@ -280,6 +280,7 @@ class SessionsEntity(Entity):
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             required_time_column="started",
             validate_data_model=ColumnValidationMode.WARN,
+            entity_subscription=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
