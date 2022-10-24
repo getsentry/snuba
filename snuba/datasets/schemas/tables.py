@@ -52,14 +52,14 @@ class TableSchema(Schema):
         dist_table_name: str,
         storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
-        part_format: Optional[Sequence[util.PartSegment]] = None,
+        partition_format: Optional[Sequence[util.PartSegment]] = None,
     ):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
         self.__storage_set_key = storage_set_key
         self.__columns = columns
         self.__mandatory_conditions = mandatory_conditions
-        self.__part_format = part_format
+        self.__partition_format = partition_format
 
     def get_data_source(self) -> TableSource:
         """
@@ -93,11 +93,11 @@ class TableSchema(Schema):
             else self.__dist_table_name
         )
 
-    def get_part_format(self) -> Optional[Sequence[util.PartSegment]]:
+    def get_partition_format(self) -> Optional[Sequence[util.PartSegment]]:
         """
         Partition format required for cleanup and optimize.
         """
-        return self.__part_format
+        return self.__partition_format
 
 
 class WritableTableSchema(TableSchema):
