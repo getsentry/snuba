@@ -515,6 +515,10 @@ V1_MIGRATION_GROUP_SCHEMA = {
             "type": "boolean",
             "description": "Flag to determine if migration group is optional",
         },
+        "execute_before": {
+            "type": "string",
+            "description": "The migration group this should be run directly before.",
+        },
         "migrations": {
             "type": "array",
             "items": {"type": "string", "description": "Names of migrations"},

@@ -1,5 +1,6 @@
 from snuba.migrations.groups import (
     OPTIONAL_GROUPS,
+    REGISTERED_GROUPS,
     REGISTERED_GROUPS_LOOKUP,
     MigrationGroup,
     get_group_loader,
@@ -29,3 +30,14 @@ class TestMigrationGroupConfiguration(ConfigurationTest):
 
         m = generic_metrics_loader.load_migration("0005_sets_replace_mv")
         assert isinstance(m, Migration)
+
+    def test_transaction_group_order(self) -> None:
+        assert "transactions" in REGISTERED_GROUPS_LOOKUP
+
+        transactions_idx = REGISTERED_GROUPS.index(
+            ("transactions", get_group_loader(MigrationGroup("transactions")))
+        )
+        discover_idx = REGISTERED_GROUPS.index(
+            ("discover", get_group_loader(MigrationGroup("discover")))
+        )
+        assert transactions_idx == discover_idx - 1

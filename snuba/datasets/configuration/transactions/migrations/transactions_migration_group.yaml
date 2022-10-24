@@ -1,0 +1,24 @@
+version: v1
+kind: migration_group
+name: transactions
+optional: false
+execute_before: discover
+
+migrations:
+  - 0001_transactions
+  - 0002_transactions_onpremise_fix_orderby_and_partitionby
+  - 0003_transactions_onpremise_fix_columns
+  - 0004_transactions_add_tags_hash_map
+  - 0005_transactions_add_measurements
+  - 0006_transactions_add_http_fields
+  - 0007_transactions_add_discover_cols
+  - 0008_transactions_add_timestamp_index
+  - 0009_transactions_fix_title_and_message
+  - 0010_transactions_nullable_trace_id
+  - 0011_transactions_add_span_op_breakdowns
+  - 0012_transactions_add_spans
+  - 0013_transactions_reduce_spans_exclusive_time
+  - 0014_transactions_remove_flattened_columns
+  - 0015_transactions_add_source_column
+  - 0016_transactions_add_group_ids_column
+  - 0017_transactions_add_app_start_type_column

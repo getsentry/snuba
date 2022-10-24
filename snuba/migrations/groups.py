@@ -65,6 +65,7 @@ class ConfigurationLoader(DirectoryLoader):
         ]
         self.optional = self.migration_group.get("optional", False)
         migration_path = migration_path or "snuba.snuba_migrations"
+        self.execute_before = self.migration_group.get("execute_before")
         super().__init__(f"{migration_path}.{self.migration_group_name}")
 
     def get_migrations(self) -> Sequence[str]:
@@ -101,32 +102,6 @@ class EventsLoader(DirectoryLoader):
             "0014_backfill_errors",
             "0015_truncate_events",
             "0016_drop_legacy_events",
-        ]
-
-
-class TransactionsLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.transactions")
-
-    def get_migrations(self) -> Sequence[str]:
-        return [
-            "0001_transactions",
-            "0002_transactions_onpremise_fix_orderby_and_partitionby",
-            "0003_transactions_onpremise_fix_columns",
-            "0004_transactions_add_tags_hash_map",
-            "0005_transactions_add_measurements",
-            "0006_transactions_add_http_fields",
-            "0007_transactions_add_discover_cols",
-            "0008_transactions_add_timestamp_index",
-            "0009_transactions_fix_title_and_message",
-            "0010_transactions_nullable_trace_id",
-            "0011_transactions_add_span_op_breakdowns",
-            "0012_transactions_add_spans",
-            "0013_transactions_reduce_spans_exclusive_time",
-            "0014_transactions_remove_flattened_columns",
-            "0015_transactions_add_source_column",
-            "0016_transactions_add_group_ids_column",
-            "0017_transactions_add_app_start_type_column",
         ]
 
 
@@ -280,7 +255,6 @@ CONFIG_BUILT_MIGRATIONS = {
 REGISTERED_GROUPS: list[tuple[str, GroupLoader]] = [
     ("system", SystemLoader()),
     ("events", EventsLoader()),
-    ("transactions", TransactionsLoader()),
     ("discover", DiscoverLoader()),
     ("metrics", MetricsLoader()),
     ("outcomes", OutcomesLoader()),
@@ -291,12 +265,26 @@ REGISTERED_GROUPS: list[tuple[str, GroupLoader]] = [
     ("replays", ReplaysLoader()),
 ]
 
-# TODO: config defined migrations are not run in any particular order.
-# In the future we will need the ability to ensure migrations run in
-# the right order.
-REGISTERED_GROUPS.extend(
-    [(name, loader) for name, loader in CONFIG_BUILT_MIGRATIONS.items()]
-)
+# Config built migrations can specify a migration that they should execute before, so
+# we can preserve the order of execution. This logic is a little more confusing than
+# it needs to be at the moment since migrations can be in the config or the registered
+# group.
+inserted = set(rg[0] for rg in REGISTERED_GROUPS)
+final_length = len(REGISTERED_GROUPS) + len(CONFIG_BUILT_MIGRATIONS)
+while len(REGISTERED_GROUPS) < final_length:
+    for new_name, new_loader in CONFIG_BUILT_MIGRATIONS.items():
+        if new_name in inserted:
+            continue
+        elif new_loader.execute_before is None:
+            REGISTERED_GROUPS.append((new_name, new_loader))
+        else:
+            for idx in range(len(REGISTERED_GROUPS)):
+                if REGISTERED_GROUPS[idx][0] == new_loader.execute_before:
+                    REGISTERED_GROUPS.insert(idx, (new_name, new_loader))
+                    break
+
+        inserted.add(new_name)
+
 
 REGISTERED_GROUPS_LOOKUP = {k: v for (k, v) in REGISTERED_GROUPS}
 
