@@ -108,7 +108,7 @@ class OptimizedPartitionTracker:
 
         """
         all_partitions = self.get_all_partitions()
-        completed_partitions = self.get_scheduled_partitions()
+        scheduled_partitions = self.get_scheduled_partitions()
 
         if not all_partitions:
             raise NoOptimizedStateException
