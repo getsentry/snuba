@@ -24,12 +24,12 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.generic_metrics_processor import (
+from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.datasets.metrics_messages import InputType
+from snuba.datasets.processors.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
-from snuba.datasets.message_filters import KafkaHeaderSelectFilter
-from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -171,7 +171,7 @@ distributions_bucket_storage = WritableTableStorage(
     schema=WritableTableSchema(
         columns=ColumnSet([*common_columns, *bucket_columns]),
         local_table_name="generic_metric_distributions_raw_local",
-        dist_table_name="generic_metric_distributions_raw_local",
+        dist_table_name="generic_metric_distributions_raw_dist",
         storage_set_key=StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
     ),
     query_processors=[],

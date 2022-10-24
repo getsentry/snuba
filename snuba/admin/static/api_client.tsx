@@ -16,6 +16,8 @@ import {
 import { TracingRequest, TracingResult } from "./tracing/types";
 import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
+import { KafkaTopicData } from "./kafka/types";
+
 interface Client {
   getConfigs: () => Promise<Config[]>;
   createNewConfig: (
@@ -37,6 +39,7 @@ interface Client {
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
+  getKafkaData: () => Promise<KafkaTopicData[]>;
 }
 
 function Client() {
@@ -180,6 +183,12 @@ function Client() {
           return resp.json().then(Promise.reject.bind(Promise));
         }
       });
+    },
+    getKafkaData: () => {
+      const url = baseUrl + "kafka";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
     },
   };
 }

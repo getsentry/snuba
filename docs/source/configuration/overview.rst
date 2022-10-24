@@ -1,9 +1,19 @@
 .. include:: intro.rst
 
-Contents:
+Schemas:
 ---------
 
 .. toctree::
-   :maxdepth: 1
+	:maxdepth: 1
 
-   dataset
+	dataset
+
+	entity
+
+	entity_subscription
+
+	migration_group
+
+	readable_storage
+
+	writable_storage

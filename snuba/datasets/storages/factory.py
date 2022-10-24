@@ -4,9 +4,11 @@ import logging
 from glob import glob
 from typing import Generator
 
+import sentry_sdk
+
 from snuba import settings
 from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.configuration.storage_builder import build_storage
+from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import get_config
@@ -19,22 +21,23 @@ USE_CONFIG_BUILT_STORAGES = "use_config_built_storages"
 
 class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def __init__(self) -> None:
-        self._config_built_storages: dict[StorageKey, Storage] = {}
-        self._writable_storages: dict[StorageKey, Storage] = {}
-        self._dev_writable_storages: dict[StorageKey, Storage] = {}
-        self._cdc_storages: dict[StorageKey, Storage] = {}
-        self._dev_cdc_storages: dict[StorageKey, Storage] = {}
-        self._non_writable_storages: dict[StorageKey, Storage] = {}
-        self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
-        self._all_storages: dict[StorageKey, Storage] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(op="initialize", description="Storage Factory"):
+            self._config_built_storages: dict[StorageKey, Storage] = {}
+            self._writable_storages: dict[StorageKey, Storage] = {}
+            self._dev_writable_storages: dict[StorageKey, Storage] = {}
+            self._cdc_storages: dict[StorageKey, Storage] = {}
+            self._dev_cdc_storages: dict[StorageKey, Storage] = {}
+            self._non_writable_storages: dict[StorageKey, Storage] = {}
+            self._dev_non_writable_storages: dict[StorageKey, Storage] = {}
+            self._all_storages: dict[StorageKey, Storage] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
 
         self._config_built_storages = {
             storage.get_storage_key(): storage
             for storage in [
-                build_storage(config_file)
+                build_storage_from_config(config_file)
                 for config_file in glob(
                     settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
                 )
@@ -99,9 +102,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         )
         from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
-        from snuba.datasets.storages.transactions_ro import (
-            storage as transactions_ro_storage,
-        )
         from snuba.datasets.storages.transactions_v2 import (
             storage as transactions_v2_storage,
         )
@@ -149,7 +149,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     outcomes_hourly_storage,
                     sessions_hourly_storage,
                     org_sessions_hourly_storage,
-                    transactions_ro_storage,
                     profiles_writable_storage,
                     functions_ro_storage,
                     errors_v2_ro_storage,

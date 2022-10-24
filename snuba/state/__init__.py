@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, annotations
 
 import logging
 import time
@@ -22,7 +22,7 @@ from confluent_kafka import Message as KafkaMessage
 from confluent_kafka import Producer
 
 from snuba import environment, settings
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
@@ -30,8 +30,8 @@ from snuba.utils.streams.topics import Topic
 metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
-kfk = None
-rds = redis_client
+kfk: Producer | None = None
+rds = get_redis_client(RedisClientKey.CONFIG)
 
 ratelimit_prefix = "snuba-ratelimit:"
 query_lock_prefix = "snuba-query-lock:"

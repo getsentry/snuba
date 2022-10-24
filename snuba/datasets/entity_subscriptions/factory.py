@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Generator, Mapping, MutableMapping, Sequence, Type
 
-from snuba import settings
+import sentry_sdk
+
 from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
 )
@@ -14,11 +17,14 @@ class _EntitySubscriptionFactory(
     ConfigComponentFactory[Type[EntitySubscription], EntityKey]
 ):
     def __init__(self) -> None:
-        self._entity_subscription_map: MutableMapping[
-            EntityKey, Type[EntitySubscription]
-        ] = {}
-        self._name_map: MutableMapping[Type[EntitySubscription], EntityKey] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(
+            op="initialize", description="Entity Subscription Factory"
+        ):
+            self._entity_subscription_map: MutableMapping[
+                EntityKey, Type[EntitySubscription]
+            ] = {}
+            self._name_map: MutableMapping[Type[EntitySubscription], EntityKey] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
         from snuba.datasets.entity_subscriptions.entity_subscription import (
@@ -47,16 +53,15 @@ class _EntitySubscriptionFactory(
             }
         )
 
-        if settings.PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS:
-            self._entity_subscription_map.update(
-                {
-                    key: build_entity_subscription_from_config(path)
-                    for (
-                        key,
-                        path,
-                    ) in entity_subscription_to_config_path_mapping.items()
-                }
-            )
+        self._entity_subscription_map.update(
+            {
+                key: build_entity_subscription_from_config(path)
+                for (
+                    key,
+                    path,
+                ) in entity_subscription_to_config_path_mapping.items()
+            }
+        )
 
         self._name_map = {v: k for k, v in self._entity_subscription_map.items()}
 
@@ -91,7 +96,7 @@ class InvalidEntitySubscriptionError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-_ENT_SUB_FACTORY = None
+_ENT_SUB_FACTORY: _EntitySubscriptionFactory | None = None
 
 
 def _ent_sub_factory() -> _EntitySubscriptionFactory:

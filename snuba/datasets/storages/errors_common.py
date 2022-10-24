@@ -9,6 +9,10 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
+from snuba.datasets.plans.splitters.strategies import (
+    ColumnSplitQueryStrategy,
+    TimeSplitQueryStrategy,
+)
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.physical.arrayjoin_keyvalue_optimizer import (
@@ -19,6 +23,9 @@ from snuba.query.processors.physical.empty_tag_condition_processor import (
 )
 from snuba.query.processors.physical.events_bool_contexts import (
     EventsBooleanContextsProcessor,
+)
+from snuba.query.processors.physical.hexint_column_processor import (
+    HexIntColumnProcessor,
 )
 from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.physical.mapping_promoter import MappingColumnPromoter
@@ -32,21 +39,15 @@ from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.query.processors.physical.type_condition_optimizer import (
     TypeConditionOptimizer,
 )
-from snuba.query.processors.physical.type_converters.hexint_column_processor import (
-    HexIntColumnProcessor,
-)
-from snuba.query.processors.physical.type_converters.uuid_array_column_processor import (
-    UUIDArrayColumnProcessor,
-)
-from snuba.query.processors.physical.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
 from snuba.query.processors.physical.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
 from snuba.query.processors.physical.user_column_processor import UserColumnProcessor
+from snuba.query.processors.physical.uuid_array_column_processor import (
+    UUIDArrayColumnProcessor,
+)
+from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
     "event_id",

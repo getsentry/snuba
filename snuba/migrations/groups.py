@@ -174,6 +174,7 @@ class ReplaysLoader(DirectoryLoader):
             "0003_alter_url_allow_null",
             "0004_add_error_ids_column",
             "0005_add_urls_user_agent_replay_start_timestamp",
+            "0006_add_is_archived_column",
         ]
 
 
@@ -225,7 +226,12 @@ class SessionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.sessions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_sessions", "0002_sessions_aggregates", "0003_sessions_matview"]
+        return [
+            "0001_sessions",
+            "0002_sessions_aggregates",
+            "0003_sessions_matview",
+            "0004_sessions_ttl",
+        ]
 
 
 class QuerylogLoader(DirectoryLoader):
@@ -245,6 +251,7 @@ class ProfilesLoader(DirectoryLoader):
             "0001_profiles",
             "0002_disable_vertical_merge_algorithm",
             "0003_add_device_architecture",
+            "0004_drop_profile_column",
         ]
 
 

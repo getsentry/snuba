@@ -108,6 +108,48 @@ class ColumnToFunction(ColumnToExpression):
 
 
 @dataclass(frozen=True)
+class ColumnToIPAddress(ColumnToFunction):
+    """
+    Custom column mapper for mapping columns to IP Address.
+    TODO: Can remove when we support dynamic expression parsing in config
+    """
+
+    def __init__(
+        self, from_table_name: str, from_col_name: str, to_function_name: str
+    ) -> None:
+        to_function_params: Tuple[FunctionCallExpr, ...] = (
+            FunctionCallExpr(
+                None,
+                "IPv4NumToString",
+                (ColumnExpr(None, None, "ip_address_v4"),),
+            ),
+            FunctionCallExpr(
+                None,
+                "IPv6NumToString",
+                (ColumnExpr(None, None, "ip_address_v6"),),
+            ),
+        )
+        super().__init__(
+            from_table_name, from_col_name, to_function_name, to_function_params
+        )
+
+
+@dataclass(frozen=True)
+class ColumnToNullIf(ColumnToFunction):
+    """
+    Custom column mapper for mapping columns to null.
+    TODO: Can remove when we support dynamic expression parsing in config
+    """
+
+    def __init__(self, from_table_name: Optional[str], from_col_name: str) -> None:
+        to_function_params: Tuple[ColumnExpr, LiteralExpr] = (
+            ColumnExpr(None, from_table_name, from_col_name),
+            LiteralExpr(None, ""),
+        )
+        super().__init__(from_table_name, from_col_name, "nullIf", to_function_params)
+
+
+@dataclass(frozen=True)
 class ColumnToCurriedFunction(ColumnToExpression):
     """
     Maps a column into a curried function expression that preserves the alias.
@@ -137,10 +179,6 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
     to_nested_col_name: str
     value_subcolumn_name: str = "value"
     nullable: bool = False
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "subscriptable"
 
     def attempt_map(
         self,
@@ -279,10 +317,6 @@ class FunctionNameMapper(FunctionCallMapper):
 
     from_name: str
     to_name: str
-
-    @classmethod
-    def config_key(cls) -> str:
-        return "simple_func"
 
     def attempt_map(
         self,

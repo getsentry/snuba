@@ -1,8 +1,9 @@
-import logging
 from abc import ABC
 from datetime import datetime
 from enum import Enum
 from typing import Any, MutableMapping, Optional, TypedDict, Union
+
+import structlog
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
@@ -48,7 +49,7 @@ class NotificationBase(ABC):
 
 class RuntimeConfigLogClient(NotificationBase):
     def __init__(self) -> None:
-        self.logger = logging.getLogger("runtime-config.notify")
+        self.logger = structlog.get_logger().bind(module=__name__)
 
     def _get_value_text(
         self,
@@ -84,18 +85,17 @@ class RuntimeConfigLogClient(NotificationBase):
                 "new": 1, // or None if removed
             }
 
-        The text generated will look like:
-          * meredith@sentry.io added enable_events_read_only_table (value:1)
-          * meredith@sentry.io removed enable_events_read_only_table (value:0)
-          * meredith@sentry.io updated enable_events_read_only_table (from value:0 to value:1)
-
         """
 
-        base_text = f'{user} {action} {data["option"]}'
-        value_text = self._get_value_text(action, data["old"], data["new"])
-        full_text = f"{base_text} {value_text}"
-
-        self.logger.info(full_text)
+        self.logger.info(
+            event="value_updated",
+            user=user,
+            action=action.value,
+            option=data["option"],
+            old=data["old"],
+            new=data["new"],
+            timestamp=timestamp,
+        )
 
 
 class RuntimeConfigSlackClient(NotificationBase):

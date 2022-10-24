@@ -9,12 +9,12 @@ from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, IPv4, IPv
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.replays_processor import ReplaysProcessor
+from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.physical.conditions_enforcer import ProjectIdEnforcer
+from snuba.query.processors.condition_checkers.checkers import ProjectIdEnforcer
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
 from snuba.utils.schemas import Nested
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
@@ -41,6 +41,7 @@ columns = ColumnSet(
         ("title", String(Modifiers(readonly=True))),
         ("url", String(Modifiers(nullable=True))),
         ("urls", Array(String())),
+        ("is_archived", UInt(8, Modifiers(nullable=True))),
         ### common sentry event columns
         ("project_id", UInt(64)),
         # release/environment info

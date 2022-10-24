@@ -4,7 +4,7 @@ from typing import Any, Iterable, Mapping, Tuple
 
 import pytest
 
-from snuba.datasets.generic_metrics_processor import (
+from snuba.datasets.processors.generic_metrics_processor import (
     GenericMetricsBucketProcessor,
     GenericSetsMetricsProcessor,
 )

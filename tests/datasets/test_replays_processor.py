@@ -8,7 +8,7 @@ from hashlib import md5
 from typing import Any, Mapping
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.replays_processor import ReplaysProcessor
+from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.processor import InsertBatch
 from snuba.util import force_bytes
 
@@ -20,9 +20,10 @@ class ReplayEvent:
     trace_ids: list[str]
     error_ids: list[str]
     urls: list[str]
+    is_archived: int | None
     timestamp: float
     replay_start_timestamp: float | None
-    platform: str
+    platform: str | None
     environment: str
     release: str
     dist: str
@@ -50,6 +51,7 @@ class ReplayEvent:
             "segment_id": self.segment_id,
             "tags": {"customtag": "is_set", "transaction": self.title},
             "urls": self.urls,
+            "is_archived": self.is_archived,
             "trace_ids": self.trace_ids,
             "error_ids": self.error_ids,
             "dist": self.dist,
@@ -142,6 +144,7 @@ class ReplayEvent:
             "release": self.release,
             "dist": self.dist,
             "urls": self.urls,
+            "is_archived": 1 if self.is_archived is True else None,
             "user_id": self.user_id,
             "user_name": self.user_name,
             "user_email": self.user_email,
@@ -194,6 +197,7 @@ class TestReplaysProcessor:
             platform="python",
             dist="",
             urls=["http://localhost:8001"],
+            is_archived=True,
             user_name="me",
             user_id="232",
             user_email="test@test.com",
@@ -229,9 +233,10 @@ class TestReplaysProcessor:
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             replay_start_timestamp=None,
-            platform="python",
+            platform=None,
             dist="",
             urls=[],
+            is_archived=None,
             os_name=None,
             os_version=None,
             browser_name=None,

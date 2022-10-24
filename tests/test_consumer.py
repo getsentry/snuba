@@ -12,7 +12,7 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
-from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
+from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
 from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 

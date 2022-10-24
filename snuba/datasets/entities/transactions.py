@@ -1,8 +1,6 @@
 from abc import ABC
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
-from snuba import settings, state
-from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -11,24 +9,18 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.clickhouse_upgrade import Option, RolloutSelector
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.plans.single_storage import (
-    SelectedStorageQueryPlanBuilder,
-    SingleStorageQueryPlanBuilder,
-)
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.pipeline.pipeline_delegator import PipelineDelegator
-from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query import ProcessableQuery
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.processors.logical.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.logical.custom_function import (
+    ApdexProcessor,
+    FailureRateProcessor,
+)
 from snuba.query.processors.logical.object_id_rate_limiter import (
     ProjectRateLimiterProcessor,
     ProjectReferrerRateLimiter,
@@ -37,11 +29,6 @@ from snuba.query.processors.logical.object_id_rate_limiter import (
 from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
-from snuba.query.processors.performance_expressions import (
-    apdex_processor,
-    failure_rate_processor,
-)
-from snuba.query.query_settings import QuerySettings
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 transaction_translator = TranslationMappers(
@@ -103,89 +90,18 @@ transaction_translator = TranslationMappers(
 )
 
 
-class TransactionsQueryStorageSelector(QueryStorageSelector):
-    def __init__(self, mappers: TranslationMappers) -> None:
-        self.__transactions_table = get_writable_storage(StorageKey.TRANSACTIONS)
-        self.__transactions_ro_table = get_storage(StorageKey.TRANSACTIONS_RO)
-        self.__mappers = mappers
-
-    def select_storage(
-        self, query: Query, query_settings: QuerySettings
-    ) -> StorageAndMappers:
-        readonly_referrer = (
-            query_settings.referrer
-            in settings.TRANSACTIONS_DIRECT_TO_READONLY_REFERRERS
-        )
-        use_readonly_storage = readonly_referrer or state.get_config(
-            "enable_transactions_readonly_table", False
-        )
-        storage = (
-            self.__transactions_ro_table
-            if use_readonly_storage
-            else self.__transactions_table
-        )
-        return StorageAndMappers(storage, self.__mappers)
-
-
-def v2_selector_function(query: Query, referrer: str) -> Tuple[str, List[str]]:
-    if settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME is None or not isinstance(
-        query, ProcessableQuery
-    ):
-        return ("transactions_v1", [])
-
-    time_range = get_time_range(query, "timestamp")
-    if time_range == (None, None):
-        time_range = get_time_range(query, "finish_ts")
-    if (
-        time_range[0] is None
-        or time_range[0] < settings.TRANSACTIONS_UPGRADE_BEGINING_OF_TIME
-    ):
-        return ("transactions_v1", [])
-
-    mapping = {
-        Option.TRANSACTIONS: "transactions_v1",
-        Option.TRANSACTIONS_V2: "transactions_v2",
-    }
-    choice = RolloutSelector(
-        Option.TRANSACTIONS, Option.TRANSACTIONS_V2, "transactions"
-    ).choose(referrer)
-    if choice.secondary is None:
-        return (mapping[choice.primary], [])
-    else:
-        return (mapping[choice.primary], [mapping[choice.secondary]])
-
-
 class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
-        mappers = (
-            transaction_translator
-            if custom_mappers is None
-            else transaction_translator.concat(custom_mappers)
-        )
 
-        v1_pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=TransactionsQueryStorageSelector(mappers=mappers)
-            ),
-        )
-
-        v2_pipeline_builder = SimplePipelineBuilder(
+        pipeline_builder = SimplePipelineBuilder(
             query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=get_storage(StorageKey.TRANSACTIONS_V2),
-                mappers=mappers,
+                storage=get_storage(StorageKey.TRANSACTIONS),
+                mappers=transaction_translator
+                if custom_mappers is None
+                else transaction_translator.concat(custom_mappers),
             )
-        )
-
-        pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan] = PipelineDelegator(
-            query_pipeline_builders={
-                "transactions_v1": v1_pipeline_builder,
-                "transactions_v2": v2_pipeline_builder,
-            },
-            selector_func=v2_selector_function,
-            split_rate_limiter=True,
-            ignore_secondary_exceptions=True,
         )
 
         super().__init__(
@@ -205,8 +121,8 @@ class BaseTransactionsEntity(Entity, ABC):
             ),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            apdex_processor(),
-            failure_rate_processor(),
+            ApdexProcessor(),
+            FailureRateProcessor(),
             ReferrerRateLimiterProcessor(),
             ProjectReferrerRateLimiter("project_id"),
             ProjectRateLimiterProcessor(project_column="project_id"),

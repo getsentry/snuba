@@ -1,9 +1,19 @@
-import os
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
+from __future__ import annotations
 
-from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
+import os
+from datetime import timedelta
+from pathlib import Path
+from typing import (
+    Any,
+    Mapping,
+    MutableMapping,
+    Sequence,
+    Set,
+    Tuple,
+    TypedDict,
+    TypeVar,
+)
+
 from snuba.settings.validation import validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -20,6 +30,17 @@ ADMIN_PORT = int(os.environ.get("ADMIN_PORT", 1219))
 ADMIN_URL = os.environ.get("ADMIN_URL", "http://localhost:1219")
 
 ADMIN_AUTH_PROVIDER = "NOOP"
+ADMIN_AUTH_JWT_AUDIENCE = ""
+
+# Migrations Groups that are allowed to be managed
+# in the snuba admin tool.
+ADMIN_ALLOWED_MIGRATION_GROUPS = {
+    "system",
+    "generic_metrics",
+    "profiles",
+    "functions",
+    "replays",
+}
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
@@ -28,17 +49,6 @@ DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
-
-# The number of physical partitions that we will need to map resources to
-# for storage partitioning
-LOCAL_PHYSICAL_PARTITIONS = 1
-# Mapping of logical (key) to physical (value) partitions for storages
-# that are partitioned in Snuba resources
-LOGICAL_PARTITION_MAPPING: Mapping[str, int] = {
-    str(x): 0 for x in range(0, SENTRY_LOGICAL_PARTITIONS)
-}
-# Storage names to apply dataset partitioning to
-PARTITIONED_STORAGES: Set[str] = set()
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -59,7 +69,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "querylog",
             "sessions",
             "transactions",
-            "transactions_ro",
             "transactions_v2",
             "errors_v2",
             "errors_v2_ro",
@@ -73,28 +82,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     },
 ]
 
-# Storage set keys should be defined either in CLUSTERS
-# or PARTITIONED_CLUSTERS. CLUSTERS will define clusters
-# which are not partitioned, i.e. are associated with
-# only the default partition_id (0). CLUSTERS is defined in
-# the default way, without adding partition id in
-# the storage_sets field.
-
-# We define partitioned clusters, i.e. clusters that reside
-# on multiple physical partitions (partition ids), in
-# PARTITIONED_CLUSTERS. We define all associated
-# (storage set, partition id) pairs in PARTITIONED_CLUSTERS
-# in the storage_sets field. Other fields are defined
-# in the same way as they are in CLUSTERS.
-PARTITIONED_CLUSTERS: Sequence[Mapping[str, Any]] = []
-
 # Dogstatsd Options
-DOGSTATSD_HOST = None
-DOGSTATSD_PORT = None
+DOGSTATSD_HOST: str | None = None
+DOGSTATSD_PORT: int | None = None
 DOGSTATSD_SAMPLING_RATES = {
-    "subscriptions.receive_latency": 0.1,
-    "subscriptions.process_message": 0.1,
-    "subscriptions.executor.latency": 0.1,
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
@@ -106,15 +97,54 @@ CLICKHOUSE_TRACE_USER = os.environ.get("CLICKHOUSE_TRACE_USER", "default")
 CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASS", "")
 
 # Redis Options
+
+
+class RedisClusterConfig(TypedDict):
+    use_redis_cluster: bool
+
+    cluster_startup_nodes: list[dict[str, Any]] | None
+    host: str
+    port: int
+    password: str | None
+    db: int
+    reinitialize_steps: int
+
+
+# The default cluster is configured using these global constants. If a config
+# for a particular usecase in REDIS_CLUSTERS is missing/null, the default
+# cluster is used.
 USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
 
-REDIS_CLUSTER_STARTUP_NODES = None
+REDIS_CLUSTER_STARTUP_NODES: list[dict[str, Any]] | None = None
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 REDIS_INIT_MAX_RETRIES = 3
 REDIS_REINITIALIZE_STEPS = 10
+
+T = TypeVar("T")
+
+
+class RedisClusters(TypedDict):
+    cache: RedisClusterConfig | None
+    rate_limiter: RedisClusterConfig | None
+    subscription_store: RedisClusterConfig | None
+    replacements_store: RedisClusterConfig | None
+    config: RedisClusterConfig | None
+    dlq: RedisClusterConfig | None
+    optimize: RedisClusterConfig | None
+
+
+REDIS_CLUSTERS: RedisClusters = {
+    "cache": None,
+    "rate_limiter": None,
+    "subscription_store": None,
+    "replacements_store": None,
+    "config": None,
+    "dlq": None,
+    "optimize": None,
+}
 
 USE_RESULT_CACHE = True
 
@@ -125,7 +155,7 @@ RECORD_QUERIES = False
 CONFIG_MEMOIZE_TIMEOUT = 10
 
 # Sentry Options
-SENTRY_DSN = None
+SENTRY_DSN: str | None = None
 SENTRY_TRACE_SAMPLE_RATE = 0
 
 # Snuba Admin Options
@@ -142,6 +172,7 @@ BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
 # Processor/Writer Options
 
+
 BROKER_CONFIG: Mapping[str, Any] = {
     # See https://github.com/getsentry/arroyo/blob/main/arroyo/backends/kafka/configuration.py#L16-L38 for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
@@ -152,11 +183,7 @@ BROKER_CONFIG: Mapping[str, Any] = {
 }
 
 # Mapping of default Kafka topic name to custom names
-KAFKA_TOPIC_MAP: Mapping[str, str] = {
-    # TODO: Remove once we are done splitting transactions from the shared events topic
-    "transactions": "events",
-    "snuba-transactions-commit-log": "snuba-commit-log",
-}
+KAFKA_TOPIC_MAP: Mapping[str, str] = {}
 
 # Mapping of default Kafka topic name to broker config
 KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
@@ -243,12 +270,6 @@ ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 # Enable replays ingestion
 ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 
-# Place the actual time we start ingesting on the new version.
-ERRORS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(2022, 3, 23, 0, 0, 0)
-TRANSACTIONS_UPGRADE_BEGINING_OF_TIME: Optional[datetime] = datetime(
-    2022, 2, 18, 0, 0, 0
-)
-
 MAX_ROWS_TO_CHECK_FOR_SIMILARITY = 1000
 
 # Start time from UTC 00:00:00 after which we are allowed to run optimize
@@ -270,14 +291,55 @@ OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
 
+ROOT_REPO_PATH = f"{Path(__file__).parent.parent.parent.as_posix()}"
+
 # File path glob for configs
 STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
-PREFER_PLUGGABLE_ENTITIES = False
-PREFER_PLUGGABLE_ENTITY_SUBSCRIPTIONS = False
+# Counter utility class window size in minutes
+COUNTER_WINDOW_SIZE = timedelta(minutes=10)
+
+
+# Slicing Configuration
+
+# Mapping of storage key to slice count
+# This is only for sliced storages
+SLICED_STORAGES: Mapping[str, int] = {}
+
+# Mapping storage key to a mapping of logical partition
+# to slice id
+LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
+
+# The slice configs below are the "SLICED" versions to
+# the equivalent default settings above. For example,
+# "SLICED_KAFKA_TOPIC_MAP" is the "SLICED" version of
+# "KAFKA_TOPIC_MAP". These should be filled out
+# for any corresponding sliced storages defined above,
+# with the applicable number of slices in mind.
+
+# Storage set keys should be defined either in CLUSTERS
+# or SLICED_CLUSTERS. CLUSTERS will define clusters
+# which are not sliced, i.e. are associated with
+# only the default slice_id (0). CLUSTERS is defined in
+# the default way, without adding slice id in
+# the storage_sets field. We define sliced clusters,
+# i.e. clusters that reside on multiple slices
+# in SLICED_CLUSTERS. We define all associated
+# (storage set, slice id) pairs in SLICED_CLUSTERS
+# in the storage_sets field. Other fields are defined
+# in the same way as they are in CLUSTERS.
+SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
+
+# Mapping of (logical topic names, slice id) pairs to custom physical topic names
+# This is only for sliced Kafka topics
+SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
+
+# Mapping of (logical topic names, slice id) pairs to broker config
+# This is only for sliced Kafka topics
+SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

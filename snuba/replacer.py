@@ -19,22 +19,24 @@ from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseNode,
 )
+from snuba.datasets.errors_replacer import Replacement as ErrorReplacement
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
 from snuba.state import get_config
+from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
 
 executor = ThreadPoolExecutor()
-
+redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 NODES_REFRESH_PERIOD = 10
 
 RESET_CHECK_CONFIG = "consumer_groups_to_reset_offset_check"
@@ -270,6 +272,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__storage = storage
 
         self.metrics = metrics
+        self.__processing_time_counter = Counter(consumer_group)
         processor = storage.get_table_writer().get_replacer_processor()
         assert (
             processor
@@ -389,8 +392,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
         for replacement in batch:
-
-            start_time = time.time()
+            start_time = datetime.now()
 
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
@@ -414,8 +416,14 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             self.__replacer_processor.post_replacement(replacement, count)
 
-            self._check_timing_and_write_to_redis(replacement, start_time)
+            self._check_timing_and_write_to_redis(replacement, start_time.timestamp())
 
+            if isinstance(replacement, ErrorReplacement):
+                project_id = replacement.get_project_id()
+                end_time = datetime.now()
+                self._attempt_emitting_metric_for_projects_exceeding_limit(
+                    start_time, end_time, project_id
+                )
         if need_optimize:
             from snuba.optimize import run_optimize
 
@@ -509,3 +517,25 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 str(message_metadata.partition_index),
             ]
         )
+
+    def _attempt_emitting_metric_for_projects_exceeding_limit(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        project_id: int,
+    ) -> None:
+        """
+        Attempts to emit a metric for projects which have a total processing time greater than some limit. This is accomplished
+        by first writing the time spent on processing the current replacement in Counter class. Then, a list of all projects
+        exceeding some limit is obtained and a metric is written to DataDog.
+        """
+        self.__processing_time_counter.record_time_spent(
+            project_id,
+            start_time,
+            end_time,
+        )
+        projects_exceeding_limit = (
+            self.__processing_time_counter.get_projects_exceeding_limit()
+        )
+        for project_id in projects_exceeding_limit:
+            self.metrics.increment("project_processing_time_exceeded_time_limit")

@@ -1,7 +1,7 @@
 from typing import Sequence
 from uuid import uuid1
 
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
@@ -30,7 +30,9 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
 
     def build_store(self, key: int = 1) -> RedisSubscriptionDataStore:
         return RedisSubscriptionDataStore(
-            redis_client, self.entity_key, PartitionId(key)
+            get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+            self.entity_key,
+            PartitionId(key),
         )
 
     def test_create(self) -> None:

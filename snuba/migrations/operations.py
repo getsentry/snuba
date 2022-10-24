@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -10,8 +10,11 @@ from snuba.migrations.table_engines import TableEngine
 
 
 class SqlOperation(ABC):
-    def __init__(self, storage_set: StorageSetKey):
+    def __init__(
+        self, storage_set: StorageSetKey, settings: Optional[Mapping[str, Any]] = None
+    ):
         self._storage_set = storage_set
+        self._settings = settings
 
     @property
     def storage_set(self) -> StorageSetKey:
@@ -26,7 +29,7 @@ class SqlOperation(ABC):
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
-            connection.execute(self.format_sql())
+            connection.execute(self.format_sql(), settings=self._settings)
 
     @abstractmethod
     def format_sql(self) -> str:
@@ -122,6 +125,50 @@ class TruncateTable(SqlOperation):
 
     def format_sql(self) -> str:
         return f"TRUNCATE TABLE IF EXISTS {self.__table_name};"
+
+
+class ModifyTableTTL(SqlOperation):
+    """
+    Modify TTL of a table
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        reference_column: str,
+        ttl_days: int,
+        materialize_ttl_on_modify: bool = False,
+    ):
+        self.__materialize_ttl_on_modify = 1 if materialize_ttl_on_modify else 0
+        super().__init__(
+            storage_set, {"materialize_ttl_on_modify": self.__materialize_ttl_on_modify}
+        )
+        self.__table_name = table_name
+        self.__reference_column = reference_column
+        self.__ttl_days = ttl_days
+
+    def format_sql(self) -> str:
+        return (
+            f"ALTER TABLE {self.__table_name} MODIFY TTL "
+            f"{self.__reference_column} + "
+            f"toIntervalDay({self.__ttl_days});"
+        )
+
+
+class RemoveTableTTL(SqlOperation):
+    """
+    Remove TTL from a table.
+    NOTE: This cannot be used right now since Clickhouse version 20.3 does not
+    support REMOVE TTL command
+    """
+
+    def __init__(self, storage_set: StorageSetKey, table_name: str):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+
+    def format_sql(self) -> str:
+        return f"ALTER TABLE {self.__table_name} REMOVE TTL;"
 
 
 class AddColumn(SqlOperation):

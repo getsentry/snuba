@@ -1,18 +1,23 @@
 from __future__ import annotations
 
-import logging
-from typing import Any, List, Optional, Sequence, Tuple, cast
+import io
+from contextlib import redirect_stdout
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
+import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
+from structlog.contextvars import bind_contextvars, clear_contextvars
+from werkzeug.routing import BaseConverter
 
-from snuba import state
+from snuba import settings, state
 from snuba.admin.auth import UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -25,11 +30,14 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
+from snuba.migrations.errors import MigrationError
+from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
@@ -48,9 +56,18 @@ def handle_invalid_json(exception: UnauthorizedException) -> Response:
 
 
 @application.before_request
+def set_logging_context() -> None:
+    clear_contextvars()
+    bind_contextvars(endpoint=request.endpoint, user_ip=request.remote_addr)
+
+
+@application.before_request
 def authorize() -> None:
-    user = authorize_request()
-    g.user = user
+    logger.debug("authorize.entered")
+    if request.endpoint != "health":
+        user = authorize_request()
+        logger.info("authorize.finished", user=user)
+        g.user = user
 
 
 @application.route("/")
@@ -63,10 +80,106 @@ def health() -> Response:
     return Response("OK", 200)
 
 
+@application.route("/migrations/groups")
+def migrations_groups() -> Response:
+    res: List[Mapping[str, MigrationGroup | Sequence[str]]] = []
+    for migration_group in get_active_migration_groups():
+        if migration_group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+            group_migrations = get_group_loader(migration_group).get_migrations()
+            res.append({"group": migration_group, "migration_ids": group_migrations})
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/migrations/<group>/list")
+def migrations_groups_list(group: str) -> Response:
+
+    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+        return make_response(jsonify({"error": "Group not allowed"}), 400)
+
+    runner = Runner()
+    for runner_group, runner_group_migrations in runner.show_all():
+        if runner_group == MigrationGroup(group):
+            return make_response(
+                jsonify(
+                    [
+                        {
+                            "migration_id": migration_id,
+                            "status": status.value,
+                            "blocking": blocking,
+                        }
+                        for migration_id, status, blocking in runner_group_migrations
+                    ]
+                ),
+                200,
+            )
+    return make_response(jsonify({"error": "Invalid group"}), 400)
+
+
+class MigrationActionConverter(BaseConverter):
+    regex = r"(?:run|reverse)"
+
+
+application.url_map.converters["migration_action"] = MigrationActionConverter
+
+
+@application.route(
+    "/migrations/<group>/<migration_action:action>/<migration_id>",
+    methods=["POST"],
+)
+def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
+    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+        return make_response(jsonify({"error": "Group not allowed"}), 400)
+
+    runner = Runner()
+    migration_group = MigrationGroup(group)
+    migration_key = MigrationKey(migration_group, migration_id)
+
+    def str_to_bool(s: str) -> bool:
+        return s.strip().lower() in ("yes", "true", "t", "1")
+
+    force = request.args.get("force", False, type=str_to_bool)
+    fake = request.args.get("fake", False, type=str_to_bool)
+    dry_run = request.args.get("dry_run", False, type=str_to_bool)
+
+    def do_action() -> None:
+        if action == "run":
+            runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
+        else:
+            runner.reverse_migration(
+                migration_key, force=force, fake=fake, dry_run=dry_run
+            )
+
+    try:
+        # temporarily redirect stdout to a buffer so we can return it
+        with io.StringIO() as output:
+            with redirect_stdout(output):
+                do_action()
+            return make_response(jsonify({"stdout": output.getvalue()}), 200)
+
+    except KeyError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "Group not found"}), 400)
+    except MigrationError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "migration error: " + err.message}), 400)
+    except ClickhouseError as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": "clickhouse error: " + err.message}), 400
+        )
+
+    return Response("OK", 200)
+
+
 @application.route("/clickhouse_queries")
 def clickhouse_queries() -> Response:
     res = [q.to_json() for q in SystemQuery.all_queries()]
     return make_response(jsonify(res), 200)
+
+
+@application.route("/kafka")
+def kafka_topics() -> Response:
+    return make_response(jsonify(get_broker_data()), 200)
 
 
 # Sample cURL command:

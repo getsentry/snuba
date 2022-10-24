@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import os
+import tempfile
+
+from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.factory import get_config_built_storages
+
+# this has to be done before the storage import because there's a cyclical dependency error
+CONFIG_BUILT_STORAGES = get_config_built_storages()
+
+
 from snuba.datasets.storages.generic_metrics import (
     distributions_bucket_storage,
     distributions_storage,
@@ -10,48 +19,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_storage,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
-
-CONFIG_BUILT_STORAGES = get_config_built_storages()
-
-
-def test_config_file_discovery() -> None:
-    assert all(
-        storage.get_storage_key() in CONFIG_BUILT_STORAGES
-        for storage in [
-            distributions_bucket_storage,
-            distributions_storage,
-            sets_bucket_storage,
-            sets_storage,
-        ]
-    )
-    assert len(CONFIG_BUILT_STORAGES) == 4
-
-
-def test_distributions_storage() -> None:
-    _deep_compare_storages(
-        distributions_storage,
-        CONFIG_BUILT_STORAGES[distributions_storage.get_storage_key()],
-    )
-
-
-def test_distributions_bucket_storage() -> None:
-    _deep_compare_storages(
-        distributions_bucket_storage,
-        CONFIG_BUILT_STORAGES[distributions_bucket_storage.get_storage_key()],
-    )
-
-
-def test_sets_storage() -> None:
-    _deep_compare_storages(
-        sets_storage, CONFIG_BUILT_STORAGES[sets_storage.get_storage_key()]
-    )
-
-
-def test_sets_bucket_storage() -> None:
-    _deep_compare_storages(
-        sets_bucket_storage,
-        CONFIG_BUILT_STORAGES[sets_bucket_storage.get_storage_key()],
-    )
+from tests.datasets.configuration.utils import ConfigurationTest
 
 
 def _deep_compare_storages(old: Storage, new: Storage) -> None:
@@ -107,3 +75,78 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
     assert (
         old.get_subscription_scheduler_mode() == new.get_subscription_scheduler_mode()
     )
+
+
+class TestStorageConfiguration(ConfigurationTest):
+    def test_config_file_discovery(self) -> None:
+        assert all(
+            storage.get_storage_key() in CONFIG_BUILT_STORAGES
+            for storage in [
+                distributions_bucket_storage,
+                distributions_storage,
+                sets_bucket_storage,
+                sets_storage,
+            ]
+        )
+        assert len(CONFIG_BUILT_STORAGES) == 4
+
+    def test_distributions_storage(self) -> None:
+        _deep_compare_storages(
+            distributions_storage,
+            CONFIG_BUILT_STORAGES[distributions_storage.get_storage_key()],
+        )
+
+    def test_distributions_bucket_storage(self) -> None:
+        _deep_compare_storages(
+            distributions_bucket_storage,
+            CONFIG_BUILT_STORAGES[distributions_bucket_storage.get_storage_key()],
+        )
+
+    def test_sets_storage(self) -> None:
+        _deep_compare_storages(
+            sets_storage, CONFIG_BUILT_STORAGES[sets_storage.get_storage_key()]
+        )
+
+    def test_sets_bucket_storage(self) -> None:
+        _deep_compare_storages(
+            sets_bucket_storage,
+            CONFIG_BUILT_STORAGES[sets_bucket_storage.get_storage_key()],
+        )
+
+    def test_processor_with_constructor(self) -> None:
+        yml_text = """
+version: v1
+kind: readable_storage
+name: test-processor-with-constructor
+
+storage:
+  key: test-storage
+  set_key: test-storage-set
+
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+    ]
+  local_table_name: "test"
+  dist_table_name: "test"
+
+query_processors:
+  -
+    processor: MappingOptimizer
+    args:
+      column_name: a
+      hash_map_name: hashmap
+      killswitch: kill
+
+"""
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            filename = os.path.join(tmpdirname, "file.yaml")
+            with open(filename, "w") as f:
+                f.write(yml_text)
+            storage = build_storage_from_config(filename)
+            assert len(storage.get_query_processors()) == 1
+            qp = storage.get_query_processors()[0]
+            assert getattr(qp, "_MappingOptimizer__column_name") == "a"
+            assert getattr(qp, "_MappingOptimizer__hash_map_name") == "hashmap"
+            assert getattr(qp, "_MappingOptimizer__killswitch") == "kill"

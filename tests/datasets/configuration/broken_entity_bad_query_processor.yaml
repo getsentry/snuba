@@ -35,9 +35,9 @@ writable_storage: generic_metrics_sets_raw
 query_processors:
   -
     # this object is invalid without a processor: attribute
-    # processor: transform_tag_types
+    # processor: TagsTypeTransformer
   -
-    processor: handle_mapped_granularities
+    processor: MappedGranularityProcessor
     args:
       accepted_granularities:
         60: 1
@@ -45,38 +45,38 @@ query_processors:
         86400: 3
       default_granularity: 1
   -
-    processor: translate_time_series
+    processor: TimeSeriesProcessor
     args:
       time_group_columns:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
   -
-    processor: referrer_rate_limit
+    processor: ReferrerRateLimiterProcessor
   -
-    processor: org_rate_limiter
+    processor: OrganizationRateLimiterProcessor
     args:
       org_column: org_id
   -
-    processor: project_referrer_rate_limiter
+    processor: ProjectReferrerRateLimiter
     args:
       project_column: project_id
   -
-    processor: project_rate_limiter
+    processor: ProjectRateLimiterProcessor
     args:
       project_column: project_id
   -
-    processor: resource_quota_limiter
+    processor: ResourceQuotaProcessor
     args:
       project_field: project_id
 translation_mappers:
   functions:
     -
-      mapper: simple_func
+      mapper: FunctionNameMapper
       args:
         from_name: uniq
         to_name: uniqCombined64Merge
     -
-      mapper: simple_func
+      mapper: FunctionNameMapper
       args:
         from_name: uniqIf
         to_name: uniqCombined64MergeIf
@@ -99,7 +99,7 @@ translation_mappers:
         value_subcolumn_name: indexed_value
 validators:
   -
-    validator: entity_required
+    validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: ["org_id", "project_id"]
 required_time_column: timestamp

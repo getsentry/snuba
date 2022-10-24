@@ -6,7 +6,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.validation.validators import (
     NoTimeBasedConditionValidator,
@@ -89,35 +89,24 @@ class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
         return {"organization": self.organization}
 
 
-class BaseEventsSubscription(EntitySubscriptionValidation, EntitySubscription, ABC):
+class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None
     ) -> Sequence[Expression]:
-        if offset is None:
-            return []
-
-        return [
-            binary_condition(
-                ConditionFunctions.LTE,
-                FunctionCall(
-                    None,
-                    "ifNull",
-                    (Column(None, None, "offset"), Literal(None, 0)),
-                ),
-                Literal(None, offset),
-            )
-        ]
+        return []
 
     def to_dict(self) -> Mapping[str, Any]:
         return {}
 
 
-class EventsSubscription(BaseEventsSubscription):
-    ...
+class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription):
+    def get_entity_subscription_conditions_for_snql(
+        self, offset: Optional[int] = None
+    ) -> Sequence[Expression]:
+        return []
 
-
-class TransactionsSubscription(BaseEventsSubscription):
-    ...
+    def to_dict(self) -> Mapping[str, Any]:
+        return {}
 
 
 class MetricsCountersSubscription(SessionsSubscription):

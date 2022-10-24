@@ -56,10 +56,11 @@ steps:
       - |
         mkdir self-hosted && cd self-hosted
         curl -L "https://github.com/getsentry/self-hosted/archive/master.tar.gz" | tar xzf - --strip-components=1
-        echo 'no' > .reporterrors
         echo '{"version": "3.4", "networks":{"default":{"external":{"name":"cloudbuild"}}}}' > docker-compose.override.yml
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: e2e-test
+    env:
+      - 'REPORT_SELF_HOSTED_ISSUES=0'
     waitFor:
       - runtime-image
       - unit-tests-cleanup

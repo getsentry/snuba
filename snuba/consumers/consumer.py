@@ -29,15 +29,15 @@ import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer as AbstractProducer
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies import FilterStep
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies import ProcessingStrategy as ProcessingStep
-from arroyo.processing.strategies import ProcessingStrategyFactory
+from arroyo.processing.strategies import ProcessingStrategyFactory, TransformStep
 from arroyo.processing.strategies.dead_letter_queue import (
     InvalidKafkaMessage,
     InvalidMessages,
 )
-from arroyo.processing.strategies.streaming import FilterStep, TransformStep
-from arroyo.processing.strategies.streaming.factory import (
+from arroyo.processing.strategies.factory import (
     ConsumerStrategyFactory,
     StreamMessageFilter,
 )

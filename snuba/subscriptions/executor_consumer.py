@@ -6,16 +6,17 @@ import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
-from typing import Callable, Deque, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Deque, Mapping, Optional, Sequence, Tuple
 
 import rapidjson
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Position
+from arroyo.types import Commit
 
 from snuba import state
 from snuba.consumers.utils import get_partition_count
@@ -43,8 +44,6 @@ from snuba.utils.streams.configuration_builder import build_kafka_consumer_confi
 from snuba.web.query import parse_and_run_query
 
 logger = logging.getLogger(__name__)
-
-COMMIT_FREQUENCY_SEC = 1
 
 
 def calculate_max_concurrent_queries(
@@ -168,6 +167,7 @@ def build_executor_consumer(
             stale_threshold_seconds,
             result_topic_spec.topic_name,
         ),
+        commit_policy=ONCE_PER_SECOND,
     )
 
 
@@ -194,7 +194,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
 
     def create_with_partitions(
         self,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
 
@@ -239,8 +239,6 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
         self.__next_step = next_step
-
-        self.__last_committed: Optional[float] = None
 
         self.__encoder = SubscriptionScheduledTaskEncoder()
 
@@ -409,15 +407,11 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
         self,
         producer: Producer[KafkaPayload],
         result_topic: str,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
     ):
         self.__producer = producer
         self.__result_topic = Topic(result_topic)
         self.__commit = commit
-        self.__commit_data: MutableMapping[Partition, Position] = {}
-
-        # Time we last called commit
-        self.__last_committed: Optional[float] = None
 
         self.__encoder = SubscriptionTaskResultEncoder()
 
@@ -428,23 +422,6 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
         self.__max_buffer_size = 10000
         self.__closed = False
 
-    def __throttled_commit(self, force: bool = False) -> None:
-        # Commits all offsets and resets self.__commit_data at most
-        # every COMMIT_FREQUENCY_SEC. If force=True is passed, the
-        # commit frequency is ignored and we immediately commit.
-
-        now = time.time()
-
-        if (
-            self.__last_committed is None
-            or now - self.__last_committed >= COMMIT_FREQUENCY_SEC
-            or force is True
-        ):
-            if self.__commit_data:
-                self.__commit(self.__commit_data)
-                self.__last_committed = now
-                self.__commit_data = {}
-
     def poll(self) -> None:
         while self.__queue:
             message, future = self.__queue[0]
@@ -454,10 +431,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             self.__queue.popleft()
 
-            self.__commit_data[message.partition] = Position(
-                message.next_offset, message.timestamp
-            )
-        self.__throttled_commit()
+            self.__commit({message.partition: message.position_to_commit})
 
     def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         assert not self.__closed
@@ -480,7 +454,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
         start = time.time()
 
         # Commit all pending offsets
-        self.__throttled_commit(force=True)
+        self.__commit({}, force=True)
 
         while self.__queue:
             remaining = timeout - (time.time() - start) if timeout is not None else None
@@ -492,6 +466,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             future.result(remaining)
 
-            self.__commit(
-                {message.partition: Position(message.offset, message.timestamp)}
-            )
+            offset = {message.partition: message.position_to_commit}
+
+            logger.info("Committing offset: %r", offset)
+            self.__commit(offset, force=True)

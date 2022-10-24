@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -19,17 +19,27 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets.generic_metrics_processor import (
-    GenericDistributionsMetricsProcessor,
-    GenericSetsMetricsProcessor,
-)
-from snuba.datasets.message_filters import KafkaHeaderSelectFilter
+from snuba.datasets.plans.splitters import QuerySplitStrategy
+from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.query.processors.physical.table_rate_limit import TableRateLimit
-from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
-from snuba.utils.schemas import UUID, AggregateFunction
+from snuba.utils.schemas import UUID, AggregateFunction, IPv4, IPv6
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
+
+
+class QueryProcessorDefinition(TypedDict):
+    processor: str
+    args: dict[str, Any]
+
+
+class QuerySplitterDefinition(TypedDict):
+    splitter: str
+    args: dict[str, Any]
+
+
+class MandatoryConditionCheckerDefinition(TypedDict):
+    condition: str
+    args: dict[str, Any]
 
 
 def generate_policy_creator(
@@ -52,41 +62,63 @@ def generate_policy_creator(
     return None
 
 
-# TODO: Add rest of prefilters and processors
-# TODO: Replace these dictionaries with something better - Factories maybe
-CONF_TO_PREFILTER: dict[str, Any] = {
-    "kafka_header_select_filter": KafkaHeaderSelectFilter
-}
-CONF_TO_PROCESSOR: dict[str, Any] = {
-    "generic_distributions_metrics_processor": GenericDistributionsMetricsProcessor,
-    "generic_sets_metrics_processor": GenericSetsMetricsProcessor,
-}
-QUERY_PROCESSORS: dict[str, Any] = {
-    "TableRateLimit": TableRateLimit,
-    "TupleUnaliaser": TupleUnaliaser,
-}
-
-
 def get_query_processors(
-    query_processor_names: list[str],
+    query_processor_objects: list[QueryProcessorDefinition],
 ) -> list[ClickhouseQueryProcessor]:
-    return [QUERY_PROCESSORS[name]() for name in query_processor_names]
+    return [
+        ClickhouseQueryProcessor.get_from_name(qp["processor"]).from_kwargs(
+            **qp.get("args", {})
+        )
+        for qp in query_processor_objects
+    ]
+
+
+def get_query_splitters(
+    query_splitter_objects: list[QuerySplitterDefinition],
+) -> list[QuerySplitStrategy]:
+    return [
+        QuerySplitStrategy.get_from_name(qs["splitter"]).from_kwargs(
+            **qs.get("args", {})
+        )
+        for qs in query_splitter_objects
+    ]
+
+
+def get_mandatory_condition_checkers(
+    mandatory_condition_checkers_objects: list[MandatoryConditionCheckerDefinition],
+) -> list[ConditionChecker]:
+    return [
+        ConditionChecker.get_from_name(mc["condition"]).from_kwargs(
+            **mc.get("args", {})
+        )
+        for mc in mandatory_condition_checkers_objects
+    ]
+
+
+NUMBER_COLUMN_TYPES = {"UInt": UInt, "Float": Float}
+
+SIMPLE_COLUMN_TYPES = {
+    **NUMBER_COLUMN_TYPES,
+    "String": String,
+    "DateTime": DateTime,
+    "UUID": UUID,
+    "IPv4": IPv4,
+    "IPv6": IPv6,
+}
 
 
 def __parse_simple(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> Column[SchemaModifiers]:
-    if col["type"] == "UInt":
-        return Column(col["name"], UInt(col["args"]["size"], modifiers))
-    elif col["type"] == "Float":
-        return Column(col["name"], Float(col["args"]["size"], modifiers))
-    elif col["type"] == "String":
-        return Column(col["name"], String(modifiers))
-    elif col["type"] == "DateTime":
-        return Column(col["name"], DateTime(modifiers))
-    elif col["type"] == "UUID":
-        return Column(col["name"], UUID(modifiers))
-    raise
+    return Column(col["name"], SIMPLE_COLUMN_TYPES[col["type"]](modifiers))
+
+
+def __parse_number(
+    col: dict[str, Any], modifiers: SchemaModifiers | None
+) -> Column[SchemaModifiers]:
+    return Column(
+        col["name"], NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
+    )
 
 
 def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]]:
@@ -94,24 +126,17 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
 
     cols: list[Column[SchemaModifiers]] = []
 
-    SIMPLE_COLUMN_TYPES = {
-        "UInt": UInt,
-        "Float": Float,
-        "String": String,
-        "DateTime": DateTime,
-        "UUID": UUID,
-    }
-
     for col in columns:
-        modifiers = None
+        column: Column[SchemaModifiers] | None = None
+        modifiers: SchemaModifiers | None = None
         if "args" in col and "schema_modifiers" in col["args"]:
             modifiers = SchemaModifiers(
                 "nullable" in col["args"]["schema_modifiers"],
                 "readonly" in col["args"]["schema_modifiers"],
             )
-
-        column: Column[SchemaModifiers] | None = None
-        if col["type"] in SIMPLE_COLUMN_TYPES:
+        if col["type"] in NUMBER_COLUMN_TYPES:
+            column = __parse_number(col, modifiers)
+        elif col["type"] in SIMPLE_COLUMN_TYPES:
             column = __parse_simple(col, modifiers)
         elif col["type"] == "Nested":
             column = Column(

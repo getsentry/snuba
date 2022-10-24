@@ -13,8 +13,10 @@ from snuba.optimize import _get_metrics_tags, optimize_partition_runner
 from snuba.optimize_scheduler import OptimizedSchedulerTimeout, OptimizeScheduler
 from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.processor import InsertBatch
-from snuba.redis import redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from tests.helpers import write_processed_messages
+
+redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 last_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -229,6 +231,8 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.
     """
+    prev_job_cutoff_time = settings.OPTIMIZE_JOB_CUTOFF_TIME
+    settings.OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
     storage = get_writable_storage(StorageKey.ERRORS)
     cluster = storage.get_cluster()
     clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
@@ -246,11 +250,11 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
 
     dummy_partition = "(90,'2022-03-28')"
     tracker.update_all_partitions([dummy_partition])
-    scheduler = OptimizeScheduler(2)
 
     with freeze_time(
         last_midnight + settings.OPTIMIZE_JOB_CUTOFF_TIME + timedelta(minutes=15)
     ):
+        scheduler = OptimizeScheduler(2)
         with pytest.raises(OptimizedSchedulerTimeout):
             optimize_partition_runner(
                 clickhouse=clickhouse_pool,
@@ -263,3 +267,4 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
             )
 
     tracker.delete_all_states()
+    settings.OPTIMIZE_JOB_CUTOFF_TIME = prev_job_cutoff_time

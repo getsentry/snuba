@@ -32,3 +32,24 @@ ENFORCE_RETENTION = True
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(days=1)
 
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
+
+REDIS_CLUSTERS = {
+    key: {
+        "use_redis_cluster": os.environ.get("USE_REDIS_CLUSTER", "0") != "0",
+        "cluster_startup_nodes": None,
+        "host": os.environ.get("REDIS_HOST", "localhost"),
+        "port": int(os.environ.get("REDIS_PORT", 6379)),
+        "password": os.environ.get("REDIS_PASSWORD"),
+        "db": i,
+        "reinitialize_steps": 10,
+    }
+    for i, key in [
+        (2, "cache"),
+        (3, "rate_limiter"),
+        (4, "subscription_store"),
+        (5, "replacements_store"),
+        (6, "config"),
+        (7, "dlq"),
+        (8, "optimize"),
+    ]
+}

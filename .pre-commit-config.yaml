@@ -43,7 +43,7 @@ repos:
         name: validate-configs-syntax
         entry: python3 -m snuba.validate_configs
         language: python
-        additional_dependencies: [ 'jsonschema', 'pyyaml' ]
+        additional_dependencies: [ 'jsonschema', 'pyyaml', 'sentry_sdk' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
 default_language_version:

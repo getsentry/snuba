@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from snuba import state
-from snuba.redis import redis_client as rds
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
@@ -142,7 +142,9 @@ class TestRateLimit:
         bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
 
         def count() -> int:
-            return rds.zcount(bucket, "-inf", "+inf")
+            return get_redis_client(RedisClientKey.RATE_LIMITER).zcount(
+                bucket, "-inf", "+inf"
+            )
 
         with rate_limit(params):
             assert count() == 1
@@ -182,7 +184,7 @@ def test_rate_limit_failures(vals: Tuple[int, int, int]) -> None:
     now = time.time()
     for p in params:
         bucket = "{}{}".format(state.ratelimit_prefix, p.bucket)
-        count = rds.zcount(
+        count = get_redis_client(RedisClientKey.RATE_LIMITER).zcount(
             bucket, now - state.rate_lookback_s, now + state.rate_lookback_s
         )
         assert count == 0

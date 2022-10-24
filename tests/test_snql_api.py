@@ -631,6 +631,39 @@ class TestSnQLApi(BaseApiTest):
         assert len(data) == 1
         assert data[0]["array_spans_exclusive_time"] > 0
 
+    @pytest.mark.parametrize(
+        "url, entity",
+        [
+            pytest.param("/transactions/snql", "transactions", id="transactions"),
+            pytest.param(
+                "/discover/snql", "discover_transactions", id="discover_transactions"
+            ),
+        ],
+    )
+    def test_app_start_type(self, url: str, entity: str) -> None:
+        response = self.post(
+            url,
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH ({entity})
+                    SELECT count() AS count
+                    WHERE
+                        finish_ts >= toDateTime('{self.base_time.isoformat()}') AND
+                        finish_ts < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id}) AND
+                        app_start_type = 'warm.prewarmed'
+                    LIMIT 10
+                    """
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 1
+        assert data[0]["count"] == 1
+
     def test_attribution_tags(self) -> None:
         response = self.post(
             "/events/snql",

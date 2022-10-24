@@ -40,7 +40,9 @@ class LiteralMapper(SnubaClickhouseMapper[Literal, Literal]):
 ValidColumnMappings = Union[Column, Literal, FunctionCall, CurriedFunctionCall]
 
 
-class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings]):
+class ColumnMapper(
+    SnubaClickhouseMapper[Column, ValidColumnMappings], metaclass=RegisteredClass
+):
     """
     Columns can be translated into other Columns, or Literals (if a Snuba
     column has a hardcoded value on a storage like the event type on
@@ -48,7 +50,13 @@ class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings]):
     assertNotNull calls).
     """
 
-    pass
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
+
+    @classmethod
+    def get_from_name(cls, name: str) -> Type["ColumnMapper"]:
+        return cast(Type["ColumnMapper"], cls.class_from_name(name))
 
 
 class FunctionCallMapper(
@@ -67,7 +75,7 @@ class FunctionCallMapper(
 
     @classmethod
     def config_key(cls) -> str:
-        return "function_call_mapper_base"
+        return cls.__name__
 
     @classmethod
     def get_from_name(cls, name: str) -> Type["FunctionCallMapper"]:
@@ -82,7 +90,7 @@ class CurriedFunctionCallMapper(
 ):
     @classmethod
     def config_key(cls) -> str:
-        return "curried_function_call_mapper_base"
+        return cls.__name__
 
     @classmethod
     def get_from_name(cls, name: str) -> Type["CurriedFunctionCallMapper"]:
@@ -107,7 +115,7 @@ class SubscriptableReferenceMapper(
 
     @classmethod
     def config_key(cls) -> str:
-        return "subref_mapper_base"
+        return cls.__name__
 
     @classmethod
     def get_from_name(cls, name: str) -> Type["SubscriptableReferenceMapper"]:
