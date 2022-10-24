@@ -115,13 +115,11 @@ schema:
     ]
   local_table_name: transactions_local
   dist_table_name: transactions_dist
-  part_format: [retention_days, date]
+  partition_format: [retention_days, date]
 
 query_processors:
-  -
-    processor: UniqInSelectAndHavingProcessor
-  -
-    processor: MappingColumnPromoter
+  - processor: UniqInSelectAndHavingProcessor
+  - processor: MappingColumnPromoter
     args:
       mapping_specs:
         tags:
@@ -132,67 +130,52 @@ query_processors:
         contexts:
           trace.trace_id: trace_id
           trace.span_id: span_id
-  -
-    processor: UUIDColumnProcessor
+  - processor: UUIDColumnProcessor
     args:
       columns: [event_id, trace_id]
-  -
-    processor: HexIntColumnProcessor
+  - processor: HexIntColumnProcessor
     args:
       columns: [span_id]
-  -
-    processor: EventsBooleanContextsProcessor
-  -
-    processor: MappingOptimizer
+  - processor: EventsBooleanContextsProcessor
+  - processor: MappingOptimizer
     args:
       column_name: tags
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
-  -
-    processor: EmptyTagConditionProcessor
-  -
-    processor: ArrayJoinKeyValueOptimizer
+  - processor: EmptyTagConditionProcessor
+  - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
-  -
-    processor: ArrayJoinKeyValueOptimizer
+  - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: measurements
-  -
-    processor: ArrayJoinKeyValueOptimizer
+  - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: span_op_breakdowns
   # the bloom filter optimizer should occur before the array join optimizer
   # on the span columns because the array join optimizer will rewrite the
   # same conditions the bloom filter optimizer is looking for
-  -
-    processor: BloomFilterOptimizer
+  - processor: BloomFilterOptimizer
     args:
       column_name: spans
       key_names: [op, group]
       val_names: [exclusive_time_32]
-  -
-    processor: ArrayJoinOptimizer
+  - processor: ArrayJoinOptimizer
     args:
       column_name: spans
       key_names: [op, group]
       val_names: [exclusive_time_32]
-  -
-    processor: ArrayHasOptimizer
+  - processor: ArrayHasOptimizer
     args:
       array_columns: [spans.op, spans.group]
-  -
-    processor: HexIntArrayColumnProcessor
+  - processor: HexIntArrayColumnProcessor
     args:
       columns: [spans.group]
-  -
-    processor: PrewhereProcessor
+  - processor: PrewhereProcessor
     args:
       prewhere_candidates: [event_id, trace_id, span_id, transaction_name, transaction, title]
-  -
-    processor: TableRateLimit
-  -
-    processor: TupleUnaliaser
+  - processor: TableRateLimit
+  - processor: TupleUnaliaser
 
 query_splitters:
   -

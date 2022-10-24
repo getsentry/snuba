@@ -72,20 +72,20 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
     schema_class = (
         WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
     )
-    part_formats = None
-    if "part_format" in config[SCHEMA]:
-        part_formats = []
-        for part in config[SCHEMA]["part_format"]:
-            for part_format in PartSegment:
-                if part == part_format.value:
-                    part_formats.append(part_format)
+    partition_formats = None
+    if "partition_format" in config[SCHEMA]:
+        partition_formats = []
+        for pformat in config[SCHEMA]["partition_format"]:
+            for partition_format in PartSegment:
+                if pformat == partition_format.value:
+                    partition_formats.append(partition_format)
 
     return schema_class(
         columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
         local_table_name=config[SCHEMA]["local_table_name"],
         dist_table_name=config[SCHEMA]["dist_table_name"],
         storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
-        part_format=part_formats,
+        part_format=partition_formats,  # TODO: Rename `part_format` to `partition_format` in the class
     )
 
 
