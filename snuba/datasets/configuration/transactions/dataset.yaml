@@ -5,4 +5,4 @@ name: transactions
 is_experimental: false
 
 entities:
-  all: [transactions]
+  - transactions
