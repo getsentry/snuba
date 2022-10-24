@@ -25,7 +25,7 @@ schema = WritableTableSchema(
     dist_table_name="errors_dist",
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=mandatory_conditions,
-    part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
+    partition_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
 storage = WritableTableStorage(

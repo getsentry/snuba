@@ -22,7 +22,7 @@ schema = WritableTableSchema(
     dist_table_name="transactions_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS_V2,
     mandatory_conditions=[],
-    part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
+    partition_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
 storage = WritableTableStorage(
