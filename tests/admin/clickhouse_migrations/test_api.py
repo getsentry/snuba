@@ -68,11 +68,11 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 
         # invalid migration group
         response = admin_api.get("/migrations/sessions/list")
-        assert response.status_code == 400
+        assert response.status_code == 403
         assert json.loads(response.data)["error"] == "Group not allowed"
 
         response = admin_api.get("/migrations/bad_group/list")
-        assert response.status_code == 400
+        assert response.status_code == 403
 
     with patch(
         "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
@@ -122,9 +122,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         },
     ):
         # invalid action
-        response = admin_api.post(
-            "/migrations/system/invalid_but_allowed_group/0001_migrations/"
-        )
+        response = admin_api.post("/migrations/system/invalid_action/0001_migrations/")
         assert response.status_code == 404
 
         # invalid migration group
@@ -147,7 +145,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         with patch.object(Runner, method) as mock_run_migration:
             # not allowed migration group
             response = admin_api.post(f"/migrations/sessions/{action}/0001_sessions")
-            assert response.status_code == 400
+            assert response.status_code == 403
             assert json.loads(response.data) == {"error": "Group not allowed"}
             assert mock_run_migration.call_count == 0
 
@@ -155,7 +153,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             response = admin_api.post(
                 f"/migrations/generic_metrics/{action}/0003_sets_mv"
             )
-            assert response.status_code == 400
+            assert response.status_code == 403
             assert json.loads(response.data) == {
                 "error": f"Group not allowed {action} policy"
             }
@@ -200,7 +198,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             response = admin_api.post(
                 f"/migrations/events/{action}/0014_backfill_errors"
             )
-            assert response.status_code == 400
+            assert response.status_code == 403
             assert json.loads(response.data) == {
                 "error": f"Group not allowed {action} policy"
             }
@@ -236,3 +234,17 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                         mock_run_migration.assert_called_once_with(
                             migration_key, force=False, fake=False, dry_run=False
                         )
+
+            # allow dry runs
+        with patch.object(Runner, method) as mock_run_migration:
+
+            def print_something(*args: Any, **kwargs: Any) -> None:
+                print("a dry run")
+
+            mock_run_migration.side_effect = print_something
+            response = admin_api.post(
+                f"/migrations/events/{action}/0014_backfill_errors?dry_run=yes"
+            )
+            assert response.status_code == 200
+            assert json.loads(response.data) == {"stdout": "a dry run\n"}
+            assert mock_run_migration.call_count == 1

@@ -168,8 +168,6 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
             jsonify({"error": "clickhouse error: " + err.message}), 400
         )
 
-    return Response("OK", 200)
-
 
 @application.route("/clickhouse_queries")
 def clickhouse_queries() -> Response:
