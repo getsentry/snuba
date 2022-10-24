@@ -85,7 +85,7 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
         local_table_name=config[SCHEMA]["local_table_name"],
         dist_table_name=config[SCHEMA]["dist_table_name"],
         storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
-        part_format=partition_formats,  # TODO: Rename `part_format` to `partition_format` in the class
+        partition_format=partition_formats,
     )
 
 
