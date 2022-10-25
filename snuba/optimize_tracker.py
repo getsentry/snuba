@@ -113,10 +113,10 @@ class OptimizedPartitionTracker:
         if not all_partitions:
             raise NoOptimizedStateException
 
-        if not completed_partitions:
+        if not scheduled_partitions:
             return all_partitions
         else:
-            return all_partitions - completed_partitions
+            return all_partitions - scheduled_partitions
 
     def delete_all_states(self) -> None:
         """
