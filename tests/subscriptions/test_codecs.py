@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime
-from typing import Callable, Optional, Type
+from typing import Callable, Optional, Sequence, Type
 
 import pytest
 
@@ -186,12 +186,16 @@ def test_subscription_task_result_encoder() -> None:
 METRICS_CASES = [
     pytest.param(
         BaseEntitySubscription,
+        3,
+        ["having", "orderby"],
         "sum",
         EntityKey.METRICS_COUNTERS,
         id="metrics_counters subscription",
     ),
     pytest.param(
         BaseEntitySubscription,
+        3,
+        ["having", "orderby"],
         "uniq",
         EntityKey.METRICS_SETS,
         id="metrics_sets subscription",
@@ -199,15 +203,23 @@ METRICS_CASES = [
 ]
 
 
-@pytest.mark.parametrize("subscription_cls, aggregate, entity_key", METRICS_CASES)
+@pytest.mark.parametrize(
+    "subscription_cls, max_allowed_aggregations, disallowed_aggregations, aggregate, entity_key",
+    METRICS_CASES,
+)
 def test_metrics_subscription_task_result_encoder(
-    subscription_cls: Type[EntitySubscription], aggregate: str, entity_key: EntityKey
+    subscription_cls: Type[EntitySubscription],
+    max_allowed_aggregations: int,
+    disallowed_aggregations: Sequence[str],
+    aggregate: str,
+    entity_key: EntityKey,
 ) -> None:
     codec = SubscriptionTaskResultEncoder()
 
     timestamp = datetime.now()
-
     entity_subscription = subscription_cls(data_dict={"organization": 1})
+    entity_subscription.max_allowed_aggregations = max_allowed_aggregations
+    entity_subscription.disallowed_aggregations = disallowed_aggregations
     subscription_data = SubscriptionData(
         project_id=1,
         query=(

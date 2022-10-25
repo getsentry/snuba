@@ -169,6 +169,7 @@ class OrgMetricsCountersEntity(MetricsEntity):
                 ]
             ),
             validators=[GranularityValidator(minimum=3600)],
+            entity_subscription=None,
         )
 
 
@@ -224,4 +225,5 @@ class MetricsDistributionsEntity(MetricsEntity):
                     ),
                 ],
             ),
+            entity_subscription=None,
         )

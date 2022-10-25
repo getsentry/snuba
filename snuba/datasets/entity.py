@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence, Type, Union
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
@@ -182,12 +181,14 @@ class InvalidSubscriptionError(Exception):
     pass
 
 
-@dataclass
 class EntitySubscription(ABC):
     organization: Optional[int] = None
     max_allowed_aggregations: Optional[int] = None
     disallowed_aggregations: Optional[Sequence[str]] = None
-    data_dict: Optional[Mapping[str, Any]] = None
+
+    # def __init__(self, data_dict: Optional[Mapping[str, Any]] = None):
+    #     organization: Optional[int] = None
+    #     self.data_dict = data_dict
 
     @abstractmethod
     def get_entity_subscription_conditions_for_snql(
@@ -212,8 +213,16 @@ class EntitySubscription(ABC):
 
 
 class EntitySubscriptionValidation:
-    MAX_ALLOWED_AGGREGATIONS: int = 1
+    max_allowed_aggregations: int = 1
     disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"]
+
+    # def __init__(
+    #     self,
+    #     max_allowed_aggregations: int = 1,
+    #     disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"],
+    # ) -> None:
+    #     self.max_allowed_aggregations = max_allowed_aggregations
+    #     self.disallowed_aggregations = disallowed_aggregations
 
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # TODO: Support composite queries with multiple entities.
