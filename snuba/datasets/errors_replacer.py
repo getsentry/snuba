@@ -1022,10 +1022,7 @@ class UnmergeGroupsReplacement(Replacement):
 
     @cached_property
     def _where_clause(self) -> str:
-        if (
-            self.state_name == ReplacerState.ERRORS
-            or self.state_name == ReplacerState.ERRORS_V2
-        ):
+        if self.state_name == ReplacerState.ERRORS:
             hashes = ", ".join(
                 ["'%s'" % str(uuid.UUID(_hashify(h))) for h in self.hashes]
             )
@@ -1071,7 +1068,7 @@ class UnmergeGroupsReplacement(Replacement):
 def _convert_hash(
     hash: str, state_name: ReplacerState, convert_types: bool = False
 ) -> str:
-    if state_name == ReplacerState.ERRORS or state_name == ReplacerState.ERRORS_V2:
+    if state_name == ReplacerState.ERRORS:
         if convert_types:
             return "toUUID('%s')" % str(uuid.UUID(_hashify(hash)))
         else:

@@ -8,7 +8,6 @@ from snuba.processor import ReplacementType
 
 class ReplacerState(Enum):
     ERRORS = "errors"
-    ERRORS_V2 = "errors_v2"
 
 
 class ReplacementMessageMetadata(NamedTuple):

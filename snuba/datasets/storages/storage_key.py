@@ -24,12 +24,10 @@ HARDCODED_STORAGE_KEYS = {
     "ORG_SESSIONS": "org_sessions",
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
-    "ERRORS_V2": "errors_v2",
     "PROFILES": "profiles",
     "FUNCTIONS": "functions",
     "FUNCTIONS_RAW": "functions_raw",
     "REPLAYS": "replays",
-    "ERRORS_V2_RO": "errors_v2_ro",
 }
 
 REGISTERED_STORAGE_KEYS: dict[str, str] = {}
@@ -68,11 +66,7 @@ def register_storage_key(key: str) -> StorageKey:
     return StorageKey(key)
 
 
-IDENTICAL_STORAGES = frozenset(
-    {
-        frozenset({StorageKey.ERRORS, StorageKey.ERRORS_V2}),
-    }
-)
+IDENTICAL_STORAGES = frozenset()
 
 
 @lru_cache(20)
