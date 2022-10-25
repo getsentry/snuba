@@ -19,7 +19,9 @@ def _get_client(
 
 
 def verify_zk_replica_path(
-    source_client: Client, curr_create_table_statement: str, table: str
+    source_client: Client,
+    curr_create_table_statement: str,
+    table: str,
 ) -> None:
     """
     Before we copy over table statements from other nodes, we need to make sure
@@ -28,20 +30,21 @@ def verify_zk_replica_path(
 
     """
     print("...looking up macros")
-    ((_, replica), (_, shard)) = source_client.execute(
+    ((_, source_replica), (_, source_shard)) = source_client.execute(
         "SELECT macro, substitution FROM system.macros"
     )
-    print(f"...found replica: {replica} for shard: {shard}")
+    print(f"...found replica: {source_replica} for shard: {source_shard}")
 
     print(f"...verifying zk replica path for table: {table}...")
+
     ((replica_path,),) = source_client.execute(
         f"SELECT replica_path FROM system.replicas where table = '{table}'"
     )
 
     match = re.search("\/clickhouse(.*,)", curr_create_table_statement)
-    create_table_path = match.group(0)[:-2].replace("{shard}", shard)
+    create_table_path = match.group(0)[:-2].replace("{shard}", source_shard)
 
-    built_replica_path = f"{create_table_path}/replicas/{replica}"
+    built_replica_path = f"{create_table_path}/replicas/{source_replica}"
 
     assert (
         built_replica_path == replica_path
@@ -139,8 +142,13 @@ def copy_tables(
 
         show_table_statments[name] = curr_create_table_statement
 
+    ((_, target_replica), (_, target_shard)) = target_client.execute(
+        "SELECT macro, substitution FROM system.macros"
+    )
     for table_name, statement in show_table_statments.items():
-        print(f"creating {table_name}...")
+        print(
+            f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}"
+        )
         if execute:
             target_client.execute(statement)
             print(f"created {table_name} !")
