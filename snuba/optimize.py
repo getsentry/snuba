@@ -213,7 +213,7 @@ def get_current_merging_partitions_info(
         SELECT
             result_part_name,
             elapsed,
-            progress,      -- get the slowest merge combination possible
+            progress,
             total_size_bytes_compressed
         FROM system.merges
         WHERE database = %(database)s
