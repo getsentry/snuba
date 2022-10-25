@@ -282,6 +282,12 @@ def clickhouse_trace_query() -> Response:
 @application.route("/clickhouse_querylog_query", methods=["POST"])
 def clickhouse_querylog_query() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
+    if not user:
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
     req = json.loads(request.data)
     try:
         raw_sql = req["sql"]
