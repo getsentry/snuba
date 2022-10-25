@@ -14,27 +14,38 @@ ENABLE_QUERYLOG_API_CONFIG = "enable_clickhouse_querylog_api"
 
 
 def run_querylog_query(query: str, user: str) -> ClickhouseResult:
-    querylog_storage_key = StorageKey.QUERYLOG
-    schema = get_storage(querylog_storage_key).get_schema()
+    """
+    Validates, audit logs, and executes given query against Querylog
+    table in ClickHouse.
+    """
+    schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
-
-    allowed_tables = [schema.get_table_name()]
-    validate_ro_query(query, allowed_tables)
-
-    connection = get_ro_query_node_connection(
-        querylog_storage_key.value, ClickhouseClientSettings.QUERY
-    )
-
+    validate_ro_query(sql_query=query, allowed_tables=[schema.get_table_name()])
     if get_config(ENABLE_QUERYLOG_API_CONFIG, 0):
         audit_log_query(query, user)
-        query_result = connection.execute(query=query, with_column_types=True)
-        return query_result
-
+        return __run_querylog_query(query)
     raise InvalidCustomQuery("Production ClickHouse querylog access is not yet ready.")
 
 
+def describe_querylog_schema() -> ClickhouseResult:
+    schema = get_storage(StorageKey.QUERYLOG).get_schema()
+    assert isinstance(schema, TableSchema)
+    if get_config(ENABLE_QUERYLOG_API_CONFIG, 0):
+        return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}")
+    raise InvalidCustomQuery("Production ClickHouse querylog access is not yet ready.")
+
+
+def __run_querylog_query(query: str) -> ClickhouseResult:
+    """
+    Runs given Query against Querylog table in ClickHouse. This function assumes valid
+    query and does not validate/sanitize query or response data.
+    """
+    connection = get_ro_query_node_connection(
+        StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERY
+    )
+    query_result = connection.execute(query=query, with_column_types=True)
+    return query_result
+
+
 def audit_log_query(query: str, user: str) -> None:
-    """
-    Log query and user to GCP logs for auditlog
-    """
     pass

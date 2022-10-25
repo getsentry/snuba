@@ -15,7 +15,7 @@ from snuba.admin.auth import UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
-from snuba.admin.clickhouse.querylog import run_querylog_query
+from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
@@ -308,6 +308,38 @@ def clickhouse_querylog_query() -> Response:
         rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
+        if columns:
+            res = {}
+            res["column_names"] = [name for name, _ in columns]
+            res["rows"] = [[str(col) for col in row] for row in rows]
+
+            return make_response(jsonify(res), 200)
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
+@application.route("/clickhouse_querylog_schema", methods=["GET"])
+def clickhouse_querylog_schema() -> Response:
+    try:
+        result = describe_querylog_schema()
+        rows = []
+        rows, columns = cast(List[List[str]], result.results), result.meta
         if columns:
             res = {}
             res["column_names"] = [name for name, _ in columns]

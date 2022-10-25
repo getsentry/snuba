@@ -259,8 +259,20 @@ def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     assert "error" in data and data["error"]["message"].startswith("Invalid FROM")
 
 
+def test_querylog_describe(admin_api: FlaskClient) -> None:
+    state.set_config(ENABLE_QUERYLOG_API_CONFIG, 1)
+    response = admin_api.get("/clickhouse_querylog_schema")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "column_names" in data and "rows" in data
+
+
 def test_querylog_config(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "querylog")
+    EXPECTED = {
+        "error": {"message": "Production ClickHouse querylog access is not yet ready."}
+    }
+
     response = admin_api.post(
         "/clickhouse_querylog_query",
         headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
@@ -268,9 +280,12 @@ def test_querylog_config(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert data == {
-        "error": {"message": "Production ClickHouse querylog access is not yet ready."}
-    }
+    assert data == EXPECTED
+
+    response = admin_api.get("/clickhouse_querylog_schema")
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data == EXPECTED
 
 
 def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
