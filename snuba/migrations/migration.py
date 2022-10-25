@@ -3,7 +3,7 @@ from typing import Sequence
 
 from snuba.clusters.cluster import get_cluster
 from snuba.migrations.context import Context
-from snuba.migrations.operations import RunPython, SqlOperation
+from snuba.migrations.operations import RunPython, SqlOperation, merge_sorted_ops
 from snuba.migrations.status import Status
 
 
@@ -141,10 +141,15 @@ class ClickhouseNodeMigration(Migration, ABC):
         # so do not update status yet
         if not self.is_first_migration():
             update_status(Status.IN_PROGRESS)
-        for op in self.forwards_local():
-            op.execute(local=True)
-        for op in self.forwards_dist():
-            op.execute(local=False)
+
+        local_ops = self.forwards_local()
+        dist_ops = self.forwards_dist()
+        ops = merge_sorted_ops(local_ops, dist_ops)
+        for op in ops:
+            if op in local_ops:
+                op.execute(local=True)
+            else:
+                op.execute(local=False)
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
@@ -156,10 +161,14 @@ class ClickhouseNodeMigration(Migration, ABC):
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
-        for op in self.backwards_dist():
-            op.execute(local=False)
-        for op in self.backwards_local():
-            op.execute(local=True)
+        local_ops = self.backwards_local()
+        dist_ops = self.backwards_dist()
+        ops = merge_sorted_ops(local_ops, dist_ops)
+        for op in ops:
+            if op in local_ops:
+                op.execute(local=True)
+            else:
+                op.execute(local=False)
         logger.info(f"Finished reversing: {migration_id}")
 
         # The migrations table will be destroyed if the first
@@ -173,23 +182,17 @@ class ClickhouseNodeMigration(Migration, ABC):
         dist_operations: Sequence[SqlOperation],
     ) -> None:
 
-        print("Local operations:")
-        if len(local_operations) == 0:
+        ops = merge_sorted_ops(dist_operations, local_operations)
+
+        if len(ops) == 0:
             print("n/a")
 
-        for op in local_operations:
-            print(op.format_sql())
-
-        print("\n")
-        print("Dist operations:")
-
-        if len(dist_operations) == 0:
-            print("n/a")
-
-        for op in dist_operations:
-            cluster = get_cluster(op._storage_set)
-
-            if not cluster.is_single_node():
-                print(op.format_sql())
+        for op in ops:
+            if op in local_operations:
+                print(f"Local operation: {op.format_sql()}")
             else:
-                print("Skipped dist operation - single node cluster")
+                cluster = get_cluster(op._storage_set)
+                if not cluster.is_single_node():
+                    print(f"Distributed operation: {op.format_sql()}")
+                else:
+                    print("Skipped dist operation - single node cluster")

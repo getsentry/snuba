@@ -68,6 +68,16 @@ class CreateTable(SqlOperation):
 
         return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
 
+    def conflicts(self, other: "CreateTable") -> bool:
+        if not isinstance(other, CreateTable):
+            return False
+        return (
+            self._storage_set == other._storage_set
+            and self.__table_name.replace("_dist", "").replace("_local", "")
+            == other.__table_name.replace("_dist", "").replace("_local", "")
+            and self.__columns == other.__columns
+        )
+
 
 class CreateMaterializedView(SqlOperation):
     def __init__(
@@ -88,6 +98,17 @@ class CreateMaterializedView(SqlOperation):
         columns = ", ".join([col.for_schema() for col in self.__columns])
 
         return f"CREATE MATERIALIZED VIEW IF NOT EXISTS {self.__view_name} TO {self.__destination_table_name} ({columns}) AS {self.__query};"
+
+    def conflicts(self, other: "CreateMaterializedView") -> bool:
+        if not isinstance(other, CreateMaterializedView):
+            return False
+        return (
+            self._storage_set == other._storage_set
+            and self.__view_name.replace("_dist", "").replace("_local", "")
+            == other.__view_name.replace("_dist", "").replace("_local", "")
+            and self.__destination_table_name.replace("_dist", "").replace("_local", "")
+            == other.__destination_table_name.replace("_dist", "").replace("_local", "")
+        )
 
 
 class RenameTable(SqlOperation):
@@ -112,6 +133,15 @@ class DropTable(SqlOperation):
 
     def format_sql(self) -> str:
         return f"DROP TABLE IF EXISTS {self.table_name};"
+
+    def conflicts(self, other: "DropTable") -> bool:
+        if not isinstance(other, DropTable):
+            return False
+        return self._storage_set == other._storage_set and self.table_name.replace(
+            "_dist", ""
+        ).replace("_local", "") == other.table_name.replace("_dist", "").replace(
+            "_local", ""
+        )
 
 
 class TruncateTable(SqlOperation):
@@ -150,6 +180,16 @@ class AddColumn(SqlOperation):
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.__table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
 
+    def conflicts(self, other: "AddColumn") -> bool:
+        if not isinstance(other, AddColumn):
+            return False
+        return (
+            self._storage_set == other._storage_set
+            and self.__table_name.replace("_dist", "").replace("_local", "")
+            == other.__table_name.replace("_dist", "").replace("_local", "")
+            and self.__column == other.__column
+        )
+
 
 class DropColumn(SqlOperation):
     """
@@ -169,6 +209,16 @@ class DropColumn(SqlOperation):
 
     def format_sql(self) -> str:
         return f"ALTER TABLE {self.__table_name} DROP COLUMN IF EXISTS {self.__column_name};"
+
+    def conflicts(self, other: "DropColumn") -> bool:
+        if not isinstance(other, DropColumn):
+            return False
+        return (
+            self._storage_set == other._storage_set
+            and self.__table_name.replace("_dist", "").replace("_local", "")
+            == other.__table_name.replace("_dist", "").replace("_local", "")
+            and self.__column_name == other.__column_name
+        )
 
 
 class ModifyColumn(SqlOperation):
@@ -237,6 +287,16 @@ class AddIndex(SqlOperation):
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.__table_name} ADD INDEX IF NOT EXISTS {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
 
+    def conflicts(self, other: "AddIndex") -> bool:
+        if not isinstance(other, AddIndex):
+            return False
+        return (
+            self._storage_set == other._storage_set
+            and self.__table_name.replace("_dist", "").replace("_local", "")
+            == other.__table_name.replace("_dist", "").replace("_local", "")
+            and self.__index_name == other.__index_name
+        )
+
 
 class DropIndex(SqlOperation):
     """
@@ -251,6 +311,16 @@ class DropIndex(SqlOperation):
     def format_sql(self) -> str:
         return (
             f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name};"
+        )
+
+    def conflicts(self, other: "DropIndex") -> bool:
+        if not isinstance(other, DropIndex):
+            return False
+        return (
+            self._storage_set == other._storage_set
+            and self.__table_name.replace("_dist", "").replace("_local", "")
+            == other.__table_name.replace("_dist", "").replace("_local", "")
+            and self.__index_name == other.__index_name
         )
 
 
@@ -347,10 +417,10 @@ def merge_sorted_ops(
     for a in dist_ops:
         for b in local_ops:
             for op in local_first_ops:
-                if isinstance(a, op) and isinstance(b, op):
+                if isinstance(a, op) and a.conflicts(b):
                     graph[a].append(b)
             for op in dist_first_ops:
-                if isinstance(a, op) and isinstance(b, op):
+                if isinstance(a, op) and a.conflicts(b):
                     graph[b].append(a)
 
     def topological_sort(
@@ -360,16 +430,20 @@ def merge_sorted_ops(
         output = []
         visited: Set[SqlOperation] = set()
 
-        def visit(node: SqlOperation, seen_in_loop: Set[SqlOperation] = set()) -> None:
-            seen_in_loop.add(node)
+        def visit(
+            node: SqlOperation, seen_in_loop: List[SqlOperation] = list()
+        ) -> None:
+            seen_in_loop.append(node)
             if node not in visited:
                 for child in graph[node]:
                     if child in seen_in_loop:
-                        raise ValueError(f"cycle detected: stack: {seen_in_loop}")
-                    visit(child)
+                        raise ValueError(
+                            f"cycle detected:\n stack: {seen_in_loop}\n local: {local_ops}\n dist: {dist_ops}"
+                        )
+                    visit(child, seen_in_loop)
                 visited.add(node)
                 output.append(node)
-            seen_in_loop.remove(node)
+            seen_in_loop.pop()
 
         for node in ops:
             visit(node)

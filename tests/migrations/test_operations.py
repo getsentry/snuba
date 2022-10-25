@@ -144,6 +144,7 @@ def test_merge_sorted_ops() -> None:
     drop_col_dist = DropColumn(StorageSetKey.EVENTS, "test_table_dist", "test")
     drop_col_local = DropColumn(StorageSetKey.EVENTS, "test_table_local", "test")
 
+    assert drop_col_dist.conflicts(drop_col_local)
     assert merge_sorted_ops(dist_ops=[drop_col_dist], local_ops=[drop_col_local]) == [
         drop_col_dist,
         drop_col_local,
