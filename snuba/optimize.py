@@ -174,9 +174,9 @@ def get_partitions_to_optimize(
         WHERE active
         AND database = %(database)s
         AND table = %(table)s
-        GROUP BY partition, partition_id
+        GROUP BY partition
         HAVING c > 1
-        ORDER BY c DESC, partition, partition_id
+        ORDER BY c DESC, partition
         """,
         {"database": database, "table": table},
     )
