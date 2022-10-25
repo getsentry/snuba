@@ -138,6 +138,8 @@ class ConsumerBuilder:
 
         self.raw_topic: ArroyoTopic
         if kafka_params.raw_topic is not None:
+            # we do not support topic override in a sliced context
+            assert slice_id is None
             self.raw_topic = ArroyoTopic(kafka_params.raw_topic)
         else:
             self.raw_topic = ArroyoTopic(
@@ -260,8 +262,6 @@ class ConsumerBuilder:
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
-        # Can we assume that the raw topic would be mapped
-        # to a physical topic in the sliced context?
         physical_topic = get_physical_arroyo_topic(self.raw_topic.name, slice_id)
 
         return StreamProcessor(consumer, physical_topic, strategy_factory, IMMEDIATE)
