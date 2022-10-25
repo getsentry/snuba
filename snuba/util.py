@@ -161,7 +161,6 @@ class Part(NamedTuple):
     name: str
     date: datetime
     retention_days: int
-    partition_id: str
 
 
 class PartSegment(Enum):
@@ -202,10 +201,7 @@ def decode_part_str(part_str: str, partition_format: Sequence[PartSegment]) -> P
 
     if date_str and retention_days:
         return Part(
-            part_str,
-            datetime.strptime(date_str, "%Y-%m-%d"),
-            int(retention_days),
-            partition_id,
+            part_str, datetime.strptime(date_str, "%Y-%m-%d"), int(retention_days)
         )
 
     else:

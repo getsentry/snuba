@@ -169,7 +169,6 @@ def get_partitions_to_optimize(
         """
         SELECT
             partition,
-            partition_id,
             count() AS c
         FROM system.parts
         WHERE active
