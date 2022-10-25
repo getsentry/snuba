@@ -187,6 +187,7 @@ class EntitySubscription(ABC):
     organization: Optional[int] = None
     max_allowed_aggregations: Optional[int] = None
     disallowed_aggregations: Optional[Sequence[str]] = None
+    data_dict: Optional[Mapping[str, Any]] = None
 
     @abstractmethod
     def get_entity_subscription_conditions_for_snql(
@@ -211,6 +212,9 @@ class EntitySubscription(ABC):
 
 
 class EntitySubscriptionValidation:
+    MAX_ALLOWED_AGGREGATIONS: int = 1
+    disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"]
+
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # TODO: Support composite queries with multiple entities.
         from_clause = query.get_from_clause()

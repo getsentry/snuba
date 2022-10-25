@@ -74,11 +74,10 @@ def assert_entity_subscription_on_subscription_class(
     subscription_cls = get_entity(entity_key).get_entity_subscription()
     if organization:
         assert isinstance(subscription.entity_subscription, subscription_cls)
-        assert getattr(subscription.entity_subscription, "organization") == organization
+        assert subscription.entity_subscription.organization == organization
     else:
         assert isinstance(subscription.entity_subscription, BaseEntitySubscription)
-        with pytest.raises(AttributeError):
-            getattr(subscription.entity_subscription, "organization")
+        assert subscription.entity_subscription.organization is None
 
 
 @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)

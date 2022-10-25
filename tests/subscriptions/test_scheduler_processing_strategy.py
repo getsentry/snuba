@@ -14,7 +14,7 @@ from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
+from snuba.datasets.entity import BaseEntitySubscription
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -555,7 +555,7 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=BaseEntitySubscription(data_dict={}),
         ),
     )
 
@@ -567,7 +567,7 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=2 * 60,
             resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=BaseEntitySubscription(data_dict={}),
         ),
     )
 
@@ -668,7 +668,7 @@ def test_produce_stale_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=BaseEntitySubscription(data_dict={}),
         ),
     )
 

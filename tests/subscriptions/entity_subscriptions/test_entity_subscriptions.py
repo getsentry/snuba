@@ -4,7 +4,6 @@ import pytest
 
 from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
 from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Literal
 
 TESTS = [
@@ -28,32 +27,14 @@ TESTS = [
     ),
     pytest.param(
         BaseEntitySubscription,
-        {"data_dict": {}},
-        InvalidQueryException,
-        id="Sessions subscription",
-    ),
-    pytest.param(
-        BaseEntitySubscription,
         {"data_dict": {"organization": 1}},
         None,
         id="Metrics counters subscription",
     ),
     pytest.param(
         BaseEntitySubscription,
-        {"data_dict": {}},
-        InvalidQueryException,
-        id="Metrics counters subscription",
-    ),
-    pytest.param(
-        BaseEntitySubscription,
         {"data_dict": {"organization": 1}},
         None,
-        id="Metrics sets subscription",
-    ),
-    pytest.param(
-        BaseEntitySubscription,
-        {"data_dict": {}},
-        InvalidQueryException,
         id="Metrics sets subscription",
     ),
 ]
