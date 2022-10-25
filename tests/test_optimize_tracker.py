@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from snuba import optimize, settings, util
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -203,19 +203,29 @@ def test_run_optimize_with_ongoing_merges() -> None:
     assert len(tracker.get_all_partitions()) == 0
     assert len(tracker.get_scheduled_partitions()) == 0
 
-    with patch("snuba.optimize.get_current_merging_partitions_info") as mock_merge_ids:
+    with patch.object(
+        optimize, "get_current_merging_partitions_info"
+    ) as mock_merge_ids:
 
         # mock ongoing merges on half the partitions
-        num_merging_parititons = len(partitions) // 2
-        mock_merge_ids.return_value = {
-            partition.name: {
-                "partition_id": partition.partition_id,
-                "elapsed": 123,
-                "progress": 0.5,
-                "estimated_time": 10,  # sleep for 10 seconds on each partition
-            }
-            for partition in partitions[:num_merging_parititons]
-        }
+        current_merges = [
+            util.MergeInfo(
+                "90-20220613",
+                "90-20220613_0_1216096_1417",
+                10,
+                0.5,
+                60_000_000_000,
+            ),
+        ]
+        # mock_merge_ids.return_value = current_merges
+        mock_merge_ids.side_effect = [
+            current_merges,
+            [],
+            current_merges,
+            [],
+            [],
+            [],
+        ]  # first & thid call returns ongoing merges, rest return no ongoing merges
 
         with patch.object(time, "sleep") as sleep_mock:
             num_optimized = run_optimize_cron_job(
@@ -227,48 +237,66 @@ def test_run_optimize_with_ongoing_merges() -> None:
                 tracker=tracker,
             )
             assert num_optimized == original_num_partitions
-            assert mock_merge_ids.call_count == 1
+            assert mock_merge_ids.call_count == 6
 
-            sleep_mock.assert_called_with(settings.OPTIMIZE_BASE_SLEEP_TIME + 10)
-            sleep_mock.call_count = (
-                num_merging_parititons  # only sleep on merging partitions
+            sleep_mock.assert_called_with(
+                settings.OPTIMIZE_BASE_SLEEP_TIME + current_merges[0].estimated_time
             )
+            sleep_mock.call_count = 4  # twice for first and second patitition
 
 
-def test_build_merge_info() -> None:
+def test_merge_info() -> None:
     storage = get_writable_storage(StorageKey.ERRORS)
     part_format = storage.get_table_writer().get_schema().get_part_format()
     assert part_format is not None
 
-    partitions = [
-        util.decode_part_str(part, part_format, partition_id)
-        for part, partition_id in [
-            ("(90,'2022-06-13')", "90-20220613"),
-            ("(90,'2022-09-12')", "90-20220912"),
-        ]
-    ]
-
     merge_query_result = ClickhouseResult(
         results=[
-            ["90-20220613_0_1216096_1417", 8020.61436897, 0.9895385071013121, 1],
-            ["90-20220912_133168_133172_1", 0.181636831, 1.0, 1],
+            [
+                "90-20220613_0_1216096_1417",
+                8020.61436897,
+                0.9895385071013121,
+                40_000_000_000,
+            ],
+            ["90-20220912_133168_133172_1", 0.181636831, 1.0, 60_000_000_000],
         ]
     )
 
-    merge_info = optimize.__build_merging_partitions_info(
-        merge_query_result, partitions
-    )
-    assert merge_info == {
-        "(90,'2022-06-13')": {
-            "partition_id": "90-20220613",
-            "elapsed": 8020.61436897,
-            "progress": 0.9895385071013121,
-            "estimated_time": 8020.61436897 / (0.9895385071013121 + 0.0001),
-        },
-        "(90,'2022-09-12')": {
-            "partition_id": "90-20220912",
-            "elapsed": 0.181636831,
-            "progress": 1.0,
-            "estimated_time": 0.181636831 / (1.0 + 0.0001),
-        },
-    }
+    with patch.object(ClickhousePool, "execute") as mock_clickhouse_execute:
+        mock_clickhouse_execute.return_value = merge_query_result
+        merge_info = optimize.get_current_merging_partitions_info(
+            clickhouse=ClickhousePool(
+                "localhost", 9000, "user", "password", "database"
+            ),
+            database="default",
+            table="errors_local",
+        )
+        assert merge_info == [
+            util.MergeInfo(
+                "90-20220613",
+                "90-20220613_0_1216096_1417",
+                8020.61436897,
+                0.9895385071013121,
+                40_000_000_000,
+            ),
+            util.MergeInfo(
+                "90-20220912",
+                "90-20220912_133168_133172_1",
+                0.181636831,
+                1.0,
+                60_000_000_000,
+            ),
+        ]
+
+        assert merge_info[0].estimated_time == 8020.61436897 / (
+            0.9895385071013121 + 0.0001
+        )
+        busy, sleep_time = optimize.is_busy_merging(
+            clickhouse=ClickhousePool(
+                "localhost", 9000, "user", "password", "database"
+            ),
+            database="default",
+            table="errors_local",
+        )
+        assert busy
+        assert sleep_time == merge_info[0].estimated_time

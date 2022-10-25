@@ -2,15 +2,20 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, Mapping, MutableSequence, Optional, Sequence
+from typing import Mapping, MutableSequence, Optional, Sequence, Tuple
 
 from snuba import environment, util
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.optimize_scheduler import OptimizeScheduler
 from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
-from snuba.settings import OPTIMIZE_BASE_SLEEP_TIME
+from snuba.settings import (
+    OPTIMIZE_BASE_SLEEP_TIME,
+    OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS,
+    OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
+    OPTIMIZE_MERGE_SIZE_CUTOFF,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.optimize")
@@ -46,16 +51,11 @@ def run_optimize(
         clickhouse, storage, database, table, before
     )
 
-    merging_partitions_info = get_current_merging_partitions_info(
-        clickhouse, database, table, partitions
-    )
-
     partition_names = [partition.name for partition in partitions]
 
     optimize_partitions(
         clickhouse=clickhouse,
         database=database,
-        current_merge_info=merging_partitions_info,
         table=table,
         partitions=partition_names,
     )
@@ -95,9 +95,6 @@ def run_optimize_cron_job(
         partitions = get_partitions_to_optimize(
             clickhouse, storage, database, table, before
         )
-        merging_partitions_info = get_current_merging_partitions_info(
-            clickhouse, database, table, partitions
-        )
 
         if len(partitions) == 0:
             logger.info("No partitions need optimization")
@@ -117,7 +114,6 @@ def run_optimize_cron_job(
         database=database,
         table=table,
         partitions=list(partitions_to_optimize),
-        current_merge_info=merging_partitions_info,
         tracker=tracker,
         scheduler=optimize_scheduler,
         clickhouse_host=clickhouse_host,
@@ -207,51 +203,42 @@ def get_current_merging_partitions_info(
     clickhouse: ClickhousePool,
     database: str,
     table: str,
-    partitions: Sequence[util.Part],
-) -> Dict[str, Any]:
+) -> Sequence[util.MergeInfo]:
     """
-    Returns a dictionary of partitions that are currently being merged.
+    Returns a dictionary of partitions that are currently part of large merged. Merges
+    are considered large if they are longer than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
+    or if they are larger than OPTIMIZE_MERGE_MIN_PARTS_CUTTOFF_TIME.
     """
-
     merging_parts = clickhouse.execute(
         """
         SELECT
             result_part_name,
-            max(elapsed),
-            min(progress),      -- get the slowest merge combination possible
-            count() AS c
+            elapsed,
+            progress,      -- get the slowest merge combination possible
+            total_size_bytes_compressed
         FROM system.merges
         WHERE database = %(database)s
+        AND (
+            total_size_bytes_compressed > %(max_merge_size)d
+            OR elapsed > %(min_merge_elapsed_time)f
+            )
         AND table = %(table)s
-        GROUP BY result_part_name
-        ORDER BY c DESC, result_part_name
+        ORDER BY elapsed DESC
         """,
-        {"database": database, "table": table},
+        {
+            "database": database,
+            "table": table,
+            "max_merge_size": OPTIMIZE_MERGE_SIZE_CUTOFF,
+            "min_merge_elapsed_time": OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
+        },
     )
 
-    return __build_merging_partitions_info(merging_parts, partitions)
-
-
-def __build_merging_partitions_info(
-    merge_resuts: ClickhouseResult, partitions: Sequence[util.Part]
-) -> Dict[str, Any]:
-
-    merge_partitions_ids = {}
-    for part, elapsed, progress, count in merge_resuts.results:
+    merge_info = []
+    for part, elapsed, progress, size in merging_parts.results:
         partition_id = part.split("_")[0]
-        merge_partitions_ids[partition_id] = {
-            "partition_id": partition_id,
-            "elapsed": elapsed,
-            "progress": progress,
-            "estimated_time": elapsed / (progress + 0.0001),
-        }
+        merge_info.append(util.MergeInfo(partition_id, part, elapsed, progress, size))
 
-    merging_partitions_info = {
-        part.name: merge_partitions_ids[part.partition_id]
-        for part in partitions
-        if part.partition_id in merge_partitions_ids
-    }
-    return merging_partitions_info
+    return merge_info
 
 
 def optimize_partition_runner(
@@ -259,7 +246,6 @@ def optimize_partition_runner(
     database: str,
     table: str,
     partitions: Sequence[str],
-    current_merge_info: Dict[str, Any],
     scheduler: OptimizeScheduler,
     tracker: OptimizedPartitionTracker,
     clickhouse_host: str,
@@ -294,7 +280,6 @@ def optimize_partition_runner(
                         database,
                         table,
                         schedule.partitions[i],
-                        current_merge_info,
                         schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
@@ -325,7 +310,6 @@ def optimize_partitions(
     database: str,
     table: str,
     partitions: Sequence[str],
-    current_merge_info: Dict[str, Any],
     cutoff_time: Optional[datetime] = None,
     tracker: Optional[OptimizedPartitionTracker] = None,
     clickhouse_host: Optional[str] = None,
@@ -368,9 +352,14 @@ def optimize_partitions(
             tracker.update_scheduled_partitions(partition)
 
         # if theres a merge in progress for this partition, wait for it to finish
-        if partition in current_merge_info:
-            est_sleep_time = current_merge_info[partition]["estimated_time"]
-            time.sleep(OPTIMIZE_BASE_SLEEP_TIME + est_sleep_time)
+        while True:
+            busy_merging, estimated_sleep_time = is_busy_merging(
+                clickhouse, database, table
+            )
+            if not busy_merging:
+                break
+            else:
+                time.sleep(OPTIMIZE_BASE_SLEEP_TIME + estimated_sleep_time)
 
         start = time.time()
         clickhouse.execute(query, retryable=False)
@@ -379,3 +368,33 @@ def optimize_partitions(
             time.time() - start,
             tags=_get_metrics_tags(table, clickhouse_host),
         )
+
+
+def is_busy_merging(
+    clickhouse: ClickhousePool, database: str, table: str
+) -> Tuple[bool, float]:
+    """
+    Returns true and the estimated sleep time if clickhouse is busy with merges in progress
+    for the table. Clickhouse is considered busy if
+        1. there are more than OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS merges in progress
+        2. or there is a merge of size greater than OPTIMIZE_MERGE_SIZE_CUTOFF
+    """
+    merge_info = get_current_merging_partitions_info(clickhouse, database, table)
+
+    if len(merge_info) > OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS:
+        estimated_sleep_time = max(
+            merge_info, key=lambda x: x.estimated_time
+        ).estimated_time
+        logger.info(
+            f"too many concurrent merges {len(merge_info)}, sleeping for {estimated_sleep_time}s"
+        )
+        return True, estimated_sleep_time
+
+    if any(merge.size > OPTIMIZE_MERGE_SIZE_CUTOFF for merge in merge_info):
+        estimated_sleep_time = max(
+            merge_info, key=lambda x: x.estimated_time
+        ).estimated_time
+        logger.info("large ongoing merge, sleeping for {estimated_sleep_time}s")
+        return True, estimated_sleep_time
+
+    return False, 0

@@ -2,6 +2,7 @@ import inspect
 import logging
 import numbers
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
@@ -279,3 +280,16 @@ def with_span(op: str = "function") -> Callable[[F], F]:
         return cast(F, wrapper)
 
     return decorator
+
+
+@dataclass
+class MergeInfo:
+    partition_id: str
+    result_part_name: str
+    elapsed: float
+    progress: float
+    size: int
+
+    @property
+    def estimated_time(self) -> float:
+        return self.elapsed / (self.progress + 0.0001)
