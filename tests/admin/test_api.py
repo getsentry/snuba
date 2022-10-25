@@ -5,7 +5,6 @@ import simplejson as json
 from flask.testing import FlaskClient
 
 from snuba import state
-from snuba.admin.views import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
 
 
@@ -236,7 +235,7 @@ def test_querylog_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "querylog")
     response = admin_api.post(
         "/clickhouse_querylog_query",
-        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        headers={"Content-Type": "application/json"},
         data=json.dumps({"sql": f"SELECT count() FROM {table}"}),
     )
     assert response.status_code == 200
@@ -248,23 +247,12 @@ def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_querylog_query",
-        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        headers={"Content-Type": "application/json"},
         data=json.dumps({"sql": f"SELECT count() FROM {table}"}),
     )
     assert response.status_code == 400
     data = json.loads(response.data)
     assert "error" in data and data["error"]["message"].startswith("Invalid FROM")
-
-
-def test_querylog_not_authorized(admin_api: FlaskClient) -> None:
-    table, _, _ = get_node_for_table(admin_api, "querylog")
-    response = admin_api.post(
-        "/clickhouse_querylog_query",
-        headers={"Content-Type": "application/json"},
-        data=json.dumps({"sql": f"SELECT count() FROM {table}"}),
-    )
-    assert response.status_code == 401
-    assert json.loads(response.data) == {"error": "Unauthorized"}
 
 
 def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
