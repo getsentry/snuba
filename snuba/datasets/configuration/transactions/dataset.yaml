@@ -1,0 +1,8 @@
+version: v1
+kind: dataset
+name: transactions
+
+is_experimental: false
+
+entities:
+  - transactions
