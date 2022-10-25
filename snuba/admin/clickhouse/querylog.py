@@ -3,6 +3,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
+from snuba.admin.notifications.querylog.audit_log import QuerylogAuditLogClient
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
@@ -11,6 +12,8 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import get_config
 
 ENABLE_QUERYLOG_API_CONFIG = "enable_clickhouse_querylog_api"
+
+querylog_audit_log_notification_client = QuerylogAuditLogClient()
 
 
 def run_querylog_query(query: str, user: str) -> ClickhouseResult:
@@ -48,4 +51,4 @@ def __run_querylog_query(query: str) -> ClickhouseResult:
 
 
 def audit_log_query(query: str, user: str) -> None:
-    pass
+    querylog_audit_log_notification_client.notify({"query": query}, user)
