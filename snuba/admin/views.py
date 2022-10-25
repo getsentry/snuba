@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stdout
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 import structlog
@@ -248,9 +248,35 @@ def clickhouse_trace_query() -> Response:
             ),
             400,
         )
-    return __run_query(
-        run_query_and_get_trace, {"storage_name": storage, "query": raw_sql}
-    )
+
+    try:
+        result = run_query_and_get_trace(storage, raw_sql)
+        trace_output = result.trace_output
+        return make_response(jsonify({"trace_output": trace_output}), 200)
+    except InvalidCustomQuery as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "validation",
+                        "message": err.message or "Invalid query",
+                    }
+                }
+            ),
+            400,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
@@ -277,14 +303,8 @@ def clickhouse_querylog_query() -> Response:
             ),
             400,
         )
-    return __run_query(run_querylog_query, {"query": raw_sql, "user": user})
-
-
-def __run_query(
-    query_runner: Callable[..., Response], kwargs: dict[str, Any]
-) -> Response:
     try:
-        result = query_runner(**kwargs)
+        result = run_querylog_query(raw_sql, user)
         rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
