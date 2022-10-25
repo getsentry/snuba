@@ -139,7 +139,7 @@ class Entity(Describable, ABC):
         """
         return self.__writable_storage
 
-    def get_entity_subscription(self) -> Optional[EntitySubscription]:
+    def get_entity_subscription(self) -> Optional[Type[EntitySubscription]]:
         """
         Returns the entity subscription associated with an entity
         """

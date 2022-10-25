@@ -109,7 +109,7 @@ class PluggableEntity(Entity):
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
 
-    def get_entity_subscription(self) -> Optional[EntitySubscription]:
+    def get_entity_subscription(self) -> Optional[Type[EntitySubscription]]:
         return self.entity_subscription
 
     def __eq__(self, other: Any) -> bool:

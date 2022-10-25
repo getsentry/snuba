@@ -4,11 +4,7 @@ import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EntitySubscriptionValidation,
-)
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
+from snuba.datasets.entity import EntitySubscription, EntitySubscriptionValidation
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -108,9 +104,8 @@ tests = [
 def test_subscription_clauses_validation(query: LogicalQuery) -> None:
     entity_subscription_cls = cast(
         EntityKeySubscription,
-        get_entity_subscription(query.get_from_clause().key),
+        get_entity(query.get_from_clause().key).get_entity_subscription(),
     )
-
     validator = SubscriptionAllowedClausesValidator(
         max_allowed_aggregations=1,
         disallowed_aggregations=entity_subscription_cls.disallowed_aggregations,
@@ -275,7 +270,7 @@ invalid_tests = [
 def test_subscription_clauses_validation_failure(query: LogicalQuery) -> None:
     entity_subscription_cls = cast(
         EntityKeySubscription,
-        get_entity_subscription(query.get_from_clause().key),
+        get_entity(query.get_from_clause().key).get_entity_subscription(),
     )
     validator = SubscriptionAllowedClausesValidator(
         max_allowed_aggregations=1,

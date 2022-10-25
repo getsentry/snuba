@@ -5,9 +5,7 @@ import pytest
 from pytest import raises
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    InvalidSubscriptionError,
-)
+from snuba.datasets.entity import InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import RedisClientKey, get_redis_client

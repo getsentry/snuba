@@ -2,63 +2,56 @@ from typing import Any, List, Mapping, Optional, Type
 
 import pytest
 
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EventsSubscription,
-    MetricsCountersSubscription,
-    MetricsSetsSubscription,
-    SessionsSubscription,
-    TransactionsSubscription,
-)
+from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Literal
 
 TESTS = [
     pytest.param(
-        EventsSubscription,
+        BaseEntitySubscription,
         {"data_dict": {}},
         None,
         id="Events subscription",
     ),
     pytest.param(
-        TransactionsSubscription,
+        BaseEntitySubscription,
         {"data_dict": {}},
         None,
         id="Transactions subscription",
     ),
     pytest.param(
-        SessionsSubscription,
+        BaseEntitySubscription,
         {"data_dict": {"organization": 1}},
         None,
         id="Sessions subscription",
     ),
     pytest.param(
-        SessionsSubscription,
+        BaseEntitySubscription,
         {"data_dict": {}},
         InvalidQueryException,
         id="Sessions subscription",
     ),
     pytest.param(
-        MetricsCountersSubscription,
+        BaseEntitySubscription,
         {"data_dict": {"organization": 1}},
         None,
         id="Metrics counters subscription",
     ),
     pytest.param(
-        MetricsCountersSubscription,
+        BaseEntitySubscription,
         {"data_dict": {}},
         InvalidQueryException,
         id="Metrics counters subscription",
     ),
     pytest.param(
-        MetricsSetsSubscription,
+        BaseEntitySubscription,
         {"data_dict": {"organization": 1}},
         None,
         id="Metrics sets subscription",
     ),
     pytest.param(
-        MetricsSetsSubscription,
+        BaseEntitySubscription,
         {"data_dict": {}},
         InvalidQueryException,
         id="Metrics sets subscription",
@@ -67,31 +60,31 @@ TESTS = [
 
 TESTS_CONDITIONS_SNQL_METHOD = [
     pytest.param(
-        EventsSubscription(data_dict={}),
+        BaseEntitySubscription(data_dict={}),
         [],
         True,
         id="Events subscription with offset of type SNQL",
     ),
     pytest.param(
-        EventsSubscription(data_dict={}),
+        BaseEntitySubscription(data_dict={}),
         [],
         False,
         id="Events subscription with no offset of type SNQL",
     ),
     pytest.param(
-        TransactionsSubscription(data_dict={}),
+        BaseEntitySubscription(data_dict={}),
         [],
         True,
         id="Transactions subscription with offset of type SNQL",
     ),
     pytest.param(
-        TransactionsSubscription(data_dict={}),
+        BaseEntitySubscription(data_dict={}),
         [],
         False,
         id="Transactions subscription with no offset of type SNQL",
     ),
     pytest.param(
-        SessionsSubscription(data_dict={"organization": 1}),
+        BaseEntitySubscription(data_dict={"organization": 1}),
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -103,7 +96,7 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         id="Sessions subscription of type SNQL",
     ),
     pytest.param(
-        MetricsCountersSubscription(data_dict={"organization": 1}),
+        BaseEntitySubscription(data_dict={"organization": 1}),
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -115,7 +108,7 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         id="Metrics counters subscription of type SNQL",
     ),
     pytest.param(
-        MetricsSetsSubscription(data_dict={"organization": 1}),
+        BaseEntitySubscription(data_dict={"organization": 1}),
         [
             binary_condition(
                 ConditionFunctions.EQ,

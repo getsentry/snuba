@@ -22,11 +22,7 @@ from uuid import UUID
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    InvalidSubscriptionError,
-)
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
+from snuba.datasets.entity import EntitySubscription, InvalidSubscriptionError
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -172,7 +168,9 @@ class SubscriptionData:
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SubscriptionData:
-        entity_subscription = get_entity_subscription(entity_key)(data_dict=data)
+        entity_subscription = get_entity(entity_key).get_entity_subscription()(
+            data_dict=data
+        )
 
         return SubscriptionData(
             project_id=data["project_id"],

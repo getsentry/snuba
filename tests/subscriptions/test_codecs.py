@@ -8,13 +8,8 @@ from typing import Callable, Optional, Type
 import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EventsSubscription,
-    MetricsCountersSubscription,
-    MetricsSetsSubscription,
-)
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -76,12 +71,12 @@ def assert_entity_subscription_on_subscription_class(
     subscription: SubscriptionData,
     entity_key: EntityKey,
 ) -> None:
-    subscription_cls = get_entity_subscription(entity_key)
+    subscription_cls = get_entity(entity_key).get_entity_subscription()
     if organization:
         assert isinstance(subscription.entity_subscription, subscription_cls)
         assert getattr(subscription.entity_subscription, "organization") == organization
     else:
-        assert isinstance(subscription.entity_subscription, EventsSubscription)
+        assert isinstance(subscription.entity_subscription, BaseEntitySubscription)
         with pytest.raises(AttributeError):
             getattr(subscription.entity_subscription, "organization")
 
@@ -142,7 +137,7 @@ def test_subscription_task_result_encoder() -> None:
 
     timestamp = datetime.now()
 
-    entity_subscription = EventsSubscription(data_dict={})
+    entity_subscription = BaseEntitySubscription(data_dict={})
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
@@ -191,13 +186,13 @@ def test_subscription_task_result_encoder() -> None:
 
 METRICS_CASES = [
     pytest.param(
-        MetricsCountersSubscription,
+        BaseEntitySubscription,
         "sum",
         EntityKey.METRICS_COUNTERS,
         id="metrics_counters subscription",
     ),
     pytest.param(
-        MetricsSetsSubscription,
+        BaseEntitySubscription,
         "uniq",
         EntityKey.METRICS_SETS,
         id="metrics_sets subscription",
@@ -278,7 +273,7 @@ def test_subscription_task_encoder() -> None:
         query="MATCH events SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity_subscription=BaseEntitySubscription(data_dict={}),
     )
 
     subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")

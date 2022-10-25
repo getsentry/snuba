@@ -17,8 +17,7 @@ from confluent_kafka.admin import AdminClient
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
+from snuba.datasets.entity import BaseEntitySubscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -125,7 +124,7 @@ def test_executor_consumer() -> None:
         query="MATCH (events) SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity_subscription=BaseEntitySubscription(data_dict={}),
     )
 
     task = ScheduledSubscriptionTask(
@@ -184,7 +183,9 @@ def generate_message(
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
         data_dict = {"organization": 1}
 
-    entity_subscription = get_entity_subscription(entity_key)(data_dict=data_dict)
+    entity_subscription = get_entity(entity_key).get_entity_subscription()(
+        data_dict=data_dict
+    )
 
     while True:
         payload = codec.encode(
@@ -316,7 +317,7 @@ def test_produce_result() -> None:
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity_subscription=BaseEntitySubscription(data_dict={}),
     )
 
     subscription = Subscription(
