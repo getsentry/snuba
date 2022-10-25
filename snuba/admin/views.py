@@ -255,6 +255,13 @@ def clickhouse_trace_query() -> Response:
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
 def clickhouse_querylog_query() -> Response:
+    user = request.headers.get(USER_HEADER_KEY)
+    if not user:
+        return make_response(
+            jsonify(
+                {"error": {"type": "authentication", "message": "User not logged in!"}}
+            )
+        )
     req = json.loads(request.data)
     try:
         raw_sql = req["sql"]
@@ -270,7 +277,7 @@ def clickhouse_querylog_query() -> Response:
             ),
             400,
         )
-    return __run_query(run_querylog_query, {"query": raw_sql})
+    return __run_query(run_querylog_query, {"query": raw_sql, "user": user})
 
 
 def __run_query(
