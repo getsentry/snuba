@@ -141,6 +141,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Copy ClickHouse Tables")
     parser.add_argument(
         "--source-host",
+        required=True,
         help="IP/name for node that tables should be copied from.",
     )
     parser.add_argument(
@@ -149,7 +150,9 @@ if __name__ == "__main__":
         default=9000,
     )
     parser.add_argument(
-        "--target-host", help="IP/name for node that needs tables created."
+        "--target-host",
+        required=True,
+        help="IP/name for node that needs tables created.",
     )
     parser.add_argument(
         "--target-port", help="Port for node that needs tables created.", default=9000
