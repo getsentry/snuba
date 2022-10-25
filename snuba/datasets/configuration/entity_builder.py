@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import sentry_sdk
 
@@ -14,8 +14,9 @@ from snuba.clickhouse.translators.snuba.allowed import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.configuration.json_schema import V1_ENTITY_SCHEMA
 from snuba.datasets.configuration.loader import load_configuration_data
-from snuba.datasets.configuration.utils import parse_columns, parse_entity_subscription
+from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.entities.entity_key import register_entity_key
+from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -90,6 +91,18 @@ def _build_entity_translation_mappers(
     )
 
 
+def _build_entity_subscription(config: dict[str, Any]) -> Optional[EntitySubscription]:
+    if "subscriptions" in config:
+        BaseEntitySubscription.max_allowed_aggregations = config["subscriptions"][
+            "max_allowed_aggregations"
+        ]
+        BaseEntitySubscription.disallowed_aggregations = config["subscriptions"][
+            "disallowed_aggregations"
+        ]
+        return BaseEntitySubscription
+    return None
+
+
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
     with sentry_sdk.start_span(op="build", description=f"Entity: {config['name']}"):
@@ -109,5 +122,5 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
             if "writable_storage" in config
             else None,
             partition_key_column_name=config.get("partition_key_column_name", None),
-            entity_subscription=parse_entity_subscription(config),
+            entity_subscription=_build_entity_subscription(config),
         )

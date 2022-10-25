@@ -315,6 +315,7 @@ class OrgSessionsEntity(Entity):
             writable_storage=None,
             validators=None,
             required_time_column="started",
+            entity_subscription=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

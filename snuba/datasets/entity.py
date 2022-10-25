@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence, Type, Union
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
-from snuba.datasets.entities.factory import get_entity
+
+# from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -18,10 +19,9 @@ from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import (
+from snuba.query.validation.validators import (  # NoTimeBasedConditionValidator,
     ColumnValidationMode,
     EntityContainsColumnsValidator,
-    NoTimeBasedConditionValidator,
     QueryValidator,
     SubscriptionAllowedClausesValidator,
 )
@@ -216,13 +216,13 @@ class EntitySubscriptionValidation:
         from_clause = query.get_from_clause()
         if not isinstance(from_clause, EntityDS):
             raise InvalidSubscriptionError("Only simple queries are supported")
-        entity = get_entity(from_clause.key)
+        # entity = get_entity(from_clause.key)
 
         SubscriptionAllowedClausesValidator(
             self.max_allowed_aggregations, self.disallowed_aggregations
         ).validate(query)
-        if entity.required_time_column:
-            NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
+        # if entity.required_time_column:
+        #     NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
 
 class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
