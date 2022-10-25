@@ -33,6 +33,7 @@ def api(
             raise click.ClickException("bind can only be in the format <host>:<port>")
     else:
         host, port = settings.HOST, settings.PORT
+
     if debug:
         if processes > 1 or threads > 1:
             raise click.ClickException("processes/threads can only be 1 in debug")
