@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import MutableMapping
 
 from snuba import settings
@@ -112,17 +114,29 @@ def get_ro_query_node_connection(
     return connection
 
 
-def validate_ro_query(sql_query: str) -> None:
+def validate_ro_query(sql_query: str, allowed_tables: list[str] | None = None) -> None:
     """
     Simple validation to ensure query only attempts read queries.
 
+    If allowed_tables is provided, ensures the 'from' clause contains
+    an allowed table. All tables are allowed otherwise.
+
     Raises InvalidCustomQuery if query is invalid or not allowed.
     """
-    sql_query = " ".join(sql_query.split())
-    lowered = sql_query.lower().strip()
 
+    sql_query_split = sql_query.lower().split()
+    lowered = " ".join(sql_query_split)
     if not lowered.startswith("select"):
         raise InvalidCustomQuery("Only SELECT queries are allowed")
+
+    if allowed_tables:
+        if (
+            sql_query_split.count("from") != 1
+            or sql_query_split[sql_query_split.index("from") + 1] not in allowed_tables
+        ):
+            raise InvalidCustomQuery(
+                f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+            )
 
     disallowed_keywords = ["insert", ";"]
     for kw in disallowed_keywords:

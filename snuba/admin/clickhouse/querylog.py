@@ -7,7 +7,9 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 
 
 def run_querylog_query(query: str) -> ClickhouseResult:
-    validate_ro_query(query)
+    validate_ro_query(
+        sql_query=query, allowed_tables=["querylog_local", "querylog_dist"]
+    )
     connection = get_ro_query_node_connection(
         "querylog", ClickhouseClientSettings.QUERY
     )
