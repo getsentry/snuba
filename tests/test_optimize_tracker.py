@@ -246,10 +246,6 @@ def test_run_optimize_with_ongoing_merges() -> None:
 
 
 def test_merge_info() -> None:
-    storage = get_writable_storage(StorageKey.ERRORS)
-    part_format = storage.get_table_writer().get_schema().get_part_format()
-    assert part_format is not None
-
     merge_query_result = ClickhouseResult(
         results=[
             [
