@@ -5,13 +5,6 @@ from typing import Optional, Sequence
 
 from clickhouse_driver import Client
 
-SETTINGS = {
-    "load_balancing": "in_order",
-    "replication_alter_partitions_sync": 2,
-    "mutations_sync": 2,
-    "database_atomic_wait_for_drop_and_detach_synchronously": 1,
-}
-
 
 def _get_client(
     host: str, port: int, user: str, password: str, database: str
@@ -22,7 +15,6 @@ def _get_client(
         user=user,
         password=password,
         database=database,
-        settings=SETTINGS,
     )
 
 
@@ -101,6 +93,25 @@ def copy_tables(
     execute: bool,
     tables: Optional[Sequence[str]],
 ) -> None:
+    """
+    When adding a replica to a clickhouse cluster, that node will not have any tables
+    created yet. In order to get the up to date table statements, we need to copy the
+    create table statements and run them on the new node(s).
+
+    The source_client is the clickhouse node that you are copying the table statements
+    from. The target_client is the clickhouse node is the node you want to create the
+    tables on.
+
+    The table engines that have some extra verification are materialized views, and
+    any of the replicated tables that are listed in the clickhouse docs:
+    https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication/
+
+    By default running the script will only print out the CREATE TABLE statement, to
+    actually have the CREATE TABLE statement run, use --execute.
+
+    Consider doing one table at a time if you have tables that will take a while to
+    replicate and might increase the cluster's normalized load considerably.
+    """
 
     if not tables:
         tables = [result[0] for result in source_client.execute("SHOW TABLES")]
