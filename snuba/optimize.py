@@ -204,7 +204,7 @@ def get_current_merging_partitions_info(
     table: str,
 ) -> Sequence[util.MergeInfo]:
     """
-    Returns a dictionary of partitions that are currently part of large merged. Merges
+    Returns a dictionary of partitions that are currently part of large merge. Merges
     are considered large if they are longer than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
     or if they are larger than OPTIMIZE_MERGE_MIN_PARTS_CUTTOFF_TIME.
     """
