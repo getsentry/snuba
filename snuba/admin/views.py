@@ -284,9 +284,8 @@ def clickhouse_querylog_query() -> Response:
     user = request.headers.get(USER_HEADER_KEY)
     if not user:
         return make_response(
-            jsonify(
-                {"error": {"type": "authentication", "message": "User not logged in!"}}
-            )
+            json.dumps({"error": "Unauthorized"}),
+            401,
         )
     req = json.loads(request.data)
     try:
@@ -321,6 +320,12 @@ def clickhouse_querylog_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
     except Exception as err:
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
