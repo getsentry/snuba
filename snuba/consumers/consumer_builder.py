@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
-from arroyo import Topic
+from arroyo import Topic as ArroyoTopic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
@@ -70,7 +70,7 @@ class ConsumerBuilder:
 
     def __init__(
         self,
-        storage_key: StorageKey,
+        storage_keys: Sequence[StorageKey],
         kafka_params: KafkaParameters,
         processing_params: ProcessingParameters,
         max_batch_size: int,
@@ -83,56 +83,92 @@ class ConsumerBuilder:
         mock_parameters: Optional[MockParameters] = None,
         cooperative_rebalancing: bool = False,
     ) -> None:
-        self.storage = get_writable_storage(storage_key)
+        self.storages = {key: get_writable_storage(key) for key in storage_keys}
         self.bootstrap_servers = kafka_params.bootstrap_servers
         self.consumer_group = kafka_params.group_id
-        topic = (
-            self.storage.get_table_writer()
+
+        # in multistorage case, we ensure there is one topic in common
+        topics = {
+            storage.get_table_writer()
             .get_stream_loader()
             .get_default_topic_spec()
             .topic
-        )
+            for storage in self.storages.values()
+        }
+        topic = topics.pop()
+        if topics:
+            raise ValueError("only one topic is supported")
 
-        self.broker_config = get_default_kafka_configuration(
-            topic, bootstrap_servers=kafka_params.bootstrap_servers
-        )
-        logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
-        self.producer_broker_config = build_kafka_producer_configuration(
-            topic,
-            bootstrap_servers=kafka_params.bootstrap_servers,
-            override_params={
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            },
-        )
+        if len(self.storages) == 1:
+            self.broker_config = get_default_kafka_configuration(
+                topic, bootstrap_servers=kafka_params.bootstrap_servers
+            )
+            logger.info(
+                f"librdkafka log level: {self.broker_config.get('log_level', 6)}"
+            )
 
-        stream_loader = self.storage.get_table_writer().get_stream_loader()
+            self.producer_broker_config = build_kafka_producer_configuration(
+                topic,
+                bootstrap_servers=kafka_params.bootstrap_servers,
+                override_params={
+                    "partitioner": "consistent",
+                    "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                },
+            )
 
-        self.raw_topic: Topic
+        storage_keys = [*self.storages.keys()]
+
+        self.raw_topic: ArroyoTopic
         if kafka_params.raw_topic is not None:
-            self.raw_topic = Topic(kafka_params.raw_topic)
+            self.raw_topic = ArroyoTopic(kafka_params.raw_topic)
         else:
-            self.raw_topic = Topic(stream_loader.get_default_topic_spec().topic_name)
+            self.raw_topic = ArroyoTopic(topic.value)
 
-        self.replacements_topic: Optional[Topic]
+        self.replacements_topic: Optional[ArroyoTopic]
         if kafka_params.replacements_topic is not None:
-            self.replacements_topic = Topic(kafka_params.replacements_topic)
+            self.replacements_topic = ArroyoTopic(kafka_params.replacements_topic)
         else:
-            replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-            if replacement_topic_spec is not None:
-                self.replacements_topic = Topic(replacement_topic_spec.topic_name)
+            replacement_topics = {
+                spec.topic_name
+                for spec in (
+                    storage.get_table_writer()
+                    .get_stream_loader()
+                    .get_replacement_topic_spec()
+                    for storage in self.storages.values()
+                )
+                if spec is not None
+            }
+
+            if replacement_topics:
+                self.replacements_topic = ArroyoTopic(replacement_topics.pop())
             else:
                 self.replacements_topic = None
 
-        self.commit_log_topic: Optional[Topic]
+            if replacement_topics:
+                raise ValueError("only one replacement topic is supported")
+
+        self.commit_log_topic: Optional[ArroyoTopic]
         if kafka_params.commit_log_topic is not None:
-            self.commit_log_topic = Topic(kafka_params.commit_log_topic)
+            self.commit_log_topic = ArroyoTopic(kafka_params.commit_log_topic)
         else:
-            commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
-            if commit_log_topic_spec is not None:
-                self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
+            commit_log_topics = {
+                spec.topic_name
+                for spec in (
+                    storage.get_table_writer()
+                    .get_stream_loader()
+                    .get_commit_log_topic_spec()
+                    for storage in self.storages.values()
+                )
+                if spec is not None
+            }
+
+            if commit_log_topics:
+                self.commit_log_topic = ArroyoTopic(commit_log_topics.pop())
             else:
                 self.commit_log_topic = None
+
+            if commit_log_topics:
+                raise ValueError("only one commit log topic is supported")
 
         self.stats_callback = stats_callback
 
@@ -174,8 +210,12 @@ class ConsumerBuilder:
     def __build_consumer(
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
+        # this assumes single storage for now
+        storage_keys = [*self.storages.keys()]
+        storage = self.storages[storage_keys[0]]
+
         configuration = build_kafka_consumer_configuration(
-            self.storage.get_table_writer()
+            storage.get_table_writer()
             .get_stream_loader()
             .get_default_topic_spec()
             .topic,
@@ -221,7 +261,11 @@ class ConsumerBuilder:
     def __build_streaming_strategy_factory(
         self,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
-        table_writer = self.storage.get_table_writer()
+        # this assumes single storage for now
+        storage_keys = [*self.storages.keys()]
+        storage = self.storages[storage_keys[0]]
+
+        table_writer = storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
 
         processor = stream_loader.get_processor()
@@ -243,7 +287,7 @@ class ConsumerBuilder:
             )
             if self.__mock_parameters is None
             else build_mock_batch_writer(
-                self.storage,
+                storage,
                 bool(self.replacements_topic),
                 self.metrics,
                 self.__mock_parameters.avg_write_latency,

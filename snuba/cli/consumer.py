@@ -43,11 +43,12 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "--storage",
-    "storage_name",
+    "storage_names",
     type=click.Choice(
         [storage_key.value for storage_key in get_writable_storage_keys()]
     ),
-    help="The storage to target",
+    help="The storage(s) to target",
+    multiple=True,
     required=True,
 )
 @click.option(
@@ -120,7 +121,7 @@ def consumer(
     commit_log_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    storage_name: str,
+    storage_names: str,
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -139,21 +140,33 @@ def consumer(
     setup_logging(log_level)
     setup_sentry()
     logger.info("Consumer Starting")
-    storage_key = StorageKey(storage_name)
+    storage_keys = [
+        getattr(StorageKey, storage_name.upper()) for storage_name in storage_names
+    ]
 
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={"group": consumer_group, "storage": storage_key.value},
-    )
-    configure_metrics(StreamMetricsAdapter(metrics))
+    if len(storage_keys) == 1:
+        metrics = MetricsWrapper(
+            environment.metrics,
+            "consumer",
+            tags={"group": consumer_group, "storage": storage_keys[0].value},
+        )
+        configure_metrics(StreamMetricsAdapter(metrics))
+    else:
+        metrics = MetricsWrapper(
+            environment.metrics,
+            "consumer",
+            tags={
+                "group": consumer_group,
+                "storage": "_".join([storage_keys[0].value, "m"]),
+            },
+        )
 
     def stats_callback(stats_json: str) -> None:
         stats = rapidjson.loads(stats_json)
         metrics.gauge("librdkafka.total_queue_size", stats.get("replyq", 0))
 
     consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
+        storage_keys=storage_keys,
         kafka_params=KafkaParameters(
             raw_topic=raw_events_topic,
             replacements_topic=replacements_topic,
