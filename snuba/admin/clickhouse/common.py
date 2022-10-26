@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import MutableMapping
 
-# import sqlparse
 from sql_metadata import Parser, QueryType
 
 from snuba import settings
@@ -126,11 +125,14 @@ def validate_ro_query(sql_query: str, allowed_tables: list[str] | None = None) -
 
     Raises InvalidCustomQuery if query is invalid or not allowed.
     """
+    lowered = sql_query.lower()
+    disallowed_keywords = ["insert", ";"]
 
-    parsed = Parser(sql_query.lower())
+    for kw in disallowed_keywords:
+        if kw in lowered:
+            raise InvalidCustomQuery(f"{kw} is not allowed in the query")
 
-    if ";" in parsed.query:
-        raise InvalidCustomQuery("';' is not allowed in the query")
+    parsed = Parser(lowered)
 
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")

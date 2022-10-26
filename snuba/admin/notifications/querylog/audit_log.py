@@ -34,7 +34,7 @@ class QuerylogAuditLogClient:
         )
 
 
-querylog_audit_log_notification_client = QuerylogAuditLogClient()
+__querylog_audit_log_notification_client = QuerylogAuditLogClient()
 
 
 def audit_log(
@@ -49,7 +49,7 @@ def audit_log(
 
     def audit_log_wrapper(query: str, user: str) -> ClickhouseResult:
         audit_log_notify = partial(
-            querylog_audit_log_notification_client.notify,
+            __querylog_audit_log_notification_client.notify,
             user=user,
             query=query,
             start_timestamp=datetime.now().strftime(DATETIME_FORMAT),
