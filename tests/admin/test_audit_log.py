@@ -20,6 +20,8 @@ def test_audit_log_success() -> None:
     assert log["query"] == "test_good_query"
     assert log["user"] == "test_good_user"
     assert log["module"] == "snuba.admin.notifications.querylog.audit_log"
+    assert "start_timestamp" in log
+    assert "end_timestamp" in log
 
 
 def test_audit_log_failure() -> None:
@@ -38,3 +40,5 @@ def test_audit_log_failure() -> None:
     assert log["query"] == "test_bad_query"
     assert log["user"] == "test_bad_user"
     assert log["module"] == "snuba.admin.notifications.querylog.audit_log"
+    assert "start_timestamp" in log
+    assert "end_timestamp" in log
