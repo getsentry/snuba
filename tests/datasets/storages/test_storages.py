@@ -12,7 +12,6 @@ def test_storage_key() -> None:
     "first_storage, second_storage, expected",
     [
         (StorageKey.ERRORS, StorageKey.ERRORS_V2, True),
-        (StorageKey.TRANSACTIONS, StorageKey.TRANSACTIONS_V2, True),
         (StorageKey.ERRORS, StorageKey.TRANSACTIONS, False),
     ],
 )

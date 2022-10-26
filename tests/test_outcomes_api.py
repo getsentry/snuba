@@ -385,6 +385,14 @@ class TestOutcomesAPI(BaseApiTest):
             category=DataCategory.TRANSACTION,
         )
         self.generate_outcomes(
+            org_id=1,
+            project_id=project_id,
+            num_outcomes=3,
+            outcome=0,
+            time_since_base=timedelta(minutes=30),
+            category=DataCategory.TRANSACTION_INDEXED,
+        )
+        self.generate_outcomes(
             org_id=2,
             project_id=project_id,
             num_outcomes=10,
