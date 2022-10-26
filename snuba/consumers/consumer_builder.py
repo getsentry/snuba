@@ -134,12 +134,7 @@ class ConsumerBuilder:
             if commit_log_topic_spec is not None:
                 self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
                 self.commit_log_producer = Producer(
-                    build_kafka_producer_configuration(commit_log_topic_spec.topic),
-                    bootstrap_servers=kafka_params.bootstrap_servers,
-                    override_params={
-                        "partitioner": "consistent",
-                        "message.max.bytes": 50000000,  # 50MB, default is 1MB)
-                    },
+                    build_kafka_producer_configuration(commit_log_topic_spec.topic)
                 )
             else:
                 self.commit_log_topic = None
@@ -279,4 +274,7 @@ class ConsumerBuilder:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(self.__build_streaming_strategy_factory())
+        processor = self.__build_consumer(self.__build_streaming_strategy_factory())
+        self.commit_log_producer.close()
+        self.replacements_producer.close()
+        return processor
