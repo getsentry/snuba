@@ -53,7 +53,7 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: 'WARN'
       KAFKA_TOOLS_LOG4J_LOGLEVEL: 'WARN'
   clickhouse:
-    image: 'yandex/clickhouse-server:20.3.9.70'
+    image: '$CLICKHOUSE_IMAGE'
     volumes:
       - ./config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
