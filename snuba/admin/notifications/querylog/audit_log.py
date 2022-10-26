@@ -19,6 +19,7 @@ class QuerylogAuditLogClient:
         timestamp: str | None = None,
     ) -> None:
         self.logger.info(
+            event="run_query",
             user=user,
             query=data["query"],
             timestamp=timestamp or datetime.now().strftime("%B %d, %Y %H:%M:%S %p"),
