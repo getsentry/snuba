@@ -129,8 +129,7 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
 
     def __init__(self) -> None:
         assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
-        BaseEntitySubscription.max_allowed_aggregations = 3
-        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
+        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
@@ -156,8 +155,7 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
 
     def __init__(self) -> None:
         assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
-        BaseEntitySubscription.max_allowed_aggregations = 3
-        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
+        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,

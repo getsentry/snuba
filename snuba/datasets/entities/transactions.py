@@ -103,12 +103,7 @@ class BaseTransactionsEntity(Entity, ABC):
                 else transaction_translator.concat(custom_mappers),
             )
         )
-        BaseEntitySubscription.max_allowed_aggregations = 1
-        BaseEntitySubscription.disallowed_aggregations = [
-            "groupby",
-            "having",
-            "orderby",
-        ]
+        BaseEntitySubscription.set_attrs(1, ["groupby", "having", "orderby"])
 
         super().__init__(
             storages=[storage],

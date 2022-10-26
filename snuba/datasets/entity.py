@@ -182,13 +182,11 @@ class InvalidSubscriptionError(Exception):
 
 
 class EntitySubscription(ABC):
-    organization: Optional[int] = None
     max_allowed_aggregations: Optional[int] = None
     disallowed_aggregations: Optional[Sequence[str]] = None
 
-    # def __init__(self, data_dict: Optional[Mapping[str, Any]] = None):
-    #     organization: Optional[int] = None
-    #     self.data_dict = data_dict
+    def __init__(self, organization: Optional[int] = None):
+        self.organization = organization
 
     @abstractmethod
     def get_entity_subscription_conditions_for_snql(
@@ -216,14 +214,6 @@ class EntitySubscriptionValidation:
     max_allowed_aggregations: int = 1
     disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"]
 
-    # def __init__(
-    #     self,
-    #     max_allowed_aggregations: int = 1,
-    #     disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"],
-    # ) -> None:
-    #     self.max_allowed_aggregations = max_allowed_aggregations
-    #     self.disallowed_aggregations = disallowed_aggregations
-
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # TODO: Support composite queries with multiple entities.
         from_clause = query.get_from_clause()
@@ -240,6 +230,7 @@ class EntitySubscriptionValidation:
 
 class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
     def __init__(self, data_dict: Mapping[str, Any] = {}) -> None:
+        self.organization: Optional[int] = None
         if "organization" in data_dict:
             try:
                 self.organization: int = data_dict["organization"]
@@ -247,6 +238,13 @@ class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
                 raise InvalidQueryException(
                     "organization param is required for any query over sessions entity"
                 )
+
+    @classmethod
+    def set_attrs(
+        cls, max_allowed_aggregations: int, disallowed_aggregations: Sequence[str]
+    ) -> None:
+        cls.max_allowed_aggregations = max_allowed_aggregations
+        cls.disallowed_aggregations = disallowed_aggregations
 
     def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None

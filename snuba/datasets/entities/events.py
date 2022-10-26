@@ -129,13 +129,7 @@ class BaseEventsEntity(Entity, ABC):
         )
         schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
-
-        BaseEntitySubscription.max_allowed_aggregations = 1
-        BaseEntitySubscription.disallowed_aggregations = [
-            "groupby",
-            "having",
-            "orderby",
-        ]
+        BaseEntitySubscription.set_attrs(1, ["groupby", "having", "orderby"])
 
         super().__init__(
             storages=[events_storage],

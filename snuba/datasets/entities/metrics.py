@@ -116,8 +116,7 @@ class MetricsEntity(Entity, ABC):
 
 class MetricsSetsEntity(MetricsEntity):
     def __init__(self) -> None:
-        BaseEntitySubscription.max_allowed_aggregations = 3
-        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
+        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             writable_storage_key=StorageKey.METRICS_RAW,
             readable_storage_key=StorageKey.METRICS_SETS,
@@ -136,8 +135,7 @@ class MetricsSetsEntity(MetricsEntity):
 
 class MetricsCountersEntity(MetricsEntity):
     def __init__(self) -> None:
-        BaseEntitySubscription.max_allowed_aggregations = 3
-        BaseEntitySubscription.disallowed_aggregations = ["having", "orderby"]
+        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             writable_storage_key=StorageKey.METRICS_RAW,
             readable_storage_key=StorageKey.METRICS_COUNTERS,

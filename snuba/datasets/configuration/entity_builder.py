@@ -93,12 +93,10 @@ def _build_entity_translation_mappers(
 
 def _build_entity_subscription(config: dict[str, Any]) -> Optional[EntitySubscription]:
     if "subscriptions" in config:
-        BaseEntitySubscription.max_allowed_aggregations = config["subscriptions"][
-            "max_allowed_aggregations"
-        ]
-        BaseEntitySubscription.disallowed_aggregations = config["subscriptions"][
-            "disallowed_aggregations"
-        ]
+        BaseEntitySubscription.set_attrs(
+            config["subscriptions"]["max_allowed_aggregations"],
+            config["subscriptions"]["disallowed_aggregations"],
+        )
         return BaseEntitySubscription
     return None
 
