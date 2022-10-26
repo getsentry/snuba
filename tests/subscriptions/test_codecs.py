@@ -71,9 +71,9 @@ def assert_entity_subscription_on_subscription_class(
     subscription: SubscriptionData,
     entity_key: EntityKey,
 ) -> None:
-    subscription_cls = get_entity(entity_key).get_entity_subscription()
+    entity_subscription = get_entity(entity_key).get_entity_subscription()
     if organization:
-        assert isinstance(subscription.entity_subscription, subscription_cls)
+        assert isinstance(subscription.entity_subscription, type(entity_subscription))
         assert subscription.entity_subscription.organization == organization
     else:
         assert isinstance(subscription.entity_subscription, BaseEntitySubscription)
@@ -217,9 +217,9 @@ def test_metrics_subscription_task_result_encoder(
     codec = SubscriptionTaskResultEncoder()
 
     timestamp = datetime.now()
-    entity_subscription = subscription_cls(data_dict={"organization": 1})
-    entity_subscription.max_allowed_aggregations = max_allowed_aggregations
-    entity_subscription.disallowed_aggregations = disallowed_aggregations
+    entity_subscription = subscription_cls(
+        max_allowed_aggregations, disallowed_aggregations, data_dict={"organization": 1}
+    )
     subscription_data = SubscriptionData(
         project_id=1,
         query=(

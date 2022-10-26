@@ -168,8 +168,8 @@ class SubscriptionData:
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SubscriptionData:
-        entity_subscription = get_entity(entity_key).get_entity_subscription()(
-            data_dict=data
+        entity_subscription = (
+            get_entity(entity_key).get_entity_subscription().set_org(data_dict=data)
         )
 
         return SubscriptionData(

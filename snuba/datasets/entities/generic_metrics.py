@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, Sequence, Type
+from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -65,7 +65,7 @@ class GenericMetricsEntity(Entity, ABC):
         value_schema: ColumnSet,
         mappers: TranslationMappers,
         validators: Optional[Sequence[QueryValidator]] = None,
-        entity_subscription: Optional[Type[EntitySubscription]] = None,
+        entity_subscription: Optional[EntitySubscription] = None,
     ) -> None:
         storages = [readable_storage]
         if writable_storage:
@@ -129,11 +129,10 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
 
     def __init__(self) -> None:
         assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
-        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
-            entity_subscription=BaseEntitySubscription,
+            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
             value_schema=ColumnSet(
                 [
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
@@ -155,12 +154,11 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
 
     def __init__(self) -> None:
         assert isinstance(self.WRITABLE_STORAGE, WritableTableStorage)
-        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
-            entity_subscription=BaseEntitySubscription,
+            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
             value_schema=ColumnSet(
                 [
                     Column(

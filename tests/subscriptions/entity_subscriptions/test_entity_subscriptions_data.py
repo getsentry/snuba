@@ -46,9 +46,9 @@ def subscription_data_builder(
 
 @pytest.fixture
 def entity_subscriptions() -> EntitySubscription:
-    entity_subscription_cls = entity.get_entity_subscription()
-    assert entity_subscription_cls == BaseEntitySubscription
-    return entity_subscription_cls(data_dict=data)
+    entity_subscription = entity.get_entity_subscription()
+    assert isinstance(entity_subscription, BaseEntitySubscription)
+    return entity_subscription.set_org(data_dict=data)
 
 
 def test_entity_subscriptions_data(

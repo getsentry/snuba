@@ -39,4 +39,4 @@ def create_entity_subscription(
         data_dict = {"organization": org_id}
     else:
         data_dict = {}
-    return get_entity(entity_key).get_entity_subscription()(data_dict=data_dict)
+    return get_entity(entity_key).get_entity_subscription().set_org(data_dict=data_dict)

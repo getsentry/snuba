@@ -103,7 +103,6 @@ class BaseTransactionsEntity(Entity, ABC):
                 else transaction_translator.concat(custom_mappers),
             )
         )
-        BaseEntitySubscription.set_attrs(1, ["groupby", "having", "orderby"])
 
         super().__init__(
             storages=[storage],
@@ -113,7 +112,9 @@ class BaseTransactionsEntity(Entity, ABC):
             writable_storage=storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
-            entity_subscription=BaseEntitySubscription,
+            entity_subscription=BaseEntitySubscription(
+                1, ["groupby", "having", "orderby"]
+            ),
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

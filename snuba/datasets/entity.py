@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Type, Union
+from dataclasses import dataclass
+from typing import Any, Mapping, Optional, Sequence, Union
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
-
-# from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -18,9 +17,10 @@ from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.validators import (  # NoTimeBasedConditionValidator,
+from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityContainsColumnsValidator,
+    NoTimeBasedConditionValidator,
     QueryValidator,
     SubscriptionAllowedClausesValidator,
 )
@@ -45,7 +45,7 @@ class Entity(Describable, ABC):
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
         validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
-        entity_subscription: Optional[Type[EntitySubscription]],
+        entity_subscription: Optional[EntitySubscription],
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
@@ -138,7 +138,7 @@ class Entity(Describable, ABC):
         """
         return self.__writable_storage
 
-    def get_entity_subscription(self) -> Optional[Type[EntitySubscription]]:
+    def get_entity_subscription(self) -> Optional[EntitySubscription]:
         """
         Returns the entity subscription associated with an entity
         """
@@ -177,16 +177,11 @@ class Entity(Describable, ABC):
         )
 
 
-class InvalidSubscriptionError(Exception):
-    pass
-
-
+@dataclass
 class EntitySubscription(ABC):
     max_allowed_aggregations: Optional[int] = None
     disallowed_aggregations: Optional[Sequence[str]] = None
-
-    def __init__(self, organization: Optional[int] = None):
-        self.organization = organization
+    organization: Optional[int] = None
 
     @abstractmethod
     def get_entity_subscription_conditions_for_snql(
@@ -209,28 +204,41 @@ class EntitySubscription(ABC):
     def to_dict(self) -> Mapping[str, Any]:
         raise NotImplementedError
 
+    @abstractmethod
+    def set_org(self, data_dict: Mapping[str, Any] = {}) -> EntitySubscription:
+        raise NotImplementedError
 
-class EntitySubscriptionValidation:
-    max_allowed_aggregations: int = 1
-    disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"]
+
+class EntitySubscriptionValidation(EntitySubscription):
+    def __init__(
+        self,
+        max_allowed_aggregations: int = 1,
+        disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"],
+    ) -> None:
+        self.max_allowed_aggregations: int = max_allowed_aggregations
+        self.disallowed_aggregations: Sequence[str] = disallowed_aggregations
 
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # TODO: Support composite queries with multiple entities.
-        from_clause = query.get_from_clause()
-        if not isinstance(from_clause, EntityDS):
-            raise InvalidSubscriptionError("Only simple queries are supported")
-        # entity = get_entity(from_clause.key)
-
         SubscriptionAllowedClausesValidator(
             self.max_allowed_aggregations, self.disallowed_aggregations
         ).validate(query)
-        # if entity.required_time_column:
-        #     NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
+        NoTimeBasedConditionValidator().validate(query)
 
 
-class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
-    def __init__(self, data_dict: Mapping[str, Any] = {}) -> None:
-        self.organization: Optional[int] = None
+class BaseEntitySubscription(EntitySubscriptionValidation):
+    def __init__(
+        self,
+        max_allowed_aggregations: Optional[int] = None,
+        disallowed_aggregations: Optional[Sequence[str]] = None,
+        data_dict: Mapping[str, Any] = {},
+    ) -> None:
+        super().__init__()
+        if max_allowed_aggregations and disallowed_aggregations:
+            super().__init__(max_allowed_aggregations, disallowed_aggregations)
+        self.set_org(data_dict)
+
+    def set_org(self, data_dict: Mapping[str, Any] = {}) -> BaseEntitySubscription:
         if "organization" in data_dict:
             try:
                 self.organization: int = data_dict["organization"]
@@ -238,13 +246,7 @@ class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
                 raise InvalidQueryException(
                     "organization param is required for any query over sessions entity"
                 )
-
-    @classmethod
-    def set_attrs(
-        cls, max_allowed_aggregations: int, disallowed_aggregations: Sequence[str]
-    ) -> None:
-        cls.max_allowed_aggregations = max_allowed_aggregations
-        cls.disallowed_aggregations = disallowed_aggregations
+        return self
 
     def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None

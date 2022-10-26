@@ -183,8 +183,8 @@ def generate_message(
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
         data_dict = {"organization": 1}
 
-    entity_subscription = get_entity(entity_key).get_entity_subscription()(
-        data_dict=data_dict
+    entity_subscription = (
+        get_entity(entity_key).get_entity_subscription().set_org(data_dict=data_dict)
     )
 
     while True:

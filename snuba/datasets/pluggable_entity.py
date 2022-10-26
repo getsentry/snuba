@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Sequence, Type
+from typing import Any, Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -53,7 +53,7 @@ class PluggableEntity(Entity):
     # partition_key_column_name is used in data slicing (the value in this storage column
     # will be used to "choose" slices)
     partition_key_column_name: Optional[str] = None
-    entity_subscription: Optional[Type[EntitySubscription]] = None
+    entity_subscription: Optional[EntitySubscription] = None
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -109,7 +109,7 @@ class PluggableEntity(Entity):
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
 
-    def get_entity_subscription(self) -> Optional[Type[EntitySubscription]]:
+    def get_entity_subscription(self) -> Optional[EntitySubscription]:
         return self.entity_subscription
 
     def __eq__(self, other: Any) -> bool:

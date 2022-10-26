@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, Sequence, Type
+from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -52,7 +52,7 @@ class MetricsEntity(Entity, ABC):
         mappers: TranslationMappers,
         abstract_column_set: Optional[ColumnSet] = None,
         validators: Optional[Sequence[QueryValidator]] = None,
-        entity_subscription: Optional[Type[EntitySubscription]] = None,
+        entity_subscription: Optional[EntitySubscription] = None,
     ) -> None:
         writable_storage = (
             get_writable_storage(writable_storage_key) if writable_storage_key else None
@@ -116,7 +116,6 @@ class MetricsEntity(Entity, ABC):
 
 class MetricsSetsEntity(MetricsEntity):
     def __init__(self) -> None:
-        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             writable_storage_key=StorageKey.METRICS_RAW,
             readable_storage_key=StorageKey.METRICS_SETS,
@@ -129,13 +128,12 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
-            entity_subscription=BaseEntitySubscription,
+            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
         )
 
 
 class MetricsCountersEntity(MetricsEntity):
     def __init__(self) -> None:
-        BaseEntitySubscription.set_attrs(3, ["having", "orderby"])
         super().__init__(
             writable_storage_key=StorageKey.METRICS_RAW,
             readable_storage_key=StorageKey.METRICS_COUNTERS,
@@ -146,7 +144,7 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
-            entity_subscription=BaseEntitySubscription,
+            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
         )
 
 
