@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import MutableMapping
 
+# import sqlparse
+from sql_metadata import Parser, QueryType
+
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
@@ -124,21 +127,17 @@ def validate_ro_query(sql_query: str, allowed_tables: list[str] | None = None) -
     Raises InvalidCustomQuery if query is invalid or not allowed.
     """
 
-    sql_query_split = sql_query.lower().split()
-    lowered = " ".join(sql_query_split)
-    if not lowered.startswith("select"):
+    parsed = Parser(sql_query.lower())
+
+    if ";" in parsed.query:
+        raise InvalidCustomQuery("';' is not allowed in the query")
+
+    if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
     if allowed_tables:
-        if (
-            sql_query_split.count("from") != 1
-            or sql_query_split[sql_query_split.index("from") + 1] not in allowed_tables
-        ):
-            raise InvalidCustomQuery(
-                f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
-            )
-
-    disallowed_keywords = ["insert", ";"]
-    for kw in disallowed_keywords:
-        if kw in lowered:
-            raise InvalidCustomQuery(f"{kw} is not allowed in the query")
+        for table in parsed.tables:
+            if table not in allowed_tables:
+                raise InvalidCustomQuery(
+                    f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+                )
