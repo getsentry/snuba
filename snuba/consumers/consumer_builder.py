@@ -116,6 +116,10 @@ class ConsumerBuilder:
                 },
             )
 
+            # XXX: This can result in a producer being built in cases where it's
+            # not actually required.
+            self.producer = Producer(self.producer_broker_config)
+
         storage_keys = [*self.storages.keys()]
 
         self.raw_topic: ArroyoTopic
@@ -171,10 +175,6 @@ class ConsumerBuilder:
                 raise ValueError("only one commit log topic is supported")
 
         self.stats_callback = stats_callback
-
-        # XXX: This can result in a producer being built in cases where it's
-        # not actually required.
-        self.producer = Producer(self.producer_broker_config)
 
         self.metrics = metrics
         self.max_batch_size = max_batch_size
