@@ -385,7 +385,7 @@ def is_busy_merging(
             merge_info, key=lambda x: x.estimated_time
         ).estimated_time
         logger.info(
-            f"too many concurrent merges {len(merge_info)}, sleeping for {estimated_sleep_time}s"
+            f"too many concurrent long merges {len(merge_info)}, sleeping for {estimated_sleep_time}s"
         )
         return True, estimated_sleep_time
 
