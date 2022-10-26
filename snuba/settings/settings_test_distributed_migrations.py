@@ -26,7 +26,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "storage_sets": {
             "migrations",
         },
-        "single_node": True,
+        "single_node": False,
         "cluster_name": "migrations_cluster",
         "distributed_cluster_name": "query_cluster",
     },
