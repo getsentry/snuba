@@ -5,12 +5,14 @@ import uuid
 from collections import ChainMap, namedtuple
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
+from hashlib import md5
 from types import TracebackType
 from typing import ChainMap as TypingChainMap
 from typing import Iterator, MutableMapping, Optional, Sequence, Type
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.util import force_bytes
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -24,7 +26,10 @@ TABLE_RATE_LIMIT_NAME = "table"
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
-rds = get_redis_client(RedisClientKey.RATE_LIMITER)
+redis_clients = [
+    get_redis_client(RedisClientKey.RATE_LIMITER),
+    get_redis_client(RedisClientKey.RATE_LIMITER_V2),
+]
 
 
 @dataclass(frozen=True)
@@ -124,22 +129,30 @@ def rate_limit(
     query_id = str(uuid.uuid4())
 
     now = time.time()
-    bypass_rate_limit, rate_history_s = state.get_configs(
-        [("bypass_rate_limit", 0), ("rate_history_sec", 3600)]
-        #                               ^ number of seconds the timestamps are kept
+    bypass_rate_limit, rate_history_s, v2_cluster_rollout_rate = state.get_configs(
+        [
+            ("bypass_rate_limit", 0),
+            # number of seconds the timestamps are kept
+            ("rate_history_sec", 3600),
+            ("rate_limit_use_v2_cluster", 0.0),
+        ]
     )
     assert isinstance(rate_history_s, (int, float))
+    assert isinstance(v2_cluster_rollout_rate, float)
 
     if bypass_rate_limit == 1:
         yield None
         return
 
+    should_use_v2 = (
+        int(md5(force_bytes(bucket)).hexdigest(), 16) % 1000
+        < v2_cluster_rollout_rate * 1000
+    )
+    rds = redis_clients[int(should_use_v2)]
+
     pipe = rds.pipeline(transaction=False)
     # cleanup old query timestamps past our retention window
-    stale_queries = pipe.zremrangebyscore(
-        bucket, "-inf", "({:f}".format(now - rate_history_s)
-    )
-    metrics.increment("rate_limit.stale", stale_queries, tags={"bucket": bucket})
+    pipe.zremrangebyscore(bucket, "-inf", "({:f}".format(now - rate_history_s))
 
     # Now for the tricky bit:
     # ======================

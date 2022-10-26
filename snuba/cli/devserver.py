@@ -45,7 +45,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--storage=transactions",
                 "--consumer-group=transactions_group",
-                "--commit-log-topic=snuba-commit-log",
             ],
         ),
         (

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Generator, Mapping, MutableMapping, Sequence, Type
 
+import sentry_sdk
+
 from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
 )
@@ -15,11 +17,14 @@ class _EntitySubscriptionFactory(
     ConfigComponentFactory[Type[EntitySubscription], EntityKey]
 ):
     def __init__(self) -> None:
-        self._entity_subscription_map: MutableMapping[
-            EntityKey, Type[EntitySubscription]
-        ] = {}
-        self._name_map: MutableMapping[Type[EntitySubscription], EntityKey] = {}
-        self.__initialize()
+        with sentry_sdk.start_span(
+            op="initialize", description="Entity Subscription Factory"
+        ):
+            self._entity_subscription_map: MutableMapping[
+                EntityKey, Type[EntitySubscription]
+            ] = {}
+            self._name_map: MutableMapping[Type[EntitySubscription], EntityKey] = {}
+            self.__initialize()
 
     def __initialize(self) -> None:
         from snuba.datasets.entity_subscriptions.entity_subscription import (

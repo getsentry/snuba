@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import sentry_sdk
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.json_schema import (
@@ -26,6 +28,7 @@ from snuba.datasets.table_storage import (
     build_kafka_stream_loader_from_settings,
 )
 from snuba.subscriptions.utils import SchedulingWatermarkMode
+from snuba.util import PartSegment
 from snuba.utils.streams.topics import Topic
 
 KIND = "kind"
@@ -39,6 +42,7 @@ PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
 QUERY_SPLITTERS = "query_splitters"
 MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
+WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
@@ -49,29 +53,47 @@ STORAGE_VALIDATION_SCHEMAS = {
 }
 
 
-def build_storage(
+def build_storage_from_config(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
     config = load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
-    storage_kwargs = __build_readable_storage_kwargs(config)
-    if config[KIND] == "readable_storage":
-        return ReadableTableStorage(**storage_kwargs)
-    storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
-    return WritableTableStorage(**storage_kwargs)
+    with sentry_sdk.start_span(op="build", description=f"Storage: {config['name']}"):
+        storage_kwargs = __build_readable_storage_kwargs(config)
+        if config[KIND] == "readable_storage":
+            return ReadableTableStorage(**storage_kwargs)
+        storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
+        storage_kwargs[WRITER_OPTIONS] = (
+            config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
+        )
+        return WritableTableStorage(**storage_kwargs)
+
+
+def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
+    schema_class = (
+        WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
+    )
+    partition_formats = None
+    if "partition_format" in config[SCHEMA]:
+        partition_formats = []
+        for pformat in config[SCHEMA]["partition_format"]:
+            for partition_format in PartSegment:
+                if pformat == partition_format.value:
+                    partition_formats.append(partition_format)
+
+    return schema_class(
+        columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
+        local_table_name=config[SCHEMA]["local_table_name"],
+        dist_table_name=config[SCHEMA]["dist_table_name"],
+        storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
+        partition_format=partition_formats,
+    )
 
 
 def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         STORAGE_KEY: register_storage_key(config[STORAGE]["key"]),
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
-        SCHEMA: (
-            WritableTableSchema if config[KIND] == WRITABLE_STORAGE else TableSchema
-        )(
-            columns=ColumnSet(parse_columns(config[SCHEMA]["columns"])),
-            local_table_name=config[SCHEMA]["local_table_name"],
-            dist_table_name=config[SCHEMA]["dist_table_name"],
-            storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
-        ),
+        SCHEMA: __build_storage_schema(config),
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),

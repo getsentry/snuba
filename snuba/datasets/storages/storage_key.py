@@ -24,7 +24,6 @@ HARDCODED_STORAGE_KEYS = {
     "ORG_SESSIONS": "org_sessions",
     "SPANS": "spans",
     "TRANSACTIONS": "transactions",
-    "TRANSACTIONS_V2": "transactions_v2",
     "ERRORS_V2": "errors_v2",
     "PROFILES": "profiles",
     "FUNCTIONS": "functions",
@@ -71,7 +70,6 @@ def register_storage_key(key: str) -> StorageKey:
 
 IDENTICAL_STORAGES = frozenset(
     {
-        frozenset({StorageKey.TRANSACTIONS, StorageKey.TRANSACTIONS_V2}),
         frozenset({StorageKey.ERRORS, StorageKey.ERRORS_V2}),
     }
 )
