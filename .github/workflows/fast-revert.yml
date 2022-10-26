@@ -22,13 +22,18 @@ jobs:
     - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8  # v3
       with:
         token: ${{ secrets.BUMP_SENTRY_TOKEN }}
+    - uses: getsentry/action-github-app-token@38a3ce582e170ddfe8789f509597c6944f2292a9  # v1
+      id: token
+      with:
+        app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
+        private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
     - uses: getsentry/action-fast-revert@dc3703df06fd2774abdef6c45bfb3720a1278130  # v2.0.0
       with:
         pr: ${{ github.event.number || github.event.inputs.pr }}
         co_authored_by: ${{ github.event.inputs.co_authored_by || format('{0} <{1}+{0}@users.noreply.github.com>', github.event.sender.login, github.event.sender.id) }}
         committer_name: getsentry-bot
         committer_email: bot@sentry.io
-        token: ${{ secrets.BUMP_SENTRY_TOKEN }}
+        token: ${{ steps.token.outputs.token }}
     - name: comment on failure
       run: |
         curl \
