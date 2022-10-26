@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from snuba import state
-from snuba.redis import RedisClientKey, get_redis_client
+from snuba.redis import RedisClientKey, RetryingStrictRedisCluster, get_redis_client
 from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
@@ -14,6 +14,7 @@ from snuba.state.rate_limit import (
     RateLimitStats,
     RateLimitStatsContainer,
     rate_limit,
+    redis_clients,
 )
 
 
@@ -190,6 +191,10 @@ def test_rate_limit_failures(vals: Tuple[int, int, int]) -> None:
         assert count == 0
 
 
+@pytest.mark.skipif(
+    isinstance(redis_clients[0], RetryingStrictRedisCluster),
+    reason="test requires support for db parameter, and redis cluster does not support DBs",
+)
 def test_rate_limit_v2_cluster(snuba_set_config):
     params = RateLimitParameters("foo", "foo", None, 4)
 
@@ -217,6 +222,10 @@ def test_rate_limit_v2_cluster(snuba_set_config):
                 pass
 
 
+@pytest.mark.skipif(
+    isinstance(redis_clients[0], RetryingStrictRedisCluster),
+    reason="test requires support for db parameter, and redis cluster does not support DBs",
+)
 def test_rate_limit_v2_cluster_inconsistency(snuba_set_config):
     params = RateLimitParameters("foo", "foo", None, 4)
 

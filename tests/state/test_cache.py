@@ -11,7 +11,12 @@ from unittest import mock
 import pytest
 import rapidjson
 
-from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
+from snuba.redis import (
+    RedisClientKey,
+    RedisClientType,
+    RetryingStrictRedisCluster,
+    get_redis_client,
+)
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
@@ -301,6 +306,10 @@ def test_notify_queue_ttl() -> None:
         redis_client.flushdb()
 
 
+@pytest.mark.skipif(
+    isinstance(redis_client, RetryingStrictRedisCluster),
+    reason="test requires support for db parameter, and redis cluster does not support DBs",
+)
 def test_multiple_redis_keys(request, snuba_set_config):
     backend = RedisCache(
         [redis_client, redis_client_v2],
