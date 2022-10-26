@@ -19,14 +19,14 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' || github.event.label.name == 'Trigger: Revert'
     steps:
-    - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8  # v3
-      with:
-        token: ${{ secrets.BUMP_SENTRY_TOKEN }}
     - uses: getsentry/action-github-app-token@38a3ce582e170ddfe8789f509597c6944f2292a9  # v1
       id: token
       with:
         app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
         private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+    - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8  # v3
+      with:
+        token: ${{ steps.token.outputs.token }}
     - uses: getsentry/action-fast-revert@dc3703df06fd2774abdef6c45bfb3720a1278130  # v2.0.0
       with:
         pr: ${{ github.event.number || github.event.inputs.pr }}
@@ -39,7 +39,7 @@ jobs:
         curl \
             --silent \
             -X POST \
-            -H 'Authorization: token ${{ secrets.BUMP_SENTRY_TOKEN }}' \
+            -H 'Authorization: token ${{ steps.token.outputs.token }}' \
             -d'{"body": "revert failed (conflict? already reverted?) -- [check the logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"}' \
             https://api.github.com/repositories/${{ github.event.repository.id }}/issues/${{ github.event.number || github.event.inputs.pr }}/comments
       if: failure()
