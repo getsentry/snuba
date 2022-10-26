@@ -3,7 +3,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.admin.notifications.querylog.audit_log import QuerylogAuditLogClient
+from snuba.admin.notifications.querylog.audit_log import audit_log
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
@@ -13,19 +13,18 @@ from snuba.state import get_config
 
 ENABLE_QUERYLOG_API_CONFIG = "enable_clickhouse_querylog_api"
 
-querylog_audit_log_notification_client = QuerylogAuditLogClient()
 
-
+@audit_log
 def run_querylog_query(query: str, user: str) -> ClickhouseResult:
     """
     Validates, audit logs, and executes given query against Querylog
-    table in ClickHouse.
+    table in ClickHouse. `user` param is necessary for audit_log
+    decorator.
     """
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
     validate_ro_query(sql_query=query, allowed_tables=[schema.get_table_name()])
     if get_config(ENABLE_QUERYLOG_API_CONFIG, 0):
-        audit_log_query(query, user)
         return __run_querylog_query(query)
     raise InvalidCustomQuery("Production ClickHouse querylog access is not yet ready.")
 
@@ -48,7 +47,3 @@ def __run_querylog_query(query: str) -> ClickhouseResult:
     )
     query_result = connection.execute(query=query, with_column_types=True)
     return query_result
-
-
-def audit_log_query(query: str, user: str) -> None:
-    querylog_audit_log_notification_client.notify({"query": query}, user)
