@@ -114,7 +114,14 @@ class ConsumerBuilder:
             if replacement_topic_spec is not None:
                 self.replacements_topic = Topic(replacement_topic_spec.topic_name)
                 self.replacements_producer = Producer(
-                    build_kafka_producer_configuration(replacement_topic_spec.topic)
+                    build_kafka_producer_configuration(
+                        replacement_topic_spec.topic,
+                        bootstrap_servers=kafka_params.bootstrap_servers,
+                        override_params={
+                            "partitioner": "consistent",
+                            "message.max.bytes": 50000000,  # 50MB, default is 1MB)
+                        },
+                    )
                 )
             else:
                 self.replacements_topic = None
@@ -127,7 +134,12 @@ class ConsumerBuilder:
             if commit_log_topic_spec is not None:
                 self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
                 self.commit_log_producer = Producer(
-                    build_kafka_producer_configuration(commit_log_topic_spec.topic)
+                    build_kafka_producer_configuration(commit_log_topic_spec.topic),
+                    bootstrap_servers=kafka_params.bootstrap_servers,
+                    override_params={
+                        "partitioner": "consistent",
+                        "message.max.bytes": 50000000,  # 50MB, default is 1MB)
+                    },
                 )
             else:
                 self.commit_log_topic = None
