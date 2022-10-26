@@ -375,7 +375,7 @@ def is_busy_merging(
     """
     Returns true and the estimated sleep time if clickhouse is busy with merges in progress
     for the table. Clickhouse is considered busy if
-        1. there are more than OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS merges in progress
+        1. there are more than OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS merges in progress with an elapsed time greater than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
         2. or there is a merge of size greater than OPTIMIZE_MERGE_SIZE_CUTOFF
     """
     merge_info = get_current_merging_partitions_info(clickhouse, database, table)
