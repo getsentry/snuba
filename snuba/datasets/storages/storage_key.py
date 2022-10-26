@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator
 
 HARDCODED_STORAGE_KEYS = {
     "DISCOVER": "discover",
@@ -66,7 +66,7 @@ def register_storage_key(key: str) -> StorageKey:
     return StorageKey(key)
 
 
-IDENTICAL_STORAGES: frozenset[Optional[frozenset[StorageKey]]] = frozenset()
+IDENTICAL_STORAGES: frozenset[frozenset[StorageKey]] = frozenset()
 
 
 @lru_cache(20)
