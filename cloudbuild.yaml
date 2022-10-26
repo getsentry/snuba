@@ -26,6 +26,7 @@ steps:
       - snuba-test
     env:
       - 'SNUBA_SETTINGS=test'
+      - 'CLICKHOUSE_IMAGE=yandex/clickhouse-server:20.3.9.70'
   # Clean up after tests
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: unit-tests-cleanup
@@ -39,6 +40,9 @@ steps:
       - "local"
       - "-v"
       - "--remove-orphans"
+    env:
+      - 'SNUBA_SETTINGS=test'
+      - 'CLICKHOUSE_IMAGE=yandex/clickhouse-server:20.3.9.70'
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: get-self-hosted-repo
     waitFor:
@@ -52,10 +56,11 @@ steps:
       - |
         mkdir self-hosted && cd self-hosted
         curl -L "https://github.com/getsentry/self-hosted/archive/master.tar.gz" | tar xzf - --strip-components=1
-        echo 'no' > .reporterrors
         echo '{"version": "3.4", "networks":{"default":{"external":{"name":"cloudbuild"}}}}' > docker-compose.override.yml
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: e2e-test
+    env:
+      - 'REPORT_SELF_HOSTED_ISSUES=0'
     waitFor:
       - runtime-image
       - unit-tests-cleanup

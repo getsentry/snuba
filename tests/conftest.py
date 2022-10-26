@@ -1,5 +1,5 @@
 import json
-from typing import Any, Callable, Generator, Iterator, Tuple, Union
+from typing import Any, Callable, Iterator, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -124,11 +124,28 @@ def _build_snql_post_methods(
     return simple_post
 
 
+SnubaSetConfig = Callable[[str, Any], None]
+
+
 @pytest.fixture
-def disable_query_cache() -> Generator[None, None, None]:
-    cache, readthrough = state.get_configs(
-        [("use_cache", settings.USE_RESULT_CACHE), ("use_readthrough_query_cache", 1)]
-    )
-    state.set_configs({"use_cache": False, "use_readthrough_query_cache": 0})
-    yield
-    state.set_configs({"use_cache": cache, "use_readthrough_query_cache": readthrough})
+def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
+    finalizers_registered = set()
+
+    def set_config(key: str, value: Any) -> None:
+        # should register finalizer only once because 1) we don't have to undo
+        # every single value change step-by-step 2) teardown-order via pytest
+        # finalizers is poorly understood
+        if key not in finalizers_registered:
+            finalizers_registered.add(key)
+            old_value = state.get_config(key)
+            request.addfinalizer(lambda: state.set_config(key, old_value))
+
+        state.set_config(key, value)
+
+    return set_config
+
+
+@pytest.fixture
+def disable_query_cache(snuba_set_config: SnubaSetConfig) -> None:
+    snuba_set_config("use_cache", False)
+    snuba_set_config("use_readthrough_query_cache", 0)

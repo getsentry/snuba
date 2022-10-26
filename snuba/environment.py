@@ -53,6 +53,7 @@ def setup_logging(level: Optional[str] = None) -> None:
     logging.basicConfig(
         level=getattr(logging, level.upper()),
         format=settings.LOG_FORMAT,
+        force=True,
     )
 
     structlog.configure(

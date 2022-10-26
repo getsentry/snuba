@@ -44,6 +44,5 @@ def test_get_projects_exceeding_limit() -> None:
     counter.record_time_spent(3, now - (TEST_COUNTER_WINDOW_SIZE * 0.01), now)
 
     exceeded_projects = counter.get_projects_exceeding_limit()
-    print(exceeded_projects)
     assert len(exceeded_projects) == 1
     assert exceeded_projects[0] == 2

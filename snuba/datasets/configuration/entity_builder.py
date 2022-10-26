@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+import sentry_sdk
+
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
@@ -52,16 +54,24 @@ def _build_entity_translation_mappers(
         if "columns" in config_translation_mappers
         else []
     )
-    function_mappers: list[FunctionCallMapper] = [
-        FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
-        for fm_config in config_translation_mappers["functions"]
-    ]
-    subscriptable_mappers: list[SubscriptableReferenceMapper] = [
-        SubscriptableReferenceMapper.get_from_name(sub_config["mapper"])(
-            **sub_config["args"]
-        )
-        for sub_config in config_translation_mappers["subscriptables"]
-    ]
+    function_mappers: list[FunctionCallMapper] = (
+        [
+            FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
+            for fm_config in config_translation_mappers["functions"]
+        ]
+        if "functions" in config_translation_mappers
+        else []
+    )
+    subscriptable_mappers: list[SubscriptableReferenceMapper] = (
+        [
+            SubscriptableReferenceMapper.get_from_name(sub_config["mapper"])(
+                **sub_config["args"]
+            )
+            for sub_config in config_translation_mappers["subscriptables"]
+        ]
+        if "subscriptables" in config_translation_mappers
+        else []
+    )
     curried_function_mappers: list[CurriedFunctionCallMapper] = (
         [
             CurriedFunctionCallMapper.get_from_name(curr_config["mapper"])(
@@ -81,23 +91,22 @@ def _build_entity_translation_mappers(
 
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
-    config_data = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
-    return PluggableEntity(
-        entity_key=register_entity_key(config_data["name"]),
-        query_processors=_build_entity_query_processors(
-            config_data["query_processors"]
-        ),
-        columns=parse_columns(config_data["schema"]),
-        readable_storage=get_storage(StorageKey(config_data["readable_storage"])),
-        required_time_column=config_data["required_time_column"],
-        validators=_build_entity_validators(config_data["validators"]),
-        translation_mappers=_build_entity_translation_mappers(
-            config_data["translation_mappers"]
-        ),
-        writeable_storage=get_writable_storage(
-            StorageKey(config_data["writable_storage"])
+    config = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
+    with sentry_sdk.start_span(op="build", description=f"Entity: {config['name']}"):
+        return PluggableEntity(
+            entity_key=register_entity_key(config["name"]),
+            query_processors=_build_entity_query_processors(config["query_processors"]),
+            columns=parse_columns(config["schema"]),
+            readable_storage=get_storage(StorageKey(config["readable_storage"])),
+            required_time_column=config["required_time_column"],
+            validators=_build_entity_validators(config["validators"]),
+            translation_mappers=_build_entity_translation_mappers(
+                config["translation_mappers"]
+            ),
+            writeable_storage=get_writable_storage(
+                StorageKey(config["writable_storage"])
+            )
+            if "writable_storage" in config
+            else None,
+            partition_key_column_name=config.get("partition_key_column_name", None),
         )
-        if "writable_storage" in config_data
-        else None,
-        partition_key_column_name=config_data["partition_key_column_name"],
-    )
