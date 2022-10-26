@@ -26,6 +26,7 @@ steps:
       - snuba-test
     env:
       - 'SNUBA_SETTINGS=test'
+      - 'CLICKHOUSE_IMAGE=yandex/clickhouse-server:20.3.9.70'
   # Clean up after tests
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: unit-tests-cleanup
@@ -39,6 +40,9 @@ steps:
       - "local"
       - "-v"
       - "--remove-orphans"
+    env:
+      - 'SNUBA_SETTINGS=test'
+      - 'CLICKHOUSE_IMAGE=yandex/clickhouse-server:20.3.9.70'
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: get-self-hosted-repo
     waitFor:
