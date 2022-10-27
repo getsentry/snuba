@@ -188,5 +188,4 @@ def consumer(
     signal.signal(signal.SIGTERM, handler)
 
     consumer.run()
-    consumer_builder.commit_log_producer.close()
-    consumer_builder.replacements_producer.close()
+    consumer_builder.close_producers()

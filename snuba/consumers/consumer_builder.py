@@ -86,6 +86,9 @@ class ConsumerBuilder:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
         self.consumer_group = kafka_params.group_id
+        self.replacements_producer = None
+        self.commit_log_producer = None
+
         topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
@@ -238,11 +241,7 @@ class ConsumerBuilder:
             collector=build_batch_writer(
                 table_writer,
                 metrics=self.metrics,
-                replacements_producer=(
-                    self.replacements_producer
-                    if self.replacements_topic is not None
-                    else None
-                ),
+                replacements_producer=self.replacements_producer,
                 replacements_topic=self.replacements_topic,
             )
             if self.__mock_parameters is None
@@ -270,6 +269,13 @@ class ConsumerBuilder:
             )
 
         return strategy_factory
+
+    def close_producers(self) -> None:
+        if self.commit_log_producer is not None:
+            self.commit_log_producer.close()
+
+        if self.replacements_producer is not None:
+            self.replacements_producer.close()
 
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
