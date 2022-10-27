@@ -137,9 +137,7 @@ def validate_ro_query(sql_query: str, allowed_tables: list[str] | None = None) -
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    if allowed_tables:
-        for table in parsed.tables:
-            if table not in allowed_tables:
-                raise InvalidCustomQuery(
-                    f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
-                )
+    if allowed_tables and not set(parsed.tables).issubset(set(allowed_tables)):
+        raise InvalidCustomQuery(
+            f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+        )
