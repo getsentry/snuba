@@ -217,14 +217,16 @@ class EntitySubscription:
         raise NotImplementedError
 
 
-class EntitySubscriptionValidation(EntitySubscription):
+class EntitySubscriptionValidation:
     def __init__(
         self,
         max_allowed_aggregations: int = 1,
         disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"],
+        organization: Optional[int] = None,
     ) -> None:
-        self.max_allowed_aggregations: int = max_allowed_aggregations
-        self.disallowed_aggregations: Sequence[str] = disallowed_aggregations
+        self.max_allowed_aggregations = max_allowed_aggregations
+        self.disallowed_aggregations = disallowed_aggregations
+        self.organization = organization
 
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # Import get_entity() when used, not at import time to avoid circular imports
@@ -243,7 +245,7 @@ class EntitySubscriptionValidation(EntitySubscription):
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
 
-class BaseEntitySubscription(EntitySubscriptionValidation):
+class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
     def __init__(
         self,
         max_allowed_aggregations: Optional[int] = None,

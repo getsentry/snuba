@@ -455,7 +455,7 @@ V1_ENTITY_SCHEMA = {
                 "disallowed_aggregations": {
                     "type": "array",
                     "items": TYPE_STRING,
-                    "description": "The disallowed aggregation clauses in subscription query",
+                    "description": "The disallowed aggregation clauses in subscription query (e.g. [having, orderby])",
                 },
             },
             "required": ["max_allowed_aggregations", "disallowed_aggregations"],
