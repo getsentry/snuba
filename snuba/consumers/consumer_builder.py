@@ -1,6 +1,5 @@
 import functools
 import logging
-from contextlib import closing
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
@@ -273,26 +272,12 @@ class ConsumerBuilder:
 
         return strategy_factory
 
-    def close(self, consumer: StreamProcessor[KafkaPayload]) -> None:
-        if self.commit_log_producer is None and self.replacements_producer is None:
-            consumer.run()
+    def flush(self) -> None:
+        if self.commit_log_producer:
+            self.commit_log_producer.flush()
 
-        elif (
-            self.commit_log_producer is not None and self.replacements_producer is None
-        ):
-            with closing(self.commit_log_producer):
-                consumer.run()
-
-        elif (
-            self.replacements_producer is not None and self.commit_log_producer is None
-        ):
-            with closing(self.replacements_producer):
-                consumer.run()
-
-        else:
-            with closing(self.commit_log_producer):
-                with closing(self.replacements_producer):
-                    consumer.run()
+        if self.replacements_producer:
+            self.replacements_producer.flush()
 
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
