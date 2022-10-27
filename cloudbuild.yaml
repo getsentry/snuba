@@ -44,6 +44,7 @@ steps:
     waitFor:
       # We need to wait until unit-tests finish as `pytest` tries
       # to run tests under self-hosted repo too
+      # random comment
       - unit-tests
     entrypoint: "bash"
     args:
