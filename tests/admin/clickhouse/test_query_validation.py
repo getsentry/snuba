@@ -17,10 +17,10 @@ def test_multiple_queries() -> None:
 def test_allowed_tables() -> None:
     validate_ro_query(
         "SELECT * FROM my_table, other_table",
-        allowed_tables=["my_table", "other_table"],
+        allowed_tables={"my_table", "other_table"},
     )
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query(
             "SELECT * FROM my_table, other_table",
-            allowed_tables=["my_table"],
+            allowed_tables={"my_table"},
         )
