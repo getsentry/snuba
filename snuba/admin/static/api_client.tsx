@@ -198,7 +198,13 @@ function Client() {
       const url = baseUrl + "clickhouse_querylog_schema";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
     },
     executeQuerylogQuery: (query: QuerylogRequest) => {
       const url = baseUrl + "clickhouse_querylog_query";
