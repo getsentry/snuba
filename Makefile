@@ -13,13 +13,11 @@ setup-git:
 test:
 	SNUBA_SETTINGS=test pytest -vv tests -v -m "not ci_only"
 
-CLICKHOUSE_IMAGE?=yandex/clickhouse-server:20.3.9.70
-
 test-distributed-migrations:
 	docker build . -t snuba-test
-	CLICKHOUSE_IMAGE=${CLICKHOUSE_IMAGE} SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml down
-	CLICKHOUSE_IMAGE=${CLICKHOUSE_IMAGE} SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
-	CLICKHOUSE_IMAGE=${CLICKHOUSE_IMAGE} SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+	SNUBA_IMAGE=snuba-test docker-compose --profile multi_node -f docker-compose.gcb.yml down
+	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
+	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
 
 tests: test
 
