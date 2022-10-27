@@ -13,6 +13,4 @@ type QuerylogResult = {
   error?: string;
 };
 
-type QuerylogSchemaResult = {};
-
-export { QuerylogRequest, QuerylogResult, QuerylogSchemaResult };
+export { QuerylogRequest, QuerylogResult };

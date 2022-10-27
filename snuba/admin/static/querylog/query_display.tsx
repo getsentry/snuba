@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Client from "../api_client";
 import { Collapse } from "../collapse";
 
-import { QuerylogRequest, QuerylogResult, QuerylogSchemaResult } from "./types";
+import { QuerylogRequest, QuerylogResult } from "./types";
 
 type QueryState = Partial<QuerylogRequest>;
 
@@ -33,7 +33,20 @@ function QueryDisplay(props: {
       })
       .catch((err) => {
         console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error);
+        window.alert("An error occurred: " + err.error.message);
+      });
+  }
+
+  function getQuerylogSchema() {
+    props.api
+      .getQuerylogSchema()
+      .then((result) => {
+        result.input_query = "View Querylog Schema";
+        setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
+      })
+      .catch((err) => {
+        console.log("ERROR", err);
+        window.alert("An error occurred: " + err.error.message);
       });
   }
 
@@ -58,7 +71,16 @@ function QueryDisplay(props: {
               style={executeButtonStyle}
               disabled={!query.sql}
             >
-              Execute query
+              Execute Query
+            </button>
+            <button
+              onClick={(evt) => {
+                evt.preventDefault();
+                getQuerylogSchema();
+              }}
+              style={executeButtonStyle}
+            >
+              View Querylog Schema
             </button>
           </div>
         </div>
@@ -110,6 +132,7 @@ const executeButtonStyle = {
   height: 30,
   border: 0,
   padding: "4px 20px",
+  marginRight: 10,
 };
 
 const selectStyle = {

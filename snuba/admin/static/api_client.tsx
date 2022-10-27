@@ -17,11 +17,7 @@ import { TracingRequest, TracingResult } from "./tracing/types";
 import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
 import { KafkaTopicData } from "./kafka/types";
-import {
-  QuerylogRequest,
-  QuerylogResult,
-  QuerylogSchemaResult,
-} from "./querylog/types";
+import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -45,7 +41,7 @@ interface Client {
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
   getKafkaData: () => Promise<KafkaTopicData[]>;
-  getQuerylogSchema: () => Promise<QuerylogSchemaResult>;
+  getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
 }
 
