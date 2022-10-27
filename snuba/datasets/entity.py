@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
@@ -181,11 +180,16 @@ class InvalidSubscriptionError(Exception):
     pass
 
 
-@dataclass
 class EntitySubscription:
-    max_allowed_aggregations: Optional[int] = None
-    disallowed_aggregations: Optional[Sequence[str]] = None
-    organization: Optional[int] = None
+    def __init__(
+        self,
+        max_allowed_aggregations: Optional[int] = None,
+        disallowed_aggregations: Optional[Sequence[str]] = None,
+        organization: Optional[int] = None,
+    ) -> None:
+        max_allowed_aggregations = max_allowed_aggregations
+        disallowed_aggregations = disallowed_aggregations
+        organization = organization
 
     @abstractmethod
     def get_entity_subscription_conditions_for_snql(

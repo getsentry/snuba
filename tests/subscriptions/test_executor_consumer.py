@@ -17,7 +17,7 @@ from confluent_kafka.admin import AdminClient
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import BaseEntitySubscription
+from snuba.datasets.entity import BaseEntitySubscription, InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -183,9 +183,12 @@ def generate_message(
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
         data_dict = {"organization": 1}
 
-    entity_subscription = (
-        get_entity(entity_key).get_entity_subscription().set_org(data_dict=data_dict)
-    )
+    entity_subscription = get_entity(entity_key).get_entity_subscription()
+    if not entity_subscription:
+        raise InvalidSubscriptionError(
+            f"entity subscription for {entity_key} does not exist"
+        )
+    entity_subscription.set_org(data_dict=data_dict)
 
     while True:
         payload = codec.encode(

@@ -9,7 +9,7 @@ import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
+from snuba.datasets.entity import BaseEntitySubscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -72,11 +72,11 @@ def assert_entity_subscription_on_subscription_class(
     entity_key: EntityKey,
 ) -> None:
     entity_subscription = get_entity(entity_key).get_entity_subscription()
+    assert isinstance(subscription.entity_subscription, type(entity_subscription))
+    assert isinstance(subscription.entity_subscription, BaseEntitySubscription)
     if organization:
-        assert isinstance(subscription.entity_subscription, type(entity_subscription))
         assert subscription.entity_subscription.organization == organization
     else:
-        assert isinstance(subscription.entity_subscription, BaseEntitySubscription)
         assert subscription.entity_subscription.organization is None
 
 
@@ -208,7 +208,7 @@ METRICS_CASES = [
     METRICS_CASES,
 )
 def test_metrics_subscription_task_result_encoder(
-    subscription_cls: Type[EntitySubscription],
+    subscription_cls: Type[BaseEntitySubscription],
     max_allowed_aggregations: int,
     disallowed_aggregations: Sequence[str],
     aggregate: str,

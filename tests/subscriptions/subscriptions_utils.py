@@ -4,7 +4,11 @@ from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
+from snuba.datasets.entity import (
+    BaseEntitySubscription,
+    EntitySubscription,
+    InvalidSubscriptionError,
+)
 from snuba.subscriptions.data import (
     PartitionId,
     Subscription,
@@ -39,4 +43,9 @@ def create_entity_subscription(
         data_dict = {"organization": org_id}
     else:
         data_dict = {}
-    return get_entity(entity_key).get_entity_subscription().set_org(data_dict=data_dict)
+    entity_subscription = get_entity(entity_key).get_entity_subscription()
+    if not entity_subscription:
+        raise InvalidSubscriptionError(
+            f"entity subscription for {entity_key} does not exist"
+        )
+    return entity_subscription.set_org(data_dict=data_dict)
