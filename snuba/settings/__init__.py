@@ -291,7 +291,7 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10  # 10 mins
 # merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # max number of long running merges to wait on. long running are merges
-# running longer thatn the min elapsed time cutoff
+# running longer than the min elapsed time cutoff
 OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS = 3
 
 # Maximum jitter to add to the scheduling of threads of an optimize job

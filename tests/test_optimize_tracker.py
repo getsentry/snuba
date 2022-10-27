@@ -203,9 +203,7 @@ def test_run_optimize_with_ongoing_merges() -> None:
     assert len(tracker.get_all_partitions()) == 0
     assert len(tracker.get_scheduled_partitions()) == 0
 
-    with patch.object(
-        optimize, "get_current_merging_partitions_info"
-    ) as mock_merge_ids:
+    with patch.object(optimize, "get_current_large_merges") as mock_merge_ids:
 
         # mock ongoing merges on half the partitions
         current_merges = [
