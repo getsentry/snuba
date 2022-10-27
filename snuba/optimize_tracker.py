@@ -41,7 +41,7 @@ class OptimizedPartitionTracker:
             f"{self.__table}:{today}"
         )
         self.__all_bucket = f"{common_prefix}:all"
-        self.__completed_bucket = f"{common_prefix}:completed"
+        self.__scheduled_bucket = f"{common_prefix}:scheduled"
         self.__key_expire_time = expire_time
 
     def __get_partitions(self, bucket: str) -> Set[str]:
@@ -63,11 +63,11 @@ class OptimizedPartitionTracker:
         """
         return self.__get_partitions(self.__all_bucket)
 
-    def get_completed_partitions(self) -> Set[str]:
+    def get_scheduled_partitions(self) -> Set[str]:
         """
-        Get a set of partitions that have completed optimization.
+        Get a set of partitions that have been scheduled for optimization.
         """
-        return self.__get_partitions(self.__completed_bucket)
+        return self.__get_partitions(self.__scheduled_bucket)
 
     def __update_partitions(
         self, bucket: str, encoded_part_names: Sequence[bytes]
@@ -90,11 +90,11 @@ class OptimizedPartitionTracker:
         encoded_part_names = [part.encode("utf-8") for part in part_names]
         self.__update_partitions(self.__all_bucket, encoded_part_names)
 
-    def update_completed_partitions(self, part_name: str) -> None:
+    def update_scheduled_partitions(self, part_name: str) -> None:
         """
-        Add partitions that have completed optimization.
+        Add partitions that have scheduled for optimization.
         """
-        self.__update_partitions(self.__completed_bucket, [part_name.encode("utf-8")])
+        self.__update_partitions(self.__scheduled_bucket, [part_name.encode("utf-8")])
 
     def get_partitions_to_optimize(self) -> Set[str]:
         """
@@ -108,15 +108,15 @@ class OptimizedPartitionTracker:
 
         """
         all_partitions = self.get_all_partitions()
-        completed_partitions = self.get_completed_partitions()
+        scheduled_partitions = self.get_scheduled_partitions()
 
         if not all_partitions:
             raise NoOptimizedStateException
 
-        if not completed_partitions:
+        if not scheduled_partitions:
             return all_partitions
         else:
-            return all_partitions - completed_partitions
+            return all_partitions - scheduled_partitions
 
     def delete_all_states(self) -> None:
         """
@@ -125,5 +125,5 @@ class OptimizedPartitionTracker:
         """
         pipe = self.__redis_client.pipeline()
         pipe.delete(self.__all_bucket)
-        pipe.delete(self.__completed_bucket)
+        pipe.delete(self.__scheduled_bucket)
         pipe.execute()
