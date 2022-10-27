@@ -187,5 +187,4 @@ def consumer(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    consumer.run()
-    consumer_builder.close_producers()
+    consumer_builder.close(consumer)

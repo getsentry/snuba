@@ -1,5 +1,6 @@
 import functools
 import logging
+from contextlib import closing
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
@@ -86,8 +87,6 @@ class ConsumerBuilder:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
         self.consumer_group = kafka_params.group_id
-        self.replacements_producer = None
-        self.commit_log_producer = None
 
         topic = (
             self.storage.get_table_writer()
@@ -128,6 +127,7 @@ class ConsumerBuilder:
                 )
             else:
                 self.replacements_topic = None
+                self.replacements_producer = None
 
         self.commit_log_topic: Optional[Topic]
         if kafka_params.commit_log_topic is not None:
@@ -137,11 +137,14 @@ class ConsumerBuilder:
             if commit_log_topic_spec is not None:
                 self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
                 self.commit_log_producer = Producer(
-                    build_kafka_producer_configuration(commit_log_topic_spec.topic),
-                    bootstrap_servers=kafka_params.bootstrap_servers,
+                    build_kafka_producer_configuration(
+                        commit_log_topic_spec.topic,
+                        bootstrap_servers=kafka_params.bootstrap_servers,
+                    ),
                 )
             else:
                 self.commit_log_topic = None
+                self.commit_log_producer = None
 
         self.stats_callback = stats_callback
 
@@ -270,12 +273,22 @@ class ConsumerBuilder:
 
         return strategy_factory
 
-    def close_producers(self) -> None:
-        if self.commit_log_producer is not None:
-            self.commit_log_producer.close()
+    def close(self, consumer: StreamProcessor[KafkaPayload]) -> None:
+        if not self.commit_log_producer and not self.replacements_producer:
+            consumer.run()
 
-        if self.replacements_producer is not None:
-            self.replacements_producer.close()
+        elif self.commit_log_producer and not self.replacements_producer:
+            with closing(self.commit_log_producer):
+                consumer.run()
+
+        elif self.replacements_producer and not self.commit_log_producer:
+            with closing(self.replacements_producer):
+                consumer.run()
+
+        else:
+            with closing(self.commit_log_producer):
+                with closing(self.replacements_producer):
+                    consumer.run()
 
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
