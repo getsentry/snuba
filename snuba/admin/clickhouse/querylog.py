@@ -23,7 +23,7 @@ def run_querylog_query(query: str, user: str) -> ClickhouseResult:
     """
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
-    validate_ro_query(sql_query=query, allowed_tables=[schema.get_table_name()])
+    validate_ro_query(sql_query=query, allowed_tables={schema.get_table_name()})
     if get_config(ENABLE_QUERYLOG_API_CONFIG, 0):
         return __run_querylog_query(query)
     raise InvalidCustomQuery("Production ClickHouse querylog access is not yet ready.")
