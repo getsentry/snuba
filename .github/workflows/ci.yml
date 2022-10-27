@@ -227,7 +227,7 @@ jobs:
     strategy:
       matrix:
         snuba_settings:
-          ["test", "test_distributed", "test_distributed_migrations"]
+          ["test", "test_distributed", "test_distributed_migrations", "test_initialization"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
