@@ -155,7 +155,7 @@ RECORD_QUERIES = False
 CONFIG_MEMOIZE_TIMEOUT = 10
 
 # Sentry Options
-SENTRY_DSN: str | None = "http://218eb27d05e64460a48de0fa22cbd9bc@localhost:8000/1"
+SENTRY_DSN: str | None = None
 SENTRY_TRACE_SAMPLE_RATE = 0
 
 # Snuba Admin Options
