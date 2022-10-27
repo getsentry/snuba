@@ -177,8 +177,12 @@ class Entity(Describable, ABC):
         )
 
 
+class InvalidSubscriptionError(Exception):
+    pass
+
+
 @dataclass
-class EntitySubscription(ABC):
+class EntitySubscription:
     max_allowed_aggregations: Optional[int] = None
     disallowed_aggregations: Optional[Sequence[str]] = None
     organization: Optional[int] = None
@@ -219,11 +223,20 @@ class EntitySubscriptionValidation(EntitySubscription):
         self.disallowed_aggregations: Sequence[str] = disallowed_aggregations
 
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
+        # Import get_entity() when used, not at import time to avoid circular imports
+        from snuba.datasets.entities.factory import get_entity
+
         # TODO: Support composite queries with multiple entities.
+        from_clause = query.get_from_clause()
+        if not isinstance(from_clause, EntityDS):
+            raise InvalidSubscriptionError("Only simple queries are supported")
+        entity = get_entity(from_clause.key)
+
         SubscriptionAllowedClausesValidator(
             self.max_allowed_aggregations, self.disallowed_aggregations
         ).validate(query)
-        NoTimeBasedConditionValidator().validate(query)
+        if entity.required_time_column:
+            NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
 
 class BaseEntitySubscription(EntitySubscriptionValidation):

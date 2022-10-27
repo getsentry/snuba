@@ -79,6 +79,7 @@ class TestEntityConfiguration(ConfigurationTest):
             assert (
                 config_v.__class__ == py_v.__class__
             ), "validator mismatch between configuration-loaded sets and python-defined"
+
         assert config_entity.get_all_storages() == py_entity.get_all_storages()
         assert config_entity.get_writable_storage() == py_entity.get_writable_storage()
         assert config_entity.required_time_column == py_entity.required_time_column

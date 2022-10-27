@@ -37,7 +37,7 @@ def test_no_time_based_validation(key: EntityKey, condition: Expression) -> None
     )
 
     assert entity.required_time_column is not None
-    validator = NoTimeBasedConditionValidator()
+    validator = NoTimeBasedConditionValidator(entity.required_time_column)
     validator.validate(query)
 
 
@@ -85,6 +85,6 @@ def test_no_time_based_validation_failure(
     )
 
     assert entity.required_time_column is not None
-    validator = NoTimeBasedConditionValidator()
+    validator = NoTimeBasedConditionValidator(entity.required_time_column)
     with pytest.raises(InvalidQueryException):
         validator.validate(query)

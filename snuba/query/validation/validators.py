@@ -5,14 +5,12 @@ from enum import Enum
 from typing import Optional, Sequence, Set, Type, cast
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
-from snuba.datasets.entities.factory import get_entity
 from snuba.query import Query
 from snuba.query.conditions import (
     ConditionFunctions,
     build_match,
     get_first_level_and_conditions,
 )
-from snuba.query.data_source.simple import Entity as EntityDS
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import Column
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
@@ -137,37 +135,30 @@ class NoTimeBasedConditionValidator(QueryValidator):
     column and ensure there are no conditions.
     """
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, required_time_column: str) -> None:
+        self.required_time_column = required_time_column
+        self.match = build_match(
+            col=required_time_column,
+            ops=[
+                ConditionFunctions.EQ,
+                ConditionFunctions.LT,
+                ConditionFunctions.LTE,
+                ConditionFunctions.GT,
+                ConditionFunctions.GTE,
+            ],
+            param_type=datetime,
+        )
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
-        from_clause = query.get_from_clause()
-        if not isinstance(from_clause, EntityDS):
-            raise InvalidQueryException("Only simple queries are supported")
-
-        entity = get_entity(from_clause.key)
-        if entity.required_time_column:
-            self.required_time_column = entity.required_time_column
-            self.match = build_match(
-                col=self.required_time_column,
-                ops=[
-                    ConditionFunctions.EQ,
-                    ConditionFunctions.LT,
-                    ConditionFunctions.LTE,
-                    ConditionFunctions.GT,
-                    ConditionFunctions.GTE,
-                ],
-                param_type=datetime,
-            )
-            condition = query.get_condition()
-            top_level = get_first_level_and_conditions(condition) if condition else []
-            for cond in top_level:
-                if self.match.match(cond):
-                    raise InvalidExpressionException.from_args(
-                        cond,
-                        f"Cannot have existing conditions on time field {self.required_time_column}",
-                        should_report=False,
-                    )
+        condition = query.get_condition()
+        top_level = get_first_level_and_conditions(condition) if condition else []
+        for cond in top_level:
+            if self.match.match(cond):
+                raise InvalidExpressionException.from_args(
+                    cond,
+                    f"Cannot have existing conditions on time field {self.required_time_column}",
+                    should_report=False,
+                )
 
 
 class SubscriptionAllowedClausesValidator(QueryValidator):

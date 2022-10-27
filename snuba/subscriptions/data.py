@@ -148,7 +148,6 @@ class SubscriptionData:
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
         schema = RequestSchema.build(SubscriptionQuerySettings)
-
         request = build_request(
             {"query": self.query},
             parse_snql_query,
@@ -168,9 +167,13 @@ class SubscriptionData:
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SubscriptionData:
-        entity_subscription = (
-            get_entity(entity_key).get_entity_subscription().set_org(data_dict=data)
-        )
+
+        entity_subscription = get_entity(entity_key).get_entity_subscription()
+        if not entity_subscription:
+            raise InvalidSubscriptionError(
+                f"entity subscription for {entity_key} does not exist"
+            )
+        entity_subscription = entity_subscription.set_org(data_dict=data)
 
         return SubscriptionData(
             project_id=data["project_id"],
