@@ -288,10 +288,11 @@ OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 OPTIMIZE_BASE_SLEEP_TIME = 300  # 5 mins
 # merges longer than this will be considered long running
 OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10  # 10 mins
-# merges larger than this will be considered long running and will be waited on
+# merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
-# max number of running merges to wait on
-OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS = 3
+# max number of long running merges to wait on. long running are merges
+# running longer thatn the min elapsed time cutoff
+OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS = 3
 
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30

@@ -12,7 +12,7 @@ from snuba.optimize_scheduler import OptimizeScheduler
 from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
 from snuba.settings import (
     OPTIMIZE_BASE_SLEEP_TIME,
-    OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS,
+    OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS,
     OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
     OPTIMIZE_MERGE_SIZE_CUTOFF,
 )
@@ -198,15 +198,15 @@ def get_partitions_to_optimize(
     return parts
 
 
-def get_current_merging_partitions_info(
+def get_current_large_merges(
     clickhouse: ClickhousePool,
     database: str,
     table: str,
 ) -> Sequence[util.MergeInfo]:
     """
-    Returns a dictionary of partitions that are currently part of large merge. Merges
+    Returns MergeInfo of parts that are currently part of large merges. Merges
     are considered large if they are longer than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
-    or if they are larger than OPTIMIZE_MERGE_MIN_PARTS_CUTTOFF_TIME.
+    (long running), or if they are larger than OPTIMIZE_MERGE_SIZE_CUTOFF.
     """
     merging_parts = clickhouse.execute(
         """
@@ -234,8 +234,7 @@ def get_current_merging_partitions_info(
 
     merge_info = []
     for part, elapsed, progress, size in merging_parts.results:
-        partition_id = part.split("_")[0]
-        merge_info.append(util.MergeInfo(partition_id, part, elapsed, progress, size))
+        merge_info.append(util.MergeInfo(part, elapsed, progress, size))
 
     return merge_info
 
@@ -375,12 +374,12 @@ def is_busy_merging(
     """
     Returns true and the estimated sleep time if clickhouse is busy with merges in progress
     for the table. Clickhouse is considered busy if
-        1. there are more than OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS merges in progress with an elapsed time greater than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
-        2. or there is a merge of size greater than OPTIMIZE_MERGE_SIZE_CUTOFF
+        1. there are more than OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS merges in progress with an elapsed time greater than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
+        2. or there is any merge of size greater than OPTIMIZE_MERGE_SIZE_CUTOFF
     """
-    merge_info = get_current_merging_partitions_info(clickhouse, database, table)
+    merge_info = get_current_large_merges(clickhouse, database, table)
 
-    if len(merge_info) > OPTIMIZE_MERGE_MAX_CONCURRENT_JOBS:
+    if len(merge_info) > OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS:
         estimated_sleep_time = max(
             merge_info, key=lambda x: x.estimated_time
         ).estimated_time

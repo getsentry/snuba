@@ -210,7 +210,6 @@ def test_run_optimize_with_ongoing_merges() -> None:
         # mock ongoing merges on half the partitions
         current_merges = [
             util.MergeInfo(
-                "90-20220613",
                 "90-20220613_0_1216096_1417",
                 10,
                 0.5,
@@ -260,7 +259,7 @@ def test_merge_info() -> None:
 
     with patch.object(ClickhousePool, "execute") as mock_clickhouse_execute:
         mock_clickhouse_execute.return_value = merge_query_result
-        merge_info = optimize.get_current_merging_partitions_info(
+        merge_info = optimize.get_current_large_merges(
             clickhouse=ClickhousePool(
                 "localhost", 9000, "user", "password", "database"
             ),
@@ -269,14 +268,12 @@ def test_merge_info() -> None:
         )
         assert merge_info == [
             util.MergeInfo(
-                "90-20220613",
                 "90-20220613_0_1216096_1417",
                 8020.61436897,
                 0.9895385071013121,
                 40_000_000_000,
             ),
             util.MergeInfo(
-                "90-20220912",
                 "90-20220912_133168_133172_1",
                 0.181636831,
                 1.0,

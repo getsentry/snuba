@@ -280,12 +280,12 @@ def with_span(op: str = "function") -> Callable[[F], F]:
 
 @dataclass
 class MergeInfo:
-    partition_id: str
     result_part_name: str
     elapsed: float
     progress: float
     size: int
 
     @property
+    # estimated time remaining in seconds
     def estimated_time(self) -> float:
         return self.elapsed / (self.progress + 0.0001)
