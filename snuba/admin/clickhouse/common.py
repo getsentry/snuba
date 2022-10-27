@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import MutableMapping
 
-from sql_metadata import Parser, QueryType
+from sql_metadata import Parser, QueryType  # type: ignore
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
