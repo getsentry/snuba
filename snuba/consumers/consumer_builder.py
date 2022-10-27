@@ -134,7 +134,8 @@ class ConsumerBuilder:
             if commit_log_topic_spec is not None:
                 self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
                 self.commit_log_producer = Producer(
-                    build_kafka_producer_configuration(commit_log_topic_spec.topic)
+                    build_kafka_producer_configuration(commit_log_topic_spec.topic),
+                    bootstrap_servers=kafka_params.bootstrap_servers,
                 )
             else:
                 self.commit_log_topic = None
@@ -274,7 +275,4 @@ class ConsumerBuilder:
         """
         Builds the consumer.
         """
-        processor = self.__build_consumer(self.__build_streaming_strategy_factory())
-        self.commit_log_producer.close()
-        self.replacements_producer.close()
-        return processor
+        return self.__build_consumer(self.__build_streaming_strategy_factory())
