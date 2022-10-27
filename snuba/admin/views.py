@@ -306,7 +306,6 @@ def clickhouse_querylog_query() -> Response:
     try:
         result = run_querylog_query(raw_sql, user)
         rows, columns = result.results, result.meta
-
         if columns:
             return make_response(
                 jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
@@ -336,14 +335,12 @@ def clickhouse_querylog_query() -> Response:
 def clickhouse_querylog_schema() -> Response:
     try:
         result = describe_querylog_schema()
-        rows = []
-        rows, columns = cast(List[List[str]], result.results), result.meta
+        rows, columns = result.results, result.meta
         if columns:
-            res = {}
-            res["column_names"] = [name for name, _ in columns]
-            res["rows"] = [[str(col) for col in row] for row in rows]
-
-            return make_response(jsonify(res), 200)
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
     except ClickhouseError as err:
         details = {
             "type": "clickhouse",
