@@ -8,6 +8,7 @@ import click
 import sentry_sdk
 import structlog
 
+from snuba.core import initialize
 from snuba.environment import metrics as environment_metrics
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -22,7 +23,7 @@ with sentry_sdk.start_transaction(
     logger = logging.getLogger("snuba_init")
 
     start = time.perf_counter()
-    logger.info("Initializing Snuba...")
+    logger.info("Initializing Snuba CLI...")
     metrics = MetricsWrapper(environment_metrics, "cli")
 
     plugin_folder = os.path.dirname(__file__)
@@ -36,14 +37,15 @@ with sentry_sdk.start_transaction(
             rv.sort()
             return rv
 
-        def get_command(self, ctx, name):
+        def get_command(self, ctx, name) -> click.Command:
             logger.info(f"Loading command {name}")
             with sentry_sdk.start_span(op="import", description=name):
-                ns = {}
+                ns: dict[str, click.Command] = {}
                 fn = os.path.join(plugin_folder, name + ".py")
                 with open(fn) as f:
                     code = compile(f.read(), fn, "exec")
                     eval(code, ns, ns)
+                initialize.initialize()
                 return ns[name]
 
     @click.command(cls=SnubaCLI)
