@@ -181,6 +181,13 @@ class InvalidSubscriptionError(Exception):
 
 
 class EntitySubscription:
+    """
+    Used to provide extra functionality for entity specific subscriptions.
+
+    An instance of this class is set as an attribute of Entity.
+        Entity.entity_subscription: Optional[EntitySubscription]
+    """
+
     def __init__(
         self,
         max_allowed_aggregations: Optional[int] = None,
@@ -246,6 +253,17 @@ class EntitySubscriptionValidation:
 
 
 class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
+    """
+    This class contains all functionality required by all entities.
+    Therefore, it is currently used by all entities.
+
+    Notes:
+        If iniitialization params are not provide, it defaults to parent class attributes.
+        Setting self.organization is optional because not every entity requires this field.
+        Organization is set after Entity and EntitySubscription objects are created using set_org().
+        Child classes can extend from this to provide additional entity specific functionality.
+    """
+
     def __init__(
         self,
         max_allowed_aggregations: Optional[int] = None,
@@ -262,9 +280,7 @@ class BaseEntitySubscription(EntitySubscriptionValidation, EntitySubscription):
             try:
                 self.organization: int = data_dict["organization"]
             except KeyError:
-                raise InvalidQueryException(
-                    "organization param is required for any query over sessions entity"
-                )
+                raise InvalidQueryException("organization param is required")
         return self
 
     def get_entity_subscription_conditions_for_snql(
