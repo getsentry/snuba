@@ -274,14 +274,18 @@ class ConsumerBuilder:
         return strategy_factory
 
     def close(self, consumer: StreamProcessor[KafkaPayload]) -> None:
-        if not self.commit_log_producer and not self.replacements_producer:
+        if self.commit_log_producer is None and self.replacements_producer is None:
             consumer.run()
 
-        elif self.commit_log_producer and not self.replacements_producer:
+        elif (
+            self.commit_log_producer is not None and self.replacements_producer is None
+        ):
             with closing(self.commit_log_producer):
                 consumer.run()
 
-        elif self.replacements_producer and not self.commit_log_producer:
+        elif (
+            self.replacements_producer is not None and self.commit_log_producer is None
+        ):
             with closing(self.replacements_producer):
                 consumer.run()
 
