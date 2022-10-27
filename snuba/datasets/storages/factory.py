@@ -101,9 +101,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         )
         from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
-        from snuba.datasets.storages.transactions_v2 import (
-            storage as transactions_v2_storage,
-        )
 
         self._cdc_storages = {
             **{
@@ -123,7 +120,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     querylog_storage,
                     sessions_raw_storage,
                     transactions_storage,
-                    transactions_v2_storage,
                     errors_v2_storage,
                     profiles_writable_storage,
                     functions_storage,

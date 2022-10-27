@@ -42,9 +42,9 @@ def get_active_partitions(
 
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
-    part_format = schema.get_part_format()
-    assert part_format is not None
-    return [util.decode_part_str(part, part_format) for part, in response.results]
+    partition_format = schema.get_partition_format()
+    assert partition_format is not None
+    return [util.decode_part_str(part, partition_format) for part, in response.results]
 
 
 def current_time() -> datetime:

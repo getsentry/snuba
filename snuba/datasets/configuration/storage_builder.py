@@ -85,7 +85,7 @@ def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
         local_table_name=config[SCHEMA]["local_table_name"],
         dist_table_name=config[SCHEMA]["dist_table_name"],
         storage_set_key=StorageSetKey(config[STORAGE][SET_KEY]),
-        part_format=partition_formats,  # TODO: Rename `part_format` to `partition_format` in the class
+        partition_format=partition_formats,
     )
 
 
@@ -110,9 +110,10 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
+    processor_config = loader_config["processor"]
     processor = DatasetMessageProcessor.get_from_name(
-        loader_config["processor"]
-    ).from_kwargs()
+        processor_config["name"]
+    ).from_kwargs(**processor_config.get("args", {}))
     default_topic = Topic(loader_config["default_topic"])
     # optionals
     pre_filter = None
