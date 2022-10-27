@@ -17,7 +17,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "distributed_cluster_name": "query_cluster",
     },
     {
-        "host": os.environ.get("CLICKHOUSE_MIGRATIONS_HOST", "clickhouse-query"),
+        "host": os.environ.get("CLICKHOUSE_HOST", "clickhouse-query"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
@@ -26,7 +26,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "storage_sets": {
             "migrations",
         },
-        "single_node": True,
+        "single_node": False,
         "cluster_name": "migrations_cluster",
         "distributed_cluster_name": "query_cluster",
     },
