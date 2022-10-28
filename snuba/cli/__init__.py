@@ -53,6 +53,7 @@ with sentry_sdk.start_transaction(
                 return ns[name]
 
     @click.command(cls=SnubaCLI)
+    @click.version_option()
     def main() -> None:
         """\b
                              o
