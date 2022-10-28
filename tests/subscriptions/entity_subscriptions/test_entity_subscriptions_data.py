@@ -20,7 +20,7 @@ storage = entity.get_writable_storage()
 assert storage is not None
 stream_loader = storage.get_table_writer().get_stream_loader()
 topic_spec = stream_loader.get_default_topic_spec()
-data = {"organization": 1}
+org_id = 1
 
 project_id = 1
 resolution_sec = 60
@@ -41,6 +41,7 @@ def subscription_data_builder(
         time_window_sec=time_window_sec,
         entity_subscription=entity_subscription,
         query=query,
+        org_id=org_id if entity_subscription.has_org_id else None,
     )
 
 
@@ -48,7 +49,7 @@ def subscription_data_builder(
 def entity_subscriptions() -> EntitySubscription:
     entity_subscription = entity.get_entity_subscription()
     assert isinstance(entity_subscription, EntitySubscription)
-    return entity_subscription.set_org(data_dict=data)
+    return entity_subscription
 
 
 def test_entity_subscriptions_data(

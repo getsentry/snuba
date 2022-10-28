@@ -182,16 +182,15 @@ def generate_message(
     if subscription_identifier is None:
         subscription_identifier = SubscriptionIdentifier(PartitionId(1), uuid.uuid1())
 
-    data_dict = {}
+    org_id = None
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
-        data_dict = {"organization": 1}
+        org_id = 1
 
     entity_subscription = get_entity(entity_key).get_entity_subscription()
     if not entity_subscription:
         raise InvalidSubscriptionError(
             f"entity subscription for {entity_key} does not exist"
         )
-    entity_subscription.set_org(data_dict=data_dict)
 
     while True:
         payload = codec.encode(
@@ -206,6 +205,7 @@ def generate_message(
                             time_window_sec=60,
                             resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
+                            org_id=org_id,
                             entity_subscription=entity_subscription,
                         ),
                     ),
@@ -323,6 +323,7 @@ def test_produce_result() -> None:
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
+        org_id=None,
         entity_subscription=EntitySubscription(),
     )
 

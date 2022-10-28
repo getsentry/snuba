@@ -34,10 +34,6 @@ class EntitySubscription:
         self.disallowed_aggregations = disallowed_aggregations
         self.has_org_id = has_org_id
 
-    def set_org_id(self, org_id: int) -> None:
-        if self.has_org_id:
-            self.org_id = org_id
-
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # Import get_entity() when used, not at import time to avoid circular imports
         from snuba.datasets.entities.factory import get_entity
@@ -55,19 +51,21 @@ class EntitySubscription:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
     def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
+        self, offset: Optional[int] = None, org_id: Optional[int] = None
     ) -> Sequence[Expression]:
         if self.has_org_id:
             return [
                 binary_condition(
                     ConditionFunctions.EQ,
                     Column(None, None, "org_id"),
-                    Literal(None, self.org_id),
+                    Literal(None, org_id),
                 ),
             ]
         return []
 
     def to_dict(self) -> Mapping[str, Any]:
-        if self.has_org_id:
-            return {"organization": self.org_id}
-        return {}
+        return {
+            "max_allowed_aggregations": self.max_allowed_aggregations,
+            "disallowed_aggregations": self.disallowed_aggregations,
+            "has_org_id": self.has_org_id,
+        }

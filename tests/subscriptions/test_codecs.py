@@ -40,7 +40,8 @@ def build_snql_subscription_data(
         time_window_sec=500 * 60,
         resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
-        entity_subscription=create_entity_subscription(entity_key, organization),
+        org_id=organization,
+        entity_subscription=create_entity_subscription(entity_key),
     )
 
 
@@ -76,7 +77,7 @@ def assert_entity_subscription_on_subscription_class(
     assert isinstance(subscription.entity_subscription, EntitySubscription)
     if organization:
         assert subscription.entity_subscription.has_org_id == True
-        assert subscription.entity_subscription.org_id == organization
+        assert subscription.org_id == organization
     else:
         assert subscription.entity_subscription.has_org_id == False
 
@@ -143,6 +144,7 @@ def test_subscription_task_result_encoder() -> None:
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
+        org_id=None,
         entity_subscription=entity_subscription,
     )
 
@@ -236,6 +238,7 @@ def test_metrics_subscription_task_result_encoder(
         ),
         time_window_sec=60,
         resolution_sec=60,
+        org_id=None,
         entity_subscription=entity_subscription,
     )
 

@@ -37,6 +37,7 @@ class TestSubscriptionScheduler:
                 query="MATCH (events) SELECT count() AS count",
                 time_window_sec=60,
                 resolution_sec=int(resolution.total_seconds()),
+                org_id=None,
                 entity_subscription=create_entity_subscription(),
             ),
         )

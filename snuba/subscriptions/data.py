@@ -79,6 +79,7 @@ class SubscriptionData:
     time_window_sec: int
     entity_subscription: EntitySubscription
     query: str
+    org_id: Optional[int]
 
     def add_conditions(
         self,
@@ -114,7 +115,7 @@ class SubscriptionData:
                 Literal(None, timestamp),
             ),
             *self.entity_subscription.get_entity_subscription_conditions_for_snql(
-                offset
+                offset, self.org_id
             ),
         ]
 
@@ -178,11 +179,11 @@ class SubscriptionData:
                 f"entity subscription for {entity_key} does not exist"
             )
 
-        try:
-            organization: int = data["organization"]
-            entity_subscription.set_org_id(organization)
-        except KeyError:
-            raise InvalidQueryException("organization param is required")
+        org_id: Optional[int] = None
+        if entity_subscription.has_org_id:
+            if "organization" not in data:
+                raise InvalidQueryException("organization param is required")
+            org_id = data["organization"]
 
         return SubscriptionData(
             project_id=data["project_id"],
@@ -191,6 +192,7 @@ class SubscriptionData:
             resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity_subscription=entity_subscription,
+            org_id=org_id,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -199,6 +201,7 @@ class SubscriptionData:
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
+            "org_id": self.org_id,
             **self.entity_subscription.to_dict(),
         }
 

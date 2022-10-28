@@ -29,6 +29,7 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
             time_window_sec=int(timedelta(minutes=5).total_seconds()),
             resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
+            org_id=None,
             entity_subscription=EntitySubscription(),
         ),
     )
@@ -42,6 +43,4 @@ def create_entity_subscription(
         raise InvalidSubscriptionError(
             f"entity subscription for {entity_key} does not exist"
         )
-    if org_id:
-        entity_subscription.set_org_id(org_id)
     return entity_subscription
