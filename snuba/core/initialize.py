@@ -12,21 +12,21 @@ logger = logging.getLogger("snuba_core_init")
 
 
 def _load_datasets() -> None:
-    from snuba.datasets.factory import get_enabled_dataset_names
+    from snuba.datasets.factory import reset_dataset_factory
 
-    get_enabled_dataset_names()
+    reset_dataset_factory()
 
 
 def _load_storages() -> None:
-    from snuba.datasets.storages.factory import get_all_storage_keys
+    from snuba.datasets.storages.factory import initialize_storage_factory
 
-    get_all_storage_keys()
+    initialize_storage_factory()
 
 
 def _load_entities() -> None:
-    from snuba.datasets.entities.factory import get_all_entity_names
+    from snuba.datasets.entities.factory import initialize_entity_factory
 
-    get_all_entity_names()
+    initialize_entity_factory()
 
 
 def initialize() -> None:
