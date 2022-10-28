@@ -5,8 +5,8 @@ import simplejson as json
 from flask.testing import FlaskClient
 
 from snuba import state
+from snuba.admin.auth import USER_HEADER_KEY
 from snuba.admin.clickhouse.querylog import ENABLE_QUERYLOG_API_CONFIG
-from snuba.admin.views import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
 
 
