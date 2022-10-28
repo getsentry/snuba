@@ -273,9 +273,6 @@ class ConsumerBuilder:
         return strategy_factory
 
     def flush(self) -> None:
-        if self.commit_log_producer:
-            self.commit_log_producer.flush()
-
         if self.replacements_producer:
             self.replacements_producer.flush()
 
