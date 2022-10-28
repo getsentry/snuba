@@ -254,7 +254,7 @@ jobs:
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
-        if: ${{ matrix.snuba_settings != 'test_distributed_migrations' }}
+        if: ${{ matrix.snuba_settings == 'test_distributed' || matrix.snuba_settings == "test"}}
 
       - name: Docker Snuba Multi-Node Tests
         run: |
@@ -264,7 +264,8 @@ jobs:
 
       - name: Docker Snuba Init Tests
         run: |
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization_break_stuff TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+        if: ${{ matrix.snuba_settings == 'test_initialization' }}
 
 
       - name: Upload to codecov
