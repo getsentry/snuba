@@ -47,6 +47,9 @@ with sentry_sdk.start_transaction(
                     code = compile(f.read(), fn, "exec")
                     eval(code, ns, ns)
                 initialize.initialize()
+                init_time = time.perf_counter() - start
+                metrics.gauge("snuba_init", init_time)
+                logger.info(f"Snuba initialization took {init_time}s")
                 return ns[name]
 
     @click.command(cls=SnubaCLI)
@@ -60,9 +63,5 @@ with sentry_sdk.start_transaction(
         `Ooo.  o   O o   O  O   o O   o
             O  O   o O   o  o   O o   O
         `OoO'  o   O `OoO'o `OoO' `OoO'o"""
-
-    init_time = time.perf_counter() - start
-    metrics.gauge("snuba_init", init_time)
-    logger.info(f"Snuba initialization took {init_time}s")
 
     structlog.reset_defaults()
