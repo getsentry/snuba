@@ -6,10 +6,20 @@ from typing import Mapping, MutableSequence, Optional, Sequence
 
 from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.optimize.optimize_scheduler import OptimizeScheduler
+from snuba.clickhouse.optimize.optimize_tracker import (
+    NoOptimizedStateException,
+    OptimizedPartitionTracker,
+)
+from snuba.clickhouse.optimize.util import MergeInfo
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.optimize_scheduler import OptimizeScheduler
-from snuba.optimize_tracker import NoOptimizedStateException, OptimizedPartitionTracker
+from snuba.settings import (
+    OPTIMIZE_BASE_SLEEP_TIME,
+    OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS,
+    OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
+    OPTIMIZE_MERGE_SIZE_CUTOFF,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.optimize")
@@ -190,6 +200,47 @@ def get_partitions_to_optimize(
     return parts
 
 
+def get_current_large_merges(
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+) -> Sequence[MergeInfo]:
+    """
+    Returns MergeInfo of parts that are currently part of large merges. Merges
+    are considered large if they are longer than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
+    (long running), or if they are larger than OPTIMIZE_MERGE_SIZE_CUTOFF.
+    """
+    merging_parts = clickhouse.execute(
+        """
+        SELECT
+            result_part_name,
+            elapsed,
+            progress,
+            total_size_bytes_compressed
+        FROM system.merges
+        WHERE database = %(database)s
+        AND (
+            total_size_bytes_compressed > %(max_merge_size)d
+            OR elapsed > %(min_merge_elapsed_time)f
+            )
+        AND table = %(table)s
+        ORDER BY elapsed DESC
+        """,
+        {
+            "database": database,
+            "table": table,
+            "max_merge_size": OPTIMIZE_MERGE_SIZE_CUTOFF,
+            "min_merge_elapsed_time": OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
+        },
+    )
+
+    merge_info = []
+    for part, elapsed, progress, size in merging_parts.results:
+        merge_info.append(MergeInfo(part, elapsed, progress, size))
+
+    return merge_info
+
+
 def optimize_partition_runner(
     clickhouse: ClickhousePool,
     database: str,
@@ -301,9 +352,51 @@ def optimize_partitions(
         if tracker:
             tracker.update_completed_partitions(partition)
 
+        # if theres a merge in progress for this partition, wait for it to finish
+        while True:
+            busy_merging, estimated_sleep_time = is_busy_merging(
+                clickhouse, database, table
+            )
+            if not busy_merging:
+                break
+            else:
+                time.sleep(OPTIMIZE_BASE_SLEEP_TIME)
+
+        start = time.time()
         clickhouse.execute(query, retryable=False)
         metrics.timing(
             "optimized_part",
             time.time() - start,
             tags=_get_metrics_tags(table, clickhouse_host),
         )
+
+
+def is_busy_merging(
+    clickhouse: ClickhousePool, database: str, table: str
+) -> Tuple[bool, float]:
+    """
+    Returns true and the estimated sleep time if clickhouse is busy with merges
+    in progress for the table. Clickhouse is considered busy if
+        1. there are more than OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS merges in progress
+           with an elapsed time greater than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
+        2. or there is any merge of size greater than OPTIMIZE_MERGE_SIZE_CUTOFF
+    """
+    merge_info = get_current_large_merges(clickhouse, database, table)
+
+    if len(merge_info) > OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS:
+        estimated_sleep_time = max(
+            merge_info, key=lambda x: x.estimated_time
+        ).estimated_time
+        logger.info(
+            f"too many concurrent long merges {len(merge_info)}, sleeping for {estimated_sleep_time}s"
+        )
+        return True, estimated_sleep_time
+
+    if any(merge.size > OPTIMIZE_MERGE_SIZE_CUTOFF for merge in merge_info):
+        estimated_sleep_time = max(
+            merge_info, key=lambda x: x.estimated_time
+        ).estimated_time
+        logger.info(f"large ongoing merge, sleeping for {estimated_sleep_time}s")
+        return True, estimated_sleep_time
+
+    return False, 0

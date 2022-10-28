@@ -4,14 +4,14 @@ from typing import Optional
 import click
 
 from snuba import settings
+from snuba.clickhouse.optimize.optimize import run_optimize_cron_job
+from snuba.clickhouse.optimize.optimize_tracker import OptimizedPartitionTracker
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
-from snuba.optimize import run_optimize_cron_job
-from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.redis import RedisClientKey, get_redis_client
 
 
