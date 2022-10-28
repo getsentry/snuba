@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from typing import Any
 
 import click
 import sentry_sdk
@@ -29,7 +30,7 @@ with sentry_sdk.start_transaction(
     plugin_folder = os.path.dirname(__file__)
 
     class SnubaCLI(click.MultiCommand):
-        def list_commands(self, ctx) -> list[str]:
+        def list_commands(self, ctx: Any) -> list[str]:
             rv = []
             for filename in os.listdir(plugin_folder):
                 if filename.endswith(".py") and filename != "__init__.py":
@@ -37,7 +38,7 @@ with sentry_sdk.start_transaction(
             rv.sort()
             return rv
 
-        def get_command(self, ctx, name) -> click.Command:
+        def get_command(self, ctx: Any, name: str) -> click.Command:
             logger.info(f"Loading command {name}")
             with sentry_sdk.start_span(op="import", description=name):
                 ns: dict[str, click.Command] = {}
@@ -49,7 +50,7 @@ with sentry_sdk.start_transaction(
                 return ns[name]
 
     @click.command(cls=SnubaCLI)
-    def main():
+    def main() -> None:
         """\b
                              o
                             O

@@ -29,7 +29,7 @@ def _load_entities() -> None:
     get_all_entity_names()
 
 
-def initialize():
+def initialize() -> None:
     logger.info("Initializing snuba")
 
     # The order of the functions matters. At time of writing (2022-10-27), snuba datasets are not guaranteed to load
