@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Optional
+from typing import Any, Mapping
 from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -29,18 +29,18 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
             time_window_sec=int(timedelta(minutes=5).total_seconds()),
             resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
-            org_id=None,
-            entity_subscription=EntitySubscription(),
+            entity_subscription=EntitySubscription().load_data({}),
         ),
     )
 
 
 def create_entity_subscription(
-    entity_key: EntityKey = EntityKey.EVENTS, org_id: Optional[int] = None
+    entity_key: EntityKey = EntityKey.EVENTS, data: Mapping[str, Any] = {}
 ) -> EntitySubscription:
     entity_subscription = get_entity(entity_key).get_entity_subscription()
     if not entity_subscription:
         raise InvalidSubscriptionError(
             f"entity subscription for {entity_key} does not exist"
         )
+    entity_subscription.load_data(data)
     return entity_subscription

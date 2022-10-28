@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime
-from typing import Callable, Optional, Sequence, Type
+from typing import Any, Callable, Mapping, Optional, Sequence, Type
 
 import pytest
 
@@ -40,8 +40,9 @@ def build_snql_subscription_data(
         time_window_sec=500 * 60,
         resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
-        org_id=organization,
-        entity_subscription=create_entity_subscription(entity_key),
+        entity_subscription=create_entity_subscription(
+            entity_key, {"organization": organization}
+        ),
     )
 
 
@@ -77,7 +78,7 @@ def assert_entity_subscription_on_subscription_class(
     assert isinstance(subscription.entity_subscription, EntitySubscription)
     if organization:
         assert subscription.entity_subscription.has_org_id == True
-        assert subscription.org_id == organization
+        assert getattr(subscription.entity_subscription, "org_id") == organization
     else:
         assert subscription.entity_subscription.has_org_id == False
 
@@ -144,7 +145,6 @@ def test_subscription_task_result_encoder() -> None:
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        org_id=None,
         entity_subscription=entity_subscription,
     )
 
@@ -192,6 +192,7 @@ METRICS_CASES = [
         3,
         ["having", "orderby"],
         True,
+        {"organization": 1},
         "sum",
         EntityKey.METRICS_COUNTERS,
         id="metrics_counters subscription",
@@ -201,6 +202,7 @@ METRICS_CASES = [
         3,
         ["having", "orderby"],
         True,
+        {"organization": 1},
         "uniq",
         EntityKey.METRICS_SETS,
         id="metrics_sets subscription",
@@ -209,7 +211,7 @@ METRICS_CASES = [
 
 
 @pytest.mark.parametrize(
-    "subscription_cls, max_allowed_aggregations, disallowed_aggregations, has_org_id, aggregate, entity_key",
+    "subscription_cls, max_allowed_aggregations, disallowed_aggregations, has_org_id, data, aggregate, entity_key",
     METRICS_CASES,
 )
 def test_metrics_subscription_task_result_encoder(
@@ -217,6 +219,7 @@ def test_metrics_subscription_task_result_encoder(
     max_allowed_aggregations: int,
     disallowed_aggregations: Sequence[str],
     has_org_id: bool,
+    data: Mapping[str, Any],
     aggregate: str,
     entity_key: EntityKey,
 ) -> None:
@@ -227,7 +230,7 @@ def test_metrics_subscription_task_result_encoder(
         max_allowed_aggregations,
         disallowed_aggregations,
         has_org_id,
-    )
+    ).load_data(data)
     subscription_data = SubscriptionData(
         project_id=1,
         query=(
@@ -238,7 +241,6 @@ def test_metrics_subscription_task_result_encoder(
         ),
         time_window_sec=60,
         resolution_sec=60,
-        org_id=None,
         entity_subscription=entity_subscription,
     )
 

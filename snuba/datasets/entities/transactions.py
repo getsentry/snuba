@@ -113,7 +113,9 @@ class BaseTransactionsEntity(Entity, ABC):
             writable_storage=storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
-            entity_subscription=EntitySubscription(1, ["groupby", "having", "orderby"]),
+            entity_subscription=EntitySubscription(
+                1, ["groupby", "having", "orderby"], False
+            ),
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

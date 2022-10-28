@@ -31,7 +31,6 @@ TESTS_CREATE = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
             entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
@@ -50,7 +49,6 @@ TESTS_INVALID = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
             entity_subscription=create_entity_subscription(),
         ),
         id="SnQL subscription",
@@ -96,7 +94,6 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=10 * 60,
                     resolution_sec=60,
                     query="MATCH (events) SELECT cout() AS count WHERE platform IN tuple('a')",
-                    org_id=None,
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -111,7 +108,6 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=0,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
-                    org_id=None,
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -129,7 +125,6 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     ),
                     time_window_sec=0,
                     resolution_sec=60,
-                    org_id=None,
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -142,7 +137,6 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=48 * 60 * 60,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
-                    org_id=None,
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -157,7 +151,6 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=0,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
-                    org_id=None,
                     entity_subscription=create_entity_subscription(),
                 ),
                 self.timer,
@@ -175,9 +168,8 @@ TESTS_CREATE_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
             entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, 1
+                EntityKey.METRICS_COUNTERS, {"organization": 1}
             ),
         ),
         EntityKey.METRICS_COUNTERS,
@@ -193,8 +185,9 @@ TESTS_CREATE_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+            entity_subscription=create_entity_subscription(
+                EntityKey.METRICS_SETS, {"organization": 1}
+            ),
         ),
         EntityKey.METRICS_SETS,
         id="Metrics Sets Snql subscription",
@@ -212,9 +205,8 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
             entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, 1
+                EntityKey.METRICS_COUNTERS, {"organization": 1}
             ),
         ),
         id="Metrics Counters subscription missing tags[3] condition",
@@ -228,9 +220,8 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
             entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, 1
+                EntityKey.METRICS_COUNTERS, {"organization": 1}
             ),
         ),
         id="Metrics Counters subscription missing project_id condition",
@@ -244,8 +235,9 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+            entity_subscription=create_entity_subscription(
+                EntityKey.METRICS_SETS, {"organization": 1}
+            ),
         ),
         id="Metrics Sets subscription missing tags[3] condition",
     ),
@@ -258,8 +250,9 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
-            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS, 1),
+            entity_subscription=create_entity_subscription(
+                EntityKey.METRICS_SETS, {"organization": 1}
+            ),
         ),
         id="Metrics Sets subscription missing project_id condition",
     ),
@@ -308,7 +301,6 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             query="MATCH (events) SELECT count() AS count",
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=None,
             entity_subscription=create_entity_subscription(),
         )
         identifier = creator.create(subscription, Timer("test"))

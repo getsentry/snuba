@@ -34,7 +34,6 @@ def create_subscription() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH (events) SELECT count()",
-            org_id=None,
             entity_subscription=EntitySubscription(),
         ),
     )

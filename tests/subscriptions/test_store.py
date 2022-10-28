@@ -17,7 +17,6 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 time_window_sec=500 * 60,
                 resolution_sec=60,
-                org_id=None,
                 entity_subscription=create_entity_subscription(),
             ),
             SubscriptionData(
@@ -25,7 +24,6 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 time_window_sec=500 * 60,
                 resolution_sec=60,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
-                org_id=None,
                 entity_subscription=create_entity_subscription(),
             ),
         ]

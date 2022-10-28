@@ -2,7 +2,7 @@ import json
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Iterator, Mapping, Optional
+from typing import Any, Iterator, Mapping, Optional
 from unittest import mock
 
 import pytest
@@ -174,6 +174,7 @@ def test_executor_consumer() -> None:
 def generate_message(
     entity_key: EntityKey,
     subscription_identifier: Optional[SubscriptionIdentifier] = None,
+    data: Mapping[str, Any] = {},
 ) -> Iterator[Message[KafkaPayload]]:
     codec = SubscriptionScheduledTaskEncoder()
     epoch = datetime(1970, 1, 1)
@@ -182,15 +183,12 @@ def generate_message(
     if subscription_identifier is None:
         subscription_identifier = SubscriptionIdentifier(PartitionId(1), uuid.uuid1())
 
-    org_id = None
-    if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
-        org_id = 1
-
     entity_subscription = get_entity(entity_key).get_entity_subscription()
     if not entity_subscription:
         raise InvalidSubscriptionError(
             f"entity subscription for {entity_key} does not exist"
         )
+    entity_subscription.load_data(data)
 
     while True:
         payload = codec.encode(
@@ -205,7 +203,6 @@ def generate_message(
                             time_window_sec=60,
                             resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
-                            org_id=org_id,
                             entity_subscription=entity_subscription,
                         ),
                     ),
@@ -288,9 +285,13 @@ def test_skip_execution_for_entity() -> None:
         next_step=mock.Mock(),
     )
 
-    metrics_sets_message = next(generate_message(EntityKey.METRICS_SETS))
+    metrics_sets_message = next(
+        generate_message(EntityKey.METRICS_SETS, data={"organization": 1})
+    )
     strategy.submit(metrics_sets_message)
-    metrics_counters_message = next(generate_message(EntityKey.METRICS_COUNTERS))
+    metrics_counters_message = next(
+        generate_message(EntityKey.METRICS_COUNTERS, data={"organization": 1})
+    )
     strategy.submit(metrics_counters_message)
 
     assert (
@@ -323,7 +324,6 @@ def test_produce_result() -> None:
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        org_id=None,
         entity_subscription=EntitySubscription(),
     )
 

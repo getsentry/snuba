@@ -41,7 +41,6 @@ def subscription_data_builder(
         time_window_sec=time_window_sec,
         entity_subscription=entity_subscription,
         query=query,
-        org_id=org_id if entity_subscription.has_org_id else None,
     )
 
 

@@ -5,6 +5,7 @@ from typing import Any, Mapping, Optional, Sequence, Union
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as EntityDS
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.validation.validators import (
@@ -34,6 +35,14 @@ class EntitySubscription:
         self.disallowed_aggregations = disallowed_aggregations
         self.has_org_id = has_org_id
 
+    def load_data(self, data_dict: Mapping[str, Any]) -> EntitySubscription:
+        if self.has_org_id:
+            try:
+                self.org_id: int = data_dict["organization"]
+            except Exception:
+                raise InvalidQueryException("organization param is required")
+        return self
+
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # Import get_entity() when used, not at import time to avoid circular imports
         from snuba.datasets.entities.factory import get_entity
@@ -51,21 +60,17 @@ class EntitySubscription:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
     def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None, org_id: Optional[int] = None
+        self, offset: Optional[int] = None
     ) -> Sequence[Expression]:
         if self.has_org_id:
             return [
                 binary_condition(
                     ConditionFunctions.EQ,
                     Column(None, None, "org_id"),
-                    Literal(None, org_id),
+                    Literal(None, self.org_id),
                 ),
             ]
         return []
 
     def to_dict(self) -> Mapping[str, Any]:
-        return {
-            "max_allowed_aggregations": self.max_allowed_aggregations,
-            "disallowed_aggregations": self.disallowed_aggregations,
-            "has_org_id": self.has_org_id,
-        }
+        return self.__dict__
