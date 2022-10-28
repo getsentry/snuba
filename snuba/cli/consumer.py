@@ -188,4 +188,3 @@ def consumer(
     signal.signal(signal.SIGTERM, handler)
 
     consumer.run()
-    consumer_builder.flush()

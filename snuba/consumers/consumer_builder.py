@@ -86,7 +86,6 @@ class ConsumerBuilder:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = kafka_params.bootstrap_servers
         self.consumer_group = kafka_params.group_id
-
         topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
@@ -98,6 +97,14 @@ class ConsumerBuilder:
             topic, bootstrap_servers=kafka_params.bootstrap_servers
         )
         logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
+        self.producer_broker_config = build_kafka_producer_configuration(
+            topic,
+            bootstrap_servers=kafka_params.bootstrap_servers,
+            override_params={
+                "partitioner": "consistent",
+                "message.max.bytes": 50000000,  # 50MB, default is 1MB
+            },
+        )
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
@@ -114,19 +121,8 @@ class ConsumerBuilder:
             replacement_topic_spec = stream_loader.get_replacement_topic_spec()
             if replacement_topic_spec is not None:
                 self.replacements_topic = Topic(replacement_topic_spec.topic_name)
-                self.replacements_producer = Producer(
-                    build_kafka_producer_configuration(
-                        replacement_topic_spec.topic,
-                        bootstrap_servers=kafka_params.bootstrap_servers,
-                        override_params={
-                            "partitioner": "consistent",
-                            "message.max.bytes": 50000000,  # 50MB, default is 1MB)
-                        },
-                    )
-                )
             else:
                 self.replacements_topic = None
-                self.replacements_producer = None
 
         self.commit_log_topic: Optional[Topic]
         if kafka_params.commit_log_topic is not None:
@@ -135,17 +131,14 @@ class ConsumerBuilder:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
                 self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
-                self.commit_log_producer = Producer(
-                    build_kafka_producer_configuration(
-                        commit_log_topic_spec.topic,
-                        bootstrap_servers=kafka_params.bootstrap_servers,
-                    ),
-                )
             else:
                 self.commit_log_topic = None
-                self.commit_log_producer = None
 
         self.stats_callback = stats_callback
+
+        # XXX: This can result in a producer being built in cases where it's
+        # not actually required.
+        self.producer = Producer(self.producer_broker_config)
 
         self.metrics = metrics
         self.max_batch_size = max_batch_size
@@ -218,7 +211,7 @@ class ConsumerBuilder:
         else:
             consumer = KafkaConsumerWithCommitLog(
                 configuration,
-                producer=self.commit_log_producer,
+                producer=self.producer,
                 commit_log_topic=self.commit_log_topic,
                 commit_retry_policy=self.__commit_retry_policy,
             )
@@ -243,7 +236,9 @@ class ConsumerBuilder:
             collector=build_batch_writer(
                 table_writer,
                 metrics=self.metrics,
-                replacements_producer=self.replacements_producer,
+                replacements_producer=(
+                    self.producer if self.replacements_topic is not None else None
+                ),
                 replacements_topic=self.replacements_topic,
             )
             if self.__mock_parameters is None
@@ -271,10 +266,6 @@ class ConsumerBuilder:
             )
 
         return strategy_factory
-
-    def flush(self) -> None:
-        if self.replacements_producer:
-            self.replacements_producer.flush()
 
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
