@@ -22,7 +22,10 @@ from uuid import UUID
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import EntitySubscription, InvalidSubscriptionError
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    EntitySubscription,
+    InvalidSubscriptionError,
+)
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -31,6 +34,7 @@ from snuba.query.conditions import (
     combine_and_conditions,
 )
 from snuba.query.data_source.simple import Entity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import SubscriptionQuerySettings
@@ -173,7 +177,12 @@ class SubscriptionData:
             raise InvalidSubscriptionError(
                 f"entity subscription for {entity_key} does not exist"
             )
-        entity_subscription = entity_subscription.set_org(data_dict=data)
+
+        try:
+            organization: int = data["organization"]
+            entity_subscription.set_org_id(organization)
+        except KeyError:
+            raise InvalidQueryException("organization param is required")
 
         return SubscriptionData(
             project_id=data["project_id"],

@@ -16,7 +16,7 @@ from snuba.datasets.configuration.json_schema import V1_ENTITY_SCHEMA
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.entities.entity_key import register_entity_key
-from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
+from snuba.datasets.entity import EntitySubscription
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -93,11 +93,12 @@ def _build_entity_translation_mappers(
 
 def _build_entity_subscription(config: dict[str, Any]) -> Optional[EntitySubscription]:
     if "subscriptions" in config:
-        return BaseEntitySubscription(
+        return EntitySubscription(
             max_allowed_aggregations=config["subscriptions"][
                 "max_allowed_aggregations"
             ],
             disallowed_aggregations=config["subscriptions"]["disallowed_aggregations"],
+            has_org_id=config["subscriptions"]["has_org_id"],
         )
     return None
 

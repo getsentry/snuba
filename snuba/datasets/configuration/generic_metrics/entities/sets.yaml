@@ -104,3 +104,4 @@ partition_key_column_name: org_id
 subscriptions:
   max_allowed_aggregations: 3
   disallowed_aggregations: ["having", "orderby"]
+  has_org_id: true

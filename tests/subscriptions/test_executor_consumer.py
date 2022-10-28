@@ -17,7 +17,10 @@ from confluent_kafka.admin import AdminClient
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import BaseEntitySubscription, InvalidSubscriptionError
+from snuba.datasets.entity_subscriptions.entity_subscription import (
+    EntitySubscription,
+    InvalidSubscriptionError,
+)
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -124,7 +127,7 @@ def test_executor_consumer() -> None:
         query="MATCH (events) SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=BaseEntitySubscription(data_dict={}),
+        entity_subscription=EntitySubscription(),
     )
 
     task = ScheduledSubscriptionTask(
@@ -320,7 +323,7 @@ def test_produce_result() -> None:
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=BaseEntitySubscription(data_dict={}),
+        entity_subscription=EntitySubscription(),
     )
 
     subscription = Subscription(

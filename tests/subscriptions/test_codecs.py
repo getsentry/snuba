@@ -9,7 +9,7 @@ import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import BaseEntitySubscription
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -73,11 +73,12 @@ def assert_entity_subscription_on_subscription_class(
 ) -> None:
     entity_subscription = get_entity(entity_key).get_entity_subscription()
     assert isinstance(subscription.entity_subscription, type(entity_subscription))
-    assert isinstance(subscription.entity_subscription, BaseEntitySubscription)
+    assert isinstance(subscription.entity_subscription, EntitySubscription)
     if organization:
-        assert subscription.entity_subscription.organization == organization
+        assert subscription.entity_subscription.has_org_id == True
+        assert subscription.entity_subscription.org_id == organization
     else:
-        assert subscription.entity_subscription.organization is None
+        assert subscription.entity_subscription.has_org_id == False
 
 
 @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)
@@ -136,7 +137,7 @@ def test_subscription_task_result_encoder() -> None:
 
     timestamp = datetime.now()
 
-    entity_subscription = BaseEntitySubscription(data_dict={})
+    entity_subscription = EntitySubscription()
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
@@ -185,17 +186,19 @@ def test_subscription_task_result_encoder() -> None:
 
 METRICS_CASES = [
     pytest.param(
-        BaseEntitySubscription,
+        EntitySubscription,
         3,
         ["having", "orderby"],
+        True,
         "sum",
         EntityKey.METRICS_COUNTERS,
         id="metrics_counters subscription",
     ),
     pytest.param(
-        BaseEntitySubscription,
+        EntitySubscription,
         3,
         ["having", "orderby"],
+        True,
         "uniq",
         EntityKey.METRICS_SETS,
         id="metrics_sets subscription",
@@ -204,13 +207,14 @@ METRICS_CASES = [
 
 
 @pytest.mark.parametrize(
-    "subscription_cls, max_allowed_aggregations, disallowed_aggregations, aggregate, entity_key",
+    "subscription_cls, max_allowed_aggregations, disallowed_aggregations, has_org_id, aggregate, entity_key",
     METRICS_CASES,
 )
 def test_metrics_subscription_task_result_encoder(
-    subscription_cls: Type[BaseEntitySubscription],
+    subscription_cls: Type[EntitySubscription],
     max_allowed_aggregations: int,
     disallowed_aggregations: Sequence[str],
+    has_org_id: bool,
     aggregate: str,
     entity_key: EntityKey,
 ) -> None:
@@ -218,7 +222,9 @@ def test_metrics_subscription_task_result_encoder(
 
     timestamp = datetime.now()
     entity_subscription = subscription_cls(
-        max_allowed_aggregations, disallowed_aggregations, data_dict={"organization": 1}
+        max_allowed_aggregations,
+        disallowed_aggregations,
+        has_org_id,
     )
     subscription_data = SubscriptionData(
         project_id=1,
@@ -284,7 +290,7 @@ def test_subscription_task_encoder() -> None:
         query="MATCH events SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=BaseEntitySubscription(data_dict={}),
+        entity_subscription=EntitySubscription(),
     )
 
     subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")

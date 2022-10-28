@@ -2,70 +2,70 @@ from typing import Any, List, Mapping, Optional, Type
 
 import pytest
 
-from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 
 TESTS = [
     pytest.param(
-        BaseEntitySubscription,
-        {"data_dict": {}},
-        None,
+        EntitySubscription,
+        {"has_org_id": False},
         id="Events subscription",
     ),
     pytest.param(
-        BaseEntitySubscription,
-        {"data_dict": {}},
-        None,
+        EntitySubscription,
+        {"has_org_id": False},
         id="Transactions subscription",
     ),
     pytest.param(
-        BaseEntitySubscription,
-        {"data_dict": {"organization": 1}},
-        None,
+        EntitySubscription,
+        {"has_org_id": True},
         id="Sessions subscription",
     ),
     pytest.param(
-        BaseEntitySubscription,
-        {"data_dict": {"organization": 1}},
-        None,
+        EntitySubscription,
+        {"has_org_id": True},
         id="Metrics counters subscription",
     ),
     pytest.param(
-        BaseEntitySubscription,
-        {"data_dict": {"organization": 1}},
-        None,
+        EntitySubscription,
+        {"has_org_id": True},
         id="Metrics sets subscription",
     ),
 ]
 
 TESTS_CONDITIONS_SNQL_METHOD = [
     pytest.param(
-        BaseEntitySubscription(data_dict={}),
+        EntitySubscription(has_org_id=False),
+        None,
         [],
         True,
         id="Events subscription with offset of type SNQL",
     ),
     pytest.param(
-        BaseEntitySubscription(data_dict={}),
+        EntitySubscription(has_org_id=False),
+        None,
         [],
         False,
         id="Events subscription with no offset of type SNQL",
     ),
     pytest.param(
-        BaseEntitySubscription(data_dict={}),
+        EntitySubscription(has_org_id=False),
+        None,
         [],
         True,
         id="Transactions subscription with offset of type SNQL",
     ),
     pytest.param(
-        BaseEntitySubscription(data_dict={}),
+        EntitySubscription(has_org_id=False),
+        None,
         [],
         False,
         id="Transactions subscription with no offset of type SNQL",
     ),
     pytest.param(
-        BaseEntitySubscription(data_dict={"organization": 1}),
+        EntitySubscription(has_org_id=True),
+        1,
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -77,7 +77,8 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         id="Sessions subscription of type SNQL",
     ),
     pytest.param(
-        BaseEntitySubscription(data_dict={"organization": 1}),
+        EntitySubscription(has_org_id=True),
+        1,
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -89,7 +90,8 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         id="Metrics counters subscription of type SNQL",
     ),
     pytest.param(
-        BaseEntitySubscription(data_dict={"organization": 1}),
+        EntitySubscription(has_org_id=True),
+        1,
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -106,6 +108,7 @@ TESTS_CONDITIONS_SNQL_METHOD = [
 @pytest.mark.parametrize("entity_subscription, creation_dict, exception", TESTS)
 def test_basic(
     entity_subscription: Type[EntitySubscription],
+    org_id: Optional[int],
     creation_dict: Mapping[str, Any],
     exception: Optional[Type[Exception]],
 ) -> None:
@@ -118,14 +121,18 @@ def test_basic(
 
 
 @pytest.mark.parametrize(
-    "entity_subscription, expected_conditions, has_offset", TESTS_CONDITIONS_SNQL_METHOD
+    "entity_subscription, org_id, expected_conditions, has_offset",
+    TESTS_CONDITIONS_SNQL_METHOD,
 )
 def test_entity_subscription_methods_for_snql(
     entity_subscription: EntitySubscription,
+    org_id: Optional[int],
     expected_conditions: List[Any],
     has_offset: bool,
 ) -> None:
     offset = 5 if has_offset else None
+    if entity_subscription.has_org_id and org_id:
+        entity_subscription.set_org_id(org_id)
     assert (
         entity_subscription.get_entity_subscription_conditions_for_snql(offset)
         == expected_conditions

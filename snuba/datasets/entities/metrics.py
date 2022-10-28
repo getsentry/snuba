@@ -20,7 +20,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entity import BaseEntitySubscription, Entity, EntitySubscription
+from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -128,7 +129,7 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
-            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
         )
 
 
@@ -144,7 +145,7 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
-            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
         )
 
 

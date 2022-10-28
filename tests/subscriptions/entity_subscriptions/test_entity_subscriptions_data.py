@@ -5,7 +5,7 @@ import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
-from snuba.datasets.entity import BaseEntitySubscription, EntitySubscription
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.factory import get_dataset
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, SubscriptionData
@@ -47,7 +47,7 @@ def subscription_data_builder(
 @pytest.fixture
 def entity_subscriptions() -> EntitySubscription:
     entity_subscription = entity.get_entity_subscription()
-    assert isinstance(entity_subscription, BaseEntitySubscription)
+    assert isinstance(entity_subscription, EntitySubscription)
     return entity_subscription.set_org(data_dict=data)
 
 
@@ -80,5 +80,5 @@ def test_entity_subscriptions_data(
     assert result.project_id == project_id
     assert result.resolution_sec == resolution_sec
     assert result.time_window_sec == time_window_sec
-    assert isinstance(result.entity_subscription, BaseEntitySubscription)
+    assert isinstance(result.entity_subscription, EntitySubscription)
     assert result.query == query

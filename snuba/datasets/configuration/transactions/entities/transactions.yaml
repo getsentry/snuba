@@ -350,3 +350,4 @@ required_time_column: finish_ts
 subscriptions:
   max_allowed_aggregations: 1
   disallowed_aggregations: ["groupby", "having", "orderby"]
+  has_org_id: false

@@ -18,7 +18,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entity import BaseEntitySubscription, Entity, EntitySubscription
+from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
@@ -132,7 +133,7 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
-            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
             value_schema=ColumnSet(
                 [
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
@@ -158,7 +159,7 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
-            entity_subscription=BaseEntitySubscription(3, ["having", "orderby"]),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
             value_schema=ColumnSet(
                 [
                     Column(

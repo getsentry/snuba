@@ -4,8 +4,7 @@ from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import (
-    BaseEntitySubscription,
+from snuba.datasets.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     InvalidSubscriptionError,
 )
@@ -23,7 +22,6 @@ UUIDS = [
 
 
 def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
-    entity_subscription = BaseEntitySubscription(data_dict={})
     return Subscription(
         SubscriptionIdentifier(PartitionId(1), UUIDS[sequence]),
         SubscriptionData(
@@ -31,7 +29,7 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
             time_window_sec=int(timedelta(minutes=5).total_seconds()),
             resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
-            entity_subscription=entity_subscription,
+            entity_subscription=EntitySubscription(),
         ),
     )
 
@@ -39,13 +37,11 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
 def create_entity_subscription(
     entity_key: EntityKey = EntityKey.EVENTS, org_id: Optional[int] = None
 ) -> EntitySubscription:
-    if org_id:
-        data_dict = {"organization": org_id}
-    else:
-        data_dict = {}
     entity_subscription = get_entity(entity_key).get_entity_subscription()
     if not entity_subscription:
         raise InvalidSubscriptionError(
             f"entity subscription for {entity_key} does not exist"
         )
-    return entity_subscription.set_org(data_dict=data_dict)
+    if org_id:
+        entity_subscription.set_org_id(org_id)
+    return entity_subscription
