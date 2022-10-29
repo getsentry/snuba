@@ -38,7 +38,7 @@ class EntitySubscription:
     def load_data(self, data_dict: Mapping[str, Any]) -> EntitySubscription:
         if self.has_org_id:
             try:
-                self.org_id: int = data_dict["organization"]
+                self.organization: int = data_dict["organization"]
             except Exception:
                 raise InvalidQueryException("organization param is required")
         return self
@@ -67,7 +67,7 @@ class EntitySubscription:
                 binary_condition(
                     ConditionFunctions.EQ,
                     Column(None, None, "org_id"),
-                    Literal(None, self.org_id),
+                    Literal(None, self.organization),
                 ),
             ]
         return []

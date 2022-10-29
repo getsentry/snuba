@@ -48,6 +48,7 @@ def subscription_data_builder(
 def entity_subscriptions() -> EntitySubscription:
     entity_subscription = entity.get_entity_subscription()
     assert isinstance(entity_subscription, EntitySubscription)
+    entity_subscription.load_data({"organization": 1})
     return entity_subscription
 
 
