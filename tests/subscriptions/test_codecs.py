@@ -78,7 +78,7 @@ def assert_entity_subscription_on_subscription_class(
     assert isinstance(subscription.entity_subscription, EntitySubscription)
     if organization:
         assert subscription.entity_subscription.has_org_id == True
-        assert getattr(subscription.entity_subscription, "org_id") == organization
+        assert getattr(subscription.entity_subscription, "organization") == organization
     else:
         assert subscription.entity_subscription.has_org_id == False
 
@@ -323,11 +323,10 @@ def test_subscription_task_encoder() -> None:
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"entity":"events",'
         b'"task":{'
-        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()"}},'
+        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","max_allowed_aggregations":1,"disallowed_aggregations":["groupby","having","orderby"],"has_org_id":false}},'
         b'"tick_upper_offset":5'
         b"}"
     )
-
     decoded = encoder.decode(encoded)
 
     assert decoded == task
