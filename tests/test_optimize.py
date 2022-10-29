@@ -187,7 +187,6 @@ class TestOptimize:
         )
 
         tracker.update_all_partitions([part.name for part in partitions])
-
         with freeze_time(current_time):
             optimize.optimize_partition_runner(
                 clickhouse=clickhouse,
