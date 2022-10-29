@@ -287,15 +287,6 @@ PARALLEL_OPTIMIZE_JOB_END_TIME = timedelta(hours=9)
 # avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
-# sleep time to wait for a merge to complete
-OPTIMIZE_BASE_SLEEP_TIME = 300  # 5 mins
-# merges longer than this will be considered long running
-OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10  # 10 mins
-# merges larger than this will be considered large and will be waited on
-OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
-# max number of long running merges to wait on. long running are merges
-# running longer than the min elapsed time cutoff
-OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS = 3
 
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
