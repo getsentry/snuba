@@ -444,7 +444,7 @@ V1_ENTITY_SCHEMA = {
             "type": ["string", "null"],
             "description": "The column name, if this entity is partitioned, to select slice",
         },
-        "subscriptions": {
+        "entity_subscriptions": {
             "type": "object",
             "description": "Specifies whether entity has subscriptions enabled",
             "properties": {
@@ -510,33 +510,6 @@ V1_DATASET_SCHEMA = {
     "additionalProperties": False,
 }
 
-V1_ENTITY_SUBSCIPTION_SCHEMA = {
-    "title": "Entity Subscription Schema",
-    "type": "object",
-    "properties": {
-        "version": {"const": "v1", "description": "Version of schema"},
-        "kind": {"const": "entity_subscription", "description": "Component kind"},
-        "name": {"type": "string", "description": "Name of the entity subscription"},
-        "max_allowed_aggregations": {
-            "type": ["integer", "null"],
-            "description": "Maximum number of allowed aggregations",
-        },
-        "disallowed_aggregations": {
-            "type": ["array", "null"],
-            "items": {
-                "type": "string",
-            },
-            "description": "Name of aggregation clauses that are not allowed",
-        },
-    },
-    "required": [
-        "version",
-        "kind",
-        "name",
-    ],
-    "additionalProperties": False,
-}
-
 
 V1_MIGRATION_GROUP_SCHEMA = {
     "title": "Migration Group Schema",
@@ -562,7 +535,6 @@ V1_MIGRATION_GROUP_SCHEMA = {
 V1_ALL_SCHEMAS = {
     "dataset": V1_DATASET_SCHEMA,
     "entity": V1_ENTITY_SCHEMA,
-    "entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA,
     "readable_storage": V1_READABLE_STORAGE_SCHEMA,
     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
     "migration_group": V1_MIGRATION_GROUP_SCHEMA,
