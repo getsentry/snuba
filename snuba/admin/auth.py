@@ -8,6 +8,8 @@ from snuba import settings
 from snuba.admin.jwt import validate_assertion
 from snuba.admin.user import AdminUser
 
+USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+
 
 class UnauthorizedException(Exception):
     pass

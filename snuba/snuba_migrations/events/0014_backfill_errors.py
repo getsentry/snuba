@@ -98,7 +98,7 @@ COLUMNS = [
     ("group_id", "group_id"),
     (
         "primary_hash",
-        "toUUID(UUIDNumToString(toFixedString(unhex(toString(primary_hash)), 16)))",
+        "toUUID(UUIDNumToString(toFixedString(unhex(toString(assumeNotNull(primary_hash))), 16)))",
     ),
     ("received", "ifNull(`received`, now())"),
     ("message", "ifNull(`message`, '')"),
