@@ -38,6 +38,13 @@ parser.add_argument(
     choices=["events"],
     default="events",
 )
+parser.add_argument(
+    "--organization",
+    type=int,
+    help="Organization for subscription query",
+    dest="organization",
+    const="1",
+)
 parsed = parser.parse_args()
 
 dataset_name = parsed.dataset
@@ -64,6 +71,7 @@ for _ in range(parsed.number):
         project_id=project_id,
         time_window_sec=60,
         resolution_sec=60,
+        organization=parsed.organization,
         entity_subscription=entity_subscription,
     )
 
