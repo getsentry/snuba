@@ -20,9 +20,10 @@ from snuba.consumers.consumer import (
 )
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
-from snuba.settings import SLICED_KAFKA_TOPIC_MAP, SLICED_STORAGES
+from snuba.settings import SLICED_STORAGES
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
@@ -33,6 +34,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
+from snuba.utils.streams.topics import Topic as SnubaTopic
 
 logger = logging.getLogger(__name__)
 
@@ -73,16 +75,16 @@ def validate_passed_slice(
         assert slice_id < SLICED_STORAGES[storage_key.value]
 
 
-def get_physical_arroyo_topic(
-    passed_topic: str, slice_id: Optional[int] = None
-) -> ArroyoTopic:
-    if slice_id is not None:
-        physical_topic = SLICED_KAFKA_TOPIC_MAP[(passed_topic, slice_id)]
-        set_topic = ArroyoTopic(physical_topic)
-    else:
-        set_topic = ArroyoTopic(passed_topic)
+# def get_physical_arroyo_topic(
+#     passed_topic: str, slice_id: Optional[int] = None
+# ) -> ArroyoTopic:
+#     if slice_id is not None:
+#         physical_topic = SLICED_KAFKA_TOPIC_MAP[(passed_topic, slice_id)]
+#         set_topic = ArroyoTopic(physical_topic)
+#     else:
+#         set_topic = ArroyoTopic(passed_topic)
 
-    return set_topic
+#     return set_topic
 
 
 class ConsumerBuilder:
@@ -159,14 +161,18 @@ class ConsumerBuilder:
         self.commit_log_topic: Optional[ArroyoTopic]
 
         if kafka_params.commit_log_topic is not None:
-            self.commit_log_topic = get_physical_arroyo_topic(
-                kafka_params.commit_log_topic, slice_id
+            kafka_param_topic_spec = KafkaTopicSpec(
+                SnubaTopic(kafka_params.commit_log_topic)
             )
+            self.commit_log_topic = ArroyoTopic(
+                kafka_param_topic_spec.get_physical_topic_name(slice_id)
+            )
+
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
-                self.commit_log_topic = get_physical_arroyo_topic(
-                    commit_log_topic_spec.topic_name, slice_id
+                self.commit_log_topic = ArroyoTopic(
+                    commit_log_topic_spec.get_physical_topic_name(slice_id)
                 )
             else:
                 self.commit_log_topic = None
@@ -262,7 +268,8 @@ class ConsumerBuilder:
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
-        physical_topic = get_physical_arroyo_topic(self.raw_topic.name, slice_id)
+        raw_topic_spec = KafkaTopicSpec(SnubaTopic(self.raw_topic.name))
+        physical_topic = ArroyoTopic(raw_topic_spec.get_physical_topic_name(slice_id))
 
         return StreamProcessor(consumer, physical_topic, strategy_factory, IMMEDIATE)
 

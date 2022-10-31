@@ -17,6 +17,7 @@ from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
+from snuba.settings import SLICED_KAFKA_TOPIC_MAP
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
@@ -56,6 +57,14 @@ class KafkaTopicSpec:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, KafkaTopicSpec) and self.topic == other.topic
+
+    def get_physical_topic_name(self, slice_id: Optional[int] = None) -> str:
+        if slice_id is not None:
+            physical_topic = SLICED_KAFKA_TOPIC_MAP[(self.topic_name, slice_id)]
+        else:
+            physical_topic = self.topic_name
+
+        return physical_topic
 
 
 def get_topic_name(topic: Topic) -> str:
