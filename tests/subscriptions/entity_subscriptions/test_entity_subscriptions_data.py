@@ -27,7 +27,7 @@ resolution_sec = 60
 time_window_sec = 60
 query = "MATCH (generic_metrics_sets) SELECT count() AS count WHERE project_id = 1"
 
-timer = Timer("test_pluggable_entity_subscription")
+timer = Timer("test_entity_subscription_data")
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
@@ -41,6 +41,7 @@ def subscription_data_builder(
         time_window_sec=time_window_sec,
         entity_subscription=entity_subscription,
         query=query,
+        organization=org_id,
     )
 
 
@@ -48,7 +49,6 @@ def subscription_data_builder(
 def entity_subscriptions() -> EntitySubscription:
     entity_subscription = entity.get_entity_subscription()
     assert isinstance(entity_subscription, EntitySubscription)
-    entity_subscription.load_data({"organization": 1})
     return entity_subscription
 
 

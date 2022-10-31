@@ -40,9 +40,8 @@ def build_snql_subscription_data(
         time_window_sec=500 * 60,
         resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
-        entity_subscription=create_entity_subscription(
-            entity_key, {"organization": organization}
-        ),
+        organization=organization,
+        entity_subscription=create_entity_subscription(entity_key),
     )
 
 
@@ -76,11 +75,6 @@ def assert_entity_subscription_on_subscription_class(
     entity_subscription = get_entity(entity_key).get_entity_subscription()
     assert isinstance(subscription.entity_subscription, type(entity_subscription))
     assert isinstance(subscription.entity_subscription, EntitySubscription)
-    if organization:
-        assert subscription.entity_subscription.has_org_id == True
-        assert getattr(subscription.entity_subscription, "organization") == organization
-    else:
-        assert subscription.entity_subscription.has_org_id == False
 
 
 @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)
@@ -191,7 +185,6 @@ METRICS_CASES = [
         EntitySubscription,
         3,
         ["having", "orderby"],
-        True,
         {"organization": 1},
         "sum",
         EntityKey.METRICS_COUNTERS,
@@ -201,7 +194,6 @@ METRICS_CASES = [
         EntitySubscription,
         3,
         ["having", "orderby"],
-        True,
         {"organization": 1},
         "uniq",
         EntityKey.METRICS_SETS,
@@ -211,14 +203,13 @@ METRICS_CASES = [
 
 
 @pytest.mark.parametrize(
-    "subscription_cls, max_allowed_aggregations, disallowed_aggregations, has_org_id, data, aggregate, entity_key",
+    "subscription_cls, max_allowed_aggregations, disallowed_aggregations, data, aggregate, entity_key",
     METRICS_CASES,
 )
 def test_metrics_subscription_task_result_encoder(
     subscription_cls: Type[EntitySubscription],
     max_allowed_aggregations: int,
     disallowed_aggregations: Sequence[str],
-    has_org_id: bool,
     data: Mapping[str, Any],
     aggregate: str,
     entity_key: EntityKey,
@@ -227,10 +218,8 @@ def test_metrics_subscription_task_result_encoder(
 
     timestamp = datetime.now()
     entity_subscription = subscription_cls(
-        max_allowed_aggregations,
-        disallowed_aggregations,
-        has_org_id,
-    ).load_data(data)
+        max_allowed_aggregations, disallowed_aggregations
+    )
     subscription_data = SubscriptionData(
         project_id=1,
         query=(
@@ -241,6 +230,7 @@ def test_metrics_subscription_task_result_encoder(
         ),
         time_window_sec=60,
         resolution_sec=60,
+        organization=data["organization"],
         entity_subscription=entity_subscription,
     )
 
@@ -323,7 +313,7 @@ def test_subscription_task_encoder() -> None:
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"entity":"events",'
         b'"task":{'
-        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","max_allowed_aggregations":1,"disallowed_aggregations":["groupby","having","orderby"],"has_org_id":false}},'
+        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","max_allowed_aggregations":1,"disallowed_aggregations":["groupby","having","orderby"]}},'
         b'"tick_upper_offset":5'
         b"}"
     )

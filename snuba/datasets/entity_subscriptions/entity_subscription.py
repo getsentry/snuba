@@ -5,7 +5,6 @@ from typing import Any, Mapping, Optional, Sequence, Union
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as EntityDS
-from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.validation.validators import (
@@ -29,19 +28,9 @@ class EntitySubscription:
         self,
         max_allowed_aggregations: int = 1,
         disallowed_aggregations: Sequence[str] = ["groupby", "having", "orderby"],
-        has_org_id: bool = False,
     ) -> None:
         self.max_allowed_aggregations = max_allowed_aggregations
         self.disallowed_aggregations = disallowed_aggregations
-        self.has_org_id = has_org_id
-
-    def load_data(self, data_dict: Mapping[str, Any]) -> EntitySubscription:
-        if self.has_org_id:
-            try:
-                self.organization: int = data_dict["organization"]
-            except Exception:
-                raise InvalidQueryException("organization param is required")
-        return self
 
     def validate_query(self, query: Union[CompositeQuery[EntityDS], Query]) -> None:
         # Import get_entity() when used, not at import time to avoid circular imports
@@ -60,14 +49,14 @@ class EntitySubscription:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 
     def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
+        self, offset: Optional[int] = None, organization: Optional[int] = None
     ) -> Sequence[Expression]:
-        if self.has_org_id:
+        if organization:
             return [
                 binary_condition(
                     ConditionFunctions.EQ,
                     Column(None, None, "org_id"),
-                    Literal(None, self.organization),
+                    Literal(None, organization),
                 ),
             ]
         return []

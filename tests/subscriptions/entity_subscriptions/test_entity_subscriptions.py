@@ -1,98 +1,44 @@
-from typing import Any, List, Mapping, Optional, Type
+from typing import Any, List, Optional
 
 import pytest
 
-from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Literal
-
-TESTS = [
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": False},
-        None,
-        None,
-        id="Events subscription",
-    ),
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": False},
-        None,
-        None,
-        id="Transactions subscription",
-    ),
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": True},
-        1,
-        None,
-        id="Sessions subscription",
-    ),
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": True},
-        None,
-        InvalidQueryException,
-        id="Sessions subscription",
-    ),
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": True},
-        1,
-        None,
-        id="Metrics counters subscription",
-    ),
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": True},
-        None,
-        InvalidQueryException,
-        id="Metrics counters subscription",
-    ),
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": True},
-        1,
-        None,
-        id="Metrics sets subscription",
-    ),
-    pytest.param(
-        EntitySubscription,
-        {"has_org_id": True},
-        None,
-        InvalidQueryException,
-        id="Metrics sets subscription",
-    ),
-]
 
 TESTS_CONDITIONS_SNQL_METHOD = [
     pytest.param(
-        EntitySubscription(has_org_id=False),
+        EntityKey.EVENTS,
+        None,
         [],
         True,
         id="Events subscription with offset of type SNQL",
     ),
     pytest.param(
-        EntitySubscription(has_org_id=False),
+        EntityKey.EVENTS,
+        None,
         [],
         False,
         id="Events subscription with no offset of type SNQL",
     ),
     pytest.param(
-        EntitySubscription(has_org_id=False),
+        EntityKey.TRANSACTIONS,
+        None,
         [],
         True,
         id="Transactions subscription with offset of type SNQL",
     ),
     pytest.param(
-        EntitySubscription(has_org_id=False),
+        EntityKey.TRANSACTIONS,
+        None,
         [],
         False,
         id="Transactions subscription with no offset of type SNQL",
     ),
     pytest.param(
-        EntitySubscription(has_org_id=True).load_data({"organization": 1}),
+        EntityKey.SESSIONS,
+        1,
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -104,7 +50,8 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         id="Sessions subscription of type SNQL",
     ),
     pytest.param(
-        EntitySubscription(has_org_id=True).load_data({"organization": 1}),
+        EntityKey.METRICS_COUNTERS,
+        1,
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -116,7 +63,8 @@ TESTS_CONDITIONS_SNQL_METHOD = [
         id="Metrics counters subscription of type SNQL",
     ),
     pytest.param(
-        EntitySubscription(has_org_id=True).load_data({"organization": 1}),
+        EntityKey.METRICS_SETS,
+        1,
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -130,36 +78,22 @@ TESTS_CONDITIONS_SNQL_METHOD = [
 ]
 
 
-@pytest.mark.parametrize("entity_subscription, creation_dict, org_id, exception", TESTS)
-def test_basic(
-    entity_subscription: Type[EntitySubscription],
-    org_id: Optional[int],
-    creation_dict: Mapping[str, Any],
-    exception: Optional[Type[Exception]],
-) -> None:
-    es = entity_subscription(**creation_dict)
-    if exception is not None:
-        with pytest.raises(exception):
-            if es.has_org_id and not org_id:
-                raise InvalidQueryException("organization param is required")
-    else:
-        if es.has_org_id:
-            assert org_id == 1
-        else:
-            assert org_id is None
-
-
 @pytest.mark.parametrize(
-    "entity_subscription, expected_conditions, has_offset",
+    "entity_key, organization, expected_conditions, has_offset",
     TESTS_CONDITIONS_SNQL_METHOD,
 )
 def test_entity_subscription_methods_for_snql(
-    entity_subscription: EntitySubscription,
+    entity_key: EntityKey,
+    organization: Optional[int],
     expected_conditions: List[Any],
     has_offset: bool,
 ) -> None:
+    entity_subscription = get_entity(entity_key).get_entity_subscription()
+    assert entity_subscription is not None
     offset = 5 if has_offset else None
     assert (
-        entity_subscription.get_entity_subscription_conditions_for_snql(offset)
+        entity_subscription.get_entity_subscription_conditions_for_snql(
+            offset, organization
+        )
         == expected_conditions
     )

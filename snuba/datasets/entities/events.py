@@ -152,9 +152,7 @@ class BaseEventsEntity(Entity, ABC):
             writable_storage=events_storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
-            entity_subscription=EntitySubscription(
-                1, ["groupby", "having", "orderby"], False
-            ),
+            entity_subscription=EntitySubscription(1, ["groupby", "having", "orderby"]),
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

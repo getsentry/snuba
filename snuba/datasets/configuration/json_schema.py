@@ -457,15 +457,10 @@ V1_ENTITY_SCHEMA = {
                     "items": TYPE_STRING,
                     "description": "The disallowed aggregation clauses in subscription query (e.g. [having, orderby])",
                 },
-                "has_org_id": {
-                    "type": "boolean",
-                    "description": "Flag to determine if entity subscription has an organization id",
-                },
             },
             "required": [
                 "max_allowed_aggregations",
                 "disallowed_aggregations",
-                "has_org_id",
             ],
             "additionalProperties": False,
         },

@@ -129,7 +129,7 @@ class MetricsSetsEntity(MetricsEntity):
                     FunctionNameMapper("uniqIf", "uniqCombined64MergeIf"),
                 ],
             ),
-            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"]),
         )
 
 
@@ -145,7 +145,7 @@ class MetricsCountersEntity(MetricsEntity):
                     FunctionNameMapper("sumIf", "sumMergeIf"),
                 ],
             ),
-            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"]),
         )
 
 

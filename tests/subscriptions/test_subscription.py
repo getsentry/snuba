@@ -168,9 +168,8 @@ TESTS_CREATE_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, {"organization": 1}
-            ),
+            organization=1,
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
         ),
         EntityKey.METRICS_COUNTERS,
         id="Metrics Counters Snql subscription",
@@ -185,9 +184,8 @@ TESTS_CREATE_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_SETS, {"organization": 1}
-            ),
+            organization=1,
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
         ),
         EntityKey.METRICS_SETS,
         id="Metrics Sets Snql subscription",
@@ -205,9 +203,8 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, {"organization": 1}
-            ),
+            organization=1,
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
         ),
         id="Metrics Counters subscription missing tags[3] condition",
     ),
@@ -220,9 +217,8 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_COUNTERS, {"organization": 1}
-            ),
+            organization=1,
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
         ),
         id="Metrics Counters subscription missing project_id condition",
     ),
@@ -235,9 +231,8 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_SETS, {"organization": 1}
-            ),
+            organization=1,
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
         ),
         id="Metrics Sets subscription missing tags[3] condition",
     ),
@@ -250,9 +245,8 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            entity_subscription=create_entity_subscription(
-                EntityKey.METRICS_SETS, {"organization": 1}
-            ),
+            organization=1,
+            entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
         ),
         id="Metrics Sets subscription missing project_id condition",
     ),

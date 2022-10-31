@@ -133,7 +133,7 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
-            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"]),
             value_schema=ColumnSet(
                 [
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
@@ -159,7 +159,7 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
-            entity_subscription=EntitySubscription(3, ["having", "orderby"], True),
+            entity_subscription=EntitySubscription(3, ["having", "orderby"]),
             value_schema=ColumnSet(
                 [
                     Column(
