@@ -227,6 +227,9 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = True
 
+# has no use in any production environment, only useful for local scripts
+ENABLE_INIT_RECORDER = False
+
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 COLUMN_SPLIT_MIN_COLS = 6

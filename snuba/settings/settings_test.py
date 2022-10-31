@@ -22,6 +22,11 @@ ENABLE_DEV_FEATURES = True
 # to explore the unrefined Expression structure
 PRETTY_FORMAT_EXPRESSIONS = True
 
+# For converting code storages/entities/datasets to yaml we need to record what
+# arguments certain classes were instantiated with. This has no purpose in a production
+# environment. Thus it is only enabled here
+ENABLE_INIT_RECORDER = True
+
 # override replacer threshold to write to redis every time a replacement message is consumed
 REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 
