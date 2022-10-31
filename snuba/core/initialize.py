@@ -32,11 +32,12 @@ def _load_entities() -> None:
 def initialize() -> None:
     logger.info("Initializing snuba")
 
-    # The order of the functions matters. At time of writing (2022-10-27), snuba datasets are not guaranteed to load
-    # entities and storages. This is because datasets defined in code reference entities via EntityKey(s) and are
-    # thus loaded lazily
-
-    # The initialization goes bottom up, starting from the lowest-level concept (storage) to the highest (dataset)
+    # The order of the functions matters The reference direction is
+    #
+    #       datasets -> entities -> storages
+    #
+    # The initialization goes bottom up, starting from the
+    # lowest-level concept (storage) to the highest (dataset).
     _load_storages()
     _load_entities()
     _load_datasets()
