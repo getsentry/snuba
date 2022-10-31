@@ -68,23 +68,14 @@ class MockParameters:
 def validate_passed_slice(
     storage_key: StorageKey, slice_id: Optional[int] = None
 ) -> None:
-    # make sure this is a storage that is sliced
-    # and that the slice id passed in is valid
+    """
+    Verifies that the given storage can be sliced
+    and that the slice_id passed in is within the range
+    of the total number of slices for the given storage
+    """
     if slice_id is not None:
         assert storage_key.value in SLICED_STORAGES
         assert slice_id < SLICED_STORAGES[storage_key.value]
-
-
-# def get_physical_arroyo_topic(
-#     passed_topic: str, slice_id: Optional[int] = None
-# ) -> ArroyoTopic:
-#     if slice_id is not None:
-#         physical_topic = SLICED_KAFKA_TOPIC_MAP[(passed_topic, slice_id)]
-#         set_topic = ArroyoTopic(physical_topic)
-#     else:
-#         set_topic = ArroyoTopic(passed_topic)
-
-#     return set_topic
 
 
 class ConsumerBuilder:
