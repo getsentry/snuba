@@ -310,7 +310,7 @@ def test_subscription_task_encoder() -> None:
         b'"timestamp":"1970-01-01T00:00:00",'
         b'"entity":"events",'
         b'"task":{'
-        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","max_allowed_aggregations":1,"disallowed_aggregations":["groupby","having","orderby"]}},'
+        b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","organization":null,"max_allowed_aggregations":1,"disallowed_aggregations":["groupby","having","orderby"]}},'
         b'"tick_upper_offset":5'
         b"}"
     )

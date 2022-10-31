@@ -2,7 +2,7 @@ import json
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Iterator, Mapping, Optional
+from typing import Iterator, Mapping, Optional
 from unittest import mock
 
 import pytest
@@ -174,7 +174,7 @@ def test_executor_consumer() -> None:
 def generate_message(
     entity_key: EntityKey,
     subscription_identifier: Optional[SubscriptionIdentifier] = None,
-    data: Mapping[str, Any] = {},
+    organization: Optional[int] = None,
 ) -> Iterator[Message[KafkaPayload]]:
     codec = SubscriptionScheduledTaskEncoder()
     epoch = datetime(1970, 1, 1)
@@ -188,7 +188,6 @@ def generate_message(
         raise InvalidSubscriptionError(
             f"entity subscription for {entity_key} does not exist"
         )
-    entity_subscription.load_data(data)
 
     while True:
         payload = codec.encode(
@@ -203,6 +202,7 @@ def generate_message(
                             time_window_sec=60,
                             resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
+                            organization=organization,
                             entity_subscription=entity_subscription,
                         ),
                     ),
@@ -286,11 +286,11 @@ def test_skip_execution_for_entity() -> None:
     )
 
     metrics_sets_message = next(
-        generate_message(EntityKey.METRICS_SETS, data={"organization": 1})
+        generate_message(EntityKey.METRICS_SETS, organization=1)
     )
     strategy.submit(metrics_sets_message)
     metrics_counters_message = next(
-        generate_message(EntityKey.METRICS_COUNTERS, data={"organization": 1})
+        generate_message(EntityKey.METRICS_COUNTERS, organization=1)
     )
     strategy.submit(metrics_counters_message)
 
