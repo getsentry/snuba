@@ -73,10 +73,10 @@ def test_show_all() -> None:
     )
 
 
-def test_show_all_for_group() -> None:
+def test_show_all_for_groups() -> None:
     runner = Runner()
     migration_key = MigrationKey(MigrationGroup("system"), "0001_migrations")
-    results = runner.show_all("system")
+    results = runner.show_all(["system"])
 
     assert len(results) == 1
     group, migrations = results[0]
@@ -84,7 +84,7 @@ def test_show_all_for_group() -> None:
     assert all([migration.status == Status.NOT_STARTED for migration in migrations])
 
     runner.run_migration(migration_key)
-    results = runner.show_all("system")
+    results = runner.show_all(["system"])
 
     assert len(results) == 1
     group, migrations = results[0]

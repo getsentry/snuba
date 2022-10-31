@@ -109,24 +109,26 @@ class Runner:
         return Status.NOT_STARTED, None
 
     def show_all(
-        self, group: Optional[str] = None
+        self, groups: Optional[Sequence[str]] = None
     ) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
         """
         migrations: List[Tuple[MigrationGroup, List[MigrationDetails]]] = []
 
-        migration_status = self._get_migration_status(group)
+        if groups:
+            migration_groups: Sequence[MigrationGroup] = [
+                MigrationGroup(group) for group in groups
+            ]
+        else:
+            migration_groups = get_active_migration_groups()
+
+        migration_status = self._get_migration_status(migration_groups)
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        if group:
-            groups: Sequence[MigrationGroup] = [MigrationGroup(group)]
-        else:
-            groups = get_active_migration_groups()
-
-        for group in groups:
+        for group in migration_groups:
             group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
@@ -367,13 +369,11 @@ class Runner:
         return 1
 
     def _get_migration_status(
-        self, group: Optional[str] = None
+        self, groups: Optional[Sequence[MigrationGroup]] = None
     ) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
 
-        if group:
-            groups: Sequence[MigrationGroup] = [MigrationGroup(group)]
-        else:
+        if not groups:
             groups = get_active_migration_groups()
 
         migration_groups = (
