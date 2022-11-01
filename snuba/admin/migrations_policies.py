@@ -7,12 +7,7 @@ from flask import Response, jsonify, make_response, request
 from werkzeug.routing import BaseConverter
 
 from snuba import settings
-from snuba.migrations.policies import (
-    AllMigrationsPolicy,
-    MigrationPolicy,
-    NoMigrationsPolicy,
-    NonBlockingMigrationsPolicy,
-)
+from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey
 
 
@@ -29,13 +24,9 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
 
     @wraps(f)
     def check_group_perms(*args: Any, **kwargs: Any) -> Response:
-        policy_map = {
-            "AllMigrationsPolicy": AllMigrationsPolicy(),
-            "NoMigrationsPolicy": NoMigrationsPolicy(),
-            "NonBlockingMigrationsPolicy": NonBlockingMigrationsPolicy(),
-        }
         ADMIN_ALLOWED_MIGRATION_GROUPS: Dict[str, MigrationPolicy] = {
-            k: policy_map[v] for k, v in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.items()
+            group_name: MigrationPolicy.class_from_name(policy_name)()
+            for group_name, policy_name in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.items()
         }
         group = kwargs["group"]
         if group not in ADMIN_ALLOWED_MIGRATION_GROUPS:
@@ -48,7 +39,7 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
             policy = ADMIN_ALLOWED_MIGRATION_GROUPS[group]
 
             def str_to_bool(s: str) -> bool:
-                return s.strip().lower() in ("yes", "true", "t", "1")
+                return s.strip().lower() == "true"
 
             dry_run = request.args.get("dry_run", False, type=str_to_bool)
 

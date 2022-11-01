@@ -161,7 +161,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
             # forced migration
             response = admin_api.post(
-                f"/migrations/system/{action}/0001_migrations?force=1"
+                f"/migrations/system/{action}/0001_migrations?force=true"
             )
             assert response.status_code == 200
             mock_run_migration.assert_called_once_with(
@@ -243,7 +243,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
             mock_run_migration.side_effect = print_something
             response = admin_api.post(
-                f"/migrations/events/{action}/0014_backfill_errors?dry_run=yes"
+                f"/migrations/events/{action}/0014_backfill_errors?dry_run=true"
             )
             assert response.status_code == 200
             assert json.loads(response.data) == {"stdout": "a dry run\n"}

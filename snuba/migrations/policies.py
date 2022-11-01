@@ -3,9 +3,10 @@ from abc import ABC, abstractmethod
 from snuba.migrations.groups import get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.utils.registered_class import RegisteredClass
 
 
-class MigrationPolicy(ABC):
+class MigrationPolicy(ABC, metaclass=RegisteredClass):
     """
     A MigrationPolicy implements `can_run` and
     `can_reverse` methods that determines whether or not
@@ -18,6 +19,10 @@ class MigrationPolicy(ABC):
     the policy. A policy doesn't verify access to a group, it
     verifies group access to running/reversing migrations.
     """
+
+    @classmethod
+    def config_key(cls) -> str:
+        return cls.__name__
 
     @abstractmethod
     def can_run(self, migration_key: MigrationKey) -> bool:
