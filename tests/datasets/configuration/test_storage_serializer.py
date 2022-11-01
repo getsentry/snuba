@@ -11,7 +11,13 @@ from typing import Any
 
 from yaml import safe_load
 
-from snuba.datasets.storages.generic_metrics import sets_bucket_storage, sets_storage
+from snuba.datasets.storages.generic_metrics import (
+    distributions_bucket_storage,
+    distributions_storage,
+    sets_bucket_storage,
+    sets_storage,
+)
+from snuba.datasets.storages.transactions import storage as transactions_storage
 
 
 def unsafe_load_configuration_data(path: str) -> dict[str, Any]:
@@ -34,6 +40,21 @@ test_data = [
         sets_bucket_storage,
         "./snuba/datasets/configuration/generic_metrics/storages/sets_bucket.yaml",
         id="gen_metrics_sets_bucket",
+    ),
+    pytest.param(
+        distributions_storage,
+        "./snuba/datasets/configuration/generic_metrics/storages/distributions.yaml",
+        id="gen_metrics_sets",
+    ),
+    pytest.param(
+        distributions_bucket_storage,
+        "./snuba/datasets/configuration/generic_metrics/storages/distributions_bucket.yaml",
+        id="gen_metrics_sets_bucket",
+    ),
+    pytest.param(
+        transactions_storage,
+        "./snuba/datasets/configuration/transactions/storages/transactions.yaml",
+        id="transactions",
     ),
 ]
 
