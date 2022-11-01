@@ -34,15 +34,26 @@ with sentry_sdk.start_transaction(
             rv = []
             for filename in os.listdir(plugin_folder):
                 if filename.endswith(".py") and filename != "__init__.py":
-                    rv.append(filename[:-3])
+                    # IMPORTANT!!!!
+                    # Click replaces underscores with dashes for command names
+                    # by default. To mimic this behavior we have to do that here
+                    # since all of our infrastructure depends on this being the
+                    # case
+                    rv.append(filename[:-3].replace("_", "-"))
             rv.sort()
             return rv
 
         def get_command(self, ctx: Any, name: str) -> click.Command:
             logger.info(f"Loading command {name}")
+            # IMPORTANT!!!!
+            # Click replaces underscores with dashes for command names
+            # by default. To mimic this behavior we have to do that here
+            # since all of our infrastructure depends on this being the
+            # case
+            actual_command_name = name.replace("-", "_")
             with sentry_sdk.start_span(op="import", description=name):
                 ns: dict[str, click.Command] = {}
-                fn = os.path.join(plugin_folder, name + ".py")
+                fn = os.path.join(plugin_folder, actual_command_name + ".py")
                 with open(fn) as f:
                     code = compile(f.read(), fn, "exec")
                     eval(code, ns, ns)
@@ -50,7 +61,7 @@ with sentry_sdk.start_transaction(
                 init_time = time.perf_counter() - start
                 metrics.gauge("snuba_init", init_time)
                 logger.info(f"Snuba initialization took {init_time}s")
-                return ns[name]
+                return ns[actual_command_name]
 
     @click.command(cls=SnubaCLI)
     @click.version_option()
