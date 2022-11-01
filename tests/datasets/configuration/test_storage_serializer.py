@@ -4,6 +4,7 @@ from snuba.datasets.storages.factory import initialize_storage_factory
 initialize_storage_factory()
 from snuba.datasets.storages.generic_metrics import sets_storage
 
+# Copied over from snuba/datasets/configuration/generic_metrics/storages/sets.yaml::schema::columns
 GEN_METRICS_COLUMNS = [
     {"name": "org_id", "type": "UInt", "args": {"size": 64}},
     {"name": "use_case_id", "type": "String"},
@@ -42,5 +43,7 @@ GEN_METRICS_COLUMNS = [
 
 
 def test_serialize_columns() -> None:
-    print(serialize_columns(sets_storage))
-    # assert serialize_columns(sets_storage) == GEN_METRICS_COLUMNS
+    assert (
+        serialize_columns(sets_storage.get_schema().get_columns().columns)
+        == GEN_METRICS_COLUMNS
+    )

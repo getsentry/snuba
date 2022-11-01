@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Sequence, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -20,7 +20,6 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets.plans.splitters import QuerySplitStrategy
-from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import UUID, AggregateFunction, IPv4, IPv6
@@ -169,37 +168,39 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
     return cols
 
 
-def serialize_columns(storage: ReadableTableStorage) -> list[dict[str, Any]]:
-    cols: list[dict[str, Any]] = []
-    for col in storage.get_schema().get_columns().columns:
-        args: dict[str, Any] = {}
-        for key, val in col.type.__dict__.items():
-            if key == "nested_columns":
-                continue
-            elif key == "inner_type":
-                args["type"] = val.__class__.__name__
-                args["arg"] = val.__dict__["size"]
-                if modifiers := col.type.get_modifiers():
-                    args["schema_modifiers"] = [
-                        modifier
-                        for modifier, exists in {
-                            "readonly": modifiers.readonly,
-                            "nullable": modifiers.nullable,
-                        }.items()
-                        if exists
-                    ]
-            elif key == "arg_types":
-                continue
-            elif key == "_ColumnType__modifiers":
-                continue
-            else:
-                args[key] = val
+NUMBER_COLUMN_TYPES_INVERTED = {val: key for key, val in NUMBER_COLUMN_TYPES.items()}
 
-        cols.append(
-            {
-                "name": col.name,
-                "type": col.type.__class__.__name__,
-                "args": args,
-            }
-        )
+
+def serialize_columns(columns: Sequence[Column[Any]]) -> list[dict[str, Any]]:
+    cols: list[dict[str, Any]] = []
+    for col in columns:
+        column: dict[str, Any] = {"name": col.name, "type": type(col.type).__name__}
+        args: dict[str, Any] = {}
+
+        if modifiers := col.type.get_modifiers():
+            args["schema_modifiers"] = [
+                modifier
+                for modifier, exists in {
+                    "readonly": modifiers.readonly,
+                    "nullable": modifiers.nullable,
+                }.items()
+                if exists
+            ]
+        if type(col.type) in NUMBER_COLUMN_TYPES_INVERTED:
+            args["size"] = col.type.__dict__["size"]
+        elif isinstance(col.type, Nested):
+            args["subcolumns"] = serialize_columns(col.type.nested_columns)
+        elif isinstance(col.type, Array):
+            args["type"] = type(col.type.inner_type).__name__
+            args["arg"] = col.type.inner_type.__dict__["size"]
+        elif isinstance(col.type, AggregateFunction):
+            args["func"] = col.type.func
+            args["arg_types"] = [
+                {"type": type(arg_type).__name__, "arg": arg_type.__dict__["size"]}
+                for arg_type in col.type.arg_types
+            ]
+
+        if args != {}:
+            column["args"] = args
+        cols.append(column)
     return cols
