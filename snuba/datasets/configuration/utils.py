@@ -20,6 +20,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets.plans.splitters import QuerySplitStrategy
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import UUID, AggregateFunction, IPv4, IPv6
@@ -165,4 +166,40 @@ def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]
             )
         assert column is not None
         cols.append(column)
+    return cols
+
+
+def serialize_columns(storage: ReadableTableStorage) -> list[dict[str, Any]]:
+    cols: list[dict[str, Any]] = []
+    for col in storage.get_schema().get_columns().columns:
+        args: dict[str, Any] = {}
+        for key, val in col.type.__dict__.items():
+            if key == "nested_columns":
+                continue
+            elif key == "inner_type":
+                args["type"] = val.__class__.__name__
+                args["arg"] = val.__dict__["size"]
+                if modifiers := col.type.get_modifiers():
+                    args["schema_modifiers"] = [
+                        modifier
+                        for modifier, exists in {
+                            "readonly": modifiers.readonly,
+                            "nullable": modifiers.nullable,
+                        }.items()
+                        if exists
+                    ]
+            elif key == "arg_types":
+                continue
+            elif key == "_ColumnType__modifiers":
+                continue
+            else:
+                args[key] = val
+
+        cols.append(
+            {
+                "name": col.name,
+                "type": col.type.__class__.__name__,
+                "args": args,
+            }
+        )
     return cols
