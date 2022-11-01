@@ -1,49 +1,49 @@
+from __future__ import annotations
+
+import pytest
+
 from snuba.datasets.configuration.utils import serialize_columns
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import initialize_storage_factory
 
 initialize_storage_factory()
-from snuba.datasets.storages.generic_metrics import sets_storage
+from typing import Any
 
-# Copied over from snuba/datasets/configuration/generic_metrics/storages/sets.yaml::schema::columns
-GEN_METRICS_COLUMNS = [
-    {"name": "org_id", "type": "UInt", "args": {"size": 64}},
-    {"name": "use_case_id", "type": "String"},
-    {"name": "project_id", "type": "UInt", "args": {"size": 64}},
-    {"name": "metric_id", "type": "UInt", "args": {"size": 64}},
-    {"name": "timestamp", "type": "DateTime"},
-    {"name": "retention_days", "type": "UInt", "args": {"size": 16}},
-    {
-        "name": "tags",
-        "type": "Nested",
-        "args": {
-            "subcolumns": [
-                {"name": "key", "type": "UInt", "args": {"size": 64}},
-                {"name": "indexed_value", "type": "UInt", "args": {"size": 64}},
-                {"name": "raw_value", "type": "String"},
-            ],
-        },
-    },
-    {
-        "name": "_raw_tags_hash",
-        "type": "Array",
-        "args": {"type": "UInt", "arg": 64, "schema_modifiers": ["readonly"]},
-    },
-    {
-        "name": "_indexed_tags_hash",
-        "type": "Array",
-        "args": {"type": "UInt", "arg": 64, "schema_modifiers": ["readonly"]},
-    },
-    {"name": "granularity", "type": "UInt", "args": {"size": 8}},
-    {
-        "name": "value",
-        "type": "AggregateFunction",
-        "args": {"func": "uniqCombined64", "arg_types": [{"type": "UInt", "arg": 64}]},
-    },
+from yaml import safe_load
+
+from snuba.datasets.storages.generic_metrics import sets_bucket_storage, sets_storage
+
+
+def unsafe_load_configuration_data(path: str) -> dict[str, Any]:
+    """
+    No validation
+    """
+    file = open(path)
+    config = safe_load(file)
+    assert isinstance(config, dict)
+    return config
+
+
+test_data = [
+    pytest.param(
+        sets_storage,
+        "./snuba/datasets/configuration/generic_metrics/storages/sets.yaml",
+        id="gen_metrics_sets",
+    ),
+    pytest.param(
+        sets_bucket_storage,
+        "./snuba/datasets/configuration/generic_metrics/storages/sets_bucket.yaml",
+        id="gen_metrics_sets_bucket",
+    ),
 ]
 
 
-def test_serialize_columns() -> None:
+@pytest.mark.parametrize(
+    "storage, path",
+    test_data,
+)
+def test_serialize_columns(storage: ReadableTableStorage, path: str) -> None:
     assert (
-        serialize_columns(sets_storage.get_schema().get_columns().columns)
-        == GEN_METRICS_COLUMNS
+        serialize_columns(storage.get_schema().get_columns().columns)
+        == unsafe_load_configuration_data(path)["schema"]["columns"]
     )
