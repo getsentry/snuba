@@ -28,7 +28,7 @@ from snuba.redis import RedisClientKey, get_redis_client
 @click.option(
     "--storage",
     "storage_name",
-    type=click.Choice(["errors", "errors_v2"]),
+    type=click.Choice(["errors"]),
     help="The storage to target",
     required=True,
 )
