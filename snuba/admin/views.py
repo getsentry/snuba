@@ -11,10 +11,11 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from werkzeug.routing import BaseConverter
 
 from snuba import settings, state
-from snuba.admin.auth import UnauthorizedException, authorize_request
+from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
+from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
@@ -42,8 +43,6 @@ logger = structlog.get_logger().bind(module=__name__)
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 notification_client = RuntimeConfigAutoClient()
-
-USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
 
 
 @application.errorhandler(UnauthorizedException)
@@ -271,6 +270,88 @@ def clickhouse_trace_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
+@application.route("/clickhouse_querylog_query", methods=["POST"])
+def clickhouse_querylog_query() -> Response:
+    user = request.headers.get(USER_HEADER_KEY, "unknown")
+    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
+    req = json.loads(request.data)
+    try:
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    try:
+        result = run_querylog_query(raw_sql, user)
+        rows, columns = result.results, result.meta
+        if columns:
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
+@application.route("/clickhouse_querylog_schema", methods=["GET"])
+def clickhouse_querylog_schema() -> Response:
+    try:
+        result = describe_querylog_schema()
+        rows, columns = result.results, result.meta
+        if columns:
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
     except Exception as err:
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),

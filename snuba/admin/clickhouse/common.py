@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from typing import MutableMapping
+
+from sql_metadata import Parser, QueryType  # type: ignore
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
@@ -110,3 +114,30 @@ def get_ro_query_node_connection(
 
     CLUSTER_CONNECTIONS[storage_name] = connection
     return connection
+
+
+def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
+    """
+    Simple validation to ensure query only attempts read queries.
+
+    If allowed_tables is provided, ensures the 'from' clause contains
+    an allowed table. All tables are allowed otherwise.
+
+    Raises InvalidCustomQuery if query is invalid or not allowed.
+    """
+    lowered = sql_query.lower()
+    disallowed_keywords = ["insert", ";"]
+
+    for kw in disallowed_keywords:
+        if kw in lowered:
+            raise InvalidCustomQuery(f"{kw} is not allowed in the query")
+
+    parsed = Parser(lowered)
+
+    if parsed.query_type != QueryType.SELECT:
+        raise InvalidCustomQuery("Only SELECT queries are allowed")
+
+    if allowed_tables and not set(parsed.tables).issubset(allowed_tables):
+        raise InvalidCustomQuery(
+            f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+        )

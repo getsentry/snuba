@@ -227,7 +227,7 @@ def test_dead_letter_step() -> None:
     dead_letter_step = DeadLetterStep(
         producer=producer, topic=topic, metrics=TestingMetricsBackend()
     )
-    storage_key = StorageKey.ERRORS_V2
+    storage_key = StorageKey.ERRORS
 
     # We only produce to dead letter topic if the payload is an insert
     # so payload of `None` shouldn't produce any futures

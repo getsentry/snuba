@@ -19,23 +19,6 @@ test_data = [
             Partition(Topic("errors"), 1),
             1,
             MultistorageKafkaPayload(
-                [StorageKey.ERRORS, StorageKey.ERRORS_V2],
-                KafkaPayload(
-                    None,
-                    json.dumps((2, "insert", get_raw_event())).encode("utf-8"),
-                    [],
-                ),
-            ),
-            datetime.now(),
-        ),
-        True,
-        id="both errors storage",
-    ),
-    pytest.param(
-        Message(
-            Partition(Topic("errors"), 1),
-            1,
-            MultistorageKafkaPayload(
                 [StorageKey.ERRORS, StorageKey.TRANSACTIONS],
                 KafkaPayload(
                     None,

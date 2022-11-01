@@ -5,6 +5,7 @@ import ClickhouseQueries from "./clickhouse_queries";
 import TracingQueries from "./tracing";
 import SnQLToSQL from "./snql_to_sql";
 import Kafka from "./kafka";
+import QuerylogQueries from "./querylog";
 
 function Placeholder(props: any) {
   return null;
@@ -32,6 +33,11 @@ const NAV_ITEMS = [
     id: "tracing",
     display: "🔎 ClickHouse Tracing",
     component: TracingQueries,
+  },
+  {
+    id: "querylog",
+    display: "🔍 ClickHouse Querylog",
+    component: QuerylogQueries,
   },
   {
     id: "auditlog",
