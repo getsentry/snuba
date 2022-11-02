@@ -126,7 +126,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
         assert data["time_window"] == subscription.time_window_sec
         assert data["resolution"] == subscription.resolution_sec
         assert data["query"] == subscription.query
-        assert data["organization"] == subscription.organization
+        assert data["org_id"] == subscription.org_id
         assert_entity_subscription_on_subscription_class(subscription, entity_key)
 
     @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)
@@ -311,7 +311,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
             b'"timestamp":"1970-01-01T00:00:00",'
             b'"entity":"events",'
             b'"task":{'
-            b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","organization":null}},'
+            b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","org_id":null}},'
             b'"tick_upper_offset":5'
             b"}"
         )

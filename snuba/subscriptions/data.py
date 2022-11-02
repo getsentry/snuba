@@ -174,6 +174,9 @@ class SubscriptionData:
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SubscriptionData:
         entity_subscription = get_entity_subscription(entity_key)()
+        org_id = data.get("organization", None)
+        if not org_id:
+            org_id = data.get("org_id", None)
 
         return SubscriptionData(
             project_id=data["project_id"],
@@ -181,7 +184,7 @@ class SubscriptionData:
             time_window_sec=int(data["time_window"]),
             resolution_sec=int(data["resolution"]),
             query=data["query"],
-            org_id=data.get("organization", None),
+            org_id=org_id,
             entity_subscription=entity_subscription,
         )
 
