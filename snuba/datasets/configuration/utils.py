@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Sequence, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -60,6 +60,45 @@ def generate_policy_creator(
         return produce_policy_creator
     # TODO: Add rest of DLQ policy types
     return None
+
+
+NUMBER_COLUMN_TYPES = {"UInt": UInt, "Float": Float}
+NUMBER_COLUMN_TYPES_INVERTED = {val: key for key, val in NUMBER_COLUMN_TYPES.items()}
+
+
+def serialize_columns(columns: Sequence[Column[Any]]) -> list[dict[str, Any]]:
+    cols: list[dict[str, Any]] = []
+    for col in columns:
+        column: dict[str, Any] = {"name": col.name, "type": type(col.type).__name__}
+        args: dict[str, Any] = {}
+
+        if modifiers := col.type.get_modifiers():
+            args["schema_modifiers"] = [
+                modifier
+                for modifier, exists in {
+                    "readonly": modifiers.readonly,
+                    "nullable": modifiers.nullable,
+                }.items()
+                if exists
+            ]
+        if type(col.type) in NUMBER_COLUMN_TYPES_INVERTED:
+            args["size"] = col.type.__dict__["size"]
+        elif isinstance(col.type, Nested):
+            args["subcolumns"] = serialize_columns(col.type.nested_columns)
+        elif isinstance(col.type, Array):
+            args["type"] = type(col.type.inner_type).__name__
+            args["arg"] = col.type.inner_type.__dict__["size"]
+        elif isinstance(col.type, AggregateFunction):
+            args["func"] = col.type.func
+            args["arg_types"] = [
+                {"type": type(arg_type).__name__, "arg": arg_type.__dict__["size"]}
+                for arg_type in col.type.arg_types
+            ]
+
+        if args != {}:
+            column["args"] = args
+        cols.append(column)
+    return cols
 
 
 def get_query_processors(

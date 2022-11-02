@@ -18,6 +18,38 @@ class RegisteredClassNameCollisionError(Exception):
     pass
 
 
+def _record_init_args(cls):
+    from copy import deepcopy
+    from dataclasses import is_dataclass
+    from inspect import signature
+
+    orig_init = getattr(cls, "__init__")
+    # IDEA: MIMIC FUNCTION SIGNATURE EXACTLY
+    orig_signature = signature(orig_init)
+
+    # if "registered_class" in getattr(orig_init, "__module__", ""):
+    #     return
+
+    def __init__(self, *args, **kwargs):
+        try:
+            self.init_kwargs = deepcopy(kwargs)
+            if args:
+                init_param_names = [p for p in orig_signature.parameters]
+                i = 0
+                while i < len(args):
+                    self.init_kwargs[init_param_names[i + 1]] = args[i]
+                    i += 1
+                return orig_init(self, *args, **kwargs)
+        except Exception as t:
+            import pdb
+
+            pdb.set_trace()
+            print(t)
+
+    __init__.__signature__ = orig_signature
+    setattr(cls, "__init__", __init__)
+
+
 class _ClassRegistry:
     """Keep a mapping of classes to their names"""
 
@@ -85,6 +117,8 @@ class RegisteredClass(ABCMeta):
             setattr(res, "_registry", _ClassRegistry())
         else:
             getattr(res, "_registry").register_class(res)
+
+        _record_init_args(res)
         return res
 
     def class_from_name(self, name: str) -> Type[Any]:

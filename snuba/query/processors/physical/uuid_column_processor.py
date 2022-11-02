@@ -2,6 +2,7 @@ import uuid
 from typing import Set
 
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.type_converters import (
     BaseTypeConverter,
     ColumnTypeError,
@@ -37,3 +38,7 @@ class UUIDColumnProcessor(BaseTypeConverter):
             )
 
         return exp
+
+    @classmethod
+    def from_kwargs(cls, **kwargs: str) -> "ClickhouseQueryProcessor":
+        return cls(**kwargs)

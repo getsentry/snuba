@@ -44,7 +44,6 @@ class PassthroughKafkaFilter(StreamMessageFilter[KafkaPayload]):
         return False
 
 
-@dataclass
 class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
     """
     A filter over messages coming from a stream which matches whether the given message
@@ -52,8 +51,9 @@ class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
     a match, the message gets processed.
     """
 
-    header_key: str
-    header_value: str
+    def __init__(self, header_key: str, header_value: str):
+        self.header_key = header_key
+        self.header_value = header_value
 
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
         for key, value in message.payload.headers:
