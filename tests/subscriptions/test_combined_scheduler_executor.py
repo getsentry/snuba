@@ -31,6 +31,7 @@ def create_subscription() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=1,
+            org_id=None,
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH (events) SELECT count()",

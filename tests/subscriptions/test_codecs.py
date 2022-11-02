@@ -46,7 +46,7 @@ def build_snql_subscription_data(
         time_window_sec=500 * 60,
         resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
-        organization=organization,
+        org_id=organization,
         entity_subscription=create_entity_subscription(entity_key),
     )
 
@@ -143,7 +143,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
             "time_window": subscription.time_window_sec,
             "resolution": subscription.resolution_sec,
             "query": subscription.query,
-            "organization": subscription.organization,
+            "organization": subscription.org_id,
         }
         payload = json.dumps(data).encode("utf-8")
         assert codec.decode(payload) == subscription
@@ -156,6 +156,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
         entity_subscription = EventsSubscription()
         subscription_data = SubscriptionData(
             project_id=1,
+            org_id=None,
             query="MATCH (events) SELECT count() AS count",
             time_window_sec=60,
             resolution_sec=60,
@@ -224,7 +225,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
             ),
             time_window_sec=60,
             resolution_sec=60,
-            organization=organization,
+            org_id=organization,
             entity_subscription=entity_subscription,
         )
 
@@ -275,6 +276,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
 
         subscription_data = SubscriptionData(
             project_id=1,
+            org_id=None,
             query="MATCH events SELECT count()",
             time_window_sec=60,
             resolution_sec=60,

@@ -122,6 +122,7 @@ def test_executor_consumer() -> None:
     # Produce a scheduled task to the scheduled subscriptions topic
     subscription_data = SubscriptionData(
         project_id=1,
+        org_id=None,
         query="MATCH (events) SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
@@ -199,7 +200,7 @@ def generate_message(
                             time_window_sec=60,
                             resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
-                            organization=organization,
+                            org_id=organization,
                             entity_subscription=entity_subscription,
                         ),
                     ),
@@ -314,6 +315,7 @@ def test_produce_result() -> None:
 
     subscription_data = SubscriptionData(
         project_id=1,
+        org_id=None,
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,

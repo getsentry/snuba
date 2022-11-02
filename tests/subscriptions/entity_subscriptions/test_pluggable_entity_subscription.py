@@ -26,7 +26,6 @@ storage = entity.get_writable_storage()
 assert storage is not None
 stream_loader = storage.get_table_writer().get_stream_loader()
 topic_spec = stream_loader.get_default_topic_spec()
-data = {"organization": 1}
 
 timer = Timer("test_pluggable_entity_subscription")
 
@@ -42,7 +41,7 @@ def subscription_data_builder(
         time_window_sec=60,
         entity_subscription=entity_subscription,
         query="MATCH (generic_metrics_sets) SELECT count() AS count WHERE project_id = 1",
-        organization=organization,
+        org_id=organization,
     )
 
 

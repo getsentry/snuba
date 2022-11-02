@@ -75,11 +75,11 @@ class SubscriptionData:
     """
 
     project_id: int
+    org_id: Optional[int]
     resolution_sec: int
     time_window_sec: int
     entity_subscription: EntitySubscription
     query: str
-    organization: Optional[int] = None
 
     def add_conditions(
         self,
@@ -115,7 +115,7 @@ class SubscriptionData:
                 Literal(None, timestamp),
             ),
             *self.entity_subscription.get_entity_subscription_conditions_for_snql(
-                offset, self.organization
+                offset, self.org_id
             ),
         ]
 
@@ -181,7 +181,7 @@ class SubscriptionData:
             time_window_sec=int(data["time_window"]),
             resolution_sec=int(data["resolution"]),
             query=data["query"],
-            organization=data.get("organization", None),
+            org_id=data.get("organization", None),
             entity_subscription=entity_subscription,
         )
 
@@ -191,7 +191,7 @@ class SubscriptionData:
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
-            "organization": self.organization,
+            "org_id": self.org_id,
         }
 
 

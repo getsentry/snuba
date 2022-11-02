@@ -12,6 +12,7 @@ TESTS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
+            org_id=None,
             query="MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
             time_window_sec=10 * 60,
             resolution_sec=60,
@@ -22,6 +23,7 @@ TESTS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
+            org_id=None,
             query=(
                 "MATCH (events) "
                 "SELECT count() AS count BY time "

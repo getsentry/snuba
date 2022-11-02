@@ -40,7 +40,7 @@ parser.add_argument(
     default="events",
 )
 parser.add_argument(
-    "--organization",
+    "--organization-id",
     type=int,
     help="Organization for subscription query",
     dest="organization",
@@ -67,10 +67,10 @@ for _ in range(parsed.number):
 
     subscription_data = SubscriptionData(
         query=f"MATCH ({entity_key.value}) SELECT count() AS count WHERE project_id = {project_id}",
+        org_id=parsed.organization,
         project_id=project_id,
         time_window_sec=60,
         resolution_sec=60,
-        organization=parsed.organization,
         entity_subscription=entity_subscription,
     )
 
