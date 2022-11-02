@@ -75,7 +75,7 @@ class SubscriptionData:
     """
 
     project_id: int
-    org_id: Optional[int]
+    organization: Optional[int]
     resolution_sec: int
     time_window_sec: int
     entity_subscription: EntitySubscription
@@ -115,7 +115,7 @@ class SubscriptionData:
                 Literal(None, timestamp),
             ),
             *self.entity_subscription.get_entity_subscription_conditions_for_snql(
-                offset, self.org_id
+                offset, self.organization
             ),
         ]
 
@@ -174,9 +174,6 @@ class SubscriptionData:
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SubscriptionData:
         entity_subscription = get_entity_subscription(entity_key)()
-        org_id = data.get("organization", None)
-        if not org_id:
-            org_id = data.get("org_id", None)
 
         return SubscriptionData(
             project_id=data["project_id"],
@@ -184,7 +181,7 @@ class SubscriptionData:
             time_window_sec=int(data["time_window"]),
             resolution_sec=int(data["resolution"]),
             query=data["query"],
-            org_id=org_id,
+            organization=data.get("organization", None),
             entity_subscription=entity_subscription,
         )
 
@@ -194,7 +191,7 @@ class SubscriptionData:
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
-            "org_id": self.org_id,
+            "organization": self.organization,
         }
 
 

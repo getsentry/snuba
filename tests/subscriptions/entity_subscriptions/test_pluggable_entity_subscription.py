@@ -41,7 +41,7 @@ def subscription_data_builder(
         time_window_sec=60,
         entity_subscription=entity_subscription,
         query="MATCH (generic_metrics_sets) SELECT count() AS count WHERE project_id = 1",
-        org_id=organization,
+        organization=organization,
     )
 
 

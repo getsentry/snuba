@@ -552,7 +552,7 @@ def test_produce_scheduled_subscription_message() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
@@ -565,7 +565,7 @@ def test_produce_scheduled_subscription_message() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=2,
-            org_id=None,
+            organization=None,
             time_window_sec=2 * 60,
             resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
@@ -667,7 +667,7 @@ def test_produce_stale_message() -> None:
         uuid.uuid4(),
         SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",

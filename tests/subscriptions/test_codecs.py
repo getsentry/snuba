@@ -46,7 +46,7 @@ def build_snql_subscription_data(
         time_window_sec=500 * 60,
         resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
-        org_id=organization,
+        organization=organization,
         entity_subscription=create_entity_subscription(entity_key),
     )
 
@@ -126,7 +126,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
         assert data["time_window"] == subscription.time_window_sec
         assert data["resolution"] == subscription.resolution_sec
         assert data["query"] == subscription.query
-        assert data["org_id"] == subscription.org_id
+        assert data["organization"] == subscription.organization
         assert_entity_subscription_on_subscription_class(subscription, entity_key)
 
     @pytest.mark.parametrize("builder, organization, entity_key", SNQL_CASES)
@@ -143,7 +143,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
             "time_window": subscription.time_window_sec,
             "resolution": subscription.resolution_sec,
             "query": subscription.query,
-            "organization": subscription.org_id,
+            "organization": subscription.organization,
         }
         payload = json.dumps(data).encode("utf-8")
         assert codec.decode(payload) == subscription
@@ -156,7 +156,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
         entity_subscription = EventsSubscription()
         subscription_data = SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             query="MATCH (events) SELECT count() AS count",
             time_window_sec=60,
             resolution_sec=60,
@@ -225,7 +225,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
             ),
             time_window_sec=60,
             resolution_sec=60,
-            org_id=organization,
+            organization=organization,
             entity_subscription=entity_subscription,
         )
 
@@ -276,7 +276,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
 
         subscription_data = SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             query="MATCH events SELECT count()",
             time_window_sec=60,
             resolution_sec=60,
@@ -311,7 +311,7 @@ class TestSubscriptionCodecs(ConfigurationTest):
             b'"timestamp":"1970-01-01T00:00:00",'
             b'"entity":"events",'
             b'"task":{'
-            b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","org_id":null}},'
+            b'"data":{"project_id":1,"time_window":60,"resolution":60,"query":"MATCH events SELECT count()","organization":null}},'
             b'"tick_upper_offset":5'
             b"}"
         )

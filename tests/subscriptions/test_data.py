@@ -15,7 +15,7 @@ TESTS = [
     pytest.param(
         SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             query=(
                 "MATCH (events) "
                 "SELECT count() AS count "
@@ -32,7 +32,7 @@ TESTS = [
     pytest.param(
         SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             query=(
                 "MATCH (events) "
                 "SELECT count() AS count, avg(timestamp) AS average_t "
@@ -49,7 +49,7 @@ TESTS = [
     pytest.param(
         SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             query=(
                 "MATCH (events) "
                 "SELECT count() AS count BY project_id "

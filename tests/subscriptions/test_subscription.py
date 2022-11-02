@@ -23,7 +23,7 @@ TESTS_CREATE = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            org_id=None,
+            organization=None,
             query=(
                 "MATCH (events) "
                 "SELECT count() AS count "
@@ -42,7 +42,7 @@ TESTS_INVALID = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            org_id=None,
+            organization=None,
             query=(
                 "MATCH (events) "
                 "SELECT count() AS count "
@@ -93,7 +93,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    org_id=None,
+                    organization=None,
                     time_window_sec=10 * 60,
                     resolution_sec=60,
                     query="MATCH (events) SELECT cout() AS count WHERE platform IN tuple('a')",
@@ -108,7 +108,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    org_id=None,
+                    organization=None,
                     time_window_sec=0,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
@@ -121,7 +121,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    org_id=None,
+                    organization=None,
                     query=(
                         "MATCH (events) "
                         "SELECT count() AS count BY time "
@@ -139,7 +139,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    org_id=None,
+                    organization=None,
                     time_window_sec=48 * 60 * 60,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
@@ -154,7 +154,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             creator.create(
                 SubscriptionData(
                     project_id=123,
-                    org_id=None,
+                    organization=None,
                     time_window_sec=0,
                     resolution_sec=60,
                     query="MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a')",
@@ -175,7 +175,7 @@ TESTS_CREATE_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=1,
+            organization=1,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
         ),
         EntityKey.METRICS_COUNTERS,
@@ -191,7 +191,7 @@ TESTS_CREATE_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=1,
+            organization=1,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
         ),
         EntityKey.METRICS_SETS,
@@ -210,7 +210,7 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=1,
+            organization=1,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
         ),
         id="Metrics Counters subscription missing tags[3] condition",
@@ -224,7 +224,7 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=1,
+            organization=1,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
         ),
         id="Metrics Counters subscription missing project_id condition",
@@ -238,7 +238,7 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=1,
+            organization=1,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
         ),
         id="Metrics Sets subscription missing tags[3] condition",
@@ -252,7 +252,7 @@ TESTS_INVALID_METRICS = [
             ),
             time_window_sec=10 * 60,
             resolution_sec=60,
-            org_id=1,
+            organization=1,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
         ),
         id="Metrics Sets subscription missing project_id condition",
@@ -299,7 +299,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         subscription = SubscriptionData(
             project_id=1,
-            org_id=None,
+            organization=None,
             query="MATCH (events) SELECT count() AS count",
             time_window_sec=10 * 60,
             resolution_sec=60,

@@ -34,7 +34,7 @@ class TestSubscriptionScheduler:
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
             SubscriptionData(
                 project_id=1,
-                org_id=None,
+                organization=None,
                 query="MATCH (events) SELECT count() AS count",
                 time_window_sec=60,
                 resolution_sec=int(resolution.total_seconds()),
