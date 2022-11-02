@@ -15,7 +15,6 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.clickhouse import get_migrations_connection
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
@@ -66,7 +65,9 @@ class Runner:
             LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
         )
 
-        self.__connection = get_migrations_connection()
+        self.__connection = migrations_cluster.get_query_connection(
+            ClickhouseClientSettings.MIGRATE
+        )
 
         self.__status: MutableMapping[
             MigrationKey, Tuple[Status, Optional[datetime]]
