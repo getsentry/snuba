@@ -381,6 +381,16 @@ def health() -> Response:
             body["clickhouse_ok"] = clickhouse_health
         status = 502
 
+    if status != 200:
+        metrics.increment(
+            "healthcheck_failed",
+            tags={
+                "down_file_exists": str(down_file_exists),
+                "clickhouse_ok": str(clickhouse_health),
+                "thorough": str(thorough),
+            },
+        )
+
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
