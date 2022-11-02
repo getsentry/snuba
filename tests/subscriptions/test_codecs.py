@@ -45,7 +45,8 @@ def build_snql_subscription_data(
         time_window_sec=500 * 60,
         resolution_sec=60,
         query="MATCH events SELECT count() WHERE in(platform, 'a')",
-        entity_subscription=create_entity_subscription(entity_key, organization),
+        organization=organization,
+        entity_subscription=create_entity_subscription(entity_key),
     )
 
 
@@ -142,7 +143,7 @@ def test_subscription_task_result_encoder() -> None:
 
     timestamp = datetime.now()
 
-    entity_subscription = EventsSubscription(data_dict={})
+    entity_subscription = EventsSubscription()
     subscription_data = SubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
@@ -213,7 +214,7 @@ def test_metrics_subscription_task_result_encoder(
 
     timestamp = datetime.now()
 
-    entity_subscription = subscription_cls(data_dict={"organization": 1})
+    entity_subscription = subscription_cls()
     subscription_data = SubscriptionData(
         project_id=1,
         query=(
@@ -278,7 +279,7 @@ def test_subscription_task_encoder() -> None:
         query="MATCH events SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity_subscription=EventsSubscription(),
     )
 
     subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")

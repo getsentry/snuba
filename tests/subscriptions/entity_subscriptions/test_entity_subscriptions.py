@@ -1,4 +1,4 @@
-from typing import Any, List, Mapping, Optional, Type
+from typing import Any, List, Optional, Type
 
 import pytest
 
@@ -17,49 +17,49 @@ from snuba.query.expressions import Column, Literal
 TESTS = [
     pytest.param(
         EventsSubscription,
-        {"data_dict": {}},
+        None,
         None,
         id="Events subscription",
     ),
     pytest.param(
         TransactionsSubscription,
-        {"data_dict": {}},
+        None,
         None,
         id="Transactions subscription",
     ),
     pytest.param(
         SessionsSubscription,
-        {"data_dict": {"organization": 1}},
+        1,
         None,
         id="Sessions subscription",
     ),
     pytest.param(
         SessionsSubscription,
-        {"data_dict": {}},
+        None,
         InvalidQueryException,
         id="Sessions subscription",
     ),
     pytest.param(
         MetricsCountersSubscription,
-        {"data_dict": {"organization": 1}},
+        1,
         None,
         id="Metrics counters subscription",
     ),
     pytest.param(
         MetricsCountersSubscription,
-        {"data_dict": {}},
+        None,
         InvalidQueryException,
         id="Metrics counters subscription",
     ),
     pytest.param(
         MetricsSetsSubscription,
-        {"data_dict": {"organization": 1}},
+        1,
         None,
         id="Metrics sets subscription",
     ),
     pytest.param(
         MetricsSetsSubscription,
-        {"data_dict": {}},
+        None,
         InvalidQueryException,
         id="Metrics sets subscription",
     ),
@@ -67,31 +67,35 @@ TESTS = [
 
 TESTS_CONDITIONS_SNQL_METHOD = [
     pytest.param(
-        EventsSubscription(data_dict={}),
+        EventsSubscription(),
         [],
         True,
+        None,
         id="Events subscription with offset of type SNQL",
     ),
     pytest.param(
-        EventsSubscription(data_dict={}),
+        EventsSubscription(),
         [],
         False,
+        None,
         id="Events subscription with no offset of type SNQL",
     ),
     pytest.param(
-        TransactionsSubscription(data_dict={}),
+        TransactionsSubscription(),
         [],
         True,
+        None,
         id="Transactions subscription with offset of type SNQL",
     ),
     pytest.param(
-        TransactionsSubscription(data_dict={}),
+        TransactionsSubscription(),
         [],
         False,
+        None,
         id="Transactions subscription with no offset of type SNQL",
     ),
     pytest.param(
-        SessionsSubscription(data_dict={"organization": 1}),
+        SessionsSubscription(),
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -100,10 +104,11 @@ TESTS_CONDITIONS_SNQL_METHOD = [
             ),
         ],
         True,
+        1,
         id="Sessions subscription of type SNQL",
     ),
     pytest.param(
-        MetricsCountersSubscription(data_dict={"organization": 1}),
+        MetricsCountersSubscription(),
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -112,10 +117,11 @@ TESTS_CONDITIONS_SNQL_METHOD = [
             ),
         ],
         True,
+        1,
         id="Metrics counters subscription of type SNQL",
     ),
     pytest.param(
-        MetricsSetsSubscription(data_dict={"organization": 1}),
+        MetricsSetsSubscription(),
         [
             binary_condition(
                 ConditionFunctions.EQ,
@@ -124,35 +130,38 @@ TESTS_CONDITIONS_SNQL_METHOD = [
             ),
         ],
         True,
+        1,
         id="Metrics sets subscription of type SNQL",
     ),
 ]
 
 
-@pytest.mark.parametrize("entity_subscription, creation_dict, exception", TESTS)
+@pytest.mark.parametrize("entity_subscription, organization, exception", TESTS)
 def test_basic(
     entity_subscription: Type[EntitySubscription],
-    creation_dict: Mapping[str, Any],
+    organization: Optional[int],
     exception: Optional[Type[Exception]],
 ) -> None:
+    es = entity_subscription()
     if exception is not None:
         with pytest.raises(exception):
-            entity_subscription(**creation_dict)
-    else:
-        es = entity_subscription(**creation_dict)
-        assert es.to_dict() == creation_dict["data_dict"]
+            es.get_entity_subscription_conditions_for_snql(None, organization)
 
 
 @pytest.mark.parametrize(
-    "entity_subscription, expected_conditions, has_offset", TESTS_CONDITIONS_SNQL_METHOD
+    "entity_subscription, expected_conditions, has_offset, organization",
+    TESTS_CONDITIONS_SNQL_METHOD,
 )
 def test_entity_subscription_methods_for_snql(
     entity_subscription: EntitySubscription,
     expected_conditions: List[Any],
     has_offset: bool,
+    organization: Optional[int],
 ) -> None:
     offset = 5 if has_offset else None
     assert (
-        entity_subscription.get_entity_subscription_conditions_for_snql(offset)
+        entity_subscription.get_entity_subscription_conditions_for_snql(
+            offset, organization
+        )
         == expected_conditions
     )

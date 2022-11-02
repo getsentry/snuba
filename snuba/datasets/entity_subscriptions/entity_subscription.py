@@ -19,12 +19,12 @@ class InvalidSubscriptionError(Exception):
 
 
 class EntitySubscription(ABC):
-    def __init__(self, data_dict: Mapping[str, Any]) -> None:
+    def __init__(self) -> None:
         ...
 
     @abstractmethod
     def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
+        self, offset: Optional[int] = None, organization: Optional[int] = None
     ) -> Sequence[Expression]:
         """
         Returns a list of extra conditions that are entity specific and required for the
@@ -65,33 +65,26 @@ class EntitySubscriptionValidation:
 class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
     MAX_ALLOWED_AGGREGATIONS: int = 2
 
-    def __init__(self, data_dict: Mapping[str, Any]) -> None:
-        super().__init__(data_dict)
-        try:
-            self.organization: int = data_dict["organization"]
-        except KeyError:
-            raise InvalidQueryException(
-                "organization param is required for any query over sessions entity"
-            )
-
     def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
+        self, offset: Optional[int] = None, organization: Optional[int] = None
     ) -> Sequence[Expression]:
+        if not organization:
+            raise InvalidQueryException("organization param is required")
         return [
             binary_condition(
                 ConditionFunctions.EQ,
                 Column(None, None, "org_id"),
-                Literal(None, self.organization),
+                Literal(None, organization),
             ),
         ]
 
     def to_dict(self) -> Mapping[str, Any]:
-        return {"organization": self.organization}
+        return self.__dict__
 
 
 class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
+        self, offset: Optional[int] = None, organization: Optional[int] = None
     ) -> Sequence[Expression]:
         return []
 
@@ -101,7 +94,7 @@ class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
 
 class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
-        self, offset: Optional[int] = None
+        self, offset: Optional[int] = None, organization: Optional[int] = None
     ) -> Sequence[Expression]:
         return []
 

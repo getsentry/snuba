@@ -125,7 +125,7 @@ def test_executor_consumer() -> None:
         query="MATCH (events) SELECT count()",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity_subscription=EventsSubscription(),
     )
 
     task = ScheduledSubscriptionTask(
@@ -180,11 +180,11 @@ def generate_message(
     if subscription_identifier is None:
         subscription_identifier = SubscriptionIdentifier(PartitionId(1), uuid.uuid1())
 
-    data_dict = {}
+    organization = None
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
-        data_dict = {"organization": 1}
+        organization = 1
 
-    entity_subscription = get_entity_subscription(entity_key)(data_dict=data_dict)
+    entity_subscription = get_entity_subscription(entity_key)()
 
     while True:
         payload = codec.encode(
@@ -199,6 +199,7 @@ def generate_message(
                             time_window_sec=60,
                             resolution_sec=60,
                             query=f"MATCH ({entity_key.value}) SELECT count()",
+                            organization=organization,
                             entity_subscription=entity_subscription,
                         ),
                     ),
@@ -316,7 +317,7 @@ def test_produce_result() -> None:
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
         resolution_sec=60,
-        entity_subscription=EventsSubscription(data_dict={}),
+        entity_subscription=EventsSubscription(),
     )
 
     subscription = Subscription(

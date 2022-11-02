@@ -1,4 +1,4 @@
-from typing import List, Tuple, cast
+from typing import List, Optional, Tuple, cast
 from uuid import UUID
 
 import pytest
@@ -34,7 +34,7 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
 def subscription_data_builder(
-    entity_subscription: EntitySubscription,
+    entity_subscription: EntitySubscription, organization: Optional[int] = None
 ) -> SubscriptionData:
     return SubscriptionData(
         project_id=1,
@@ -42,6 +42,7 @@ def subscription_data_builder(
         time_window_sec=60,
         entity_subscription=entity_subscription,
         query="MATCH (generic_metrics_sets) SELECT count() AS count WHERE project_id = 1",
+        organization=organization,
     )
 
 
@@ -51,18 +52,18 @@ def pluggable_sets_entity_subscription() -> EntitySubscription:
     PluggableEntitySubscription.MAX_ALLOWED_AGGREGATIONS = 3
     PluggableEntitySubscription.disallowed_aggregations = ["having", "orderby"]
     assert issubclass(PluggableEntitySubscription, EntitySubscription)
-    return PluggableEntitySubscription(data_dict=data)
+    return PluggableEntitySubscription()
 
 
 def test_entity_subscription_generic_metrics_sets_regular_vs_pluggable(
     pluggable_sets_entity_subscription: PluggableEntitySubscription,
 ) -> None:
-    sets_entity_subscription = GenericMetricsSetsSubscription(data_dict=data)
+    sets_entity_subscription = GenericMetricsSetsSubscription()
 
-    sets_subscription = subscription_data_builder(sets_entity_subscription)
+    sets_subscription = subscription_data_builder(sets_entity_subscription, 1)
     assert isinstance(pluggable_sets_entity_subscription, EntitySubscription)
     pluggable_subscription = subscription_data_builder(
-        pluggable_sets_entity_subscription
+        pluggable_sets_entity_subscription, 1
     )
 
     sets_identifier = SubscriptionCreator(dataset, entity_key).create(

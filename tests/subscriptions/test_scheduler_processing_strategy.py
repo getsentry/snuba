@@ -555,7 +555,7 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=EventsSubscription(),
         ),
     )
 
@@ -567,7 +567,7 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=2 * 60,
             resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=EventsSubscription(),
         ),
     )
 
@@ -668,7 +668,7 @@ def test_produce_stale_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=EventsSubscription(),
         ),
     )
 
