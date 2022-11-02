@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
@@ -39,10 +39,6 @@ class EntitySubscription(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def to_dict(self) -> Mapping[str, Any]:
-        raise NotImplementedError
-
 
 class EntitySubscriptionValidation:
     MAX_ALLOWED_AGGREGATIONS: int = 1
@@ -78,9 +74,6 @@ class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
             ),
         ]
 
-    def to_dict(self) -> Mapping[str, Any]:
-        return self.__dict__
-
 
 class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
@@ -88,18 +81,12 @@ class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
     ) -> Sequence[Expression]:
         return []
 
-    def to_dict(self) -> Mapping[str, Any]:
-        return {}
-
 
 class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
         self, offset: Optional[int] = None, organization: Optional[int] = None
     ) -> Sequence[Expression]:
         return []
-
-    def to_dict(self) -> Mapping[str, Any]:
-        return {}
 
 
 class MetricsCountersSubscription(SessionsSubscription):

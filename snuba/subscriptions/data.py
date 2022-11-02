@@ -181,7 +181,7 @@ class SubscriptionData:
             time_window_sec=int(data["time_window"]),
             resolution_sec=int(data["resolution"]),
             query=data["query"],
-            organization=data["organization"] if "organization" in data else None,
+            organization=data.get("organization", None),
             entity_subscription=entity_subscription,
         )
 
@@ -192,7 +192,6 @@ class SubscriptionData:
             "resolution": self.resolution_sec,
             "query": self.query,
             "organization": self.organization,
-            **self.entity_subscription.to_dict(),
         }
 
 

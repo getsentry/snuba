@@ -146,6 +146,10 @@ def test_basic(
     if exception is not None:
         with pytest.raises(exception):
             es.get_entity_subscription_conditions_for_snql(None, organization)
+    else:
+        assert isinstance(
+            es.get_entity_subscription_conditions_for_snql(None, organization), list
+        )
 
 
 @pytest.mark.parametrize(
