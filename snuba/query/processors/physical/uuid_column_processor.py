@@ -38,7 +38,3 @@ class UUIDColumnProcessor(BaseTypeConverter):
             )
 
         return exp
-
-    @classmethod
-    def from_kwargs(cls, **kwargs: str) -> "ClickhouseQueryProcessor":
-        return cls(**kwargs)
