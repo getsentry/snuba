@@ -18,10 +18,7 @@ from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_queryl
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
-from snuba.admin.migrations_policies import (
-    MigrationActionConverter,
-    check_migration_perms,
-)
+from snuba.admin.migrations_policies import check_migration_perms
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -116,13 +113,26 @@ def migrations_groups_list(group: str) -> Response:
     return make_response(jsonify({"error": "Invalid group"}), 400)
 
 
-application.url_map.converters["migration_action"] = MigrationActionConverter
+@application.route(
+    "/migrations/<group>/run/<migration_id>",
+    methods=["POST"],
+)
+def run_migration(group: str, migration_id: str) -> Response:
+    return run_or_reverse_migration(
+        group=group, action="run", migration_id=migration_id
+    )
 
 
 @application.route(
-    "/migrations/<group>/<migration_action:action>/<migration_id>",
+    "/migrations/<group>/reverse/<migration_id>",
     methods=["POST"],
 )
+def reverse_migration(group: str, migration_id: str) -> Response:
+    return run_or_reverse_migration(
+        group=group, action="reverse", migration_id=migration_id
+    )
+
+
 @check_migration_perms
 def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
     runner = Runner()

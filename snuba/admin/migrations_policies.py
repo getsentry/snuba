@@ -4,15 +4,10 @@ from functools import wraps
 from typing import Any, Callable, Dict
 
 from flask import Response, jsonify, make_response, request
-from werkzeug.routing import BaseConverter
 
 from snuba import settings
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey
-
-
-class MigrationActionConverter(BaseConverter):
-    regex = r"(?:run|reverse)"
 
 
 def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]:
