@@ -13,11 +13,6 @@ from snuba.query.processors.physical import ClickhouseQueryProcessor
 
 initialize_storage_factory()
 
-_FILE_MAP = {
-    StorageKey.TRANSACTIONS: "snuba/datasets/configuration/transactions/storages/transactions.yaml",
-    StorageKey.GENERIC_METRICS_DISTRIBUTIONS: "snuba/datasets/configuration/generic_metrics/storages/distributions.yaml",
-}
-
 
 def convert_query_processors(
     qps: Sequence[ClickhouseQueryProcessor],
@@ -31,53 +26,6 @@ def convert_query_processors(
         res.append(processor_dict)
 
     return res
-
-
-def get_yaml_query_processors(filepath):
-    with open(filepath) as f:
-        l = yaml.safe_load(f.read())
-        return l["query_processors"]
-
-
-def check_equality(converted, file_qps):
-    proc_difference = set([qp["processor"] for qp in converted]) - set(
-        [qp["processor"] for qp in file_qps]
-    )
-    assert not proc_difference, proc_difference
-    for i, proc in enumerate(file_qps):
-        converted_qp = converted[i]
-        file_qp = file_qps[i]
-        if converted_qp["processor"] != file_qp["processor"]:
-            raise Exception("bad ordering")
-        if converted_qp.get("args", None) != file_qp.get("args", None):
-            print("Arg mismatch")
-            print(
-                (
-                    converted_qp["processor"],
-                    converted_qp.get("args", None),
-                    file_qp.get("args", None),
-                )
-            )
-
-
-def check_against_real_storage(converted, original):
-    # arrange original by name
-    orig_by_name = {og_qp.config_key(): og_qp for og_qp in original}
-
-    # create list of converted into actual processor
-    converted_by_name = {
-        qp["processor"]: ClickhouseQueryProcessor.get_from_name(
-            qp["processor"]
-        ).from_kwargs(**qp.get("args", {}))
-        for qp in converted
-    }
-
-    assert set(orig_by_name.keys()) == set(converted_by_name.keys())
-
-    for name in orig_by_name.keys():
-        orig = orig_by_name[name]
-        converted_thing = converted_by_name[name]
-        assert orig.init_kwargs == converted_thing.init_kwargs
 
 
 def convert_to_yaml(key: StorageKey, result_path):
