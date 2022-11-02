@@ -13,7 +13,7 @@ from snuba.datasets.entity_subscriptions.pluggable_entity_subscription import (
     PluggableEntitySubscription,
 )
 
-data = {"organization": 1}
+organization = 1
 
 
 def test_build_entity_subscription_from_config() -> None:
@@ -25,17 +25,16 @@ def test_build_entity_subscription_from_config() -> None:
     py_sets_entity_subscription = GenericMetricsSetsSubscription
     assert config_sets_entity_subscription.name == "generic_metrics_sets_subscription"
 
-    config_sets = config_sets_entity_subscription(data_dict=data)
-    py_sets = py_sets_entity_subscription(data_dict=data)
+    config_sets = config_sets_entity_subscription()
+    py_sets = py_sets_entity_subscription()
 
     assert config_sets.name == "generic_metrics_sets_subscription"
 
     assert config_sets.MAX_ALLOWED_AGGREGATIONS == py_sets.MAX_ALLOWED_AGGREGATIONS
     assert config_sets.disallowed_aggregations == py_sets.disallowed_aggregations
-    assert (
-        config_sets.get_entity_subscription_conditions_for_snql()
-        == py_sets.get_entity_subscription_conditions_for_snql()
-    )
+    assert config_sets.get_entity_subscription_conditions_for_snql(
+        None, organization
+    ) == py_sets.get_entity_subscription_conditions_for_snql(None, organization)
 
 
 def test_bad_configuration_broken_attribute() -> None:
