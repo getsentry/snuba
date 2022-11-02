@@ -14,6 +14,9 @@ from snuba.query.processors.physical import ClickhouseQueryProcessor
 
 
 def _check_query_processors(converted, original) -> None:
+    import pdb
+
+    pdb.set_trace()
     orig_by_name = {og_qp.config_key(): og_qp for og_qp in original}
     converted_by_name = {og_qp.config_key(): og_qp for og_qp in converted}
 
@@ -27,15 +30,21 @@ def _check_query_processors(converted, original) -> None:
 
 def _check_columns(converted, original):
     assert len(converted) == len(original)
+    for i, orig_col in enumerate(original):
+        converted_col = converted[i]
+        assert orig_col == converted_col
 
 
 def check_against_real_storage(
     converted_storage: ReadableStorage, original_storage: ReadableStorage
 ):
-    _check_columns(converted_storage.get_schema(), original_storage.get_schema())
+    _check_columns(
+        converted_storage.get_schema().get_columns().columns,
+        original_storage.get_schema().get_columns().columns,
+    )
     _check_query_processors(
         converted_storage.get_query_processors(),
-        converted_storage.get_query_processors(),
+        original_storage.get_query_processors(),
     )
 
 
