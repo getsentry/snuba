@@ -114,7 +114,7 @@ class ClickhouseNodeMigration(Migration, ABC):
     """
 
     forwards_local_first: bool = True
-    backwards_local_first: bool = True
+    backwards_local_first: bool = False
 
     @abstractmethod
     def forwards_local(self) -> Sequence[SqlOperation]:
