@@ -14,9 +14,6 @@ from snuba.query.processors.physical import ClickhouseQueryProcessor
 
 
 def _check_query_processors(converted, original) -> None:
-    import pdb
-
-    pdb.set_trace()
     orig_by_name = {og_qp.config_key(): og_qp for og_qp in original}
     converted_by_name = {og_qp.config_key(): og_qp for og_qp in converted}
 
