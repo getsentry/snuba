@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
     help="The entity to target",
 )
 @click.option(
+    "--slice-id",
+    "slice_id",
+    type=int,
+    help="The slice id for the corresponding storage to the given entity",
+)
+@click.option(
     "--consumer-group",
     default="snuba-subscription-scheduler",
     help="Consumer group used for consuming the commit log topic.",
