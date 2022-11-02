@@ -52,6 +52,7 @@ class KafkaHeaderSelectFilter(StreamMessageFilter[KafkaPayload]):
     """
 
     def __init__(self, header_key: str, header_value: str):
+        # not a dataclass to play nice with init arg recording
         self.header_key = header_key
         self.header_value = header_value
 
