@@ -35,11 +35,11 @@ ADMIN_AUTH_JWT_AUDIENCE = ""
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system",
-    "generic_metrics",
-    "profiles",
-    "functions",
-    "replays",
+    "system": "NonBlockingMigrationsPolicy",
+    "generic_metrics": "NonBlockingMigrationsPolicy",
+    "profiles": "NonBlockingMigrationsPolicy",
+    "functions": "NonBlockingMigrationsPolicy",
+    "replays": "NonBlockingMigrationsPolicy",
 }
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)

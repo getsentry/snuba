@@ -8,7 +8,6 @@ import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
-from werkzeug.routing import BaseConverter
 
 from snuba import settings, state
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
@@ -19,6 +18,7 @@ from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_queryl
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
+from snuba.admin.migrations_policies import check_migration_perms
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -92,11 +92,8 @@ def migrations_groups() -> Response:
 
 
 @application.route("/migrations/<group>/list")
+@check_migration_perms
 def migrations_groups_list(group: str) -> Response:
-
-    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-        return make_response(jsonify({"error": "Group not allowed"}), 400)
-
     runner = Runner()
     for runner_group, runner_group_migrations in runner.show_all():
         if runner_group == MigrationGroup(group):
@@ -116,21 +113,28 @@ def migrations_groups_list(group: str) -> Response:
     return make_response(jsonify({"error": "Invalid group"}), 400)
 
 
-class MigrationActionConverter(BaseConverter):
-    regex = r"(?:run|reverse)"
-
-
-application.url_map.converters["migration_action"] = MigrationActionConverter
+@application.route(
+    "/migrations/<group>/run/<migration_id>",
+    methods=["POST"],
+)
+def run_migration(group: str, migration_id: str) -> Response:
+    return run_or_reverse_migration(
+        group=group, action="run", migration_id=migration_id
+    )
 
 
 @application.route(
-    "/migrations/<group>/<migration_action:action>/<migration_id>",
+    "/migrations/<group>/reverse/<migration_id>",
     methods=["POST"],
 )
-def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
-    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-        return make_response(jsonify({"error": "Group not allowed"}), 400)
+def reverse_migration(group: str, migration_id: str) -> Response:
+    return run_or_reverse_migration(
+        group=group, action="reverse", migration_id=migration_id
+    )
 
+
+@check_migration_perms
+def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
     runner = Runner()
     try:
         migration_group = MigrationGroup(group)
@@ -173,8 +177,6 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         return make_response(
             jsonify({"error": "clickhouse error: " + err.message}), 400
         )
-
-    return Response("OK", 200)
 
 
 @application.route("/clickhouse_queries")
