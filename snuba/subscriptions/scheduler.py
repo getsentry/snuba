@@ -295,6 +295,9 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         self.__partition_id = partition_id
         self.__metrics = metrics
 
+        # entity = get_entity(self.__entity_key)
+        # self.is_sliced_storage = is_storage_partitioned(entity.get_writable_storage())
+
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
 
