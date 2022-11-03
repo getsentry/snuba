@@ -262,7 +262,13 @@ def optimize_partition_runner(
     raise an exception which would be propagated to the caller.
     """
     remaining_partitions = partitions
-
+    # if theres a merge in progress wait for it to finish
+    while True:
+        busy_merging, _ = is_busy_merging(clickhouse, database, table)
+        if not busy_merging:
+            break
+        else:
+            time.sleep(OPTIMIZE_BASE_SLEEP_TIME)
     while remaining_partitions:
         schedule = scheduler.get_next_schedule(remaining_partitions)
         num_threads = len(schedule.partitions)
@@ -351,16 +357,6 @@ def optimize_partitions(
         # run optimization on the same partition twice.
         if tracker:
             tracker.update_completed_partitions(partition)
-
-        # if theres a merge in progress for this partition, wait for it to finish
-        while True:
-            busy_merging, estimated_sleep_time = is_busy_merging(
-                clickhouse, database, table
-            )
-            if not busy_merging:
-                break
-            else:
-                time.sleep(OPTIMIZE_BASE_SLEEP_TIME)
 
         start = time.time()
         clickhouse.execute(query, retryable=False)
