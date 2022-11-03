@@ -7,7 +7,7 @@ import pytest
 import simplejson as json
 from flask.testing import FlaskClient
 
-from snuba.migrations.groups import get_group_loader
+from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner
 
 
@@ -34,11 +34,13 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
     assert json.loads(response.data) == [
         {
             "group": "system",
-            "migration_ids": get_group_loader("system").get_migrations(),
+            "migration_ids": get_group_loader(MigrationGroup.SYSTEM).get_migrations(),
         },
         {
             "group": "generic_metrics",
-            "migration_ids": get_group_loader("generic_metrics").get_migrations(),
+            "migration_ids": get_group_loader(
+                MigrationGroup.GENERIC_METRICS
+            ).get_migrations(),
         },
     ]
 
@@ -115,7 +117,9 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         with patch.object(Runner, method) as mock_run_migration:
             response = admin_api.post(f"/migrations/system/{action}/0001_migrations")
             assert response.status_code == 200
-            migration_key = MigrationKey(group="system", migration_id="0001_migrations")
+            migration_key = MigrationKey(
+                group=MigrationGroup.SYSTEM, migration_id="0001_migrations"
+            )
             mock_run_migration.assert_called_once_with(
                 migration_key, force=False, fake=False, dry_run=False
             )

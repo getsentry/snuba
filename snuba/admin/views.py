@@ -83,9 +83,11 @@ def health() -> Response:
 def migrations_groups() -> Response:
     res: List[Mapping[str, MigrationGroup | Sequence[str]]] = []
     for migration_group in get_active_migration_groups():
-        if migration_group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
+        if migration_group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
             group_migrations = get_group_loader(migration_group).get_migrations()
-            res.append({"group": migration_group, "migration_ids": group_migrations})
+            res.append(
+                {"group": migration_group.value, "migration_ids": group_migrations}
+            )
     return make_response(jsonify(res), 200)
 
 
@@ -130,7 +132,12 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         return make_response(jsonify({"error": "Group not allowed"}), 400)
 
     runner = Runner()
-    migration_group = MigrationGroup(group)
+    try:
+        migration_group = MigrationGroup(group)
+    except ValueError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "Group not found"}), 400)
+
     migration_key = MigrationKey(migration_group, migration_id)
 
     def str_to_bool(s: str) -> bool:
