@@ -15,6 +15,13 @@ from typing import (
 
 from snuba import settings, state
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity_subscriptions.entity_subscription import SessionsSubscription
+from snuba.datasets.partitioning import (
+    is_storage_partitioned,
+    map_logical_partition_to_slice,
+    map_org_id_to_logical_partition,
+)
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
@@ -294,9 +301,13 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id
         self.__metrics = metrics
+        self.__is_sliced_storage: Optional[bool] = None
 
-        # entity = get_entity(self.__entity_key)
-        # self.is_sliced_storage = is_storage_partitioned(entity.get_writable_storage())
+        entity = get_entity(self.__entity_key)
+        storage = entity.get_writable_storage()
+
+        if storage is not None:
+            self.__is_sliced_storage = is_storage_partitioned(storage.get_storage_key())
 
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
@@ -349,7 +360,25 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             (current_time - self.__last_refresh).total_seconds() * 1000.0,
             tags={"partition": str(self.__partition_id)},
         )
-        return self.__subscriptions
+
+        final_subscriptions = []
+        for subscription in self.__subscriptions:
+
+            # get the EntitySubscription from the Subscription
+            sub_data = subscription.data
+            entity_sub = sub_data.entity_subscription
+
+            if isinstance(entity_sub, SessionsSubscription):
+                partition_key_value = entity_sub.get_partitioning_key()
+
+                # map the partition key's value to the slice ID
+                logical_part = map_org_id_to_logical_partition(partition_key_value)
+                part_slice_id = map_logical_partition_to_slice(logical_part)
+
+                if part_slice_id == self.__slice_id:
+                    final_subscriptions.append(subscription)
+
+        return final_subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()

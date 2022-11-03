@@ -43,6 +43,10 @@ class EntitySubscription(ABC):
     def to_dict(self) -> Mapping[str, Any]:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_partitioning_key(self) -> int:
+        raise NotImplementedError
+
 
 class EntitySubscriptionValidation:
     MAX_ALLOWED_AGGREGATIONS: int = 1
@@ -88,6 +92,9 @@ class SessionsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def to_dict(self) -> Mapping[str, Any]:
         return {"organization": self.organization}
 
+    def get_partitioning_key(self) -> int:
+        return self.organization
+
 
 class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
@@ -98,6 +105,9 @@ class EventsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def to_dict(self) -> Mapping[str, Any]:
         return {}
 
+    def get_partitioning_key(self) -> int:
+        raise NotImplementedError
+
 
 class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription):
     def get_entity_subscription_conditions_for_snql(
@@ -107,6 +117,9 @@ class TransactionsSubscription(EntitySubscriptionValidation, EntitySubscription)
 
     def to_dict(self) -> Mapping[str, Any]:
         return {}
+
+    def get_partitioning_key(self) -> int:
+        raise NotImplementedError
 
 
 class MetricsCountersSubscription(SessionsSubscription):
