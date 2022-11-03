@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict
 from flask import Response, jsonify, make_response, request
 
 from snuba import settings
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey
 
@@ -30,7 +31,7 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
         if "action" in kwargs:
             action = kwargs["action"]
             migration_id = kwargs["migration_id"]
-            migration_key = MigrationKey(group, migration_id)
+            migration_key = MigrationKey(MigrationGroup(group), migration_id)
             policy = ADMIN_ALLOWED_MIGRATION_GROUPS[group]
 
             def str_to_bool(s: str) -> bool:

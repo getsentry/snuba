@@ -129,8 +129,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         response = admin_api.post(
             f"/migrations/invalid_but_allowed_group/{action}/0001_migrations"
         )
-        assert response.status_code == 400
-        assert json.loads(response.data) == {"error": "Group not found"}
+        assert response.status_code == 500
 
         with patch.object(Runner, method) as mock_run_migration:
             response = admin_api.post(f"/migrations/system/{action}/0001_migrations")
@@ -211,7 +210,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                 )
                 assert response.status_code == 200
                 migration_key = MigrationKey(
-                    group="events", migration_id="0015_truncate_events"
+                    group=MigrationGroup.EVENTS, migration_id="0015_truncate_events"
                 )
                 mock_run_migration.assert_called_once_with(
                     migration_key, force=False, fake=False, dry_run=False
@@ -225,7 +224,8 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                         return_value=(Status.IN_PROGRESS, None),
                     ):
                         migration_key = MigrationKey(
-                            group="events", migration_id="0016_drop_legacy_events"
+                            group=MigrationGroup.EVENTS,
+                            migration_id="0016_drop_legacy_events",
                         )
                         response = admin_api.post(
                             f"/migrations/events/{action}/0016_drop_legacy_events"
