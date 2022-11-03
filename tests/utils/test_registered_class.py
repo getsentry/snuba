@@ -115,3 +115,12 @@ def test_override_from_name() -> None:
     assert get_from_name("extra_name") is ExtraName
     with pytest.raises(InvalidConfigKeyError):
         assert get_from_name("base") is None
+
+
+def test_import():
+    from snuba.query.processors.physical.uuid_column_processor import (
+        UUIDColumnProcessor,
+    )
+
+    proc = UUIDColumnProcessor(["a", "b"])
+    assert proc.init_kwargs == {"columns": ["a", "b"]}

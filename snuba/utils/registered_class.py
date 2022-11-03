@@ -20,21 +20,23 @@ class RegisteredClassNameCollisionError(Exception):
 
 def _record_init_args(cls):
     from copy import deepcopy
-    from dataclasses import is_dataclass
     from inspect import signature
 
     orig_init = getattr(cls, "__init__")
     orig_signature = signature(orig_init)
 
     def __init__(self, *args, **kwargs):
-        self.init_kwargs = deepcopy(kwargs)
-        if args:
-            init_param_names = [p for p in orig_signature.parameters]
-            i = 0
-            while i < len(args):
-                self.init_kwargs[init_param_names[i + 1]] = args[i]
-                i += 1
-            return orig_init(self, *args, **kwargs)
+        # no need to capture the init_kwargs again if a subclass
+        # has already captured them
+        if not hasattr(self, "init_kwargs"):
+            self.init_kwargs = deepcopy(kwargs)
+            if args:
+                init_param_names = [p for p in orig_signature.parameters]
+                i = 0
+                while i < len(args):
+                    self.init_kwargs[init_param_names[i + 1]] = args[i]
+                    i += 1
+        return orig_init(self, *args, **kwargs)
 
     __init__.__signature__ = orig_signature
     setattr(cls, "__init__", __init__)
