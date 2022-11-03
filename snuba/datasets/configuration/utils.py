@@ -86,8 +86,14 @@ def serialize_columns(columns: Sequence[Column[Any]]) -> list[dict[str, Any]]:
         elif isinstance(col.type, Nested):
             args["subcolumns"] = serialize_columns(col.type.nested_columns)
         elif isinstance(col.type, Array):
-            args["type"] = type(col.type.inner_type).__name__
-            args["arg"] = col.type.inner_type.__dict__["size"]
+            try:
+                args["type"] = type(col.type.inner_type).__name__
+                args["arg"] = col.type.inner_type.__dict__["size"]
+            except KeyError as e:
+                import pdb
+
+                pdb.set_trace()
+                print(col)
         elif isinstance(col.type, AggregateFunction):
             args["func"] = col.type.func
             args["arg_types"] = [
