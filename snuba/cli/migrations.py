@@ -67,7 +67,10 @@ def migrate(
     runner = Runner()
 
     try:
-        migration_group = MigrationGroup(group)
+        if group is not None:
+            migration_group = MigrationGroup(group)
+        else:
+            migration_group = None
         runner.run_all(force=force, group=migration_group)
     except MigrationError as e:
         raise click.ClickException(str(e))
