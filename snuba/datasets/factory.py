@@ -110,10 +110,10 @@ class InvalidDatasetError(SerializableException):
 _DS_FACTORY: _DatasetFactory | None = None
 
 
-def _ds_factory(reset: bool = False) -> _DatasetFactory:
+def _ds_factory() -> _DatasetFactory:
     # This function can be acessed by many threads at once. It is okay if more than one thread recreates the same object.
     global _DS_FACTORY
-    if _DS_FACTORY is None or reset:
+    if _DS_FACTORY is None:
         _DS_FACTORY = _DatasetFactory()
     return _DS_FACTORY
 
@@ -137,4 +137,5 @@ def get_config_built_datasets() -> dict[str, Dataset]:
 
 
 def reset_dataset_factory() -> None:
-    _ds_factory(reset=True)
+    global _DS_FACTORY
+    _DS_FACTORY = _DatasetFactory()
