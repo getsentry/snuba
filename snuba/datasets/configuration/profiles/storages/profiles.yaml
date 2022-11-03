@@ -81,11 +81,10 @@ schema:
 query_processors:
 - processor: UUIDColumnProcessor
   args:
-    optimize_ordering: false
     columns: !!set
+      profile_id: null
       trace_id: null
       transaction_id: null
-      profile_id: null
 - processor: TableRateLimit
 query_splitters: []
 mandatory_condition_checkers:
