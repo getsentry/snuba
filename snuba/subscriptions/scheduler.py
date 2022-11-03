@@ -15,10 +15,8 @@ from typing import (
 
 from snuba import settings, state
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.entity_subscription import SessionsSubscription
 from snuba.datasets.partitioning import (
-    is_storage_partitioned,
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
 )
@@ -301,13 +299,6 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id
         self.__metrics = metrics
-        self.__is_sliced_storage: Optional[bool] = None
-
-        entity = get_entity(self.__entity_key)
-        storage = entity.get_writable_storage()
-
-        if storage is not None:
-            self.__is_sliced_storage = is_storage_partitioned(storage.get_storage_key())
 
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
@@ -361,7 +352,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             tags={"partition": str(self.__partition_id)},
         )
 
-        final_subscriptions = []
+        filtered_subscriptions = []
         for subscription in self.__subscriptions:
 
             # get the EntitySubscription from the Subscription
@@ -376,9 +367,9 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
                 part_slice_id = map_logical_partition_to_slice(logical_part)
 
                 if part_slice_id == self.__slice_id:
-                    final_subscriptions.append(subscription)
+                    filtered_subscriptions.append(subscription)
 
-        return final_subscriptions
+        return filtered_subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()
