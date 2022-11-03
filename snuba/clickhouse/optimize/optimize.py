@@ -16,7 +16,6 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
     OPTIMIZE_BASE_SLEEP_TIME,
-    OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS,
     OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
     OPTIMIZE_MERGE_SIZE_CUTOFF,
 )
@@ -89,6 +88,11 @@ def run_optimize_cron_job(
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
     optimize_scheduler = OptimizeScheduler(parallel=parallel)
+
+    # if theres a merge in progress wait for it to finish
+    while is_busy_merging(clickhouse, database, table):
+        logger.info(f"busy merging, sleeping for {OPTIMIZE_BASE_SLEEP_TIME}s")
+        time.sleep(OPTIMIZE_BASE_SLEEP_TIME)
 
     try:
         partitions_to_optimize = tracker.get_partitions_to_optimize()
@@ -262,13 +266,6 @@ def optimize_partition_runner(
     raise an exception which would be propagated to the caller.
     """
     remaining_partitions = partitions
-    # if theres a merge in progress wait for it to finish
-    while True:
-        busy_merging, _ = is_busy_merging(clickhouse, database, table)
-        if not busy_merging:
-            break
-        else:
-            time.sleep(OPTIMIZE_BASE_SLEEP_TIME)
     while remaining_partitions:
         schedule = scheduler.get_next_schedule(remaining_partitions)
         num_threads = len(schedule.partitions)
@@ -367,32 +364,21 @@ def optimize_partitions(
         )
 
 
-def is_busy_merging(
-    clickhouse: ClickhousePool, database: str, table: str
-) -> Tuple[bool, float]:
+def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bool:
     """
-    Returns true and the estimated sleep time if clickhouse is busy with merges
-    in progress for the table. Clickhouse is considered busy if
-        1. there are more than OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS merges in progress
-           with an elapsed time greater than OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME
-        2. or there is any merge of size greater than OPTIMIZE_MERGE_SIZE_CUTOFF
+    Returns true if clickhouse is busy with merges in progress
+    for the table. Clickhouse is considered busy if there is any
+    merge of size greater than OPTIMIZE_MERGE_SIZE_CUTOFF
     """
     merge_info = get_current_large_merges(clickhouse, database, table)
 
-    if len(merge_info) > OPTIMIZE_MERGE_MAX_LONG_CONCURRENT_JOBS:
-        estimated_sleep_time = max(
-            merge_info, key=lambda x: x.estimated_time
-        ).estimated_time
-        logger.info(
-            f"too many concurrent long merges {len(merge_info)}, sleeping for {estimated_sleep_time}s"
-        )
-        return True, estimated_sleep_time
+    for merge in merge_info:
+        if merge.size > OPTIMIZE_MERGE_SIZE_CUTOFF:
+            logger.info(
+                "large ongoing merge detected  "
+                f"result part: {merge.result_part_name}, size: {merge.size}"
+                f"progress: {merge.progress}, elapsed: {merge.elapsed}"
+            )
+            return True
 
-    if any(merge.size > OPTIMIZE_MERGE_SIZE_CUTOFF for merge in merge_info):
-        estimated_sleep_time = max(
-            merge_info, key=lambda x: x.estimated_time
-        ).estimated_time
-        logger.info(f"large ongoing merge, sleeping for {estimated_sleep_time}s")
-        return True, estimated_sleep_time
-
-    return False, 0
+    return False

@@ -1,7 +1,7 @@
 import time
-from unittest.mock import patch
 import uuid
 from datetime import datetime, timedelta
+from unittest.mock import call, patch
 
 import pytest
 
@@ -219,11 +219,19 @@ def test_run_optimize_with_ongoing_merges() -> None:
                 60_000_000_000,
             ),
         ]
+        small_merges = [
+            MergeInfo(
+                "90-20220613_0_1216096_1417",
+                10,
+                0.5,
+                60_000,
+            ),
+        ]
         mock_merge_ids.side_effect = [
             current_merges,
             current_merges,
-            [],
-        ]  # first & second call returns ongoing merges, rest return no ongoing merges
+            small_merges,
+        ]  # first & second call returns large ongoing merges, third call returns small ongoing merges
 
         with patch.object(time, "sleep") as sleep_mock:
             num_optimized = run_optimize_cron_job(
@@ -238,7 +246,11 @@ def test_run_optimize_with_ongoing_merges() -> None:
             assert mock_merge_ids.call_count == 3
 
             sleep_mock.assert_called_with(settings.OPTIMIZE_BASE_SLEEP_TIME)
-            sleep_mock.call_count = 4  # twice for first and second patitition
+            assert sleep_mock.call_count == 2  # twice for first and second
+            assert sleep_mock.call_args_list == [
+                call(settings.OPTIMIZE_BASE_SLEEP_TIME),
+                call(settings.OPTIMIZE_BASE_SLEEP_TIME),
+            ]
 
 
 def test_merge_info() -> None:
@@ -281,7 +293,7 @@ def test_merge_info() -> None:
         assert merge_info[0].estimated_time == 8020.61436897 / (
             0.9895385071013121 + 0.0001
         )
-        busy, sleep_time = optimize.is_busy_merging(
+        busy = optimize.is_busy_merging(
             clickhouse=ClickhousePool(
                 "localhost", 9000, "user", "password", "database"
             ),
@@ -289,4 +301,3 @@ def test_merge_info() -> None:
             table="errors_local",
         )
         assert busy
-        assert sleep_time == merge_info[0].estimated_time
