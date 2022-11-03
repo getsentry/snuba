@@ -212,6 +212,7 @@ class SchedulerBuilder:
     def __init__(
         self,
         entity_name: str,
+        slice_id: Optional[int],
         consumer_group: str,
         followed_consumer_group: str,
         producer: Producer[KafkaPayload],
@@ -247,6 +248,7 @@ class SchedulerBuilder:
 
         self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
+        self.__slice_id = slice_id
         self.__consumer_group = consumer_group
         self.__followed_consumer_group = followed_consumer_group
         self.__producer = producer
@@ -268,6 +270,7 @@ class SchedulerBuilder:
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
         return SubscriptionSchedulerProcessingFactory(
             self.__entity_key,
+            self.__slice_id,
             self.__mode,
             self.__schedule_ttl,
             self.__stale_threshold_seconds,
@@ -322,6 +325,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     def __init__(
         self,
         entity_key: EntityKey,
+        slice_id: Optional[int],
         mode: SchedulingWatermarkMode,
         schedule_ttl: int,
         stale_threshold_seconds: Optional[int],
@@ -330,6 +334,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
     ) -> None:
+        self.__slice_id = slice_id
         self.__mode = mode
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__partitions = partitions
@@ -344,6 +349,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__schedulers = {
             index: SubscriptionScheduler(
                 entity_key,
+                self.__slice_id,
                 RedisSubscriptionDataStore(
                     redis_client, entity_key, PartitionId(index)
                 ),

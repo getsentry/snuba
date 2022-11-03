@@ -282,12 +282,14 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
     def __init__(
         self,
         entity_key: EntityKey,
+        slice_id: Optional[int],
         store: SubscriptionDataStore,
         partition_id: PartitionId,
         cache_ttl: timedelta,
         metrics: MetricsBackend,
     ) -> None:
         self.__entity_key = entity_key
+        self.__slice_id = slice_id
         self.__store = store
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id

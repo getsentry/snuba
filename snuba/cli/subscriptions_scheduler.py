@@ -28,12 +28,6 @@ logger = logging.getLogger(__name__)
     help="The entity to target",
 )
 @click.option(
-    "--slice-id",
-    "slice_id",
-    type=int,
-    help="The slice id for the corresponding storage to the given entity",
-)
-@click.option(
     "--consumer-group",
     default="snuba-subscription-scheduler",
     help="Consumer group used for consuming the commit log topic.",
@@ -55,6 +49,12 @@ logger = logging.getLogger(__name__)
     help="Forces the kafka consumer auto offset reset.",
 )
 @click.option("--schedule-ttl", type=int, default=60 * 5)
+@click.option(
+    "--slice-id",
+    "slice_id",
+    type=int,
+    help="The slice id for the corresponding storage to the given entity",
+)
 @click.option("--log-level", help="Logging level to use.")
 @click.option("--delay-seconds", type=int)
 @click.option(
@@ -70,6 +70,7 @@ def subscriptions_scheduler(
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     schedule_ttl: int,
+    slice_id: Optional[int],
     log_level: Optional[str],
     delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
@@ -147,6 +148,7 @@ def subscriptions_scheduler(
 
     builder = SchedulerBuilder(
         entity_name,
+        slice_id,
         consumer_group,
         followed_consumer_group,
         producer,
