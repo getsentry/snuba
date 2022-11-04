@@ -174,11 +174,12 @@ def get_partitions_to_optimize(
     )
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
-    part_format = schema.get_part_format()
-    assert part_format is not None
+    partition_format = schema.get_partition_format()
+    assert partition_format is not None
 
     parts = [
-        util.decode_part_str(part, part_format) for part, count in active_parts.results
+        util.decode_part_str(part, partition_format)
+        for part, count in active_parts.results
     ]
 
     if before:

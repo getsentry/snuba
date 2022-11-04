@@ -1,4 +1,3 @@
-import importlib
 from typing import Union
 
 import pytest
@@ -7,12 +6,9 @@ from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression, Query
-from snuba.clusters import cluster
-from snuba.datasets import factory
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages import factory as storage_factory
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -226,10 +222,6 @@ def test_metrics_processing(
 ) -> None:
     settings.ENABLE_DEV_FEATURES = True
     settings.DISABLED_DATASETS = set()
-
-    importlib.reload(factory)
-    importlib.reload(storage_factory)
-    importlib.reload(cluster)
 
     query_body = {
         "query": (

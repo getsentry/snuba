@@ -33,7 +33,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             self.__initialize()
 
     def __initialize(self) -> None:
-
         self._config_built_storages = {
             storage.get_storage_key(): storage
             for storage in [
@@ -48,8 +47,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         from snuba.datasets.storages.discover import storage as discover_storage
         from snuba.datasets.storages.errors import storage as errors_storage
         from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
-        from snuba.datasets.storages.errors_v2 import storage as errors_v2_storage
-        from snuba.datasets.storages.errors_v2_ro import storage as errors_v2_ro_storage
         from snuba.datasets.storages.functions import (
             agg_storage as functions_ro_storage,
         )
@@ -102,9 +99,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
         )
         from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
         from snuba.datasets.storages.transactions import storage as transactions_storage
-        from snuba.datasets.storages.transactions_v2 import (
-            storage as transactions_v2_storage,
-        )
 
         self._cdc_storages = {
             **{
@@ -124,8 +118,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     querylog_storage,
                     sessions_raw_storage,
                     transactions_storage,
-                    transactions_v2_storage,
-                    errors_v2_storage,
                     profiles_writable_storage,
                     functions_storage,
                     gen_metrics_sets_bucket_storage,
@@ -151,7 +143,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
                     org_sessions_hourly_storage,
                     profiles_writable_storage,
                     functions_ro_storage,
-                    errors_v2_ro_storage,
                     metrics_counters_storage,
                     metrics_distributions_storage,
                     metrics_org_counters_storage,
@@ -170,7 +161,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
 
     def get(self, storage_key: StorageKey) -> Storage:
         if (
-            get_config(USE_CONFIG_BUILT_STORAGES, 0)
+            get_config(USE_CONFIG_BUILT_STORAGES, 1)
             and storage_key in self._config_built_storages
         ):
             return self._config_built_storages[storage_key]

@@ -17,6 +17,7 @@ import { TracingRequest, TracingResult } from "./tracing/types";
 import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
 import { KafkaTopicData } from "./kafka/types";
+import { QuerylogRequest, QuerylogResult } from "./querylog/types";
 
 interface Client {
   getConfigs: () => Promise<Config[]>;
@@ -40,6 +41,8 @@ interface Client {
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
   getKafkaData: () => Promise<KafkaTopicData[]>;
+  getQuerylogSchema: () => Promise<QuerylogResult>;
+  executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
 }
 
 function Client() {
@@ -189,6 +192,33 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
+    },
+
+    getQuerylogSchema: () => {
+      const url = baseUrl + "clickhouse_querylog_schema";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    executeQuerylogQuery: (query: QuerylogRequest) => {
+      const url = baseUrl + "clickhouse_querylog_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
     },
   };
 }

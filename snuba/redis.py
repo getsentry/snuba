@@ -121,7 +121,9 @@ def _initialize_specialized_redis_cluster(
 
 class RedisClientKey(Enum):
     CACHE = "cache"
+    CACHE_V2 = "cache_v2"
     RATE_LIMITER = "rate_limiter"
+    RATE_LIMITER_V2 = "rate_limiter_v2"
     SUBSCRIPTION_STORE = "subscription_store"
     REPLACEMENTS_STORE = "replacements_store"
     CONFIG = "config"
@@ -133,8 +135,14 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     RedisClientKey.CACHE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["cache"]
     ),
+    RedisClientKey.CACHE_V2: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["cache_v2"]
+    ),
     RedisClientKey.RATE_LIMITER: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["rate_limiter"]
+    ),
+    RedisClientKey.RATE_LIMITER_V2: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["rate_limiter_v2"]
     ),
     RedisClientKey.SUBSCRIPTION_STORE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["subscription_store"]

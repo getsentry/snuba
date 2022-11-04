@@ -22,7 +22,6 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_sentry
-from snuba.processor import MessageProcessor
 from snuba.settings import SLICED_STORAGES
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
@@ -267,16 +266,11 @@ class ConsumerBuilder:
     def __build_streaming_strategy_factory(
         self,
         slice_id: Optional[int] = None,
-        processor_wrapper: Optional[
-            Callable[[MessageProcessor], MessageProcessor]
-        ] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
 
         processor = stream_loader.get_processor()
-        if processor_wrapper is not None:
-            processor = processor_wrapper(processor)
 
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload

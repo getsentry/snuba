@@ -5,7 +5,7 @@ import pickle
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import MutableSequence, Optional
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, call
 
 import pytest
 from arroyo import Message, Partition, Topic
@@ -16,7 +16,6 @@ from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
 from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
-from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
@@ -29,13 +28,11 @@ from snuba.consumers.consumer import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
-from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
-from tests.fixtures import get_raw_event, get_raw_transaction
 
 
 def test_streaming_consumer_strategy() -> None:
@@ -215,106 +212,6 @@ def test_multistorage_strategy(
             strategy.join()
 
 
-@pytest.mark.skip(
-    reason="Writes to errors_v2 and transactions_v2 are no longer ignoring writes"
-)
-@patch("snuba.consumers.consumer.InsertBatchWriter.close")
-@pytest.mark.parametrize(
-    "processes, input_block_size, output_block_size",
-    [
-        pytest.param(1, int(32 * 1e6), int(64 * 1e6), id="multiprocessing"),
-        pytest.param(None, None, None, id="no multiprocessing"),
-    ],
-)
-def test_multistorage_strategy_dead_letter_step(
-    mock_close: MagicMock,
-    processes: Optional[int],
-    input_block_size: Optional[int],
-    output_block_size: Optional[int],
-) -> None:
-    from snuba.datasets.storages.storage_key import StorageKey
-
-    clock = TestingClock()
-    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
-
-    topic = Topic("test-dlq")
-
-    broker.create_topic(topic, partitions=1)
-
-    producer = broker.get_producer()
-
-    # we want to raise a dummy clickhousewritererror so that we cause
-    # the multistorage collector to use the dead letter step
-    mock_close.side_effect = ClickhouseWriterError("oops", code=500, row=None)
-
-    commit = Mock()
-    partitions = Mock()
-    storage_keys = [StorageKey.ERRORS_V2, StorageKey.TRANSACTIONS_V2]
-
-    storages = [get_writable_storage(key) for key in storage_keys]
-
-    strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages,
-        10,
-        10,
-        False,
-        processes,
-        input_block_size,
-        output_block_size,
-        TestingMetricsBackend(),
-        producer,
-        topic,
-    ).create_with_partitions(commit, partitions)
-
-    payloads = [
-        KafkaPayload(
-            None,
-            json.dumps(
-                (
-                    2,
-                    "insert",
-                    get_raw_event(),
-                )
-            ).encode("utf8"),
-            [("transaction_forwarder", "0".encode("utf8"))],
-        ),
-        KafkaPayload(
-            None,
-            json.dumps(
-                (
-                    2,
-                    "insert",
-                    get_raw_transaction(),
-                )
-            ).encode("utf8"),
-            [("transaction_forwarder", "1".encode("utf8"))],
-        ),
-    ]
-
-    now = datetime.now()
-
-    messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now)
-        for offset, payload in enumerate(payloads)
-    ]
-
-    for message in messages:
-        strategy.submit(message)
-
-    strategy.close()
-    strategy.join()
-
-    # assert that we submit to the dead letter step for both messages
-    error_message = broker.consume(Partition(topic, 0), 0)
-    transaction_message = broker.consume(Partition(topic, 0), 1)
-    assert error_message and transaction_message
-
-    assert error_message.payload.key == StorageKey.ERRORS_V2.value.encode("utf-8")
-    assert transaction_message.payload.key == StorageKey.TRANSACTIONS_V2.value.encode(
-        "utf-8"
-    )
-
-
 def test_dead_letter_step() -> None:
     from snuba.datasets.storages.storage_key import StorageKey
 
@@ -330,7 +227,7 @@ def test_dead_letter_step() -> None:
     dead_letter_step = DeadLetterStep(
         producer=producer, topic=topic, metrics=TestingMetricsBackend()
     )
-    storage_key = StorageKey.ERRORS_V2
+    storage_key = StorageKey.ERRORS
 
     # We only produce to dead letter topic if the payload is an insert
     # so payload of `None` shouldn't produce any futures

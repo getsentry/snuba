@@ -35,11 +35,11 @@ ADMIN_AUTH_JWT_AUDIENCE = ""
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system",
-    "generic_metrics",
-    "profiles",
-    "functions",
-    "replays",
+    "system": "NonBlockingMigrationsPolicy",
+    "generic_metrics": "NonBlockingMigrationsPolicy",
+    "profiles": "NonBlockingMigrationsPolicy",
+    "functions": "NonBlockingMigrationsPolicy",
+    "replays": "NonBlockingMigrationsPolicy",
 }
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -69,9 +69,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "querylog",
             "sessions",
             "transactions",
-            "transactions_v2",
-            "errors_v2",
-            "errors_v2_ro",
             "profiles",
             "functions",
             "replays",
@@ -128,7 +125,9 @@ T = TypeVar("T")
 
 class RedisClusters(TypedDict):
     cache: RedisClusterConfig | None
+    cache_v2: RedisClusterConfig | None
     rate_limiter: RedisClusterConfig | None
+    rate_limiter_v2: RedisClusterConfig | None
     subscription_store: RedisClusterConfig | None
     replacements_store: RedisClusterConfig | None
     config: RedisClusterConfig | None
@@ -138,7 +137,9 @@ class RedisClusters(TypedDict):
 
 REDIS_CLUSTERS: RedisClusters = {
     "cache": None,
+    "cache_v2": None,
     "rate_limiter": None,
+    "rate_limiter_v2": None,
     "subscription_store": None,
     "replacements_store": None,
     "config": None,
@@ -295,7 +296,6 @@ ROOT_REPO_PATH = f"{Path(__file__).parent.parent.parent.as_posix()}"
 
 # File path glob for configs
 STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
-MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 

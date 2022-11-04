@@ -33,7 +33,9 @@ def main() -> None:
     `OoO'  o   O `OoO'o `OoO' `OoO'o"""
 
 
-with sentry_sdk.start_transaction(op="snuba_init", name="Snuba CLI Initialization"):
+with sentry_sdk.start_transaction(
+    op="snuba_init", name="Snuba CLI Initialization", sampled=True
+):
     for loader, module_name, is_pkg in walk_packages(__path__, __name__ + "."):
         logger.info(f"Loading module {module_name}")
         with sentry_sdk.start_span(op="import", description=module_name):

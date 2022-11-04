@@ -402,8 +402,7 @@ class DeadLetterStep(
 
     This is only possible for the MultiStorageConsumerFactory right now, and it is an
     optional step for the MultistorageCollector. Additionally, this is only enabled if
-    the storages have `ignore_errors` set to True - which is the case for the errors_v2
-    and transaction_v2 storages.
+    the storages have `ignore_errors` set to True.
 
     """
 
@@ -732,7 +731,7 @@ def process_message_multistorage_identical_storages(
     It performs an optimization where it avoids processing a message multiple times if the
     it finds that the storages on which data needs to be written are identical. This is a
     performance optimization since we remove the message processing time completely for all
-    identical storages like errors and errors_v2.
+    identical storages.
 
     It is possible that the storage keys in the message could be a mix of identical and
     non-identical storages. This method takes into account that scenario as well.

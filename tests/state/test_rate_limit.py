@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from snuba import state
-from snuba.redis import RedisClientKey, get_redis_client
+from snuba.redis import RedisClientKey, RetryingStrictRedisCluster, get_redis_client
 from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
@@ -14,11 +14,21 @@ from snuba.state.rate_limit import (
     RateLimitStats,
     RateLimitStatsContainer,
     rate_limit,
+    redis_clients,
 )
 
 
+@pytest.fixture(params=[1, 20])
+def rate_limit_shards(request):
+    """
+    Use this fixture to run the test automatically against both 1
+    and 20 shards.
+    """
+    state.set_config("rate_limit_shard_factor", request.param)
+
+
 class TestRateLimit:
-    def test_concurrent_limit(self) -> None:
+    def test_concurrent_limit(self, rate_limit_shards) -> None:
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         with rate_limit(rate_limit_params) as stats:
@@ -56,7 +66,7 @@ class TestRateLimit:
             with RateLimitAggregator([rate_limit_params2]):
                 pass
 
-    def test_per_second_limit(self) -> None:
+    def test_per_second_limit(self, rate_limit_shards) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
         # Create 30 queries at time 0, should all be allowed
@@ -88,7 +98,7 @@ class TestRateLimit:
             with rate_limit(rate_limit_params) as stats:
                 assert stats is not None
 
-    def test_aggregator(self) -> None:
+    def test_aggregator(self, rate_limit_shards) -> None:
         # do not raise with multiple valid rate limits
         rate_limit_params_outer = RateLimitParameters("foo", "bar", None, 5)
         rate_limit_params_inner = RateLimitParameters("foo", "bar", None, 5)
@@ -172,7 +182,7 @@ tests = [
     "vals",
     tests,
 )
-def test_rate_limit_failures(vals: Tuple[int, int, int]) -> None:
+def test_rate_limit_failures(vals: Tuple[int, int, int], rate_limit_shards) -> None:
     params = []
     for i, v in enumerate(vals):
         params.append(RateLimitParameters(f"foo{i}", f"bar{i}", None, v))
@@ -188,3 +198,64 @@ def test_rate_limit_failures(vals: Tuple[int, int, int]) -> None:
             bucket, now - state.rate_lookback_s, now + state.rate_lookback_s
         )
         assert count == 0
+
+
+@pytest.mark.skipif(
+    isinstance(redis_clients[0], RetryingStrictRedisCluster),
+    reason="test requires support for db parameter, and redis cluster does not support DBs",
+)
+def test_rate_limit_v2_cluster(snuba_set_config):
+    params = RateLimitParameters("foo", "foo", None, 4)
+
+    # Start 4 concurrent "queries"... concurrent limit maxed out
+    with RateLimitAggregator([params] * 4):
+        # Exceed concurrent rate limit
+        with pytest.raises(RateLimitExceeded):
+            with RateLimitAggregator([params] * 4):
+                pass
+
+        # switch over to new cluster
+        snuba_set_config("rate_limit_use_v2_cluster", 1.0)
+
+        # since we switched over to a new cluster, the limit is
+        # practically reset
+        with RateLimitAggregator([params] * 4):
+            pass
+
+        snuba_set_config("rate_limit_use_v2_cluster", 0.0)
+
+        # assert that rollback succeeds and we exceed the limit
+        # again (since we're talking to the old cluster again)
+        with pytest.raises(RateLimitExceeded):
+            with RateLimitAggregator([params] * 4):
+                pass
+
+
+@pytest.mark.skipif(
+    isinstance(redis_clients[0], RetryingStrictRedisCluster),
+    reason="test requires support for db parameter, and redis cluster does not support DBs",
+)
+def test_rate_limit_v2_cluster_inconsistency(snuba_set_config):
+    params = RateLimitParameters("foo", "foo", None, 4)
+
+    # max out rate limit
+    with RateLimitAggregator([params] * 4):
+        snuba_set_config("rate_limit_use_v2_cluster", 1.0)
+
+    # asserted that rate limiter does not crash if cluster is switched
+    # halfway through (since the routing decision is only made once)
+
+    # check that rollback does not crash either
+    with RateLimitAggregator([params] * 4):
+        snuba_set_config("rate_limit_use_v2_cluster", 0.0)
+
+    with pytest.raises(RateLimitExceeded):
+        with RateLimitAggregator([params] * 5):
+            snuba_set_config("rate_limit_use_v2_cluster", 1.0)
+
+    snuba_set_config("rate_limit_use_v2_cluster", 0.0)
+
+    # assert that rate limits don't get "stuck" when clusters are switched
+    # while a query is rejected, and we can still run queries after
+    with RateLimitAggregator([params] * 4):
+        pass

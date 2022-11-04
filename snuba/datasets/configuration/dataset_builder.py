@@ -15,6 +15,6 @@ def build_dataset_from_config(config_file_path: str) -> PluggableDataset:
     with sentry_sdk.start_span(op="build", description=f"Dataset: {config['name']}"):
         return PluggableDataset(
             name=config["name"],
-            all_entities=[EntityKey(key) for key in config["entities"]["all"]],
+            all_entities=[EntityKey(key) for key in config["entities"]],
             is_experimental=bool(config["is_experimental"]),
         )

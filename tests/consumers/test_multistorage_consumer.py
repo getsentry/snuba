@@ -11,7 +11,7 @@ from snuba.consumers.consumer import (
     process_message_multistorage_identical_storages,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from tests.fixtures import get_raw_event, get_raw_transaction
+from tests.fixtures import get_raw_event
 
 test_data = [
     pytest.param(
@@ -19,41 +19,7 @@ test_data = [
             Partition(Topic("errors"), 1),
             1,
             MultistorageKafkaPayload(
-                [StorageKey.ERRORS, StorageKey.ERRORS_V2],
-                KafkaPayload(
-                    None,
-                    json.dumps((2, "insert", get_raw_event())).encode("utf-8"),
-                    [],
-                ),
-            ),
-            datetime.now(),
-        ),
-        True,
-        id="both errors storage",
-    ),
-    pytest.param(
-        Message(
-            Partition(Topic("errors"), 1),
-            1,
-            MultistorageKafkaPayload(
-                [StorageKey.TRANSACTIONS, StorageKey.TRANSACTIONS_V2],
-                KafkaPayload(
-                    None,
-                    json.dumps((2, "insert", get_raw_transaction())).encode("utf-8"),
-                    [],
-                ),
-            ),
-            datetime.now(),
-        ),
-        True,
-        id="both transactions storage",
-    ),
-    pytest.param(
-        Message(
-            Partition(Topic("errors"), 1),
-            1,
-            MultistorageKafkaPayload(
-                [StorageKey.ERRORS_V2, StorageKey.TRANSACTIONS_V2],
+                [StorageKey.ERRORS, StorageKey.TRANSACTIONS],
                 KafkaPayload(
                     None,
                     json.dumps((2, "insert", get_raw_event())).encode("utf-8"),

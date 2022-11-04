@@ -32,7 +32,7 @@ Migrations follow a strict sequence to ensure that changes are applied in order,
 
 Migrations in Snuba are organized into groups, which typically correspond with features or sets of related tables in Snuba. Each migration is applied in order by group, and the groups are themselves ordered. All of the migrations of the first group are applied first, then all of the migrations of the second group, and so on. Hence migrations in subsequent groups can depend on changes in earlier groups being already applied but not vice versa. The `system` group is the one that creates the ClickHouse table used by the migrations system itself, and must always remain as the first group.
 
-In this codebase, each group has a folder in the `snuba.snuba_migrations` module, and all of the migrations for that group are stored within that folder. Each group also has a corresponding Loader class or a migration group configuration file.
+In this codebase, each group is represented by a folder in the `snuba.snuba_migrations` module, and all of the migrations for that group are stored within that folder.
 
 Migration groups can be defined as either optional or mandatory. Most groups in Snuba are mandatory, however optional groups can provide a mechanism to test experimental features in Snuba that should not be rolled out to most users yet. Optional groups can be toggled by the user via `settings.SKIPPED_MIGRATION_GROUPS`. In most cases, the default in settings.py should not be changed, and doing so may result in unexpected behavior.
 
@@ -98,7 +98,7 @@ The `snuba migrations` CLI tool should be used to manage migrations.
 
 In order to add a new migration, first determine which migration group the new migration should be added to, and add an entry to that group in `migrations/groups.py` with the new migration identifier you have chosen. By convention we prefix migration IDs with a number matching the position of the migration in the group, i.e. the 4th migration in that group will be prefixed with `0004_`. Add a file which will contain the new migration at `/migrations/snuba_migrations/<group>/<migration_id>.py`.
 
-If you need to create a new group, add a loader for the group defining the path to the directory where that group's migrations will be located. Register these to `migrations.groups.REGISTERED_GROUPS` - note the position of the group in this list determines the order the migrations will be executed in. To create a new group in configuration, add a `migration_group.yaml` file in the configuration for the corresponding dataset.
+If you need to create a new group, add the group to `migrations.groups.MigrationGroup` and a loader for the group defining the path to the directory where that group's migrations will be located. Register these to `migrations.groups._REGISTERED_GROUPS` - note the position of the group in this list determines the order the migrations will be executed in.
 
 The new migration should contain a class called `Migration` which inherits from one of two types:
 `ClickhouseNodeMigration` or `CodeMigration`

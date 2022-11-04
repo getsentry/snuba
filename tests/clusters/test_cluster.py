@@ -74,7 +74,7 @@ FULL_CONFIG = [
         "cluster_name": "clickhouse_hosts",
         "distributed_cluster_name": "dist_hosts",
         "cache_partition_id": "host_2_cache",
-        "query_settings_prefix": "transactions_v2",
+        "query_settings_prefix": "transactions",
     },
 ]
 
@@ -136,7 +136,7 @@ def test_cache_partition() -> None:
 def test_query_settings_prefix() -> None:
     get_storage(
         StorageKey("transactions")
-    ).get_cluster().get_reader().get_query_settings_prefix() == "transactions_v2"
+    ).get_cluster().get_reader().get_query_settings_prefix() == "transactions"
 
     get_storage(
         StorageKey("errors")

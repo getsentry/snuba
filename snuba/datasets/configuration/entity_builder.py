@@ -54,16 +54,24 @@ def _build_entity_translation_mappers(
         if "columns" in config_translation_mappers
         else []
     )
-    function_mappers: list[FunctionCallMapper] = [
-        FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
-        for fm_config in config_translation_mappers["functions"]
-    ]
-    subscriptable_mappers: list[SubscriptableReferenceMapper] = [
-        SubscriptableReferenceMapper.get_from_name(sub_config["mapper"])(
-            **sub_config["args"]
-        )
-        for sub_config in config_translation_mappers["subscriptables"]
-    ]
+    function_mappers: list[FunctionCallMapper] = (
+        [
+            FunctionCallMapper.get_from_name(fm_config["mapper"])(**fm_config["args"])
+            for fm_config in config_translation_mappers["functions"]
+        ]
+        if "functions" in config_translation_mappers
+        else []
+    )
+    subscriptable_mappers: list[SubscriptableReferenceMapper] = (
+        [
+            SubscriptableReferenceMapper.get_from_name(sub_config["mapper"])(
+                **sub_config["args"]
+            )
+            for sub_config in config_translation_mappers["subscriptables"]
+        ]
+        if "subscriptables" in config_translation_mappers
+        else []
+    )
     curried_function_mappers: list[CurriedFunctionCallMapper] = (
         [
             CurriedFunctionCallMapper.get_from_name(curr_config["mapper"])(
@@ -100,5 +108,5 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
             )
             if "writable_storage" in config
             else None,
-            partition_key_column_name=config["partition_key_column_name"],
+            partition_key_column_name=config.get("partition_key_column_name", None),
         )

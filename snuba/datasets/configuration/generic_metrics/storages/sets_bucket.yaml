@@ -43,7 +43,8 @@ schema:
   dist_table_name: generic_metric_sets_raw_dist
 
 stream_loader:
-  processor: GenericSetsMetricsProcessor
+  processor:
+    name: GenericSetsMetricsProcessor
   default_topic: snuba-generic-metrics
   pre_filter:
     type: KafkaHeaderSelectFilter

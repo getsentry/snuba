@@ -56,6 +56,11 @@ from snuba.web import QueryException, QueryResult, constants
 MAX_HASH_PLUS_ONE = 16**32  # Max value of md5 hash
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
+redis_cache_clients = [
+    get_redis_client(RedisClientKey.CACHE),
+    get_redis_client(RedisClientKey.CACHE_V2),
+]
+
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
     def encode(self, value: Result) -> bytes:
@@ -80,7 +85,7 @@ DEFAULT_CACHE_PARTITION_ID = "default"
 # reader when running a query.
 cache_partitions: MutableMapping[str, Cache[Result]] = {
     DEFAULT_CACHE_PARTITION_ID: RedisCache(
-        get_redis_client(RedisClientKey.CACHE),
+        redis_cache_clients,
         "snuba-query-cache:",
         ResultCacheCodec(),
         ThreadPoolExecutor(),
@@ -426,7 +431,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
             # of acquiring the lock is not needed.
             if partition_id not in cache_partitions:
                 cache_partitions[partition_id] = RedisCache(
-                    get_redis_client(RedisClientKey.CACHE),
+                    redis_cache_clients,
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
                     ThreadPoolExecutor(),
