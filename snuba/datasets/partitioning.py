@@ -22,7 +22,7 @@ def map_logical_partition_to_slice(storage: StorageKey, logical_partition: int) 
     """
     from snuba.settings import LOGICAL_PARTITION_MAPPING
 
-    assert is_storage_partitioned(
+    assert is_storage_sliced(
         storage
     ), f"cannot retrieve slice of non-partitioned storage {storage}"
     assert (
@@ -32,7 +32,7 @@ def map_logical_partition_to_slice(storage: StorageKey, logical_partition: int) 
     return LOGICAL_PARTITION_MAPPING[storage.value][logical_partition]
 
 
-def is_storage_partitioned(storage: StorageKey) -> bool:
+def is_storage_sliced(storage: StorageKey) -> bool:
     """
     Returns whether the storage set is partitioned.
     """

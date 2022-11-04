@@ -6,7 +6,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.partitioning import is_storage_partitioned
+from snuba.datasets.partitioning import is_storage_sliced
 from snuba.datasets.plans.partitioned_storage import (
     ColumnBasedStoragePartitionSelector,
     PartitionedStorageQueryPlanBuilder,
@@ -69,7 +69,7 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        if is_storage_partitioned(self.readable_storage.get_storage_key()):
+        if is_storage_sliced(self.readable_storage.get_storage_key()):
             assert (
                 self.partition_key_column_name is not None
             ), "partition key column name must be defined for a sliced storage"
