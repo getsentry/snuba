@@ -37,10 +37,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
     InvalidKafkaMessage,
     InvalidMessages,
 )
-from arroyo.processing.strategies.factory import (
-    ConsumerStrategyFactory,
-    StreamMessageFilter,
-)
+from arroyo.processing.strategies.factory import ConsumerStrategyFactory
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
@@ -851,11 +848,6 @@ def build_collector(
     )
 
 
-class MultiStorageStreamFilter(StreamMessageFilter[MultistorageKafkaPayload]):
-    def should_drop(self, message: Message[MultistorageKafkaPayload]) -> bool:
-        return not has_destination_storages(message)
-
-
 class MultistorageConsumerProcessingStrategyFactory(
     ProcessingStrategyFactory[KafkaPayload]
 ):
@@ -897,7 +889,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             self.__process_message_fn = process_message_multistorage_identical_storages
 
         self.__inner_factory = ConsumerStrategyFactory(
-            prefilter=MultiStorageStreamFilter(),
+            prefilter=None,
             process_message=self.__process_message_fn,
             collector=partial(
                 build_collector,
