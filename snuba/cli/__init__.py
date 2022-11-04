@@ -53,11 +53,15 @@ with sentry_sdk.start_transaction(
             actual_command_name = name.replace("-", "_")
             with sentry_sdk.start_span(op="import", description=name):
                 ns: dict[str, click.Command] = {}
+                # NOTE: WE initialize snuba before we compile the command code
+                # That way if any command code references any snuba construct that needs
+                # to be initialized (e.g. a factory) at import time, it is already initialized
+                # into the runtime
+                initialize.initialize()
                 fn = os.path.join(plugin_folder, actual_command_name + ".py")
                 with open(fn) as f:
                     code = compile(f.read(), fn, "exec")
                     eval(code, ns, ns)
-                initialize.initialize()
                 init_time = time.perf_counter() - start
                 metrics.gauge("snuba_init", init_time)
                 logger.info(f"Snuba initialization took {init_time}s")
