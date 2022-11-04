@@ -34,9 +34,6 @@ from arroyo.processing.strategies.dead_letter_queue import (
     InvalidKafkaMessage,
     InvalidMessages,
 )
-from arroyo.processing.strategies.dead_letter_queue.dead_letter_queue import (
-    DeadLetterQueue,
-)
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
@@ -785,6 +782,7 @@ class MultistorageConsumerProcessingStrategyFactory(
             output_block_size=output_block_size,
             initialize_parallel_transform=initialize_parallel_transform,
             parallel_collect=parallel_collect,
+            dead_letter_queue_policy_creator=self.__dead_letter_policy_creator,
         )
 
     def create_with_partitions(
@@ -792,16 +790,10 @@ class MultistorageConsumerProcessingStrategyFactory(
         commit: Callable[[Mapping[Partition, Position]], None],
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
-        strategy: ProcessingStrategy[KafkaPayload]
-        strategy = TransformStep(
+        return TransformStep(
             partial(find_destination_storages, self.__storages),
             FilterStep(
                 has_destination_storages,
                 self.__inner_factory.create_with_partitions(commit, partitions),
             ),
         )
-
-        if self.__dead_letter_policy_creator:
-            strategy = DeadLetterQueue(strategy, self.__dead_letter_policy_creator())
-
-        return strategy
