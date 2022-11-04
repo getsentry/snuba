@@ -212,7 +212,6 @@ class SchedulerBuilder:
     def __init__(
         self,
         entity_name: str,
-        slice_id: Optional[int],
         consumer_group: str,
         followed_consumer_group: str,
         producer: Producer[KafkaPayload],
@@ -222,6 +221,7 @@ class SchedulerBuilder:
         delay_seconds: Optional[int],
         stale_threshold_seconds: Optional[int],
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
@@ -248,7 +248,6 @@ class SchedulerBuilder:
 
         self.__partitions = stream_loader.get_default_topic_spec().partitions_number
 
-        self.__slice_id = slice_id
         self.__consumer_group = consumer_group
         self.__followed_consumer_group = followed_consumer_group
         self.__producer = producer
@@ -258,6 +257,7 @@ class SchedulerBuilder:
         self.__delay_seconds = delay_seconds
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__metrics = metrics
+        self.__slice_id = slice_id
 
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
@@ -270,7 +270,6 @@ class SchedulerBuilder:
     def __build_strategy_factory(self) -> ProcessingStrategyFactory[Tick]:
         return SubscriptionSchedulerProcessingFactory(
             self.__entity_key,
-            self.__slice_id,
             self.__mode,
             self.__schedule_ttl,
             self.__stale_threshold_seconds,
@@ -278,6 +277,7 @@ class SchedulerBuilder:
             self.__producer,
             self.__scheduled_topic_spec,
             self.__metrics,
+            self.__slice_id,
         )
 
     def __build_tick_consumer(self) -> CommitLogTickConsumer:
@@ -325,7 +325,6 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
     def __init__(
         self,
         entity_key: EntityKey,
-        slice_id: Optional[int],
         mode: SchedulingWatermarkMode,
         schedule_ttl: int,
         stale_threshold_seconds: Optional[int],
@@ -333,14 +332,15 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
-        self.__slice_id = slice_id
         self.__mode = mode
         self.__stale_threshold_seconds = stale_threshold_seconds
         self.__partitions = partitions
         self.__producer = producer
         self.__scheduled_topic_spec = scheduled_topic_spec
         self.__metrics = metrics
+        self.__slice_id = slice_id
 
         self.__buffer_size = settings.SUBSCRIPTIONS_ENTITY_BUFFER_SIZE.get(
             entity_key.value, settings.SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE
@@ -349,13 +349,13 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__schedulers = {
             index: SubscriptionScheduler(
                 entity_key,
-                self.__slice_id,
                 RedisSubscriptionDataStore(
                     redis_client, entity_key, PartitionId(index)
                 ),
                 partition_id=PartitionId(index),
                 cache_ttl=timedelta(seconds=schedule_ttl),
                 metrics=self.__metrics,
+                slice_id=self.__slice_id,
             )
             for index in range(self.__partitions)
         }

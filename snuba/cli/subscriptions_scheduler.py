@@ -148,7 +148,6 @@ def subscriptions_scheduler(
 
     builder = SchedulerBuilder(
         entity_name,
-        slice_id,
         consumer_group,
         followed_consumer_group,
         producer,
@@ -158,6 +157,7 @@ def subscriptions_scheduler(
         delay_seconds,
         stale_threshold_seconds,
         metrics,
+        slice_id,
     )
 
     processor = builder.build_consumer()

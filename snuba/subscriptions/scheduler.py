@@ -15,6 +15,7 @@ from typing import (
 
 from snuba import settings, state
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.entity_subscription import SessionsSubscription
 from snuba.datasets.partitioning import (
     map_logical_partition_to_slice,
@@ -287,11 +288,11 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
     def __init__(
         self,
         entity_key: EntityKey,
-        slice_id: Optional[int],
         store: SubscriptionDataStore,
         partition_id: PartitionId,
         cache_ttl: timedelta,
         metrics: MetricsBackend,
+        slice_id: Optional[int] = None,
     ) -> None:
         self.__entity_key = entity_key
         self.__slice_id = slice_id
@@ -352,24 +353,32 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             tags={"partition": str(self.__partition_id)},
         )
 
-        filtered_subscriptions = []
-        for subscription in self.__subscriptions:
+        if self.__slice_id is not None:
+            filtered_subscriptions: List[Subscription] = []
+            for subscription in self.__subscriptions:
+                # get the EntitySubscription from the Subscription
+                sub_data = subscription.data
+                entity_sub = sub_data.entity_subscription
 
-            # get the EntitySubscription from the Subscription
-            sub_data = subscription.data
-            entity_sub = sub_data.entity_subscription
+                # partition key is only defined for SessionsSubscriptions
+                if isinstance(entity_sub, SessionsSubscription):
+                    partition_key_value = entity_sub.get_partitioning_key()
 
-            if isinstance(entity_sub, SessionsSubscription):
-                partition_key_value = entity_sub.get_partitioning_key()
+                    # map the partition key's value to the slice ID
+                    logical_part = map_org_id_to_logical_partition(partition_key_value)
+                    entity = get_entity(self.__entity_key)
+                    storage = entity.get_writable_storage()
+                    if storage is not None:
+                        part_slice_id = map_logical_partition_to_slice(
+                            storage.get_storage_key(), logical_part
+                        )
+                        if part_slice_id == self.__slice_id:
+                            filtered_subscriptions.append(subscription)
 
-                # map the partition key's value to the slice ID
-                logical_part = map_org_id_to_logical_partition(partition_key_value)
-                part_slice_id = map_logical_partition_to_slice(logical_part)
+            return filtered_subscriptions
 
-                if part_slice_id == self.__slice_id:
-                    filtered_subscriptions.append(subscription)
-
-        return filtered_subscriptions
+        else:
+            return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()
