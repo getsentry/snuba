@@ -21,7 +21,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 @click.option(
     "--storage",
     "storage_name",
-    type=click.Choice(["errors", "errors_v2"]),
+    type=click.Choice(["errors"]),
     help="The storage to consume/run replacements for (currently only events supported)",
     required=True,
 )
