@@ -70,8 +70,8 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
         self, query: LogicalQuery, query_settings: QuerySettings
     ) -> ClickhouseCluster:
         """
-        Selects the cluster to use for a query if the storage set is partitioned.
-        If the storage set is not partitioned, it returns the default cluster.
+        Selects the cluster to use for a query if the storage set is sliced.
+        If the storage set is not sliced, it returns the default cluster.
         """
         if not is_storage_sliced(self.storage):
             return get_cluster(self.storage_set)
