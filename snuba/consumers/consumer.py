@@ -787,16 +787,13 @@ def build_multistorage_batch_writer(
     replacement_batch_writer: Optional[ReplacementBatchWriter]
     stream_loader = storage.get_table_writer().get_stream_loader()
     replacement_topic_spec = stream_loader.get_replacement_topic_spec()
-    default_topic_spec = stream_loader.get_default_topic_spec()
     if replacement_topic_spec is not None:
         # XXX: The producer is flushed when closed on strategy teardown
         # after an assignment is revoked, but never explicitly closed.
-        # XXX: This assumes that the Kafka cluster used for the input topic
-        # to the storage is the same as the replacement topic.
         replacement_batch_writer = ReplacementBatchWriter(
             ConfluentKafkaProducer(
                 build_kafka_producer_configuration(
-                    default_topic_spec.topic,
+                    replacement_topic_spec.topic,
                     override_params={
                         "partitioner": "consistent",
                         "message.max.bytes": 50000000,  # 50MB, default is 1MB
