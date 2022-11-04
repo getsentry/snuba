@@ -762,8 +762,6 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__storages = storages
         self.__metrics = metrics
         self.__dead_letter_policy_creator = dead_letter_policy_creator
-        # self.__producer = producer
-        # self.__topic = topic
 
         self.__process_message_fn = process_message_multistorage
         if any(
