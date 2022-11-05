@@ -50,7 +50,7 @@ def optimize(
     from datetime import datetime
 
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.optimize import logger
+    from snuba.clickhouse.optimize.optimize import logger
 
     setup_logging(log_level)
     setup_sentry()

@@ -35,7 +35,7 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
                 port=9000,
                 database="some-database",
                 table="some-table",
-                expire_time=(datetime.now() + timedelta(minutes=3)),
+                expire_time=(datetime.now() + timedelta(minutes=6)),
             ),
             id="redis",
         ),
