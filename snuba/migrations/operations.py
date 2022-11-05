@@ -60,16 +60,18 @@ class CreateTable(SqlOperation):
         engine: TableEngine,
     ):
         super().__init__(storage_set)
-        self.__table_name = table_name
+        self.table_name = table_name
         self.__columns = columns
         self.__engine = engine
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
         cluster = get_cluster(self._storage_set)
-        engine = self.__engine.get_sql(cluster, self.__table_name)
+        engine = self.__engine.get_sql(cluster, self.table_name)
 
-        return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
+        return (
+            f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
+        )
 
 
 class CreateMaterializedView(SqlOperation):
@@ -188,14 +190,14 @@ class AddColumn(SqlOperation):
         after: Optional[str] = None,
     ):
         super().__init__(storage_set)
-        self.__table_name = table_name
-        self.__column = column
+        self.table_name = table_name
+        self.column = column
         self.__after = after
 
     def format_sql(self) -> str:
-        column = self.__column.for_schema()
+        column = self.column.for_schema()
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
-        return f"ALTER TABLE {self.__table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
+        return f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
 
 
 class DropColumn(SqlOperation):
@@ -211,11 +213,13 @@ class DropColumn(SqlOperation):
 
     def __init__(self, storage_set: StorageSetKey, table_name: str, column_name: str):
         super().__init__(storage_set)
-        self.__table_name = table_name
-        self.__column_name = column_name
+        self.table_name = table_name
+        self.column_name = column_name
 
     def format_sql(self) -> str:
-        return f"ALTER TABLE {self.__table_name} DROP COLUMN IF EXISTS {self.__column_name};"
+        return (
+            f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
+        )
 
 
 class ModifyColumn(SqlOperation):
