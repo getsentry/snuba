@@ -108,7 +108,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
             replay_event.get("replay_start_timestamp"),
         )
         processed["urls"] = self.__extract_urls(replay_event)
-        processed["release"] = replay_event.get("release")
+        processed["release"] = str(replay_event.get("release"))
         processed["environment"] = replay_event.get("environment")
         processed["dist"] = replay_event.get("dist")
         processed["platform"] = _unicodify(replay_event["platform"])
