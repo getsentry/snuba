@@ -1,12 +1,11 @@
 import logging
 import signal
-from contextlib import closing
 from typing import Any, Optional, Sequence
 
 import click
 import rapidjson
 from arroyo import Topic, configure_metrics
-from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
+from arroyo.backends.kafka import KafkaConsumer
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from confluent_kafka import Producer as ConfluentKafkaProducer
@@ -29,7 +28,6 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.topics import Topic as StreamsTopic
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +106,6 @@ logger = logging.getLogger(__name__)
     type=int,
 )
 @click.option("--log-level")
-@click.option(
-    "--dead-letter-topic", help="Dead letter topic to send failed insert messages."
-)
 # TODO: For testing alternate rebalancing strategies. To be eventually removed.
 @click.option(
     "--cooperative-rebalancing",
@@ -135,7 +130,6 @@ def multistorage_consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
-    dead_letter_topic: Optional[str] = None,
     cooperative_rebalancing: bool = False,
 ) -> None:
 
@@ -282,14 +276,18 @@ def multistorage_consumer(
             commit_log_topic=commit_log,
         )
 
-    dead_letter_producer: Optional[KafkaProducer] = None
-    dead_letter_queue: Optional[Topic] = None
-    if dead_letter_topic:
-        dead_letter_queue = Topic(dead_letter_topic)
+    dead_letter_policies = {
+        storage.get_table_writer()
+        .get_stream_loader()
+        .get_dead_letter_queue_policy_creator()
+        for storage in storages.values()
+    }
 
-        dead_letter_producer = KafkaProducer(
-            build_kafka_producer_configuration(StreamsTopic(dead_letter_topic))
-        )
+    # Only one dead letter policy is supported. All storages must share the same
+    # dead letter policy creator
+    dead_letter_policy_creator = dead_letter_policies.pop()
+    if dead_letter_policies:
+        raise ValueError("only one dead letter policy is supported")
 
     configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
@@ -304,8 +302,7 @@ def multistorage_consumer(
             input_block_size=input_block_size,
             output_block_size=output_block_size,
             metrics=metrics,
-            producer=dead_letter_producer,
-            topic=dead_letter_queue,
+            dead_letter_policy_creator=dead_letter_policy_creator,
         ),
         IMMEDIATE,
     )
@@ -315,8 +312,4 @@ def multistorage_consumer(
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
-    if dead_letter_producer:
-        with closing(dead_letter_producer):
-            processor.run()
-    else:
-        processor.run()
+    processor.run()

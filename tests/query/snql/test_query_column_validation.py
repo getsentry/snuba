@@ -436,7 +436,7 @@ def set_configs() -> Generator[None, None, None]:
 
 @pytest.mark.parametrize("query_body, expected_query", time_validation_tests)
 def test_entity_column_validation(
-    query_body: str, expected_query: LogicalQuery, set_configs: Any
+    query_body: str, expected_query: LogicalQuery, set_configs: Any, monkeypatch
 ) -> None:
     events = get_dataset("events")
 
@@ -455,12 +455,7 @@ def test_entity_column_validation(
         )
 
     events_entity = get_entity(EntityKey.EVENTS)
-    old_get_join = events_entity.get_join_relationship
-
-    try:
-        setattr(events_entity, "get_join_relationship", events_mock)
-        query, _ = parse_snql_query(query_body, events)
-        eq, reason = query.equals(expected_query)
-        assert eq, reason
-    finally:
-        setattr(events_entity, "get_join_relationship", old_get_join)
+    monkeypatch.setattr(events_entity, "get_join_relationship", events_mock)
+    query, _ = parse_snql_query(query_body, events)
+    eq, reason = query.equals(expected_query)
+    assert eq, reason

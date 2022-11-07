@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Any, Mapping, Optional, Sequence, Union
 
@@ -9,6 +10,7 @@ from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
+logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
@@ -123,6 +125,26 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "organization": None,
             **self.__extract_query_list(message["query_list"]),
         }
+
+        # Ignore negative project IDs
+        for pid in processed["projects"]:
+            try:
+                p = int(pid)
+            except ValueError:
+                logger.error(
+                    "Invalid project id",
+                    extra=processed,
+                    exc_info=True,
+                )
+                return None
+
+            if p <= 0:
+                logger.error(
+                    "Invalid project id",
+                    extra=processed,
+                    exc_info=True,
+                )
+                return None
 
         # These fields are sometimes missing from the payload. If they are missing, don't
         # add them to processed so Clickhouse sets a default value for them.

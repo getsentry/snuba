@@ -18,8 +18,17 @@ from snuba.state.rate_limit import (
 )
 
 
+@pytest.fixture(params=[1, 20])
+def rate_limit_shards(request):
+    """
+    Use this fixture to run the test automatically against both 1
+    and 20 shards.
+    """
+    state.set_config("rate_limit_shard_factor", request.param)
+
+
 class TestRateLimit:
-    def test_concurrent_limit(self) -> None:
+    def test_concurrent_limit(self, rate_limit_shards) -> None:
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         with rate_limit(rate_limit_params) as stats:
@@ -57,7 +66,7 @@ class TestRateLimit:
             with RateLimitAggregator([rate_limit_params2]):
                 pass
 
-    def test_per_second_limit(self) -> None:
+    def test_per_second_limit(self, rate_limit_shards) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
         # Create 30 queries at time 0, should all be allowed
@@ -89,7 +98,7 @@ class TestRateLimit:
             with rate_limit(rate_limit_params) as stats:
                 assert stats is not None
 
-    def test_aggregator(self) -> None:
+    def test_aggregator(self, rate_limit_shards) -> None:
         # do not raise with multiple valid rate limits
         rate_limit_params_outer = RateLimitParameters("foo", "bar", None, 5)
         rate_limit_params_inner = RateLimitParameters("foo", "bar", None, 5)
@@ -173,7 +182,7 @@ tests = [
     "vals",
     tests,
 )
-def test_rate_limit_failures(vals: Tuple[int, int, int]) -> None:
+def test_rate_limit_failures(vals: Tuple[int, int, int], rate_limit_shards) -> None:
     params = []
     for i, v in enumerate(vals):
         params.append(RateLimitParameters(f"foo{i}", f"bar{i}", None, v))

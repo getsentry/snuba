@@ -1,15 +1,6 @@
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import (
-    Any,
-    Callable,
-    Generator,
-    List,
-    Mapping,
-    MutableMapping,
-    Sequence,
-    Tuple,
-)
+from typing import Any, Callable, List, Mapping, MutableMapping, Sequence, Tuple
 
 import pytest
 
@@ -63,23 +54,20 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
 
 
 @pytest.fixture
-def override_cluster() -> Generator[
-    Callable[[bool], FakeClickhouseCluster], None, None
-]:
-    current_clusters = cluster.CLUSTERS
-    current_mapping = cluster._STORAGE_SET_CLUSTER_MAP
-
+def override_cluster(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[bool], FakeClickhouseCluster]:
     def override(healthy: bool) -> FakeClickhouseCluster:
         test_cluster = _build_cluster(healthy=healthy)
-        cluster.CLUSTERS = [test_cluster]
-        cluster._STORAGE_SET_CLUSTER_MAP = {StorageSetKey.EVENTS: cluster.CLUSTERS[0]}
+        monkeypatch.setattr(cluster, "CLUSTERS", [test_cluster])
+        monkeypatch.setattr(
+            cluster,
+            "_STORAGE_SET_CLUSTER_MAP",
+            {StorageSetKey.EVENTS: cluster.CLUSTERS[0]},
+        )
         return test_cluster
 
-    try:
-        yield override
-    finally:
-        cluster.CLUSTERS = current_clusters
-        cluster._STORAGE_SET_CLUSTER_MAP = current_mapping
+    return override
 
 
 LOCAL_QUERY = """\

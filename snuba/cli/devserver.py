@@ -271,6 +271,34 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                         ],
                     ),
                     (
+                        "subscriptions-scheduler-generic-metrics-distributions",
+                        [
+                            "snuba",
+                            "subscriptions-scheduler",
+                            "--entity=generic_metrics_distributions",
+                            "--consumer-group=snuba-generic-metrics-distributions-subscriptions-schedulers",
+                            "--followed-consumer-group=snuba-generic-metrics-distributions-consumers",
+                            "--auto-offset-reset=latest",
+                            "--log-level=debug",
+                            "--delay-seconds=1",
+                            "--schedule-ttl=10",
+                        ],
+                    ),
+                    (
+                        "subscriptions-scheduler-generic-metrics-sets",
+                        [
+                            "snuba",
+                            "subscriptions-scheduler",
+                            "--entity=generic_metrics_sets",
+                            "--consumer-group=snuba-generic-metrics-sets-subscriptions-schedulers",
+                            "--followed-consumer-group=snuba-generic-metrics-sets-consumers",
+                            "--auto-offset-reset=latest",
+                            "--log-level=debug",
+                            "--delay-seconds=1",
+                            "--schedule-ttl=10",
+                        ],
+                    ),
+                    (
                         "subscriptions-executor-metrics",
                         [
                             "snuba",
