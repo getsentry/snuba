@@ -18,10 +18,10 @@ from snuba.consumers.consumer import (
     build_mock_batch_writer,
     process_message,
 )
+from snuba.datasets.partitioning import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
-from snuba.settings import SLICED_STORAGES
 from snuba.state import get_config
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
@@ -60,19 +60,6 @@ class ProcessingParameters:
 class MockParameters:
     avg_write_latency: int
     std_deviation: int
-
-
-def validate_passed_slice(
-    storage_key: StorageKey, slice_id: Optional[int] = None
-) -> None:
-    """
-    Verifies that the given storage can be sliced
-    and that the slice_id passed in is within the range
-    of the total number of slices for the given storage
-    """
-    if slice_id is not None:
-        assert storage_key.value in SLICED_STORAGES
-        assert slice_id < SLICED_STORAGES[storage_key.value]
 
 
 class ConsumerBuilder:
