@@ -3,14 +3,11 @@ from logging import Logger
 from typing import Callable, Sequence
 from unittest.mock import Mock
 
-import pytest
-
 from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.context import Context
-from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.operations import (
     AddColumn,
     AddIndex,
@@ -28,7 +25,6 @@ from snuba.migrations.operations import (
     TruncateTable,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
-from snuba.migrations.validator import validate_migration_order
 from snuba.utils.schemas import DateTime
 
 
@@ -245,14 +241,3 @@ def test_specify_order() -> None:
     test_migration.backwards_local_first = True
     test_migration.backwards(context, False)
     assert order == [drop_local_op, drop_dist_op]
-
-
-@pytest.mark.ci_only
-def test_validate_migrations() -> None:
-    for group in MigrationGroup:
-        group_loader = get_group_loader(group)
-
-        for migration_id in group_loader.get_migrations():
-            snuba_migration = group_loader.load_migration(migration_id)
-            if isinstance(snuba_migration, migration.ClickhouseNodeMigration):
-                validate_migration_order(snuba_migration)
