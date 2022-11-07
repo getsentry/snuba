@@ -24,13 +24,13 @@ from snuba.util import force_bytes
 @dataclass
 class ReplayEvent:
     replay_id: str
-    segment_id: int | None
+    segment_id: Any
     trace_ids: list[str]
     error_ids: list[str]
     urls: list[str]
     is_archived: int | None
-    timestamp: int
-    replay_start_timestamp: int | None
+    timestamp: Any
+    replay_start_timestamp: Any
     platform: str | None
     environment: str
     release: str
@@ -51,6 +51,39 @@ class ReplayEvent:
     sdk_name: str
     sdk_version: str
     title: str | None
+
+    @classmethod
+    def empty_set(cls) -> ReplayEvent:
+        return cls(
+            replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
+            title=None,
+            error_ids=[],
+            trace_ids=[],
+            segment_id=None,
+            timestamp=int(datetime.now(timezone.utc).timestamp()),
+            replay_start_timestamp=None,
+            platform=None,
+            dist="",
+            urls=[],
+            is_archived=None,
+            os_name=None,
+            os_version=None,
+            browser_name=None,
+            browser_version=None,
+            device_name=None,
+            device_brand=None,
+            device_family=None,
+            device_model=None,
+            user_name=None,
+            user_id=None,
+            user_email=None,
+            ipv4=None,
+            ipv6=None,
+            environment="prod",
+            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+            sdk_name="sentry.python",
+            sdk_version="0.9.0",
+        )
 
     def serialize(self) -> Mapping[Any, Any]:
         replay_event: Any = {
@@ -231,40 +264,83 @@ class TestReplaysProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
-        message = ReplayEvent(
-            replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            title=None,
-            error_ids=[],
-            trace_ids=[],
-            segment_id=None,
-            timestamp=int(datetime.now(timezone.utc).timestamp()),
-            replay_start_timestamp=None,
-            platform=None,
-            dist="",
-            urls=[],
-            is_archived=None,
-            os_name=None,
-            os_version=None,
-            browser_name=None,
-            browser_version=None,
-            device_name=None,
-            device_brand=None,
-            device_family=None,
-            device_model=None,
-            user_name=None,
-            user_id=None,
-            user_email=None,
-            ipv4=None,
-            ipv6=None,
-            environment="prod",
-            release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-            sdk_name="sentry.python",
-            sdk_version="0.9.0",
-        )
+        message = ReplayEvent.empty_set()
 
         assert ReplaysProcessor().process_message(
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
+
+    def test_process_message_invalid_segment_id(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        message = ReplayEvent.empty_set()
+
+        with pytest.raises(ValueError):
+            message.segment_id = "a"
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        with pytest.raises(ValueError):
+            message.segment_id = -1
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        with pytest.raises(ValueError):
+            message.segment_id = 2**16
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        message.segment_id = 2**16 - 1
+        ReplaysProcessor().process_message(message.serialize(), meta)
+
+    def test_process_message_invalid_timestamp(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        message = ReplayEvent.empty_set()
+
+        with pytest.raises(ValueError):
+            message.timestamp = "a"
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        with pytest.raises(ValueError):
+            message.timestamp = -1
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        with pytest.raises(ValueError):
+            message.timestamp = 2**32
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        message.timestamp = 2**32 - 1
+        ReplaysProcessor().process_message(message.serialize(), meta)
+
+        message.timestamp = f"{2**32 - 1}"
+        ReplaysProcessor().process_message(message.serialize(), meta)
+
+    def test_process_message_invalid_replay_start_timestamp(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        message = ReplayEvent.empty_set()
+
+        with pytest.raises(ValueError):
+            message.replay_start_timestamp = "a"
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        with pytest.raises(ValueError):
+            message.replay_start_timestamp = -1
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        with pytest.raises(ValueError):
+            message.replay_start_timestamp = 2**32
+            ReplaysProcessor().process_message(message.serialize(), meta)
+
+        message.replay_start_timestamp = 2**32 - 1
+        ReplaysProcessor().process_message(message.serialize(), meta)
+
+        message.replay_start_timestamp = f"{2**32 - 1}"
+        ReplaysProcessor().process_message(message.serialize(), meta)
 
     def test_coerce_segment_id(self) -> None:
         """Test "coerce_segment_id" function."""
