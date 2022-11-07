@@ -113,6 +113,9 @@ class ClickhouseNodeMigration(Migration, ABC):
     completely unrelated, they are probably better as separate migrations.
     """
 
+    forwards_local_first: bool = True
+    backwards_local_first: bool = False
+
     @abstractmethod
     def forwards_local(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
@@ -141,10 +144,19 @@ class ClickhouseNodeMigration(Migration, ABC):
         # so do not update status yet
         if not self.is_first_migration():
             update_status(Status.IN_PROGRESS)
-        for op in self.forwards_local():
-            op.execute(local=True)
-        for op in self.forwards_dist():
-            op.execute(local=False)
+
+        local_ops = list(self.forwards_local())
+        dist_ops = list(self.forwards_dist())
+        ops = (
+            local_ops + dist_ops if self.forwards_local_first else dist_ops + local_ops
+        )
+
+        for op in ops:
+            if op in local_ops:
+                op.execute(local=True)
+            if op in dist_ops:
+                op.execute(local=False)
+
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
@@ -156,10 +168,18 @@ class ClickhouseNodeMigration(Migration, ABC):
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
-        for op in self.backwards_dist():
-            op.execute(local=False)
-        for op in self.backwards_local():
-            op.execute(local=True)
+
+        local_ops = list(self.backwards_local())
+        dist_ops = list(self.backwards_dist())
+        ops = (
+            local_ops + dist_ops if self.backwards_local_first else dist_ops + local_ops
+        )
+
+        for op in ops:
+            if op in local_ops:
+                op.execute(local=True)
+            if op in dist_ops:
+                op.execute(local=False)
         logger.info(f"Finished reversing: {migration_id}")
 
         # The migrations table will be destroyed if the first

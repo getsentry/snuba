@@ -35,11 +35,11 @@ ADMIN_AUTH_JWT_AUDIENCE = ""
 # Migrations Groups that are allowed to be managed
 # in the snuba admin tool.
 ADMIN_ALLOWED_MIGRATION_GROUPS = {
-    "system",
-    "generic_metrics",
-    "profiles",
-    "functions",
-    "replays",
+    "system": "NonBlockingMigrationsPolicy",
+    "generic_metrics": "NonBlockingMigrationsPolicy",
+    "profiles": "NonBlockingMigrationsPolicy",
+    "functions": "NonBlockingMigrationsPolicy",
+    "replays": "NonBlockingMigrationsPolicy",
 }
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -296,7 +296,6 @@ ROOT_REPO_PATH = f"{Path(__file__).parent.parent.parent.as_posix()}"
 
 # File path glob for configs
 STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
-MIGRATION_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/migrations/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
