@@ -25,7 +25,10 @@ test-initialization:
 	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization docker-compose -f docker-compose.gcb.yml up -d
 	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
-
+test-distributed:
+	docker build . -t snuba-test
+	SNUBA_IMAGE=snuba-test docker-compose -f docker-compose.gcb.yml down
+	SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
 tests: test
 
