@@ -1,5 +1,5 @@
 import re
-from typing import Union
+from typing import Sequence, Union
 
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -31,42 +31,56 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
     AddColumn, CreateTable and DropColumn operations are correct with reagards to being
     applied on local and distributed tables.
     """
-    local_ops = migration.forwards_local()
-    dist_ops = migration.forwards_dist()
 
-    if migration.forwards_local_first:
-        for dist_op in dist_ops:
-            if isinstance(dist_op, DropColumn):
-                if any(
-                    conflicts_drop_column_op(local_op, dist_op)
-                    for local_op in local_ops
-                    if isinstance(local_op, DropColumn)
-                ):
-                    raise InvalidMigrationOrderError(
-                        f"DropColumn {dist_op.table_name}.{dist_op.column_name} operation must applied on dist table before local"
-                    )
+    def validate_order(
+        local_ops: Sequence[SqlOperation],
+        dist_ops: Sequence[SqlOperation],
+        local_first: bool,
+    ) -> None:
+        if local_first:
+            for dist_op in dist_ops:
+                if isinstance(dist_op, DropColumn):
+                    if any(
+                        conflicts_drop_column_op(local_op, dist_op)
+                        for local_op in local_ops
+                        if isinstance(local_op, DropColumn)
+                    ):
+                        raise InvalidMigrationOrderError(
+                            f"DropColumn {dist_op.table_name}.{dist_op.column_name} operation must be applied on dist table before local"
+                        )
 
-    else:
-        for local_op in local_ops:
-            if isinstance(local_op, AddColumn):
-                if any(
-                    conflicts_add_column_op(local_op, dist_op)
-                    for dist_op in dist_ops
-                    if isinstance(dist_op, AddColumn)
-                ):
-                    raise InvalidMigrationOrderError(
-                        f"AddColumn {local_op.table_name}.{local_op.column.name} operation must applied on local table before dist"
-                    )
+        else:
+            for local_op in local_ops:
+                if isinstance(local_op, AddColumn):
+                    if any(
+                        conflicts_add_column_op(local_op, dist_op)
+                        for dist_op in dist_ops
+                        if isinstance(dist_op, AddColumn)
+                    ):
+                        raise InvalidMigrationOrderError(
+                            f"AddColumn {local_op.table_name}.{local_op.column.name} operation must be applied on local table before dist"
+                        )
 
-            if isinstance(local_op, CreateTable):
-                if any(
-                    conflicts_create_table_op(local_op, dist_op)
-                    for dist_op in dist_ops
-                    if isinstance(dist_op, CreateTable)
-                ):
-                    raise InvalidMigrationOrderError(
-                        f"CreateTable {local_op.table_name} operation must applied on local table before dist"
-                    )
+                if isinstance(local_op, CreateTable):
+                    if any(
+                        conflicts_create_table_op(local_op, dist_op)
+                        for dist_op in dist_ops
+                        if isinstance(dist_op, CreateTable)
+                    ):
+                        raise InvalidMigrationOrderError(
+                            f"CreateTable {local_op.table_name} operation must be applied on local table before dist"
+                        )
+
+    validate_order(
+        migration.forwards_local(),
+        migration.forwards_dist(),
+        migration.forwards_local_first,
+    )
+    validate_order(
+        migration.backwards_local(),
+        migration.backwards_dist(),
+        migration.backwards_local_first,
+    )
 
 
 def conflicts_create_table_op(

@@ -1,5 +1,8 @@
-from typing import Sequence, Union
+from contextlib import contextmanager
+from typing import Any, Iterator, Sequence, Union
 from unittest.mock import Mock, patch
+
+import pytest
 
 from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -10,6 +13,7 @@ from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.operations import AddColumn, CreateTable, DropColumn, SqlOperation
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
 from snuba.migrations.validator import (
+    InvalidMigrationOrderError,
     _get_local_table_name,
     conflicts_add_column_op,
     conflicts_create_table_op,
@@ -28,21 +32,16 @@ def test_validate_all_migrations() -> None:
                 validate_migration_order(snuba_migration)
 
 
-@patch.object(validator, "_get_local_table_name")
-def test_out_of_order_create(mock_get_local_table_name: Mock) -> None:
-    def _dist_to_local(op: Union[CreateTable, AddColumn, DropColumn]) -> str:
-        if op.table_name == "test_dist_table":
-            return "test_local_table"
-        if op.table_name == "test_dist_table2":
-            return "test_local_table2"
-        return op.table_name
+@contextmanager
+def does_not_raise() -> Iterator[None]:
+    yield
 
-    mock_get_local_table_name.side_effect = _dist_to_local
+
+class TestValidateMigrations:
     columns: Sequence[Column[Modifiers]] = [
         Column("col1", String()),
     ]
     storage = StorageSetKey.EVENTS
-    # create_local_op = Mock(CreateTable)
     create_local_op = CreateTable(
         storage,
         "test_local_table",
@@ -58,28 +57,155 @@ def test_out_of_order_create(mock_get_local_table_name: Mock) -> None:
         columns,
         Distributed("test_local_table", None),
     )
-    # create_dist_op = Mock(CreateTable)
-    # drop_local_op = Mock(DropTable)??
-    # drop_dist_op = Mock(DropTable)??
-    # logger = Logger("test")
-    # context = Context("001", logger, lambda x: None)
+    col: Column[Modifiers] = Column("col", String())
+    add_col_local_op = AddColumn(storage, "test_local_table", col, None)
+    add_col_dist_op = AddColumn(storage, "test_dist_table", col, None)
+    drop_col_local_op = DropColumn(storage, "test_local_table", "col")
+    drop_col_dist_op = DropColumn(storage, "test_dist_table", "col")
 
-    class TestMigration(migration.ClickhouseNodeMigration):
-        blocking = False
+    def _dist_to_local(self, op: Union[CreateTable, AddColumn, DropColumn]) -> str:
+        if op.table_name == "test_dist_table":
+            return "test_local_table"
+        if op.table_name == "test_dist_table2":
+            return "test_local_table2"
+        return op.table_name
 
-        def forwards_local(self) -> Sequence[SqlOperation]:
-            return [create_local_op]
+    test_data = [
+        (True, False, [], [], [], [], does_not_raise(), ""),
+        (
+            True,
+            False,
+            [create_local_op],
+            [],
+            [create_dist_op],
+            [],
+            does_not_raise(),
+            "",
+        ),
+        (
+            False,
+            False,
+            [create_local_op],
+            [create_dist_op],
+            [],
+            [],
+            pytest.raises(InvalidMigrationOrderError),
+            "CreateTable test_local_table operation must be applied on local table before dist",
+        ),
+        (
+            True,
+            False,
+            [create_local_op, add_col_local_op],
+            [create_dist_op, add_col_dist_op],
+            [],
+            [],
+            does_not_raise(),
+            "",
+        ),
+        (
+            False,
+            True,
+            [add_col_local_op],
+            [add_col_dist_op],
+            [],
+            [],
+            pytest.raises(InvalidMigrationOrderError),
+            "AddColumn test_local_table.col operation must be applied on local table before dist",
+        ),
+        (
+            True,
+            False,
+            [create_local_op, add_col_local_op],
+            [create_dist_op, add_col_dist_op],
+            [drop_col_local_op],
+            [drop_col_dist_op],
+            does_not_raise(),
+            "",
+        ),
+        (
+            True,
+            True,
+            [create_local_op, add_col_local_op],
+            [create_dist_op, add_col_dist_op],
+            [drop_col_local_op],
+            [drop_col_dist_op],
+            pytest.raises(InvalidMigrationOrderError),
+            "DropColumn test_dist_table.col operation must be applied on dist table before local",
+        ),
+        (
+            True,
+            False,
+            [create_local_op, drop_col_local_op],
+            [create_dist_op, drop_col_dist_op],
+            [add_col_local_op],
+            [add_col_dist_op],
+            pytest.raises(InvalidMigrationOrderError),
+            "DropColumn test_dist_table.col operation must be applied on dist table before local",
+        ),
+        (
+            False,
+            False,
+            [drop_col_local_op],
+            [drop_col_dist_op],
+            [add_col_local_op],
+            [add_col_dist_op],
+            pytest.raises(InvalidMigrationOrderError),
+            "AddColumn test_local_table.col operation must be applied on local table before dist",
+        ),
+        (
+            False,
+            True,
+            [create_local_op, drop_col_local_op],
+            [create_dist_op, drop_col_dist_op],
+            [add_col_local_op],
+            [add_col_dist_op],
+            pytest.raises(InvalidMigrationOrderError),
+            "CreateTable test_local_table operation must be applied on local table before dist",
+        ),
+    ]
 
-        def backwards_local(self) -> Sequence[SqlOperation]:
-            return []
+    @pytest.mark.parametrize(
+        "forwards_local_first_val, backwards_local_first_val,forwards_local,forwards_dist,"
+        "backwards_local, backwards_dist, expectation, err_msg",
+        test_data,
+    )
+    @patch.object(validator, "_get_local_table_name")
+    def test_validate_migration_order(
+        self,
+        mock_get_local_table_name: Mock,
+        forwards_local_first_val: bool,
+        backwards_local_first_val: bool,
+        forwards_local: Sequence[SqlOperation],
+        forwards_dist: Sequence[SqlOperation],
+        backwards_local: Sequence[SqlOperation],
+        backwards_dist: Sequence[SqlOperation],
+        expectation: Any,
+        err_msg: str,
+    ) -> None:
 
-        def forwards_dist(self) -> Sequence[SqlOperation]:
-            return [create_dist_op]
+        mock_get_local_table_name.side_effect = self._dist_to_local
 
-        def backwards_dist(self) -> Sequence[SqlOperation]:
-            return []
+        class TestMigration(migration.ClickhouseNodeMigration):
+            blocking = False
+            backwards_local_first: bool = backwards_local_first_val
+            forwards_local_first: bool = forwards_local_first_val
 
-    validate_migration_order(TestMigration())
+            def forwards_local(self) -> Sequence[SqlOperation]:
+                return forwards_local
+
+            def backwards_local(self) -> Sequence[SqlOperation]:
+                return backwards_local
+
+            def forwards_dist(self) -> Sequence[SqlOperation]:
+                return forwards_dist
+
+            def backwards_dist(self) -> Sequence[SqlOperation]:
+                return backwards_dist
+
+        with expectation as err:
+            validate_migration_order(TestMigration())
+        if err_msg:
+            assert str(err.value) == err_msg
 
 
 @patch.object(validator, "_get_local_table_name")
