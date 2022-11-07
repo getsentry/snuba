@@ -24,7 +24,6 @@ from snuba.processor import (
     _collapse_uint16,
     _collapse_uint32,
     _ensure_valid_ip,
-    _unicodify,
 )
 from snuba.util import force_bytes
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -50,7 +49,15 @@ class ReplaysProcessor(DatasetMessageProcessor):
         elif "urls" in replay_event:
             # Latest SDK input.
             urls = replay_event.get("urls")
-            return urls[:LIST_ELEMENT_LIMIT] if isinstance(urls, list) else []
+            if isinstance(urls, list):
+                return list(
+                    filter(
+                        None,
+                        [maybe(stringify, url) for url in urls[:LIST_ELEMENT_LIMIT]],
+                    )
+                )
+            else:
+                return []
         else:
             # Malformed event catch all.
             return []
@@ -61,7 +68,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
             return []
 
         url = request.get("url")
-        return [url] if isinstance(url, str) else []
+        return [stringify(url)] if isinstance(url, str) else []
 
     def __process_trace_ids(self, trace_ids: list[str] | None) -> list[str]:
         if not trace_ids:
@@ -95,10 +102,10 @@ class ReplaysProcessor(DatasetMessageProcessor):
             datetimeify, replay_event.get("replay_start_timestamp")
         )
         processed["urls"] = self.__extract_urls(replay_event)
-        processed["release"] = str(replay_event.get("release"))
-        processed["environment"] = replay_event.get("environment")
-        processed["dist"] = replay_event.get("dist")
-        processed["platform"] = _unicodify(replay_event["platform"])
+        processed["release"] = maybe(stringify, replay_event.get("release"))
+        processed["environment"] = maybe(stringify, replay_event.get("environment"))
+        processed["dist"] = maybe(stringify, replay_event.get("dist"))
+        processed["platform"] = maybe(stringify, replay_event["platform"])
 
         processed["error_ids"] = self.__process_error_ids(replay_event.get("error_ids"))
 
@@ -133,6 +140,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
     ) -> None:
         user_dict = replay_event.get("user") or {}
         user_data: MutableMapping[str, Any] = {}
+
+        # "extract_user" calls "_unicodify" so we can be reasonably sure it has coerced the
+        # strings correctly.
         extract_user(user_data, user_dict)
         processed["user_name"] = user_data["username"]
         processed["user_id"] = user_data["user_id"]
@@ -155,25 +165,25 @@ class ReplaysProcessor(DatasetMessageProcessor):
             return None
 
         os_context = contexts.get("os", {})
-        processed["os_name"] = os_context.get("name")
-        processed["os_version"] = os_context.get("version")
+        processed["os_name"] = maybe(stringify, os_context.get("name"))
+        processed["os_version"] = maybe(stringify, os_context.get("version"))
 
         browser_context = contexts.get("browser", {})
-        processed["browser_name"] = browser_context.get("name")
-        processed["browser_version"] = browser_context.get("version")
+        processed["browser_name"] = maybe(stringify, browser_context.get("name"))
+        processed["browser_version"] = maybe(stringify, browser_context.get("version"))
 
         device_context = contexts.get("device", {})
-        processed["device_name"] = device_context.get("name")
-        processed["device_brand"] = device_context.get("brand")
-        processed["device_family"] = device_context.get("family")
-        processed["device_model"] = device_context.get("model")
+        processed["device_name"] = maybe(stringify, device_context.get("name"))
+        processed["device_brand"] = maybe(stringify, device_context.get("brand"))
+        processed["device_family"] = maybe(stringify, device_context.get("family"))
+        processed["device_model"] = maybe(stringify, device_context.get("model"))
 
     def _process_sdk(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         sdk = replay_event.get("sdk", None) or {}
-        processed["sdk_name"] = _unicodify(sdk.get("name") or "")
-        processed["sdk_version"] = _unicodify(sdk.get("version") or "")
+        processed["sdk_name"] = maybe(stringify, sdk.get("name"))
+        processed["sdk_version"] = maybe(stringify, sdk.get("version"))
 
     def _process_kafka_metadata(
         self, metadata: KafkaMessageMetadata, processed: MutableMapping[str, Any]
@@ -258,6 +268,21 @@ def datetimeify(value: Any) -> datetime:
     Datetimes for the replays schema standardize on 32 bit dates.
     """
     return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, _intify(value)))
+
+
+def stringify(value: Any) -> str:
+    """Return a string or err.
+
+    This function follows the lead of "snuba.processors._unicodify" and enforces UTF-8
+    encoding.
+    """
+    if isinstance(value, (bool, dict, list)):
+        result: str = rapidjson.dumps(value)
+        return result
+    elif value is None:
+        return ""
+    else:
+        return str(value).encode("utf8", errors="backslashreplace").decode("utf8")
 
 
 def _intify(value: Any) -> int:

@@ -16,6 +16,7 @@ from snuba.datasets.processors.replays_processor import (
     coerce_segment_id,
     datetimeify,
     maybe,
+    stringify,
 )
 from snuba.processor import InsertBatch
 from snuba.util import force_bytes
@@ -27,29 +28,29 @@ class ReplayEvent:
     segment_id: Any
     trace_ids: list[str]
     error_ids: list[str]
-    urls: list[str]
+    urls: list[Any]
     is_archived: int | None
     timestamp: Any
     replay_start_timestamp: Any
-    platform: str | None
-    environment: str
-    release: str
-    dist: str
+    platform: Any
+    environment: Any
+    release: Any
+    dist: Any
     ipv4: str | None
     ipv6: str | None
-    user_name: str | None
-    user_id: str | None
-    user_email: str | None
-    os_name: str | None
-    os_version: str | None
-    browser_name: str | None
-    browser_version: str | None
-    device_name: str | None
-    device_brand: str | None
-    device_family: str | None
-    device_model: str | None
-    sdk_name: str
-    sdk_version: str
+    user_name: Any
+    user_id: Any
+    user_email: Any
+    os_name: Any
+    os_version: Any
+    browser_name: Any
+    browser_version: Any
+    device_name: Any
+    device_brand: Any
+    device_family: Any
+    device_model: Any
+    sdk_name: Any
+    sdk_version: Any
     title: str | None
 
     @classmethod
@@ -148,7 +149,7 @@ class ReplayEvent:
             "payload": list(bytes(json.dumps(replay_event).encode())),
         }
 
-    def _user_field(self) -> str | None:
+    def _user_field(self) -> Any | None:
         user_fields = [
             self.user_id,
             self.user_name,
@@ -259,6 +260,72 @@ class TestReplaysProcessor:
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
 
+    def test_process_message_mismatched_types(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+
+        message = ReplayEvent(
+            replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
+            title="/organizations/:orgId/issues/",
+            error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
+            trace_ids=[
+                "36e980a9c6024cde9f5d089f15b83b5f",
+                "8bea4461d8b944f393c15a3cb1c4169a",
+            ],
+            segment_id=0,
+            timestamp=str(int(now.timestamp())),
+            replay_start_timestamp=str(int(now.timestamp())),
+            platform=0,
+            dist=0,
+            urls=["http://localhost:8001", None, 0],
+            is_archived=True,
+            user_name=0,
+            user_id=0,
+            user_email=0,
+            os_name=0,
+            os_version=0,
+            browser_name=0,
+            browser_version=0,
+            device_name=0,
+            device_brand=0,
+            device_family=0,
+            device_model=0,
+            ipv4="127.0.0.1",
+            ipv6=None,
+            environment=0,
+            release=0,
+            sdk_name=0,
+            sdk_version=0,
+        )
+
+        processed_message = ReplaysProcessor().process_message(
+            message.serialize(), meta
+        )
+        assert isinstance(processed_message, InsertBatch)
+        assert processed_message.rows[0]["urls"] == ["http://localhost:8001", "0"]
+        assert processed_message.rows[0]["platform"] == "0"
+        assert processed_message.rows[0]["dist"] == "0"
+        assert processed_message.rows[0]["user_name"] == "0"
+        assert processed_message.rows[0]["user_id"] == "0"
+        assert processed_message.rows[0]["user_email"] == "0"
+        assert processed_message.rows[0]["os_name"] == "0"
+        assert processed_message.rows[0]["os_version"] == "0"
+        assert processed_message.rows[0]["browser_name"] == "0"
+        assert processed_message.rows[0]["browser_version"] == "0"
+        assert processed_message.rows[0]["device_name"] == "0"
+        assert processed_message.rows[0]["device_brand"] == "0"
+        assert processed_message.rows[0]["device_family"] == "0"
+        assert processed_message.rows[0]["device_model"] == "0"
+        assert processed_message.rows[0]["environment"] == "0"
+        assert processed_message.rows[0]["release"] == "0"
+        assert processed_message.rows[0]["sdk_name"] == "0"
+        assert processed_message.rows[0]["sdk_version"] == "0"
+        assert processed_message.rows[0]["timestamp"] == now
+        assert processed_message.rows[0]["replay_start_timestamp"] == now
+
     def test_process_message_nulls(self) -> None:
         meta = KafkaMessageMetadata(
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
@@ -368,3 +435,23 @@ class TestReplaysProcessor:
             datetimeify(-1)
         with pytest.raises(ValueError):
             datetimeify("a")
+
+    def test_maybe(self) -> None:
+        """Test maybe utility function."""
+
+        def identity(a: Any) -> Any:
+            return a
+
+        assert maybe(identity, None) is None
+        assert maybe(identity, False) is False
+        assert maybe(identity, True) is True
+        assert maybe(identity, 0) == 0
+        assert maybe(identity, "hello") == "hello"
+
+    def test_stringify(self) -> None:
+        """Test stringify utility function."""
+        assert stringify(None) == ""
+        assert stringify(True) == "true"
+        assert stringify([0, 1]) == "[0,1]"
+        assert stringify("hello") == "hello"
+        assert stringify({"hello": "world"}) == '{"hello":"world"}'
