@@ -5,7 +5,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from threading import Thread
-from typing import Any, Callable, Iterator, cast
+from typing import Any, Callable, cast
 from unittest import mock
 
 import pytest
@@ -64,15 +64,12 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
 
 
 @pytest.fixture
-def backend() -> Iterator[Cache[bytes]]:
+def backend() -> Cache[bytes]:
     codec = PassthroughCodec()
     backend: Cache[bytes] = RedisCache(
         redis_client, "test", codec, ThreadPoolExecutor()
     )
-    try:
-        yield backend
-    finally:
-        redis_client.flushdb()
+    return backend
 
 
 def noop(value: int) -> None:
@@ -158,17 +155,12 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     with pytest.raises(ReadThroughCustomException):
         setter.result()
 
-    # pytest assertRaises does not give us the actual exception object
-    # so we implement it ourselves as we need it here
-    raised_exc = False
-    try:
+    # notice that we raised the same exception class in the waiter despite it being deserialized
+    # from redis
+    with pytest.raises(ReadThroughCustomException) as excinfo:
         waiter.result()
-    except ReadThroughCustomException as e:
-        # notice that we raised the same exception class in the waiter despite it being deserialized
-        # from redis
-        raised_exc = True
-        assert e.message == "error"
-    assert raised_exc
+
+    assert excinfo.value.message == "error"
 
 
 @pytest.mark.parametrize(
@@ -270,40 +262,35 @@ def test_notify_queue_ttl() -> None:
         ThreadPoolExecutor(),
     )
     key = "key"
-    try:
 
-        def normal_function() -> bytes:
-            # this sleep makes sure that all waiting clients
-            # are put into the waiting queue
-            time.sleep(0.5)
-            return b"hello-cached"
+    def normal_function() -> bytes:
+        # this sleep makes sure that all waiting clients
+        # are put into the waiting queue
+        time.sleep(0.5)
+        return b"hello-cached"
 
-        def normal_function_uncached() -> bytes:
-            return b"hello-not-cached"
+    def normal_function_uncached() -> bytes:
+        return b"hello-not-cached"
 
-        def cached_query() -> bytes:
-            return delayed_backend.get_readthrough(key, normal_function, noop, 10)
+    def cached_query() -> bytes:
+        return delayed_backend.get_readthrough(key, normal_function, noop, 10)
 
-        def uncached_query() -> bytes:
-            return delayed_backend.get_readthrough(
-                key, normal_function_uncached, noop, 10
-            )
+    def uncached_query() -> bytes:
+        return delayed_backend.get_readthrough(key, normal_function_uncached, noop, 10)
 
-        setter = execute(cached_query)
-        waiters = []
-        time.sleep(0.1)
-        for _ in range(num_waiters):
-            waiters.append(execute(uncached_query))
+    setter = execute(cached_query)
+    waiters = []
+    time.sleep(0.1)
+    for _ in range(num_waiters):
+        waiters.append(execute(uncached_query))
 
-        # make sure that all clients actually did hit the cache
-        assert setter.result() == b"hello-cached"
-        for w in waiters:
-            assert w.result() == b"hello-cached"
-        # make sure that all the waiters actually did hit the notification queue
-        # and didn't just get a direct cache hit
-        assert pop_calls == num_waiters
-    finally:
-        redis_client.flushdb()
+    # make sure that all clients actually did hit the cache
+    assert setter.result() == b"hello-cached"
+    for w in waiters:
+        assert w.result() == b"hello-cached"
+    # make sure that all the waiters actually did hit the notification queue
+    # and didn't just get a direct cache hit
+    assert pop_calls == num_waiters
 
 
 @pytest.mark.skipif(
