@@ -7,8 +7,16 @@ from datetime import datetime, timezone
 from hashlib import md5
 from typing import Any, Mapping
 
+import pytest
+
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.processors.replays_processor import ReplaysProcessor
+from snuba.datasets.processors.replays_processor import (
+    ReplaysProcessor,
+    _timestamp_to_datetime,
+    coerce_segment_id,
+    datetimeify,
+    maybe,
+)
 from snuba.processor import InsertBatch
 from snuba.util import force_bytes
 
@@ -16,13 +24,13 @@ from snuba.util import force_bytes
 @dataclass
 class ReplayEvent:
     replay_id: str
-    segment_id: int
+    segment_id: int | None
     trace_ids: list[str]
     error_ids: list[str]
     urls: list[str]
     is_archived: int | None
-    timestamp: float
-    replay_start_timestamp: float | None
+    timestamp: int
+    replay_start_timestamp: int | None
     platform: str | None
     environment: str
     release: str
@@ -45,7 +53,7 @@ class ReplayEvent:
     title: str | None
 
     def serialize(self) -> Mapping[Any, Any]:
-        replay_event = {
+        replay_event: Any = {
             "type": "replay_event",
             "replay_id": self.replay_id,
             "segment_id": self.segment_id,
@@ -100,7 +108,7 @@ class ReplayEvent:
 
         return {
             "type": "replay_event",
-            "start_time": self.timestamp,
+            "start_time": datetime.now().timestamp(),
             "replay_id": self.replay_id,
             "project_id": 1,
             "retention_days": 30,
@@ -133,12 +141,10 @@ class ReplayEvent:
             "segment_id": self.segment_id,
             "trace_ids": [str(uuid.UUID(t)) for t in self.trace_ids],
             "error_ids": [str(uuid.UUID(e)) for e in self.error_ids],
-            "timestamp": datetime.utcfromtimestamp(self.timestamp),
-            "replay_start_timestamp": datetime.utcfromtimestamp(
-                self.replay_start_timestamp
-            )
-            if self.replay_start_timestamp
-            else None,
+            "timestamp": maybe(_timestamp_to_datetime, self.timestamp),
+            "replay_start_timestamp": maybe(
+                _timestamp_to_datetime, self.replay_start_timestamp
+            ),
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
@@ -192,8 +198,8 @@ class TestReplaysProcessor:
                 "8bea4461d8b944f393c15a3cb1c4169a",
             ],
             segment_id=0,
-            timestamp=datetime.now(tz=timezone.utc).timestamp(),
-            replay_start_timestamp=datetime.now(tz=timezone.utc).timestamp(),
+            timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
+            replay_start_timestamp=int(datetime.now(tz=timezone.utc).timestamp()),
             platform="python",
             dist="",
             urls=["http://localhost:8001"],
@@ -230,8 +236,8 @@ class TestReplaysProcessor:
             title=None,
             error_ids=[],
             trace_ids=[],
-            segment_id=0,
-            timestamp=datetime.now(tz=timezone.utc).timestamp(),
+            segment_id=None,
+            timestamp=int(datetime.now(timezone.utc).timestamp()),
             replay_start_timestamp=None,
             platform=None,
             dist="",
@@ -259,3 +265,30 @@ class TestReplaysProcessor:
         assert ReplaysProcessor().process_message(
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
+
+    def test_coerce_segment_id(self) -> None:
+        """Test "coerce_segment_id" function."""
+        assert coerce_segment_id(0) == 0
+        assert coerce_segment_id(65535) == 65535
+        assert coerce_segment_id(1.25) == 1
+        assert coerce_segment_id("1") == 1
+
+        with pytest.raises(ValueError):
+            coerce_segment_id(65536)
+        with pytest.raises(ValueError):
+            coerce_segment_id(-1)
+        with pytest.raises(TypeError):
+            coerce_segment_id([1])
+
+    def test_datetimeify(self) -> None:
+        """Test "datetimeify" function."""
+        now = int(datetime.now(timezone.utc).timestamp())
+        assert datetimeify(now).timestamp() == now
+        assert datetimeify(str(now)).timestamp() == now
+
+        with pytest.raises(ValueError):
+            datetimeify(2**32)
+        with pytest.raises(ValueError):
+            datetimeify(-1)
+        with pytest.raises(ValueError):
+            datetimeify("a")

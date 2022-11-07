@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Callable, Mapping, MutableMapping, Optional, TypeVar
 
 import rapidjson
 
@@ -21,7 +21,8 @@ from snuba.processor import (
     InsertBatch,
     ProcessedMessage,
     _as_dict_safe,
-    _ensure_valid_date,
+    _collapse_uint16,
+    _collapse_uint32,
     _ensure_valid_ip,
     _unicodify,
 )
@@ -42,22 +43,6 @@ USER_FIELDS_PRECEDENCE = ("user_id", "username", "email", "ip_address")
 
 
 class ReplaysProcessor(DatasetMessageProcessor):
-    def __extract_timestamp(self, field: int) -> datetime:
-        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
-        if timestamp is None:
-            timestamp = datetime.utcnow()
-        return timestamp
-
-    def __extract_started_at(self, started_at: Optional[int]) -> Optional[datetime]:
-        if started_at is None:
-            return None
-
-        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(started_at))
-        if timestamp:
-            return timestamp
-        else:
-            raise TypeError("Missing data for replay_start_timestamp column.")
-
     def __extract_urls(self, replay_event: ReplayEventDict) -> list[str]:
         if "url" in replay_event:
             # Backwards compat for non-public, pre-alpha javascript SDK.
@@ -98,14 +83,16 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         processed["replay_id"] = str(uuid.UUID(replay_event["replay_id"]))
-        processed["segment_id"] = replay_event["segment_id"]
+        processed["segment_id"] = maybe(
+            coerce_segment_id, replay_event.get("segment_id")
+        )
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
 
-        processed["timestamp"] = self.__extract_timestamp(
-            replay_event["timestamp"],
+        processed["timestamp"] = default(
+            maybe(datetimeify, replay_event.get("timestamp")), utcnow()
         )
-        processed["replay_start_timestamp"] = self.__extract_started_at(
-            replay_event.get("replay_start_timestamp"),
+        processed["replay_start_timestamp"] = maybe(
+            datetimeify, replay_event.get("replay_start_timestamp")
         )
         processed["urls"] = self.__extract_urls(replay_event)
         processed["release"] = str(replay_event.get("release"))
@@ -116,7 +103,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["error_ids"] = self.__process_error_ids(replay_event.get("error_ids"))
 
         # Archived can only be 1 or null.
-        processed["is_archived"] = 1 if replay_event.get("is_archived") else None
+        processed["is_archived"] = (
+            1 if replay_event.get("is_archived") is True else None
+        )
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -239,3 +228,65 @@ class ReplaysProcessor(DatasetMessageProcessor):
         except Exception:
             metrics.increment("consumer_error")
             raise
+
+
+T = TypeVar("T")
+U = TypeVar("U")
+
+
+def default(value: Any, default: Any) -> Any:
+    """Return a default value only if the given value was null.
+
+    Falsey types such as 0, "", False, [], {} are returned.
+    """
+    return default if value is None else value
+
+
+def maybe(into: Callable[[T], U], value: T | None) -> U | None:
+    """Optionally return a processed value."""
+    return None if value is None else into(value)
+
+
+def coerce_segment_id(value: Any) -> int:
+    """Return a 16-bit integer or err."""
+    return _collapse_or_err(_collapse_uint16, _intify(value))
+
+
+def datetimeify(value: Any) -> datetime:
+    """Return a datetime instance or err.
+
+    Datetimes for the replays schema standardize on 32 bit dates.
+    """
+    return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, _intify(value)))
+
+
+def _intify(value: Any) -> int:
+    """Return an integer or err."""
+    if isinstance(value, int):
+        return value
+    elif isinstance(value, (str, float)):
+        return int(value)
+    else:
+        raise TypeError(
+            f'Expected value of type "int"; received "{type(value)}" with a value of "{value}".'
+        )
+
+
+def _collapse_or_err(callable: Callable[[int], int | None], value: int) -> int:
+    """Return the integer or error if it overflows."""
+    if callable(value) is None:
+        # This exception can only be triggered through abuse.  We choose not to suppress these
+        # exceptions in favor of identifying the origin.
+        raise ValueError(f'Integer "{value}" overflowed.')
+    else:
+        return value
+
+
+def _timestamp_to_datetime(timestamp: int) -> datetime:
+    """Convert an integer timestamp to a timezone-aware utc datetime instance."""
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+
+def utcnow() -> datetime:
+    """Return a timezone-aware utc datetime."""
+    return datetime.now(timezone.utc)
