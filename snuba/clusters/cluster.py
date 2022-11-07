@@ -468,7 +468,11 @@ def get_cluster(
         res = part_storage_set_cluster_map.get((storage_set_key, slice_id), None)
         if res is None:
             raise UndefinedClickhouseCluster(
-                f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment"
+                f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment",
+                extra_data={
+                    "storage_set_key_not_defined": storage_set_key,
+                    "slice_id": slice_id,
+                },
             )
 
     else:
@@ -476,6 +480,7 @@ def get_cluster(
         res = storage_set_cluster_map.get(storage_set_key, None)
         if res is None:
             raise UndefinedClickhouseCluster(
-                f"{storage_set_key} is not defined in the CLUSTERS setting for this environment"
+                f"{storage_set_key} is not defined in the CLUSTERS setting for this environment",
+                extra_data={"storage_set_key_not_defined": storage_set_key},
             )
     return res
