@@ -419,8 +419,6 @@ def health() -> Response:
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
 
-    print(metric_tags)
-
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
