@@ -11,7 +11,6 @@ def test_storage_key() -> None:
 @pytest.mark.parametrize(
     "first_storage, second_storage, expected",
     [
-        (StorageKey.ERRORS, StorageKey.ERRORS_V2, True),
         (StorageKey.ERRORS, StorageKey.TRANSACTIONS, False),
     ],
 )

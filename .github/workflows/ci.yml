@@ -15,12 +15,12 @@ jobs:
         name: Checkout code
       - name: Internal github app token
         id: token
-        uses: getsentry/action-github-app-token@v1
+        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc  # v2.0.0
         continue-on-error: true
         with:
           app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: 3.8
       - uses: actions/cache@v3
@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: 3.8
       - name: Install dependencies
@@ -88,7 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: 3.8
       - name: Install dependencies
@@ -226,14 +226,8 @@ jobs:
     timeout-minutes: 25
     strategy:
       matrix:
-        snuba_settings: ["test"]
-        clickhouse_image: ['yandex/clickhouse-server:20.3.9.70',
-                           'altinity/clickhouse-server:21.8.13.1.altinitystable']
-        include:
-          - snuba_settings: "test_distributed"
-            clickhouse_image: 'yandex/clickhouse-server:20.3.9.70'
-          - snuba_settings: "test_distributed_migrations"
-            clickhouse_image: 'yandex/clickhouse-server:20.3.9.70'
+        snuba_settings:
+          ["test", "test_distributed", "test_distributed_migrations"]
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -259,15 +253,13 @@ jobs:
 
       - name: Docker Snuba tests
         run: |
-          export CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} &&
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings != 'test_distributed_migrations' }}
 
       - name: Docker Snuba Multi-Node Tests
         run: |
-          export CLICKHOUSE_IMAGE=${{ matrix.clickhouse_image }} &&
-          SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_SETTINGS=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test_distributed_migrations' }}
 
       - name: Upload to codecov
