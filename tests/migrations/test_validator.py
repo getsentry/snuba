@@ -200,7 +200,7 @@ def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     # test parsing the local table name from engine
     mock_dist_op.table_name = "test_dist_table"
     assert _get_local_table_name(mock_dist_op) == "test_local_table"
-    mock_dist_op = "test_sharded_dist_table"
+    mock_dist_op.table_name = "test_sharded_dist_table"
     assert _get_local_table_name(mock_dist_op) == "test_local_table"
 
     # cleanup
