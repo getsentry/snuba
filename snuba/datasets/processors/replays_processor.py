@@ -300,8 +300,7 @@ def process_tags_object(value: Any) -> Tag:
     transaction = None
 
     for key, value in tags:
-        # Keys and values are stored as strings regardless of their input type.  In the schema,
-        # both are technically optional in the schema only the value part logically allows null.
+        # Keys and values are stored as optional strings regardless of their input type.
         parsed_key, parsed_value = stringify(key), maybe(stringify, value)
 
         if key == "transaction":
