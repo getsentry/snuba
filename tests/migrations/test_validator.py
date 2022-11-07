@@ -23,6 +23,9 @@ from snuba.migrations.validator import (
 
 
 def test_validate_all_migrations() -> None:
+    """
+    Runs the migration validator on all existing migrations.
+    """
     for group in MigrationGroup:
         group_loader = get_group_loader(group)
 
@@ -213,8 +216,6 @@ def test_conflicts(mock_get_local_table_name: Mock) -> None:
     """
     Test that the conlicts functions detect conflicting SQL operations that target the same table.
     """
-    # database = os.environ.get("CLICKHOUSE_DATABASE", "default")
-    # dist_to_local: Dict[SqlOperation, str] = {}
     storage = StorageSetKey.EVENTS
 
     def _dist_to_local(op: Union[CreateTable, AddColumn, DropColumn]) -> str:
