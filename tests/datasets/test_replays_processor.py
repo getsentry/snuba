@@ -7,10 +7,13 @@ from datetime import datetime, timezone
 from hashlib import md5
 from typing import Any, Mapping
 
+import pytest
+
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
     ReplaysProcessor,
     maybe,
+    normalize_tags,
     stringify,
 )
 from snuba.processor import InsertBatch
@@ -345,3 +348,18 @@ class TestReplaysProcessor:
         assert stringify([0, 1]) == "[0,1]"
         assert stringify("hello") == "hello"
         assert stringify({"hello": "world"}) == '{"hello":"world"}'
+
+    def test_normalize_tags(self) -> None:
+        """Test "normalize_tags" function."""
+        assert normalize_tags([("hello", "world")]) == [("hello", "world")]
+        assert normalize_tags({"hello": "world"}) == [("hello", "world")]
+        assert normalize_tags([("hello", "world", "!")]) == []
+
+        with pytest.raises(TypeError):
+            normalize_tags(1)
+
+        with pytest.raises(TypeError):
+            normalize_tags(None)
+
+        with pytest.raises(TypeError):
+            normalize_tags("a")

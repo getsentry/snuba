@@ -293,14 +293,15 @@ def process_tags_object(value: Any) -> Tag:
         return Tag.empty_set()
 
     # Excess tags are trimmed.
-    tags = capped_list(normalize_tags(value))
+    tags = capped_list("tags", normalize_tags(value))
 
     keys = []
     values = []
     transaction = None
 
     for key, value in tags:
-        # Keys and values are stored as strings regardless of their input type.
+        # Keys and values are stored as strings regardless of their input type.  In the schema,
+        # both are technically optional in the schema only the value part logically allows null.
         parsed_key, parsed_value = stringify(key), maybe(stringify, value)
 
         if key == "transaction":
@@ -336,6 +337,9 @@ def _coerce_tags_tuple_list(tags_list: list[Any]) -> list[tuple[str, str]]:
     ]
 
 
-def capped_list(value: list[Any]) -> list[Any]:
+def capped_list(metric_name: str, value: list[Any]) -> list[Any]:
     """Return a list with a maximum configured length."""
+    if len(value) > LIST_ELEMENT_LIMIT:
+        metrics.increment(f'"{metric_name}" exceeded maximum length.')
+
     return value[:LIST_ELEMENT_LIMIT]
