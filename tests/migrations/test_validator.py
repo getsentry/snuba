@@ -13,6 +13,7 @@ from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.operations import AddColumn, CreateTable, DropColumn, SqlOperation
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
 from snuba.migrations.validator import (
+    DistributedEngineParseError,
     InvalidMigrationOrderError,
     _get_local_table_name,
     conflicts_add_column_op,
@@ -21,18 +22,29 @@ from snuba.migrations.validator import (
     validate_migration_order,
 )
 
+all_migrations = []
+for group in MigrationGroup:
+    group_loader = get_group_loader(group)
+    for migration_id in group_loader.get_migrations():
+        snuba_migration = group_loader.load_migration(migration_id)
+        if isinstance(snuba_migration, migration.ClickhouseNodeMigration):
+            all_migrations.append((migration_id, snuba_migration))
 
-def test_validate_all_migrations() -> None:
+
+@pytest.mark.parametrize(
+    "snuba_migration",
+    [
+        pytest.param(snuba_migration, id=migration_id)
+        for migration_id, snuba_migration in all_migrations
+    ],
+)
+def test_validate_all_migrations(
+    snuba_migration: migration.ClickhouseNodeMigration,
+) -> None:
     """
     Runs the migration validator on all existing migrations.
     """
-    for group in MigrationGroup:
-        group_loader = get_group_loader(group)
-
-        for migration_id in group_loader.get_migrations():
-            snuba_migration = group_loader.load_migration(migration_id)
-            if isinstance(snuba_migration, migration.ClickhouseNodeMigration):
-                validate_migration_order(snuba_migration)
+    validate_migration_order(snuba_migration)
 
 
 @contextmanager
@@ -309,8 +321,9 @@ def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     connection.execute(f"DROP TABLE IF EXISTS {database}.test_dist_table")
     connection.execute(f"DROP TABLE IF EXISTS {database}.test_sharded_dist_table")
 
+    local_table_engine = f"Merge('{database}', 'test_local_table')"
     connection.execute(
-        f"CREATE TABLE {database}.test_local_table (id String) ENGINE = Merge('{database}','test_local_table')"
+        f"CREATE TABLE {database}.test_local_table (id String) ENGINE = {local_table_engine}"
     )
     connection.execute(
         f"CREATE TABLE {database}.test_dist_table (id String)"
@@ -329,6 +342,21 @@ def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     assert _get_local_table_name(mock_dist_op) == "test_local_table"
     mock_dist_op.table_name = "test_sharded_dist_table"
     assert _get_local_table_name(mock_dist_op) == "test_local_table"
+
+    # test on not existing table
+    mock_dist_op.table_name = "not_exists_table"
+    with pytest.raises(DistributedEngineParseError) as parse_error:
+        _get_local_table_name(mock_dist_op)
+    assert str(parse_error.value) == "No engine found for table not_exists_table"
+
+    # test on not distributed table
+    mock_dist_op.table_name = "test_local_table"
+    with pytest.raises(DistributedEngineParseError) as parse_error:
+        _get_local_table_name(mock_dist_op)
+    assert (
+        str(parse_error.value)
+        == f"Cannot match engine {local_table_engine} for distributed table test_local_table"
+    )
 
     # cleanup
     connection.execute(f"DROP TABLE {database}.test_local_table")

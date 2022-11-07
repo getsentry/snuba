@@ -25,6 +25,14 @@ class NoDistClusterNodes(Exception):
     pass
 
 
+class DistributedEngineParseError(Exception):
+    """
+    Cant parser the distributed engine string value
+    """
+
+    pass
+
+
 def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
     """
     Validates that the migration order is correct. Chesk that the order of
@@ -159,14 +167,19 @@ def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) ->
     """
     clickhouse = _get_dist_connection(dist_op)
     dist_table_name = dist_op.table_name
-    engine: str = clickhouse.execute(
+    engine = clickhouse.execute(
         f"SELECT engine_full FROM system.tables WHERE name = '{dist_table_name}' AND database = '{clickhouse.database}'"
-    ).results[0][0]
-
-    params = re.match(ENGINE_REGEX, engine)
-    assert (
-        params
-    ), f"Cannot match engine {engine} for distributed table {dist_table_name}"
+    ).results
+    if not engine:
+        raise DistributedEngineParseError(
+            f"No engine found for table {dist_table_name}"
+        )
+    engine_str = engine[0][0]
+    params = re.match(ENGINE_REGEX, engine_str)
+    if not params:
+        raise DistributedEngineParseError(
+            f"Cannot match engine {engine_str} for distributed table {dist_table_name}"
+        )
 
     dist_engine_args = params.group(1)[1:-1].split(",")
     local_table_name = dist_engine_args[2].strip()
