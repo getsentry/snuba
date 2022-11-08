@@ -55,7 +55,7 @@ def _convert_schema(schema: Schema) -> dict[str, Any]:
     res = {
         "columns": serialize_columns(schema.get_columns().columns),
         "local_table_name": schema.get_local_table_name(),
-        "dist_table_name": schema.get_table_name(),
+        "dist_table_name": schema._TableSchema__dist_table_name,  # type: ignore
     }
     if part_format := schema.get_partition_format():
         res["partition_format"] = [segment.value for segment in part_format]
