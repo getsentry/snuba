@@ -184,10 +184,12 @@ class TestValidateMigrations:
         "backwards_local, backwards_dist, expectation, err_msg",
         test_data,
     )
+    @patch.object(validator, "get_cluster")
     @patch.object(validator, "_get_local_table_name")
     def test_validate_migration_order(
         self,
         mock_get_local_table_name: Mock,
+        mock_get_cluster: Mock,
         forwards_local_first_val: bool,
         backwards_local_first_val: bool,
         forwards_local: Sequence[SqlOperation],
@@ -199,6 +201,17 @@ class TestValidateMigrations:
     ) -> None:
 
         mock_get_local_table_name.side_effect = self._dist_to_local
+
+        storage = StorageSetKey.EVENTS
+        cluster = get_cluster(storage)
+
+        mock_cluster = Mock(spec=cluster)
+        mock_cluster.is_single_node.return_value = False
+        mock_cluster.get_database.return_value = cluster.get_database()
+        mock_cluster.get_clickhouse_cluster_name.return_value = (
+            cluster.get_clickhouse_cluster_name() or "test_cluster"
+        )
+        mock_get_cluster.return_value = mock_cluster
 
         class TestMigration(migration.ClickhouseNodeMigration):
             blocking = False
@@ -223,12 +236,21 @@ class TestValidateMigrations:
             assert str(err.value) == err_msg
 
 
+@patch.object(validator, "get_cluster")
 @patch.object(validator, "_get_local_table_name")
-def test_conflicts(mock_get_local_table_name: Mock) -> None:
+def test_conflicts(mock_get_local_table_name: Mock, mock_get_cluster: Mock) -> None:
     """
     Test that the conlicts functions detect conflicting SQL operations that target the same table.
     """
     storage = StorageSetKey.EVENTS
+    cluster = get_cluster(storage)
+    mock_cluster = Mock(spec=cluster)
+    mock_cluster.is_single_node.return_value = False
+    mock_cluster.get_database.return_value = cluster.get_database()
+    mock_cluster.get_clickhouse_cluster_name.return_value = (
+        cluster.get_clickhouse_cluster_name() or "test_cluster"
+    )
+    mock_get_cluster.return_value = mock_cluster
 
     def _dist_to_local(op: Union[CreateTable, AddColumn, DropColumn]) -> str:
         if op.table_name == "test_dist_table":
@@ -355,7 +377,7 @@ def test_parse_engine(mock_get_dist_connection: Mock) -> None:
         _get_local_table_name(mock_dist_op)
     assert (
         str(parse_error.value)
-        == f"Cannot match engine {local_table_engine} for distributed table test_local_table"
+        == f"Cannot match engine string {local_table_engine} for distributed table"
     )
 
     # cleanup

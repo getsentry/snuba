@@ -101,7 +101,11 @@ def conflicts_create_table_op(
     if local_create._storage_set != dist_create._storage_set:
         return False
     try:
-        if local_create.table_name == _get_local_table_name(dist_create):
+        cluster = get_cluster(dist_create._storage_set)
+        if cluster.is_single_node():
+            raise NoDistClusterNodes
+        dist_engine_str = dist_create.engine.get_sql(cluster, dist_create.table_name)
+        if local_create.table_name == _extract_local_table_name(dist_engine_str):
             return True
     except NoDistClusterNodes:
         # If there are no distributed nodes, we can't validate the order.
@@ -175,10 +179,14 @@ def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) ->
             f"No engine found for table {dist_table_name}"
         )
     engine_str = engine[0][0]
+    return _extract_local_table_name(engine_str)
+
+
+def _extract_local_table_name(engine_str: str) -> str:
     params = re.match(ENGINE_REGEX, engine_str)
     if not params:
         raise DistributedEngineParseError(
-            f"Cannot match engine {engine_str} for distributed table {dist_table_name}"
+            f"Cannot match engine string {engine_str} for distributed table"
         )
 
     dist_engine_args = params.group(1)[1:-1].split(",")

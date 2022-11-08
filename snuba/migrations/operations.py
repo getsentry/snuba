@@ -62,12 +62,12 @@ class CreateTable(SqlOperation):
         super().__init__(storage_set)
         self.table_name = table_name
         self.__columns = columns
-        self.__engine = engine
+        self.engine = engine
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
         cluster = get_cluster(self._storage_set)
-        engine = self.__engine.get_sql(cluster, self.table_name)
+        engine = self.engine.get_sql(cluster, self.table_name)
 
         return (
             f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
