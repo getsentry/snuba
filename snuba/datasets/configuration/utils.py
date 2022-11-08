@@ -63,6 +63,7 @@ def generate_policy_creator(
 
 
 NUMBER_COLUMN_TYPES = {"UInt": UInt, "Float": Float}
+
 NUMBER_COLUMN_TYPES_INVERTED = {val: key for key, val in NUMBER_COLUMN_TYPES.items()}
 
 
@@ -86,14 +87,9 @@ def serialize_columns(columns: Sequence[Column[Any]]) -> list[dict[str, Any]]:
         elif isinstance(col.type, Nested):
             args["subcolumns"] = serialize_columns(col.type.nested_columns)
         elif isinstance(col.type, Array):
-            try:
-                args["type"] = type(col.type.inner_type).__name__
+            args["type"] = type(col.type.inner_type).__name__
+            if type(col.type.inner_type) in NUMBER_COLUMN_TYPES_INVERTED:
                 args["arg"] = col.type.inner_type.__dict__["size"]
-            except KeyError as e:
-                import pdb
-
-                pdb.set_trace()
-                print(col)
         elif isinstance(col.type, AggregateFunction):
             args["func"] = col.type.func
             args["arg_types"] = [
@@ -139,8 +135,6 @@ def get_mandatory_condition_checkers(
         for mc in mandatory_condition_checkers_objects
     ]
 
-
-NUMBER_COLUMN_TYPES = {"UInt": UInt, "Float": Float}
 
 SIMPLE_COLUMN_TYPES = {
     **NUMBER_COLUMN_TYPES,
