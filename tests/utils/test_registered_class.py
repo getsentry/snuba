@@ -117,10 +117,10 @@ def test_override_from_name() -> None:
         assert get_from_name("base") is None
 
 
-def test_import():
+def test_import() -> None:
     from snuba.query.processors.physical.uuid_column_processor import (
         UUIDColumnProcessor,
     )
 
-    proc = UUIDColumnProcessor(["a", "b"])
-    assert proc.init_kwargs == {"columns": ["a", "b"]}
+    proc = UUIDColumnProcessor({"a", "b"})
+    assert proc.init_kwargs == {"columns": {"a", "b"}}  # type: ignore
