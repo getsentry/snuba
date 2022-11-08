@@ -7,9 +7,13 @@ from datetime import datetime, timezone
 from hashlib import md5
 from typing import Any, Mapping
 
+import pytest
+
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
     ReplaysProcessor,
+    coerce_list,
+    coerce_uuid,
     maybe,
     stringify,
 )
@@ -21,9 +25,9 @@ from snuba.util import force_bytes
 class ReplayEvent:
     replay_id: str
     segment_id: int
-    trace_ids: list[str]
-    error_ids: list[str]
-    urls: list[Any]
+    trace_ids: Any
+    error_ids: Any
+    urls: Any
     is_archived: int | None
     timestamp: float
     replay_start_timestamp: float | None
@@ -135,8 +139,12 @@ class ReplayEvent:
             "replay_id": str(uuid.UUID(self.replay_id)),
             "event_hash": event_hash,
             "segment_id": self.segment_id,
-            "trace_ids": [str(uuid.UUID(t)) for t in self.trace_ids],
-            "error_ids": [str(uuid.UUID(e)) for e in self.error_ids],
+            "trace_ids": [
+                coerce_uuid(t) for t in coerce_list("trace_ids", self.trace_ids)
+            ],
+            "error_ids": [
+                coerce_uuid(e) for e in coerce_list("error_ids", self.error_ids)
+            ],
             "timestamp": datetime.utcfromtimestamp(self.timestamp),
             "replay_start_timestamp": datetime.utcfromtimestamp(
                 self.replay_start_timestamp
@@ -147,7 +155,7 @@ class ReplayEvent:
             "environment": self.environment,
             "release": self.release,
             "dist": self.dist,
-            "urls": self.urls,
+            "urls": coerce_list("urls", self.urls),
             "is_archived": 1 if self.is_archived is True else None,
             "user_id": self.user_id,
             "user_name": self.user_name,
@@ -294,14 +302,14 @@ class TestReplaysProcessor:
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
             title=None,
-            error_ids=[],
-            trace_ids=[],
+            error_ids=None,
+            trace_ids=None,
             segment_id=0,
             timestamp=datetime.now(tz=timezone.utc).timestamp(),
             replay_start_timestamp=None,
             platform=None,
             dist="",
-            urls=[],
+            urls=None,
             is_archived=None,
             os_name=None,
             os_version=None,
@@ -345,3 +353,17 @@ class TestReplaysProcessor:
         assert stringify([0, 1]) == "[0,1]"
         assert stringify("hello") == "hello"
         assert stringify({"hello": "world"}) == '{"hello":"world"}'
+
+    def test_coerce_list(self) -> None:
+        """Test "coerce_list" function."""
+        assert coerce_list("t", [1, 2]) == [1, 2]
+        assert coerce_list("t", "a") == ["a"]
+        assert coerce_list("t", None) == []
+
+    def test_coerce_uuid(self) -> None:
+        """Test "coerce_uuid" function."""
+        uid = uuid.uuid4()
+        assert coerce_uuid(uid.hex) == str(uid)
+
+        with pytest.raises(ValueError):
+            coerce_uuid("4")

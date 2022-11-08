@@ -68,7 +68,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
                 return list(
                     filter(
                         None,
-                        [maybe(stringify, url) for url in urls[:LIST_ELEMENT_LIMIT]],
+                        [maybe(stringify, url) for url in capped_list("urls", urls)],
                     )
                 )
             else:
@@ -85,26 +85,16 @@ class ReplaysProcessor(DatasetMessageProcessor):
         url = request.get("url")
         return [stringify(url)] if isinstance(url, str) else []
 
-    def __process_trace_ids(self, trace_ids: list[str] | None) -> list[str]:
-        if not trace_ids:
-            return []
-        if len(trace_ids) > LIST_ELEMENT_LIMIT:
-            metrics.increment("trace_ids exceeded list limit")
+    def __process_trace_ids(self, trace_ids: Any) -> list[str]:
+        return [coerce_uuid(t) for t in coerce_list("trace_ids", trace_ids)]
 
-        return [str(uuid.UUID(t)) for t in trace_ids[:LIST_ELEMENT_LIMIT]]
-
-    def __process_error_ids(self, error_ids: list[str] | None) -> list[str]:
-        if not error_ids:
-            return []
-        if len(error_ids) > LIST_ELEMENT_LIMIT:
-            metrics.increment("error_ids exceeded list limit")
-
-        return [str(uuid.UUID(e)) for e in error_ids[:LIST_ELEMENT_LIMIT]]
+    def __process_error_ids(self, error_ids: Any) -> list[str]:
+        return [coerce_uuid(e) for e in coerce_list("error_ids", error_ids)]
 
     def _process_base_replay_event_values(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
-        processed["replay_id"] = str(uuid.UUID(replay_event["replay_id"]))
+        processed["replay_id"] = coerce_uuid(replay_event["replay_id"])
         processed["segment_id"] = replay_event["segment_id"]
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
 
@@ -255,6 +245,14 @@ T = TypeVar("T")
 U = TypeVar("U")
 
 
+def default(default: T, value: Any) -> T | Any:
+    """Return a default value if the value is null.
+
+    Falsey types such as 0, "", False, [], {} are returned.
+    """
+    return default if value is None else value
+
+
 def maybe(into: Callable[[T], U], value: T | None) -> U | None:
     """Optionally return a processed value."""
     return None if value is None else into(value)
@@ -273,3 +271,29 @@ def stringify(value: Any) -> str:
         return ""
     else:
         return str(value).encode("utf8", errors="backslashreplace").decode("utf8")
+
+
+def coerce_list(metric_name: str, value: Any) -> list[Any]:
+    """Return a list of values capped to the maximum allowable limit."""
+    return capped_list(metric_name, default([], maybe(into_list, value)))
+
+
+def coerce_uuid(value: Any) -> str:
+    """Return a valid, stringified UUID."""
+    return str(uuid.UUID(str(value)))
+
+
+def into_list(value: Any) -> list[Any]:
+    """Accepts any type and returns a list of that type unless the value is a list."""
+    if isinstance(value, list):
+        return value
+    else:
+        return [value]
+
+
+def capped_list(metric_name: str, value: list[Any]) -> list[Any]:
+    """Return a list with a maximum configured length."""
+    if len(value) > LIST_ELEMENT_LIMIT:
+        metrics.increment(f'"{metric_name}" exceeded maximum length.')
+
+    return value[:LIST_ELEMENT_LIMIT]
