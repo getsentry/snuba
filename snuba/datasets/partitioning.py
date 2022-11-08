@@ -6,7 +6,6 @@ for repartitioning with less code changes per physical change.
 from typing import Optional
 
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.settings import SLICED_STORAGES
 
 SENTRY_LOGICAL_PARTITIONS = 256
 
@@ -39,6 +38,7 @@ def is_storage_partitioned(storage: StorageKey) -> bool:
     """
     Returns whether the storage set is partitioned.
     """
+    from snuba.settings import SLICED_STORAGES
 
     return True if storage.value in SLICED_STORAGES.keys() else False
 
@@ -51,6 +51,8 @@ def validate_passed_slice(
     and that the slice_id passed in is within the range
     of the total number of slices for the given storage
     """
+    from snuba.settings import SLICED_STORAGES
+
     if slice_id is not None:
         assert storage_key.value in SLICED_STORAGES
         assert slice_id < SLICED_STORAGES[storage_key.value]
