@@ -44,7 +44,6 @@ with sentry_sdk.start_transaction(
             return rv
 
         def get_command(self, ctx: Any, name: str) -> click.Command:
-            logger.info(f"Loading command {name}")
             # IMPORTANT!!!!
             # Click replaces underscores with dashes for command names
             # by default. To mimic this behavior we have to do that here
