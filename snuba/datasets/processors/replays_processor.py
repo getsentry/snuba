@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -10,17 +11,11 @@ import rapidjson
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.events_format import (
-    EventTooOld,
-    enforce_retention,
-    extract_extra_tags,
-    extract_user,
-)
+from snuba.datasets.events_format import EventTooOld, enforce_retention, extract_user
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import (
     InsertBatch,
     ProcessedMessage,
-    _as_dict_safe,
     _collapse_uint16,
     _collapse_uint32,
     _ensure_valid_ip,
@@ -117,11 +112,10 @@ class ReplaysProcessor(DatasetMessageProcessor):
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
-        tags: MutableMapping[str, Any] = _as_dict_safe(replay_event.get("tags", None))
-        if "transaction" in tags:
-            processed["title"] = tags["transaction"]
-        tags.pop("transaction", None)
-        processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+        tags = process_tags_object(replay_event.get("tags"))
+        processed["title"] = tags.transaction
+        processed["tags.key"] = tags.keys
+        processed["tags.value"] = tags.values
 
     def _add_user_column(
         self,
@@ -262,14 +256,6 @@ def coerce_segment_id(value: Any) -> int:
     return _collapse_or_err(_collapse_uint16, _intify(value))
 
 
-def datetimeify(value: Any) -> datetime:
-    """Return a datetime instance or err.
-
-    Datetimes for the replays schema standardize on 32 bit dates.
-    """
-    return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, _intify(value)))
-
-
 def stringify(value: Any) -> str:
     """Return a string or err.
 
@@ -278,11 +264,24 @@ def stringify(value: Any) -> str:
     """
     if isinstance(value, (bool, dict, list)):
         result: str = rapidjson.dumps(value)
-        return result
+        return _encode_utf8(result)
     elif value is None:
         return ""
     else:
-        return str(value).encode("utf8", errors="backslashreplace").decode("utf8")
+        return _encode_utf8(str(value))
+
+
+def _encode_utf8(value: str) -> str:
+    """Return a utf-8 encoded string."""
+    return value.encode("utf8", errors="backslashreplace").decode("utf8")
+
+
+def datetimeify(value: Any) -> datetime:
+    """Return a datetime instance or err.
+
+    Datetimes for the replays schema standardize on 32 bit dates.
+    """
+    return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, _intify(value)))
 
 
 def _intify(value: Any) -> int:
@@ -315,3 +314,73 @@ def _timestamp_to_datetime(timestamp: int) -> datetime:
 def utcnow() -> datetime:
     """Return a timezone-aware utc datetime."""
     return datetime.now(timezone.utc)
+
+
+# Tags processor.
+
+
+@dataclasses.dataclass
+class Tag:
+    keys: list[str]
+    values: list[str | None]
+    transaction: str | None
+
+    @classmethod
+    def empty_set(cls) -> Tag:
+        return cls([], [], None)
+
+
+def process_tags_object(value: Any) -> Tag:
+    if value is None:
+        return Tag.empty_set()
+
+    # Excess tags are trimmed.
+    tags = capped_list("tags", normalize_tags(value))
+
+    keys = []
+    values = []
+    transaction = None
+
+    for key, value in tags:
+        # Keys and values are stored as optional strings regardless of their input type.
+        parsed_key, parsed_value = stringify(key), maybe(stringify, value)
+
+        if key == "transaction":
+            transaction = parsed_value
+        else:
+            keys.append(parsed_key)
+            values.append(parsed_value)
+
+    return Tag(keys=keys, values=values, transaction=transaction)
+
+
+def normalize_tags(value: Any) -> list[tuple[str, str]]:
+    """Normalize tags payload to a single format."""
+    if isinstance(value, dict):
+        return _coerce_tags_dictionary(value)
+    elif isinstance(value, list):
+        return _coerce_tags_tuple_list(value)
+    else:
+        raise TypeError(f'Invalid tags type specified: "{type(value)}"')
+
+
+def _coerce_tags_dictionary(tags: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return a list of tag tuples from an unspecified dictionary."""
+    return [(key, value) for key, value in tags.items() if isinstance(key, str)]
+
+
+def _coerce_tags_tuple_list(tags_list: list[Any]) -> list[tuple[str, str]]:
+    """Return a list of tag tuples from an unspecified list of values."""
+    return [
+        (item[0], item[1])
+        for item in tags_list
+        if (isinstance(item, (list, tuple)) and len(item) == 2)
+    ]
+
+
+def capped_list(metric_name: str, value: list[Any]) -> list[Any]:
+    """Return a list with a maximum configured length."""
+    if len(value) > LIST_ELEMENT_LIMIT:
+        metrics.increment(f'"{metric_name}" exceeded maximum length.')
+
+    return value[:LIST_ELEMENT_LIMIT]

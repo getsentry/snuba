@@ -318,7 +318,7 @@ def test_negative_project_id_fields() -> None:
                 trace_id="b" * 32,
             )
         ],
-        projects={-2},
+        projects={-2, 0, 420},
         snql_anonymized=request.snql_anonymized,
         entity=EntityKey.EVENTS.value,
     ).to_dict()
@@ -329,8 +329,8 @@ def test_negative_project_id_fields() -> None:
         .get_stream_loader()
         .get_processor()
     )
-
-    assert (
-        processor.process_message(message, KafkaMessageMetadata(0, 0, datetime.now()))
-        is None
+    res_batch = processor.process_message(
+        message, KafkaMessageMetadata(0, 0, datetime.now())
     )
+    # We keep only valid project ids (>= 0)
+    assert res_batch.rows[0]["projects"] == [420]
