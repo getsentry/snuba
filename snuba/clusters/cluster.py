@@ -55,16 +55,6 @@ class ClickhouseClientSettings(Enum):
         },
         10000,
     )
-    MIGRATE_DDL = ClickhouseClientSettingsType(
-        {
-            "readonly": 2,
-            "load_balancing": "in_order",
-            "replication_alter_partitions_sync": 2,
-            "mutations_sync": 2,
-            "database_atomic_wait_for_drop_and_detach_synchronously": 1,
-        },
-        10000,
-    )
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
     QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)

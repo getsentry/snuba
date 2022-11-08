@@ -25,7 +25,7 @@ def get_ddl_node_connection(node: ClickhouseNode, database: str) -> ClickhousePo
         settings.CLICKHOUSE_MIGRATIONS_DDL_PASSWORD,
         database,
         max_pool_size=2,
-        client_settings=ClickhouseClientSettings.MIGRATE_DDL.value.settings,
+        client_settings=ClickhouseClientSettings.MIGRATE.value.settings,
     )
     MIGRATIONS_CONNECTIONS[key] = connection
     return connection
