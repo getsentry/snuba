@@ -18,14 +18,14 @@ class RegisteredClassNameCollisionError(Exception):
     pass
 
 
-def _record_init_args(cls):
+def _record_init_args(cls: RegisteredClass) -> None:
     from copy import deepcopy
     from inspect import signature
 
     orig_init = getattr(cls, "__init__")
     orig_signature = signature(orig_init)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self: Any, *args: Any, **kwargs: Any) -> Any:
         # no need to capture the init_kwargs again if a subclass
         # has already captured them
         if not hasattr(self, "init_kwargs"):
@@ -38,7 +38,7 @@ def _record_init_args(cls):
                     i += 1
         return orig_init(self, *args, **kwargs)
 
-    __init__.__signature__ = orig_signature
+    __init__.__signature__ = orig_signature  # type: ignore
     setattr(cls, "__init__", __init__)
 
 
