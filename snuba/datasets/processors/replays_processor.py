@@ -86,7 +86,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
     ) -> None:
         processed["replay_id"] = str(uuid.UUID(replay_event["replay_id"]))
         processed["segment_id"] = maybe(
-            coerce_segment_id, replay_event.get("segment_id")
+            _coerce_segment_id, replay_event.get("segment_id")
         )
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
 
@@ -251,11 +251,6 @@ def maybe(into: Callable[[T], U], value: T | None) -> U | None:
     return None if value is None else into(value)
 
 
-def coerce_segment_id(value: Any) -> int:
-    """Return a 16-bit integer or err."""
-    return _collapse_or_err(_collapse_uint16, _intify(value))
-
-
 def stringify(value: Any) -> str:
     """Return a string or err.
 
@@ -309,6 +304,11 @@ def _collapse_or_err(callable: Callable[[int], int | None], value: int) -> int:
 def _timestamp_to_datetime(timestamp: int) -> datetime:
     """Convert an integer timestamp to a timezone-aware utc datetime instance."""
     return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+
+def _coerce_segment_id(value: Any) -> int:
+    """Return a 16-bit integer or err."""
+    return _collapse_or_err(_collapse_uint16, _intify(value))
 
 
 def utcnow() -> datetime:
