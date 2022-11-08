@@ -53,7 +53,9 @@ def _convert_stream_loader(stream_loader: KafkaStreamLoader) -> dict[str, Any]:
 def _convert_schema(schema: Schema) -> dict[str, Any]:
     assert isinstance(schema, TableSchema)
     res = {
-        "columns": serialize_columns(schema.get_columns().columns),
+        "columns": str(serialize_columns(schema.get_columns().columns)).replace(
+            "'", ""
+        ),
         "local_table_name": schema.get_local_table_name(),
         "dist_table_name": schema._TableSchema__dist_table_name,  # type: ignore
     }
