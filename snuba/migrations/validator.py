@@ -35,10 +35,42 @@ class DistributedEngineParseError(Exception):
 
 def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
     """
-    Validates that the migration order is correct. Chesk that the order of
-    AddColumn, CreateTable and DropColumn operations are correct with reagards to being
+    Validates that the migration order is correct. Checks that the order of
+    AddColumn, CreateTable and DropColumn operations are correct with regards to being
     applied on local and distributed tables.
     """
+
+    def conflicts_ops(local_op: SqlOperation, dist_op: SqlOperation) -> bool:
+        if isinstance(local_op, CreateTable) and isinstance(dist_op, CreateTable):
+            return conflicts_create_table_op(local_op, dist_op)
+        elif isinstance(local_op, AddColumn) and isinstance(dist_op, AddColumn):
+            return conflicts_add_column_op(local_op, dist_op)
+        elif isinstance(local_op, DropColumn) and isinstance(dist_op, DropColumn):
+            return conflicts_drop_column_op(local_op, dist_op)
+        return False
+
+    def validate_add_col_or_create_table(
+        local_op: SqlOperation, dist_ops: Sequence[SqlOperation]
+    ) -> None:
+        if isinstance(local_op, (CreateTable, AddColumn)):
+            if any(conflicts_ops(local_op, dist_op) for dist_op in dist_ops):
+                op_name = (
+                    f"{local_op.table_name}.{local_op.column.name}"
+                    if isinstance(local_op, AddColumn)
+                    else local_op.table_name
+                )
+                raise InvalidMigrationOrderError(
+                    f"{type(local_op).__name__} {op_name} operation "
+                    "must be applied on local table before dist"
+                )
+
+    def validate_drop(dist_op: SqlOperation, local_ops: Sequence[SqlOperation]) -> None:
+        if isinstance(dist_op, (DropColumn)):
+            if any(conflicts_ops(local_op, dist_op) for local_op in local_ops):
+                raise InvalidMigrationOrderError(
+                    f"{type(dist_op).__name__} {dist_op.table_name}.{dist_op.column_name} "
+                    "operation must be applied on dist table before local"
+                )
 
     def validate_order(
         local_ops: Sequence[SqlOperation],
@@ -47,37 +79,10 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
     ) -> None:
         if local_first:
             for dist_op in dist_ops:
-                if isinstance(dist_op, DropColumn):
-                    if any(
-                        conflicts_drop_column_op(local_op, dist_op)
-                        for local_op in local_ops
-                        if isinstance(local_op, DropColumn)
-                    ):
-                        raise InvalidMigrationOrderError(
-                            f"DropColumn {dist_op.table_name}.{dist_op.column_name} operation must be applied on dist table before local"
-                        )
-
+                validate_drop(dist_op, local_ops)
         else:
             for local_op in local_ops:
-                if isinstance(local_op, AddColumn):
-                    if any(
-                        conflicts_add_column_op(local_op, dist_op)
-                        for dist_op in dist_ops
-                        if isinstance(dist_op, AddColumn)
-                    ):
-                        raise InvalidMigrationOrderError(
-                            f"AddColumn {local_op.table_name}.{local_op.column.name} operation must be applied on local table before dist"
-                        )
-
-                if isinstance(local_op, CreateTable):
-                    if any(
-                        conflicts_create_table_op(local_op, dist_op)
-                        for dist_op in dist_ops
-                        if isinstance(dist_op, CreateTable)
-                    ):
-                        raise InvalidMigrationOrderError(
-                            f"CreateTable {local_op.table_name} operation must be applied on local table before dist"
-                        )
+                validate_add_col_or_create_table(local_op, dist_ops)
 
     validate_order(
         migration.forwards_local(),
