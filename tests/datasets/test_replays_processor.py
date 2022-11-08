@@ -14,6 +14,7 @@ from snuba.datasets.processors.replays_processor import (
     ReplaysProcessor,
     maybe,
     normalize_tags,
+    process_tags_object,
     stringify,
 )
 from snuba.processor import InsertBatch
@@ -348,6 +349,62 @@ class TestReplaysProcessor:
         assert stringify([0, 1]) == "[0,1]"
         assert stringify("hello") == "hello"
         assert stringify({"hello": "world"}) == '{"hello":"world"}'
+
+    def test_process_tags_object(self) -> None:
+        """Test "process_tags_object" function."""
+
+        # Dictionary.
+
+        tags = process_tags_object({"transaction": "/", "hello": "world"})
+        assert tags.transaction == "/"
+        assert tags.keys == ["hello"]
+        assert tags.values == ["world"]
+
+        tags = process_tags_object({"transaction": "/", "hello": None})
+        assert tags.transaction == "/"
+        assert tags.keys == []
+        assert tags.values == []
+
+        tags = process_tags_object({"hello": "world"})
+        assert tags.transaction is None
+        assert tags.keys == ["hello"]
+        assert tags.values == ["world"]
+
+        # Tuple list.
+
+        tags = process_tags_object([("transaction", "/"), ("hello", "world")])
+        assert tags.transaction == "/"
+        assert tags.keys == ["hello"]
+        assert tags.values == ["world"]
+
+        tags = process_tags_object([("transaction", "/"), ("hello", None)])
+        assert tags.transaction == "/"
+        assert tags.keys == []
+        assert tags.values == []
+
+        tags = process_tags_object([("hello", "world")])
+        assert tags.transaction is None
+        assert tags.keys == ["hello"]
+        assert tags.values == ["world"]
+
+        tags = process_tags_object([("hello", "world", "!")])
+        assert tags.transaction is None
+        assert tags.keys == []
+        assert tags.values == []
+
+        # Empty
+
+        tags = process_tags_object(None)
+        assert tags.transaction is None
+        assert tags.keys == []
+        assert tags.values == []
+
+        # Invalid types
+
+        with pytest.raises(TypeError):
+            process_tags_object("hello")
+        with pytest.raises(TypeError):
+            process_tags_object(1)
 
     def test_normalize_tags(self) -> None:
         """Test "normalize_tags" function."""
