@@ -96,7 +96,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
 
         processed["timestamp"] = default(
-            maybe(datetimeify, replay_event.get("timestamp")), utcnow()
+            utcnow, maybe(datetimeify, replay_event.get("timestamp"))
         )
         processed["replay_start_timestamp"] = maybe(
             datetimeify, replay_event.get("replay_start_timestamp")
@@ -244,12 +244,12 @@ T = TypeVar("T")
 U = TypeVar("U")
 
 
-def default(value: Any, default: Any) -> Any:
+def default(default: Callable[[], T], value: T | None) -> T:
     """Return a default value only if the given value was null.
 
     Falsey types such as 0, "", False, [], {} are returned.
     """
-    return default if value is None else value
+    return default() if value is None else value
 
 
 def maybe(into: Callable[[T], U], value: T | None) -> U | None:
