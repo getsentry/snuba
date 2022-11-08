@@ -12,8 +12,8 @@ import pytest
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
     ReplaysProcessor,
+    _coerce_segment_id,
     _timestamp_to_datetime,
-    coerce_segment_id,
     datetimeify,
     maybe,
     normalize_tags,
@@ -411,18 +411,18 @@ class TestReplaysProcessor:
         ReplaysProcessor().process_message(message.serialize(), meta)
 
     def test_coerce_segment_id(self) -> None:
-        """Test "coerce_segment_id" function."""
-        assert coerce_segment_id(0) == 0
-        assert coerce_segment_id(65535) == 65535
-        assert coerce_segment_id(1.25) == 1
-        assert coerce_segment_id("1") == 1
+        """Test "_coerce_segment_id" function."""
+        assert _coerce_segment_id(0) == 0
+        assert _coerce_segment_id(65535) == 65535
+        assert _coerce_segment_id(1.25) == 1
+        assert _coerce_segment_id("1") == 1
 
         with pytest.raises(ValueError):
-            coerce_segment_id(65536)
+            _coerce_segment_id(65536)
         with pytest.raises(ValueError):
-            coerce_segment_id(-1)
+            _coerce_segment_id(-1)
         with pytest.raises(TypeError):
-            coerce_segment_id([1])
+            _coerce_segment_id([1])
 
     def test_datetimeify(self) -> None:
         """Test "datetimeify" function."""
