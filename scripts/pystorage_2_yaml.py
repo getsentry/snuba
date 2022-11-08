@@ -73,15 +73,19 @@ def convert_to_yaml(key: StorageKey, result_path: str) -> None:
         "storage": {"key": key.value, "set_key": storage.get_storage_set_key().value},
     }
     res["schema"] = _convert_schema(storage.get_schema())
-    res["query_processors"] = _convert_registered_classes(
+
+    if processors := _convert_registered_classes(
         storage.get_query_processors(), "processor"
-    )
-    res["query_splitters"] = _convert_registered_classes(
+    ):
+        res["query_processors"] = processors
+    if splitters := _convert_registered_classes(
         storage.get_query_splitters(), "splitter"
-    )
-    res["mandatory_condition_checkers"] = _convert_registered_classes(
+    ):
+        res["query_splitters"] = splitters
+    if checkers := _convert_registered_classes(
         storage.get_mandatory_condition_checkers(), "condition"
-    )
+    ):
+        res["mandatory_condition_checkers"] = checkers
     if isinstance(storage, WritableTableStorage):
         writer_options = storage.get_table_writer()._TableWriter__writer_options  # type: ignore
         if writer_options:
