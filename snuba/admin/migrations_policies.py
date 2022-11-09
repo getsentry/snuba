@@ -11,28 +11,37 @@ from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey
 
 
+def get_migration_group_polices() -> Dict[str, MigrationPolicy]:
+    """
+    Maps migration groups to their policies if as defined by the
+    ADMIN_ALLOWED_MIGRATION_GROUPS setting. If a group is not defined
+    it means no access at all to that group through admin.
+    """
+    return {
+        group_name: MigrationPolicy.class_from_name(policy_name)()
+        for group_name, policy_name in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.items()
+    }
+
+
 def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]:
     """
-    A wrapper decorator applied to endpoints handling migrations. It checks that
-    the migration group is in the ADMIN_ALLOWED_MIGRATION_GROUPS setting and checks
-    that the migration has the appropriate run/reverse policy
+    A wrapper decorator applied to endpoints handling migrations. It checks that we
+    have a policy for the group in question and that the migration is allowed for
+    the run/reverse policy defined.
     """
 
     @wraps(f)
     def check_group_perms(*args: Any, **kwargs: Any) -> Response:
-        ADMIN_ALLOWED_MIGRATION_GROUPS: Dict[str, MigrationPolicy] = {
-            group_name: MigrationPolicy.class_from_name(policy_name)()
-            for group_name, policy_name in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.items()
-        }
         group = kwargs["group"]
-        if group not in ADMIN_ALLOWED_MIGRATION_GROUPS:
+        group_polices = get_migration_group_polices()
+        if group not in group_polices:
             return make_response(jsonify({"error": "Group not allowed"}), 403)
 
         if "action" in kwargs:
             action = kwargs["action"]
             migration_id = kwargs["migration_id"]
             migration_key = MigrationKey(MigrationGroup(group), migration_id)
-            policy = ADMIN_ALLOWED_MIGRATION_GROUPS[group]
+            policy = group_polices[group]
 
             def str_to_bool(s: str) -> bool:
                 return s.strip().lower() == "true"
