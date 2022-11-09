@@ -230,6 +230,11 @@ def rate_limit(
     #              | current time
     pipe.zadd(query_bucket, {query_id: now + state.max_query_duration_s})
 
+    # bump the expiration date of the entire set so that it roughly aligns with
+    # the expiration date of the latest item. round up and cast to int since
+    # `expire` doesn't take floats
+    pipe.expire(query_bucket, int(state.max_query_duration_s + 1))
+
     if rate_limit_params.per_second_limit is not None:
         # count queries that have finished for the per-second rate
         for shard_i in range(rate_limit_shard_factor):

@@ -170,6 +170,16 @@ class TestRateLimit:
 
         assert count() == 2
 
+    def test_rate_limit_ttl(self) -> None:
+        params = RateLimitParameters("foo", "bar", None, 5)
+        bucket = "{}{}".format(state.ratelimit_prefix, params.bucket)
+
+        with rate_limit(params):
+            pass
+
+        ttl = get_redis_client(RedisClientKey.RATE_LIMITER).ttl(bucket)
+        assert 0 < ttl <= time.time() + state.max_query_duration_s
+
 
 tests = [
     pytest.param((0, 5, 5)),
