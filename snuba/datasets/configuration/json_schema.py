@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
@@ -121,6 +122,18 @@ def make_column_schema(
     }
 
 
+def del_name_field(column_schema: dict[str, Any]) -> dict[str, Any]:
+    """
+    Useful for simply removing the `name` field from a Column Schema.
+    Column types within Arrays do not have names but do maintain the
+    same structure as the column type itself.
+    """
+    new_column_schema = deepcopy(column_schema)
+    if "properties" in new_column_schema and "name" in new_column_schema["properties"]:
+        del new_column_schema["properties"]["name"]
+    return new_column_schema
+
+
 NUMBER_SCHEMA = make_column_schema(
     column_type={"enum": ["UInt", "Float"]},
     args={
@@ -138,19 +151,6 @@ NO_ARG_SCHEMA = make_column_schema(
     args={
         "type": "object",
         "properties": {},
-        "additionalProperties": False,
-    },
-)
-
-
-ARRAY_SCHEMA = make_column_schema(
-    column_type={"const": "Array"},
-    args={
-        "type": "object",
-        "properties": {
-            "type": TYPE_STRING,
-            "arg": {"type": "number"},
-        },
         "additionalProperties": False,
     },
 )
@@ -177,23 +177,145 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     },
 )
 
-COLUMN_TYPES = [
+SIMPLE_COLUMN_TYPES = [
     NUMBER_SCHEMA,
     NO_ARG_SCHEMA,
-    ARRAY_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
 ]
+
+SIMPLE_ARRAY_SUBCOLUMN_TYPES = [
+    del_name_field(col_type) for col_type in SIMPLE_COLUMN_TYPES
+]
+
+
+ARRAY_SCHEMA = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {
+            "type": TYPE_STRING,
+            "arg": {"type": "number"},
+        },
+        "additionalProperties": False,
+    },
+)
+
+
+SUB_ARRAY_SCHEMA = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {"inner_type": {"anyOf": SIMPLE_ARRAY_SUBCOLUMN_TYPES}},
+        "additionalProperties": False,
+    },
+)
+
+# Up to one subarray is supported. Eg Array(Array(String())).
+# ARRAY_SCHEMA = make_column_schema(
+#     column_type={"const": "Array"},
+#     args={
+#         "type": "object",
+#         "properties": {
+#             "inner_type": {"anyOf": [*SIMPLE_ARRAY_SUBCOLUMN_TYPES, SUB_ARRAY_SCHEMA]}
+#         },
+#         "additionalProperties": False,
+#     },
+# )
+
+COLUMN_TYPES = [
+    *SIMPLE_COLUMN_TYPES,
+    ARRAY_SCHEMA,
+]
+
+ARRAY_SUBCOLUMN_TYPES = [*SIMPLE_ARRAY_SUBCOLUMN_TYPES, del_name_field(ARRAY_SCHEMA)]
 
 NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},
     args={
         "type": "object",
         "properties": {
-            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
+            "subcolumns": {
+                "type": "array",
+                "items": {"anyOf": COLUMN_TYPES},
+            }
         },
         "additionalProperties": False,
     },
 )
+
+# {
+#     "definitions": {
+#         "MenuItem": {
+#             "title": "MenuItem",
+#             "properties": {
+#                 "display_name": {
+#                     "type": "string",
+#                     "title": "Link display name",
+#                     "minLength": 2,
+#                 },
+#                 "url": {"type": "string", "title": "URL address", "minLength": 2},
+#                 "children": {
+#                     "type": "array",
+#                     "title": "Children",
+#                     "items": {"$ref": "#/definitions/MenuItem"},
+#                 },
+#             },
+#         }
+#     },
+#     "title": "MenuItems",
+#     "type": "array",
+#     "items": {"$ref": "#/definitions/MenuItem"},
+# }
+
+# {
+#     "type": "object",
+#     # "items": {"$ref": "#/definitions/MenuItem"},
+#     "properties": {},
+#     "definitions": {
+#         "ArraySchema": {
+#             "type": "object",
+#             "properties": {
+#                 "name": TYPE_STRING,
+#                 "type": {"const": "Array"},
+#                 "args": {
+#                     "type": "object",
+#                     "properties": {
+#                         "schema_modifiers": TYPE_STRING_ARRAY,
+#                         "inner_type": {
+#                             "anyOf": COLUMN_TYPES
+#                             + [{"$ref": "#/definitions/ArraySchema"}]
+#                         },
+#                     },
+#                     "additionalProperties": False,
+#                 },
+#             },
+#             "additionalProperties": False,
+#         }
+#     },
+#     "additionalProperties": False,
+# }
+
+
+# ARRAY_SCHEMA2 = {
+#     "type": "object",
+#     "properties": {
+#         "name": TYPE_STRING,
+#         "type": {"const": "Array"},
+#         "args": {
+#             "type": "object",
+#             "properties": {
+#                 "schema_modifiers": TYPE_STRING_ARRAY,
+#                 "inner_type": {
+#                     "anyOf": COLUMN_TYPES + [{"$ref": "#/definitions/ArraySchema"}],
+#                     "definitions": {},
+#                 },
+#             },
+#             "additionalProperties": False,
+#         },
+#     },
+#     "additionalProperties": False,
+# }
+
 
 SCHEMA_COLUMNS = {
     "type": "array",

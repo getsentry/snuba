@@ -470,10 +470,9 @@ class FixedString(ColumnType[TModifiers]):
         return FixedString(self.length)
 
 
-class UInt(ColumnType[TModifiers]):
+class _Number(ColumnType[TModifiers]):
     def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
         super().__init__(modifiers)
-        assert size in (8, 16, 32, 64)
         self.size = size
 
     def _repr_content(self) -> str:
@@ -482,9 +481,15 @@ class UInt(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(UInt[TModifiers], other).get_modifiers()
-            and self.size == cast(UInt[TModifiers], other).size
+            and self.get_modifiers() == cast(_Number[TModifiers], other).get_modifiers()
+            and self.size == cast(_Number[TModifiers], other).size
         )
+
+
+class UInt(_Number[TModifiers]):
+    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+        super().__init__(size, modifiers)
+        assert size in (8, 16, 32, 64)
 
     def _for_schema_impl(self) -> str:
         return "UInt{}".format(self.size)
@@ -496,25 +501,10 @@ class UInt(ColumnType[TModifiers]):
         return UInt(self.size)
 
 
-class Float(ColumnType[TModifiers]):
-    def __init__(
-        self,
-        size: int,
-        modifiers: Optional[TModifiers] = None,
-    ) -> None:
-        super().__init__(modifiers)
+class Float(_Number[TModifiers]):
+    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+        super().__init__(size, modifiers)
         assert size in (32, 64)
-        self.size = size
-
-    def _repr_content(self) -> str:
-        return str(self.size)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Float[TModifiers], other).get_modifiers()
-            and self.size == cast(Float[TModifiers], other).size
-        )
 
     def _for_schema_impl(self) -> str:
         return "Float{}".format(self.size)

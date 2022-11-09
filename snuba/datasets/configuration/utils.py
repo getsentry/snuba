@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Type, TypedDict
 
 from arroyo import Topic as KafkaTopic
 from arroyo.backends.kafka import KafkaProducer
@@ -22,7 +22,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.utils.schemas import UUID, AggregateFunction, IPv4, IPv6
+from snuba.utils.schemas import UUID, AggregateFunction, ColumnType, IPv4, IPv6, _Number
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -95,9 +95,12 @@ def get_mandatory_condition_checkers(
     ]
 
 
-NUMBER_COLUMN_TYPES = {"UInt": UInt, "Float": Float}
+NUMBER_COLUMN_TYPES: dict[str, Type[_Number[SchemaModifiers]]] = {
+    "UInt": UInt,
+    "Float": Float,
+}
 
-SIMPLE_COLUMN_TYPES = {
+SIMPLE_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
     **NUMBER_COLUMN_TYPES,
     "String": String,
     "DateTime": DateTime,
@@ -109,60 +112,54 @@ SIMPLE_COLUMN_TYPES = {
 
 def __parse_simple(
     col: dict[str, Any], modifiers: SchemaModifiers | None
-) -> Column[SchemaModifiers]:
-    return Column(col["name"], SIMPLE_COLUMN_TYPES[col["type"]](modifiers))
+) -> ColumnType[SchemaModifiers]:
+    return SIMPLE_COLUMN_TYPES[col["type"]](modifiers)
 
 
 def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
-) -> Column[SchemaModifiers]:
-    return Column(
-        col["name"], NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
-    )
+) -> ColumnType[SchemaModifiers]:
+    return NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
+
+
+def __parse_column_type(
+    col: dict[str, Any], no_name: bool = False
+) -> ColumnType[SchemaModifiers]:
+    # TODO: Add more of Column/Value types as needed
+
+    column_type: ColumnType[SchemaModifiers] | None = None
+
+    modifiers: SchemaModifiers | None = None
+    if "args" in col and "schema_modifiers" in col["args"]:
+        modifiers = SchemaModifiers(
+            "nullable" in col["args"]["schema_modifiers"],
+            "readonly" in col["args"]["schema_modifiers"],
+        )
+    if col["type"] in NUMBER_COLUMN_TYPES:
+        column_type = __parse_number(col, modifiers)
+    elif col["type"] in SIMPLE_COLUMN_TYPES:
+        column_type = __parse_simple(col, modifiers)
+    elif col["type"] == "Nested":
+        column_type = Nested(parse_columns(col["args"]["subcolumns"]), modifiers)
+    elif col["type"] == "Array":
+        column_type = Array(
+            SIMPLE_COLUMN_TYPES[col["args"]["type"]](col["args"]["arg"]),
+            modifiers,
+        )
+
+    elif col["type"] == "AggregateFunction":
+        column_type = AggregateFunction(
+            col["args"]["func"],
+            [
+                SIMPLE_COLUMN_TYPES[c["type"]](c["arg"])
+                if "arg" in c
+                else SIMPLE_COLUMN_TYPES[c["type"]]()
+                for c in col["args"]["arg_types"]
+            ],
+        )
+    assert column_type is not None
+    return column_type
 
 
 def parse_columns(columns: list[dict[str, Any]]) -> list[Column[SchemaModifiers]]:
-    # TODO: Add more of Column/Value types as needed
-
-    cols: list[Column[SchemaModifiers]] = []
-
-    for col in columns:
-        column: Column[SchemaModifiers] | None = None
-        modifiers: SchemaModifiers | None = None
-        if "args" in col and "schema_modifiers" in col["args"]:
-            modifiers = SchemaModifiers(
-                "nullable" in col["args"]["schema_modifiers"],
-                "readonly" in col["args"]["schema_modifiers"],
-            )
-        if col["type"] in NUMBER_COLUMN_TYPES:
-            column = __parse_number(col, modifiers)
-        elif col["type"] in SIMPLE_COLUMN_TYPES:
-            column = __parse_simple(col, modifiers)
-        elif col["type"] == "Nested":
-            column = Column(
-                col["name"], Nested(parse_columns(col["args"]["subcolumns"]), modifiers)
-            )
-        elif col["type"] == "Array":
-            column = Column(
-                col["name"],
-                Array(
-                    SIMPLE_COLUMN_TYPES[col["args"]["type"]](col["args"]["arg"]),
-                    modifiers,
-                ),
-            )
-        elif col["type"] == "AggregateFunction":
-            column = Column(
-                col["name"],
-                AggregateFunction(
-                    col["args"]["func"],
-                    [
-                        SIMPLE_COLUMN_TYPES[c["type"]](c["arg"])
-                        if "arg" in c
-                        else SIMPLE_COLUMN_TYPES[c["type"]]()
-                        for c in col["args"]["arg_types"]
-                    ],
-                ),
-            )
-        assert column is not None
-        cols.append(column)
-    return cols
+    return [Column(col["name"], __parse_column_type(col)) for col in columns]
