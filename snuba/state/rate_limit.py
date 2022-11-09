@@ -231,9 +231,23 @@ def rate_limit(
     pipe.zadd(query_bucket, {query_id: now + state.max_query_duration_s})
 
     # bump the expiration date of the entire set so that it roughly aligns with
-    # the expiration date of the latest item. round up and cast to int since
-    # `expire` doesn't take floats
-    pipe.expire(query_bucket, int(state.max_query_duration_s + 1))
+    # the expiration date of the latest item.
+    #
+    # we do this in order to avoid leaking redis sets in the event that two
+    # things occur at the same time:
+    # 1. a bucket stops receiving requests (this can happen if a bucket
+    #    corresponds to a deleted project id)
+    # 2. a previous request to the same bucket was killed off so that the set
+    #    has a dangling item (ie. a process was killed)
+    #
+    # the TTL is calculated as such:
+    #
+    # * in the previous zadd command, the last item is inserted with timestamp
+    #   `now + max_query_duration_s`.
+    # * the next query's zremrangebyscore would remove this item on `now +
+    #   max_query_duration_s + rate_history_s` at the earliest.
+    # * add +1 to account for rounding errors when casting to int
+    pipe.expire(query_bucket, int(state.max_query_duration_s + rate_history_s + 1))
 
     if rate_limit_params.per_second_limit is not None:
         # count queries that have finished for the per-second rate
@@ -255,7 +269,8 @@ def rate_limit(
     try:
         pipe_results = iter(pipe.execute())
 
-        # skip zremrangebyscore and zadd
+        # skip zremrangebyscore, zadd and expire
+        next(pipe_results)
         next(pipe_results)
         next(pipe_results)
 
