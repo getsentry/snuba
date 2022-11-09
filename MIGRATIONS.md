@@ -109,7 +109,6 @@ A ClickhouseNodeMigration is the most common type of migration and determines th
 
 The `forwards_local_first` and `backwards_local_first` attributes allow you to specify the order of operations. By default `forwards_local_first = True` and `backwards_local_first = False`, this means in the forwards step `_local` is run before `_dist`, and in the backwards step it's the opposite. For some SQL operations, such `AddColumn` and `CreateTable`, it's important to apply them on local nodes before distributed. For others, such as `DropColumn`, it's importants to apply them on the distributed first.
 
-
 For each forwards method, you should provide the sequence of operations to be run on that node. In case the forwards methods fail halfway, the corresponding backwards methods should also restore the original state so the migration can be retried.
 For example if a temporary table is created during the forwards migration, the backwards migration should drop it.
 
