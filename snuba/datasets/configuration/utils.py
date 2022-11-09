@@ -22,7 +22,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
-from snuba.utils.schemas import UUID, AggregateFunction, ColumnType, IPv4, IPv6, _Number
+from snuba.utils.schemas import UUID, AggregateFunction, ColumnType, IPv4, IPv6
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -95,7 +95,7 @@ def get_mandatory_condition_checkers(
     ]
 
 
-NUMBER_COLUMN_TYPES: dict[str, Type[_Number[SchemaModifiers]]] = {
+NUMBER_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
     "UInt": UInt,
     "Float": Float,
 }
@@ -119,7 +119,9 @@ def __parse_simple(
 def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> ColumnType[SchemaModifiers]:
-    return NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
+    col_type = NUMBER_COLUMN_TYPES[col["type"]]
+    # UInt and Float ColumnType accepts a size parameter
+    return col_type(col["args"]["size"], modifiers)  # type: ignore
 
 
 def __parse_column_type(
