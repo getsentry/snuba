@@ -178,7 +178,7 @@ class TestRateLimit:
             pass
 
         ttl = get_redis_client(RedisClientKey.RATE_LIMITER).ttl(bucket)
-        assert 0 < ttl <= time.time() + state.max_query_duration_s
+        assert 0 < ttl <= 3600 + 60 + 1
 
 
 tests = [
