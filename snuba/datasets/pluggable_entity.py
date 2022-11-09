@@ -6,16 +6,16 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.partitioning import is_storage_sliced
-from snuba.datasets.plans.partitioned_storage import (
-    ColumnBasedStoragePartitionSelector,
-    PartitionedStorageQueryPlanBuilder,
-)
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.sliced_storage import (
+    ColumnBasedStorageSliceSelector,
+    SlicedStorageQueryPlanBuilder,
+)
+from snuba.datasets.slicing import is_storage_sliced
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
@@ -74,10 +74,10 @@ class PluggableEntity(Entity):
                 self.partition_key_column_name is not None
             ), "partition key column name must be defined for a sliced storage"
             query_plan_builder: ClickhouseQueryPlanBuilder = (
-                PartitionedStorageQueryPlanBuilder(
+                SlicedStorageQueryPlanBuilder(
                     storage=self.readable_storage,
                     mappers=self.translation_mappers,
-                    storage_cluster_selector=ColumnBasedStoragePartitionSelector(
+                    storage_cluster_selector=ColumnBasedStorageSliceSelector(
                         storage=self.readable_storage.get_storage_key(),
                         storage_set=self.readable_storage.get_storage_set_key(),
                         partition_key_column_name=self.partition_key_column_name,

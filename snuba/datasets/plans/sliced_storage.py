@@ -7,11 +7,6 @@ from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.partitioning import (
-    is_storage_sliced,
-    map_logical_partition_to_slice,
-    map_org_id_to_logical_partition,
-)
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -21,6 +16,11 @@ from snuba.datasets.plans.single_storage import (
     get_query_data_source,
 )
 from snuba.datasets.plans.translator.query import QueryTranslator
+from snuba.datasets.slicing import (
+    is_storage_sliced,
+    map_logical_partition_to_slice,
+    map_org_id_to_logical_partition,
+)
 from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query as LogicalQuery
@@ -49,11 +49,11 @@ class StorageClusterSelector(ABC):
         raise NotImplementedError
 
 
-class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
+class ColumnBasedStorageSliceSelector(StorageClusterSelector):
     """
-    Storage partition selector for the generic metrics storage. This is needed
-    because the generic metrics storage can be partitioned and we would need to
-    know which partition to use for a specific query.
+    Storage slice selector for the generic metrics storage. This is needed
+    because the generic metrics storage can be sliced and we would need to
+    know which slice to use for a specific query.
     """
 
     def __init__(
@@ -89,10 +89,10 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
         return cluster
 
 
-class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
+class SlicedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
     Builds the Clickhouse Query Execution Plan for a dataset that is
-    partitioned.
+    sliced.
     """
 
     def __init__(

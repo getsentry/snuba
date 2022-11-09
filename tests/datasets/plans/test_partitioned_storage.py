@@ -5,7 +5,7 @@ import pytest
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.plans.partitioned_storage import ColumnBasedStoragePartitionSelector
+from snuba.datasets.plans.sliced_storage import ColumnBasedStorageSliceSelector
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -88,7 +88,7 @@ def test_column_based_partition_selector(org_id: int, expected_slice_db: str) ->
     )
 
     settings = HTTPQuerySettings()
-    selector = ColumnBasedStoragePartitionSelector(
+    selector = ColumnBasedStorageSliceSelector(
         DISTS_STORAGE_KEY,
         DISTS_STORAGE_SET_KEY,
         "org_id",

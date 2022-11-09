@@ -1,5 +1,5 @@
 ===========================================
-Snuba Data Partitioning (under development)
+Snuba Data Slicing (under development)
 ===========================================
 
 *This feature is under active development and is subject to change*
@@ -23,7 +23,7 @@ Adding a slice
 
 Add the logical:physical mapping
 --------------------------------
-To add a physical partition to a storage's logical:physical mapping, or repartition,
+To add a slice to a storage's logical:physical mapping, or repartition,
 increment the slice count in ``settings.SLICED_STORAGES`` for the relevant
 storage. Change the mapping of the relevant storage's
 logical partitions in ``settings.LOGICAL_PARTITION_MAPPING``.
