@@ -220,10 +220,7 @@ NESTED_SCHEMA = make_column_schema(
     args={
         "type": "object",
         "properties": {
-            "subcolumns": {
-                "type": "array",
-                "items": {"anyOf": COLUMN_TYPES},
-            }
+            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
         },
         "additionalProperties": False,
     },

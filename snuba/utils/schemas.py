@@ -497,7 +497,11 @@ class UInt(ColumnType[TModifiers]):
 
 
 class Float(ColumnType[TModifiers]):
-    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+    def __init__(
+        self,
+        size: int,
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
         super().__init__(modifiers)
         assert size in (32, 64)
         self.size = size
