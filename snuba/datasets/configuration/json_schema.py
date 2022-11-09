@@ -188,20 +188,7 @@ SIMPLE_ARRAY_SUBCOLUMN_TYPES = [
 ]
 
 
-ARRAY_SCHEMA = make_column_schema(
-    column_type={"const": "Array"},
-    args={
-        "type": "object",
-        "properties": {
-            "type": TYPE_STRING,
-            "arg": {"type": "number"},
-        },
-        "additionalProperties": False,
-    },
-)
-
-
-SUB_ARRAY_SCHEMA = make_column_schema(
+_SUB_ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
@@ -211,16 +198,16 @@ SUB_ARRAY_SCHEMA = make_column_schema(
 )
 
 # Up to one subarray is supported. Eg Array(Array(String())).
-# ARRAY_SCHEMA = make_column_schema(
-#     column_type={"const": "Array"},
-#     args={
-#         "type": "object",
-#         "properties": {
-#             "inner_type": {"anyOf": [*SIMPLE_ARRAY_SUBCOLUMN_TYPES, SUB_ARRAY_SCHEMA]}
-#         },
-#         "additionalProperties": False,
-#     },
-# )
+ARRAY_SCHEMA = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_type": {"anyOf": [*SIMPLE_ARRAY_SUBCOLUMN_TYPES, _SUB_ARRAY_SCHEMA]}
+        },
+        "additionalProperties": False,
+    },
+)
 
 COLUMN_TYPES = [
     *SIMPLE_COLUMN_TYPES,
@@ -242,80 +229,6 @@ NESTED_SCHEMA = make_column_schema(
         "additionalProperties": False,
     },
 )
-
-# {
-#     "definitions": {
-#         "MenuItem": {
-#             "title": "MenuItem",
-#             "properties": {
-#                 "display_name": {
-#                     "type": "string",
-#                     "title": "Link display name",
-#                     "minLength": 2,
-#                 },
-#                 "url": {"type": "string", "title": "URL address", "minLength": 2},
-#                 "children": {
-#                     "type": "array",
-#                     "title": "Children",
-#                     "items": {"$ref": "#/definitions/MenuItem"},
-#                 },
-#             },
-#         }
-#     },
-#     "title": "MenuItems",
-#     "type": "array",
-#     "items": {"$ref": "#/definitions/MenuItem"},
-# }
-
-# {
-#     "type": "object",
-#     # "items": {"$ref": "#/definitions/MenuItem"},
-#     "properties": {},
-#     "definitions": {
-#         "ArraySchema": {
-#             "type": "object",
-#             "properties": {
-#                 "name": TYPE_STRING,
-#                 "type": {"const": "Array"},
-#                 "args": {
-#                     "type": "object",
-#                     "properties": {
-#                         "schema_modifiers": TYPE_STRING_ARRAY,
-#                         "inner_type": {
-#                             "anyOf": COLUMN_TYPES
-#                             + [{"$ref": "#/definitions/ArraySchema"}]
-#                         },
-#                     },
-#                     "additionalProperties": False,
-#                 },
-#             },
-#             "additionalProperties": False,
-#         }
-#     },
-#     "additionalProperties": False,
-# }
-
-
-# ARRAY_SCHEMA2 = {
-#     "type": "object",
-#     "properties": {
-#         "name": TYPE_STRING,
-#         "type": {"const": "Array"},
-#         "args": {
-#             "type": "object",
-#             "properties": {
-#                 "schema_modifiers": TYPE_STRING_ARRAY,
-#                 "inner_type": {
-#                     "anyOf": COLUMN_TYPES + [{"$ref": "#/definitions/ArraySchema"}],
-#                     "definitions": {},
-#                 },
-#             },
-#             "additionalProperties": False,
-#         },
-#     },
-#     "additionalProperties": False,
-# }
-
 
 SCHEMA_COLUMNS = {
     "type": "array",

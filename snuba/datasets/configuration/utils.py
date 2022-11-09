@@ -124,9 +124,7 @@ def __parse_number(
     return col_type(col["args"]["size"], modifiers)  # type: ignore
 
 
-def __parse_column_type(
-    col: dict[str, Any], no_name: bool = False
-) -> ColumnType[SchemaModifiers]:
+def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
     # TODO: Add more of Column/Value types as needed
 
     column_type: ColumnType[SchemaModifiers] | None = None
@@ -144,11 +142,7 @@ def __parse_column_type(
     elif col["type"] == "Nested":
         column_type = Nested(parse_columns(col["args"]["subcolumns"]), modifiers)
     elif col["type"] == "Array":
-        column_type = Array(
-            SIMPLE_COLUMN_TYPES[col["args"]["type"]](col["args"]["arg"]),
-            modifiers,
-        )
-
+        column_type = Array(__parse_column_type(col["args"]["inner_type"]), modifiers)
     elif col["type"] == "AggregateFunction":
         column_type = AggregateFunction(
             col["args"]["func"],

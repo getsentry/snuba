@@ -56,7 +56,11 @@ schema:
     {
       name: _tags_hash_map,
       type: Array,
-      args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
+      args:
+        {
+          inner_type:
+            { type: UInt, args: { size: 64, schema_modifiers: [readonly] } },
+        },
     },
     {
       name: contexts,
@@ -115,7 +119,11 @@ schema:
     { name: title, type: String, args: { schema_modifiers: [readonly] } },
     { name: transaction_source, type: String },
     { name: timestamp, type: DateTime, args: { schema_modifiers: [readonly] } },
-    { name: group_ids, type: Array, args: { type: UInt, arg: 64 } },
+    {
+      name: group_ids,
+      type: Array,
+      args: { inner_type: { type: UInt, args: { size: 64 } } },
+    },
     { name: app_start_type, type: String },
   ]
 
