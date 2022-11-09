@@ -287,6 +287,7 @@ OPTIMIZE_JOB_CUTOFF_TIME = timedelta(hours=23)
 OPTIMIZE_QUERY_TIMEOUT = 4 * 60 * 60  # 4 hours
 # sleep time to wait for a merge to complete
 OPTIMIZE_BASE_SLEEP_TIME = 300  # 5 mins
+OPTIMIZE_MAX_SLEEP_TIME = 2 * 60 * 60  # 2 hours
 # merges longer than this will be considered long running
 OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 # merges larger than this will be considered large and will be waited on

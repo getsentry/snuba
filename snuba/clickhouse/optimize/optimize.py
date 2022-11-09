@@ -16,6 +16,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
     OPTIMIZE_BASE_SLEEP_TIME,
+    OPTIMIZE_MAX_SLEEP_TIME,
     OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
     OPTIMIZE_MERGE_SIZE_CUTOFF,
 )
@@ -93,6 +94,9 @@ def run_optimize_cron_job(
     while is_busy_merging(clickhouse, database, table):
         logger.info(f"busy merging, sleeping for {OPTIMIZE_BASE_SLEEP_TIME}s")
         time.sleep(OPTIMIZE_BASE_SLEEP_TIME)
+        if time.time() - start > OPTIMIZE_MAX_SLEEP_TIME:
+            logger.info("timed out waiting for merge to finish. resuming optimization.")
+            break
 
     try:
         partitions_to_optimize = tracker.get_partitions_to_optimize()
