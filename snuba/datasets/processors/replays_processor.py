@@ -280,7 +280,7 @@ def _encode_utf8(value: str) -> str:
 @dataclasses.dataclass
 class Tag:
     keys: list[str]
-    values: list[str | None]
+    values: list[str]
     transaction: str | None
 
     @classmethod
@@ -305,7 +305,7 @@ def process_tags_object(value: Any) -> Tag:
 
         if key == "transaction":
             transaction = parsed_value
-        else:
+        elif parsed_value is not None:
             keys.append(parsed_key)
             values.append(parsed_value)
 
