@@ -425,7 +425,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                     start_time, end_time, project_id
                 )
         if need_optimize:
-            from snuba.optimize import run_optimize
+            from snuba.clickhouse.optimize.optimize import run_optimize
 
             today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             num_dropped = run_optimize(
