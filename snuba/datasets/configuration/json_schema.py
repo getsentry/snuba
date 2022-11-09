@@ -183,27 +183,27 @@ SIMPLE_COLUMN_TYPES = [
     AGGREGATE_FUNCTION_SCHEMA,
 ]
 
-SIMPLE_ARRAY_SUBCOLUMN_TYPES = [
+# Array inner types are the same as normal column types except they don't have a name
+_SIMPLE_ARRAY_INNER_TYPES = [
     del_name_field(col_type) for col_type in SIMPLE_COLUMN_TYPES
 ]
 
-
+# Up to one subarray is supported. Eg Array(Array(String())).
 _SUB_ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
-        "properties": {"inner_type": {"anyOf": SIMPLE_ARRAY_SUBCOLUMN_TYPES}},
+        "properties": {"inner_type": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES}},
         "additionalProperties": False,
     },
 )
 
-# Up to one subarray is supported. Eg Array(Array(String())).
 ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
     args={
         "type": "object",
         "properties": {
-            "inner_type": {"anyOf": [*SIMPLE_ARRAY_SUBCOLUMN_TYPES, _SUB_ARRAY_SCHEMA]}
+            "inner_type": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, _SUB_ARRAY_SCHEMA]}
         },
         "additionalProperties": False,
     },
@@ -214,7 +214,6 @@ COLUMN_TYPES = [
     ARRAY_SCHEMA,
 ]
 
-ARRAY_SUBCOLUMN_TYPES = [*SIMPLE_ARRAY_SUBCOLUMN_TYPES, del_name_field(ARRAY_SCHEMA)]
 
 NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},
