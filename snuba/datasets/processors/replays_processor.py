@@ -276,19 +276,7 @@ def datetimeify(value: Any) -> datetime:
 
     Datetimes for the replays schema standardize on 32 bit dates.
     """
-    return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, _intify(value)))
-
-
-def _intify(value: Any) -> int:
-    """Return an integer or err."""
-    if isinstance(value, int):
-        return value
-    elif isinstance(value, (str, float)):
-        return int(value)
-    else:
-        raise TypeError(
-            f'Expected value of type "int"; received "{type(value)}" with a value of "{value}".'
-        )
+    return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, int(value)))
 
 
 def _collapse_or_err(callable: Callable[[int], int | None], value: int) -> int:
@@ -308,7 +296,7 @@ def _timestamp_to_datetime(timestamp: int) -> datetime:
 
 def _coerce_segment_id(value: Any) -> int:
     """Return a 16-bit integer or err."""
-    return _collapse_or_err(_collapse_uint16, _intify(value))
+    return _collapse_or_err(_collapse_uint16, int(value))
 
 
 def utcnow() -> datetime:
