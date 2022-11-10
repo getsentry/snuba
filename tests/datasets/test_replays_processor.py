@@ -332,6 +332,36 @@ class TestReplaysProcessor:
         assert processed_message.rows[0]["timestamp"] == now
         assert processed_message.rows[0]["replay_start_timestamp"] == now
 
+    def test_process_message_minimal_payload(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        minimal_payload = {
+            "type": "replay_event",
+            "start_time": datetime.now().timestamp(),
+            "replay_id": str(uuid.uuid4()),
+            "project_id": 1,
+            "retention_days": 30,
+            "payload": list(
+                bytes(
+                    json.dumps(
+                        {
+                            "type": "replay_event",
+                            "replay_id": str(uuid.uuid4()),
+                            "segment_id": None,
+                            "platform": "internal",
+                        }
+                    ).encode()
+                )
+            ),
+        }
+
+        # Asserting that the minimal payload was successfully processed.
+        result = ReplaysProcessor().process_message(minimal_payload, meta)
+        assert isinstance(result, InsertBatch)
+        assert len(result.rows) == 1
+
     def test_process_message_nulls(self) -> None:
         meta = KafkaMessageMetadata(
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
