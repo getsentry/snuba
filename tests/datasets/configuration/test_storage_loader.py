@@ -18,6 +18,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage,
     sets_storage,
 )
+from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -94,6 +95,7 @@ class TestStorageConfiguration(ConfigurationTest):
         sets_bucket_storage,
         sets_storage,
         transactions,
+        profiles,
     ]
 
     def test_config_file_discovery(self) -> None:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import uuid
 from typing import Any, Mapping, Optional, Sequence, Union
@@ -111,6 +113,30 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "clickhouse_queries.array_join_columns": array_join_columns,
         }
 
+    def _remove_invalid_data(self, processed: dict[str, Any]) -> None:
+        valid_project_ids = []
+        # Ignore negative project IDs
+        for pid in processed["projects"]:
+            try:
+                p = int(pid)
+            except ValueError:
+                logger.error(
+                    "Invalid project id",
+                    extra=processed,
+                    exc_info=True,
+                )
+                continue
+
+            if p <= 0:
+                logger.error(
+                    "Invalid project id",
+                    extra=processed,
+                    exc_info=True,
+                )
+                continue
+            valid_project_ids.append(pid)
+        processed["projects"] = valid_project_ids
+
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
@@ -125,26 +151,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "organization": None,
             **self.__extract_query_list(message["query_list"]),
         }
-
-        # Ignore negative project IDs
-        for pid in processed["projects"]:
-            try:
-                p = int(pid)
-            except ValueError:
-                logger.error(
-                    "Invalid project id",
-                    extra=processed,
-                    exc_info=True,
-                )
-                return None
-
-            if p <= 0:
-                logger.error(
-                    "Invalid project id",
-                    extra=processed,
-                    exc_info=True,
-                )
-                return None
+        self._remove_invalid_data(processed)
 
         # These fields are sometimes missing from the payload. If they are missing, don't
         # add them to processed so Clickhouse sets a default value for them.
