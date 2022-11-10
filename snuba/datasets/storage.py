@@ -167,7 +167,6 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             writer_options=writer_options,
             write_format=write_format,
         )
-
         self.__ignore_write_errors = ignore_write_errors
 
     def get_table_writer(self) -> TableWriter:

@@ -43,9 +43,7 @@ def is_storage_partitioned(storage: StorageKey) -> bool:
     return True if storage.value in SLICED_STORAGES.keys() else False
 
 
-def validate_passed_slice(
-    storage_key: StorageKey, slice_id: Optional[int] = None
-) -> None:
+def validate_passed_slice(storage_key: StorageKey, slice_id: Optional[int]) -> None:
     """
     Verifies that the given storage can be sliced
     and that the slice_id passed in is within the range
