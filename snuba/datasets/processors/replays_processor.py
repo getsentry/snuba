@@ -159,7 +159,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
 
         segment_id_bytes = force_bytes(str((replay_event["segment_id"])))
         segment_hash = md5(segment_id_bytes).hexdigest()
-        processed["event_hash"] = str(uuid.UUID(segment_hash))
+        processed["event_hash"] = to_uuid(segment_hash)
 
     def process_message(
         self, message: Mapping[Any, Any], metadata: KafkaMessageMetadata
