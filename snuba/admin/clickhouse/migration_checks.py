@@ -159,6 +159,14 @@ class PolicyChecker(Checker):
 def do_checks(
     checkers: Sequence[Checker], migration_id: str
 ) -> Tuple[ResultReason, ResultReason]:
+    """
+    Execute the can_run and can_reverse functionality
+    for the checkers.
+
+    Returns the failed ResultReason(s) for the first
+    check to fail in the sequence, otherwise returns
+    a passing ResultReason.
+    """
 
     assert len(checkers) >= 1
 
@@ -175,9 +183,17 @@ def do_checks(
     return run_result, reverse_result
 
 
-def checks_for_group(
+def migration_checks_for_group(
     migration_group: MigrationGroup, migrations: Sequence[MigrationDetails]
 ) -> Sequence[MigrationData]:
+    """
+    Responsible for initializing the checkers to be used to
+    validate whether migrations can be run/reversed for a specific
+    migration group.
+
+    Returns the list of migrations with the results of the checks
+    in addition to migration details (id, status, blocking)
+    """
     migration_ids: List[MigrationData] = []
 
     status_checker = StatusChecker(migration_group, migrations)

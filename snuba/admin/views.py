@@ -12,7 +12,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from snuba import settings, state
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-from snuba.admin.clickhouse.migration_checks import checks_for_group
+from snuba.admin.clickhouse.migration_checks import migration_checks_for_group
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
@@ -102,7 +102,7 @@ def migrations_groups() -> Response:
                 "run_reason": m.run_reason,
                 "reverse_reason": m.reverse_reason,
             }
-            for m in checks_for_group(group, migrations)
+            for m in migration_checks_for_group(group, migrations)
         ]
         res.append({"group": group.value, "migration_ids": migration_ids})
     return make_response(jsonify(res), 200)
