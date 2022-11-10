@@ -13,6 +13,7 @@ import {
   QueryResult,
   PredefinedQuery,
 } from "./clickhouse_queries/types";
+import { MigrationGroup } from "./clickhouse_migrations";
 import { TracingRequest, TracingResult } from "./tracing/types";
 import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
@@ -43,6 +44,7 @@ interface Client {
   getKafkaData: () => Promise<KafkaTopicData[]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
+  getAllMigrationGroups: () => Promise<MigrationGroup[]>;
 }
 
 function Client() {
@@ -219,6 +221,12 @@ function Client() {
           return resp.json().then(Promise.reject.bind(Promise));
         }
       });
+    },
+    getAllMigrationGroups: () => {
+      const url = baseUrl + "migrations/groups";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
     },
   };
 }

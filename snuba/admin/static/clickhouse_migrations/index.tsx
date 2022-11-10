@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import Client from "../api_client";
 import { Table } from "../table";
 
-type MigrationGroup = {
-  groupName: string;
-  migrations: MigrationData[];
+export type MigrationGroup = {
+  group: string;
+  migration_ids: MigrationData[];
 };
 
 type MigrationData = {
@@ -39,12 +40,12 @@ const Events2 = {
   migration_id: "0002_migration",
 };
 
-const MIGRATIONS: groupOptions = {
-  events: {
-    groupName: "events",
-    migrations: [Events1, Events2],
-  },
-};
+// const MIGRATIONS: groupOptions = {
+//   events: {
+//     groupName: "events",
+//     migrations: [Events1, Events2],
+//   },
+// };
 
 const SQLforwards =
   "Local operations:\
@@ -65,14 +66,24 @@ Dist operations:\
 \n\n\
 Skipped dist operation - single node cluster";
 
-function ClickhouseMigrations() {
+function ClickhouseMigrations(props: { api: Client }) {
+  const [allGroups, setAllGroups] = useState<groupOptions>({});
   const [migrationGroup, setMigrationGroup] = useState<MigrationGroup | null>(
     null
   );
   const [migrationId, setMigrationId] = useState<string | null>(null);
   const [SQLText, setSQLText] = useState<string | null>(null);
+
+  useEffect(() => {
+    props.api.getAllMigrationGroups().then((res) => {
+      let options: groupOptions = {};
+      res.forEach((group: MigrationGroup) => (options[group.group] = group));
+      setAllGroups(options);
+    });
+  }, []);
+
   function selectGroup(groupName: string) {
-    const migrationGroup: MigrationGroup = MIGRATIONS[groupName];
+    const migrationGroup: MigrationGroup = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
   }
 
@@ -82,7 +93,7 @@ function ClickhouseMigrations() {
   }
 
   function execute(action: string) {
-    const data = migrationGroup?.migrations.find(
+    const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
     if (data?.blocking) {
@@ -96,7 +107,7 @@ function ClickhouseMigrations() {
   function rowData() {
     if (migrationGroup) {
       let data: any = [];
-      MIGRATIONS[migrationGroup.groupName].migrations.forEach((migration) => {
+      allGroups[migrationGroup.group].migration_ids.forEach((migration) => {
         data.push([
           migration.migration_id,
           migration.status,
@@ -119,7 +130,7 @@ function ClickhouseMigrations() {
           <option disabled={!migrationGroup} value="">
             Select a migration id
           </option>
-          {MIGRATIONS[migrationGroup.groupName].migrations.map(
+          {allGroups[migrationGroup.group].migration_ids.map(
             (m: MigrationData) => (
               <option key={m.migration_id} value={m.migration_id}>
                 {m.migration_id} - {m.status}
@@ -147,7 +158,7 @@ function ClickhouseMigrations() {
     if (!(migrationGroup && migrationId)) {
       return null;
     }
-    const data = migrationGroup?.migrations.find(
+    const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
 
@@ -200,14 +211,14 @@ function ClickhouseMigrations() {
             groups you have access to
           </p>
           <select
-            value={migrationGroup?.groupName || ""}
+            value={migrationGroup?.group || ""}
             onChange={(evt) => selectGroup(evt.target.value)}
             style={dropDownStyle}
           >
             <option disabled value="">
               Select a migration group
             </option>
-            {Object.keys(MIGRATIONS).map((name: string) => (
+            {Object.keys(allGroups).map((name: string) => (
               <option key={name} value={name}>
                 {name}
               </option>
