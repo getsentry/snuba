@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping, Sequence
 from unittest.mock import patch
 
 import pytest
 import simplejson as json
 from flask.testing import FlaskClient
 
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.admin.clickhouse.migration_checks import checks_for_group
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -17,6 +18,24 @@ def admin_api() -> FlaskClient:
     from snuba.admin.views import application
 
     return application.test_client()
+
+
+def _get_formatted_migration_ids(
+    group: MigrationGroup,
+) -> Sequence[Mapping[str, str | bool]]:
+    _, migrations = Runner().show_all([group.value])[0]
+    return [
+        {
+            "migration_id": m.migration_id,
+            "status": m.status,
+            "blocking": m.blocking,
+            "can_run": m.can_run,
+            "can_reverse": m.can_reverse,
+            "run_reason": m.run_reason,
+            "reverse_reason": m.reverse_reason,
+        }
+        for m in checks_for_group(group, migrations)
+    ]
 
 
 def test_migration_groups(admin_api: FlaskClient) -> None:
@@ -32,19 +51,19 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
     ):
         response = admin_api.get("/migrations/groups")
 
-    assert response.status_code == 200
-    assert json.loads(response.data) == [
-        {
-            "group": "system",
-            "migration_ids": get_group_loader(MigrationGroup.SYSTEM).get_migrations(),
-        },
-        {
-            "group": "generic_metrics",
-            "migration_ids": get_group_loader(
-                MigrationGroup.GENERIC_METRICS
-            ).get_migrations(),
-        },
-    ]
+        assert response.status_code == 200
+        assert json.loads(response.data) == [
+            {
+                "group": "system",
+                "migration_ids": _get_formatted_migration_ids(MigrationGroup.SYSTEM),
+            },
+            {
+                "group": "generic_metrics",
+                "migration_ids": _get_formatted_migration_ids(
+                    MigrationGroup.GENERIC_METRICS
+                ),
+            },
+        ]
 
 
 def test_list_migration_status(admin_api: FlaskClient) -> None:

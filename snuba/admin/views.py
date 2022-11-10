@@ -12,6 +12,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from snuba import settings, state
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.migration_checks import checks_for_group
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
@@ -32,7 +33,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.migrations.errors import MigrationError
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
@@ -81,13 +82,29 @@ def health() -> Response:
 
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
-    res: List[Mapping[str, MigrationGroup | Sequence[str]]] = []
-    for migration_group in get_active_migration_groups():
-        if migration_group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-            group_migrations = get_group_loader(migration_group).get_migrations()
-            res.append(
-                {"group": migration_group.value, "migration_ids": group_migrations}
-            )
+    res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
+    allowed_groups = [
+        group.value
+        for group in get_active_migration_groups()
+        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
+    ]
+    if not allowed_groups:
+        return make_response(jsonify(res), 200)
+
+    for group, migrations in Runner().show_all(allowed_groups):
+        migration_ids: Sequence[Mapping[str, str | bool]] = [
+            {
+                "migration_id": m.migration_id,
+                "status": m.status,
+                "blocking": m.blocking,
+                "can_run": m.can_run,
+                "can_reverse": m.can_reverse,
+                "run_reason": m.run_reason,
+                "reverse_reason": m.reverse_reason,
+            }
+            for m in checks_for_group(group, migrations)
+        ]
+        res.append({"group": group.value, "migration_ids": migration_ids})
     return make_response(jsonify(res), 200)
 
 

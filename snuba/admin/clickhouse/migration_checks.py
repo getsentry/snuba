@@ -29,7 +29,8 @@ class ResultReason:
     reason: Reason
 
 
-class MigrationData(TypedDict):
+@dataclass
+class MigrationData:
     migration_id: str
     status: str
     blocking: bool
@@ -179,22 +180,6 @@ def do_checks(
     return run_result, reverse_result
 
 
-def format_migration_data(
-    details: MigrationDetails,
-    run_result: ResultReason,
-    reverse_result: ResultReason,
-) -> MigrationData:
-    return {
-        "migration_id": details.migration_id,
-        "status": details.status.value,
-        "blocking": details.blocking,
-        "can_run": run_result.allowed,
-        "run_reason": run_result.reason.value,
-        "can_reverse": reverse_result.allowed,
-        "reverse_reason": reverse_result.reason.value,
-    }
-
-
 def checks_for_group(
     migration_group: MigrationGroup, migrations: Sequence[MigrationDetails]
 ) -> Sequence[MigrationData]:
@@ -207,20 +192,16 @@ def checks_for_group(
 
     for details in migrations:
         run_result, reverse_result = do_checks(checkers, details.migration_id)
-        migration_ids.append(format_migration_data(details, run_result, reverse_result))
+        migration_ids.append(
+            MigrationData(
+                migration_id=details.migration_id,
+                status=details.status.value,
+                blocking=details.blocking,
+                can_run=run_result.allowed,
+                can_reverse=reverse_result.allowed,
+                run_reason=run_result.reason.value,
+                reverse_reason=reverse_result.reason.value,
+            )
+        )
 
     return migration_ids
-
-
-def get_migration_ids_data(
-    groups: Sequence[str],
-) -> Sequence[MigrationGroupPayload]:
-    result = []
-    for group, migrations in runner.show_all(groups):
-        migration_ids = checks_for_group(group, migrations)
-        payload: MigrationGroupPayload = {
-            "group": group.value,
-            "migration_ids": migration_ids,
-        }
-        result.append(payload)
-    return result
