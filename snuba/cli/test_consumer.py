@@ -160,6 +160,7 @@ def test_consumer(
         max_batch_time_ms=max_batch_time_ms,
         metrics=metrics,
         parallel_collect=parallel_collect,
+        slice_id=None,
         profile_path=profile_path,
         mock_parameters=MockParameters(
             avg_write_latency=avg_latency_ms,
