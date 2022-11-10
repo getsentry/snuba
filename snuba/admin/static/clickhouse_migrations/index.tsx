@@ -1,51 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-
-export type MigrationGroup = {
-  group: string;
-  migration_ids: MigrationData[];
-};
-
-type MigrationData = {
-  can_run: boolean;
-  can_reverse: boolean;
-  run_reason: string;
-  reverse_reason: string;
-  blocking: boolean;
-  status: string;
-  migration_id: string;
-};
-type groupOptions = {
-  [key: string]: MigrationGroup;
-};
-
-const Events1 = {
-  can_run: false,
-  can_reverse: false,
-  run_reason: "already run",
-  reverse_reason: "subsequent migrations must be reversed first",
-  blocking: true,
-  status: "completed",
-  migration_id: "0001_migration",
-};
-
-const Events2 = {
-  can_run: false,
-  can_reverse: true,
-  run_reason: "already run",
-  reverse_reason: "",
-  blocking: true,
-  status: "completed",
-  migration_id: "0002_migration",
-};
-
-// const MIGRATIONS: groupOptions = {
-//   events: {
-//     groupName: "events",
-//     migrations: [Events1, Events2],
-//   },
-// };
+import { MigrationData, MigrationGroupResult, GroupOptions } from "./types";
 
 const SQLforwards =
   "Local operations:\
@@ -67,23 +23,24 @@ Dist operations:\
 Skipped dist operation - single node cluster";
 
 function ClickhouseMigrations(props: { api: Client }) {
-  const [allGroups, setAllGroups] = useState<groupOptions>({});
-  const [migrationGroup, setMigrationGroup] = useState<MigrationGroup | null>(
-    null
-  );
+  const [allGroups, setAllGroups] = useState<GroupOptions>({});
+  const [migrationGroup, setMigrationGroup] =
+    useState<MigrationGroupResult | null>(null);
   const [migrationId, setMigrationId] = useState<string | null>(null);
   const [SQLText, setSQLText] = useState<string | null>(null);
 
   useEffect(() => {
     props.api.getAllMigrationGroups().then((res) => {
-      let options: groupOptions = {};
-      res.forEach((group: MigrationGroup) => (options[group.group] = group));
+      let options: GroupOptions = {};
+      res.forEach(
+        (group: MigrationGroupResult) => (options[group.group] = group)
+      );
       setAllGroups(options);
     });
   }, []);
 
   function selectGroup(groupName: string) {
-    const migrationGroup: MigrationGroup = allGroups[groupName];
+    const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
   }
 
