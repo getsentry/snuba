@@ -13,11 +13,6 @@ from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.status import Status
 
 
-class Action(Enum):
-    RUN = "run"
-    REVERSE = "reverse"
-
-
 class Reason(Enum):
     NO_REASON_NEEDED = ""
     ALREADY_RUN = "already run"
@@ -29,8 +24,7 @@ class Reason(Enum):
 
 
 @dataclass
-class ActionReason:
-    action: Action
+class ResultReason:
     allowed: bool
     reason: Reason
 
@@ -62,11 +56,11 @@ class Checker(ABC):
     """
 
     @abstractmethod
-    def can_run(self, migration_id: str) -> ActionReason:
+    def can_run(self, migration_id: str) -> ResultReason:
         raise NotImplementedError
 
     @abstractmethod
-    def can_reverse(self, migration_id: str) -> ActionReason:
+    def can_reverse(self, migration_id: str) -> ResultReason:
         raise NotImplementedError
 
 
@@ -99,7 +93,7 @@ class StatusChecker(Checker):
     def all_migration_ids(self) -> Sequence[str]:
         return list(self.__migration_statuses.keys())
 
-    def can_run(self, migration_id: str) -> ActionReason:
+    def can_run(self, migration_id: str) -> ResultReason:
         """
         Covers the following cases:
         * no running a migration that is already pending or completed
@@ -107,15 +101,15 @@ class StatusChecker(Checker):
         """
         all_migration_ids = self.all_migration_ids
         if self.__migration_statuses[migration_id]["status"] != Status.NOT_STARTED:
-            return ActionReason(Action.RUN, False, Reason.ALREADY_RUN)
+            return ResultReason(False, Reason.ALREADY_RUN)
 
         for m in all_migration_ids[: all_migration_ids.index(migration_id)]:
             if self.__migration_statuses[m]["status"] != Status.COMPLETED:
-                return ActionReason(Action.RUN, False, Reason.NEEDS_EARLIER_MIGRATIONS)
+                return ResultReason(False, Reason.NEEDS_EARLIER_MIGRATIONS)
 
-        return ActionReason(Action.RUN, True, Reason.NO_REASON_NEEDED)
+        return ResultReason(True, Reason.NO_REASON_NEEDED)
 
-    def can_reverse(self, migration_id: str) -> ActionReason:
+    def can_reverse(self, migration_id: str) -> ResultReason:
         """
         Covers the following cases:
         * no reversing a migration that is has not started
@@ -123,15 +117,13 @@ class StatusChecker(Checker):
         """
         all_migration_ids = self.all_migration_ids
         if self.__migration_statuses[migration_id]["status"] == Status.NOT_STARTED:
-            return ActionReason(Action.REVERSE, False, Reason.NOT_RUN_YET)
+            return ResultReason(False, Reason.NOT_RUN_YET)
 
         for m in all_migration_ids[all_migration_ids.index(migration_id) + 1 :]:
             if self.__migration_statuses[m]["status"] != Status.NOT_STARTED:
-                return ActionReason(
-                    Action.REVERSE, False, Reason.NEEDS_SUBSEQUENT_MIGRATIONS
-                )
+                return ResultReason(False, Reason.NEEDS_SUBSEQUENT_MIGRATIONS)
 
-        return ActionReason(Action.REVERSE, True, Reason.NO_REASON_NEEDED)
+        return ResultReason(True, Reason.NO_REASON_NEEDED)
 
 
 class PolicyChecker(Checker):
@@ -153,24 +145,24 @@ class PolicyChecker(Checker):
     def _get_migration_key(self, migration_id: str) -> MigrationKey:
         return MigrationKey(self.__migration_group, migration_id)
 
-    def can_run(self, migration_id: str) -> ActionReason:
+    def can_run(self, migration_id: str) -> ResultReason:
         key = self._get_migration_key(migration_id)
         if self.__policy.can_run(key):
-            return ActionReason(Action.RUN, True, Reason.NO_REASON_NEEDED)
+            return ResultReason(True, Reason.NO_REASON_NEEDED)
         else:
-            return ActionReason(Action.RUN, False, Reason.RUN_POLICY)
+            return ResultReason(False, Reason.RUN_POLICY)
 
-    def can_reverse(self, migration_id: str) -> ActionReason:
+    def can_reverse(self, migration_id: str) -> ResultReason:
         key = self._get_migration_key(migration_id)
         if self.__policy.can_reverse(key):
-            return ActionReason(Action.REVERSE, True, Reason.NO_REASON_NEEDED)
+            return ResultReason(True, Reason.NO_REASON_NEEDED)
         else:
-            return ActionReason(Action.REVERSE, False, Reason.REVERSE_POLICY)
+            return ResultReason(False, Reason.REVERSE_POLICY)
 
 
 def do_checks(
     checkers: Sequence[Checker], migration_id: str
-) -> Tuple[ActionReason, ActionReason]:
+) -> Tuple[ResultReason, ResultReason]:
 
     assert len(checkers) >= 1
 
@@ -189,8 +181,8 @@ def do_checks(
 
 def format_migration_data(
     details: MigrationDetails,
-    run_result: ActionReason,
-    reverse_result: ActionReason,
+    run_result: ResultReason,
+    reverse_result: ResultReason,
 ) -> MigrationData:
     return {
         "migration_id": details.migration_id,
