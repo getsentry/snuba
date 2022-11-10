@@ -98,10 +98,14 @@ def migrations_groups() -> Response:
         return make_response(jsonify(res), 200)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
         migration_ids = [asdict(m) for m in migrations]
 =======
     for group, migrations in Runner().show_all(allowed_groups):
+=======
+    for group, migrations in runner.show_all(allowed_groups):
+>>>>>>> 348b803b (one instance of the runner)
         migration_ids: Sequence[Mapping[str, str | bool]] = [
             {
                 "migration_id": m.migration_id,
