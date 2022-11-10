@@ -472,7 +472,8 @@ class TestReplaysProcessor:
 
     def test_to_typed_list(self) -> None:
         """Test "to_typed_list" function."""
-        assert to_typed_list(to_uint16, [1, 2, None])
+        assert to_typed_list(to_uint16, [1, 2, None]) == [1, 2]
+        assert to_typed_list(to_string, ["a", 0, None]) == ["a", "0"]
 
         with pytest.raises(ValueError):
             assert to_typed_list(to_uint16, ["a"])
