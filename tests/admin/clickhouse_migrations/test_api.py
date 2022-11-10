@@ -7,7 +7,7 @@ import pytest
 import simplejson as json
 from flask.testing import FlaskClient
 
-from snuba.admin.clickhouse.migration_checks import checks_for_group
+from snuba.admin.clickhouse.migration_checks import migration_checks_for_group
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
@@ -34,7 +34,7 @@ def _get_formatted_migration_ids(
             "run_reason": m.run_reason,
             "reverse_reason": m.reverse_reason,
         }
-        for m in checks_for_group(group, migrations)
+        for m in migration_checks_for_group(group, migrations)
     ]
 
 
