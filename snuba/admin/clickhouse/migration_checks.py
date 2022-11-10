@@ -1,4 +1,4 @@
-from typing import List, Sequence, Tuple, TypedDict
+from typing import List, Sequence, Tuple
 
 from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 
@@ -38,11 +38,6 @@ class MigrationData:
     can_reverse: bool
     run_reason: str
     reverse_reason: str
-
-
-class MigrationGroupPayload(TypedDict):
-    group: str
-    migration_ids: Sequence[MigrationData]
 
 
 class Checker(ABC):
