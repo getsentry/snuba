@@ -10,11 +10,6 @@ from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationKey
 
-ADMIN_ALLOWED_MIGRATION_GROUPS: Dict[str, MigrationPolicy] = {
-    group_name: MigrationPolicy.class_from_name(policy_name)()
-    for group_name, policy_name in settings.ADMIN_ALLOWED_MIGRATION_GROUPS.items()
-}
-
 
 def get_migration_group_polices() -> Dict[str, MigrationPolicy]:
     """
