@@ -1,6 +1,6 @@
 from unittest import mock
 
-from snuba.core.initialize import initialize
+from snuba.core.initialize import initialize_snuba
 
 
 class TestInitialization:
@@ -17,7 +17,7 @@ class TestInitialization:
         for factory in (_DS_FACTORY, _ENT_FACTORY, _STORAGE_FACTORY):
             assert factory is None
 
-        initialize()
+        initialize_snuba()
         from snuba.datasets.entities.factory import get_all_entity_names
         from snuba.datasets.factory import get_enabled_dataset_names
         from snuba.datasets.storages.factory import get_all_storage_keys

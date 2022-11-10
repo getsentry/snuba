@@ -29,8 +29,8 @@ def _load_entities() -> None:
     initialize_entity_factory()
 
 
-def initialize() -> None:
-    logger.info("Initializing snuba")
+def initialize_snuba() -> None:
+    logger.info("Initializing Snuba")
 
     # The order of the functions matters The reference direction is
     #
