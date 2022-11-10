@@ -44,6 +44,7 @@ logger = structlog.get_logger().bind(module=__name__)
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 notification_client = RuntimeConfigAutoClient()
+runner = Runner()
 
 
 @application.errorhandler(UnauthorizedException)
@@ -91,7 +92,7 @@ def migrations_groups() -> Response:
     if not allowed_groups:
         return make_response(jsonify(res), 200)
 
-    for group, migrations in Runner().show_all(allowed_groups):
+    for group, migrations in runner.show_all(allowed_groups):
         migration_ids: Sequence[Mapping[str, str | bool]] = [
             {
                 "migration_id": m.migration_id,
@@ -111,7 +112,6 @@ def migrations_groups() -> Response:
 @application.route("/migrations/<group>/list")
 @check_migration_perms
 def migrations_groups_list(group: str) -> Response:
-    runner = Runner()
     for runner_group, runner_group_migrations in runner.show_all():
         if runner_group == MigrationGroup(group):
             return make_response(
@@ -152,7 +152,6 @@ def reverse_migration(group: str, migration_id: str) -> Response:
 
 @check_migration_perms
 def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
-    runner = Runner()
     try:
         migration_group = MigrationGroup(group)
     except ValueError as err:

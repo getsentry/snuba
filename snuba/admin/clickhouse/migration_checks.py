@@ -1,15 +1,12 @@
-from typing import List, Sequence, Tuple
-
-from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
-
-runner = Runner()
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from typing import List, Sequence, Tuple
 
 from snuba.admin.migrations_policies import get_migration_group_polices
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
+from snuba.migrations.runner import MigrationDetails, MigrationKey
 from snuba.migrations.status import Status
 
 
