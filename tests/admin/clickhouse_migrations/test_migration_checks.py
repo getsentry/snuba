@@ -1,9 +1,10 @@
 from typing import Sequence
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from snuba.admin.clickhouse.migration_checks import (
+    PolicyChecker,
     Reason,
     ResultReason,
     StatusChecker,
@@ -89,3 +90,44 @@ def test_status_checker_reverse(
 
     assert result.allowed == expected_allowed
     assert result.reason == expected_reason
+
+
+@pytest.mark.parametrize(
+    "migration_id, policy, action, expected_allowed, expected_reason",
+    [
+        pytest.param(
+            "0001_querylog",
+            "AllMigrationsPolicy",
+            "run",
+            True,
+            Reason.NO_REASON_NEEDED,
+        ),
+        pytest.param(
+            "0001_querylog",
+            "NoMigrationsPolicy",
+            "reverse",
+            False,
+            Reason.REVERSE_POLICY,
+        ),
+    ],
+)
+def test_policy_checker(
+    migration_id: str,
+    policy: str,
+    action: str,
+    expected_allowed: bool,
+    expected_reason: Reason,
+) -> None:
+
+    with patch(
+        "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
+        {"querylog": policy},
+    ):
+        checker = PolicyChecker(MigrationGroup("querylog"))
+        if action == "run":
+            result = checker.can_run(migration_id)
+        if action == "reverse":
+            result = checker.can_reverse(migration_id)
+
+        assert result.allowed == expected_allowed
+        assert result.reason == expected_reason

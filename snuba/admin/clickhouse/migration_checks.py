@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
-from snuba.admin.migrations_policies import ADMIN_ALLOWED_MIGRATION_GROUPS
+from snuba.admin.migrations_policies import get_migration_group_polices
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.status import Status
@@ -138,7 +138,7 @@ class PolicyChecker(Checker):
 
     def __init__(self, migration_group: MigrationGroup) -> None:
         self.__migration_group: MigrationGroup = migration_group
-        self.__policy: MigrationPolicy = ADMIN_ALLOWED_MIGRATION_GROUPS[
+        self.__policy: MigrationPolicy = get_migration_group_polices()[
             migration_group.value
         ]
 
