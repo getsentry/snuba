@@ -46,7 +46,7 @@ class Checker(ABC):
     a migration can be run or reversed based on some criteria
     or state the checker has.
 
-    If a migration can be run/reversed, the ActionReason that
+    If a migration can be run/reversed, the ResultReason that
     is returned should have allowed = True and
     reason = Reason.NO_REASON_NEEDED.
     """
