@@ -12,7 +12,6 @@ import pytest
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
     ReplaysProcessor,
-    _timestamp_to_datetime,
     maybe,
     normalize_tags,
     process_tags_object,
@@ -184,10 +183,8 @@ class ReplayEvent:
             "error_ids": list(
                 map(to_uuid, to_capped_list("trace_ids", self.error_ids))
             ),
-            "timestamp": maybe(_timestamp_to_datetime, self.timestamp),
-            "replay_start_timestamp": maybe(
-                _timestamp_to_datetime, self.replay_start_timestamp
-            ),
+            "timestamp": maybe(to_datetime, self.timestamp),
+            "replay_start_timestamp": maybe(to_datetime, self.replay_start_timestamp),
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
