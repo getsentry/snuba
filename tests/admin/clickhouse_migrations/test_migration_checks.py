@@ -14,7 +14,7 @@ from snuba.admin.clickhouse.migration_checks import (
     do_checks,
 )
 from snuba.migrations.groups import DirectoryLoader, GroupLoader, MigrationGroup
-from snuba.migrations.runner import MigrationDetails
+from snuba.migrations.runner import MigrationDetails, MigrationKey
 from snuba.migrations.status import Status
 
 
@@ -39,14 +39,18 @@ def test_do_checks() -> None:
     checker2.can_run.return_value = RunResult(True)
     checker2.can_reverse.return_value = ReverseResult(False, ReverseReason.NOT_RUN_YET)
 
-    run, reverse = do_checks([checker1, checker2], "0001_xxx")
+    run, reverse = do_checks(
+        [checker1, checker2], MigrationKey(MigrationGroup("querylog"), "0001_xxx")
+    )
     assert run.allowed == False
     assert reverse.allowed == False
 
     assert checker2.can_run.call_count == 0
     assert checker2.can_reverse.call_count == 0
 
-    run, reverse = do_checks([checker2, checker1], "0001_xxx")
+    run, reverse = do_checks(
+        [checker2, checker1], MigrationKey(MigrationGroup("querylog"), "0001_xxx")
+    )
     assert run.allowed == False
     assert reverse.allowed == False
 
@@ -79,9 +83,9 @@ def test_status_checker_run(
     expected_allowed: bool,
     expected_reason: Optional[RunReason],
 ) -> None:
-
-    checker = StatusChecker(MigrationGroup("querylog"), RUN_MIGRATIONS)
-    result = checker.can_run(migration_id)
+    group = MigrationGroup("querylog")
+    checker = StatusChecker(group, RUN_MIGRATIONS)
+    result = checker.can_run(MigrationKey(group, migration_id))
 
     assert result.allowed == expected_allowed
     assert result.reason == expected_reason
@@ -112,8 +116,9 @@ def test_status_checker_reverse(
     expected_allowed: bool,
     expected_reason: Optional[ReverseReason],
 ) -> None:
-    checker = StatusChecker(MigrationGroup("querylog"), REVERSE_MIGRATIONS)
-    result = checker.can_reverse(migration_id)
+    group = MigrationGroup("querylog")
+    checker = StatusChecker(group, REVERSE_MIGRATIONS)
+    result = checker.can_reverse(MigrationKey(group, migration_id))
 
     assert result.allowed == expected_allowed
     assert result.reason == expected_reason
@@ -150,11 +155,12 @@ def test_policy_checker_run(
         "snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS",
         {"querylog": policy},
     ):
-        checker = PolicyChecker(MigrationGroup("querylog"))
+        group = MigrationGroup("querylog")
+        checker = PolicyChecker()
         if action == "run":
-            result: Result = checker.can_run(migration_id)
+            result: Result = checker.can_run(MigrationKey(group, migration_id))
         if action == "reverse":
-            result = checker.can_reverse(migration_id)
+            result = checker.can_reverse(MigrationKey(group, migration_id))
 
         assert result.allowed == expected_allowed
         assert result.reason == expected_reason

@@ -5,7 +5,6 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 from snuba.admin.migrations_policies import get_migration_group_polices
 from snuba.migrations.groups import MigrationGroup, get_group_loader
-from snuba.migrations.policies import MigrationPolicy
 from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -70,11 +69,11 @@ class Checker(ABC):
     """
 
     @abstractmethod
-    def can_run(self, migration_id: str) -> RunResult:
+    def can_run(self, migration_key: MigrationKey) -> RunResult:
         raise NotImplementedError
 
     @abstractmethod
-    def can_reverse(self, migration_id: str) -> ReverseResult:
+    def can_reverse(self, migration_key: MigrationKey) -> ReverseResult:
         raise NotImplementedError
 
 
@@ -106,15 +105,19 @@ class StatusChecker(Checker):
                 "migration_id": migration_id,
                 "status": status,
             }
+        assert self.__all_migration_ids == list(migration_statuses.keys())
         self.__migration_statuses = migration_statuses
 
-    def can_run(self, migration_id: str) -> RunResult:
+    def can_run(self, migration_key: MigrationKey) -> RunResult:
         """
         Covers the following cases:
         * no running a migration that is already pending or completed
         * no running a migration that has a preceeding migration that is not completed
         """
+        group, migration_id = migration_key
+        assert group == self.__group
         all_migration_ids = self.__all_migration_ids
+
         if self.__migration_statuses[migration_id]["status"] != Status.NOT_STARTED:
             return RunResult(False, RunReason.ALREADY_RUN)
 
@@ -124,13 +127,16 @@ class StatusChecker(Checker):
 
         return RunResult(True)
 
-    def can_reverse(self, migration_id: str) -> ReverseResult:
+    def can_reverse(self, migration_key: MigrationKey) -> ReverseResult:
         """
         Covers the following cases:
         * no reversing a migration that is has not started
         * no reversing a migration that has a subsequent migration that has not been run
         """
+        group, migration_id = migration_key
+        assert group == self.__group
         all_migration_ids = self.__all_migration_ids
+
         if self.__migration_statuses[migration_id]["status"] == Status.NOT_STARTED:
             return ReverseResult(False, ReverseReason.NOT_RUN_YET)
 
@@ -151,32 +157,25 @@ class PolicyChecker(Checker):
     setting.
     """
 
-    def __init__(self, migration_group: MigrationGroup) -> None:
-        self.__migration_group: MigrationGroup = migration_group
-        self.__policy: MigrationPolicy = get_migration_group_polices()[
-            migration_group.value
-        ]
-
-    def _get_migration_key(self, migration_id: str) -> MigrationKey:
-        return MigrationKey(self.__migration_group, migration_id)
-
-    def can_run(self, migration_id: str) -> RunResult:
-        key = self._get_migration_key(migration_id)
-        if self.__policy.can_run(key):
+    def can_run(self, migration_key: MigrationKey) -> RunResult:
+        if get_migration_group_polices()[migration_key.group.value].can_run(
+            migration_key
+        ):
             return RunResult(True)
         else:
             return RunResult(False, RunReason.RUN_POLICY)
 
-    def can_reverse(self, migration_id: str) -> ReverseResult:
-        key = self._get_migration_key(migration_id)
-        if self.__policy.can_reverse(key):
+    def can_reverse(self, migration_key: MigrationKey) -> ReverseResult:
+        if get_migration_group_polices()[migration_key.group.value].can_reverse(
+            migration_key
+        ):
             return ReverseResult(True)
         else:
             return ReverseResult(False, ReverseReason.REVERSE_POLICY)
 
 
 def do_checks(
-    checkers: Sequence[Checker], migration_id: str
+    checkers: Sequence[Checker], migration_key: MigrationKey
 ) -> Tuple[RunResult, ReverseResult]:
     """
     Execute the can_run and can_reverse functionality
@@ -190,12 +189,12 @@ def do_checks(
     assert len(checkers) >= 1
 
     for checker in checkers:
-        run_result = checker.can_run(migration_id)
+        run_result = checker.can_run(migration_key)
         if not run_result.allowed:
             break
 
     for checker in checkers:
-        reverse_result = checker.can_reverse(migration_id)
+        reverse_result = checker.can_reverse(migration_key)
         if not reverse_result.allowed:
             break
 
@@ -220,12 +219,14 @@ def run_migration_checks_for_groups(
         migration_ids: List[MigrationData] = []
 
         status_checker = StatusChecker(group, migrations)
-        policy_checker = PolicyChecker(group)
+        policy_checker = PolicyChecker()
 
         checkers = [status_checker, policy_checker]
 
         for details in migrations:
-            run_result, reverse_result = do_checks(checkers, details.migration_id)
+            run_result, reverse_result = do_checks(
+                checkers, MigrationKey(group, details.migration_id)
+            )
             migration_ids.append(
                 MigrationData(
                     migration_id=details.migration_id,
