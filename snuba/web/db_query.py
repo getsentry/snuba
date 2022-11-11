@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
@@ -511,7 +512,7 @@ def execute_query_with_caching(
 
 
 @with_span(op="db")
-def execute_query_with_readthrough_caching(
+def execute_query_with_query_id(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
@@ -523,6 +524,55 @@ def execute_query_with_readthrough_caching(
     robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
+
+    try:
+        return execute_query_with_readthrough_caching(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            formatted_query_sorted,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+            query_id,
+        )
+    except ClickhouseError as e:
+        if e.code != errors.ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING:
+            raise
+
+        metrics.increment("query_cache_lost")
+
+        query_id = f"randomized-{uuid.uuid4().hex}"
+
+        return execute_query_with_readthrough_caching(
+            clickhouse_query,
+            query_settings,
+            formatted_query,
+            formatted_query_sorted,
+            reader,
+            timer,
+            stats,
+            clickhouse_query_settings,
+            robust,
+            query_id,
+        )
+
+
+@with_span(op="db")
+def execute_query_with_readthrough_caching(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    query_settings: QuerySettings,
+    formatted_query: FormattedQuery,
+    formatted_query_sorted: Optional[FormattedQuery],
+    reader: Reader,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: MutableMapping[str, Any],
+    robust: bool,
+    query_id: str,
+) -> Result:
     sorted_key_cache_experiment = {"is_selected": False, "sorted_key_exists": False}
     try:
         check_sorted_sql_key_in_cache(
@@ -668,7 +718,7 @@ def raw_query(
     )
 
     execute_query_strategy = (
-        execute_query_with_readthrough_caching
+        execute_query_with_query_id
         if state.get_config("use_readthrough_query_cache", 1)
         else execute_query_with_caching
     )
