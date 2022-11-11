@@ -41,7 +41,7 @@ class ResourceQuotaProcessor(LogicalQueryProcessor):
             return
 
         # TODO: Like for the rate limiter Add logic for multiple IDs
-        project_id = str(project_ids.pop())
+        project_id = str(project_ids.pop()) if project_ids else "NO_PROJECT_ID"
         project_referrer_thread_quota = get_config(
             f"{REFERRER_PROJECT_CONFIG}_{query_settings.referrer}_{project_id}"
         )
