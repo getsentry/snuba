@@ -19,6 +19,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
@@ -65,6 +68,7 @@ class GenericMetricsEntity(Entity, ABC):
         value_schema: ColumnSet,
         mappers: TranslationMappers,
         validators: Optional[Sequence[QueryValidator]] = None,
+        entity_subscription: Optional[EntitySubscription] = None,
     ) -> None:
         storages = [readable_storage]
         if writable_storage:
@@ -103,6 +107,7 @@ class GenericMetricsEntity(Entity, ABC):
             writable_storage=writable_storage,
             validators=validators,
             required_time_column="timestamp",
+            entity_subscription=entity_subscription,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
@@ -130,6 +135,10 @@ class GenericMetricsSetsEntity(GenericMetricsEntity):
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
+            entity_subscription=EntitySubscription(
+                validators=[AggregationValidator(3, ["having", "orderby"])],
+                processors=[AddColumnCondition("organization", "org_id")],
+            ),
             value_schema=ColumnSet(
                 [
                     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),

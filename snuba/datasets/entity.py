@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
@@ -34,6 +35,7 @@ class Entity(Describable, ABC):
         validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
         validate_data_model: ColumnValidationMode = ColumnValidationMode.DO_NOTHING,
+        entity_subscription: Optional[EntitySubscription],
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
@@ -45,6 +47,7 @@ class Entity(Describable, ABC):
         self.__data_model = EntityColumnSet(abstract_column_set.columns)
 
         self.__join_relationships = join_relationships
+        self.__entity_subscription = entity_subscription
         self.required_time_column = required_time_column
 
         columns_exist_validator = EntityContainsColumnsValidator(
@@ -124,6 +127,13 @@ class Entity(Describable, ABC):
         and entity can have more than one writable storage.
         """
         return self.__writable_storage
+
+    def get_entity_subscription(self) -> Optional[EntitySubscription]:
+        """
+        Provides an entity subscription object which contains defined validators and
+        processors to be run on on subscription queries.
+        """
+        return self.__entity_subscription
 
     def describe(self) -> Description:
         relationships = []

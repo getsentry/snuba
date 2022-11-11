@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import sentry_sdk
 
@@ -16,6 +16,9 @@ from snuba.datasets.configuration.json_schema import V1_ENTITY_SCHEMA
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.entities.entity_key import register_entity_key
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
+from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -90,6 +93,32 @@ def _build_entity_translation_mappers(
     )
 
 
+def _build_entity_subscription(config: dict[str, Any]) -> Optional[EntitySubscription]:
+    if "entity_subscriptions" in config:
+        processors: Sequence[EntitySubscriptionProcessor] = (
+            [
+                EntitySubscriptionProcessor.get_from_name(pro_config["processor"])(
+                    **pro_config["args"]
+                )
+                for pro_config in config["entity_subscriptions"]["processors"]
+            ]
+            if "processors" in config["entity_subscriptions"]
+            else []
+        )
+        validators: Sequence[EntitySubscriptionValidator] = (
+            [
+                EntitySubscriptionValidator.get_from_name(val_config["validator"])(
+                    **val_config["args"]
+                )
+                for val_config in config["entity_subscriptions"]["validators"]
+            ]
+            if "validators" in config["entity_subscriptions"]
+            else []
+        )
+        return EntitySubscription(processors, validators)
+    return None
+
+
 def build_entity_from_config(file_path: str) -> PluggableEntity:
     config = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
     with sentry_sdk.start_span(op="build", description=f"Entity: {config['name']}"):
@@ -109,4 +138,5 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
             if "writable_storage" in config
             else None,
             partition_key_column_name=config.get("partition_key_column_name", None),
+            entity_subscription=_build_entity_subscription(config),
         )

@@ -6,6 +6,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -53,6 +54,7 @@ class PluggableEntity(Entity):
     # partition_key_column_name is used in data slicing (the value in this storage column
     # will be used to "choose" slices)
     partition_key_column_name: Optional[str] = None
+    entity_subscription: Optional[EntitySubscription] = None
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
@@ -107,6 +109,9 @@ class PluggableEntity(Entity):
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.writeable_storage
+
+    def get_entity_subscription(self) -> Optional[EntitySubscription]:
+        return self.entity_subscription
 
     def __eq__(self, other: Any) -> bool:
         return (

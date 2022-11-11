@@ -26,7 +26,6 @@ from snuba.datasets.entity_subscriptions.entity_subscription import (
     EntitySubscription,
     InvalidSubscriptionError,
 )
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -79,6 +78,7 @@ class SubscriptionData:
     time_window_sec: int
     entity_subscription: EntitySubscription
     query: str
+    metadata: Mapping[str, Any]
 
     def add_conditions(
         self,
@@ -113,9 +113,6 @@ class SubscriptionData:
                 Column(None, None, required_timestamp_column),
                 Literal(None, timestamp),
             ),
-            *self.entity_subscription.get_entity_subscription_conditions_for_snql(
-                offset
-            ),
         ]
 
         new_condition = combine_and_conditions(conditions_to_add)
@@ -126,6 +123,10 @@ class SubscriptionData:
             )
 
         query.set_ast_condition(new_condition)
+
+        if self.entity_subscription.processors:
+            for processor in self.entity_subscription.processors:
+                processor.process(query, self.metadata)
 
     def validate(self) -> None:
         if self.time_window_sec < 60:
@@ -153,6 +154,12 @@ class SubscriptionData:
     ) -> Request:
         schema = RequestSchema.build(SubscriptionQuerySettings)
 
+        custom_processing = []
+        if self.entity_subscription.validators:
+            for validator in self.entity_subscription.validators:
+                custom_processing.append(validator.validate)
+        custom_processing.append(partial(self.add_conditions, timestamp, offset))
+
         request = build_request(
             {"query": self.query},
             parse_snql_query,
@@ -161,10 +168,7 @@ class SubscriptionData:
             dataset,
             timer,
             referrer,
-            [
-                self.entity_subscription.validate_query,
-                partial(self.add_conditions, timestamp, offset),
-            ],
+            custom_processing,
         )
         return request
 
@@ -172,7 +176,8 @@ class SubscriptionData:
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> SubscriptionData:
-        entity_subscription = get_entity_subscription(entity_key)(data_dict=data)
+        entity_subscription = get_entity(entity_key).get_entity_subscription()
+        assert entity_subscription is not None
 
         return SubscriptionData(
             project_id=data["project_id"],
@@ -181,16 +186,23 @@ class SubscriptionData:
             resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity_subscription=entity_subscription,
+            metadata=data,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
-        return {
+        subscription_data_dict = {
             "project_id": self.project_id,
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
-            **self.entity_subscription.to_dict(),
         }
+        if self.entity_subscription.processors:
+            for processor in self.entity_subscription.processors:
+                subscription_data_dict.update(processor.to_dict(self.metadata))
+        if self.entity_subscription.validators:
+            for validator in self.entity_subscription.validators:
+                subscription_data_dict.update(validator.to_dict())
+        return subscription_data_dict
 
 
 class Subscription(NamedTuple):

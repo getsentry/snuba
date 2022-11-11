@@ -379,6 +379,44 @@ ENTITY_TRANSLATION_MAPPERS = {
     "additionalProperties": False,
 }
 
+ENTITY_SUBSCRIPTION_PROCESSORS = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "processor": {
+                "type": "string",
+                "description": "Entity Subscription Processor class name",
+            },
+            "args": {
+                "type": "object",
+                "description": "Key/value mappings required to instantiate Entity Subscription Processor class",
+            },
+        },
+        "required": ["processor"],
+        "additionalProperties": False,
+    },
+}
+
+ENTITY_SUBSCRIPTION_VALIDATORS = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "validator": {
+                "type": "string",
+                "description": "Entity Subscription Validator class name",
+            },
+            "args": {
+                "type": "object",
+                "description": "Key/value mappings required to instantiate Entity Subscription Validator class",
+            },
+        },
+        "required": ["validator"],
+        "additionalProperties": False,
+    },
+}
+
 # Full schemas:
 
 V1_WRITABLE_STORAGE_SCHEMA = {
@@ -472,6 +510,15 @@ V1_ENTITY_SCHEMA = {
         "partition_key_column_name": {
             "type": ["string", "null"],
             "description": "The column name, if this entity is partitioned, to select slice",
+        },
+        "entity_subscription": {
+            "type": "object",
+            "description": "Specifies the processors and validators associated with subscriptions",
+            "properties": {
+                "processors": ENTITY_SUBSCRIPTION_PROCESSORS,
+                "validators": ENTITY_SUBSCRIPTION_VALIDATORS,
+            },
+            "additionalProperties": False,
         },
     },
     "required": [

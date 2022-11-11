@@ -11,6 +11,8 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -151,6 +153,10 @@ class BaseEventsEntity(Entity, ABC):
             writable_storage=events_storage,
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
+            entity_subscription=EntitySubscription(
+                validators=[AggregationValidator(1, ["groupby", "having", "orderby"])],
+                processors=None,
+            ),
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

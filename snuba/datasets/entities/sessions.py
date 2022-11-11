@@ -10,6 +10,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity_subscriptions.processors import AddColumnCondition
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.datasets.plans.single_storage import (
     SelectedStorageQueryPlanBuilder,
     SingleStorageQueryPlanBuilder,
@@ -280,6 +283,10 @@ class SessionsEntity(Entity):
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             required_time_column="started",
             validate_data_model=ColumnValidationMode.WARN,
+            entity_subscription=EntitySubscription(
+                validators=[AggregationValidator(2, ["groupby", "having", "orderby"])],
+                processors=[AddColumnCondition("organization", "org_id")],
+            ),
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
@@ -314,6 +321,7 @@ class OrgSessionsEntity(Entity):
             writable_storage=None,
             validators=None,
             required_time_column="started",
+            entity_subscription=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
