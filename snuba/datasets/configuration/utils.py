@@ -67,40 +67,40 @@ NUMBER_COLUMN_TYPES = {"UInt": UInt, "Float": Float}
 NUMBER_COLUMN_TYPES_INVERTED = {val: key for key, val in NUMBER_COLUMN_TYPES.items()}
 
 
+def serialize_column_type(col_type: ColumnType[SchemaModifiers]) -> dict[str, Any]:
+    column_type: dict[str, Any] = {"type": type(col_type).__name__}
+    args: dict[str, Any] = {}
+
+    if modifiers := col_type.get_modifiers():
+        args["schema_modifiers"] = [
+            modifier
+            for modifier, exists in {
+                "readonly": modifiers.readonly,
+                "nullable": modifiers.nullable,
+            }.items()
+            if exists
+        ]
+    if type(col_type) in NUMBER_COLUMN_TYPES_INVERTED:
+        args["size"] = col_type.__dict__["size"]
+    elif isinstance(col_type, Nested):
+        args["subcolumns"] = serialize_columns(col_type.nested_columns)
+    elif isinstance(col_type, Array):
+        args["inner_type"] = serialize_column_type(col_type.inner_type)
+    elif isinstance(col_type, AggregateFunction):
+        args["func"] = col_type.func
+        args["arg_types"] = [
+            {"type": type(arg_type).__name__, "arg": arg_type.__dict__["size"]}
+            for arg_type in col_type.arg_types
+        ]
+
+    if args != {}:
+        column_type["args"] = args
+
+    return column_type
+
+
 def serialize_columns(columns: Sequence[Column[Any]]) -> list[dict[str, Any]]:
-    cols: list[dict[str, Any]] = []
-    for col in columns:
-        column: dict[str, Any] = {"name": col.name, "type": type(col.type).__name__}
-        args: dict[str, Any] = {}
-
-        if modifiers := col.type.get_modifiers():
-            args["schema_modifiers"] = [
-                modifier
-                for modifier, exists in {
-                    "readonly": modifiers.readonly,
-                    "nullable": modifiers.nullable,
-                }.items()
-                if exists
-            ]
-        if type(col.type) in NUMBER_COLUMN_TYPES_INVERTED:
-            args["size"] = col.type.__dict__["size"]
-        elif isinstance(col.type, Nested):
-            args["subcolumns"] = serialize_columns(col.type.nested_columns)
-        elif isinstance(col.type, Array):
-            args["type"] = type(col.type.inner_type).__name__
-            if type(col.type.inner_type) in NUMBER_COLUMN_TYPES_INVERTED:
-                args["arg"] = col.type.inner_type.__dict__["size"]
-        elif isinstance(col.type, AggregateFunction):
-            args["func"] = col.type.func
-            args["arg_types"] = [
-                {"type": type(arg_type).__name__, "arg": arg_type.__dict__["size"]}
-                for arg_type in col.type.arg_types
-            ]
-
-        if args != {}:
-            column["args"] = args
-        cols.append(column)
-    return cols
+    return [{"name": col.name, **serialize_column_type(col.type)} for col in columns]
 
 
 def get_query_processors(
