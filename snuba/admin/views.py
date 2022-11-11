@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stdout
+from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
@@ -12,7 +13,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from snuba import settings, state
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-from snuba.admin.clickhouse.migration_checks import migration_checks_for_group
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
@@ -84,27 +85,16 @@ def health() -> Response:
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
     res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
-    allowed_groups = [
-        group.value
+    allowed_groups: Sequence[MigrationGroup] = [
+        group
         for group in get_active_migration_groups()
         if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
     ]
     if not allowed_groups:
         return make_response(jsonify(res), 200)
 
-    for group, migrations in runner.show_all(allowed_groups):
-        migration_ids: Sequence[Mapping[str, str | bool]] = [
-            {
-                "migration_id": m.migration_id,
-                "status": m.status,
-                "blocking": m.blocking,
-                "can_run": m.can_run,
-                "can_reverse": m.can_reverse,
-                "run_reason": m.run_reason,
-                "reverse_reason": m.reverse_reason,
-            }
-            for m in migration_checks_for_group(group, migrations)
-        ]
+    for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
+        migration_ids = [asdict(m) for m in migrations]
         res.append({"group": group.value, "migration_ids": migration_ids})
     return make_response(jsonify(res), 200)
 

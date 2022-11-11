@@ -6,7 +6,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 from snuba.admin.migrations_policies import get_migration_group_polices
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.policies import MigrationPolicy
-from snuba.migrations.runner import MigrationDetails, MigrationKey
+from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 from snuba.migrations.status import Status
 
 
@@ -202,38 +202,44 @@ def do_checks(
     return run_result, reverse_result
 
 
-def migration_checks_for_group(
-    migration_group: MigrationGroup, migrations: Sequence[MigrationDetails]
-) -> Sequence[MigrationData]:
+def run_migration_checks_for_groups(
+    allowed_groups: Sequence[MigrationGroup], runner: Runner
+) -> Sequence[Tuple[MigrationGroup, Sequence[MigrationData]]]:
     """
-    Responsible for initializing the checkers to be used to
-    validate whether migrations can be run/reversed for a specific
-    migration group.
+    Gets the statuses of all the migrations within each group
+    listed in the allowed_groups and runs the StatusChecker
+    and PolicyChecker (in that order) for said migrations.
 
-    Returns the list of migrations with the results of the checks
-    in addition to migration details (id, status, blocking)
+    Returns the results of those checks along with the statuses
+    for the migrations.
     """
-    migration_ids: List[MigrationData] = []
+    group_results: List[Tuple[MigrationGroup, Sequence[MigrationData]]] = []
 
-    status_checker = StatusChecker(migration_group, migrations)
-    policy_checker = PolicyChecker(migration_group)
+    for group, migrations in runner.show_all([g.value for g in allowed_groups]):
 
-    checkers = [status_checker, policy_checker]
+        migration_ids: List[MigrationData] = []
 
-    for details in migrations:
-        run_result, reverse_result = do_checks(checkers, details.migration_id)
-        migration_ids.append(
-            MigrationData(
-                migration_id=details.migration_id,
-                status=details.status.value,
-                blocking=details.blocking,
-                can_run=run_result.allowed,
-                can_reverse=reverse_result.allowed,
-                run_reason=run_result.reason.value if run_result.reason else "",
-                reverse_reason=reverse_result.reason.value
-                if reverse_result.reason
-                else "",
+        status_checker = StatusChecker(group, migrations)
+        policy_checker = PolicyChecker(group)
+
+        checkers = [status_checker, policy_checker]
+
+        for details in migrations:
+            run_result, reverse_result = do_checks(checkers, details.migration_id)
+            migration_ids.append(
+                MigrationData(
+                    migration_id=details.migration_id,
+                    status=details.status.value,
+                    blocking=details.blocking,
+                    can_run=run_result.allowed,
+                    can_reverse=reverse_result.allowed,
+                    run_reason=run_result.reason.value if run_result.reason else "",
+                    reverse_reason=reverse_result.reason.value
+                    if reverse_result.reason
+                    else "",
+                )
             )
-        )
 
-    return migration_ids
+        group_results.append((group, migration_ids))
+
+    return group_results
