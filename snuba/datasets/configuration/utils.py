@@ -120,8 +120,8 @@ def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> ColumnType[SchemaModifiers]:
     col_type = NUMBER_COLUMN_TYPES[col["type"]]
-    # UInt and Float ColumnType accepts a size parameter
-    return col_type(col["args"]["size"], modifiers)  # type: ignore
+    assert isinstance(col_type, UInt) or isinstance(col_type, Float)
+    return col_type(col["args"]["size"], modifiers)
 
 
 def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
