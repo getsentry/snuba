@@ -148,11 +148,15 @@ def consumer(
     logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
 
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={"group": consumer_group, "storage": storage_key.value},
-    )
+    metrics_tags = {
+        "group": consumer_group,
+        "storage": storage_key.value,
+    }
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
+    metrics = MetricsWrapper(environment.metrics, "consumer", tags=metrics_tags)
     configure_metrics(StreamMetricsAdapter(metrics))
 
     def stats_callback(stats_json: str) -> None:
