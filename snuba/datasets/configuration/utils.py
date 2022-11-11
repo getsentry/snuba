@@ -95,7 +95,7 @@ def get_mandatory_condition_checkers(
     ]
 
 
-NUMBER_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
+NUMBER_COLUMN_TYPES: dict[str, Any] = {
     "UInt": UInt,
     "Float": Float,
 }
@@ -119,9 +119,9 @@ def __parse_simple(
 def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> ColumnType[SchemaModifiers]:
-    col_type = NUMBER_COLUMN_TYPES[col["type"]]
+    col_type = NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
     assert isinstance(col_type, UInt) or isinstance(col_type, Float)
-    return col_type(col["args"]["size"], modifiers)
+    return col_type
 
 
 def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
