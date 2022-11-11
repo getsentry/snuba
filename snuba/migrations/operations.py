@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import Column
@@ -9,26 +10,51 @@ from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
 
 
+class OperationTarget(Enum):
+    """
+    Represents the target nodes of an operation.
+    Either local, distributed.
+    """
+
+    LOCAL = "local"
+    DISTRIBUTED = "distributed"
+    UNSET = "unset"  # target is not set. will throw an error if executed
+
+
 class SqlOperation(ABC):
     def __init__(
-        self, storage_set: StorageSetKey, settings: Optional[Mapping[str, Any]] = None
+        self,
+        storage_set: StorageSetKey,
+        settings: Optional[Mapping[str, Any]] = None,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
         self._storage_set = storage_set
         self._settings = settings
+        self.target = target
 
     @property
     def storage_set(self) -> StorageSetKey:
         return self._storage_set
 
-    def execute(self, local: bool) -> None:
+    def execute(self) -> None:
         cluster = get_cluster(self._storage_set)
+        local_nodes, dist_nodes = (
+            cluster.get_local_nodes(),
+            cluster.get_distributed_nodes(),
+        )
 
-        nodes = cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
+        if self.target == OperationTarget.LOCAL:
+            nodes = local_nodes
+        elif self.target == OperationTarget.DISTRIBUTED:
+            nodes = dist_nodes
+        else:
+            raise ValueError(f"Target not set for {self}")
 
         for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
+
             connection.execute(self.format_sql(), settings=self._settings)
 
     @abstractmethod
@@ -58,8 +84,9 @@ class CreateTable(SqlOperation):
         table_name: str,
         columns: Sequence[Column[MigrationModifiers]],
         engine: TableEngine,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
-        super().__init__(storage_set)
+        super().__init__(storage_set, target=target)
         self.table_name = table_name
         self.__columns = columns
         self.engine = engine
@@ -68,7 +95,6 @@ class CreateTable(SqlOperation):
         columns = ", ".join([col.for_schema() for col in self.__columns])
         cluster = get_cluster(self._storage_set)
         engine = self.engine.get_sql(cluster, self.table_name)
-
         return (
             f"CREATE TABLE IF NOT EXISTS {self.table_name} ({columns}) ENGINE {engine};"
         )
@@ -82,12 +108,13 @@ class CreateMaterializedView(SqlOperation):
         destination_table_name: str,
         columns: Sequence[Column[MigrationModifiers]],
         query: str,
+        target: OperationTarget = OperationTarget.UNSET,
     ) -> None:
         self.__view_name = view_name
         self.__destination_table_name = destination_table_name
         self.__columns = columns
         self.__query = query
-        super().__init__(storage_set)
+        super().__init__(storage_set, target=target)
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
@@ -101,8 +128,9 @@ class RenameTable(SqlOperation):
         storage_set: StorageSetKey,
         old_table_name: str,
         new_table_name: str,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
-        super().__init__(storage_set)
+        super().__init__(storage_set, target=target)
         self.__old_table_name = old_table_name
         self.__new_table_name = new_table_name
 
@@ -111,8 +139,13 @@ class RenameTable(SqlOperation):
 
 
 class DropTable(SqlOperation):
-    def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
-        super().__init__(storage_set)
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        target: OperationTarget = OperationTarget.UNSET,
+    ) -> None:
+        super().__init__(storage_set, target=target)
         self.table_name = table_name
 
     def format_sql(self) -> str:
@@ -120,8 +153,13 @@ class DropTable(SqlOperation):
 
 
 class TruncateTable(SqlOperation):
-    def __init__(self, storage_set: StorageSetKey, table_name: str):
-        super().__init__(storage_set)
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        target: OperationTarget = OperationTarget.UNSET,
+    ) -> None:
+        super().__init__(storage_set, target=target)
         self.__storage_set = storage_set
         self.__table_name = table_name
 
@@ -141,10 +179,13 @@ class ModifyTableTTL(SqlOperation):
         reference_column: str,
         ttl_days: int,
         materialize_ttl_on_modify: bool = False,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
         self.__materialize_ttl_on_modify = 1 if materialize_ttl_on_modify else 0
         super().__init__(
-            storage_set, {"materialize_ttl_on_modify": self.__materialize_ttl_on_modify}
+            storage_set,
+            {"materialize_ttl_on_modify": self.__materialize_ttl_on_modify},
+            target=target,
         )
         self.__table_name = table_name
         self.__reference_column = reference_column
@@ -165,8 +206,13 @@ class RemoveTableTTL(SqlOperation):
     support REMOVE TTL command
     """
 
-    def __init__(self, storage_set: StorageSetKey, table_name: str):
-        super().__init__(storage_set)
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
         self.__table_name = table_name
 
     def format_sql(self) -> str:
@@ -188,8 +234,9 @@ class AddColumn(SqlOperation):
         table_name: str,
         column: Column[MigrationModifiers],
         after: Optional[str] = None,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
-        super().__init__(storage_set)
+        super().__init__(storage_set, target=target)
         self.table_name = table_name
         self.column = column
         self.__after = after
@@ -211,8 +258,14 @@ class DropColumn(SqlOperation):
     key in the engine expression.
     """
 
-    def __init__(self, storage_set: StorageSetKey, table_name: str, column_name: str):
-        super().__init__(storage_set)
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        column_name: str,
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
         self.table_name = table_name
         self.column_name = column_name
 
@@ -237,8 +290,9 @@ class ModifyColumn(SqlOperation):
         table_name: str,
         column: Column[MigrationModifiers],
         ttl_month: Optional[Tuple[str, int]] = None,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
-        super().__init__(storage_set)
+        super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__column = column
         self.__ttl_month = ttl_month
@@ -275,8 +329,9 @@ class AddIndex(SqlOperation):
         index_type: str,
         granularity: int,
         after: Optional[str] = None,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
-        super().__init__(storage_set)
+        super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__index_name = index_name
         self.__index_expression = index_expression
@@ -294,8 +349,14 @@ class DropIndex(SqlOperation):
     Drops an index.
     """
 
-    def __init__(self, storage_set: StorageSetKey, table_name: str, index_name: str):
-        super().__init__(storage_set)
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        index_name: str,
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__index_name = index_name
 
@@ -324,8 +385,9 @@ class InsertIntoSelect(SqlOperation):
         src_columns: Sequence[str],
         prewhere: Optional[str] = None,
         where: Optional[str] = None,
+        target: OperationTarget = OperationTarget.UNSET,
     ):
-        super().__init__(storage_set)
+        super().__init__(storage_set, target=target)
         self.__dest_table_name = dest_table_name
         self.__dest_columns = dest_columns
         self.__src_table_name = src_table_name
