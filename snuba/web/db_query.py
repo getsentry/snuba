@@ -13,7 +13,7 @@ from clickhouse_driver import errors
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, settings, state
+from snuba import environment, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.formatter.query import format_query_anonymized
@@ -443,74 +443,6 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
 
 
 @with_span(op="db")
-def execute_query_with_caching(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
-    formatted_query: FormattedQuery,
-    formatted_query_sorted: Optional[FormattedQuery],
-    reader: Reader,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
-    robust: bool,
-) -> Result:
-    # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
-    # cache, as well as the uncompressed cache. These should be independent.
-    use_cache, uc_max = state.get_configs(
-        [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
-    )
-
-    column_counter = ReferencedColumnsCounter()
-    column_counter.visit(clickhouse_query.get_from_clause())
-    assert isinstance(uc_max, int)
-    if column_counter.count_columns() > uc_max:
-        use_cache = False
-
-    execute = partial(
-        execute_query_with_rate_limits,
-        clickhouse_query,
-        query_settings,
-        formatted_query,
-        reader,
-        timer,
-        stats,
-        clickhouse_query_settings,
-        robust=robust,
-    )
-
-    with sentry_sdk.start_span(description="execute", op="db") as span:
-        key = get_query_cache_key(formatted_query)
-        clickhouse_query_settings["query_id"] = key
-        sorted_key_cache_experiment = {"is_selected": False, "sorted_key_exists": False}
-        if use_cache:
-            try:
-                check_sorted_sql_key_in_cache(
-                    formatted_query_sorted, reader, sorted_key_cache_experiment
-                )
-            except Exception:
-                pass
-            cache_partition = _get_cache_partition(reader)
-            result = cache_partition.get(key)
-            timer.mark("cache_get")
-            stats["cache_hit"] = result is not None
-            if result is not None:
-                span.set_tag("cache", "hit")
-                write_sorted_unsorted_cache_hit_metric(
-                    sorted_key_cache_experiment, True
-                )
-                return result
-
-            span.set_tag("cache", "miss")
-            write_sorted_unsorted_cache_hit_metric(sorted_key_cache_experiment, False)
-            result = execute()
-            cache_partition.set(key, result)
-            timer.mark("cache_set")
-            return result
-        else:
-            return execute()
-
-
-@with_span(op="db")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -667,14 +599,8 @@ def raw_query(
         trace_id,
     )
 
-    execute_query_strategy = (
-        execute_query_with_readthrough_caching
-        if state.get_config("use_readthrough_query_cache", 1)
-        else execute_query_with_caching
-    )
-
     try:
-        result = execute_query_strategy(
+        result = execute_query_with_readthrough_caching(
             clickhouse_query,
             query_settings,
             formatted_query,
