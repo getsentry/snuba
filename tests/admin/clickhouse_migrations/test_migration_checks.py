@@ -1,31 +1,43 @@
-from typing import Sequence
+from typing import Optional, Sequence, Union
 from unittest.mock import Mock, patch
 
 import pytest
 
 from snuba.admin.clickhouse.migration_checks import (
     PolicyChecker,
-    Reason,
-    ResultReason,
+    Result,
+    ReverseReason,
+    ReverseResult,
+    RunReason,
+    RunResult,
     StatusChecker,
     do_checks,
 )
-from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.groups import DirectoryLoader, GroupLoader, MigrationGroup
 from snuba.migrations.runner import MigrationDetails
 from snuba.migrations.status import Status
 
-PASS_REASON = ResultReason(True, Reason.NO_REASON_NEEDED)
-FAIL_REASON = ResultReason(False, Reason.ALREADY_RUN)
+
+class ExampleLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001", "0002", "0003"]
+
+
+def group_loader() -> GroupLoader:
+    return ExampleLoader()
 
 
 def test_do_checks() -> None:
     checker1 = Mock()
     checker2 = Mock()
 
-    checker1.can_run.return_value = FAIL_REASON
-    checker1.can_reverse.return_value = FAIL_REASON
-    checker2.can_run.return_value = PASS_REASON
-    checker2.can_reverse.return_value = FAIL_REASON
+    checker1.can_run.return_value = RunResult(False, RunReason.ALREADY_RUN)
+    checker1.can_reverse.return_value = ReverseResult(False, ReverseReason.NOT_RUN_YET)
+    checker2.can_run.return_value = RunResult(True)
+    checker2.can_reverse.return_value = ReverseResult(False, ReverseReason.NOT_RUN_YET)
 
     run, reverse = do_checks([checker1, checker2], "0001_xxx")
     assert run.allowed == False
@@ -49,17 +61,25 @@ RUN_MIGRATIONS: Sequence[MigrationDetails] = [
 ]
 
 
+@patch(
+    "snuba.admin.clickhouse.migration_checks.get_group_loader",
+    return_value=group_loader(),
+)
 @pytest.mark.parametrize(
     "migration_id, expected_allowed, expected_reason",
     [
-        pytest.param("0001", False, Reason.ALREADY_RUN),
-        pytest.param("0002", True, Reason.NO_REASON_NEEDED),
-        pytest.param("0003", False, Reason.NEEDS_EARLIER_MIGRATIONS),
+        pytest.param("0001", False, RunReason.ALREADY_RUN),
+        pytest.param("0002", True, None),
+        pytest.param("0003", False, RunReason.NEEDS_EARLIER_MIGRATIONS),
     ],
 )
 def test_status_checker_run(
-    migration_id: str, expected_allowed: bool, expected_reason: Reason
+    mock_loader: Mock,
+    migration_id: str,
+    expected_allowed: bool,
+    expected_reason: Optional[RunReason],
 ) -> None:
+
     checker = StatusChecker(MigrationGroup("querylog"), RUN_MIGRATIONS)
     result = checker.can_run(migration_id)
 
@@ -74,16 +94,23 @@ REVERSE_MIGRATIONS: Sequence[MigrationDetails] = [
 ]
 
 
+@patch(
+    "snuba.admin.clickhouse.migration_checks.get_group_loader",
+    return_value=group_loader(),
+)
 @pytest.mark.parametrize(
     "migration_id, expected_allowed, expected_reason",
     [
-        pytest.param("0001", False, Reason.NEEDS_SUBSEQUENT_MIGRATIONS),
-        pytest.param("0002", True, Reason.NO_REASON_NEEDED),
-        pytest.param("0003", False, Reason.NOT_RUN_YET),
+        pytest.param("0001", False, ReverseReason.NEEDS_SUBSEQUENT_MIGRATIONS),
+        pytest.param("0002", True, None),
+        pytest.param("0003", False, ReverseReason.NOT_RUN_YET),
     ],
 )
 def test_status_checker_reverse(
-    migration_id: str, expected_allowed: bool, expected_reason: Reason
+    mock_loader: Mock,
+    migration_id: str,
+    expected_allowed: bool,
+    expected_reason: Optional[ReverseReason],
 ) -> None:
     checker = StatusChecker(MigrationGroup("querylog"), REVERSE_MIGRATIONS)
     result = checker.can_reverse(migration_id)
@@ -100,23 +127,23 @@ def test_status_checker_reverse(
             "AllMigrationsPolicy",
             "run",
             True,
-            Reason.NO_REASON_NEEDED,
+            None,
         ),
         pytest.param(
             "0001_querylog",
             "NoMigrationsPolicy",
             "reverse",
             False,
-            Reason.REVERSE_POLICY,
+            ReverseReason.REVERSE_POLICY,
         ),
     ],
 )
-def test_policy_checker(
+def test_policy_checker_run(
     migration_id: str,
     policy: str,
     action: str,
     expected_allowed: bool,
-    expected_reason: Reason,
+    expected_reason: Optional[Union[RunReason, ReverseReason]],
 ) -> None:
 
     with patch(
@@ -125,7 +152,7 @@ def test_policy_checker(
     ):
         checker = PolicyChecker(MigrationGroup("querylog"))
         if action == "run":
-            result = checker.can_run(migration_id)
+            result: Result = checker.can_run(migration_id)
         if action == "reverse":
             result = checker.can_reverse(migration_id)
 
