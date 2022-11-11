@@ -81,6 +81,7 @@ def test_simple() -> None:
                     groupby_cols=set(),
                     array_join_cols=set(),
                 ),
+                result_profile={"bytes": 1337},
                 trace_id="b" * 32,
             )
         ],
@@ -132,6 +133,7 @@ def test_simple() -> None:
                 "clickhouse_queries.where_mapping_columns": [["tags"]],
                 "clickhouse_queries.groupby_columns": [[]],
                 "clickhouse_queries.array_join_columns": [[]],
+                "clickhouse_queries.bytes_scanned": [1337],
             }
         ],
         None,
@@ -253,6 +255,7 @@ def test_missing_fields() -> None:
                     "clickhouse_queries.where_mapping_columns": [["tags"]],
                     "clickhouse_queries.groupby_columns": [[]],
                     "clickhouse_queries.array_join_columns": [[]],
+                    "clickhouse_queries.bytes_scanned": [0],
                 }
             ],
             None,
