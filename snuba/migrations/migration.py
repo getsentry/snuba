@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Sequence
 
@@ -116,29 +117,64 @@ class ClickhouseNodeMigrationLegacy(Migration, ABC):
     forwards_local_first: bool = True
     backwards_local_first: bool = False
 
-    @abstractmethod
     def forwards_local(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
-    @abstractmethod
     def backwards_local(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
-    @abstractmethod
     def forwards_dist(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
-    @abstractmethod
     def backwards_dist(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
-    def forwards(self, context: Context, dry_run: bool = False) -> None:
-        if dry_run:
-            self.__dry_run(
-                self.forwards_local(),
-                self.forwards_dist(),
-                self.forwards_local_first,
+    def _set_targets(
+        self, ops: Sequence[SqlOperation], target: OperationTarget
+    ) -> None:
+        """For old migrations using the old methods, set the target appropriately."""
+        for op in ops:
+            op.target = target
+
+    def backwards_ops(self) -> Sequence[SqlOperation]:
+        if self.backwards_local() or self.backwards_dist():
+            warnings.warn(
+                "backwards_local and backwards_dist are deprecated. Use backwards_ops instead.",
+                DeprecationWarning,
             )
+            local_ops, dist_ops = self.backwards_local(), self.backwards_dist()
+            self._set_targets(local_ops, OperationTarget.LOCAL)
+            self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
+
+            if self.backwards_local_first:
+                return (*local_ops, *dist_ops)
+            else:
+                return (*dist_ops, *local_ops)
+        else:
+            raise NotImplementedError()
+
+    def forwards_ops(self) -> Sequence[SqlOperation]:
+        if self.forwards_local() or self.forwards_dist():
+            warnings.warn(
+                "forwards_local and forwards_dist are deprecated. Use forwards_ops instead.",
+                DeprecationWarning,
+            )
+            local_ops, dist_ops = self.forwards_local(), self.forwards_dist()
+            self._set_targets(local_ops, OperationTarget.LOCAL)
+            self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
+
+            if self.forwards_local_first:
+                return (*local_ops, *dist_ops)
+            else:
+                return (*dist_ops, *local_ops)
+        else:
+            raise NotImplementedError()
+
+    def forwards(self, context: Context, dry_run: bool = False) -> None:
+        ops = self.forwards_ops()
+
+        if dry_run:
+            self.__dry_run(ops)
             return
 
         migration_id, logger, update_status = context
@@ -149,49 +185,24 @@ class ClickhouseNodeMigrationLegacy(Migration, ABC):
         if not self.is_first_migration():
             update_status(Status.IN_PROGRESS)
 
-        local_ops = list(self.forwards_local())
-        dist_ops = list(self.forwards_dist())
-        ops = (
-            local_ops + dist_ops if self.forwards_local_first else dist_ops + local_ops
-        )
-
         for op in ops:
-            if op in local_ops:
-                op.target = OperationTarget.LOCAL
-                op.execute()
-            if op in dist_ops:
-                op.target = OperationTarget.DISTRIBUTED
-                op.execute()
+            op.execute()
 
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
     def backwards(self, context: Context, dry_run: bool) -> None:
+        ops = self.backwards_ops()
         if dry_run:
-            self.__dry_run(
-                self.backwards_local(),
-                self.backwards_dist(),
-                self.backwards_local_first,
-            )
+            self.__dry_run(ops)
             return
 
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
 
-        local_ops = list(self.backwards_local())
-        dist_ops = list(self.backwards_dist())
-        ops = (
-            local_ops + dist_ops if self.backwards_local_first else dist_ops + local_ops
-        )
-
         for op in ops:
-            if op in local_ops:
-                op.target = OperationTarget.LOCAL
-                op.execute()
-            if op in dist_ops:
-                op.target = OperationTarget.DISTRIBUTED
-                op.execute()
+            op.execute()
         logger.info(f"Finished reversing: {migration_id}")
 
         # The migrations table will be destroyed if the first
@@ -201,37 +212,25 @@ class ClickhouseNodeMigrationLegacy(Migration, ABC):
 
     def __dry_run(
         self,
-        local_operations: Sequence[SqlOperation],
-        dist_operations: Sequence[SqlOperation],
-        local_first: bool,
+        ops: Sequence[SqlOperation],
     ) -> None:
-        def print_local() -> None:
-            print("Local operations:")
-            if len(local_operations) == 0:
-                print("n/a")
+        def print_dist_op(op: SqlOperation, is_single_node: bool) -> None:
+            if not is_single_node:
+                print(f"Distributed op: {op.format_sql()}")
+            else:
+                print("Skipped dist operation - single node cluster")
 
-            for op in local_operations:
-                print(op.format_sql())
-
-        def print_dist() -> None:
-            print("Dist operations:")
-
-            if len(dist_operations) == 0:
-                print("n/a")
-
-            for op in dist_operations:
-                cluster = get_cluster(op._storage_set)
-
-                if not cluster.is_single_node():
-                    print(op.format_sql())
+        for op in ops:
+            cluster = get_cluster(op._storage_set)
+            is_single_node = cluster.is_single_node()
+            if op.target == OperationTarget.BOTH:
+                if op.local_first:
+                    print(f"Local op: {op.format_sql()}")
+                    print_dist_op(op, is_single_node)
                 else:
-                    print("Skipped dist operation - single node cluster")
-
-        if local_first:
-            print_local()
-            print("\n")
-            print_dist()
-        else:
-            print_dist()
-            print("\n")
-            print_local()
+                    print_dist_op(op, is_single_node)
+                    print(f"Local op: {op.format_sql()}")
+            elif op.target == OperationTarget.LOCAL:
+                print(f"Local op: {op.format_sql()}")
+            elif op.target == OperationTarget.DISTRIBUTED:
+                print_dist_op(op, is_single_node)

@@ -10,7 +10,13 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, validator
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.groups import MigrationGroup, get_group_loader
-from snuba.migrations.operations import AddColumn, CreateTable, DropColumn, SqlOperation
+from snuba.migrations.operations import (
+    AddColumn,
+    CreateTable,
+    DropColumn,
+    OperationTarget,
+    SqlOperation,
+)
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
 from snuba.migrations.validator import (
     DistributedEngineParseError,
@@ -86,7 +92,7 @@ class TestValidateMigrations:
         return op.table_name
 
     test_data = [
-        (True, False, [], [], [], [], does_not_raise(), ""),
+        (True, False, [], [], [], [], does_not_raise(), does_not_raise(), ""),
         (
             True,
             False,
@@ -94,6 +100,7 @@ class TestValidateMigrations:
             [],
             [create_dist_op],
             [],
+            does_not_raise(),
             does_not_raise(),
             "",
         ),
@@ -104,6 +111,7 @@ class TestValidateMigrations:
             [create_dist_op],
             [],
             [],
+            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "CreateTable test_local_table operation must be applied on local table before dist",
         ),
@@ -115,6 +123,7 @@ class TestValidateMigrations:
             [],
             [],
             does_not_raise(),
+            does_not_raise(),
             "",
         ),
         (
@@ -124,6 +133,7 @@ class TestValidateMigrations:
             [add_col_dist_op],
             [],
             [],
+            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "AddColumn test_local_table.col operation must be applied on local table before dist",
         ),
@@ -135,6 +145,7 @@ class TestValidateMigrations:
             [drop_col_local_op],
             [drop_col_dist_op],
             does_not_raise(),
+            does_not_raise(),
             "",
         ),
         (
@@ -145,6 +156,7 @@ class TestValidateMigrations:
             [drop_col_local_op],
             [drop_col_dist_op],
             pytest.raises(InvalidMigrationOrderError),
+            pytest.raises(InvalidMigrationOrderError),
             "DropColumn test_dist_table.col operation must be applied on dist table before local",
         ),
         (
@@ -154,6 +166,7 @@ class TestValidateMigrations:
             [create_dist_op, drop_col_dist_op],
             [add_col_local_op],
             [add_col_dist_op],
+            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "DropColumn test_dist_table.col operation must be applied on dist table before local",
         ),
@@ -165,6 +178,7 @@ class TestValidateMigrations:
             [add_col_local_op],
             [add_col_dist_op],
             pytest.raises(InvalidMigrationOrderError),
+            pytest.raises(InvalidMigrationOrderError),
             "AddColumn test_local_table.col operation must be applied on local table before dist",
         ),
         (
@@ -174,6 +188,7 @@ class TestValidateMigrations:
             [create_dist_op, drop_col_dist_op],
             [add_col_local_op],
             [add_col_dist_op],
+            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "CreateTable test_local_table operation must be applied on local table before dist",
         ),
@@ -181,7 +196,7 @@ class TestValidateMigrations:
 
     @pytest.mark.parametrize(
         "forwards_local_first_val, backwards_local_first_val,forwards_local,forwards_dist,"
-        "backwards_local, backwards_dist, expectation, err_msg",
+        "backwards_local, backwards_dist, expectation, expectation_new, err_msg",
         test_data,
     )
     @patch.object(validator, "get_cluster")
@@ -197,6 +212,7 @@ class TestValidateMigrations:
         backwards_local: Sequence[SqlOperation],
         backwards_dist: Sequence[SqlOperation],
         expectation: Any,
+        expectation_new: Any,
         err_msg: str,
     ) -> None:
 
@@ -230,8 +246,35 @@ class TestValidateMigrations:
             def backwards_dist(self) -> Sequence[SqlOperation]:
                 return backwards_dist
 
+        # expectation_clone, err = itertools.tee(expectation)
         with expectation as err:
             validate_migration_order(TestMigration())
+        if err_msg:
+            assert str(err.value) == err_msg
+
+        # test on the new api
+        for op in (*forwards_local, *backwards_local):
+            op.target = OperationTarget.LOCAL
+        for op in (*forwards_dist, *backwards_dist):
+            op.target = OperationTarget.DISTRIBUTED
+
+        class TestMigrationNew(migration.ClickhouseNodeMigration):
+            blocking = False
+
+            def forwards_ops(self) -> Sequence[SqlOperation]:
+                if forwards_local_first_val:
+                    return (*forwards_local, *forwards_dist)
+                else:
+                    return (*forwards_dist, *forwards_local)
+
+            def backwards_ops(self) -> Sequence[SqlOperation]:
+                if backwards_local_first_val:
+                    return (*backwards_local, *backwards_dist)
+                else:
+                    return (*backwards_dist, *backwards_local)
+
+        with expectation_new as err:
+            validate_migration_order(TestMigrationNew())
         if err_msg:
             assert str(err.value) == err_msg
 
@@ -329,6 +372,38 @@ def test_conflicts(mock_get_local_table_name: Mock, mock_get_cluster: Mock) -> N
     assert not conflicts_drop_column_op(drop_col_local_op, drop_col_dist_op_table_2)
     assert not conflicts_drop_column_op(drop_col_local_op_table_2, drop_col_dist_op)
     assert not conflicts_drop_column_op(drop_col_local_op, drop_col_dist_op_col_2)
+
+    new_create_dist_op = CreateTable(
+        storage,
+        "test_dist_table",
+        columns,
+        Distributed("test_local_table", None),
+        target=OperationTarget.DISTRIBUTED,
+    )
+
+    new_create_local_op = CreateTable(
+        storage,
+        "test_local_table",
+        columns,
+        ReplacingMergeTree(
+            storage_set=storage,
+            order_by="version",
+        ),
+        target=OperationTarget.LOCAL,
+    )
+
+    new_create_local_op2 = CreateTable(
+        storage,
+        "test_local_table2",
+        columns,
+        ReplacingMergeTree(
+            storage_set=storage,
+            order_by="version",
+        ),
+        target=OperationTarget.LOCAL,
+    )
+    assert conflicts_create_table_op(new_create_local_op, new_create_dist_op)
+    assert not conflicts_create_table_op(new_create_local_op2, create_dist_op)
 
 
 @patch.object(validator, "_get_dist_connection")
