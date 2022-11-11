@@ -73,4 +73,5 @@ storage = WritableTableStorage(
         processor=QuerylogProcessor(),
         default_topic=Topic.QUERYLOG,
     ),
+    writer_options={"input_format_skip_unknown_fields": 1},
 )

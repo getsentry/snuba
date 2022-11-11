@@ -21,12 +21,7 @@ from snuba.migrations.errors import (
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import (
-    OPTIONAL_GROUPS,
-    REGISTERED_GROUPS_LOOKUP,
-    MigrationGroup,
-    get_group_loader,
-)
+from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
@@ -38,10 +33,14 @@ DIST_TABLE_NAME = "migrations_dist"
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
+
     return [
         group
-        for group in REGISTERED_GROUPS_LOOKUP
-        if not (group in OPTIONAL_GROUPS and group in settings.SKIPPED_MIGRATION_GROUPS)
+        for group in MigrationGroup
+        if not (
+            group in OPTIONAL_GROUPS
+            and group.value in settings.SKIPPED_MIGRATION_GROUPS
+        )
     ]
 
 
@@ -50,7 +49,7 @@ class MigrationKey(NamedTuple):
     migration_id: str
 
     def __str__(self) -> str:
-        return f"{self.group}: {self.migration_id}"
+        return f"{self.group.value}: {self.migration_id}"
 
 
 class MigrationDetails(NamedTuple):
@@ -88,7 +87,7 @@ class Runner:
             data = self.__connection.execute(
                 f"SELECT status, timestamp FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s",
                 {
-                    "group": migration_key.group,
+                    "group": migration_key.group.value,
                     "migration_id": migration_key.migration_id,
                 },
             ).results
@@ -145,7 +144,9 @@ class Runner:
 
         return migrations
 
-    def run_all(self, *, force: bool = False, group: Optional[str] = None) -> None:
+    def run_all(
+        self, *, force: bool = False, group: Optional[MigrationGroup] = None
+    ) -> None:
         """
         If group is specified, runs all pending migrations for that specific group. Makes
         sure to run any pending system migrations first so that the migrations table is
@@ -162,7 +163,7 @@ class Runner:
             pending_migrations = self._get_pending_migrations()
         else:
             pending_migrations = self._get_pending_migrations_for_group(
-                "system"
+                MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
 
         # Do not run migrations if any are blocking
@@ -308,7 +309,9 @@ class Runner:
 
         return migrations
 
-    def _get_pending_migrations_for_group(self, group: str) -> List[MigrationKey]:
+    def _get_pending_migrations_for_group(
+        self, group: MigrationGroup
+    ) -> List[MigrationKey]:
         """
         Gets pending migrations list for a specific group
         """
@@ -345,7 +348,7 @@ class Runner:
         statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         data = [
             {
-                "group": migration_key.group,
+                "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
                 "timestamp": datetime.now(),
                 "status": status.value,
@@ -358,7 +361,7 @@ class Runner:
         result = self.__connection.execute(
             f"SELECT version FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
             {
-                "group": migration_key.group,
+                "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
             },
         ).results
@@ -377,7 +380,16 @@ class Runner:
             groups = get_active_migration_groups()
 
         migration_groups = (
-            "(" + (", ".join([escape_string(group) for group in groups])) + ")"
+            "("
+            + (
+                ", ".join(
+                    [
+                        escape_string(group.value)
+                        for group in get_active_migration_groups()
+                    ]
+                )
+            )
+            + ")"
         )
 
         try:

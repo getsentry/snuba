@@ -2,11 +2,24 @@ from __future__ import annotations
 
 import os
 import tempfile
+from typing import Any
 
+from snuba.clickhouse.columns import (
+    Array,
+    Column,
+    DateTime,
+    Float,
+    Nested,
+    SchemaModifiers,
+    String,
+    UInt,
+)
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
+from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.factory import get_config_built_storages
+from snuba.utils.schemas import AggregateFunction
 
 # this has to be done before the storage import because there's a cyclical dependency error
 CONFIG_BUILT_STORAGES = get_config_built_storages()
@@ -18,6 +31,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage,
     sets_storage,
 )
+from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -94,6 +108,7 @@ class TestStorageConfiguration(ConfigurationTest):
         sets_bucket_storage,
         sets_storage,
         transactions,
+        profiles,
     ]
 
     def test_config_file_discovery(self) -> None:
@@ -146,3 +161,66 @@ query_processors:
             assert getattr(qp, "_MappingOptimizer__column_name") == "a"
             assert getattr(qp, "_MappingOptimizer__hash_map_name") == "hashmap"
             assert getattr(qp, "_MappingOptimizer__killswitch") == "kill"
+
+    def test_column_parser(self) -> None:
+        serialized_columns: list[dict[str, Any]] = [
+            {"name": "int_col", "type": "UInt", "args": {"size": 64}},
+            {"name": "float_col", "type": "Float", "args": {"size": 32}},
+            {"name": "string_col", "type": "String"},
+            {"name": "time_col", "type": "DateTime"},
+            {
+                "name": "nested_col",
+                "type": "Nested",
+                "args": {
+                    "subcolumns": [
+                        {"name": "sub_col", "type": "UInt", "args": {"size": 64}},
+                    ],
+                },
+            },
+            {
+                "name": "func_col",
+                "type": "AggregateFunction",
+                "args": {
+                    "func": "uniqCombined64",
+                    "arg_types": [{"type": "UInt", "arg": 64}],
+                },
+            },
+            {
+                "name": "array_col",
+                "type": "Array",
+                "args": {
+                    "inner_type": {"type": "UInt", "args": {"size": 64}},
+                    "schema_modifiers": ["readonly"],
+                },
+            },
+            {
+                "name": "double_array_col",
+                "type": "Array",
+                "args": {
+                    "inner_type": {
+                        "type": "Array",
+                        "args": {"inner_type": {"type": "UInt", "args": {"size": 64}}},
+                    },
+                    "schema_modifiers": ["readonly"],
+                },
+            },
+        ]
+
+        expected_python_columns = [
+            Column("int_col", UInt(64)),
+            Column("float_col", Float(32)),
+            Column("string_col", String()),
+            Column("time_col", DateTime()),
+            Column("nested_col", Nested([Column("sub_col", UInt(64))])),
+            Column("func_col", AggregateFunction("uniqCombined64", [UInt(64)])),
+            Column(
+                "array_col",
+                Array(UInt(64), SchemaModifiers(nullable=False, readonly=True)),
+            ),
+            Column(
+                "double_array_col",
+                Array(Array(UInt(64)), SchemaModifiers(nullable=False, readonly=True)),
+            ),
+        ]
+
+        assert parse_columns(serialized_columns) == expected_python_columns

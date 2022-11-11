@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import logging
 import uuid
 from typing import Any, Mapping, Optional, Sequence, Union
 
@@ -9,6 +12,7 @@ from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
+logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
@@ -49,6 +53,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
         where_mapping_columns = []
         groupby_columns = []
         array_join_columns = []
+        bytes_scanned_columns = []
 
         for query in query_list:
             sql.append(query["sql"])
@@ -74,7 +79,9 @@ class QuerylogProcessor(DatasetMessageProcessor):
                 "where_profile": {"columns": [], "mapping_cols": []},
                 "groupby_cols": [],
                 "array_join_cols": [],
+                "bytes_scanned": 0,
             }
+            result_profile = query.get("result_profile") or {"bytes": 0}
             time_range = profile["time_range"]
             num_days.append(
                 time_range if time_range is not None and time_range >= 0 else 0
@@ -85,6 +92,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             where_mapping_columns.append(profile["where_profile"]["mapping_cols"])
             groupby_columns.append(profile["groupby_cols"])
             array_join_columns.append(profile["array_join_cols"])
+            bytes_scanned_columns.append(result_profile.get("bytes", 0))
 
         return {
             "clickhouse_queries.sql": sql,
@@ -107,7 +115,32 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "clickhouse_queries.where_mapping_columns": where_mapping_columns,
             "clickhouse_queries.groupby_columns": groupby_columns,
             "clickhouse_queries.array_join_columns": array_join_columns,
+            "clickhouse_queries.bytes_scanned": bytes_scanned_columns,
         }
+
+    def _remove_invalid_data(self, processed: dict[str, Any]) -> None:
+        valid_project_ids = []
+        # Ignore negative project IDs
+        for pid in processed["projects"]:
+            try:
+                p = int(pid)
+            except ValueError:
+                logger.error(
+                    "Invalid project id",
+                    extra=processed,
+                    exc_info=True,
+                )
+                continue
+
+            if p <= 0:
+                logger.error(
+                    "Invalid project id",
+                    extra=processed,
+                    exc_info=True,
+                )
+                continue
+            valid_project_ids.append(pid)
+        processed["projects"] = valid_project_ids
 
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
@@ -123,6 +156,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "organization": None,
             **self.__extract_query_list(message["query_list"]),
         }
+        self._remove_invalid_data(processed)
 
         # These fields are sometimes missing from the payload. If they are missing, don't
         # add them to processed so Clickhouse sets a default value for them.

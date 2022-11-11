@@ -5,7 +5,7 @@ import pytest
 from freezegun import freeze_time
 
 from snuba import settings
-from snuba.optimize_scheduler import (
+from snuba.clickhouse.optimize.optimize_scheduler import (
     OptimizationSchedule,
     OptimizedSchedulerTimeout,
     OptimizeScheduler,
