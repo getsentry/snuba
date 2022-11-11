@@ -12,6 +12,7 @@ from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.logical.quota_processor import (
     ENABLED_CONFIG,
+    REFERRER_CONFIG,
     REFERRER_PROJECT_CONFIG,
     ResourceQuotaProcessor,
 )
@@ -46,6 +47,13 @@ tests = [
         f"{REFERRER_PROJECT_CONFIG}_some_referrer_1",
         ResourceQuota(max_threads=5),
         id="Apply quota",
+    ),
+    pytest.param(
+        1,
+        "some_referrer",
+        f"{REFERRER_CONFIG}_some_referrer",
+        ResourceQuota(max_threads=5),
+        id="all referrers",
     ),
 ]
 
