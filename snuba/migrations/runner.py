@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
@@ -32,6 +33,10 @@ LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
 
+class InvalidMigrationId(Exception):
+    pass
+
+
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
 
     return [
@@ -44,9 +49,16 @@ def get_active_migration_groups() -> Sequence[MigrationGroup]:
     ]
 
 
-class MigrationKey(NamedTuple):
+@dataclass(frozen=True)
+class MigrationKey:
     group: MigrationGroup
     migration_id: str
+
+    def __post_init__(self) -> None:
+        if self.migration_id not in get_group_loader(self.group).get_migrations():
+            raise InvalidMigrationId(
+                f"No migration {self.migration_id} for group {self.group}"
+            )
 
     def __str__(self) -> str:
         return f"{self.group.value}: {self.migration_id}"
