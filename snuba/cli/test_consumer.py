@@ -139,7 +139,7 @@ def test_consumer(
     configure_metrics(StreamMetricsAdapter(metrics))
 
     consumer_builder = ConsumerBuilder(
-        storage_key=storage_key,
+        storage_keys=[storage_key],
         kafka_params=KafkaParameters(
             raw_topic=None,
             replacements_topic=None,
