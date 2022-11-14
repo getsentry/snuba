@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
-from arroyo import Topic as ArroyoTopic
+from arroyo import Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
@@ -113,35 +113,33 @@ class ConsumerBuilder:
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
-        self.raw_topic: ArroyoTopic
+        self.raw_topic: Topic
         if kafka_params.raw_topic is not None:
-            self.raw_topic = ArroyoTopic(kafka_params.raw_topic)
+            self.raw_topic = Topic(kafka_params.raw_topic)
         else:
             default_topic_spec = stream_loader.get_default_topic_spec()
-            self.raw_topic = ArroyoTopic(
-                default_topic_spec.get_physical_topic_name(slice_id)
-            )
+            self.raw_topic = Topic(default_topic_spec.get_physical_topic_name(slice_id))
 
-        self.replacements_topic: Optional[ArroyoTopic]
+        self.replacements_topic: Optional[Topic]
         if kafka_params.replacements_topic is not None:
-            self.replacements_topic = ArroyoTopic(kafka_params.replacements_topic)
+            self.replacements_topic = Topic(kafka_params.replacements_topic)
         else:
             replacement_topic_spec = stream_loader.get_replacement_topic_spec()
             if replacement_topic_spec is not None:
-                self.replacements_topic = ArroyoTopic(
+                self.replacements_topic = Topic(
                     replacement_topic_spec.get_physical_topic_name(slice_id)
                 )
             else:
                 self.replacements_topic = None
 
-        self.commit_log_topic: Optional[ArroyoTopic]
+        self.commit_log_topic: Optional[Topic]
         if kafka_params.commit_log_topic is not None:
-            self.commit_log_topic = ArroyoTopic(kafka_params.commit_log_topic)
+            self.commit_log_topic = Topic(kafka_params.commit_log_topic)
 
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
-                self.commit_log_topic = ArroyoTopic(
+                self.commit_log_topic = Topic(
                     commit_log_topic_spec.get_physical_topic_name(slice_id)
                 )
             else:
