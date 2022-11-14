@@ -82,3 +82,50 @@ def test_apply_quota(
 
     ResourceQuotaProcessor("project_id").process_query(query, settings)
     assert settings.get_resource_quota() == expected_quota
+
+
+def test_apply_two_quota() -> None:
+    referrer = "MYREFERRER"
+    referrer_project_limited_project_id = 1337
+    referrer_limited_project_id = 314
+    referrer_quota = 20
+    referrer_project_quota = 5
+
+    state.set_config(ENABLED_CONFIG, 1)
+    state.set_config(f"referrer_thread_quota_{referrer}", referrer_quota)
+    state.set_config(
+        f"referrer_project_thread_quota_{referrer}_{referrer_project_limited_project_id}",
+        referrer_project_quota,
+    )
+
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=binary_condition(
+            ConditionFunctions.EQ,
+            Column("_snuba_project_id", None, "project_id"),
+            Literal(None, referrer_project_limited_project_id),
+        ),
+    )
+    settings = HTTPQuerySettings()
+    settings.referrer = referrer
+
+    ResourceQuotaProcessor("project_id").process_query(query, settings)
+    assert settings.get_resource_quota() == ResourceQuota(
+        max_threads=referrer_project_quota
+    )
+
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=binary_condition(
+            ConditionFunctions.EQ,
+            Column("_snuba_project_id", None, "project_id"),
+            Literal(None, referrer_limited_project_id),
+        ),
+    )
+    settings = HTTPQuerySettings()
+    settings.referrer = referrer
+
+    ResourceQuotaProcessor("project_id").process_query(query, settings)
+    assert settings.get_resource_quota() == ResourceQuota(max_threads=referrer_quota)
