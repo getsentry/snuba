@@ -59,9 +59,14 @@ class BaseSubscriptionTest:
 def __entity_subscription_eq__(self: EntitySubscription, other: object) -> bool:
     if not isinstance(other, EntitySubscription):
         return False
+    self_processors = [type(p) for p in self.processors] if self.processors else None
+    self_validators = [type(v) for v in self.validators] if self.validators else None
+
+    other_processors = [type(p) for p in other.processors] if other.processors else None
+    other_validators = [type(v) for v in other.validators] if other.validators else None
     return (
-        self.processors == other.processors
-        and self.validators == other.validators
+        self_processors == other_processors
+        and self_validators == other_validators
         and isinstance(other, type(self))
     )
 

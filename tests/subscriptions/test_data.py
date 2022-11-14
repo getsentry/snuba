@@ -24,6 +24,17 @@ TESTS = [
             time_window_sec=500 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(),
+            metadata={
+                "project_id": 1,
+                "time_window": 500 * 60,
+                "resolution": 60,
+                "query": (
+                    "MATCH (events) "
+                    "SELECT count() AS count "
+                    "WHERE "
+                    "platform IN tuple('a') "
+                ),
+            },
         ),
         None,
         id="SnQL subscription",
@@ -40,6 +51,17 @@ TESTS = [
             time_window_sec=500 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(),
+            metadata={
+                "project_id": 1,
+                "time_window": 500 * 60,
+                "resolution": 60,
+                "query": (
+                    "MATCH (events) "
+                    "SELECT count() AS count, avg(timestamp) AS average_t "
+                    "WHERE "
+                    "platform IN tuple('a') "
+                ),
+            },
         ),
         InvalidQueryException,
         id="SnQL subscription with 2 many aggregates",
@@ -56,6 +78,17 @@ TESTS = [
             time_window_sec=500 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(),
+            metadata={
+                "project_id": 1,
+                "time_window": 500 * 60,
+                "resolution": 60,
+                "query": (
+                    "MATCH (events) "
+                    "SELECT count() AS count BY project_id "
+                    "WHERE platform IN tuple('a') "
+                    "AND project_id IN tuple(1) "
+                ),
+            },
         ),
         InvalidQueryException,
         id="SnQL subscription with disallowed clause",

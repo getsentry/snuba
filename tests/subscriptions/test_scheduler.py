@@ -38,6 +38,12 @@ class TestSubscriptionScheduler:
                 time_window_sec=60,
                 resolution_sec=int(resolution.total_seconds()),
                 entity_subscription=create_entity_subscription(),
+                metadata={
+                    "project_id": 1,
+                    "time_window": 60,
+                    "resolution": int(resolution.total_seconds()),
+                    "query": "MATCH (events) SELECT count() AS count",
+                },
             ),
         )
 

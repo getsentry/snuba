@@ -16,6 +16,12 @@ TESTS = [
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(),
+            metadata={
+                "project_id": 123,
+                "time_window": 10 * 60,
+                "resolution": 60,
+                "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
+            },
         ),
         id="Legacy subscription",
     ),
@@ -31,6 +37,17 @@ TESTS = [
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(),
+            metadata={
+                "project_id": 123,
+                "time_window": 10 * 60,
+                "resolution": 60,
+                "query": (
+                    "MATCH (events) "
+                    "SELECT count() AS count BY time "
+                    "WHERE "
+                    "platform IN tuple('a') "
+                ),
+            },
         ),
         id="SnQL subscription",
     ),

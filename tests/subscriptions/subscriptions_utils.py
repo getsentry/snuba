@@ -1,5 +1,4 @@
 from datetime import timedelta
-from typing import Any, Mapping
 from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -19,9 +18,7 @@ UUIDS = [
 ]
 
 
-def build_subscription(
-    resolution: timedelta, sequence: int, metadata: Mapping[str, Any]
-) -> Subscription:
+def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
     entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
     assert entity_subscription is not None
     return Subscription(
@@ -32,7 +29,12 @@ def build_subscription(
             resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
             entity_subscription=entity_subscription,
-            metadata=metadata,
+            metadata={
+                "project_id": 1,
+                "time_window": int(timedelta(minutes=5).total_seconds()),
+                "resolution": int(resolution.total_seconds()),
+                "query": "MATCH events SELECT count()",
+            },
         ),
     )
 

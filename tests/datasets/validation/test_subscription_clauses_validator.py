@@ -275,12 +275,8 @@ def test_subscription_clauses_validation_failure(query: LogicalQuery) -> None:
         EntityKeySubscription,
         get_entity(query.get_from_clause().key).get_entity_subscription(),
     )
-    if entity_subscription_cls.validators:
-        for validator in entity_subscription_cls.validators:
-            if isinstance(validator, AggregationValidator):
-                SubscriptionAllowedClausesValidator(
-                    max_allowed_aggregations=1,
-                    disallowed_aggregations=validator.disallowed_aggregations,
-                ).validate(query)
+
     with pytest.raises(InvalidQueryException):
-        validator.validate(query)
+        if entity_subscription_cls.validators:
+            for validator in entity_subscription_cls.validators:
+                validator.validate(query)

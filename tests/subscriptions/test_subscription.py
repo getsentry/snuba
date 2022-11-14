@@ -216,11 +216,7 @@ TESTS_CREATE_METRICS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            query=(
-                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
-                array(6,7)"""
-            ),
+            query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
@@ -229,11 +225,7 @@ TESTS_CREATE_METRICS = [
                 "time_window": 10 * 60,
                 "resolution": 60,
                 "organization": 1,
-                "query": (
-                    """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                    WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
-                    array(6,7)"""
-                ),
+                "query": "MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             },
         ),
         EntityKey.METRICS_COUNTERS,
@@ -242,11 +234,7 @@ TESTS_CREATE_METRICS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            query=(
-                """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
-                array(6,7)"""
-            ),
+            query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
@@ -255,11 +243,7 @@ TESTS_CREATE_METRICS = [
                 "time_window": 10 * 60,
                 "resolution": 60,
                 "organization": 1,
-                "query": (
-                    """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
-                    WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN
-                    array(6,7)"""
-                ),
+                "query": "MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             },
         ),
         EntityKey.METRICS_SETS,
@@ -272,10 +256,7 @@ TESTS_INVALID_METRICS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            query=(
-                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
-            ),
+            query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
@@ -284,10 +265,7 @@ TESTS_INVALID_METRICS = [
                 "time_window": 10 * 60,
                 "resolution": 60,
                 "organization": 1,
-                "query": (
-                    """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                    WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
-                ),
+                "query": "MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             },
         ),
         id="Metrics Counters subscription missing tags[3] condition",
@@ -295,10 +273,7 @@ TESTS_INVALID_METRICS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            query=(
-                """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
-            ),
+            query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_COUNTERS),
@@ -307,10 +282,7 @@ TESTS_INVALID_METRICS = [
                 "time_window": 10 * 60,
                 "resolution": 60,
                 "organization": 1,
-                "query": (
-                    """MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]
-                    WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
-                ),
+                "query": "MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             },
         ),
         id="Metrics Counters subscription missing project_id condition",
@@ -318,10 +290,7 @@ TESTS_INVALID_METRICS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            query=(
-                """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
-            ),
+            query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
@@ -330,10 +299,7 @@ TESTS_INVALID_METRICS = [
                 "time_window": 10 * 60,
                 "resolution": 60,
                 "organization": 1,
-                "query": (
-                    """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
-                    WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7"""
-                ),
+                "query": "MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             },
         ),
         id="Metrics Sets subscription missing tags[3] condition",
@@ -341,10 +307,7 @@ TESTS_INVALID_METRICS = [
     pytest.param(
         SubscriptionData(
             project_id=123,
-            query=(
-                """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
-                WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
-            ),
+            query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity_subscription=create_entity_subscription(EntityKey.METRICS_SETS),
@@ -353,15 +316,31 @@ TESTS_INVALID_METRICS = [
                 "time_window": 10 * 60,
                 "resolution": 60,
                 "organization": 1,
-                "query": (
-                    """MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3]
-                    WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)"""
-                ),
+                "query": "MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             },
         ),
         id="Metrics Sets subscription missing project_id condition",
     ),
 ]
+
+# assert
+# SubscriptionData(project_id=123, resolution_sec=60, time_window_sec=600, entity_subscription=EntitySubscription(
+#     processors=[<snuba.datasets.entity_subscriptions.processors.AddColumnCondition object at 0x1097d3640>],
+#     validators=[<snuba.datasets.entity_subscriptions.validators.AggregationValidator object at 0x1097d36a0>]),
+#     query='MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]\n                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN\n
+#                    array(6,7)',
+#                    metadata={'project_id': 123, 'time_window': 600, 'resolution': 60,
+#                    'query': 'MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]\n                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7
+#                    AND tags[3] IN\n                array(6,7)', 'organization': 1})
+#                    ==
+# SubscriptionData(project_id=123, resolution_sec=60, time_window_sec=600, entity_subscription=EntitySubscription(
+#     processors=[<snuba.datasets.entity_subscriptions.processors.AddColumnCondition object at 0x1097d3640>],
+#     validators=[<snuba.datasets.entity_subscriptions.validators.AggregationValidator object at 0x1097d36a0>]),
+#     query='MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]\n                WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN\n
+#                     array(6,7)',
+#                     metadata={'project_id': 123, 'time_window': 600, 'resolution': 60, 'organization': 1,
+#                     'query': 'MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3]\n                    WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7
+#                     AND tags[3] IN\n                    array(6,7)'})
 
 
 class TestMetricsCountersSubscriptionCreator:

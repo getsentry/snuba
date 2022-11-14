@@ -18,6 +18,12 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 time_window_sec=500 * 60,
                 resolution_sec=60,
                 entity_subscription=create_entity_subscription(),
+                metadata={
+                    "project_id": self.project_id,
+                    "time_window": 500 * 60,
+                    "resolution": 60,
+                    "query": "MATCH (events) SELECT count() WHERE in(platform, 'a')",
+                },
             ),
             SubscriptionData(
                 project_id=self.project_id,
@@ -25,6 +31,12 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 resolution_sec=60,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 entity_subscription=create_entity_subscription(),
+                metadata={
+                    "project_id": self.project_id,
+                    "time_window": 500 * 60,
+                    "resolution": 60,
+                    "query": "MATCH (events) SELECT count() WHERE in(platform, 'a')",
+                },
             ),
         ]
 
