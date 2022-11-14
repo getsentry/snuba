@@ -87,7 +87,7 @@ def test_apply_thread_quota(
     rate_limit_params: Sequence[RateLimitParameters],
     resource_quota: ResourceQuota,
     rate_limit_stats: RateLimitStats,
-    expected_query_settings: dict,
+    expected_query_settings: Mapping[str, Any],
 ) -> None:
     settings = HTTPQuerySettings()
     for rlimit in rate_limit_params:
