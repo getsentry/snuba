@@ -17,6 +17,7 @@ from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
+from snuba.settings import SLICED_KAFKA_TOPIC_MAP
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
@@ -56,6 +57,14 @@ class KafkaTopicSpec:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, KafkaTopicSpec) and self.topic == other.topic
+
+    def get_physical_topic_name(self, slice_id: Optional[int] = None) -> str:
+        if slice_id is not None:
+            physical_topic = SLICED_KAFKA_TOPIC_MAP[(self.topic_name, slice_id)]
+        else:
+            physical_topic = self.topic_name
+
+        return physical_topic
 
 
 def get_topic_name(topic: Topic) -> str:
@@ -225,6 +234,7 @@ class TableWriter:
         options: ClickhouseWriterOptions = None,
         table_name: Optional[str] = None,
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
+        slice_id: Optional[int] = None,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
         if self.__write_format == WriteFormat.JSON:
@@ -240,7 +250,7 @@ class TableWriter:
             raise TypeError("unknown table format", self.__write_format)
         options = self.__update_writer_options(options)
 
-        return get_cluster(self.__storage_set).get_batch_writer(
+        return get_cluster(self.__storage_set, slice_id).get_batch_writer(
             metrics,
             insert_statement,
             encoding=None,
