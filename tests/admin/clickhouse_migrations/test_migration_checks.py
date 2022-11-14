@@ -14,7 +14,7 @@ from snuba.admin.clickhouse.migration_checks import (
     do_checks,
 )
 from snuba.migrations.groups import DirectoryLoader, GroupLoader, MigrationGroup
-from snuba.migrations.runner import MigrationDetails, MigrationKey
+from snuba.migrations.runner import MigrationDetails, MigrationKey, Runner
 from snuba.migrations.status import Status
 
 
@@ -122,6 +122,35 @@ def test_status_checker_reverse(
 
     assert result.allowed == expected_allowed
     assert result.reason == expected_reason
+
+
+def test_status_checker_errors() -> None:
+    """
+    Tests the following failure cases:
+    * status checker initalized with mismatching group and migrations
+
+    * status checker called with MigrationKey whose migration doesn't
+      match the migrations the status checker is initalized with
+
+    * status checker called with MigrationKey whose group doesn't match
+      the group the status checker is initialized with
+    """
+    group = MigrationGroup("querylog")
+    with pytest.raises(AssertionError, match="migration ids dont match"):
+        StatusChecker(group, RUN_MIGRATIONS)
+
+    runner = Runner()
+    migration_id = "0666_wrong_migration"
+    _, migrations = runner.show_all(["querylog"])[0]
+    checker = StatusChecker(group, migrations)
+
+    with pytest.raises(
+        AssertionError, match="0666_wrong_migration is not part of querylog group"
+    ):
+        checker.can_run(MigrationKey(group, migration_id))
+
+    with pytest.raises(AssertionError, match="Group events does not match querylog"):
+        checker.can_reverse(MigrationKey(MigrationGroup("events"), migration_id))
 
 
 @pytest.mark.parametrize(
