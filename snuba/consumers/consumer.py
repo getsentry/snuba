@@ -331,6 +331,7 @@ def build_batch_writer(
     metrics: MetricsBackend,
     replacements_producer: Optional[ConfluentKafkaProducer] = None,
     replacements_topic: Optional[Topic] = None,
+    slice_id: Optional[int] = None,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
 
     assert not (replacements_producer is None) ^ (replacements_topic is None)
@@ -339,6 +340,7 @@ def build_batch_writer(
     writer = table_writer.get_batch_writer(
         metrics,
         {"load_balancing": "in_order", "insert_distributed_sync": 1},
+        slice_id=slice_id,
     )
 
     def build_writer() -> ProcessedMessageBatchWriter:
