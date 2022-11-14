@@ -1,11 +1,11 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 import pytest
 
 from snuba import state
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state.quota import ResourceQuota
-from snuba.state.rate_limit import RateLimitStats
+from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.web.db_query import (
     _apply_thread_quota_to_clickhouse_query_settings,
     _get_query_settings_from_config,
@@ -84,13 +84,16 @@ test_thread_quota_data = [
     test_thread_quota_data,
 )
 def test_apply_thread_quota(
-    rate_limit_params, resource_quota, rate_limit_stats, expected_query_settings
+    rate_limit_params: Sequence[RateLimitParameters],
+    resource_quota: ResourceQuota,
+    rate_limit_stats: RateLimitStats,
+    expected_query_settings: dict,
 ):
     settings = HTTPQuerySettings()
     for rlimit in rate_limit_params:
         settings.add_rate_limit(rlimit)
     settings.set_resource_quota(resource_quota)
-    clickhouse_query_settings = {}
+    clickhouse_query_settings: MutableMapping[str, Any] = {}
     _apply_thread_quota_to_clickhouse_query_settings(
         settings, clickhouse_query_settings, rate_limit_stats
     )
