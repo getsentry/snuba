@@ -94,15 +94,15 @@ def _build_entity_translation_mappers(
 
 
 def _build_entity_subscription(config: dict[str, Any]) -> Optional[EntitySubscription]:
-    if "entity_subscriptions" in config:
+    if "entity_subscription" in config:
         processors: Sequence[EntitySubscriptionProcessor] = (
             [
                 EntitySubscriptionProcessor.get_from_name(pro_config["processor"])(
                     **pro_config["args"]
                 )
-                for pro_config in config["entity_subscriptions"]["processors"]
+                for pro_config in config["entity_subscription"]["processors"]
             ]
-            if "processors" in config["entity_subscriptions"]
+            if "processors" in config["entity_subscription"]
             else []
         )
         validators: Sequence[EntitySubscriptionValidator] = (
@@ -110,9 +110,9 @@ def _build_entity_subscription(config: dict[str, Any]) -> Optional[EntitySubscri
                 EntitySubscriptionValidator.get_from_name(val_config["validator"])(
                     **val_config["args"]
                 )
-                for val_config in config["entity_subscriptions"]["validators"]
+                for val_config in config["entity_subscription"]["validators"]
             ]
-            if "validators" in config["entity_subscriptions"]
+            if "validators" in config["entity_subscription"]
             else []
         )
         return EntitySubscription(processors, validators)

@@ -44,6 +44,7 @@ class GroupAssigneeEntity(Entity):
             writable_storage=storage,
             validators=None,
             required_time_column=None,
+            entity_subscription=None,
         )
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

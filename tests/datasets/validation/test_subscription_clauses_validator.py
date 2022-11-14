@@ -4,11 +4,8 @@ import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EntitySubscriptionValidation,
-)
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity_subscriptions.validators import AggregationValidator
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -27,7 +24,7 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.validation.validators import SubscriptionAllowedClausesValidator
 
 
-class EntityKeySubscription(EntitySubscriptionValidation, EntitySubscription):
+class EntityKeySubscription(EntitySubscription):
     ...
 
 
@@ -108,14 +105,15 @@ tests = [
 def test_subscription_clauses_validation(query: LogicalQuery) -> None:
     entity_subscription_cls = cast(
         EntityKeySubscription,
-        get_entity_subscription(query.get_from_clause().key),
+        get_entity(query.get_from_clause().key).get_entity_subscription(),
     )
-
-    validator = SubscriptionAllowedClausesValidator(
-        max_allowed_aggregations=1,
-        disallowed_aggregations=entity_subscription_cls.disallowed_aggregations,
-    )
-    validator.validate(query)
+    if entity_subscription_cls.validators:
+        for validator in entity_subscription_cls.validators:
+            if isinstance(validator, AggregationValidator):
+                SubscriptionAllowedClausesValidator(
+                    max_allowed_aggregations=1,
+                    disallowed_aggregations=validator.disallowed_aggregations,
+                ).validate(query)
 
 
 invalid_tests = [
@@ -275,11 +273,14 @@ invalid_tests = [
 def test_subscription_clauses_validation_failure(query: LogicalQuery) -> None:
     entity_subscription_cls = cast(
         EntityKeySubscription,
-        get_entity_subscription(query.get_from_clause().key),
+        get_entity(query.get_from_clause().key).get_entity_subscription(),
     )
-    validator = SubscriptionAllowedClausesValidator(
-        max_allowed_aggregations=1,
-        disallowed_aggregations=entity_subscription_cls.disallowed_aggregations,
-    )
+    if entity_subscription_cls.validators:
+        for validator in entity_subscription_cls.validators:
+            if isinstance(validator, AggregationValidator):
+                SubscriptionAllowedClausesValidator(
+                    max_allowed_aggregations=1,
+                    disallowed_aggregations=validator.disallowed_aggregations,
+                ).validate(query)
     with pytest.raises(InvalidQueryException):
         validator.validate(query)

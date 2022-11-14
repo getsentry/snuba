@@ -9,6 +9,7 @@ from snuba.query.conditions import (
     combine_and_conditions,
 )
 from snuba.query.data_source.simple import Entity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.utils.registered_class import RegisteredClass
@@ -40,16 +41,20 @@ class AddColumnCondition(EntitySubscriptionProcessor):
         self.extra_condition_column = extra_condition_column
 
     def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
-        return {self.extra_condition_data_key: metadata["extra_condition_data_key"]}
+        if self.extra_condition_data_key not in metadata:
+            raise InvalidQueryException
+        return {self.extra_condition_data_key: metadata[self.extra_condition_data_key]}
 
     def process(
         self, query: Union[CompositeQuery[Entity], Query], metadata: Mapping[str, Any]
     ) -> None:
+        if self.extra_condition_data_key not in metadata:
+            raise InvalidQueryException
         condition_to_add: Sequence[Expression] = [
             binary_condition(
                 ConditionFunctions.EQ,
                 Column(None, None, self.extra_condition_column),
-                Literal(None, metadata["extra_condition_data_key"]),
+                Literal(None, metadata[self.extra_condition_data_key]),
             ),
         ]
         new_condition = combine_and_conditions(condition_to_add)

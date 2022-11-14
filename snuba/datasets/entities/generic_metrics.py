@@ -163,6 +163,10 @@ class GenericMetricsDistributionsEntity(GenericMetricsEntity):
         super().__init__(
             readable_storage=self.READABLE_STORAGE,
             writable_storage=self.WRITABLE_STORAGE,
+            entity_subscription=EntitySubscription(
+                validators=[AggregationValidator(3, ["having", "orderby"])],
+                processors=[AddColumnCondition("organization", "org_id")],
+            ),
             validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             value_schema=ColumnSet(
                 [

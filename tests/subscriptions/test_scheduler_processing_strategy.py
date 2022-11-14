@@ -14,7 +14,7 @@ from arroyo.types import Position
 from arroyo.utils.clock import TestingClock
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -545,7 +545,8 @@ def test_produce_scheduled_subscription_message() -> None:
         entity_key,
         PartitionId(partition_index),
     )
-
+    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
+    assert entity_subscription is not None
     # Create 2 subscriptions
     # Subscription 1
     store.create(
@@ -555,7 +556,13 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=entity_subscription,
+            metadata={
+                "project_id": 1,
+                "time_window": 60,
+                "resolution": 60,
+                "query": "MATCH events SELECT count()",
+            },
         ),
     )
 
@@ -567,7 +574,13 @@ def test_produce_scheduled_subscription_message() -> None:
             time_window_sec=2 * 60,
             resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=entity_subscription,
+            metadata={
+                "project_id": 2,
+                "time_window": 2 * 60,
+                "resolution": 2 * 60,
+                "query": "MATCH events SELECT count(event_id)",
+            },
         ),
     )
 
@@ -660,6 +673,8 @@ def test_produce_stale_message() -> None:
         PartitionId(partition_index),
     )
 
+    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
+    assert entity_subscription is not None
     # Create subscription
     store.create(
         uuid.uuid4(),
@@ -668,7 +683,13 @@ def test_produce_stale_message() -> None:
             time_window_sec=60,
             resolution_sec=60,
             query="MATCH events SELECT count()",
-            entity_subscription=EventsSubscription(data_dict={}),
+            entity_subscription=entity_subscription,
+            metadata={
+                "project_id": 1,
+                "time_window": 60,
+                "resolution": 60,
+                "query": "MATCH events SELECT count()",
+            },
         ),
     )
 

@@ -5,10 +5,6 @@ from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionPro
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 
 
-class InvalidSubscriptionError(Exception):
-    pass
-
-
 @dataclass
 class EntitySubscription:
     processors: Optional[Sequence[EntitySubscriptionProcessor]]

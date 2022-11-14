@@ -1,10 +1,6 @@
 from abc import abstractmethod
 from typing import Any, Mapping, Sequence, Type, Union, cast
 
-from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    InvalidSubscriptionError,
-)
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
@@ -13,6 +9,10 @@ from snuba.query.validation.validators import (
     SubscriptionAllowedClausesValidator,
 )
 from snuba.utils.registered_class import RegisteredClass
+
+
+class InvalidSubscriptionError(Exception):
+    pass
 
 
 class EntitySubscriptionValidator(metaclass=RegisteredClass):
@@ -44,6 +44,8 @@ class AggregationValidator(EntitySubscriptionValidator):
         return {}
 
     def validate(self, query: Union[CompositeQuery[Entity], Query]) -> None:
+        from snuba.datasets.entities.factory import get_entity
+
         from_clause = query.get_from_clause()
         if not isinstance(from_clause, Entity):
             raise InvalidSubscriptionError("Only simple queries are supported")

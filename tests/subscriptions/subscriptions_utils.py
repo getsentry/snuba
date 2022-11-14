@@ -1,13 +1,11 @@
 from datetime import timedelta
-from typing import Optional
+from typing import Any, Mapping
 from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity_subscriptions.entity_subscription import (
-    EntitySubscription,
-    EventsSubscription,
-)
-from snuba.datasets.entity_subscriptions.factory import get_entity_subscription
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
+from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.subscriptions.data import (
     PartitionId,
     Subscription,
@@ -21,8 +19,11 @@ UUIDS = [
 ]
 
 
-def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
-    entity_subscription = EventsSubscription(data_dict={})
+def build_subscription(
+    resolution: timedelta, sequence: int, metadata: Mapping[str, Any]
+) -> Subscription:
+    entity_subscription = get_entity(EntityKey.EVENTS).get_entity_subscription()
+    assert entity_subscription is not None
     return Subscription(
         SubscriptionIdentifier(PartitionId(1), UUIDS[sequence]),
         SubscriptionData(
@@ -31,15 +32,17 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
             resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
             entity_subscription=entity_subscription,
+            metadata=metadata,
         ),
     )
 
 
 def create_entity_subscription(
-    entity_key: EntityKey = EntityKey.EVENTS, org_id: Optional[int] = None
+    entity_key: EntityKey = EntityKey.EVENTS,
 ) -> EntitySubscription:
-    if org_id:
-        data_dict = {"organization": org_id}
-    else:
-        data_dict = {}
-    return get_entity_subscription(entity_key)(data_dict=data_dict)
+    entity_subscription = get_entity(entity_key).get_entity_subscription()
+    if not entity_subscription:
+        raise InvalidSubscriptionError(
+            f"entity subscription for {entity_key} does not exist"
+        )
+    return entity_subscription
