@@ -84,7 +84,7 @@ def test_apply_quota(
     assert settings.get_resource_quota() == expected_quota
 
 
-def test_apply_two_quota() -> None:
+def test_apply_overlapping_quota() -> None:
     referrer = "MYREFERRER"
     referrer_project_limited_project_id = 1337
     referrer_limited_project_id = 314
@@ -98,6 +98,7 @@ def test_apply_two_quota() -> None:
         referrer_project_quota,
     )
 
+    # test the limit with the referrer_project config
     query = Query(
         QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
@@ -111,10 +112,12 @@ def test_apply_two_quota() -> None:
     settings.referrer = referrer
 
     ResourceQuotaProcessor("project_id").process_query(query, settings)
+    # see that the more restrictive quota is applied
     assert settings.get_resource_quota() == ResourceQuota(
         max_threads=referrer_project_quota
     )
 
+    # test with just the referrer limit applied
     query = Query(
         QueryEntity(EntityKey.EVENTS, EntityColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
@@ -128,4 +131,6 @@ def test_apply_two_quota() -> None:
     settings.referrer = referrer
 
     ResourceQuotaProcessor("project_id").process_query(query, settings)
+    # see that just the referrer limit was applied given that there was no config for that
+    # specific project id
     assert settings.get_resource_quota() == ResourceQuota(max_threads=referrer_quota)
