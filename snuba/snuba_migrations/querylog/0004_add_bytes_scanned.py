@@ -3,7 +3,6 @@ from typing import Sequence
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -24,9 +23,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     "clickhouse_queries.bytes_scanned",
                     Array(
                         UInt(64),
-                        Modifiers(
-                            default="arrayResize([0], length(clickhouse_queries.sql))"
-                        ),
                     ),
                 ),
                 after="clickhouse_queries.array_join_columns",
