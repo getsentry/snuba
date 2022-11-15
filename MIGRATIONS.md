@@ -107,6 +107,8 @@ The new migration should contain a class called `Migration` which inherits from 
 
 A ClickhouseNodeMigration is the most common type of migration and determines the SQL to be run on each ClickHouse node. You should define all four methods - `forwards_local`, `backwards_local`, `forwards_dist` and `backwards_dist` in order to provide the DDL for all ClickHouse layouts that a user may have. The operations provided in the `_local` methods will run on each local ClickHouse node and the `_dist` methods will run on each distributed ClickHouse nodes (if any).
 
+The `forwards_local_first` and `backwards_local_first` attributes allow you to specify the order of operations. By default `forwards_local_first = True` and `backwards_local_first = False`. This means in the forwards step `_local` is run before `_dist`, and in the backwards step it's the opposite. For some SQL operations, such as `AddColumn` and `CreateTable`, it's important to apply them on local nodes before distributed. For others, such as `DropColumn`, it's important to apply them on the distributed first.
+
 For each forwards method, you should provide the sequence of operations to be run on that node. In case the forwards methods fail halfway, the corresponding backwards methods should also restore the original state so the migration can be retried.
 For example if a temporary table is created during the forwards migration, the backwards migration should drop it.
 
