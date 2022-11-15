@@ -9,7 +9,7 @@ Contents:
    getstarted
    architecture/overview
    architecture/datamodel
-   architecture/partitioning
+   architecture/slicing
    architecture/queryprocessing
    configuration/overview
    query/overview

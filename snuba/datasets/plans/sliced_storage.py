@@ -112,19 +112,19 @@ class SlicedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self, query: LogicalQuery, settings: QuerySettings
     ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
-            op="build_plan.partitioned_storage", description="select_storage"
+            op="build_plan.sliced_storage", description="select_storage"
         ):
             cluster = self.__storage_cluster_selector.select_cluster(query, settings)
 
         with sentry_sdk.start_span(
-            op="build_plan.partitioned_storage", description="translate"
+            op="build_plan.sliced_storage", description="translate"
         ):
             # The QueryTranslator class should be instantiated once for each call to build_plan,
             # to avoid cache conflicts.
             clickhouse_query = QueryTranslator(self.__mappers).translate(query)
 
         with sentry_sdk.start_span(
-            op="build_plan.partitioned_storage", description="set_from_clause"
+            op="build_plan.sliced_storage", description="set_from_clause"
         ):
             clickhouse_query.set_from_clause(
                 get_query_data_source(

@@ -36,7 +36,7 @@ To add a cluster with an associated (storage set key, slice) pair, add cluster d
 to ``settings.SLICED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
 regular cluster definitions in ``settings.CLUSTERS``. In the ``storage_set_slices`` field, sliced storage
 sets should be added in the form of ``(StorageSetKey, slice_id)`` where slice_id is in
-the range ``[0,settings.SLICED_STORAGES[storage])`` for relevant storages.
+the range ``[0,settings.SLICED_STORAGES[storage])`` for storages relevant to the ``StorageSetKey``.
 
 
 Preparing the storage for sharding
