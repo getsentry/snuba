@@ -134,7 +134,11 @@ class ClickhouseNodeMigration(Migration, ABC):
 
     def forwards(self, context: Context, dry_run: bool = False) -> None:
         if dry_run:
-            self.__dry_run(self.forwards_local(), self.forwards_dist())
+            self.__dry_run(
+                self.forwards_local(),
+                self.forwards_dist(),
+                self.forwards_local_first,
+            )
             return
 
         migration_id, logger, update_status = context
@@ -162,7 +166,11 @@ class ClickhouseNodeMigration(Migration, ABC):
 
     def backwards(self, context: Context, dry_run: bool) -> None:
         if dry_run:
-            self.__dry_run(self.backwards_local(), self.backwards_dist())
+            self.__dry_run(
+                self.backwards_local(),
+                self.backwards_dist(),
+                self.backwards_local_first,
+            )
             return
 
         migration_id, logger, update_status = context
@@ -191,25 +199,35 @@ class ClickhouseNodeMigration(Migration, ABC):
         self,
         local_operations: Sequence[SqlOperation],
         dist_operations: Sequence[SqlOperation],
+        local_first: bool,
     ) -> None:
+        def print_local() -> None:
+            print("Local operations:")
+            if len(local_operations) == 0:
+                print("n/a")
 
-        print("Local operations:")
-        if len(local_operations) == 0:
-            print("n/a")
-
-        for op in local_operations:
-            print(op.format_sql())
-
-        print("\n")
-        print("Dist operations:")
-
-        if len(dist_operations) == 0:
-            print("n/a")
-
-        for op in dist_operations:
-            cluster = get_cluster(op._storage_set)
-
-            if not cluster.is_single_node():
+            for op in local_operations:
                 print(op.format_sql())
-            else:
-                print("Skipped dist operation - single node cluster")
+
+        def print_dist() -> None:
+            print("Dist operations:")
+
+            if len(dist_operations) == 0:
+                print("n/a")
+
+            for op in dist_operations:
+                cluster = get_cluster(op._storage_set)
+
+                if not cluster.is_single_node():
+                    print(op.format_sql())
+                else:
+                    print("Skipped dist operation - single node cluster")
+
+        if local_first:
+            print_local()
+            print("\n")
+            print_dist()
+        else:
+            print_dist()
+            print("\n")
+            print_local()
