@@ -31,6 +31,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage,
     sets_storage,
 )
+from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.transactions import storage as transactions
@@ -106,6 +107,7 @@ class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
         distributions_bucket_storage,
         distributions_storage,
+        metrics_raw,
         sets_bucket_storage,
         sets_storage,
         transactions,
