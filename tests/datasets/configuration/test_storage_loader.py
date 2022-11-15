@@ -184,7 +184,7 @@ query_processors:
                 "type": "AggregateFunction",
                 "args": {
                     "func": "uniqCombined64",
-                    "arg_types": [{"type": "UInt", "arg": 64}],
+                    "arg_types": [{"type": "UInt", "args": {"size": 64}}],
                 },
             },
             {
