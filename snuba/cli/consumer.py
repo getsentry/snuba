@@ -51,6 +51,12 @@ logger = logging.getLogger(__name__)
     required=True,
 )
 @click.option(
+    "--slice-id",
+    "slice_id",
+    type=int,
+    help="The slice id for the storage",
+)
+@click.option(
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
@@ -121,6 +127,7 @@ def consumer(
     consumer_group: str,
     bootstrap_server: Sequence[str],
     storage_name: str,
+    slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -141,11 +148,15 @@ def consumer(
     logger.info("Consumer Starting")
     storage_key = StorageKey(storage_name)
 
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "consumer",
-        tags={"group": consumer_group, "storage": storage_key.value},
-    )
+    metrics_tags = {
+        "group": consumer_group,
+        "storage": storage_key.value,
+    }
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
+    metrics = MetricsWrapper(environment.metrics, "consumer", tags=metrics_tags)
     configure_metrics(StreamMetricsAdapter(metrics))
 
     def stats_callback(stats_json: str) -> None:
@@ -176,10 +187,11 @@ def consumer(
         profile_path=profile_path,
         stats_callback=stats_callback,
         parallel_collect=parallel_collect,
+        slice_id=slice_id,
         cooperative_rebalancing=cooperative_rebalancing,
     )
 
-    consumer = consumer_builder.build_base_consumer()
+    consumer = consumer_builder.build_base_consumer(slice_id)
 
     def handler(signum: int, frame: Any) -> None:
         consumer.signal_shutdown()

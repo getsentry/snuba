@@ -29,13 +29,21 @@ schema:
           },
       },
 
-      { name: granularities, type: Array, args: { type: UInt, arg: 8 } },
+      {
+        name: granularities,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
       { name: count_value, type: Float, args: { size: 64 } },
-      { name: set_values, type: Array, args: { type: UInt, arg: 64 } },
+      {
+        name: set_values,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 64 } } },
+      },
       {
         name: distribution_values,
         type: Array,
-        args: { type: Float, arg: 64 },
+        args: { inner_type: { type: Float, args: { size: 64 } } },
       },
       { name: timeseries_id, type: UInt, args: { size: 32 } },
     ]

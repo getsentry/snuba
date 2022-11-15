@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
@@ -121,6 +122,18 @@ def make_column_schema(
     }
 
 
+def del_name_field(column_schema: dict[str, Any]) -> dict[str, Any]:
+    """
+    Useful for simply removing the `name` field from a Column Schema.
+    Column types within Arrays do not have names but do maintain the
+    same structure as the column type itself.
+    """
+    new_column_schema = deepcopy(column_schema)
+    if "properties" in new_column_schema and "name" in new_column_schema["properties"]:
+        del new_column_schema["properties"]["name"]
+    return new_column_schema
+
+
 NUMBER_SCHEMA = make_column_schema(
     column_type={"enum": ["UInt", "Float"]},
     args={
@@ -138,19 +151,6 @@ NO_ARG_SCHEMA = make_column_schema(
     args={
         "type": "object",
         "properties": {},
-        "additionalProperties": False,
-    },
-)
-
-
-ARRAY_SCHEMA = make_column_schema(
-    column_type={"const": "Array"},
-    args={
-        "type": "object",
-        "properties": {
-            "type": TYPE_STRING,
-            "arg": {"type": "number"},
-        },
         "additionalProperties": False,
     },
 )
@@ -177,12 +177,43 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     },
 )
 
-COLUMN_TYPES = [
+SIMPLE_COLUMN_TYPES = [
     NUMBER_SCHEMA,
     NO_ARG_SCHEMA,
-    ARRAY_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
 ]
+
+# Array inner types are the same as normal column types except they don't have a name
+_SIMPLE_ARRAY_INNER_TYPES = [
+    del_name_field(col_type) for col_type in SIMPLE_COLUMN_TYPES
+]
+
+# Up to one subarray is supported. Eg Array(Array(String())).
+_SUB_ARRAY_SCHEMA = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {"inner_type": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES}},
+        "additionalProperties": False,
+    },
+)
+
+ARRAY_SCHEMA = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_type": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, _SUB_ARRAY_SCHEMA]}
+        },
+        "additionalProperties": False,
+    },
+)
+
+COLUMN_TYPES = [
+    *SIMPLE_COLUMN_TYPES,
+    ARRAY_SCHEMA,
+]
+
 
 NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},

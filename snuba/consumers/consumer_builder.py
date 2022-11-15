@@ -18,6 +18,7 @@ from snuba.consumers.consumer import (
     build_mock_batch_writer,
     process_message,
 )
+from snuba.datasets.partitioning import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
@@ -77,6 +78,7 @@ class ConsumerBuilder:
         max_batch_time_ms: int,
         metrics: MetricsBackend,
         parallel_collect: bool,
+        slice_id: Optional[int],
         stats_callback: Optional[Callable[[str], None]] = None,
         commit_retry_policy: Optional[RetryPolicy] = None,
         profile_path: Optional[str] = None,
@@ -93,12 +95,15 @@ class ConsumerBuilder:
             .topic
         )
 
+        validate_passed_slice(storage_key, slice_id)
+
         self.broker_config = get_default_kafka_configuration(
-            topic, bootstrap_servers=kafka_params.bootstrap_servers
+            topic, slice_id, bootstrap_servers=kafka_params.bootstrap_servers
         )
         logger.info(f"librdkafka log level: {self.broker_config.get('log_level', 6)}")
         self.producer_broker_config = build_kafka_producer_configuration(
             topic,
+            slice_id,
             bootstrap_servers=kafka_params.bootstrap_servers,
             override_params={
                 "partitioner": "consistent",
@@ -112,7 +117,8 @@ class ConsumerBuilder:
         if kafka_params.raw_topic is not None:
             self.raw_topic = Topic(kafka_params.raw_topic)
         else:
-            self.raw_topic = Topic(stream_loader.get_default_topic_spec().topic_name)
+            default_topic_spec = stream_loader.get_default_topic_spec()
+            self.raw_topic = Topic(default_topic_spec.get_physical_topic_name(slice_id))
 
         self.replacements_topic: Optional[Topic]
         if kafka_params.replacements_topic is not None:
@@ -120,17 +126,22 @@ class ConsumerBuilder:
         else:
             replacement_topic_spec = stream_loader.get_replacement_topic_spec()
             if replacement_topic_spec is not None:
-                self.replacements_topic = Topic(replacement_topic_spec.topic_name)
+                self.replacements_topic = Topic(
+                    replacement_topic_spec.get_physical_topic_name(slice_id)
+                )
             else:
                 self.replacements_topic = None
 
         self.commit_log_topic: Optional[Topic]
         if kafka_params.commit_log_topic is not None:
             self.commit_log_topic = Topic(kafka_params.commit_log_topic)
+
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
-                self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
+                self.commit_log_topic = Topic(
+                    commit_log_topic_spec.get_physical_topic_name(slice_id)
+                )
             else:
                 self.commit_log_topic = None
 
@@ -172,15 +183,24 @@ class ConsumerBuilder:
         self.__commit_retry_policy = commit_retry_policy
 
     def __build_consumer(
-        self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
+        self,
+        strategy_factory: ProcessingStrategyFactory[KafkaPayload],
+        slice_id: Optional[int] = None,
     ) -> StreamProcessor[KafkaPayload]:
-        configuration = build_kafka_consumer_configuration(
+
+        # retrieves the default logical topic
+        topic = (
             self.storage.get_table_writer()
             .get_stream_loader()
             .get_default_topic_spec()
-            .topic,
+            .topic
+        )
+
+        configuration = build_kafka_consumer_configuration(
+            topic,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
+            slice_id=slice_id,
             auto_offset_reset=self.auto_offset_reset,
             strict_offset_reset=self.strict_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
@@ -226,6 +246,7 @@ class ConsumerBuilder:
 
     def __build_streaming_strategy_factory(
         self,
+        slice_id: Optional[int] = None,
     ) -> ProcessingStrategyFactory[KafkaPayload]:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
@@ -246,6 +267,7 @@ class ConsumerBuilder:
                     self.producer if self.replacements_topic is not None else None
                 ),
                 replacements_topic=self.replacements_topic,
+                slice_id=slice_id,
             )
             if self.__mock_parameters is None
             else build_mock_batch_writer(
@@ -273,8 +295,12 @@ class ConsumerBuilder:
 
         return strategy_factory
 
-    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
+    def build_base_consumer(
+        self, slice_id: Optional[int] = None
+    ) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer.
         """
-        return self.__build_consumer(self.__build_streaming_strategy_factory())
+        return self.__build_consumer(
+            self.__build_streaming_strategy_factory(slice_id), slice_id
+        )

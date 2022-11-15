@@ -5,13 +5,20 @@ from typing import Callable, Mapping
 import pytest
 from freezegun import freeze_time
 
-from snuba import optimize, settings
+from snuba import settings
+from snuba.clickhouse.optimize import optimize
+from snuba.clickhouse.optimize.optimize import (
+    _get_metrics_tags,
+    optimize_partition_runner,
+)
+from snuba.clickhouse.optimize.optimize_scheduler import (
+    OptimizedSchedulerTimeout,
+    OptimizeScheduler,
+)
+from snuba.clickhouse.optimize.optimize_tracker import OptimizedPartitionTracker
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.optimize import _get_metrics_tags, optimize_partition_runner
-from snuba.optimize_scheduler import OptimizedSchedulerTimeout, OptimizeScheduler
-from snuba.optimize_tracker import OptimizedPartitionTracker
 from snuba.processor import InsertBatch
 from snuba.redis import RedisClientKey, get_redis_client
 from tests.helpers import write_processed_messages

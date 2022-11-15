@@ -60,11 +60,13 @@ class ClickhouseClientSettings(Enum):
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
-            # Replacing existing rows requires reconstructing the entire tuple for each
-            # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
-            # the default settings it's common for ClickHouse to go over the default max_memory_usage
-            # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
-            # max_memory_usage gives the query more breathing room.
+            # Replacing existing rows requires reconstructing the entire tuple
+            # for each event (via a SELECT), which is a Hard Thing (TM) for
+            # columnstores to do. With the default settings it's common for
+            # ClickHouse to go over the default max_memory_usage of 10GB per
+            # query. Lowering the max_block_size reduces memory usage, and
+            # increasing the max_memory_usage gives the query more breathing
+            # room.
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
             # Don't use up production cache for the count() queries.
@@ -466,7 +468,11 @@ def get_cluster(
         res = part_storage_set_cluster_map.get((storage_set_key, slice_id), None)
         if res is None:
             raise UndefinedClickhouseCluster(
-                f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment"
+                f"{(storage_set_key, slice_id)} is not defined in the SLICED_CLUSTERS setting for this environment",
+                extra_data={
+                    "storage_set_key_not_defined": storage_set_key,
+                    "slice_id": slice_id,
+                },
             )
 
     else:
@@ -474,6 +480,7 @@ def get_cluster(
         res = storage_set_cluster_map.get(storage_set_key, None)
         if res is None:
             raise UndefinedClickhouseCluster(
-                f"{storage_set_key} is not defined in the CLUSTERS setting for this environment"
+                f"{storage_set_key} is not defined in the CLUSTERS setting for this environment",
+                extra_data={"storage_set_key_not_defined": storage_set_key},
             )
     return res

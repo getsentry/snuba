@@ -90,15 +90,15 @@ def test_transactions_compatibility() -> None:
     generate_transactions()
 
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
 
     runner._update_migration_status(
-        MigrationKey(MigrationGroup("transactions"), "0001_transactions"),
+        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"),
         Status.COMPLETED,
     )
     runner.run_migration(
         MigrationKey(
-            MigrationGroup("transactions"),
+            MigrationGroup.TRANSACTIONS,
             "0002_transactions_onpremise_fix_orderby_and_partitionby",
         ),
         force=True,
@@ -166,17 +166,17 @@ def test_groupedmessages_compatibility() -> None:
     migration_id = "0010_groupedmessages_onpremise_compatibility"
 
     runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup("system"), "0001_migrations"))
-    events_migrations = get_group_loader(MigrationGroup("events")).get_migrations()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
 
     # Mark prior migrations complete
     for migration in events_migrations[: (events_migrations.index(migration_id))]:
         runner._update_migration_status(
-            MigrationKey(MigrationGroup("events"), migration), Status.COMPLETED
+            MigrationKey(MigrationGroup.EVENTS, migration), Status.COMPLETED
         )
 
     runner.run_migration(
-        MigrationKey(MigrationGroup("events"), migration_id),
+        MigrationKey(MigrationGroup.EVENTS, migration_id),
         force=True,
     )
 

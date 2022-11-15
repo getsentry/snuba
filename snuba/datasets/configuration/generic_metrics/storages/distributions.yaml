@@ -32,12 +32,20 @@ schema:
       {
         name: _raw_tags_hash,
         type: Array,
-        args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [readonly],
+          },
       },
       {
         name: _indexed_tags_hash,
         type: Array,
-        args: { type: UInt, arg: 64, schema_modifiers: [readonly] },
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [readonly],
+          },
       },
       { name: granularity, type: UInt, args: { size: 8 } },
 
