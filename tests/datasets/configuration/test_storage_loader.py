@@ -32,6 +32,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_storage,
 )
 from snuba.datasets.storages.profiles import writable_storage as profiles
+from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -111,6 +112,7 @@ class TestStorageConfiguration(ConfigurationTest):
         transactions,
         profiles,
         replays,
+        querylog,
     ]
 
     def test_config_file_discovery(self) -> None:
