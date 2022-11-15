@@ -1,0 +1,158 @@
+version: v1
+kind: writable_storage
+name: querylog
+storage:
+  key: querylog
+  set_key: querylog
+schema:
+  columns:
+    [
+      { name: request_id, type: UUID },
+      { name: request_body, type: String },
+      { name: referrer, type: String },
+      { name: dataset, type: String },
+      {
+        name: projects,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 64 } } },
+      },
+      {
+        name: organization,
+        type: UInt,
+        args: { schema_modifiers: [nullable], size: 64 },
+      },
+      { name: timestamp, type: DateTime },
+      { name: duration_ms, type: UInt, args: { size: 32 } },
+      { name: status, type: String },
+      {
+        name: clickhouse_queries.sql,
+        type: Array,
+        args: { inner_type: { type: String } },
+      },
+      {
+        name: clickhouse_queries.status,
+        type: Array,
+        args: { inner_type: { type: String } },
+      },
+      {
+        name: clickhouse_queries.trace_id,
+        type: Array,
+        args:
+          {
+            inner_type: { type: UUID, args: { schema_modifiers: [nullable] } },
+          },
+      },
+      {
+        name: clickhouse_queries.duration_ms,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 32 } } },
+      },
+      {
+        name: clickhouse_queries.stats,
+        type: Array,
+        args: { inner_type: { type: String } },
+      },
+      {
+        name: clickhouse_queries.final,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
+      {
+        name: clickhouse_queries.cache_hit,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
+      {
+        name: clickhouse_queries.sample,
+        type: Array,
+        args: { inner_type: { type: Float, args: { size: 32 } } },
+      },
+      {
+        name: clickhouse_queries.max_threads,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
+      {
+        name: clickhouse_queries.num_days,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 32 } } },
+      },
+      {
+        name: clickhouse_queries.clickhouse_table,
+        type: Array,
+        args: { inner_type: { type: String } },
+      },
+      {
+        name: clickhouse_queries.query_id,
+        type: Array,
+        args: { inner_type: { type: String } },
+      },
+      {
+        name: clickhouse_queries.is_duplicate,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
+      {
+        name: clickhouse_queries.consistent,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
+      {
+        name: clickhouse_queries.all_columns,
+        type: Array,
+        args:
+          {
+            inner_type: { type: Array, args: { inner_type: { type: String } } },
+          },
+      },
+      {
+        name: clickhouse_queries.or_conditions,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 8 } } },
+      },
+      {
+        name: clickhouse_queries.where_columns,
+        type: Array,
+        args:
+          {
+            inner_type: { type: Array, args: { inner_type: { type: String } } },
+          },
+      },
+      {
+        name: clickhouse_queries.where_mapping_columns,
+        type: Array,
+        args:
+          {
+            inner_type: { type: Array, args: { inner_type: { type: String } } },
+          },
+      },
+      {
+        name: clickhouse_queries.groupby_columns,
+        type: Array,
+        args:
+          {
+            inner_type: { type: Array, args: { inner_type: { type: String } } },
+          },
+      },
+      {
+        name: clickhouse_queries.array_join_columns,
+        type: Array,
+        args:
+          {
+            inner_type: { type: Array, args: { inner_type: { type: String } } },
+          },
+      },
+      {
+        name: clickhouse_queries.bytes_scanned,
+        type: Array,
+        args: { inner_type: { type: UInt, args: { size: 64 } } },
+      },
+    ]
+  local_table_name: querylog_local
+  dist_table_name: querylog_dist
+writer_options:
+  input_format_skip_unknown_fields: 1
+stream_loader:
+  processor:
+    name: QuerylogProcessor
+  default_topic: snuba-queries
