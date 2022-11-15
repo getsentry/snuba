@@ -1,5 +1,36 @@
 # Changelog
 
+## 22.11.0
+
+### Various fixes & improvements
+
+- feat(migrations): add migration order validator SNS-1831 (#3353) by @dbanda
+- feat(api-abuse): Add ability to throttle threads for an entire referrer (#3376) by @volokluev
+- add bytes_scanned column to querylog storage (#3381) by @volokluev
+- MIGRATION: add bytes_scanned to querylog (#3360) by @volokluev
+- feat(slices): Make consumers "slice-aware" (#3259) by @ayirr7
+- use new checkout action to fix GHA warnings (#3377) by @volokluev
+- feat(DC): More inner types for Array (#3367) by @rahul-kumar-saini
+- add bytes scanned to the querylog consumer (#3375) by @volokluev
+- feat(replays): Add additional parsing safety to lists and uuids (#3369) by @cmanallen
+- fix(init): uWSGI Snuba API processes not initializing Snuba (#3370) by @rahul-kumar-saini
+- feat(replays): Add additional parsing safety to integer and datetime column types (#3352) by @cmanallen
+- Explain the ordering flags in MIGRATIONS.md (#3365) by @dbanda
+- fix(admin): Allow ARRAY JOIN with clickhouse_queries in admin (#3366) by @volokluev
+- ref(admin): get_migration_group_policies (#3364) by @MeredithAnya
+- Pause optimize on large merges. attempt 2 (#3339) by @dbanda
+- Tag keys and values may not be null (#3357) by @cmanallen
+- fix(rate_limit): Set explicit TTL for set of open requests [SNS-1864] (#3362) by @untitaker
+- fix(logging): Incorrect Snuba init instrumentation (#3361) by @rahul-kumar-saini
+- feat(DC): Profiles Storage as Config (#3359) by @rahul-kumar-saini
+- clean up project id filtering (#3355) by @volokluev
+- remove logging line that is not helpful (#3356) by @volokluev
+- feat(replays): Add additional safety to tags processor (#3354) by @cmanallen
+- feat(api): Snuba healthcheck observability (#3334) by @rahul-kumar-saini
+- add useful test distributed command to make file (#3349) by @dbanda
+
+_Plus 68 more_
+
 ## 22.10.0
 
 ### Various fixes & improvements
