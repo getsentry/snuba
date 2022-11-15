@@ -539,9 +539,15 @@ def execute_query_with_query_id(
             query_id,
         )
     except ClickhouseError as e:
-        if e.code != errors.ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING:
+        if (
+            e.code != errors.ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING
+            or not state.get_config("retry_duplicate_query_id", False)
+        ):
             raise
 
+        logger.error(
+            "Query cache for query ID %s lost, retrying query with random ID", query_id
+        )
         metrics.increment("query_cache_lost")
 
         query_id = f"randomized-{uuid.uuid4().hex}"
