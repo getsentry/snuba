@@ -26,11 +26,16 @@ CONFIG_BUILT_STORAGES = get_config_built_storages()
 
 
 from snuba.datasets.storages.generic_metrics import (
-    distributions_bucket_storage,
-    distributions_storage,
-    sets_bucket_storage,
-    sets_storage,
+    distributions_bucket_storage as gen_metrics_distributions_bucket,
 )
+from snuba.datasets.storages.generic_metrics import (
+    distributions_storage as gen_metrics_distributions,
+)
+from snuba.datasets.storages.generic_metrics import (
+    sets_bucket_storage as gen_metrics_sets_bucket,
+)
+from snuba.datasets.storages.generic_metrics import sets_storage as gen_metrics_sets
+from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
@@ -105,10 +110,11 @@ def _compare_stream_loaders(old: KafkaStreamLoader, new: KafkaStreamLoader) -> N
 
 class TestStorageConfiguration(ConfigurationTest):
     python_storages: list[ReadableTableStorage] = [
-        distributions_bucket_storage,
-        distributions_storage,
-        sets_bucket_storage,
-        sets_storage,
+        gen_metrics_distributions_bucket,
+        gen_metrics_distributions,
+        gen_metrics_sets_bucket,
+        gen_metrics_sets,
+        metrics_sets,
         transactions,
         profiles,
         replays,
