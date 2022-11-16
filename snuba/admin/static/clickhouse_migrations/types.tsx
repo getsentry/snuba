@@ -3,6 +3,12 @@ export type MigrationGroupResult = {
   migration_ids: MigrationData[];
 };
 
+export type MigrationStatusResult = {
+  blocking: boolean;
+  status: string;
+  migration_id: string;
+};
+
 export type MigrationData = {
   can_run: boolean;
   can_reverse: boolean;

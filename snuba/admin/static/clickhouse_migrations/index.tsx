@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-import { MigrationData, MigrationGroupResult, GroupOptions, RunMigrationRequest, RunMigrationResult, Action } from "./types";
+import {
+  MigrationData,
+  MigrationGroupResult,
+  GroupOptions,
+  RunMigrationRequest,
+  RunMigrationResult,
+  Action,
+} from "./types";
 
 function ClickhouseMigrations(props: { api: Client }) {
   const [allGroups, setAllGroups] = useState<GroupOptions>({});
@@ -20,50 +27,81 @@ function ClickhouseMigrations(props: { api: Client }) {
     });
   }, []);
 
+  function refreshStatus(group: string) {
+    const id = migrationId;
+    props.api.getAllMigrationGroups().then((res) => {
+      let options: GroupOptions = {};
+      res.forEach(
+        (group: MigrationGroupResult) => (options[group.group] = group)
+      );
+      setAllGroups(options);
+      setMigrationGroup(options[group]);
+      setMigrationId(id);
+    });
+  }
+
   function selectGroup(groupName: string) {
     const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
-    setSQLText(()=>"")
+    setSQLText(() => "");
   }
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
-    setSQLText(()=>"")
+    setSQLText(() => "");
   }
 
   function execute(action: Action) {
+    if (!migrationGroup) {
+      return null;
+    }
     const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
+    let force = false;
     if (data?.blocking) {
       window.confirm(
         `Migration ${migrationId} is blocking, are you sure you want to execute?`
       );
+      force = true;
     }
-    console.log("executing !", action);
+    if (data?.status == "completed" && action == "reverse") {
+      window.confirm(
+        `Migration ${migrationId} was already run, are you sure you want to reverse?`
+      );
+      force = true;
+    }
+    let req = {
+      action: action,
+      migration_id: migrationId,
+      group: migrationGroup?.group,
+      force: force,
+    };
+    console.log("executing!", migrationId, action);
+    // execute the migration...
+    refreshStatus(migrationGroup.group);
   }
 
   function executeDryRun(action: Action) {
-      let req = {
-        action: action,
-        migration_id: migrationId,
-        group: migrationGroup?.group,
-        dry_run: true
-      }
-      console.log("executing dry run !", migrationId, action);
-      console.assert(req.dry_run, "dry_run must be set")
-      props.api
+    let req = {
+      action: action,
+      migration_id: migrationId,
+      group: migrationGroup?.group,
+      dry_run: true,
+    };
+    console.log("executing dry run !", migrationId, action);
+    console.assert(req.dry_run, "dry_run must be set");
+    props.api
       .runMigration(req as RunMigrationRequest)
       .then((res) => {
-        console.log(res)
+        console.log(res);
         setSQLText(() => res.stdout);
       })
       .catch((err) => {
-        console.log(err)
+        console.log(err);
         setSQLText(() => JSON.stringify(err));
       });
   }
-
 
   function rowData() {
     if (migrationGroup) {
@@ -191,13 +229,15 @@ function ClickhouseMigrations(props: { api: Client }) {
           {renderMigrationIds()}
           {migrationGroup && migrationId && (
             <div style={{ display: "inline-block" }}>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => executeDryRun(Action.Run)}
                 style={buttonStyle}
               >
                 forwards
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => executeDryRun(Action.Reverse)}
                 style={buttonStyle}
               >

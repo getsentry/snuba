@@ -20,7 +20,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ops.append(
                 operations.AddColumn(
                     storage_set=StorageSetKey.REPLAYS,
-                    table_name="replays_local",
+                    table_name="replays_locall",
                     column=column,
                     after=after,
                 )
