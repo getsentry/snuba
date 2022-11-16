@@ -89,8 +89,7 @@ def serialize_column_type(col_type: ColumnType[SchemaModifiers]) -> dict[str, An
     elif isinstance(col_type, AggregateFunction):
         args["func"] = col_type.func
         args["arg_types"] = [
-            {"type": type(arg_type).__name__, "arg": arg_type.__dict__["size"]}
-            for arg_type in col_type.arg_types
+            serialize_column_type(arg_type) for arg_type in col_type.arg_types
         ]
 
     if args != {}:
