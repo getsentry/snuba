@@ -21,8 +21,6 @@ steps:
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: transactions-consumer-new
       - image: us.gcr.io/sentryio/snuba:{sha}
-        name: sessions-consumer
-      - image: us.gcr.io/sentryio/snuba:{sha}
         name: outcomes-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: loadbalancer-outcomes-consumer
