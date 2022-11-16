@@ -25,7 +25,7 @@ from snuba.migrations.operations import (
     SqlOperation,
     TruncateTable,
 )
-from snuba.migrations.table_engines import Merge, ReplacingMergeTree
+from snuba.migrations.table_engines import ReplacingMergeTree
 from snuba.utils.schemas import DateTime
 
 
@@ -274,7 +274,7 @@ def test_specify_order() -> None:
     assert order == [drop_local_op, drop_dist_op]
 
 
-def test_create_dist_table() -> None:
+def test_new_create_table() -> None:
     database = os.environ.get("CLICKHOUSE_DATABASE", "default")
     columns: Sequence[Column[Modifiers]] = [
         Column("id", String()),
@@ -292,9 +292,7 @@ def test_create_dist_table() -> None:
             order_by="version",
             settings={"index_granularity": "256"},
         ),
-        dist_table_name="test_dist_table",
-        target=OperationTarget.BOTH,
-        dist_engine=Merge("test_table"),
+        target=OperationTarget.DISTRIBUTED,
     )
 
     assert op.format_sql() in [
@@ -304,29 +302,19 @@ def test_create_dist_table() -> None:
         + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
     ]
 
-    assert (
-        op.format_sql(False)
-        == "CREATE TABLE IF NOT EXISTS test_dist_table (id String, name Nullable(String), version UInt64) ENGINE Merge(currentDatabase(), 'test_table');"
-    )
 
-
-def test_add_dist_column() -> None:
-    op = AddColumn(
+def test_new_add_column() -> None:
+    dist_op = AddColumn(
         StorageSetKey.EVENTS,
         "test_table",
         Column("new_column", String()),
         after="id",
-        target=OperationTarget.BOTH,
-        dist_table_name="test_dist_table",
+        target=OperationTarget.DISTRIBUTED,
     )
 
     assert (
-        op.format_sql()
+        dist_op.format_sql()
         == "ALTER TABLE test_table ADD COLUMN IF NOT EXISTS new_column String AFTER id;"
-    )
-    assert (
-        op.format_sql(False)
-        == "ALTER TABLE test_dist_table ADD COLUMN IF NOT EXISTS new_column String AFTER id;"
     )
 
     local_op = AddColumn(
@@ -342,24 +330,18 @@ def test_add_dist_column() -> None:
         == "ALTER TABLE test_table ADD COLUMN IF NOT EXISTS new_column String AFTER id;"
     )
 
-    assert local_op.format_sql() == local_op.format_sql(False)
 
-
-def test_drop_dist_column() -> None:
-    op = DropColumn(
+def test_new_drop_column() -> None:
+    local_op = DropColumn(
         StorageSetKey.EVENTS,
         "test_table",
         "test_column",
-        target=OperationTarget.BOTH,
-        dist_table_name="test_dist_table",
+        target=OperationTarget.LOCAL,
     )
 
     assert (
-        op.format_sql() == "ALTER TABLE test_table DROP COLUMN IF EXISTS test_column;"
-    )
-    assert (
-        op.format_sql(False)
-        == "ALTER TABLE test_dist_table DROP COLUMN IF EXISTS test_column;"
+        local_op.format_sql()
+        == "ALTER TABLE test_table DROP COLUMN IF EXISTS test_column;"
     )
 
     dist_op = DropColumn(
@@ -372,8 +354,6 @@ def test_drop_dist_column() -> None:
         dist_op.format_sql()
         == "ALTER TABLE test_dist_table DROP COLUMN IF EXISTS test_column;"
     )
-
-    assert dist_op.format_sql() == dist_op.format_sql(False)
 
 
 def test_refactored_migration() -> None:

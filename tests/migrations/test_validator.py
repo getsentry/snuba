@@ -1,4 +1,5 @@
-from contextlib import contextmanager
+import copy
+from contextlib import _GeneratorContextManager, contextmanager
 from typing import Any, Iterator, Sequence, Union
 from unittest.mock import Mock, patch
 
@@ -92,7 +93,7 @@ class TestValidateMigrations:
         return op.table_name
 
     test_data = [
-        (True, False, [], [], [], [], does_not_raise(), does_not_raise(), ""),
+        (True, False, [], [], [], [], does_not_raise(), ""),
         (
             True,
             False,
@@ -100,7 +101,6 @@ class TestValidateMigrations:
             [],
             [create_dist_op],
             [],
-            does_not_raise(),
             does_not_raise(),
             "",
         ),
@@ -111,7 +111,6 @@ class TestValidateMigrations:
             [create_dist_op],
             [],
             [],
-            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "CreateTable test_local_table operation must be applied on local table before dist",
         ),
@@ -123,7 +122,6 @@ class TestValidateMigrations:
             [],
             [],
             does_not_raise(),
-            does_not_raise(),
             "",
         ),
         (
@@ -133,7 +131,6 @@ class TestValidateMigrations:
             [add_col_dist_op],
             [],
             [],
-            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "AddColumn test_local_table.col operation must be applied on local table before dist",
         ),
@@ -145,7 +142,6 @@ class TestValidateMigrations:
             [drop_col_local_op],
             [drop_col_dist_op],
             does_not_raise(),
-            does_not_raise(),
             "",
         ),
         (
@@ -156,7 +152,6 @@ class TestValidateMigrations:
             [drop_col_local_op],
             [drop_col_dist_op],
             pytest.raises(InvalidMigrationOrderError),
-            pytest.raises(InvalidMigrationOrderError),
             "DropColumn test_dist_table.col operation must be applied on dist table before local",
         ),
         (
@@ -166,7 +161,6 @@ class TestValidateMigrations:
             [create_dist_op, drop_col_dist_op],
             [add_col_local_op],
             [add_col_dist_op],
-            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "DropColumn test_dist_table.col operation must be applied on dist table before local",
         ),
@@ -178,7 +172,6 @@ class TestValidateMigrations:
             [add_col_local_op],
             [add_col_dist_op],
             pytest.raises(InvalidMigrationOrderError),
-            pytest.raises(InvalidMigrationOrderError),
             "AddColumn test_local_table.col operation must be applied on local table before dist",
         ),
         (
@@ -188,7 +181,6 @@ class TestValidateMigrations:
             [create_dist_op, drop_col_dist_op],
             [add_col_local_op],
             [add_col_dist_op],
-            pytest.raises(InvalidMigrationOrderError),
             pytest.raises(InvalidMigrationOrderError),
             "CreateTable test_local_table operation must be applied on local table before dist",
         ),
@@ -196,7 +188,7 @@ class TestValidateMigrations:
 
     @pytest.mark.parametrize(
         "forwards_local_first_val, backwards_local_first_val,forwards_local,forwards_dist,"
-        "backwards_local, backwards_dist, expectation, expectation_new, err_msg",
+        "backwards_local, backwards_dist, expectation, err_msg",
         test_data,
     )
     @patch.object(validator, "get_cluster")
@@ -212,7 +204,6 @@ class TestValidateMigrations:
         backwards_local: Sequence[SqlOperation],
         backwards_dist: Sequence[SqlOperation],
         expectation: Any,
-        expectation_new: Any,
         err_msg: str,
     ) -> None:
 
@@ -246,7 +237,12 @@ class TestValidateMigrations:
             def backwards_dist(self) -> Sequence[SqlOperation]:
                 return backwards_dist
 
-        # expectation_clone, err = itertools.tee(expectation)
+        # reuse expected error message
+        if isinstance(expectation, _GeneratorContextManager):
+            expectation_new = does_not_raise()
+        else:
+            expectation_new = copy.deepcopy(expectation)
+
         with expectation as err:
             validate_migration_order(TestMigration())
         if err_msg:
