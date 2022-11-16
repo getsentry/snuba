@@ -34,6 +34,7 @@ from snuba.datasets.storages.generic_metrics import (
 from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
+from snuba.datasets.storages.replays import storage as replays
 from snuba.datasets.storages.transactions import storage as transactions
 from snuba.datasets.table_storage import KafkaStreamLoader
 from tests.datasets.configuration.utils import ConfigurationTest
@@ -112,6 +113,7 @@ class TestStorageConfiguration(ConfigurationTest):
         sets_storage,
         transactions,
         profiles,
+        replays,
         querylog,
     ]
 
@@ -186,7 +188,7 @@ query_processors:
                 "type": "AggregateFunction",
                 "args": {
                     "func": "uniqCombined64",
-                    "arg_types": [{"type": "UInt", "arg": 64}],
+                    "arg_types": [{"type": "UInt", "args": {"size": 64}}],
                 },
             },
             {

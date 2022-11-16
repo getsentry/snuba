@@ -24,70 +24,62 @@ schema:
     {
       name: value,
       type: AggregateFunction,
-      args: { func: "uniqCombined64", arg_types: [{ type: UInt, arg: 64 }] },
+      args:
+        {
+          func: "uniqCombined64",
+          arg_types: [{ type: UInt, args: { size: 64 } }],
+        },
     },
   ]
 
 readable_storage: generic_metrics_sets
 writable_storage: generic_metrics_sets_raw
 query_processors:
-  -
-    processor: TagsTypeTransformer
-  -
-    processor: MappedGranularityProcessor
+  - processor: TagsTypeTransformer
+  - processor: MappedGranularityProcessor
     args:
       accepted_granularities:
         60: 1
         3600: 2
         86400: 3
       default_granularity: 1
-  -
-    processor: TimeSeriesProcessor
+  - processor: TimeSeriesProcessor
     args:
       time_group_columns:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
-  -
-    processor: ReferrerRateLimiterProcessor
-  -
-    processor: OrganizationRateLimiterProcessor
+  - processor: ReferrerRateLimiterProcessor
+  - processor: OrganizationRateLimiterProcessor
     args:
       org_column: org_id
-  -
-    processor: ProjectReferrerRateLimiter
+  - processor: ProjectReferrerRateLimiter
     args:
       project_column: project_id
-  -
-    processor: ProjectRateLimiterProcessor
+  - processor: ProjectRateLimiterProcessor
     args:
       project_column: project_id
-  -
-    processor: ResourceQuotaProcessor
+  - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
 translation_mappers:
   functions:
-    -
-      mapper: FunctionNameMapper
+    - mapper: FunctionNameMapper
       args:
         from_name: uniq
         to_name: uniqCombined64Merge
-    -
-      mapper: FunctionNameMapper
+    - mapper: FunctionNameMapper
       args:
         from_name: uniqIf
         to_name: uniqCombined64MergeIf
   subscriptables:
-    -
-      mapper: SubscriptableMapper
+    - mapper: SubscriptableMapper
       args:
         from_column_table:
         from_column_name: tags_raw
         to_nested_col_table:
         to_nested_col_name: tags
         value_subcolumn_name: raw_value
-    -
-      mapper: SubscriptableMapper
+    - mapper: SubscriptableMapper
       args:
         from_column_table:
         from_column_name: tags
@@ -95,8 +87,7 @@ translation_mappers:
         to_nested_col_name: tags
         value_subcolumn_name: indexed_value
 validators:
-  -
-    validator: EntityRequiredColumnValidator
+  - validator: EntityRequiredColumnValidator
     args:
       required_filter_columns: ["org_id", "project_id"]
 required_time_column: timestamp
