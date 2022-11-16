@@ -93,8 +93,7 @@ def test_apply_thread_quota(
     for rlimit in rate_limit_params:
         settings.add_rate_limit(rlimit)
     settings.set_resource_quota(resource_quota)
-    clickhouse_query_settings: MutableMapping[str, Any] = {}
-    _apply_thread_quota_to_clickhouse_query_settings(
-        settings, clickhouse_query_settings, rate_limit_stats
+    clickhouse_query_settings = _apply_thread_quota_to_clickhouse_query_settings(
+        settings, {}, rate_limit_stats
     )
     assert clickhouse_query_settings == expected_query_settings
