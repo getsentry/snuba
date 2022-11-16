@@ -322,9 +322,7 @@ def _apply_thread_quota_to_clickhouse_query_settings(
     query_settings: QuerySettings,
     clickhouse_query_settings: MutableMapping[str, Any],
     project_rate_limit_stats: Optional[RateLimitStats],
-) -> MutableMapping[str, Any]:
-    res: MutableMapping[str, Any] = {}
-    res.update(clickhouse_query_settings)
+) -> None:
     thread_quota = query_settings.get_resource_quota()
     if (
         "max_threads" in clickhouse_query_settings or thread_quota is not None
@@ -334,8 +332,9 @@ def _apply_thread_quota_to_clickhouse_query_settings(
             if thread_quota is None
             else thread_quota.max_threads
         )
-        res["max_threads"] = max(1, maxt - project_rate_limit_stats.concurrent + 1)
-    return res
+        clickhouse_query_settings["max_threads"] = max(
+            1, maxt - project_rate_limit_stats.concurrent + 1
+        )
 
 
 @with_span(op="db")
@@ -360,7 +359,7 @@ def execute_query_with_rate_limits(
         project_rate_limit_stats = rate_limit_stats_container.get_stats(
             PROJECT_RATE_LIMIT_NAME
         )
-        clickhouse_query_settings = _apply_thread_quota_to_clickhouse_query_settings(
+        _apply_thread_quota_to_clickhouse_query_settings(
             query_settings, clickhouse_query_settings, project_rate_limit_stats
         )
 

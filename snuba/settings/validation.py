@@ -1,6 +1,6 @@
 from typing import Any, Mapping, MutableMapping
 
-from snuba.datasets.partitioning import SENTRY_LOGICAL_PARTITIONS
+from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
 
 class InvalidTopicError(ValueError):

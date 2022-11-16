@@ -52,7 +52,11 @@ schema:
       {
         name: value,
         type: AggregateFunction,
-        args: { func: "uniqCombined64", arg_types: [{ type: UInt, arg: 64 }] },
+        args:
+          {
+            func: "uniqCombined64",
+            arg_types: [{ type: UInt, args: { size: 64 } }],
+          },
       },
     ]
   local_table_name: generic_metric_sets_local
