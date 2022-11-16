@@ -37,7 +37,7 @@ schema:
       {
         name: value,
         type: AggregateFunction,
-        args: { func: sum, arg_types: [{ type: Float, arg: 64 }] },
+        args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
     ]
   local_table_name: metrics_counters_v2_local
