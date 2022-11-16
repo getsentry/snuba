@@ -114,61 +114,13 @@ class ClickhouseNodeMigrationLegacy(Migration, ABC):
     completely unrelated, they are probably better as separate migrations.
     """
 
-    forwards_local_first: bool = True
-    backwards_local_first: bool = False
-
-    def forwards_local(self) -> Sequence[SqlOperation]:
-        raise NotImplementedError
-
-    def backwards_local(self) -> Sequence[SqlOperation]:
-        raise NotImplementedError
-
-    def forwards_dist(self) -> Sequence[SqlOperation]:
-        raise NotImplementedError
-
-    def backwards_dist(self) -> Sequence[SqlOperation]:
-        raise NotImplementedError
-
-    def _set_targets(
-        self, ops: Sequence[SqlOperation], target: OperationTarget
-    ) -> None:
-        """For old migrations using the old methods, set the target appropriately."""
-        for op in ops:
-            op.target = target
-
+    @abstractmethod
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        if self.backwards_local() or self.backwards_dist():
-            warnings.warn(
-                "backwards_local and backwards_dist are deprecated. Use backwards_ops instead.",
-                DeprecationWarning,
-            )
-            local_ops, dist_ops = self.backwards_local(), self.backwards_dist()
-            self._set_targets(local_ops, OperationTarget.LOCAL)
-            self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
+        raise NotImplementedError()
 
-            if self.backwards_local_first:
-                return (*local_ops, *dist_ops)
-            else:
-                return (*dist_ops, *local_ops)
-        else:
-            raise NotImplementedError()
-
+    @abstractmethod
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        if self.forwards_local() or self.forwards_dist():
-            warnings.warn(
-                "forwards_local and forwards_dist are deprecated. Use forwards_ops instead.",
-                DeprecationWarning,
-            )
-            local_ops, dist_ops = self.forwards_local(), self.forwards_dist()
-            self._set_targets(local_ops, OperationTarget.LOCAL)
-            self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
-
-            if self.forwards_local_first:
-                return (*local_ops, *dist_ops)
-            else:
-                return (*dist_ops, *local_ops)
-        else:
-            raise NotImplementedError()
+        raise NotImplementedError()
 
     def forwards(self, context: Context, dry_run: bool = False) -> None:
         ops = self.forwards_ops()
@@ -223,14 +175,64 @@ class ClickhouseNodeMigrationLegacy(Migration, ABC):
         for op in ops:
             cluster = get_cluster(op._storage_set)
             is_single_node = cluster.is_single_node()
-            if op.target == OperationTarget.BOTH:
-                if op.local_first:
-                    print(f"Local op: {op.format_sql()}")
-                    print_dist_op(op, is_single_node)
-                else:
-                    print_dist_op(op, is_single_node)
-                    print(f"Local op: {op.format_sql()}")
-            elif op.target == OperationTarget.LOCAL:
+            if op.target == OperationTarget.LOCAL:
                 print(f"Local op: {op.format_sql()}")
             elif op.target == OperationTarget.DISTRIBUTED:
                 print_dist_op(op, is_single_node)
+
+
+class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
+
+    forwards_local_first: bool = True
+    backwards_local_first: bool = False
+
+    @abstractmethod
+    def forwards_local(self) -> Sequence[SqlOperation]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def backwards_local(self) -> Sequence[SqlOperation]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def forwards_dist(self) -> Sequence[SqlOperation]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def backwards_dist(self) -> Sequence[SqlOperation]:
+        raise NotImplementedError
+
+    def _set_targets(
+        self, ops: Sequence[SqlOperation], target: OperationTarget
+    ) -> None:
+        """For old migrations using the old methods, set the target appropriately."""
+        for op in ops:
+            op.target = target
+
+    def backwards_ops(self) -> Sequence[SqlOperation]:
+        warnings.warn(
+            "backwards_local and backwards_dist are deprecated. Use backwards_ops instead.",
+            DeprecationWarning,
+        )
+        local_ops, dist_ops = self.backwards_local(), self.backwards_dist()
+        self._set_targets(local_ops, OperationTarget.LOCAL)
+        self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
+
+        if self.backwards_local_first:
+            return (*local_ops, *dist_ops)
+        else:
+            return (*dist_ops, *local_ops)
+
+    def forwards_ops(self) -> Sequence[SqlOperation]:
+        warnings.warn(
+            "forwards_local and forwards_dist are deprecated. Use forwards_ops instead.",
+            DeprecationWarning,
+        )
+        local_ops, dist_ops = self.forwards_local(), self.forwards_dist()
+        self._set_targets(local_ops, OperationTarget.LOCAL)
+        self._set_targets(dist_ops, OperationTarget.DISTRIBUTED)
+
+        if self.forwards_local_first:
+            return (*local_ops, *dist_ops)
+        else:
+            return (*dist_ops, *local_ops)

@@ -3,7 +3,10 @@ from typing import Sequence, Union
 
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
-from snuba.migrations.migration import ClickhouseNodeMigration
+from snuba.migrations.migration import (
+    ClickhouseNodeMigration,
+    ClickhouseNodeMigrationLegacy,
+)
 from snuba.migrations.operations import (
     AddColumn,
     CreateTable,
@@ -112,7 +115,7 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
     applied on local and distributed tables.
     """
 
-    try:
+    if isinstance(migration, ClickhouseNodeMigrationLegacy):
         # old way of doing migrations
         validate_order_old(
             migration.forwards_local(),
@@ -124,7 +127,7 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
             migration.backwards_dist(),
             migration.backwards_local_first,
         )
-    except NotImplementedError:
+    else:
         # try new way of doing migrations
         forward_ops = migration.forwards_ops()
         backward_ops = migration.backwards_ops()
