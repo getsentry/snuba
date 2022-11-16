@@ -154,9 +154,8 @@ def copy_tables(
         if execute:
             target_client.execute(statement)
             print(f"created {table_name} !")
-            return
-        print(f"\ncreate table statement: \n {statement}\n")
-
+        else:
+            print(f"\ncreate table statement: \n {statement}\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Copy ClickHouse Tables")
