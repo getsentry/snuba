@@ -146,12 +146,8 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
     elif col["type"] == "AggregateFunction":
         column_type = AggregateFunction(
             col["args"]["func"],
-            [
-                SIMPLE_COLUMN_TYPES[c["type"]](c["arg"])
-                if "arg" in c
-                else SIMPLE_COLUMN_TYPES[c["type"]]()
-                for c in col["args"]["arg_types"]
-            ],
+            [__parse_column_type(c) for c in col["args"]["arg_types"]],
+            modifiers,
         )
     assert column_type is not None
     return column_type

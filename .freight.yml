@@ -21,8 +21,6 @@ steps:
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: transactions-consumer-new
       - image: us.gcr.io/sentryio/snuba:{sha}
-        name: sessions-consumer
-      - image: us.gcr.io/sentryio/snuba:{sha}
         name: outcomes-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: loadbalancer-outcomes-consumer
@@ -63,8 +61,6 @@ steps:
       # Consumers below this line are considered experimental (ie not present in .freight.stable.yml)
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: loadtest-errors-consumer
-      - image: us.gcr.io/sentryio/snuba:{sha}
-        name: loadtest-sessions-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}
         name: loadtest-transactions-consumer
       - image: us.gcr.io/sentryio/snuba:{sha}

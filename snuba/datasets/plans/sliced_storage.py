@@ -7,11 +7,6 @@ from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.partitioning import (
-    is_storage_partitioned,
-    map_logical_partition_to_slice,
-    map_org_id_to_logical_partition,
-)
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -21,6 +16,11 @@ from snuba.datasets.plans.single_storage import (
     get_query_data_source,
 )
 from snuba.datasets.plans.translator.query import QueryTranslator
+from snuba.datasets.slicing import (
+    is_storage_sliced,
+    map_logical_partition_to_slice,
+    map_org_id_to_logical_partition,
+)
 from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query as LogicalQuery
@@ -49,11 +49,11 @@ class StorageClusterSelector(ABC):
         raise NotImplementedError
 
 
-class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
+class ColumnBasedStorageSliceSelector(StorageClusterSelector):
     """
-    Storage partition selector for the generic metrics storage. This is needed
-    because the generic metrics storage can be partitioned and we would need to
-    know which partition to use for a specific query.
+    Storage slice selector for the generic metrics storage. This is needed
+    because the generic metrics storage can be sliced and we would need to
+    know which slice to use for a specific query.
     """
 
     def __init__(
@@ -70,10 +70,10 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
         self, query: LogicalQuery, query_settings: QuerySettings
     ) -> ClickhouseCluster:
         """
-        Selects the cluster to use for a query if the storage set is partitioned.
-        If the storage set is not partitioned, it returns the default cluster.
+        Selects the cluster to use for a query if the storage set is sliced.
+        If the storage set is not sliced, it returns the default cluster.
         """
-        if not is_storage_partitioned(self.storage):
+        if not is_storage_sliced(self.storage):
             return get_cluster(self.storage_set)
 
         org_ids = get_object_ids_in_query_ast(query, self.partition_key_column_name)
@@ -89,10 +89,10 @@ class ColumnBasedStoragePartitionSelector(StorageClusterSelector):
         return cluster
 
 
-class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
+class SlicedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
     Builds the Clickhouse Query Execution Plan for a dataset that is
-    partitioned.
+    sliced.
     """
 
     def __init__(
@@ -112,19 +112,19 @@ class PartitionedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self, query: LogicalQuery, settings: QuerySettings
     ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
-            op="build_plan.partitioned_storage", description="select_storage"
+            op="build_plan.sliced_storage", description="select_storage"
         ):
             cluster = self.__storage_cluster_selector.select_cluster(query, settings)
 
         with sentry_sdk.start_span(
-            op="build_plan.partitioned_storage", description="translate"
+            op="build_plan.sliced_storage", description="translate"
         ):
             # The QueryTranslator class should be instantiated once for each call to build_plan,
             # to avoid cache conflicts.
             clickhouse_query = QueryTranslator(self.__mappers).translate(query)
 
         with sentry_sdk.start_span(
-            op="build_plan.partitioned_storage", description="set_from_clause"
+            op="build_plan.sliced_storage", description="set_from_clause"
         ):
             clickhouse_query.set_from_clause(
                 get_query_data_source(
