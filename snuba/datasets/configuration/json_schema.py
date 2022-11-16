@@ -421,8 +421,8 @@ V1_READABLE_STORAGE_SCHEMA = {
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "mandatory_condition_checkers": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
+        "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
     },
     "required": [
         "version",
