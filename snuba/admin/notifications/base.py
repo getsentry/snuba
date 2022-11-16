@@ -5,9 +5,9 @@ from typing import Any, Mapping, Optional
 
 
 class NotificationAction(Enum):
-    ADDED = "added"
-    REMOVED = "removed"
-    UPDATED = "updated"
+    CONFIG_OPTION_ADDED = "option.added"
+    CONFIG_OPTION_REMOVED = "option.removed"
+    CONFIG_OPTION_UPDATED = "option.updated"
 
 
 class NotificationBase(ABC):

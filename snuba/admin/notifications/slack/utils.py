@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, Union
 
 from snuba import settings
+from snuba.admin.notifications.base import NotificationAction
 
 
 def build_blocks(data: Any, action: str, timestamp: str, user: str) -> List[Any]:
@@ -13,11 +14,11 @@ def build_text(data: Any, action: str) -> Optional[str]:
     added = f"```{{'{data['option']}': {data['new']}}}```"
     updated = f"{removed} {added}"
 
-    if action == "removed":
+    if action == NotificationAction.CONFIG_OPTION_REMOVED:
         return f"{base} :put_litter_in_its_place:\n\n {removed}"
-    elif action == "added":
+    elif action == NotificationAction.CONFIG_OPTION_ADDED:
         return f"{base} :new:\n\n {added}"
-    elif action == "updated":
+    elif action == NotificationAction.CONFIG_OPTION_UPDATED:
         return f"{base} :up: :date:\n\n {updated}"
     else:
         # todo: raise error, cause slack won't accept this

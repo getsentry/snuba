@@ -417,7 +417,7 @@ def configs() -> Response:
         }
 
         runtime_notification_client.notify(
-            NotificationAction.ADDED,
+            NotificationAction.CONFIG_OPTION_ADDED,
             {"option": key, "old": None, "new": evaluated_value},
             user,
         )
@@ -471,7 +471,7 @@ def config(config_key: str) -> Response:
             state.delete_config_description(config_key, user=user)
 
         runtime_notification_client.notify(
-            NotificationAction.REMOVED,
+            NotificationAction.CONFIG_OPTION_REMOVED,
             {"option": config_key, "old": old, "new": None},
             user,
         )
@@ -524,7 +524,7 @@ def config(config_key: str) -> Response:
 
         # Send notification
         runtime_notification_client.notify(
-            NotificationAction.UPDATED,
+            NotificationAction.CONFIG_OPTION_UPDATED,
             {"option": config_key, "old": old, "new": evaluated_value},
             user=user,
         )

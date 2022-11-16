@@ -20,11 +20,11 @@ class RuntimeConfigLogClient(NotificationBase):
         old: Optional[ConfigType],
         new: Optional[ConfigType],
     ) -> str:
-        if action == NotificationAction.REMOVED:
+        if action == NotificationAction.CONFIG_OPTION_REMOVED:
             return f"(value:{old})"
-        elif action == NotificationAction.ADDED:
+        elif action == NotificationAction.CONFIG_OPTION_ADDED:
             return f"(value:{new})"
-        elif action == NotificationAction.UPDATED:
+        elif action == NotificationAction.CONFIG_OPTION_UPDATED:
             return f"(from value:{old} to value:{new})"
         else:
             return ""
@@ -90,7 +90,7 @@ class RuntimeConfigSlackClient(NotificationBase):
         if not timestamp:
             timestamp = self.timestamp
 
-        blocks = build_blocks(data, action.value, timestamp, user or "")
+        blocks = build_blocks(data, action, timestamp, user or "")
         payload: MutableMapping[str, Any] = {"blocks": blocks}
 
         self.client.post_message(message=payload, channel=self.channel_id)
