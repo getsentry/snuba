@@ -31,6 +31,9 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage,
     sets_storage,
 )
+from snuba.datasets.storages.metrics import (
+    distributions_storage as metrics_distributions_storage,
+)
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
 from snuba.datasets.storages.replays import storage as replays
@@ -109,6 +112,7 @@ class TestStorageConfiguration(ConfigurationTest):
         distributions_storage,
         sets_bucket_storage,
         sets_storage,
+        metrics_distributions_storage,
         transactions,
         profiles,
         replays,
