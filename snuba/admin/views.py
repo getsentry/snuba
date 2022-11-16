@@ -95,18 +95,6 @@ def migrations_groups() -> Response:
 
     for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
         migration_ids = [asdict(m) for m in migrations]
-        migration_ids: Sequence[Mapping[str, str | bool]] = [
-            {
-                "migration_id": m.migration_id,
-                "status": m.status,
-                "blocking": m.blocking,
-                "can_run": m.can_run,
-                "can_reverse": m.can_reverse,
-                "run_reason": m.run_reason,
-                "reverse_reason": m.reverse_reason,
-            }
-            for m in run_migration_checks_for_groups(group, migrations)
-        ]
         res.append({"group": group.value, "migration_ids": migration_ids})
     return make_response(jsonify(res), 200)
 
