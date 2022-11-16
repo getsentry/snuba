@@ -19,8 +19,7 @@ schema:
         type: AggregateFunction,
         args:
           {
-            func: quantilesIf(0.5,
-            0.9),
+            func: "quantilesIf(0.5, 0.9)",
             arg_types:
               [
                 { type: UInt, args: { size: 32 } },
