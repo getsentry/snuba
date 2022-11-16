@@ -60,7 +60,7 @@ def test_topics_sync_in_settings_validator() -> None:
         all_settings["KAFKA_TOPIC_MAP"] = default_map
 
 
-@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
+@patch("snuba.datasets.slicing.SENTRY_LOGICAL_PARTITIONS", 2)
 def test_validation_catches_bad_partition_mapping() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
@@ -80,7 +80,7 @@ def test_validation_catches_bad_partition_mapping() -> None:
     del sliced_storages["events"]
 
 
-@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
+@patch("snuba.datasets.slicing.SENTRY_LOGICAL_PARTITIONS", 2)
 def test_validation_catches_unmapped_logical_parts() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()
@@ -99,7 +99,7 @@ def test_validation_catches_unmapped_logical_parts() -> None:
     del sliced_storages["events"]
 
 
-@patch("snuba.datasets.partitioning.SENTRY_LOGICAL_PARTITIONS", 2)
+@patch("snuba.datasets.slicing.SENTRY_LOGICAL_PARTITIONS", 2)
 def test_validation_catches_empty_slice_mapping() -> None:
     importlib.reload(validation)
     all_settings = build_settings_dict()

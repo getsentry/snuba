@@ -155,6 +155,11 @@ NO_ARG_SCHEMA = make_column_schema(
     },
 )
 
+# Get just the type
+_SIMPLE_COLUMN_TYPES = [
+    del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]
+]
+
 AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     column_type={"const": "AggregateFunction"},
     args={
@@ -163,21 +168,14 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
             "func": TYPE_STRING,
             "arg_types": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"enum": ["Float", "UUID", "UInt"]},
-                        "arg": {"type": ["number", "null"]},
-                    },
-                    "additionalProperties": False,
-                },
+                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
             },
         },
         "additionalProperties": False,
     },
 )
 
-SIMPLE_COLUMN_TYPES = [
+SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
@@ -185,7 +183,7 @@ SIMPLE_COLUMN_TYPES = [
 
 # Array inner types are the same as normal column types except they don't have a name
 _SIMPLE_ARRAY_INNER_TYPES = [
-    del_name_field(col_type) for col_type in SIMPLE_COLUMN_TYPES
+    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
 ]
 
 # Up to one subarray is supported. Eg Array(Array(String())).
@@ -209,8 +207,8 @@ ARRAY_SCHEMA = make_column_schema(
     },
 )
 
-COLUMN_TYPES = [
-    *SIMPLE_COLUMN_TYPES,
+COLUMN_SCHEMAS = [
+    *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
 ]
 
@@ -220,7 +218,7 @@ NESTED_SCHEMA = make_column_schema(
     args={
         "type": "object",
         "properties": {
-            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
+            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_SCHEMAS}}
         },
         "additionalProperties": False,
     },
@@ -228,7 +226,7 @@ NESTED_SCHEMA = make_column_schema(
 
 SCHEMA_COLUMNS = {
     "type": "array",
-    "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]},
+    "items": {"anyOf": [*COLUMN_SCHEMAS, NESTED_SCHEMA]},
     "description": "Objects (or nested objects) representing columns containg a name, type and args",
 }
 
