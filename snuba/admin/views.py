@@ -21,7 +21,8 @@ from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import check_migration_perms
-from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
+from snuba.admin.notifications.base import NotificationAction
+from snuba.admin.notifications.runtime_config.client import RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -44,8 +45,7 @@ logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
-notification_client = RuntimeConfigAutoClient()
-runner = Runner()
+runtime_notification_client = RuntimeConfigAutoClient()
 
 
 @application.errorhandler(UnauthorizedException)
@@ -416,8 +416,8 @@ def configs() -> Response:
             "type": evaluated_type,
         }
 
-        notification_client.notify(
-            RuntimeConfigAction.ADDED,
+        runtime_notification_client.notify(
+            NotificationAction.ADDED,
             {"option": key, "old": None, "new": evaluated_value},
             user,
         )
@@ -470,8 +470,8 @@ def config(config_key: str) -> Response:
         if request.args.get("keepDescription") is None:
             state.delete_config_description(config_key, user=user)
 
-        notification_client.notify(
-            RuntimeConfigAction.REMOVED,
+        runtime_notification_client.notify(
+            NotificationAction.REMOVED,
             {"option": config_key, "old": old, "new": None},
             user,
         )
@@ -523,8 +523,8 @@ def config(config_key: str) -> Response:
         evaluated_type = get_config_type_from_value(evaluated_value)
 
         # Send notification
-        notification_client.notify(
-            RuntimeConfigAction.UPDATED,
+        runtime_notification_client.notify(
+            NotificationAction.UPDATED,
             {"option": config_key, "old": old, "new": evaluated_value},
             user=user,
         )

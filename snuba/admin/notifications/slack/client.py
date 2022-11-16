@@ -49,3 +49,6 @@ class SlackClient(object):
 
         if not is_ok:
             logger.error(f"Slack error: {str(error_option)}")
+
+
+slack_client = SlackClient()
