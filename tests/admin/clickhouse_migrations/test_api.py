@@ -21,24 +21,6 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
-def _get_formatted_migration_ids(
-    group: MigrationGroup,
-) -> Sequence[Mapping[str, str | bool]]:
-    _, migrations = Runner().show_all([group.value])[0]
-    return [
-        {
-            "migration_id": m.migration_id,
-            "status": m.status,
-            "blocking": m.blocking,
-            "can_run": m.can_run,
-            "can_reverse": m.can_reverse,
-            "run_reason": m.run_reason,
-            "reverse_reason": m.reverse_reason,
-        }
-        for m in checks_for_group(group, migrations)
-    ]
-
-
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
     with patch("snuba.settings.ADMIN_ALLOWED_MIGRATION_GROUPS", dict()):

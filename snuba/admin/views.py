@@ -13,11 +13,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from snuba import settings, state
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-<<<<<<< HEAD
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
-=======
-from snuba.admin.clickhouse.migration_checks import migration_checks_for_group
->>>>>>> 0d12d5e8 (add more words)
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
@@ -97,15 +93,8 @@ def migrations_groups() -> Response:
     if not allowed_groups:
         return make_response(jsonify(res), 200)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
         migration_ids = [asdict(m) for m in migrations]
-=======
-    for group, migrations in Runner().show_all(allowed_groups):
-=======
-    for group, migrations in runner.show_all(allowed_groups):
->>>>>>> 348b803b (one instance of the runner)
         migration_ids: Sequence[Mapping[str, str | bool]] = [
             {
                 "migration_id": m.migration_id,
@@ -116,9 +105,8 @@ def migrations_groups() -> Response:
                 "run_reason": m.run_reason,
                 "reverse_reason": m.reverse_reason,
             }
-            for m in migration_checks_for_group(group, migrations)
+            for m in run_migration_checks_for_groups(group, migrations)
         ]
->>>>>>> 0d12d5e8 (add more words)
         res.append({"group": group.value, "migration_ids": migration_ids})
     return make_response(jsonify(res), 200)
 
