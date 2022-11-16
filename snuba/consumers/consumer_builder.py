@@ -229,12 +229,6 @@ class ConsumerBuilder:
                 commit_retry_policy=self.__commit_retry_policy,
             )
         else:
-            # if we are going down this path
-            # we want to know that the necessary
-            # fields are defined
-
-            # assert self.producer is defined
-
             consumer = KafkaConsumerWithCommitLog(
                 configuration,
                 producer=self.producer,
