@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Callable, Type, TypedDict
 
 from arroyo import Topic as KafkaTopic
@@ -42,6 +43,17 @@ class MandatoryConditionCheckerDefinition(TypedDict):
     args: dict[str, Any]
 
 
+def _produce_policy_creator(dlq_topic: str) -> DeadLetterQueuePolicy:
+    """
+    Moved to top level for pickleability in case of multiprocessed
+    config loading.
+    """
+    return ProduceInvalidMessagePolicy(
+        KafkaProducer(build_kafka_producer_configuration(Topic(dlq_topic))),
+        KafkaTopic(dlq_topic),
+    )
+
+
 def generate_policy_creator(
     dlq_policy_config: dict[str, Any],
 ) -> Callable[[], DeadLetterQueuePolicy] | None:
@@ -50,14 +62,7 @@ def generate_policy_creator(
     """
     if dlq_policy_config["type"] == "produce":
         dlq_topic = dlq_policy_config["args"][0]
-
-        def produce_policy_creator() -> DeadLetterQueuePolicy:
-            return ProduceInvalidMessagePolicy(
-                KafkaProducer(build_kafka_producer_configuration(Topic(dlq_topic))),
-                KafkaTopic(dlq_topic),
-            )
-
-        return produce_policy_creator
+        return partial(_produce_policy_creator, dlq_topic=dlq_topic)
     # TODO: Add rest of DLQ policy types
     return None
 

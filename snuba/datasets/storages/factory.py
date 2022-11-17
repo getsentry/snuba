@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from glob import glob
+from multiprocessing import Pool
 from typing import Generator
 
 import sentry_sdk
@@ -10,7 +11,7 @@ from snuba import settings
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.storages.storage_key import StorageKey, register_storage_key
 from snuba.state import get_config
 from snuba.utils.config_component_factory import ConfigComponentFactory
 
@@ -33,15 +34,27 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
             self.__initialize()
 
     def __initialize(self) -> None:
-        self._config_built_storages = {
-            storage.get_storage_key(): storage
-            for storage in [
-                build_storage_from_config(config_file)
-                for config_file in glob(
-                    settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
-                )
-            ]
-        }
+        if get_config("load_configs_multi_processed", 0):
+            with Pool() as p:
+                self._config_built_storages = {
+                    storage.get_storage_key(): storage
+                    for storage in p.map(
+                        build_storage_from_config,
+                        glob(settings.STORAGE_CONFIG_FILES_GLOB, recursive=True),
+                    )
+                }
+            for key in self._config_built_storages:
+                register_storage_key(key.value)
+        else:
+            self._config_built_storages = {
+                storage.get_storage_key(): storage
+                for storage in [
+                    build_storage_from_config(config_file)
+                    for config_file in glob(
+                        settings.STORAGE_CONFIG_FILES_GLOB, recursive=True
+                    )
+                ]
+            }
 
         # TODO: Remove these as they are converted to configs
         from snuba.datasets.storages.discover import storage as discover_storage
