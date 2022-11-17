@@ -74,7 +74,7 @@ test_data = [
     # clusters is set to True
     pytest.param(
         1,
-        os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
+        os.environ.get("CLICKHOUSE_DATABASE", "default"),
         True,
         id="slice use mega cluster",
     ),
