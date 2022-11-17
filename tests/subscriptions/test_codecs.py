@@ -47,36 +47,19 @@ def build_snql_subscription_data(
 SNQL_CASES = [
     pytest.param(
         build_snql_subscription_data,
-        {
-            "project_id": 5,
-            "time_window": 30000,
-            "resolution": 60,
-            "query": "MATCH events SELECT count() WHERE in(platform, 'a')",
-        },
+        {},
         EntityKey.EVENTS,
         id="snql",
     ),
     pytest.param(
         build_snql_subscription_data,
-        {
-            "project_id": 5,
-            "time_window": 30000,
-            "resolution": 60,
-            "query": "MATCH events SELECT count() WHERE in(platform, 'a')",
-            "organization": 1,
-        },
+        {"organization": 1},
         EntityKey.METRICS_COUNTERS,
         id="snql",
     ),
     pytest.param(
         build_snql_subscription_data,
-        {
-            "project_id": 5,
-            "time_window": 30000,
-            "resolution": 60,
-            "query": "MATCH events SELECT count() WHERE in(platform, 'a')",
-            "organization": 1,
-        },
+        {"organization": 1},
         EntityKey.METRICS_SETS,
         id="snql",
     ),
@@ -109,6 +92,7 @@ def test_encode_snql(
     assert data["time_window"] == subscription.time_window_sec
     assert data["resolution"] == subscription.resolution_sec
     assert data["query"] == subscription.query
+    assert metadata == subscription.metadata
     assert isinstance(
         subscription.entity_subscription,
         type(get_entity(entity_key).get_entity_subscription()),
@@ -280,12 +264,7 @@ def test_subscription_task_encoder() -> None:
         time_window_sec=60,
         resolution_sec=60,
         entity_subscription=entity_subscription,
-        metadata={
-            "project_id": 1,
-            "time_window": 60,
-            "resolution": 60,
-            "query": "MATCH events SELECT count()",
-        },
+        metadata={},
     )
 
     subscription_id = uuid.UUID("91b46cb6224f11ecb2ddacde48001122")

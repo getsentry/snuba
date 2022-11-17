@@ -37,12 +37,7 @@ def create_subscription() -> None:
             resolution_sec=60,
             query="MATCH (events) SELECT count()",
             entity_subscription=entity_subscription,
-            metadata={
-                "project_id": 1,
-                "time_window": 60,
-                "resolution": 60,
-                "query": "MATCH events SELECT count()",
-            },
+            metadata={},
         ),
     )
 

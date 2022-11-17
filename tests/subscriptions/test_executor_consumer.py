@@ -126,12 +126,7 @@ def test_executor_consumer() -> None:
         time_window_sec=60,
         resolution_sec=60,
         entity_subscription=entity_subscription,
-        metadata={
-            "project_id": 1,
-            "time_window": 60,
-            "resolution": 60,
-            "query": "MATCH events SELECT count()",
-        },
+        metadata={},
     )
 
     task = ScheduledSubscriptionTask(
@@ -186,12 +181,7 @@ def generate_message(
     if subscription_identifier is None:
         subscription_identifier = SubscriptionIdentifier(PartitionId(1), uuid.uuid1())
 
-    metadata = {
-        "project_id": 1,
-        "time_window": 60,
-        "resolution": 60,
-        "query": "MATCH events SELECT count()",
-    }
+    metadata = {}
     if entity_key in (EntityKey.METRICS_SETS, EntityKey.METRICS_COUNTERS):
         metadata.update({"organization": 1})
 
@@ -332,12 +322,7 @@ def test_produce_result() -> None:
         time_window_sec=60,
         resolution_sec=60,
         entity_subscription=entity_subscription,
-        metadata={
-            "project_id": 1,
-            "time_window": 60,
-            "resolution": 60,
-            "query": "MATCH events SELECT count()",
-        },
+        metadata={},
     )
 
     subscription = Subscription(

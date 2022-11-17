@@ -557,12 +557,7 @@ def test_produce_scheduled_subscription_message() -> None:
             resolution_sec=60,
             query="MATCH events SELECT count()",
             entity_subscription=entity_subscription,
-            metadata={
-                "project_id": 1,
-                "time_window": 60,
-                "resolution": 60,
-                "query": "MATCH events SELECT count()",
-            },
+            metadata={},
         ),
     )
 
@@ -575,12 +570,7 @@ def test_produce_scheduled_subscription_message() -> None:
             resolution_sec=2 * 60,
             query="MATCH events SELECT count(event_id)",
             entity_subscription=entity_subscription,
-            metadata={
-                "project_id": 2,
-                "time_window": 2 * 60,
-                "resolution": 2 * 60,
-                "query": "MATCH events SELECT count(event_id)",
-            },
+            metadata={},
         ),
     )
 
@@ -684,12 +674,7 @@ def test_produce_stale_message() -> None:
             resolution_sec=60,
             query="MATCH events SELECT count()",
             entity_subscription=entity_subscription,
-            metadata={
-                "project_id": 1,
-                "time_window": 60,
-                "resolution": 60,
-                "query": "MATCH events SELECT count()",
-            },
+            metadata={},
         ),
     )
 

@@ -177,6 +177,11 @@ class SubscriptionData:
         entity_subscription = get_entity(entity_key).get_entity_subscription()
         assert entity_subscription is not None
 
+        metadata = {}
+        for key in data.keys():
+            if key not in {"project_id", "time_window", "resolution", "query"}:
+                metadata[key] = data[key]
+
         return SubscriptionData(
             project_id=data["project_id"],
             # Always cast to int in case any old subscriptions are stored as float
@@ -184,7 +189,7 @@ class SubscriptionData:
             resolution_sec=int(data["resolution"]),
             query=data["query"],
             entity_subscription=entity_subscription,
-            metadata=data,
+            metadata=metadata,
         )
 
     def to_dict(self) -> Mapping[str, Any]:

@@ -29,12 +29,7 @@ def build_subscription(resolution: timedelta, sequence: int) -> Subscription:
             resolution_sec=int(resolution.total_seconds()),
             query="MATCH events SELECT count()",
             entity_subscription=entity_subscription,
-            metadata={
-                "project_id": 1,
-                "time_window": int(timedelta(minutes=5).total_seconds()),
-                "resolution": int(resolution.total_seconds()),
-                "query": "MATCH events SELECT count()",
-            },
+            metadata={},
         ),
     )
 
