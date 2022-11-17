@@ -1,3 +1,5 @@
+from typing import Any, Callable
+
 import pytest
 from clickhouse_driver.errors import ErrorCodes
 
@@ -52,14 +54,16 @@ def run_query() -> None:
     assert result.result["data"] == []
 
 
-def test_cache_retries_on_bad_query_id(monkeypatch, snuba_set_config) -> None:
+def test_cache_retries_on_bad_query_id(
+    monkeypatch: pytest.MonkeyPatch, snuba_set_config: Callable[[str, Any], None]
+) -> None:
     from snuba.web import db_query
 
     calls = []
 
     old_excecute_query_with_rate_limits = db_query.execute_query_with_rate_limits
 
-    def execute_query_with_rate_limits(*args):
+    def execute_query_with_rate_limits(*args: Any) -> Any:
         calls.append(args[-2]["query_id"])
 
         if len(calls) == 1:
