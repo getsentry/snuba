@@ -284,7 +284,9 @@ class SessionsEntity(Entity):
             required_time_column="started",
             validate_data_model=ColumnValidationMode.WARN,
             entity_subscription=EntitySubscription(
-                validators=[AggregationValidator(2, ["groupby", "having", "orderby"])],
+                validators=[
+                    AggregationValidator(2, ["groupby", "having", "orderby"], "started")
+                ],
                 processors=[AddColumnCondition("organization", "org_id")],
             ),
         )

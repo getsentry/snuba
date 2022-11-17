@@ -210,6 +210,7 @@ entity_subscription:
       args:
         max_allowed_aggregations: 3
         disallowed_aggregations: [having, orderby]
+        required_time_column: timestamp
   processors:
     -
       processor: AddColumnCondition

@@ -364,7 +364,8 @@ entity_subscription:
           args:
             {
               max_allowed_aggregations: 1,
-              disallowed_aggregations: [groupby, having, orderby]
+              disallowed_aggregations: [groupby, having, orderby],
+              required_time_column: finish_ts
             },
         },
       ]

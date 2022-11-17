@@ -154,7 +154,11 @@ class BaseEventsEntity(Entity, ABC):
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
             entity_subscription=EntitySubscription(
-                validators=[AggregationValidator(1, ["groupby", "having", "orderby"])],
+                validators=[
+                    AggregationValidator(
+                        1, ["groupby", "having", "orderby"], "timestamp"
+                    )
+                ],
                 processors=None,
             ),
         )

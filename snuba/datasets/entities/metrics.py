@@ -132,7 +132,9 @@ class MetricsSetsEntity(MetricsEntity):
                 ],
             ),
             entity_subscription=EntitySubscription(
-                validators=[AggregationValidator(3, ["having", "orderby"])],
+                validators=[
+                    AggregationValidator(3, ["having", "orderby"], "timestamp")
+                ],
                 processors=[AddColumnCondition("organization", "org_id")],
             ),
         )
@@ -151,7 +153,9 @@ class MetricsCountersEntity(MetricsEntity):
                 ],
             ),
             entity_subscription=EntitySubscription(
-                validators=[AggregationValidator(3, ["having", "orderby"])],
+                validators=[
+                    AggregationValidator(3, ["having", "orderby"], "timestamp")
+                ],
                 processors=[AddColumnCondition("organization", "org_id")],
             ),
         )

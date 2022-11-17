@@ -115,7 +115,11 @@ class BaseTransactionsEntity(Entity, ABC):
             validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="finish_ts",
             entity_subscription=EntitySubscription(
-                validators=[AggregationValidator(1, ["groupby", "having", "orderby"])],
+                validators=[
+                    AggregationValidator(
+                        1, ["groupby", "having", "orderby"], "finish_ts"
+                    )
+                ],
                 processors=None,
             ),
         )
