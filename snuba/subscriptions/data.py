@@ -45,6 +45,9 @@ from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
 
+# These are subscription payload keys which need to be set as attributes in SubscriptionData.
+SUBSCRIPTION_DATA_PAYLOAD_KEYS = {"project_id", "time_window", "resolution", "query"}
+
 logger = logging.getLogger("snuba.subscriptions")
 
 
@@ -179,7 +182,7 @@ class SubscriptionData:
 
         metadata = {}
         for key in data.keys():
-            if key not in {"project_id", "time_window", "resolution", "query"}:
+            if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
                 metadata[key] = data[key]
 
         return SubscriptionData(
