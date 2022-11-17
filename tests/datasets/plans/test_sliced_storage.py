@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 from unittest.mock import patch
 
@@ -71,7 +72,12 @@ test_data = [
     pytest.param(500, SLICE_0_DATABASE_VALUE, False, id="even org iD slice"),
     # org_id 1 should use mega cluster since the override to use the mega
     # clusters is set to True
-    pytest.param(1, "snuba_test", True, id="slice use mega cluster"),
+    pytest.param(
+        1,
+        os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
+        True,
+        id="slice use mega cluster",
+    ),
 ]
 
 
