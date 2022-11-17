@@ -9,7 +9,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_sentry
-from snuba.redis import all_redis_clients
+from snuba.redis import RedisClientKey, all_redis_clients, get_redis_client
 
 
 def pytest_configure() -> None:
@@ -146,6 +146,8 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
 
 
 @pytest.fixture
-def disable_query_cache(snuba_set_config: SnubaSetConfig) -> None:
-    snuba_set_config("use_cache", False)
-    snuba_set_config("use_readthrough_query_cache", 0)
+def clear_query_cache(snuba_set_config: SnubaSetConfig) -> Callable[[], None]:
+    def inner() -> None:
+        get_redis_client(RedisClientKey.CACHE).flushdb()
+
+    return inner

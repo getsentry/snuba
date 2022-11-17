@@ -1836,7 +1836,7 @@ class TestApi(SimpleAPITest):
             map(str, reversed(range(0, 10)))
         )
 
-    def test_consistent(self, disable_query_cache: Callable[..., Any]) -> None:
+    def test_consistent(self, clear_query_cache: Callable[[], None]) -> None:
         state.set_config("consistent_override", "test_override=0;another=0.5")
         query = json.dumps(
             {
@@ -1853,6 +1853,8 @@ class TestApi(SimpleAPITest):
 
         response = json.loads(self.post(query, referrer="test_query").data)
         assert response["stats"]["consistent"]
+
+        clear_query_cache()
 
         response = json.loads(self.post(query, referrer="test_override").data)
         assert response["stats"]["consistent"] == False

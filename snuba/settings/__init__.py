@@ -147,8 +147,6 @@ REDIS_CLUSTERS: RedisClusters = {
     "optimize": None,
 }
 
-USE_RESULT_CACHE = True
-
 # Query Recording Options
 RECORD_QUERIES = False
 
