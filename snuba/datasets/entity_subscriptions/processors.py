@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Mapping, Sequence, Type, Union, cast
+from typing import Any, Mapping, Optional, Sequence, Type, Union, cast
 
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -30,7 +30,10 @@ class EntitySubscriptionProcessor(metaclass=RegisteredClass):
 
     @abstractmethod
     def process(
-        self, query: Union[CompositeQuery[Entity], Query], metadata: Mapping[str, Any]
+        self,
+        query: Union[CompositeQuery[Entity], Query],
+        metadata: Mapping[str, Any],
+        offset: Optional[int] = None,
     ) -> None:
         raise NotImplementedError
 
@@ -46,7 +49,10 @@ class AddColumnCondition(EntitySubscriptionProcessor):
         return {self.extra_condition_data_key: metadata[self.extra_condition_data_key]}
 
     def process(
-        self, query: Union[CompositeQuery[Entity], Query], metadata: Mapping[str, Any]
+        self,
+        query: Union[CompositeQuery[Entity], Query],
+        metadata: Mapping[str, Any],
+        offset: Optional[int] = None,
     ) -> None:
         if self.extra_condition_data_key not in metadata:
             raise InvalidQueryException

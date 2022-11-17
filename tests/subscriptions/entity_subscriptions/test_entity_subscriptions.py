@@ -34,6 +34,7 @@ TESTS = [
         ),
         {},
         None,
+        5,
         id="Events subscription",
     ),
     pytest.param(
@@ -56,6 +57,7 @@ TESTS = [
         ),
         {},
         None,
+        5,
         id="Transactions subscription",
     ),
     pytest.param(
@@ -78,6 +80,7 @@ TESTS = [
         ),
         {"organization": 1},
         None,
+        5,
         id="Sessions subscription",
     ),
     pytest.param(
@@ -100,6 +103,7 @@ TESTS = [
         ),
         {},
         InvalidQueryException,
+        5,
         id="Sessions subscription",
     ),
     pytest.param(
@@ -122,6 +126,7 @@ TESTS = [
         ),
         {"organization": 1},
         None,
+        5,
         id="Metrics counters subscription",
     ),
     pytest.param(
@@ -144,6 +149,7 @@ TESTS = [
         ),
         {},
         InvalidQueryException,
+        5,
         id="Metrics counters subscription",
     ),
     pytest.param(
@@ -166,6 +172,7 @@ TESTS = [
         ),
         {"organization": 1},
         None,
+        5,
         id="Metrics sets subscription",
     ),
     pytest.param(
@@ -188,80 +195,19 @@ TESTS = [
         ),
         {},
         InvalidQueryException,
+        5,
         id="Metrics sets subscription",
     ),
 ]
 
-# TESTS_CONDITIONS_SNQL_METHOD = [
-#     pytest.param(
-#         EventsSubscription(data_dict={}),
-#         [],
-#         True,
-#         id="Events subscription with offset of type SNQL",
-#     ),
-#     pytest.param(
-#         EventsSubscription(data_dict={}),
-#         [],
-#         False,
-#         id="Events subscription with no offset of type SNQL",
-#     ),
-#     pytest.param(
-#         TransactionsSubscription(data_dict={}),
-#         [],
-#         True,
-#         id="Transactions subscription with offset of type SNQL",
-#     ),
-#     pytest.param(
-#         TransactionsSubscription(data_dict={}),
-#         [],
-#         False,
-#         id="Transactions subscription with no offset of type SNQL",
-#     ),
-#     pytest.param(
-#         SessionsSubscription(data_dict={"organization": 1}),
-#         [
-#             binary_condition(
-#                 ConditionFunctions.EQ,
-#                 Column(None, None, "org_id"),
-#                 Literal(None, 1),
-#             ),
-#         ],
-#         True,
-#         id="Sessions subscription of type SNQL",
-#     ),
-#     pytest.param(
-#         MetricsCountersSubscription(data_dict={"organization": 1}),
-#         [
-#             binary_condition(
-#                 ConditionFunctions.EQ,
-#                 Column(None, None, "org_id"),
-#                 Literal(None, 1),
-#             ),
-#         ],
-#         True,
-#         id="Metrics counters subscription of type SNQL",
-#     ),
-#     pytest.param(
-#         MetricsSetsSubscription(data_dict={"organization": 1}),
-#         [
-#             binary_condition(
-#                 ConditionFunctions.EQ,
-#                 Column(None, None, "org_id"),
-#                 Literal(None, 1),
-#             ),
-#         ],
-#         True,
-#         id="Metrics sets subscription of type SNQL",
-#     ),
-# ]
 
-
-@pytest.mark.parametrize("entity_key, query, metadata, exception", TESTS)
+@pytest.mark.parametrize("entity_key, query, metadata, exception, offset", TESTS)
 def test_entity_subscription_processors(
     entity_key: EntityKey,
     query: Union[CompositeQuery[QueryEntity], Query],
     metadata: Mapping[str, Any],
     exception: Optional[Type[Exception]],
+    offset: Optional[int],
 ) -> None:
     entity_subscription = get_entity(entity_key).get_entity_subscription()
 
@@ -272,7 +218,7 @@ def test_entity_subscription_processors(
                     processor.to_dict(metadata) == {}
             else:
                 if isinstance(processor, AddColumnCondition):
-                    processor.process(query, metadata)
+                    processor.process(query, metadata, offset)
                     new_condition = query.get_condition()
                     assert isinstance(new_condition, FunctionCall)
                     assert len(new_condition.parameters) == 2
@@ -281,12 +227,13 @@ def test_entity_subscription_processors(
                     }
 
 
-@pytest.mark.parametrize("entity_key, query, metadata, exception", TESTS)
+@pytest.mark.parametrize("entity_key, query, metadata, exception, offset", TESTS)
 def test_entity_subscription_validators(
     entity_key: EntityKey,
     query: Union[CompositeQuery[QueryEntity], Query],
     metadata: Mapping[str, Any],
     exception: Optional[Type[Exception]],
+    offset: Optional[int],
 ) -> None:
     entity_subscription = get_entity(entity_key).get_entity_subscription()
 

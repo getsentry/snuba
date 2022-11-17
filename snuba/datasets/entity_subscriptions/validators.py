@@ -25,7 +25,7 @@ class EntitySubscriptionValidator(metaclass=RegisteredClass):
         return cast(Type["EntitySubscriptionValidator"], cls.class_from_name(name))
 
     @abstractmethod
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
@@ -40,7 +40,7 @@ class AggregationValidator(EntitySubscriptionValidator):
         self.max_allowed_aggregations = max_allowed_aggregations
         self.disallowed_aggregations = disallowed_aggregations
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
         return {}
 
     def validate(self, query: Union[CompositeQuery[Entity], Query]) -> None:

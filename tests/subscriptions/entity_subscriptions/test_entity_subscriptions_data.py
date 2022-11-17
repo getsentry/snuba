@@ -1,8 +1,6 @@
 from typing import List, Tuple, cast
 from uuid import UUID
 
-import pytest
-
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.entity_subscriptions.entity_subscription import EntitySubscription
@@ -16,6 +14,8 @@ from snuba.utils.metrics.timer import Timer
 dataset = get_dataset("generic_metrics")
 entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
 entity_key = get_entity_name(entity)
+entity_subscription = entity.get_entity_subscription()
+assert isinstance(entity_subscription, EntitySubscription)
 storage = entity.get_writable_storage()
 assert storage is not None
 stream_loader = storage.get_table_writer().get_stream_loader()
@@ -44,13 +44,6 @@ def subscription_data_builder(
         query=query,
         metadata=metadata,
     )
-
-
-@pytest.fixture
-def entity_subscription() -> EntitySubscription:
-    entity_subscription = entity.get_entity_subscription()
-    assert isinstance(entity_subscription, EntitySubscription)
-    return entity_subscription
 
 
 def test_entity_subscriptions_data(

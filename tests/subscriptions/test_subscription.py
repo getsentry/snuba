@@ -128,17 +128,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     time_window_sec=0,
                     resolution_sec=60,
                     entity_subscription=create_entity_subscription(),
-                    metadata={
-                        "project_id": 123,
-                        "time_window": 0,
-                        "resolution": 60,
-                        "query": (
-                            "MATCH (events) "
-                            "SELECT count() AS count BY time "
-                            "WHERE "
-                            "platform IN tuple('a') "
-                        ),
-                    },
+                    metadata={},
                 ),
                 self.timer,
             )
