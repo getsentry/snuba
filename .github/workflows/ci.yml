@@ -375,3 +375,4 @@ jobs:
           project_name: snuba
           local_image: ghcr.io/getsentry/snuba-ci:${{ github.sha }}
           container_repo: ghcr.io/getsentry/snuba
+          # TODO: add docker tag to build for
