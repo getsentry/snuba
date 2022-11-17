@@ -72,7 +72,7 @@ consumer_builder_with_opt = ConsumerBuilder(
         tags={"group": consumer_group_name, "storage": test_storage_key.value},
     ),
     parallel_collect=False,
-    slice_id=1,
+    slice_id=None,
 )
 
 
