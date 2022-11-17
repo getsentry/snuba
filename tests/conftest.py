@@ -148,6 +148,6 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
 @pytest.fixture
 def clear_query_cache(snuba_set_config: SnubaSetConfig) -> Callable[[], None]:
     def inner() -> None:
-        get_redis_client(RedisClientKey.CACHE).flushall()
+        get_redis_client(RedisClientKey.CACHE).flushdb()
 
     return inner
