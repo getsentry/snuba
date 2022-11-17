@@ -5,12 +5,19 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, TypeVar
 
 import simplejson as json
-from arroyo import Message
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies.batching import AbstractBatchWorker
+from arroyo.processing.strategies.abstract import (
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+)
+from arroyo.processing.strategies.batching import (
+    AbstractBatchWorker,
+    BatchProcessingStrategy,
+)
+from arroyo.types import Message, Partition, Position
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
@@ -260,6 +267,34 @@ class ShardedExecutor(InsertExecutor):
                 exc_info=e,
             )
             return count
+
+
+TPayload = TypeVar("TPayload")
+TResult = TypeVar("TResult")
+
+
+class ReplacerStrategyFactory(ProcessingStrategyFactory[TPayload]):
+    def __init__(
+        self,
+        worker: AbstractBatchWorker[TPayload, TResult],
+        max_batch_size: int,
+        max_batch_time: int,
+    ) -> None:
+        self.__worker = worker
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+
+    def create_with_partitions(
+        self,
+        commit: Callable[[Mapping[Partition, Position]], None],
+        partitions: Mapping[Partition, int],
+    ) -> ProcessingStrategy[TPayload]:
+        return BatchProcessingStrategy(
+            commit,
+            self.__worker,
+            self.__max_batch_size,
+            self.__max_batch_time,
+        )
 
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
