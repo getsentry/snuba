@@ -371,12 +371,36 @@ def optimize_partitions(
             tracker.update_completed_partitions(partition)
 
         start = time.time()
+        is_done = threading.Event()
+
+        threshold = 1000
+
+        def monitor_thread() -> None:
+            while True:
+                if is_done.wait(1):
+                    break
+                if time.time() - start > threshold:
+                    logger.warn(
+                        f"Optimizing partition {partition} is running longer than {threshold}"
+                    )
+                    metrics.events(
+                        title="optimize_partition_long_running",
+                        text=f"Optimizing partition {partition} is running longer than {threshold}",
+                        priority="error",
+                        tags=_get_metrics_tags(table, clickhouse_host),
+                    )
+                    break
+
+        monitor_thread = threading.Thread(target=monitor_thread)
+
         clickhouse.execute(query, retryable=False)
+        is_done.set()
         metrics.timing(
             "optimized_part",
             time.time() - start,
             tags=_get_metrics_tags(table, clickhouse_host),
         )
+        monitor_thread.join()
 
 
 def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bool:
