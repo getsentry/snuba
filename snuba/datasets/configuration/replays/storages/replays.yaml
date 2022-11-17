@@ -111,6 +111,7 @@ schema:
   local_table_name: replays_local
   dist_table_name: replays_dist
 query_processors:
+  - processor: TagsTypeTransformer
   - processor: TableRateLimit
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer

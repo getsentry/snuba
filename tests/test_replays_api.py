@@ -63,3 +63,24 @@ class TestReplaysApi(BaseApiTest):
                 ],
             }
         ]
+
+    def test_tag_transformer(self) -> None:
+        response = self.post(
+            "/replays/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (replays)
+                    SELECT tags[customtag]
+                    WHERE project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 10 OFFSET 0
+                    """,
+                    "debug": True,
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
