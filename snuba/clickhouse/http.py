@@ -9,6 +9,7 @@ from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Union, 
 from urllib.parse import urlencode
 
 import rapidjson
+import sentry_sdk
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
@@ -179,7 +180,7 @@ class HTTPWriteBatch:
             body=body,
         )
 
-        self.__rows = 0
+        self.__rows = []
         self.__size = 0
         self.__closed = False
 
@@ -199,7 +200,7 @@ class HTTPWriteBatch:
         assert not self.__closed
 
         self.__queue.put(value)
-        self.__rows += 1
+        self.__rows.append(value)
         self.__size += len(value)
 
     def close(self) -> None:
@@ -219,6 +220,14 @@ class HTTPWriteBatch:
                 code = int(details["code"])
                 message = details["message"]
                 row = int(details["row"]) if details["row"] is not None else None
+                try:
+                    if row is not None:
+                        sentry_sdk.set_context(
+                            "snuba_errored_row", {"data": self.__rows[row]}
+                        )
+                except IndexError:
+                    sentry_sdk.set_context("snuba_errored_row", {"index_error": True})
+
                 raise ClickhouseWriterError(message, code=code, row=row)
             else:
                 raise HTTPError(
