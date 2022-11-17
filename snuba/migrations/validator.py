@@ -36,7 +36,7 @@ class NoDistClusterNodes(Exception):
 
 class DistributedEngineParseError(Exception):
     """
-    Cant parse the distributed engine string value
+    Can't parse the distributed engine string value
     """
 
     pass
@@ -77,11 +77,14 @@ def _validate_drop(dist_op: SqlOperation, local_ops: Sequence[SqlOperation]) -> 
             )
 
 
-def validate_order_old(
+def _validate_order_old(
     local_ops: Sequence[SqlOperation],
     dist_ops: Sequence[SqlOperation],
     local_first: bool,
 ) -> None:
+    """
+    Validates migration order for old style migrations ClickhouseNodeMigrationLegacy class.
+    """
     if local_first:
         for dist_op in dist_ops:
             _validate_drop(dist_op, local_ops)
@@ -90,9 +93,12 @@ def validate_order_old(
             _validate_add_col_or_create_table(local_op, dist_ops)
 
 
-def validate_order_new(
+def _validate_order_new(
     forward_ops: Sequence[SqlOperation], backwards_ops: Sequence[SqlOperation]
 ) -> None:
+    """
+    Validates migration order for new style migrations ClickhouseNodeMigration class.
+    """
     for ops in [forward_ops, backwards_ops]:
         for i, op in enumerate(ops):
             local_ops_before = [
@@ -117,12 +123,12 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
 
     if isinstance(migration, ClickhouseNodeMigrationLegacy):
         # old way of doing migrations
-        validate_order_old(
+        _validate_order_old(
             migration.forwards_local(),
             migration.forwards_dist(),
             migration.forwards_local_first,
         )
-        validate_order_old(
+        _validate_order_old(
             migration.backwards_local(),
             migration.backwards_dist(),
             migration.backwards_local_first,
@@ -131,7 +137,7 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
         # try new way of doing migrations
         forward_ops = migration.forwards_ops()
         backward_ops = migration.backwards_ops()
-        validate_order_new(forward_ops, backward_ops)
+        _validate_order_new(forward_ops, backward_ops)
 
 
 def conflicts_create_table_op(
