@@ -15,6 +15,7 @@ from snuba.clickhouse.optimize.util import MergeInfo
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
+    OPTIMIZE_ALERT_THRESHOLD,
     OPTIMIZE_BASE_SLEEP_TIME,
     OPTIMIZE_MAX_SLEEP_TIME,
     OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
@@ -373,25 +374,25 @@ def optimize_partitions(
         start = time.time()
         is_done = threading.Event()
 
-        threshold = 1000
-
-        def monitor_thread() -> None:
+        def monitor() -> None:
             while True:
                 if is_done.wait(1):
                     break
-                if time.time() - start > threshold:
+                if time.time() - start > OPTIMIZE_ALERT_THRESHOLD:
                     logger.warn(
-                        f"Optimizing partition {partition} is running longer than {threshold}"
+                        f"Optimizing partition {partition} is running longer than {OPTIMIZE_ALERT_THRESHOLD}s"
                     )
                     metrics.events(
                         title="optimize_partition_long_running",
-                        text=f"Optimizing partition {partition} is running longer than {threshold}",
+                        text=f"Optimizing partition {partition} is running longer than {OPTIMIZE_ALERT_THRESHOLD}s",
                         priority="error",
+                        alert_type="error",
                         tags=_get_metrics_tags(table, clickhouse_host),
                     )
                     break
 
-        monitor_thread = threading.Thread(target=monitor_thread)
+        monitor_thread = threading.Thread(target=monitor)
+        monitor_thread.start()
 
         clickhouse.execute(query, retryable=False)
         is_done.set()
