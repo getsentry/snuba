@@ -26,15 +26,14 @@ class QuerylogAuditLog(AuditLog):
     def _record(
         self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
     ) -> None:
-        query = data["query"]
-        status = data["status"]
-        start_timestamp = timestamp
+        query = data.get("query")
+        status = data.get("status")
         self.logger.info(
             event=action,
             user=user,
             query=query,
-            status=status.value,
-            start_timestamp=start_timestamp,
+            status=status.value if status else "unknown",
+            start_timestamp=timestamp,
             end_timestamp=datetime.now().strftime(DATETIME_FORMAT),
         )
 

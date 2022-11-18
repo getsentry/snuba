@@ -1,26 +1,16 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import structlog
 
-from snuba import settings
 from snuba.admin.audit_log.base import AuditLog
-from snuba.admin.notifications.slack.client import SlackClient
+from snuba.admin.notifications.slack.client import slack_client
 from snuba.admin.notifications.slack.utils import build_blocks
 
 
 class RuntimeConfigAuditLog(AuditLog):
     def __init__(self) -> None:
         self.logger = structlog.get_logger().bind(module=__name__)
-        self.notification_client: Optional[SlackClient] = None
-        self.channel_id: Optional[str] = None
-
-        if (
-            settings.SNUBA_SLACK_CHANNEL_ID is not None
-            and settings.SLACK_API_TOKEN is not None
-        ):
-            self.notification_client = SlackClient()
-            # feed-sns-admin channel
-            self.channel_id = settings.SNUBA_SLACK_CHANNEL_ID
+        self.client = slack_client
 
     def _record(
         self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
@@ -43,9 +33,9 @@ class RuntimeConfigAuditLog(AuditLog):
             event="value_updated",
             user=user,
             action=action,
-            option=data["option"],
-            old=data["old"],
-            new=data["new"],
+            option=data.get("option"),
+            old=data.get("old"),
+            new=data.get("new"),
             timestamp=timestamp,
         )
 
@@ -65,13 +55,11 @@ class RuntimeConfigAuditLog(AuditLog):
             }
 
         """
-        if self.notification_client and self.channel_id:
+        if self.client.is_configured:
             blocks = build_blocks(data, action, timestamp, user)
             payload: MutableMapping[str, Any] = {"blocks": blocks}
 
-            self.notification_client.post_message(
-                message=payload, channel=self.channel_id
-            )
+            self.client.post_message(message=payload)
 
 
 runtime_config_auditlog = RuntimeConfigAuditLog()

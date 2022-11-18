@@ -10,6 +10,14 @@ logger = structlog.get_logger().bind(module=__name__)
 
 class SlackClient(object):
     @property
+    def is_configured(self) -> bool:
+        return self.channel_id is not None and self.token is not None
+
+    @property
+    def channel_id(self) -> Optional[str]:
+        return settings.SNUBA_SLACK_CHANNEL_ID
+
+    @property
     def token(self) -> Optional[str]:
         return settings.SLACK_API_TOKEN
 
@@ -49,3 +57,6 @@ class SlackClient(object):
 
         if not is_ok:
             logger.error(f"Slack error: {str(error_option)}")
+
+
+slack_client = SlackClient()
