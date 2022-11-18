@@ -698,6 +698,7 @@ def raw_query(
             stats = update_with_status(QueryStatus.RATE_LIMITED)
         else:
             error_code = None
+            status = QueryStatus.ERROR
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     error_code = cause.code
@@ -713,8 +714,10 @@ def raw_query(
                     if scope.span:
                         if cause.code == errors.ErrorCodes.TOO_SLOW:
                             sentry_sdk.set_tag("timeout", "predicted")
+                            status = QueryStatus.TIMEOUT
                         elif cause.code == errors.ErrorCodes.TIMEOUT_EXCEEDED:
                             sentry_sdk.set_tag("timeout", "query_timeout")
+                            status = QueryStatus.TIMEOUT
                         elif cause.code in (
                             errors.ErrorCodes.SOCKET_TIMEOUT,
                             errors.ErrorCodes.NETWORK_ERROR,
@@ -726,9 +729,10 @@ def raw_query(
                 ):
                     if scope.span:
                         sentry_sdk.set_tag("timeout", "cache_timeout")
+                        status = QueryStatus.TIMEOUT
 
                 logger.exception("Error running query: %s\n%s", sql, cause)
-            stats = update_with_status(QueryStatus.ERROR, error_code=error_code)
+            stats = update_with_status(status, error_code=error_code)
         raise QueryException.from_args(
             # This exception needs to have the message of the cause in it for sentry
             # to pick it up properly
