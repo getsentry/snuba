@@ -15,6 +15,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 test_storage_key = StorageKey("errors")
 consumer_group_name = "my_consumer_group"
 
+# Below, a ConsumerBuilder with only required args
 consumer_builder = ConsumerBuilder(
     storage_key=test_storage_key,
     kafka_params=KafkaParameters(
@@ -56,6 +57,9 @@ optional_kafka_params = KafkaParameters(
     queued_min_messages=2,
 )
 
+# Below, a ConsumerBuilder with all required
+# and optional args, but only those with
+# no default values
 consumer_builder_with_opt = ConsumerBuilder(
     storage_key=test_storage_key,
     kafka_params=optional_kafka_params,
@@ -76,12 +80,13 @@ consumer_builder_with_opt = ConsumerBuilder(
 )
 
 
-# the point of these tests is to try out
-# different configurations of builder
-# and see if any initialization breaks
-
-
 def test_consumer_builder_non_optional_attributes() -> None:
+    # Ensures that the ConsumerBuilders are assigning a
+    # not-None value to the required attributes
+
+    # Depending on the attribute, we can verify this
+    # to different degrees
+
     assert consumer_builder.storage == get_writable_storage(test_storage_key)
     assert consumer_builder_with_opt.storage == get_writable_storage(test_storage_key)
 
@@ -117,6 +122,13 @@ def test_consumer_builder_non_optional_attributes() -> None:
 
 
 def test_consumer_builder_optional_attributes() -> None:
+    # Ensures that the ConsumerBuilders are assigning
+    # some value, None or not, to the optional attributes
+
+    # In the case that optional Kafka topic overrides
+    # are passed in, stronger checks are performed
+    # in a separate test
+
     try:
         consumer_builder.bootstrap_servers
     except NameError:
@@ -218,21 +230,25 @@ def test_consumer_builder_optional_attributes() -> None:
 
 def test_optional_kafka_overrides() -> None:
 
+    # In the case that Kafka topic overrides are provided,
+    # verify that these attributes are populated
+    # as expected
+
     if optional_kafka_params.raw_topic is not None:
         assert (
             consumer_builder_with_opt.raw_topic.name == optional_kafka_params.raw_topic
-        )
+        ), "Raw topic name should match raw Kafka topic override"
 
     if optional_kafka_params.replacements_topic is not None:
         assert consumer_builder_with_opt.replacements_topic is not None
         assert (
             consumer_builder_with_opt.replacements_topic.name
             == optional_kafka_params.replacements_topic
-        )
+        ), "Replacements topic name should match replacements Kafka topic override"
 
     if optional_kafka_params.commit_log_topic is not None:
         assert consumer_builder_with_opt.commit_log_topic is not None
         assert (
             consumer_builder_with_opt.commit_log_topic.name
             == optional_kafka_params.commit_log_topic
-        )
+        ), "Commit log topic name should match commit log Kafka topic override"
