@@ -42,6 +42,7 @@ interface Client {
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
   getKafkaData: () => Promise<KafkaTopicData[]>;
+  getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
@@ -196,6 +197,10 @@ function Client() {
       }).then((resp) => resp.json());
     },
 
+    getPredefinedQuerylogOptions: () => {
+      const url = baseUrl + "querylog_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
     getQuerylogSchema: () => {
       const url = baseUrl + "clickhouse_querylog_schema";
       return fetch(url, {
