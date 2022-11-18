@@ -5,8 +5,6 @@ from enum import Enum
 from functools import partial
 from typing import Any, Callable, Mapping, MutableMapping, Union
 
-import structlog
-
 from snuba.clickhouse.native import ClickhouseResult
 
 DATETIME_FORMAT = "%B %d, %Y %H:%M:%S %p"
@@ -20,30 +18,19 @@ class QueryExecutionStatus(Enum):
 
 
 class QuerylogAuditLog(AuditLog):
-    def __init__(self) -> None:
-        self.logger = structlog.get_logger().bind(module=__name__)
-
-    def _record(
+    def _format_data(
         self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
-    ) -> None:
-        query = data.get("query")
+    ) -> Mapping[str, Any]:
         status = data.get("status")
-        self.logger.info(
-            event=action,
-            user=user,
-            query=query,
-            status=status.value if status else "unknown",
-            start_timestamp=timestamp,
-            end_timestamp=datetime.now().strftime(DATETIME_FORMAT),
-        )
-
-    def _notify(
-        self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
-    ) -> None:
-        pass
+        return {
+            "query": data.get("query"),
+            "status": status.value if status else "unknown",
+            "start_timestamp": timestamp,
+            "end_timestamp": datetime.now().strftime(DATETIME_FORMAT),
+        }
 
 
-__querylog_audit_log_notification_client = QuerylogAuditLog()
+__querylog_audit_log_notification_client = QuerylogAuditLog(__name__)
 
 
 def audit_log(
