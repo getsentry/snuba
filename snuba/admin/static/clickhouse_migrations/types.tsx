@@ -15,4 +15,23 @@ export type MigrationData = {
 
 export type GroupOptions = {
   [key: string]: MigrationGroupResult;
+}
+
+export enum Action {
+    Run = "run",
+    Reverse = "reverse",
+}
+
+export type RunMigrationRequest = {
+    group: string;
+    action: Action;
+    migration_id: string;
+    force?: boolean;
+    fake?: boolean;
+    dry_run?: boolean;
+};
+
+export type RunMigrationResult = {
+    stdout: string;
+    error?: string;
 };
