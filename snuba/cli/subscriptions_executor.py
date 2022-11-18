@@ -52,7 +52,7 @@ from snuba.utils.streams.topics import Topic
 )
 @click.option(
     "--slice-id",
-    help="The slice to write on/read data from",
+    help="The slice to load scheduled queries from",
 )
 @click.option(
     "--total-concurrent-queries",
