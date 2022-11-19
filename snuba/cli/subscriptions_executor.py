@@ -17,7 +17,6 @@ from snuba.subscriptions.executor_consumer import build_executor_consumer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.topics import Topic
 
 
 @click.command()
@@ -122,11 +121,10 @@ def subscriptions_executor(
     stream_loader = storage.get_table_writer().get_stream_loader()
     result_topic_spec = stream_loader.get_subscription_result_topic_spec()
     assert result_topic_spec is not None
-    physical_topic_name = result_topic_spec.get_physical_topic_name(slice_id)
 
     producer = KafkaProducer(
         build_kafka_producer_configuration(
-            Topic(physical_topic_name),
+            result_topic_spec.topic,
             override_params={"partitioner": "consistent"},
         )
     )

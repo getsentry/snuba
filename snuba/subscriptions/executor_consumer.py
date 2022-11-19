@@ -125,7 +125,6 @@ def build_executor_consumer(
         ), "All entities must have same scheduled and result topics"
 
     physical_scheduled_topic = scheduled_topic_spec.get_physical_topic_name(slice_id)
-    physical_result_topic = result_topic_spec.get_physical_topic_name(slice_id)
 
     consumer_configuration = build_kafka_consumer_configuration(
         SnubaTopic(physical_scheduled_topic),
@@ -170,7 +169,7 @@ def build_executor_consumer(
             producer,
             metrics,
             stale_threshold_seconds,
-            physical_result_topic,
+            result_topic_spec.topic_name,
         ),
         commit_policy=ONCE_PER_SECOND,
     )
