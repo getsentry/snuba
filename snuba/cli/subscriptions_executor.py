@@ -104,10 +104,15 @@ def subscriptions_executor(
     setup_logging(log_level)
     setup_sentry()
 
+    metrics_tags = {
+        "dataset": dataset_name,
+    }
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
     metrics = MetricsWrapper(
-        environment.metrics,
-        "subscriptions.executor",
-        tags={"dataset": dataset_name},
+        environment.metrics, "subscriptions.executor", tags=metrics_tags
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
