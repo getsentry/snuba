@@ -1,21 +1,11 @@
 from datetime import datetime
-from enum import Enum
 from typing import Any, Mapping, MutableMapping, Optional, Union
 
 import structlog
 
+from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.notifications.slack.client import slack_client
 from snuba.admin.notifications.slack.utils import build_blocks
-
-
-class AuditLogAction(Enum):
-    # action.resource
-    ADDED_OPTION = "added.option"
-    REMOVED_OPTION = "removed.option"
-    UPDATED_OPTION = "updated.option"
-    RAN_QUERY = "ran.query"
-    RAN_MIGRATION = "ran.migration"
-    REVERSED_MIGRATION = "reversed.migration"
 
 
 class AuditLog:
@@ -33,7 +23,7 @@ class AuditLog:
         user: str,
         action: AuditLogAction,
         data: Mapping[str, Union[str, int]],
-        timestamp: Optional[str],
+        timestamp: Optional[str] = None,
         notify: Optional[bool] = False,
     ) -> None:
         if not timestamp:

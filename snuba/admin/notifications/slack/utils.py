@@ -1,17 +1,13 @@
 from typing import Any, Dict, List, Optional, Union
 
 from snuba import settings
-from snuba.admin.audit_log.base import AuditLogAction
+from snuba.admin.audit_log.action import RUNTIME_CONFIG_ACTIONS, AuditLogAction
 
 
 def build_blocks(
     data: Any, action: AuditLogAction, timestamp: str, user: str
 ) -> List[Any]:
-    if action in [
-        AuditLogAction.ADDED_OPTION,
-        AuditLogAction.UPDATED_OPTION,
-        AuditLogAction.REMOVED_OPTION,
-    ]:
+    if action in RUNTIME_CONFIG_ACTIONS:
         text = build_runtime_config_text(data, action)
     else:
         text = action.value

@@ -416,7 +416,7 @@ def configs() -> Response:
             "type": evaluated_type,
         }
 
-        audit_log.audit(
+        audit_log.record(
             user,
             AuditLogAction.ADDED_OPTION,
             {"option": key, "old": None, "new": evaluated_value},
