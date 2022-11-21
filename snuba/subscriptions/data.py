@@ -205,9 +205,6 @@ class SubscriptionData:
         if self.entity_subscription.processors:
             for processor in self.entity_subscription.processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
-        if self.entity_subscription.validators:
-            for validator in self.entity_subscription.validators:
-                subscription_data_dict.update(validator.to_dict(self.metadata))
         return subscription_data_dict
 
 

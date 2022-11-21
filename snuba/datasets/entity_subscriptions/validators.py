@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Type, Union, cast
+from typing import Optional, Sequence, Type, Union, cast
 
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
@@ -25,10 +25,6 @@ class EntitySubscriptionValidator(metaclass=RegisteredClass):
         return cast(Type["EntitySubscriptionValidator"], cls.class_from_name(name))
 
     @abstractmethod
-    def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
-        raise NotImplementedError
-
-    @abstractmethod
     def validate(self, query: Union[CompositeQuery[Entity], Query]) -> None:
         raise NotImplementedError
 
@@ -43,9 +39,6 @@ class AggregationValidator(EntitySubscriptionValidator):
         self.max_allowed_aggregations = max_allowed_aggregations
         self.disallowed_aggregations = disallowed_aggregations
         self.required_time_column = required_time_column
-
-    def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
-        return {}
 
     def validate(self, query: Union[CompositeQuery[Entity], Query]) -> None:
         SubscriptionAllowedClausesValidator(
