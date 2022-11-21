@@ -92,6 +92,10 @@ Example configurations:
 Working in a Sliced Environment
 =================================
 
+Starting a sliced consumer
+-----------------------------
+
+
 
 TODO: handling subscriptions, etc.
 ----------------------------------------------------
