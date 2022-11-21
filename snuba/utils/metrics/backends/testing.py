@@ -13,12 +13,19 @@ class RecordedMetricCall:
     tags: Tags
 
 
+@dataclass(frozen=True)
+class RecordedEventCall:
+    value: str
+    tags: Tags
+
+
 RecordedMetricCalls = List[RecordedMetricCall]
 
 
 RECORDED_METRIC_CALLS: MutableMapping[
     str, MutableMapping[str, List[RecordedMetricCall]]
 ] = {}
+RECORDED_EVENT_CALLS: MutableMapping[str, List[RecordedEventCall]] = {}
 
 
 def record_metric_call(
@@ -35,9 +42,24 @@ def record_metric_call(
     RECORDED_METRIC_CALLS[mtype][name].append(RecordedMetricCall(value, tags))
 
 
+def record_event_call(
+    title: str, text: str, alert_type: str, priority: str, tags: Optional[Tags] = None
+) -> None:
+    value = str(
+        {
+            "title": title,
+            "text": text,
+            "alert_type": alert_type,
+            "priority": priority,
+        }
+    )
+    RECORDED_EVENT_CALLS[title].append(RecordedEventCall(value, tags or {}))
+
+
 def clear_recorded_metric_calls() -> None:
     global RECORDED_METRIC_CALLS
     RECORDED_METRIC_CALLS = {}
+    RECORDED_EVENT_CALLS.clear()
 
 
 def get_recorded_metric_calls(mtype: str, name: str) -> RecordedMetricCalls | None:
@@ -102,7 +124,7 @@ class TestingMetricsBackend(MetricsBackend):
         priority: str,
         tags: Optional[Tags] = None,
     ) -> None:
-        record_metric_call("events", title, 1, tags)
+        record_event_call(title, text, alert_type, priority, tags)
         if self.__strict:
             assert isinstance(title, str)
             assert isinstance(text, str)
