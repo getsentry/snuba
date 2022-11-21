@@ -23,6 +23,17 @@ from snuba.settings import (
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.optimize")
+
+# include thread and process info in log messages
+log_handler = logging.StreamHandler()
+log_handler.setFormatter(
+    logging.Formatter(
+        "%(levelname)s %(asctime)s %(name)s %(process)d-%(threadName)s %(message)s"
+    )
+)
+logger.addHandler(log_handler)
+logger.propagate = False
+
 metrics = MetricsWrapper(environment.metrics, "optimize")
 
 
