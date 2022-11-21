@@ -1,23 +1,40 @@
 from typing import Any, Dict, List, Optional, Union
 
 from snuba import settings
+from snuba.admin.audit_log.base import AuditLogAction
 
 
-def build_blocks(data: Any, action: str, timestamp: str, user: str) -> List[Any]:
-    return [build_section(data, action), build_context(user, timestamp, action)]
+def build_blocks(
+    data: Any, action: AuditLogAction, timestamp: str, user: str
+) -> List[Any]:
+    if action in [
+        AuditLogAction.ADDED_OPTION,
+        AuditLogAction.UPDATED_OPTION,
+        AuditLogAction.REMOVED_OPTION,
+    ]:
+        text = build_runtime_config_text(data, action)
+    else:
+        text = action.value
+
+    section = {
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": text},
+    }
+
+    return [section, build_context(user, timestamp, action)]
 
 
-def build_text(data: Any, action: str) -> Optional[str]:
+def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str]:
     base = "*Runtime Config Option:*"
     removed = f"~```{{'{data['option']}': {data['old']}}}```~"
     added = f"```{{'{data['option']}': {data['new']}}}```"
     updated = f"{removed} {added}"
 
-    if action == "removed":
+    if action == AuditLogAction.REMOVED_OPTION:
         return f"{base} :put_litter_in_its_place:\n\n {removed}"
-    elif action == "added":
+    elif action == AuditLogAction.ADDED_OPTION:
         return f"{base} :new:\n\n {added}"
-    elif action == "updated":
+    elif action == AuditLogAction.UPDATED_OPTION:
         return f"{base} :up: :date:\n\n {updated}"
     else:
         # todo: raise error, cause slack won't accept this
@@ -25,16 +42,8 @@ def build_text(data: Any, action: str) -> Optional[str]:
         return None
 
 
-def build_section(data: Any, action: str) -> Any:
-    text = build_text(data, action)
-    return {
-        "type": "section",
-        "text": {"type": "mrkdwn", "text": text},
-    }
-
-
 def build_context(
-    user: str, timestamp: str, action: str
+    user: str, timestamp: str, action: AuditLogAction
 ) -> Dict[str, Union[str, List[Dict[str, str]]]]:
     url = f"{settings.ADMIN_URL}/#auditlog"
     return {
@@ -42,7 +51,7 @@ def build_context(
         "elements": [
             {
                 "type": "mrkdwn",
-                "text": f"{action} at *<{url}|{timestamp}>* by *<{user}>*",
+                "text": f"{action.value} at *<{url}|{timestamp}>* by *<{user}>*",
             }
         ],
     }

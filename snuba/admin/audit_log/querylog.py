@@ -9,7 +9,7 @@ from snuba.clickhouse.native import ClickhouseResult
 
 DATETIME_FORMAT = "%B %d, %Y %H:%M:%S %p"
 
-from snuba.admin.audit_log.base import AuditLog
+from snuba.admin.audit_log.base import AuditLog, AuditLogAction
 
 
 class QueryExecutionStatus(Enum):
@@ -17,20 +17,7 @@ class QueryExecutionStatus(Enum):
     FAILED = "failed"
 
 
-class QuerylogAuditLog(AuditLog):
-    def _format_data(
-        self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
-    ) -> Mapping[str, Any]:
-        status = data.get("status")
-        return {
-            "query": data.get("query"),
-            "status": status.value if status else "unknown",
-            "start_timestamp": timestamp,
-            "end_timestamp": datetime.now().strftime(DATETIME_FORMAT),
-        }
-
-
-__querylog_audit_log_notification_client = QuerylogAuditLog(__name__)
+__querylog_audit_log_notification_client = AuditLog()
 
 
 def audit_log(
@@ -48,18 +35,20 @@ def audit_log(
             "query": query,
         }
         audit_log_notify = partial(
-            __querylog_audit_log_notification_client.audit,
+            __querylog_audit_log_notification_client.record,
             user=user,
             timestamp=datetime.now().strftime(DATETIME_FORMAT),
-            action="run_query",
+            action=AuditLogAction.RAN_QUERY,
         )
         try:
             result = fn(query, user)
         except Exception:
-            data["status"] = QueryExecutionStatus.FAILED
+            data["status"] = QueryExecutionStatus.FAILED.value
+            data["end_timestamp"] = datetime.now().strftime(DATETIME_FORMAT)
             audit_log_notify(data=data)
             raise
-        data["status"] = QueryExecutionStatus.SUCCEEDED
+        data["status"] = QueryExecutionStatus.SUCCEEDED.value
+        data["end_timestamp"] = datetime.now().strftime(DATETIME_FORMAT)
         audit_log_notify(data=data)
         return result
 

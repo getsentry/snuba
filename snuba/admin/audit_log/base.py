@@ -1,54 +1,57 @@
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional, Union
 
 import structlog
 
 from snuba.admin.notifications.slack.client import slack_client
 from snuba.admin.notifications.slack.utils import build_blocks
 
+from enum import Enum
+from dataclasses import dataclass
+
+
+class AuditLogAction(Enum):
+    # action.resource
+    ADDED_OPTION = "added.option"
+    REMOVED_OPTION = "removed.option"
+    UPDATED_OPTION = "updated.option"
+    RAN_QUERY = "ran.query"
+    RAN_MIGRATION = "ran.migration"
+    REVERSED_MIGRATION = "reversed.migration"
+
+
 
 class AuditLog:
-    def __init__(self, module: Optional[str] = None):
-        if not module:
-            module = __name__
-        self.logger = structlog.get_logger().bind(module=module)
+    def __init__(self) -> None:
+        self.logger = structlog.get_logger()
         self.client = slack_client
-
-    def _format_data(
-        self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
-    ) -> Mapping[str, Any]:
-        return data
-
-    def _record(
-        self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
-    ) -> None:
-        formatted = self._format_data(user, timestamp, action, data)
-        self.logger.info(event=action, user=user, timestamp=timestamp, **formatted)
-
-    def _notify(
-        self, user: str, timestamp: str, action: str, data: Mapping[str, Any]
-    ) -> None:
-        if self.client.is_configured:
-            blocks = build_blocks(data, action, timestamp, user)
-            payload: MutableMapping[str, Any] = {"blocks": blocks}
-
-            self.client.post_message(message=payload)
 
     @property
     def timestamp(self) -> str:
         time = datetime.now()
         return time.strftime("%B %d, %Y %H:%M:%S %p")
 
-    def audit(
+    def record(
         self,
         user: str,
-        action: str,
-        data: Mapping[str, Any],
-        notify: bool = False,
-        timestamp: Optional[str] = None,
+        action: AuditLogAction,
+        data: Mapping[str, Union[str, int]],
+        notify: Optional[bool] = False,
+        timestamp: Optional[str],
     ) -> None:
         if not timestamp:
             timestamp = self.timestamp
-        self._record(user, timestamp, action, data)
-        if notify:
-            self._notify(user, timestamp, action, data)
+
+        self.logger.info(
+            event=f"{user} {action.value}",
+            user=user,
+            timestamp=timestamp,
+            **data,
+        )
+        if notify and self.client.is_configured:
+            blocks = build_blocks(
+                data, action, timestamp, user
+            )
+            payload: MutableMapping[str, Any] = {"blocks": blocks}
+
+            self.client.post_message(message=payload)
