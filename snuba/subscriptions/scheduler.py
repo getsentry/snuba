@@ -329,30 +329,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             # We are transitioning between jittered and immediate mode. We must use the delegate builder.
             self.__builder = self.__delegate_builder
 
-    def __get_subscriptions(self) -> List[Subscription]:
-        current_time = datetime.now()
-
-        if (
-            self.__last_refresh is None
-            or (current_time - self.__last_refresh) > self.__cache_ttl
-        ):
-            self.__subscriptions = [
-                Subscription(SubscriptionIdentifier(self.__partition_id, uuid), data)
-                for uuid, data in self.__store.all()
-            ]
-            self.__last_refresh = current_time
-            self.__metrics.gauge(
-                "schedule.size",
-                len(self.__subscriptions),
-                tags={"partition": str(self.__partition_id)},
-            )
-
-        self.__metrics.timing(
-            "schedule.staleness",
-            (current_time - self.__last_refresh).total_seconds() * 1000.0,
-            tags={"partition": str(self.__partition_id)},
-        )
-
+    def __get_filtered_subscriptions(self) -> List[Subscription]:
         if self.__slice_id is not None:
             filtered_subscriptions: List[Subscription] = []
             for subscription in self.__subscriptions:
@@ -379,6 +356,32 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
 
         else:
             return self.__subscriptions
+
+    def __get_subscriptions(self) -> List[Subscription]:
+        current_time = datetime.now()
+
+        if (
+            self.__last_refresh is None
+            or (current_time - self.__last_refresh) > self.__cache_ttl
+        ):
+            self.__subscriptions = [
+                Subscription(SubscriptionIdentifier(self.__partition_id, uuid), data)
+                for uuid, data in self.__store.all()
+            ]
+            self.__last_refresh = current_time
+            self.__metrics.gauge(
+                "schedule.size",
+                len(self.__subscriptions),
+                tags={"partition": str(self.__partition_id)},
+            )
+
+        self.__metrics.timing(
+            "schedule.staleness",
+            (current_time - self.__last_refresh).total_seconds() * 1000.0,
+            tags={"partition": str(self.__partition_id)},
+        )
+
+        return self.__get_filtered_subscriptions()
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()
