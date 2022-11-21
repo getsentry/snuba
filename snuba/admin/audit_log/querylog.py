@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from functools import partial
-from typing import Any, Callable, Mapping, MutableMapping, Union
+from typing import Callable, MutableMapping, Union
 
 from snuba.clickhouse.native import ClickhouseResult
 
@@ -37,7 +37,6 @@ def audit_log(
         audit_log_notify = partial(
             __querylog_audit_log_notification_client.record,
             user=user,
-            timestamp=datetime.now().strftime(DATETIME_FORMAT),
             action=AuditLogAction.RAN_QUERY,
         )
         try:
