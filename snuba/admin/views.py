@@ -475,7 +475,7 @@ def config(config_key: str) -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.REMOVED_OPTION,
-            {"option": config_key, "old": old},
+            {"option": config_key, "old": str(old) if not old else old},
             notify=True,
         )
 
@@ -529,7 +529,11 @@ def config(config_key: str) -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.UPDATED_OPTION,
-            {"option": config_key, "old": old, "new": evaluated_value},
+            {
+                "option": config_key,
+                "old": str(old) if not old else old,
+                "new": evaluated_value,
+            },
             notify=True,
         )
 
