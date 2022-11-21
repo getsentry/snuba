@@ -263,27 +263,6 @@ def test_querylog_describe(admin_api: FlaskClient) -> None:
     assert "column_names" in data and "rows" in data
 
 
-def test_querylog_config(admin_api: FlaskClient) -> None:
-    table, _, _ = get_node_for_table(admin_api, "querylog")
-    EXPECTED = {
-        "error": {"message": "Production ClickHouse querylog access is not yet ready."}
-    }
-
-    response = admin_api.post(
-        "/clickhouse_querylog_query",
-        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
-        data=json.dumps({"sql": f"SELECT count() FROM {table}"}),
-    )
-    assert response.status_code == 400
-    data = json.loads(response.data)
-    assert data == EXPECTED
-
-    response = admin_api.get("/clickhouse_querylog_schema")
-    assert response.status_code == 400
-    data = json.loads(response.data)
-    assert data == EXPECTED
-
-
 def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
     response = admin_api.get("/snuba_datasets")
     assert response.status_code == 200
