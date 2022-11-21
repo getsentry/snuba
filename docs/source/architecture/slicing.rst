@@ -30,13 +30,37 @@ logical partitions in ``settings.LOGICAL_PARTITION_MAPPING``.
 Every logical partition **must** be assigned to a slice and the
 valid values of slices are in the range of ``[0,settings.SLICED_STORAGES[storage])``.
 
-Defining sliced ClickHouse clusters
------------------------------------
-To add a cluster with an associated (storage set key, slice) pair, add cluster definitions
+Defining ClickHouse clusters in a sliced environment
+----------------------------------------------------
+
+Given a storage set, there can be three different cases:
+
+1. The storage set is not sliced
+2. The storage set is sliced and no mega-cluster is needed
+3. The storage set is sliced and a mega-cluster is needed
+
+A mega-cluster is needed when there may be partial data residing on different sliced
+ClickHouse clusters. This could happen, for example, when a logical partition:slice
+mapping changes. In this scenario, writes of new data will be routed to the new slice,
+but reads of data will need to span multiple clusters. Now that queries need to work
+across different slices, a mega-cluster query node will be needed.
+
+For each of the cases above, different types of ClickHouse cluster
+configuration will be needed.
+
+For case 1, we simply define clusters as per usual in ``settings.CLUSTERS``.
+
+For cases 2 and 3:
+
+To add a sliced cluster with an associated (storage set key, slice) pair, add cluster definitions
 to ``settings.SLICED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
 regular cluster definitions in ``settings.CLUSTERS``. In the ``storage_set_slices`` field, sliced storage
 sets should be added in the form of ``(StorageSetKey, slice_id)`` where slice_id is in
 the range ``[0,settings.SLICED_STORAGES[storage])`` for storages relevant to the ``StorageSetKey``.
+
+For case 3 only:
+
+Add the mega-cluster information into ``settings.CLUSTERS``.
 
 
 Preparing the storage for sharding
