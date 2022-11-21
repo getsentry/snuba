@@ -18,7 +18,7 @@ columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     This migration is the only one that sets is_first_migration = True since it is
     responsible for bootstrapping the migration system itself. It skips setting
