@@ -17,7 +17,7 @@ from snuba import settings, state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.entity_subscription import SessionsSubscription
-from snuba.datasets.partitioning import (
+from snuba.datasets.slicing import (
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
 )
