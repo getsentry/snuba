@@ -1,12 +1,11 @@
 from abc import abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Type, Union, cast
+from typing import Any, Mapping, Optional, Type, Union, cast
 
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
-    combine_and_conditions,
 )
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
@@ -56,17 +55,14 @@ class AddColumnCondition(EntitySubscriptionProcessor):
     ) -> None:
         if self.extra_condition_data_key not in metadata:
             raise InvalidQueryException
-        condition_to_add: Sequence[Expression] = [
-            binary_condition(
-                ConditionFunctions.EQ,
-                Column(None, None, self.extra_condition_column),
-                Literal(None, metadata[self.extra_condition_data_key]),
-            ),
-        ]
-        new_condition = combine_and_conditions(condition_to_add)
+        condition_to_add: Expression = binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, self.extra_condition_column),
+            Literal(None, metadata[self.extra_condition_data_key]),
+        )
         condition = query.get_condition()
         if condition:
             new_condition = binary_condition(
-                BooleanFunctions.AND, condition, new_condition
+                BooleanFunctions.AND, condition, condition_to_add
             )
         query.set_ast_condition(new_condition)
