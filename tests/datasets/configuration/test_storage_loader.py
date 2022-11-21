@@ -36,6 +36,7 @@ from snuba.datasets.storages.generic_metrics import (
     sets_bucket_storage as gen_metrics_sets_bucket,
 )
 from snuba.datasets.storages.generic_metrics import sets_storage as gen_metrics_sets
+from snuba.datasets.storages.metrics import counters_storage
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
@@ -124,6 +125,7 @@ class TestStorageConfiguration(ConfigurationTest):
         gen_metrics_sets_bucket,
         gen_metrics_sets,
         metrics_sets,
+        counters_storage,
         transactions,
         profiles,
         replays,
