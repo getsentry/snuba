@@ -9,7 +9,8 @@ from snuba.clickhouse.native import ClickhouseResult
 
 DATETIME_FORMAT = "%B %d, %Y %H:%M:%S %p"
 
-from snuba.admin.audit_log.base import AuditLog, AuditLogAction
+from snuba.admin.audit_log.action import AuditLogAction
+from snuba.admin.audit_log.base import AuditLog
 
 
 class QueryExecutionStatus(Enum):

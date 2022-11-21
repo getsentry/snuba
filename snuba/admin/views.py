@@ -11,7 +11,8 @@ from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import settings, state
-from snuba.admin.audit_log.base import AuditLog, AuditLogAction
+from snuba.admin.audit_log.action import AuditLogAction
+from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
@@ -417,9 +418,9 @@ def configs() -> Response:
         }
 
         audit_log.record(
-            user,
+            user or "",
             AuditLogAction.ADDED_OPTION,
-            {"option": key, "old": None, "new": evaluated_value},
+            {"option": key, "new": evaluated_value},
             notify=True,
         )
 
@@ -472,9 +473,9 @@ def config(config_key: str) -> Response:
             state.delete_config_description(config_key, user=user)
 
         audit_log.record(
-            user,
+            user or "",
             AuditLogAction.REMOVED_OPTION,
-            {"option": config_key, "old": old, "new": None},
+            {"option": config_key, "old": old},
             notify=True,
         )
 
@@ -526,7 +527,7 @@ def config(config_key: str) -> Response:
 
         # Send notification
         audit_log.record(
-            user,
+            user or "",
             AuditLogAction.UPDATED_OPTION,
             {"option": config_key, "old": old, "new": evaluated_value},
             notify=True,

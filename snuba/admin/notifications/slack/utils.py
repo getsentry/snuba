@@ -22,8 +22,8 @@ def build_blocks(
 
 def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str]:
     base = "*Runtime Config Option:*"
-    removed = f"~```{{'{data['option']}': {data['old']}}}```~"
-    added = f"```{{'{data['option']}': {data['new']}}}```"
+    removed = f"~```{{'{data['option']}': {data.get('old')}}}```~"
+    added = f"```{{'{data['option']}': {data.get('new')}}}```"
     updated = f"{removed} {added}"
 
     if action == AuditLogAction.REMOVED_OPTION:
