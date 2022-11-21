@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
@@ -121,6 +122,18 @@ def make_column_schema(
     }
 
 
+def del_name_field(column_schema: dict[str, Any]) -> dict[str, Any]:
+    """
+    Useful for simply removing the `name` field from a Column Schema.
+    Column types within Arrays do not have names but do maintain the
+    same structure as the column type itself.
+    """
+    new_column_schema = deepcopy(column_schema)
+    if "properties" in new_column_schema and "name" in new_column_schema["properties"]:
+        del new_column_schema["properties"]["name"]
+    return new_column_schema
+
+
 NUMBER_SCHEMA = make_column_schema(
     column_type={"enum": ["UInt", "Float"]},
     args={
@@ -142,18 +155,10 @@ NO_ARG_SCHEMA = make_column_schema(
     },
 )
 
-
-ARRAY_SCHEMA = make_column_schema(
-    column_type={"const": "Array"},
-    args={
-        "type": "object",
-        "properties": {
-            "type": TYPE_STRING,
-            "arg": {"type": "number"},
-        },
-        "additionalProperties": False,
-    },
-)
+# Get just the type
+_SIMPLE_COLUMN_TYPES = [
+    del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]
+]
 
 AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     column_type={"const": "AggregateFunction"},
@@ -163,33 +168,57 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
             "func": TYPE_STRING,
             "arg_types": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"enum": ["Float", "UUID", "UInt"]},
-                        "arg": {"type": ["number", "null"]},
-                    },
-                    "additionalProperties": False,
-                },
+                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
             },
         },
         "additionalProperties": False,
     },
 )
 
-COLUMN_TYPES = [
+SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
     NO_ARG_SCHEMA,
-    ARRAY_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
 ]
+
+# Array inner types are the same as normal column types except they don't have a name
+_SIMPLE_ARRAY_INNER_TYPES = [
+    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
+]
+
+# Up to one subarray is supported. Eg Array(Array(String())).
+_SUB_ARRAY_SCHEMA = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {"inner_type": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES}},
+        "additionalProperties": False,
+    },
+)
+
+ARRAY_SCHEMA = make_column_schema(
+    column_type={"const": "Array"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_type": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, _SUB_ARRAY_SCHEMA]}
+        },
+        "additionalProperties": False,
+    },
+)
+
+COLUMN_SCHEMAS = [
+    *SIMPLE_COLUMN_SCHEMAS,
+    ARRAY_SCHEMA,
+]
+
 
 NESTED_SCHEMA = make_column_schema(
     column_type={"const": "Nested"},
     args={
         "type": "object",
         "properties": {
-            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
+            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_SCHEMAS}}
         },
         "additionalProperties": False,
     },
@@ -197,7 +226,7 @@ NESTED_SCHEMA = make_column_schema(
 
 SCHEMA_COLUMNS = {
     "type": "array",
-    "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]},
+    "items": {"anyOf": [*COLUMN_SCHEMAS, NESTED_SCHEMA]},
     "description": "Objects (or nested objects) representing columns containg a name, type and args",
 }
 
@@ -392,8 +421,8 @@ V1_READABLE_STORAGE_SCHEMA = {
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "mandatory_condition_checkers": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
+        "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
     },
     "required": [
         "version",

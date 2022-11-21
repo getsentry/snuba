@@ -11,11 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         name: Checkout code
       - name: Internal github app token
         id: token
-        uses: getsentry/action-github-app-token@v1
+        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc  # v2.0.0
         continue-on-error: true
         with:
           app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         name: Checkout code
       - uses: actions/setup-python@v4
         with:
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         name: Checkout code
       - uses: actions/setup-python@v4
         with:
@@ -107,7 +107,7 @@ jobs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Get branch name
         id: branch
@@ -170,7 +170,7 @@ jobs:
       # NOTE: This image has only been tested for local development
       SNUBA_IMAGE: ghcr.io/getsentry/snuba-arm64-dev
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         name: Checkout code
 
       - name: Get branch name
@@ -262,6 +262,12 @@ jobs:
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test_distributed_migrations' }}
 
+      - name: Docker Snuba Init Tests
+        run: |
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+        if: ${{ matrix.snuba_settings == 'test' }}
+
+
       - name: Upload to codecov
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
@@ -350,3 +356,23 @@ jobs:
         working-directory: sentry
         run: |
           make test-snuba
+  self-hosted-end-to-end:
+    needs: [snuba-image]
+    runs-on: ubuntu-latest
+    # temporary, remove once we are confident the action is working
+    continue-on-error: true
+
+    steps:
+      - name: Checkout snuba
+        uses: actions/checkout@v2
+
+      - name: Pull snuba CI images
+        run: |
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || docker pull ghcr.io/getsentry/snuba-ci:latest
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/action-self-hosted-e2e-tests@5bbd3d6725bbe4bf5cc12f8a3291ce87df6a891f
+        with:
+          project_name: snuba
+          local_image: ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+          docker_repo: ghcr.io/getsentry/snuba
+          # TODO: add docker tag to build for

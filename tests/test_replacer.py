@@ -12,12 +12,12 @@ from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 
 from snuba import replacer, settings
+from snuba.clickhouse.optimize.optimize import run_optimize
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets import errors_replacer
 from snuba.datasets.errors_replacer import ProjectsQueryFlags
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.optimize import run_optimize
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import ReplacerState

@@ -21,13 +21,12 @@ from snuba.migrations.errors import (
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import (
-    OPTIONAL_GROUPS,
-    REGISTERED_GROUPS_LOOKUP,
-    MigrationGroup,
-    get_group_loader,
+from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
+from snuba.migrations.migration import (
+    ClickhouseNodeMigrationLegacy,
+    CodeMigration,
+    Migration,
 )
-from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
 
@@ -38,10 +37,14 @@ DIST_TABLE_NAME = "migrations_dist"
 
 
 def get_active_migration_groups() -> Sequence[MigrationGroup]:
+
     return [
         group
-        for group in REGISTERED_GROUPS_LOOKUP
-        if not (group in OPTIONAL_GROUPS and group in settings.SKIPPED_MIGRATION_GROUPS)
+        for group in MigrationGroup
+        if not (
+            group in OPTIONAL_GROUPS
+            and group.value in settings.SKIPPED_MIGRATION_GROUPS
+        )
     ]
 
 
@@ -50,7 +53,7 @@ class MigrationKey(NamedTuple):
     migration_id: str
 
     def __str__(self) -> str:
-        return f"{self.group}: {self.migration_id}"
+        return f"{self.group.value}: {self.migration_id}"
 
 
 class MigrationDetails(NamedTuple):
@@ -88,7 +91,7 @@ class Runner:
             data = self.__connection.execute(
                 f"SELECT status, timestamp FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s",
                 {
-                    "group": migration_key.group,
+                    "group": migration_key.group.value,
                     "migration_id": migration_key.migration_id,
                 },
             ).results
@@ -108,18 +111,27 @@ class Runner:
 
         return Status.NOT_STARTED, None
 
-    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
+    def show_all(
+        self, groups: Optional[Sequence[str]] = None
+    ) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
         """
         migrations: List[Tuple[MigrationGroup, List[MigrationDetails]]] = []
 
-        migration_status = self._get_migration_status()
+        if groups:
+            migration_groups: Sequence[MigrationGroup] = [
+                MigrationGroup(group) for group in groups
+            ]
+        else:
+            migration_groups = get_active_migration_groups()
+
+        migration_status = self._get_migration_status(migration_groups)
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in get_active_migration_groups():
+        for group in migration_groups:
             group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
@@ -136,7 +148,9 @@ class Runner:
 
         return migrations
 
-    def run_all(self, *, force: bool = False, group: Optional[str] = None) -> None:
+    def run_all(
+        self, *, force: bool = False, group: Optional[MigrationGroup] = None
+    ) -> None:
         """
         If group is specified, runs all pending migrations for that specific group. Makes
         sure to run any pending system migrations first so that the migrations table is
@@ -153,7 +167,7 @@ class Runner:
             pending_migrations = self._get_pending_migrations()
         else:
             pending_migrations = self._get_pending_migrations_for_group(
-                "system"
+                MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
 
         # Do not run migrations if any are blocking
@@ -299,7 +313,9 @@ class Runner:
 
         return migrations
 
-    def _get_pending_migrations_for_group(self, group: str) -> List[MigrationKey]:
+    def _get_pending_migrations_for_group(
+        self, group: MigrationGroup
+    ) -> List[MigrationKey]:
         """
         Gets pending migrations list for a specific group
         """
@@ -336,7 +352,7 @@ class Runner:
         statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         data = [
             {
-                "group": migration_key.group,
+                "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
                 "timestamp": datetime.now(),
                 "status": status.value,
@@ -349,7 +365,7 @@ class Runner:
         result = self.__connection.execute(
             f"SELECT version FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
             {
-                "group": migration_key.group,
+                "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
             },
         ).results
@@ -359,13 +375,22 @@ class Runner:
 
         return 1
 
-    def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
+    def _get_migration_status(
+        self, groups: Optional[Sequence[MigrationGroup]] = None
+    ) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
+
+        if not groups:
+            groups = get_active_migration_groups()
+
         migration_groups = (
             "("
             + (
                 ", ".join(
-                    [escape_string(group) for group in get_active_migration_groups()]
+                    [
+                        escape_string(group.value)
+                        for group in get_active_migration_groups()
+                    ]
                 )
             )
             + ")"
@@ -418,7 +443,7 @@ class Runner:
                 migrations.append(migration)
 
         for migration in migrations:
-            if isinstance(migration, ClickhouseNodeMigration):
+            if isinstance(migration, ClickhouseNodeMigrationLegacy):
                 operations = (
                     migration.forwards_local()
                     if node_type == ClickhouseNodeType.LOCAL

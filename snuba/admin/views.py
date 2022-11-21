@@ -2,23 +2,25 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stdout
+from dataclasses import asdict
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
-from werkzeug.routing import BaseConverter
 
 from snuba import settings, state
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
+from snuba.admin.migrations_policies import check_migration_perms
 from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -32,7 +34,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.migrations.errors import MigrationError
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
@@ -43,6 +45,7 @@ logger = structlog.get_logger().bind(module=__name__)
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 notification_client = RuntimeConfigAutoClient()
+runner = Runner()
 
 
 @application.errorhandler(UnauthorizedException)
@@ -81,21 +84,24 @@ def health() -> Response:
 
 @application.route("/migrations/groups")
 def migrations_groups() -> Response:
-    res: List[Mapping[str, MigrationGroup | Sequence[str]]] = []
-    for migration_group in get_active_migration_groups():
-        if migration_group in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-            group_migrations = get_group_loader(migration_group).get_migrations()
-            res.append({"group": migration_group, "migration_ids": group_migrations})
+    res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
+    allowed_groups: Sequence[MigrationGroup] = [
+        group
+        for group in get_active_migration_groups()
+        if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
+    ]
+    if not allowed_groups:
+        return make_response(jsonify(res), 200)
+
+    for group, migrations in run_migration_checks_for_groups(allowed_groups, runner):
+        migration_ids = [asdict(m) for m in migrations]
+        res.append({"group": group.value, "migration_ids": migration_ids})
     return make_response(jsonify(res), 200)
 
 
 @application.route("/migrations/<group>/list")
+@check_migration_perms
 def migrations_groups_list(group: str) -> Response:
-
-    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-        return make_response(jsonify({"error": "Group not allowed"}), 400)
-
-    runner = Runner()
     for runner_group, runner_group_migrations in runner.show_all():
         if runner_group == MigrationGroup(group):
             return make_response(
@@ -114,23 +120,34 @@ def migrations_groups_list(group: str) -> Response:
     return make_response(jsonify({"error": "Invalid group"}), 400)
 
 
-class MigrationActionConverter(BaseConverter):
-    regex = r"(?:run|reverse)"
-
-
-application.url_map.converters["migration_action"] = MigrationActionConverter
+@application.route(
+    "/migrations/<group>/run/<migration_id>",
+    methods=["POST"],
+)
+def run_migration(group: str, migration_id: str) -> Response:
+    return run_or_reverse_migration(
+        group=group, action="run", migration_id=migration_id
+    )
 
 
 @application.route(
-    "/migrations/<group>/<migration_action:action>/<migration_id>",
+    "/migrations/<group>/reverse/<migration_id>",
     methods=["POST"],
 )
-def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
-    if group not in settings.ADMIN_ALLOWED_MIGRATION_GROUPS:
-        return make_response(jsonify({"error": "Group not allowed"}), 400)
+def reverse_migration(group: str, migration_id: str) -> Response:
+    return run_or_reverse_migration(
+        group=group, action="reverse", migration_id=migration_id
+    )
 
-    runner = Runner()
-    migration_group = MigrationGroup(group)
+
+@check_migration_perms
+def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
+    try:
+        migration_group = MigrationGroup(group)
+    except ValueError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "Group not found"}), 400)
+
     migration_key = MigrationKey(migration_group, migration_id)
 
     def str_to_bool(s: str) -> bool:
@@ -166,8 +183,6 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         return make_response(
             jsonify({"error": "clickhouse error: " + err.message}), 400
         )
-
-    return Response("OK", 200)
 
 
 @application.route("/clickhouse_queries")

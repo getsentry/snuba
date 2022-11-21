@@ -13,8 +13,6 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "QUERYLOG": "querylog",
     "SESSIONS": "sessions",
     "TRANSACTIONS": "transactions",
-    "ERRORS_V2": "errors_v2",
-    "ERRORS_V2_RO": "errors_v2_ro",
     "PROFILES": "profiles",
     "FUNCTIONS": "functions",
     "REPLAYS": "replays",
@@ -85,7 +83,6 @@ DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
 JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
     {
         frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC}),
-        frozenset({StorageSetKey.ERRORS_V2, StorageSetKey.ERRORS_V2_RO}),
     }
 )
 

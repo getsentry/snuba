@@ -6,8 +6,10 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
+    forwards_local_first: bool = False
+    backwards_local_first: bool = True
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [

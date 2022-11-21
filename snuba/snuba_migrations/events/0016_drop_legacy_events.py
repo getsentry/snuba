@@ -116,13 +116,15 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     This is exactly the same as 0001_events_initial with the forwards and backwards
     methods flipped around since we are deleting the table now.
     """
 
     blocking = False
+    forwards_local_first: bool = False
+    backwards_local_first: bool = True
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [

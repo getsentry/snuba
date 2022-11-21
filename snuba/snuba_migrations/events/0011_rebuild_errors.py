@@ -93,7 +93,7 @@ columns: Sequence[Column[Modifiers]] = [
 sample_expr = "cityHash64(event_id)"
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     This migration rebuilds the errors table, with the following changes:
 

@@ -51,6 +51,7 @@ columns = ColumnSet(
         ("clickhouse_queries.where_mapping_columns", Array(Array(String()))),
         ("clickhouse_queries.groupby_columns", Array(Array(String()))),
         ("clickhouse_queries.array_join_columns", Array(Array(String()))),
+        ("clickhouse_queries.bytes_scanned", Array(UInt(64))),
     ]
 )
 
@@ -73,4 +74,5 @@ storage = WritableTableStorage(
         processor=QuerylogProcessor(),
         default_topic=Topic.QUERYLOG,
     ),
+    writer_options={"input_format_skip_unknown_fields": 1},
 )

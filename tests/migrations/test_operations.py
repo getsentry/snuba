@@ -1,9 +1,13 @@
 import os
-from typing import Sequence
+from logging import Logger
+from typing import Callable, Sequence
+from unittest.mock import Mock
 
 from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations import migration
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.context import Context
 from snuba.migrations.operations import (
     AddColumn,
     AddIndex,
@@ -17,6 +21,7 @@ from snuba.migrations.operations import (
     ModifyTableTTL,
     RemoveTableTTL,
     RenameTable,
+    SqlOperation,
     TruncateTable,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
@@ -182,3 +187,57 @@ def test_modify_ttl() -> None:
         ).format_sql()
         == "ALTER TABLE test_table REMOVE TTL;"
     )
+
+
+def test_specify_order() -> None:
+    """
+    Test that specifying the migration order works when changing forwards_local_first
+    """
+    create_local_op = Mock(CreateTable)
+    create_dist_op = Mock(CreateTable)
+    drop_local_op = Mock(DropTable)
+    drop_dist_op = Mock(DropTable)
+    logger = Logger("test")
+    context = Context("001", logger, lambda x: None)
+
+    class TestMigration(migration.ClickhouseNodeMigrationLegacy):
+        blocking = False
+
+        def forwards_local(self) -> Sequence[SqlOperation]:
+            return [create_local_op]
+
+        def backwards_local(self) -> Sequence[SqlOperation]:
+            return [drop_local_op]
+
+        def forwards_dist(self) -> Sequence[SqlOperation]:
+            return [create_dist_op]
+
+        def backwards_dist(self) -> Sequence[SqlOperation]:
+            return [drop_dist_op]
+
+    ops = [create_local_op, create_dist_op, drop_local_op, drop_dist_op]
+    order = []
+    for op in ops:
+
+        def effect(op: Mock) -> Callable[[bool], None]:
+            def add_op(local: bool) -> None:
+                order.append(op)
+
+            return add_op
+
+        op.execute.side_effect = effect(op)
+
+    test_migration = TestMigration()
+    test_migration.forwards(context)
+    assert order == [create_local_op, create_dist_op]
+    order.clear()
+    test_migration.backwards(context, False)
+    assert order == [drop_dist_op, drop_local_op]
+    order.clear()
+    test_migration.forwards_local_first = False
+    test_migration.forwards(context)
+    assert order == [create_dist_op, create_local_op]
+    order.clear()
+    test_migration.backwards_local_first = True
+    test_migration.backwards(context, False)
+    assert order == [drop_local_op, drop_dist_op]

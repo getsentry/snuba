@@ -5,9 +5,11 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     blocking = False
+    forwards_local_first: bool = False
+    backwards_local_first: bool = True
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [

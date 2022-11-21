@@ -28,7 +28,7 @@ def list() -> None:
     check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
-        click.echo(group)
+        click.echo(group.value)
         for migration_id, status, blocking in group_migrations:
             symbol = {
                 Status.COMPLETED: "X",
@@ -67,7 +67,11 @@ def migrate(
     runner = Runner()
 
     try:
-        runner.run_all(force=force, group=group)
+        if group is not None:
+            migration_group = MigrationGroup(group)
+        else:
+            migration_group = None
+        runner.run_all(force=force, group=migration_group)
     except MigrationError as e:
         raise click.ClickException(str(e))
 

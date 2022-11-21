@@ -93,7 +93,7 @@ class CodeMigration(Migration, ABC):
         update_status(Status.NOT_STARTED)
 
 
-class ClickhouseNodeMigration(Migration, ABC):
+class ClickhouseNodeMigrationLegacy(Migration, ABC):
     """
     A ClickhouseNodeMigration consists of one or more forward operations which will be executed
     on all of the local and distributed nodes of the cluster. Upon error, the backwards
@@ -113,6 +113,9 @@ class ClickhouseNodeMigration(Migration, ABC):
     completely unrelated, they are probably better as separate migrations.
     """
 
+    forwards_local_first: bool = True
+    backwards_local_first: bool = False
+
     @abstractmethod
     def forwards_local(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
@@ -131,7 +134,11 @@ class ClickhouseNodeMigration(Migration, ABC):
 
     def forwards(self, context: Context, dry_run: bool = False) -> None:
         if dry_run:
-            self.__dry_run(self.forwards_local(), self.forwards_dist())
+            self.__dry_run(
+                self.forwards_local(),
+                self.forwards_dist(),
+                self.forwards_local_first,
+            )
             return
 
         migration_id, logger, update_status = context
@@ -141,25 +148,46 @@ class ClickhouseNodeMigration(Migration, ABC):
         # so do not update status yet
         if not self.is_first_migration():
             update_status(Status.IN_PROGRESS)
-        for op in self.forwards_local():
-            op.execute(local=True)
-        for op in self.forwards_dist():
-            op.execute(local=False)
+
+        local_ops = list(self.forwards_local())
+        dist_ops = list(self.forwards_dist())
+        ops = (
+            local_ops + dist_ops if self.forwards_local_first else dist_ops + local_ops
+        )
+
+        for op in ops:
+            if op in local_ops:
+                op.execute(local=True)
+            if op in dist_ops:
+                op.execute(local=False)
+
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
     def backwards(self, context: Context, dry_run: bool) -> None:
         if dry_run:
-            self.__dry_run(self.backwards_local(), self.backwards_dist())
+            self.__dry_run(
+                self.backwards_local(),
+                self.backwards_dist(),
+                self.backwards_local_first,
+            )
             return
 
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
-        for op in self.backwards_dist():
-            op.execute(local=False)
-        for op in self.backwards_local():
-            op.execute(local=True)
+
+        local_ops = list(self.backwards_local())
+        dist_ops = list(self.backwards_dist())
+        ops = (
+            local_ops + dist_ops if self.backwards_local_first else dist_ops + local_ops
+        )
+
+        for op in ops:
+            if op in local_ops:
+                op.execute(local=True)
+            if op in dist_ops:
+                op.execute(local=False)
         logger.info(f"Finished reversing: {migration_id}")
 
         # The migrations table will be destroyed if the first
@@ -171,25 +199,35 @@ class ClickhouseNodeMigration(Migration, ABC):
         self,
         local_operations: Sequence[SqlOperation],
         dist_operations: Sequence[SqlOperation],
+        local_first: bool,
     ) -> None:
+        def print_local() -> None:
+            print("Local operations:")
+            if len(local_operations) == 0:
+                print("n/a")
 
-        print("Local operations:")
-        if len(local_operations) == 0:
-            print("n/a")
-
-        for op in local_operations:
-            print(op.format_sql())
-
-        print("\n")
-        print("Dist operations:")
-
-        if len(dist_operations) == 0:
-            print("n/a")
-
-        for op in dist_operations:
-            cluster = get_cluster(op._storage_set)
-
-            if not cluster.is_single_node():
+            for op in local_operations:
                 print(op.format_sql())
-            else:
-                print("Skipped dist operation - single node cluster")
+
+        def print_dist() -> None:
+            print("Dist operations:")
+
+            if len(dist_operations) == 0:
+                print("n/a")
+
+            for op in dist_operations:
+                cluster = get_cluster(op._storage_set)
+
+                if not cluster.is_single_node():
+                    print(op.format_sql())
+                else:
+                    print("Skipped dist operation - single node cluster")
+
+        if local_first:
+            print_local()
+            print("\n")
+            print_dist()
+        else:
+            print_dist()
+            print("\n")
+            print_local()

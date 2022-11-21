@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import itertools
 import logging
@@ -37,7 +39,11 @@ from werkzeug.exceptions import InternalServerError
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clusters.cluster import ClickhouseClientSettings, ConnectionId
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ConnectionId,
+    UndefinedClickhouseCluster,
+)
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
@@ -111,7 +117,9 @@ else:
             return False
 
 
-def check_clickhouse(ignore_experimental: bool = True) -> bool:
+def check_clickhouse(
+    ignore_experimental: bool = True, metric_tags: dict[str, Any] | None = None
+) -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
@@ -155,9 +163,24 @@ def check_clickhouse(ignore_experimental: bool = True) -> bool:
             for table in known_table_names:
                 if (table,) not in clickhouse_tables:
                     logger.error(f"{table} not present in cluster {cluster}")
+                    if metric_tags is not None:
+                        metric_tags["table_not_present"] = table
+                        metric_tags["cluster"] = str(cluster)
                     return False
 
         return True
+
+    except UndefinedClickhouseCluster as err:
+        if metric_tags is not None and isinstance(err.extra_data, dict):
+            metric_tags.update(err.extra_data)
+        logger.error(err)
+        return False
+
+    except ClickhouseError as err:
+        if metric_tags and err.__cause__:
+            metric_tags["exception"] = type(err.__cause__).__name__
+        logger.error(err)
+        return False
 
     except Exception as err:
         logger.error(err)
@@ -365,9 +388,21 @@ def config_changes() -> RespTuple:
 
 @application.route("/health")
 def health() -> Response:
+
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
-    clickhouse_health = check_clickhouse(ignore_experimental=True) if thorough else True
+
+    metric_tags = {
+        "down_file_exists": str(down_file_exists),
+        "thorough": str(thorough),
+    }
+
+    clickhouse_health = (
+        check_clickhouse(ignore_experimental=True, metric_tags=metric_tags)
+        if thorough
+        else True
+    )
+    metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]
     if not down_file_exists and clickhouse_health:
@@ -380,6 +415,9 @@ def health() -> Response:
         if thorough:
             body["clickhouse_ok"] = clickhouse_health
         status = 502
+
+    if status != 200:
+        metrics.increment("healthcheck_failed", tags=metric_tags)
 
     return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
