@@ -1,0 +1,43 @@
+version: v1
+kind: writable_storage
+name: functions_raw
+storage:
+  key: functions_raw
+  set_key: functions
+schema:
+  columns:
+    [
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: transaction_name, type: String },
+      { name: timestamp, type: DateTime },
+      { name: depth, type: UInt, args: { size: 32 } },
+      { name: parent_fingerprint, type: UInt, args: { size: 64 } },
+      { name: fingerprint, type: UInt, args: { size: 64 } },
+      { name: name, type: String },
+      { name: package, type: String },
+      { name: path, type: String },
+      { name: is_application, type: UInt, args: { size: 8 } },
+      { name: platform, type: String },
+      {
+        name: environment,
+        type: String,
+        args: { schema_modifiers: [nullable] },
+      },
+      { name: release, type: String, args: { schema_modifiers: [nullable] } },
+      { name: os_name, type: String },
+      { name: os_version, type: String },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: durations,
+        type: Array,
+        args: { inner_type: { type: Float, args: { size: 64 } } },
+      },
+      { name: profile_id, type: UUID },
+      { name: materialization_version, type: UInt, args: { size: 8 } },
+    ]
+  local_table_name: functions_raw_local
+  dist_table_name: functions_raw_dist
+stream_loader:
+  processor:
+    name: FunctionsMessageProcessor
+  default_topic: profiles-call-tree

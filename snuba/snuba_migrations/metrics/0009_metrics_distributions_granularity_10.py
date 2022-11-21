@@ -9,7 +9,7 @@ from snuba.snuba_migrations.metrics.templates import (
 )
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     Create a materialized view for metrics distributions with a 10 second granularity
     in addition to the existing 60 seconds view.

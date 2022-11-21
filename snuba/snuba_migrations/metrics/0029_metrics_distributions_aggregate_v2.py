@@ -9,7 +9,7 @@ from snuba.snuba_migrations.metrics.templates import COMMON_AGGR_COLUMNS
 from snuba.utils.schemas import AggregateFunction, Float, String
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
     table_name = "metrics_distributions_v2_local"
     dist_table_name = "metrics_distributions_v2_dist"

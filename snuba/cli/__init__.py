@@ -21,7 +21,6 @@ setup_logging("DEBUG")
 logger = logging.getLogger("snuba_init")
 
 start = time.perf_counter()
-logger.info("Initializing Snuba CLI...")
 metrics = MetricsWrapper(environment_metrics, "cli")
 
 plugin_folder = os.path.dirname(__file__)
@@ -82,3 +81,4 @@ def main() -> None:
 
 
 structlog.reset_defaults()
+setup_logging()

@@ -9,7 +9,7 @@ from snuba.snuba_migrations.metrics.templates import (
 )
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     Create a materialized view for metrics counters which writes to 10s, 1m, 1h, 1d granularities
 

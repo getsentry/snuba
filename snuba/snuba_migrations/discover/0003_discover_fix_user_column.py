@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     The user column should not be low cardinality - it's not in the underlying errors
     or transactions tables.
