@@ -6,7 +6,6 @@ from flask.testing import FlaskClient
 
 from snuba import state
 from snuba.admin.auth import USER_HEADER_KEY
-from snuba.admin.clickhouse.querylog import ENABLE_QUERYLOG_API_CONFIG
 from snuba.datasets.factory import get_enabled_dataset_names
 
 
@@ -234,7 +233,6 @@ def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
 
 
 def test_querylog_query(admin_api: FlaskClient) -> None:
-    state.set_config(ENABLE_QUERYLOG_API_CONFIG, 1)
     table, _, _ = get_node_for_table(admin_api, "querylog")
     response = admin_api.post(
         "/clickhouse_querylog_query",
@@ -247,7 +245,6 @@ def test_querylog_query(admin_api: FlaskClient) -> None:
 
 
 def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
-    state.set_config(ENABLE_QUERYLOG_API_CONFIG, 1)
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
         "/clickhouse_querylog_query",
@@ -260,7 +257,6 @@ def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
 
 
 def test_querylog_describe(admin_api: FlaskClient) -> None:
-    state.set_config(ENABLE_QUERYLOG_API_CONFIG, 1)
     response = admin_api.get("/clickhouse_querylog_schema")
     assert response.status_code == 200
     data = json.loads(response.data)
