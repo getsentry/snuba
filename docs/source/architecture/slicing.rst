@@ -1,5 +1,5 @@
 ===========================================
-Snuba Data Partitioning (under development)
+Snuba Data Slicing (under development)
 ===========================================
 
 *This feature is under active development and is subject to change*
@@ -23,7 +23,7 @@ Adding a slice
 
 Add the logical:physical mapping
 --------------------------------
-To add a physical partition to a storage's logical:physical mapping, or repartition,
+To add a slice to a storage's logical:physical mapping, or repartition,
 increment the slice count in ``settings.SLICED_STORAGES`` for the relevant
 storage. Change the mapping of the relevant storage's
 logical partitions in ``settings.LOGICAL_PARTITION_MAPPING``.
@@ -36,7 +36,7 @@ To add a cluster with an associated (storage set key, slice) pair, add cluster d
 to ``settings.SLICED_CLUSTERS`` in the desired environment's settings. Follow the same structure as
 regular cluster definitions in ``settings.CLUSTERS``. In the ``storage_set_slices`` field, sliced storage
 sets should be added in the form of ``(StorageSetKey, slice_id)`` where slice_id is in
-the range ``[0,settings.SLICED_STORAGES[storage])`` for relevant storages.
+the range ``[0,settings.SLICED_STORAGES[storage])`` for storages relevant to the ``StorageSetKey``.
 
 
 Preparing the storage for sharding

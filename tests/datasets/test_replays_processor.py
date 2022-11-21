@@ -12,13 +12,15 @@ import pytest
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
     ReplaysProcessor,
-    _coerce_segment_id,
-    _timestamp_to_datetime,
-    datetimeify,
     maybe,
     normalize_tags,
     process_tags_object,
-    stringify,
+    to_capped_list,
+    to_datetime,
+    to_string,
+    to_typed_list,
+    to_uint16,
+    to_uuid,
 )
 from snuba.processor import InsertBatch
 from snuba.util import force_bytes
@@ -28,9 +30,9 @@ from snuba.util import force_bytes
 class ReplayEvent:
     replay_id: str
     segment_id: Any
-    trace_ids: list[str]
-    error_ids: list[str]
-    urls: list[Any]
+    trace_ids: Any
+    error_ids: Any
+    urls: Any
     is_archived: int | None
     timestamp: Any
     replay_start_timestamp: Any
@@ -175,17 +177,19 @@ class ReplayEvent:
             "replay_id": str(uuid.UUID(self.replay_id)),
             "event_hash": event_hash,
             "segment_id": self.segment_id,
-            "trace_ids": [str(uuid.UUID(t)) for t in self.trace_ids],
-            "error_ids": [str(uuid.UUID(e)) for e in self.error_ids],
-            "timestamp": maybe(_timestamp_to_datetime, self.timestamp),
-            "replay_start_timestamp": maybe(
-                _timestamp_to_datetime, self.replay_start_timestamp
+            "trace_ids": list(
+                map(to_uuid, to_capped_list("trace_ids", self.trace_ids))
             ),
+            "error_ids": list(
+                map(to_uuid, to_capped_list("trace_ids", self.error_ids))
+            ),
+            "timestamp": maybe(to_datetime, self.timestamp),
+            "replay_start_timestamp": maybe(to_datetime, self.replay_start_timestamp),
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
             "dist": self.dist,
-            "urls": self.urls,
+            "urls": to_capped_list("urls", self.urls),
             "is_archived": 1 if self.is_archived is True else None,
             "user_id": self.user_id,
             "user_name": self.user_name,
@@ -328,6 +332,36 @@ class TestReplaysProcessor:
         assert processed_message.rows[0]["timestamp"] == now
         assert processed_message.rows[0]["replay_start_timestamp"] == now
 
+    def test_process_message_minimal_payload(self) -> None:
+        meta = KafkaMessageMetadata(
+            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
+        )
+
+        minimal_payload = {
+            "type": "replay_event",
+            "start_time": datetime.now().timestamp(),
+            "replay_id": str(uuid.uuid4()),
+            "project_id": 1,
+            "retention_days": 30,
+            "payload": list(
+                bytes(
+                    json.dumps(
+                        {
+                            "type": "replay_event",
+                            "replay_id": str(uuid.uuid4()),
+                            "segment_id": None,
+                            "platform": "internal",
+                        }
+                    ).encode()
+                )
+            ),
+        }
+
+        # Asserting that the minimal payload was successfully processed.
+        result = ReplaysProcessor().process_message(minimal_payload, meta)
+        assert isinstance(result, InsertBatch)
+        assert len(result.rows) == 1
+
     def test_process_message_nulls(self) -> None:
         meta = KafkaMessageMetadata(
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
@@ -411,32 +445,32 @@ class TestReplaysProcessor:
         message.replay_start_timestamp = f"{2**32 - 1}"
         ReplaysProcessor().process_message(message.serialize(), meta)
 
-    def test_coerce_segment_id(self) -> None:
-        """Test "_coerce_segment_id" function."""
-        assert _coerce_segment_id(0) == 0
-        assert _coerce_segment_id(65535) == 65535
-        assert _coerce_segment_id(1.25) == 1
-        assert _coerce_segment_id("1") == 1
+    def test_to_uint16(self) -> None:
+        """Test "to_uint16" function."""
+        assert to_uint16(0) == 0
+        assert to_uint16(65535) == 65535
+        assert to_uint16(1.25) == 1
+        assert to_uint16("1") == 1
 
         with pytest.raises(ValueError):
-            _coerce_segment_id(65536)
+            to_uint16(65536)
         with pytest.raises(ValueError):
-            _coerce_segment_id(-1)
+            to_uint16(-1)
         with pytest.raises(TypeError):
-            _coerce_segment_id([1])
+            to_uint16([1])
 
-    def test_datetimeify(self) -> None:
-        """Test "datetimeify" function."""
+    def test_to_datetime(self) -> None:
+        """Test "to_datetime" function."""
         now = int(datetime.now(timezone.utc).timestamp())
-        assert datetimeify(now).timestamp() == now
-        assert datetimeify(str(now)).timestamp() == now
+        assert to_datetime(now).timestamp() == now
+        assert to_datetime(str(now)).timestamp() == now
 
         with pytest.raises(ValueError):
-            datetimeify(2**32)
+            to_datetime(2**32)
         with pytest.raises(ValueError):
-            datetimeify(-1)
+            to_datetime(-1)
         with pytest.raises(ValueError):
-            datetimeify("a")
+            to_datetime("a")
 
     def test_maybe(self) -> None:
         """Test maybe utility function."""
@@ -450,13 +484,35 @@ class TestReplaysProcessor:
         assert maybe(identity, 0) == 0
         assert maybe(identity, "hello") == "hello"
 
-    def test_stringify(self) -> None:
-        """Test stringify utility function."""
-        assert stringify(None) == ""
-        assert stringify(True) == "true"
-        assert stringify([0, 1]) == "[0,1]"
-        assert stringify("hello") == "hello"
-        assert stringify({"hello": "world"}) == '{"hello":"world"}'
+    def test_to_string(self) -> None:
+        """Test to_string utility function."""
+        assert to_string(None) == ""
+        assert to_string(True) == "true"
+        assert to_string([0, 1]) == "[0,1]"
+        assert to_string("hello") == "hello"
+        assert to_string({"hello": "world"}) == '{"hello":"world"}'
+
+    def test_to_capped_list(self) -> None:
+        """Test "to_capped_list" function."""
+        assert to_capped_list("t", [1, 2]) == [1, 2]
+        assert len(to_capped_list("t", [1] * 10_000)) == 1000
+        assert to_capped_list("t", None) == []
+
+    def test_to_typed_list(self) -> None:
+        """Test "to_typed_list" function."""
+        assert to_typed_list(to_uint16, [1, 2, None]) == [1, 2]
+        assert to_typed_list(to_string, ["a", 0, None]) == ["a", "0"]
+
+        with pytest.raises(ValueError):
+            assert to_typed_list(to_uint16, ["a"])
+
+    def test_to_uuid(self) -> None:
+        """Test "to_uuid" function."""
+        uid = uuid.uuid4()
+        assert to_uuid(uid.hex) == str(uid)
+
+        with pytest.raises(ValueError):
+            to_uuid("4")
 
     def test_process_tags_object(self) -> None:
         """Test "process_tags_object" function."""

@@ -241,7 +241,12 @@ class QuerylogLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.querylog")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_querylog", "0002_status_type_change", "0003_add_profile_fields"]
+        return [
+            "0001_querylog",
+            "0002_status_type_change",
+            "0003_add_profile_fields",
+            "0004_add_bytes_scanned",
+        ]
 
 
 class ProfilesLoader(DirectoryLoader):

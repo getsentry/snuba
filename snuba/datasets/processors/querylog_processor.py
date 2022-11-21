@@ -53,6 +53,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
         where_mapping_columns = []
         groupby_columns = []
         array_join_columns = []
+        bytes_scanned_columns = []
 
         for query in query_list:
             sql.append(query["sql"])
@@ -78,7 +79,9 @@ class QuerylogProcessor(DatasetMessageProcessor):
                 "where_profile": {"columns": [], "mapping_cols": []},
                 "groupby_cols": [],
                 "array_join_cols": [],
+                "bytes_scanned": 0,
             }
+            result_profile = query.get("result_profile") or {"bytes": 0}
             time_range = profile["time_range"]
             num_days.append(
                 time_range if time_range is not None and time_range >= 0 else 0
@@ -89,6 +92,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             where_mapping_columns.append(profile["where_profile"]["mapping_cols"])
             groupby_columns.append(profile["groupby_cols"])
             array_join_columns.append(profile["array_join_cols"])
+            bytes_scanned_columns.append(result_profile.get("bytes", 0))
 
         return {
             "clickhouse_queries.sql": sql,
@@ -111,6 +115,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "clickhouse_queries.where_mapping_columns": where_mapping_columns,
             "clickhouse_queries.groupby_columns": groupby_columns,
             "clickhouse_queries.array_join_columns": array_join_columns,
+            "clickhouse_queries.bytes_scanned": bytes_scanned_columns,
         }
 
     def _remove_invalid_data(self, processed: dict[str, Any]) -> None:
