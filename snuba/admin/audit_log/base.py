@@ -1,13 +1,11 @@
 from datetime import datetime
+from enum import Enum
 from typing import Any, Mapping, MutableMapping, Optional, Union
 
 import structlog
 
 from snuba.admin.notifications.slack.client import slack_client
 from snuba.admin.notifications.slack.utils import build_blocks
-
-from enum import Enum
-from dataclasses import dataclass
 
 
 class AuditLogAction(Enum):
@@ -18,7 +16,6 @@ class AuditLogAction(Enum):
     RAN_QUERY = "ran.query"
     RAN_MIGRATION = "ran.migration"
     REVERSED_MIGRATION = "reversed.migration"
-
 
 
 class AuditLog:
@@ -36,8 +33,8 @@ class AuditLog:
         user: str,
         action: AuditLogAction,
         data: Mapping[str, Union[str, int]],
-        notify: Optional[bool] = False,
         timestamp: Optional[str],
+        notify: Optional[bool] = False,
     ) -> None:
         if not timestamp:
             timestamp = self.timestamp
@@ -49,9 +46,7 @@ class AuditLog:
             **data,
         )
         if notify and self.client.is_configured:
-            blocks = build_blocks(
-                data, action, timestamp, user
-            )
+            blocks = build_blocks(data, action, timestamp, user)
             payload: MutableMapping[str, Any] = {"blocks": blocks}
 
             self.client.post_message(message=payload)
