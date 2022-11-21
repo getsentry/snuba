@@ -83,9 +83,14 @@ configuration details to ``settings.SLICED_KAFKA_BROKER_CONFIG``. Here, use the 
 ``(default logical topic name, slice id)`` as the key, and the broker config info as the value.
 
 Example configurations:
+
 ``SLICED_KAFKA_TOPIC_MAP`` = {("snuba-generic-metrics", 1): "snuba-generic-metrics-1"}
+
 ``SLICED_KAFKA_BROKER_CONFIG`` = {("snuba-generic-metrics", 1): BROKER_CONFIG}
 
+=================================
+Working in a Sliced Environment
+=================================
 
 
 TODO: handling subscriptions, etc.
