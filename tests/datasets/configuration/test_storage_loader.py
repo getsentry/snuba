@@ -40,6 +40,7 @@ from snuba.datasets.storages.metrics import counters_storage
 from snuba.datasets.storages.metrics import (
     distributions_storage as metrics_distributions_storage,
 )
+from snuba.datasets.storages.metrics import polymorphic_bucket as metrics_raw
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets
 from snuba.datasets.storages.profiles import writable_storage as profiles
 from snuba.datasets.storages.querylog import storage as querylog
@@ -130,6 +131,7 @@ class TestStorageConfiguration(ConfigurationTest):
         metrics_sets,
         counters_storage,
         metrics_distributions_storage,
+        metrics_raw,
         transactions,
         profiles,
         replays,
