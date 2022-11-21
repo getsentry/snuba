@@ -47,6 +47,7 @@ def subscription_data_builder(
 
 
 def test_entity_subscriptions_data() -> None:
+    assert entity_subscription is not None
     subscription_data = subscription_data_builder(entity_subscription)
 
     subscription_identifier = SubscriptionCreator(dataset, entity_key).create(
