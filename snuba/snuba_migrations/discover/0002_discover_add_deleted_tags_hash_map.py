@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     Adds the _tags_hash_map and deleted columns to the merge table so we can use
     the tags optimization, and ensure deleted rows are omitted from queries.
