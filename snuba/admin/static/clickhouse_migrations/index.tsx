@@ -65,7 +65,7 @@ function ClickhouseMigrations(props: { api: Client }) {
       );
       force = true;
     }
-    if (data?.status == "completed" && action == "reverse") {
+    if (data?.status == "completed" && action == Action.Reverse) {
       window.confirm(
         `Migration ${migrationId} was already run, are you sure you want to reverse?`
       );
@@ -78,7 +78,16 @@ function ClickhouseMigrations(props: { api: Client }) {
       force: force,
     };
     console.log("executing!", migrationId, action);
-    // execute the migration...
+    props.api
+      .runMigration(req as RunMigrationRequest)
+      .then((res) => {
+        console.log(res);
+        setSQLText(() => res.stdout);
+      })
+      .catch((err) => {
+        console.log(err);
+        setSQLText(() => JSON.stringify(err));
+      });
     refreshStatus(migrationGroup.group);
   }
 
