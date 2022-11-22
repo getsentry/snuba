@@ -17,6 +17,7 @@ from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_r
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
 from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
@@ -188,7 +189,13 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
 
 @application.route("/clickhouse_queries")
 def clickhouse_queries() -> Response:
-    res = [q.to_json() for q in SystemQuery.all_queries()]
+    res = [q.to_json() for q in SystemQuery.all_classes()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/querylog_queries")
+def querylog_queries() -> Response:
+    res = [q.to_json() for q in QuerylogQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
