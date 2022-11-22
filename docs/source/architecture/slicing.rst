@@ -21,8 +21,8 @@ StorageSet key that exists in configuration.
 Configuring a slice
 ===========================
 
-Add the logical:physical mapping
---------------------------------
+Mapping logical partitions : physical slices
+----------------------------------------------
 To add a slice to a storage's logical:physical mapping, or repartition,
 increment the slice count in ``settings.SLICED_STORAGES`` for the relevant
 storage. Change the mapping of the relevant storage's
@@ -74,7 +74,7 @@ support sharded storages for non-YAML based entities). You can see an example of
 might shard by organization_id in generic_metrics_sets and generic_metrics_distributions
 dataset YAML files.
 
-Configuring sliced Kafka topics
+Adding sliced Kafka topics
 ---------------------------------
 In order to define a "sliced" Kafka topic, add ``(default logical topic name, slice id)`` to
 ``settings.SLICED_KAFKA_TOPIC_MAP``. This tuple should be mapped to a custom physical topic
@@ -87,6 +87,11 @@ Example configurations:
 ``SLICED_KAFKA_TOPIC_MAP`` = {("snuba-generic-metrics", 1): "snuba-generic-metrics-1"}
 
 ``SLICED_KAFKA_BROKER_CONFIG`` = {("snuba-generic-metrics", 1): BROKER_CONFIG}
+
+These types of topics can be "sliced": raw topics, replacements topics, commit log topics,
+subscription scheduler topics. Note that the slicing boundary stops at this point and
+the results topics for subscriptions cannot be sliced.
+
 
 =================================
 Working in a Sliced Environment
