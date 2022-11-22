@@ -19,7 +19,7 @@ from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.slicing import (
     is_storage_sliced,
     map_logical_partition_to_slice,
-    map_org_id_to_logical_partition,
+    map_partition_key_to_logical_partition,
 )
 from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -82,7 +82,7 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         org_id = org_ids.pop()
 
         slice_id = map_logical_partition_to_slice(
-            self.storage, map_org_id_to_logical_partition(org_id)
+            self.storage, map_partition_key_to_logical_partition(org_id)
         )
         cluster = get_cluster(self.storage_set, slice_id)
 
