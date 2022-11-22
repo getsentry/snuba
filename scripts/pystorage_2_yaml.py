@@ -4,6 +4,7 @@ import sys
 from typing import Any, Sequence
 
 import yaml
+from arroyo.processing.strategies.dead_letter_queue import ProduceInvalidMessagePolicy
 
 from snuba.datasets.configuration.utils import serialize_columns
 from snuba.datasets.schemas import Schema
@@ -47,6 +48,19 @@ def _convert_stream_loader(stream_loader: KafkaStreamLoader) -> dict[str, Any]:
         res["subscription_scheduled_topic"] = spec.topic_name
     if spec := stream_loader.get_subscription_result_topic_spec():
         res["subscription_result_topic"] = spec.topic_name
+    if creator := stream_loader.get_dead_letter_queue_policy_creator():
+        policy = creator()
+        if isinstance(policy, ProduceInvalidMessagePolicy):
+            res["dlq_policy"] = {
+                "type": "produce",
+                "args": [policy._ProduceInvalidMessagePolicy__dead_letter_topic.name],  # type: ignore
+            }
+        policy.terminate()
+    if prefilter := stream_loader.get_pre_filter():
+        res["pre_filter"] = {
+            "type": prefilter.__class__.__name__,
+            "args": prefilter.init_kwargs,
+        }
     return res
 
 
