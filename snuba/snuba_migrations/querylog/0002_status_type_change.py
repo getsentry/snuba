@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Drops the status enum and replaces it with a LowCardinality string
     now that the support for low cardinality strings is better.

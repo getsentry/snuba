@@ -19,7 +19,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.utils.schemas import Float
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     granularity = "2048"
     local_table_name = "generic_metric_distributions_aggregated_local"

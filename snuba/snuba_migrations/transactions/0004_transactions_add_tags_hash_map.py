@@ -7,7 +7,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Adds the tags hash map column defined as Array(Int64) Materialized with
     arrayMap((k, v) -> cityHash64(

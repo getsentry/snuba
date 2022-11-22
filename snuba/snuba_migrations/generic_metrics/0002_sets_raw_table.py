@@ -14,7 +14,7 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     local_table_name = "generic_metric_sets_raw_local"
     dist_table_name = "generic_metric_sets_raw_dist"

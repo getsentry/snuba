@@ -10,7 +10,7 @@ from snuba.snuba_migrations.metrics.templates import (
 from snuba.utils.schemas import AggregateFunction, Column, Float, UInt
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Creates materialized view for all metrics types which writes to 10s, 1m, 1h, 1d granularities
     The backward migration does *not* delete any data from the destination tables.
