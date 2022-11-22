@@ -18,7 +18,7 @@ data from consumers to different ClickHouse clusters by overriding the
 StorageSet key that exists in configuration.
 
 ===========================
-Adding a slice
+Configuring a slice
 ===========================
 
 Add the logical:physical mapping
@@ -95,7 +95,13 @@ Working in a Sliced Environment
 Starting a sliced consumer
 -----------------------------
 
+First, ensure that your slicing configuration is set up properly: ``SLICED_STORAGES``,
+``SLICED_CLUSTERS``, ``SLICED_KAFKA_TOPIC_MAP``, and ``SLICED_KAFKA_BROKER_CONFIG``.
+See above for details.
+
+Start up ``snuba consumer`` as per usual, with an extra flag ``--slice-id`` set equal
+to the slice number you are reading from.
 
 
-TODO: handling subscriptions, etc.
-----------------------------------------------------
+TODO: handling subscriptions, scheduler and executor, etc.
+----------------------------------------------------------
