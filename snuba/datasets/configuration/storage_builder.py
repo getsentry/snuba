@@ -48,10 +48,6 @@ SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
 
-# STORAGE_VALIDATION_SCHEMAS = {
-#     "readable_storage": V1_READABLE_STORAGE_SCHEMA,
-#     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
-# }
 STORAGE_VALIDATION_SCHEMAS = {
     "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
     "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
