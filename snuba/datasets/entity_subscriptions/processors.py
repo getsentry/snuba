@@ -65,4 +65,4 @@ class AddColumnCondition(EntitySubscriptionProcessor):
             new_condition = binary_condition(
                 BooleanFunctions.AND, condition, condition_to_add
             )
-        query.set_ast_condition(new_condition)
+            query.set_ast_condition(new_condition)
