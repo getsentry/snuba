@@ -21,16 +21,13 @@ class SlackClient(object):
     def token(self) -> Optional[str]:
         return settings.SLACK_API_TOKEN
 
-    def post_message(
-        self, message: MutableMapping[str, Any], channel: Optional[str] = None
-    ) -> None:
+    def post_message(self, message: MutableMapping[str, Any]) -> None:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.token}",
         }
 
-        if channel:
-            message["channel"] = channel
+        message["channel"] = self.channel_id
 
         try:
             resp = requests.post(
