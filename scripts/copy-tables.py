@@ -2,6 +2,7 @@
 
 import argparse
 import re
+import sys
 from collections import OrderedDict
 from typing import Optional, Sequence
 
@@ -94,7 +95,8 @@ def verify_local_tables_exist_from_mv(
 def copy_tables(
     source_client: Client,
     target_client: Client,
-    database: str,
+    source_database: str,
+    target_database: str,
     execute: bool,
     tables: Optional[Sequence[str]],
 ) -> None:
@@ -121,7 +123,7 @@ def copy_tables(
     if not tables:
         tables = [result[0] for result in source_client.execute("SHOW TABLES")]
 
-    show_table_statments = OrderedDict()
+    show_table_statements = OrderedDict()
 
     for name in tables:
         ((engine,),) = source_client.execute(
@@ -129,7 +131,7 @@ def copy_tables(
         )
 
         ((curr_create_table_statement,),) = source_client.execute(
-            f"SHOW CREATE TABLE {database}.{name}"
+            f"SHOW CREATE TABLE {source_database}.{name}"
         )
 
         if engine == "MaterializedView":
@@ -142,14 +144,17 @@ def copy_tables(
             print("\nReplicated Table Check:")
             verify_zk_replica_path(source_client, curr_create_table_statement, name)
 
-        show_table_statments[name] = curr_create_table_statement
+        show_table_statements[name] = curr_create_table_statement
 
     ((_, target_replica), (_, target_shard)) = target_client.execute(
         "SELECT macro, substitution FROM system.macros"
     )
-    for table_name, statement in show_table_statments.items():
+    for table_name, statement in show_table_statements.items():
+        if source_database != target_database:
+            print(f"Mismatched databases.. Replacing: {source_database}.{table_name} with {target_database}.{table_name}")
+            statement = statement.replace(f"CREATE TABLE {source_database}.{table_name}", f"CREATE TABLE {target_database}.{table_name}")
         print(
-            f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}"
+            f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}, database: {target_database}"
         )
         if execute:
             target_client.execute(statement)
@@ -179,7 +184,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--user", default="default")
     parser.add_argument("--password", default="")
-    parser.add_argument("--database", default="default")
+    parser.add_argument("--source-database", default="default")
+    parser.add_argument("--target-database", default="default")
     parser.add_argument("--tables", help="One or more tables separated by ','.")
     parser.add_argument(
         "--execute", action="store_true", help="Executes the create table statements."
@@ -192,7 +198,7 @@ if __name__ == "__main__":
         port=args.source_port,
         user=args.user,
         password=args.password,
-        database=args.database,
+        database=args.source_database,
     )
 
     target_client = _get_client(
@@ -200,9 +206,9 @@ if __name__ == "__main__":
         port=args.target_port,
         user=args.user,
         password=args.password,
-        database=args.database,
+        database=args.target_database,
     )
 
     tables = args.tables and args.tables.split(",")
 
-    copy_tables(source_client, target_client, args.database, args.execute, tables)
+    copy_tables(source_client, target_client, args.source_database, args.target_database, args.execute, tables)
