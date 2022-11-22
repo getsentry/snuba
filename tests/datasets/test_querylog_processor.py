@@ -81,7 +81,7 @@ def test_simple() -> None:
                     groupby_cols=set(),
                     array_join_cols=set(),
                 ),
-                result_profile={"bytes": 1337, "elapsed": 42},
+                result_profile={"bytes": 1337, "elapsed": 0.042},
                 trace_id="b" * 32,
             )
         ],
