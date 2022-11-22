@@ -3,7 +3,7 @@ from typing import Sequence, Union
 
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
-from snuba.migrations.migration import ClickhouseNodeMigrationLegacy
+from snuba.migrations.migration import ClickhouseNodeMigration
 from snuba.migrations.operations import AddColumn, CreateTable, DropColumn, SqlOperation
 
 ENGINE_REGEX = r"^Distributed(\(.+\))$"
@@ -33,7 +33,7 @@ class DistributedEngineParseError(Exception):
     pass
 
 
-def validate_migration_order(migration: ClickhouseNodeMigrationLegacy) -> None:
+def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
     """
     Validates that the migration order is correct. Checks that the order of
     AddColumn, CreateTable and DropColumn operations are correct with regards to being

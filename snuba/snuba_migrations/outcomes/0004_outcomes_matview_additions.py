@@ -28,7 +28,7 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Updates materialized view query to support category and quantity.
     Note that the consumer needs to be stopped for this migration.

@@ -4,7 +4,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     We added the size and bytes_received columns on 15 Dec 2019 and reverted the next
     day. This migration ensures the column is dropped for all users on the off chance

@@ -6,7 +6,7 @@ from snuba.migrations.columns import MigrationModifiers
 from snuba.utils.schemas import Array, Column, UInt
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     table_name = "generic_metric_sets_raw_dist"
     new_column: Column[MigrationModifiers] = Column("granularities", Array(UInt(8)))

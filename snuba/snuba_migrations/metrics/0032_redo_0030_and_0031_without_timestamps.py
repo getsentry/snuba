@@ -10,7 +10,7 @@ from snuba.snuba_migrations.metrics.templates import (
 from snuba.utils.schemas import AggregateFunction, Column, UInt
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Re-creates materialized views of 0030 and 0031 without timestamps for easier operations
     """
