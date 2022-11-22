@@ -55,7 +55,11 @@ class SnubaCLI(click.MultiCommand):
             # That way if any command code references any snuba construct that needs
             # to be initialized (e.g. a factory) at import time, it is already initialized
             # into the runtime
-            initialize.initialize_snuba()
+            import cProfile
+
+            with cProfile.Profile() as pr:
+                initialize.initialize_snuba()
+            pr.dump_stats("stats2.prof")
             fn = os.path.join(plugin_folder, actual_command_name + ".py")
             with open(fn) as f:
                 code = compile(f.read(), fn, "exec")

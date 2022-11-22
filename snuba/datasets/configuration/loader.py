@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+import fastjsonschema
 import sentry_sdk
-from jsonschema import validate
 from yaml import safe_load
 
 
@@ -21,5 +21,6 @@ def load_configuration_data(
         file = open(path)
         config = safe_load(file)
         assert isinstance(config, dict)
-        validate(config, validation_schemas[config["kind"]])
+        validator = fastjsonschema.compile(validation_schemas[config["kind"]])
+        validator(config)
         return config

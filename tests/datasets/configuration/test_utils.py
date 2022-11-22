@@ -7,8 +7,8 @@ from arroyo.processing.strategies.dead_letter_queue import (
     DeadLetterQueuePolicy,
     ProduceInvalidMessagePolicy,
 )
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
+from fastjsonschema import validate
+from fastjsonschema.exceptions import JsonSchemaValueException
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.configuration.json_schema import V1_READABLE_STORAGE_SCHEMA
@@ -130,7 +130,7 @@ def test_invalid_storage() -> None:
         "schema": {"columns": []},
         "query_processors": [],
     }
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(JsonSchemaValueException) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
     assert e.value.message == "1 is not of type 'string'"
 
@@ -144,7 +144,7 @@ def test_invalid_query_processor() -> None:
         "schema": {"columns": []},
         "query_processors": [5],
     }
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(JsonSchemaValueException) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
     assert e.value.message == "5 is not of type 'object'"
 
@@ -159,7 +159,7 @@ def test_unexpected_key() -> None:
         "query_processors": [],
         "extra": "",
     }
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(JsonSchemaValueException) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
     assert (
         e.value.message
@@ -175,6 +175,6 @@ def test_missing_required_key() -> None:
         "schema": {"columns": []},
         "query_processors": [],
     }
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(JsonSchemaValueException) as e:
         validate(config, V1_READABLE_STORAGE_SCHEMA)
     assert e.value.message == "'kind' is a required property"

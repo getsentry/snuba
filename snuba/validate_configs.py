@@ -1,6 +1,6 @@
 from glob import glob
 
-from jsonschema.exceptions import ValidationError
+from fastjsonschema.exceptions import JsonSchemaValueException
 
 from snuba import settings
 from snuba.datasets.configuration.json_schema import V1_ALL_SCHEMAS
@@ -24,7 +24,7 @@ def validate_configs() -> None:
     if errors:
         print("\nFailures:")
         for file_name, err in errors:
-            if isinstance(err, ValidationError):
+            if isinstance(err, JsonSchemaValueException):
                 print(f"{file_name}: {err.message}")
             else:
                 print(f"{file_name}: {err.__class__.__name__}: {err}")
