@@ -200,7 +200,7 @@ def test_specify_order() -> None:
     logger = Logger("test")
     context = Context("001", logger, lambda x: None)
 
-    class TestMigration(migration.ClickhouseNodeMigration):
+    class TestMigration(migration.ClickhouseNodeMigrationLegacy):
         blocking = False
 
         def forwards_local(self) -> Sequence[SqlOperation]:

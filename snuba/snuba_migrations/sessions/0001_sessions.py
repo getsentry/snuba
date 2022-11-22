@@ -24,7 +24,7 @@ raw_columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
