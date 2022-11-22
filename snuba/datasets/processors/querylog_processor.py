@@ -59,6 +59,8 @@ class QuerylogProcessor(DatasetMessageProcessor):
             sql.append(query["sql"])
             status.append(query["status"])
             trace_id.append(str(uuid.UUID(query["trace_id"])))
+            # TODO: Calculate subquery duration, for now just insert 0s
+            duration_ms.append(0)
             stats.append(self.__to_json_string(query["stats"]))
             final.append(int(query["stats"].get("final") or 0))
             cache_hit.append(int(query["stats"].get("cache_hit") or 0))
@@ -91,7 +93,6 @@ class QuerylogProcessor(DatasetMessageProcessor):
             groupby_columns.append(profile["groupby_cols"])
             array_join_columns.append(profile["array_join_cols"])
             bytes_scanned_columns.append(result_profile.get("bytes", 0))
-            duration_ms.append(result_profile.get("elapsed", 0) * 1000)
 
         return {
             "clickhouse_queries.sql": sql,
