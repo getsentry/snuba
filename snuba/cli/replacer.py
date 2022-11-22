@@ -88,9 +88,8 @@ def replacer(
     from arroyo.backends.kafka import KafkaConsumer
     from arroyo.commit import IMMEDIATE
     from arroyo.processing import StreamProcessor
-    from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
 
-    from snuba.replacer import ReplacerWorker
+    from snuba.replacer import ReplacerStrategyFactory, ReplacerWorker
     from snuba.utils.streams.configuration_builder import (
         build_kafka_consumer_configuration,
     )
@@ -126,7 +125,7 @@ def replacer(
             ),
         ),
         Topic(replacements_topic),
-        BatchProcessingStrategyFactory(
+        ReplacerStrategyFactory(
             worker=ReplacerWorker(storage, consumer_group, metrics=metrics),
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time_ms,
