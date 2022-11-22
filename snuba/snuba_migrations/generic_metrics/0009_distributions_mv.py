@@ -13,7 +13,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     view_name = "generic_metric_distributions_aggregation_mv"
     dest_table_columns: Sequence[Column[Modifiers]] = [

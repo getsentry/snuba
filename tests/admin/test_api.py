@@ -188,6 +188,18 @@ def test_system_query(admin_api: FlaskClient) -> None:
     assert data["rows"] == []
 
 
+def test_predefined_system_queries(admin_api: FlaskClient) -> None:
+    response = admin_api.get(
+        "/clickhouse_queries",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert len(data) > 1
+    assert data[0]["description"] == "Currently executing merges"
+    assert data[0]["name"] == "CurrentMerges"
+
+
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -261,6 +273,18 @@ def test_querylog_describe(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "column_names" in data and "rows" in data
+
+
+def test_predefined_querylog_queries(admin_api: FlaskClient) -> None:
+    response = admin_api.get(
+        "/querylog_queries",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert len(data) > 1
+    assert data[0]["description"] == "Find a query by its ID"
+    assert data[0]["name"] == "QueryByID"
 
 
 def test_get_snuba_datasets(admin_api: FlaskClient) -> None:

@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
 
     blocking = False
 

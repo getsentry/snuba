@@ -1,8 +1,8 @@
+from snuba.admin.audit_log.querylog import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.admin.notifications.querylog.audit_log import audit_log
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema

@@ -10,7 +10,7 @@ from snuba.snuba_migrations.metrics.templates import (
 )
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:

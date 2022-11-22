@@ -54,7 +54,7 @@ agg_columns: List[Column[Modifiers]] = common_columns + [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     index_granularity = "2048"
     storage_set = StorageSetKey.FUNCTIONS

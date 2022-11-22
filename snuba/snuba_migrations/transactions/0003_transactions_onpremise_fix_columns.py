@@ -8,7 +8,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 UNKNOWN_SPAN_STATUS = 2
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     The second of two migrations that syncs the transactions_local table for onpremise
     users migrating from versions of Snuba prior to the migration system.

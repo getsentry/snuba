@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 
 import sentry_sdk
 
+from snuba import state
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
@@ -34,6 +35,8 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
 from snuba.query.query_settings import QuerySettings
 from snuba.util import with_span
 
+MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX = "slicing_mega_cluster_partitions"
+
 
 class StorageClusterSelector(ABC):
     """
@@ -49,11 +52,47 @@ class StorageClusterSelector(ABC):
         raise NotImplementedError
 
 
+def _should_use_mega_cluster(
+    storage_set: StorageSetKey, logical_partition: int
+) -> bool:
+    """
+    Helper method to find out whether a logical partition of a sliced storage
+    set needs to send queries to the mega cluster.
+
+    Mega cluster needs to be used when a logical partition's data might be
+    across multiple slices. This happens when a logical partition is mapped
+    to a new slice. In such cases, the old data resides in some different
+    slice than what the new mapping says.
+    """
+    key = f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_{storage_set.value}"
+    state.get_config(key, None)
+    slicing_read_override_config = state.get_config(key, None)
+
+    if slicing_read_override_config is None:
+        return False
+
+    slicing_read_override_config = slicing_read_override_config[1:-1]
+    if slicing_read_override_config:
+        logical_partition_overrides = [
+            int(p.strip()) for p in slicing_read_override_config.split(",")
+        ]
+        if logical_partition in logical_partition_overrides:
+            return True
+
+    return False
+
+
 class ColumnBasedStorageSliceSelector(StorageClusterSelector):
     """
-    Storage slice selector for the generic metrics storage. This is needed
-    because the generic metrics storage can be sliced and we would need to
-    know which slice to use for a specific query.
+    Storage slice selector based on a specific column of the query. This is
+    needed in order to select the cluster to use for a query. The cluster
+    selection depends on the value of the partition_key_column_name.
+
+    In most cases, the partition_key_column_name would get mapped to a logical
+    partition and then to a slice. But when a logical partition is being
+    transitioned to another slice, the old data resides in a different slice. In
+    those cases, we need to use the mega cluster to query both the old data and
+    the new data.
     """
 
     def __init__(
@@ -81,12 +120,13 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         assert len(org_ids) == 1
         org_id = org_ids.pop()
 
-        slice_id = map_logical_partition_to_slice(
-            self.storage, map_org_id_to_logical_partition(org_id)
-        )
-        cluster = get_cluster(self.storage_set, slice_id)
-
-        return cluster
+        logical_partition = map_org_id_to_logical_partition(org_id)
+        if _should_use_mega_cluster(self.storage_set, logical_partition):
+            return get_cluster(self.storage_set)
+        else:
+            slice_id = map_logical_partition_to_slice(self.storage, logical_partition)
+            cluster = get_cluster(self.storage_set, slice_id)
+            return cluster
 
 
 class SlicedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):

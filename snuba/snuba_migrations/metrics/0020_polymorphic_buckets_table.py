@@ -6,7 +6,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.utils.schemas import Array, Column, DateTime, Float, Nested, String, UInt
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Create a polymorphic bucket table for metrics_sets,
     metrics_distributions, and metrics_counters

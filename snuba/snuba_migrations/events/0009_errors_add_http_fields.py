@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Adds the http columns defined, with the method and referer coming from the request interface
     and url materialized from the tags.
