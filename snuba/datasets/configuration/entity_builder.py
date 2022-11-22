@@ -23,6 +23,9 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
 
+with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+    ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+
 
 def _build_entity_validators(
     config_validators: list[dict[str, Any]]
@@ -92,24 +95,19 @@ def _build_entity_translation_mappers(
 
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
-    config = load_configuration_data(
-        file_path, {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+    config = load_configuration_data(file_path, ENTITY_VALIDATORS)
+    return PluggableEntity(
+        entity_key=register_entity_key(config["name"]),
+        query_processors=_build_entity_query_processors(config["query_processors"]),
+        columns=parse_columns(config["schema"]),
+        readable_storage=get_storage(StorageKey(config["readable_storage"])),
+        required_time_column=config["required_time_column"],
+        validators=_build_entity_validators(config["validators"]),
+        translation_mappers=_build_entity_translation_mappers(
+            config["translation_mappers"]
+        ),
+        writeable_storage=get_writable_storage(StorageKey(config["writable_storage"]))
+        if "writable_storage" in config
+        else None,
+        partition_key_column_name=config.get("partition_key_column_name", None),
     )
-    with sentry_sdk.start_span(op="build", description=f"Entity: {config['name']}"):
-        return PluggableEntity(
-            entity_key=register_entity_key(config["name"]),
-            query_processors=_build_entity_query_processors(config["query_processors"]),
-            columns=parse_columns(config["schema"]),
-            readable_storage=get_storage(StorageKey(config["readable_storage"])),
-            required_time_column=config["required_time_column"],
-            validators=_build_entity_validators(config["validators"]),
-            translation_mappers=_build_entity_translation_mappers(
-                config["translation_mappers"]
-            ),
-            writeable_storage=get_writable_storage(
-                StorageKey(config["writable_storage"])
-            )
-            if "writable_storage" in config
-            else None,
-            partition_key_column_name=config.get("partition_key_column_name", None),
-        )

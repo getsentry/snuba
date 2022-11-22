@@ -11,7 +11,7 @@ from fastjsonschema.exceptions import JsonSchemaValueException
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.configuration.storage_builder import (
-    STORAGE_VALIDATION_SCHEMAS,
+    STORAGE_VALIDATORS,
     build_stream_loader,
 )
 from snuba.datasets.configuration.utils import generate_policy_creator
@@ -132,7 +132,7 @@ def test_invalid_storage() -> None:
         "query_processors": [],
     }
     with pytest.raises(JsonSchemaValueException) as e:
-        STORAGE_VALIDATION_SCHEMAS["readable_storage"](config)
+        STORAGE_VALIDATORS["readable_storage"](config)
     assert e.value.message == "data.storage.key must be string"
 
 
@@ -146,7 +146,7 @@ def test_invalid_query_processor() -> None:
         "query_processors": [5],
     }
     with pytest.raises(JsonSchemaValueException) as e:
-        STORAGE_VALIDATION_SCHEMAS["readable_storage"](config)
+        STORAGE_VALIDATORS["readable_storage"](config)
     assert e.value.message == "data.query_processors[0] must be object"
 
 
@@ -161,7 +161,7 @@ def test_unexpected_key() -> None:
         "extra": "",
     }
     with pytest.raises(JsonSchemaValueException) as e:
-        STORAGE_VALIDATION_SCHEMAS["readable_storage"](config)
+        STORAGE_VALIDATORS["readable_storage"](config)
     assert e.value.message == "data must not contain {'extra'} properties"
 
 
@@ -174,7 +174,7 @@ def test_missing_required_key() -> None:
         "query_processors": [],
     }
     with pytest.raises(JsonSchemaValueException) as e:
-        STORAGE_VALIDATION_SCHEMAS["readable_storage"](config)
+        STORAGE_VALIDATORS["readable_storage"](config)
     assert (
         e.value.message
         == "data must contain ['version', 'kind', 'name', 'storage', 'schema'] properties"

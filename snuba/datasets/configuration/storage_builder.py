@@ -47,26 +47,25 @@ WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
-
-STORAGE_VALIDATION_SCHEMAS = {
-    "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
-    "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
-}
+with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+    STORAGE_VALIDATORS = {
+        "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
+        "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+    }
 
 
 def build_storage_from_config(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
-    config = load_configuration_data(config_file_path, STORAGE_VALIDATION_SCHEMAS)
-    with sentry_sdk.start_span(op="build", description=f"Storage: {config['name']}"):
-        storage_kwargs = __build_readable_storage_kwargs(config)
-        if config[KIND] == "readable_storage":
-            return ReadableTableStorage(**storage_kwargs)
-        storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
-        storage_kwargs[WRITER_OPTIONS] = (
-            config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
-        )
-        return WritableTableStorage(**storage_kwargs)
+    config = load_configuration_data(config_file_path, STORAGE_VALIDATORS)
+    storage_kwargs = __build_readable_storage_kwargs(config)
+    if config[KIND] == "readable_storage":
+        return ReadableTableStorage(**storage_kwargs)
+    storage_kwargs[STREAM_LOADER] = build_stream_loader(config[STREAM_LOADER])
+    storage_kwargs[WRITER_OPTIONS] = (
+        config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {}
+    )
+    return WritableTableStorage(**storage_kwargs)
 
 
 def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
