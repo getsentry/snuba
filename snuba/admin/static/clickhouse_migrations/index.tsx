@@ -42,16 +42,16 @@ function ClickhouseMigrations(props: { api: Client }) {
         `Migration ${migrationId} is blocking, are you sure you want to execute?`
       );
     }
-    console.log("executing !", action);
     executeRealRun(action);
   }
 
-  function executeRun(action: Action, dry_run: boolean) {
+  function executeRun(action: Action, dry_run: boolean, force: boolean) {
       let req = {
         action: action,
         migration_id: migrationId,
         group: migrationGroup?.group,
-        dry_run: dry_run
+        dry_run: dry_run,
+        force: force
       }
       props.api
       .runMigration(req as RunMigrationRequest)
@@ -67,12 +67,12 @@ function ClickhouseMigrations(props: { api: Client }) {
 
   function executeDryRun(action: Action) {
     console.log("executing dry run !", migrationId, action);
-    executeRun(action, true)
+    executeRun(action, true, false)
   }
 
   function executeRealRun(action: Action) {
     console.log("executing real run !", migrationId, action);
-    executeRun(action, false)
+    executeRun(action, false, false)
     if (migrationGroup)
       refreshStatus(migrationGroup.group)
   }
