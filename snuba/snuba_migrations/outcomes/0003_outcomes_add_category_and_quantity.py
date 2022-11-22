@@ -11,7 +11,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     category as a new dimension and quantity as a new measure.
     """
 
-    blocking = False
+    blocking = True
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [

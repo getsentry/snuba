@@ -11,7 +11,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     they had upgraded or attempted to upgrade to a version released in that window.
     """
 
-    blocking = False
+    blocking = True
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
