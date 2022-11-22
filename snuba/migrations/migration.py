@@ -94,7 +94,7 @@ class CodeMigration(Migration, ABC):
         update_status(Status.NOT_STARTED)
 
 
-class ClickhouseNodeMigrationLegacy(Migration, ABC):
+class ClickhouseNodeMigration(Migration, ABC):
     """
     A ClickhouseNodeMigration consists of one or more forward operations which will be executed
     on all of the local and distributed nodes of the cluster. Upon error, the backwards
