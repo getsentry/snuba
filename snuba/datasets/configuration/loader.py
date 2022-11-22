@@ -11,12 +11,11 @@ def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, 
     Loads a configuration file from the given path
     Returns an untyped dict of dicts
     """
-    with sentry_sdk.start_span(
-        op="load_and_validate", description="Config File"
-    ) as span:
+    with sentry_sdk.start_span(op="load_and_validate") as span:
         span.set_tag("file", path)
         file = open(path)
         config = safe_load(file)
         assert isinstance(config, dict)
         validators[config["kind"]](config)
+        span.description = config["name"]
         return config
