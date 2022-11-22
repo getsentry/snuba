@@ -2,15 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import fastjsonschema
-import sentry_sdk
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.configuration.json_schema import (
-    V1_READABLE_STORAGE_SCHEMA,
-    V1_WRITABLE_STORAGE_SCHEMA,
-)
+from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
     generate_policy_creator,
@@ -46,12 +40,6 @@ MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
-
-with sentry_sdk.start_span(op="compile", description="Storage Validators"):
-    STORAGE_VALIDATORS = {
-        "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
-        "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
-    }
 
 
 def build_storage_from_config(

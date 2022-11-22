@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-import fastjsonschema
-import sentry_sdk
-
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
@@ -13,7 +10,7 @@ from snuba.clickhouse.translators.snuba.allowed import (
     SubscriptableReferenceMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.configuration.json_schema import V1_ENTITY_SCHEMA
+from snuba.datasets.configuration.json_schema import ENTITY_VALIDATORS
 from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import parse_columns
 from snuba.datasets.entities.entity_key import register_entity_key
@@ -22,9 +19,6 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation.validators import QueryValidator
-
-with sentry_sdk.start_span(op="compile", description="Entity Validators"):
-    ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
 
 
 def _build_entity_validators(
