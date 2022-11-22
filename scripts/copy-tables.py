@@ -151,8 +151,13 @@ def copy_tables(
     )
     for table_name, statement in show_table_statements.items():
         if source_database != target_database:
-            print(f"Mismatched databases.. Replacing: {source_database}.{table_name} with {target_database}.{table_name}")
-            statement = statement.replace(f"CREATE TABLE {source_database}.{table_name}", f"CREATE TABLE {target_database}.{table_name}")
+            print(
+                f"Mismatched databases.. Replacing: {source_database}.{table_name} with {target_database}.{table_name}"
+            )
+            statement = statement.replace(
+                f"CREATE TABLE {source_database}.{table_name}",
+                f"CREATE TABLE {target_database}.{table_name}",
+            )
         print(
             f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}, database: {target_database}"
         )
@@ -161,6 +166,7 @@ def copy_tables(
             print(f"created {table_name} !")
         else:
             print(f"\ncreate table statement: \n {statement}\n")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Copy ClickHouse Tables")
@@ -211,4 +217,11 @@ if __name__ == "__main__":
 
     tables = args.tables and args.tables.split(",")
 
-    copy_tables(source_client, target_client, args.source_database, args.target_database, args.execute, tables)
+    copy_tables(
+        source_client,
+        target_client,
+        args.source_database,
+        args.target_database,
+        args.execute,
+        tables,
+    )
