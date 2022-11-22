@@ -81,7 +81,7 @@ def test_simple() -> None:
                     groupby_cols=set(),
                     array_join_cols=set(),
                 ),
-                result_profile={"bytes": 1337, "elapsed": 0.042},
+                result_profile={"bytes": 1337},
                 trace_id="b" * 32,
             )
         ],
@@ -116,7 +116,7 @@ def test_simple() -> None:
                 ],
                 "clickhouse_queries.status": ["success"],
                 "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
-                "clickhouse_queries.duration_ms": [42],
+                "clickhouse_queries.duration_ms": [0],
                 "clickhouse_queries.stats": ['{"error_code": 386, "sample": 10}'],
                 "clickhouse_queries.final": [0],
                 "clickhouse_queries.cache_hit": [0],
