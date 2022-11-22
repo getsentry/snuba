@@ -20,6 +20,7 @@ class MigrationGroup(Enum):
     FUNCTIONS = "functions"
     REPLAYS = "replays"
     GENERIC_METRICS = "generic_metrics"
+    ACCESS_LOGS = "access_logs"
 
 
 # Migration groups are mandatory by default, unless they are on this list
@@ -288,6 +289,15 @@ class GenericMetricsLoader(DirectoryLoader):
         ]
 
 
+class AccessLogsLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.access_logs")
+
+    def get_migrations(self) -> Sequence[str]:
+        # returns a list of migration ids (we will add this later)
+        return []
+
+
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
@@ -301,6 +311,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.FUNCTIONS: FunctionsLoader(),
     MigrationGroup.REPLAYS: ReplaysLoader(),
     MigrationGroup.GENERIC_METRICS: GenericMetricsLoader(),
+    MigrationGroup.ACCESS_LOGS: AccessLogsLoader(),
 }
 
 

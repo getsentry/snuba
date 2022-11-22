@@ -16,6 +16,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "PROFILES": "profiles",
     "FUNCTIONS": "functions",
     "REPLAYS": "replays",
+    "ACCESS_LOGS": "access_logs",
 }
 
 
