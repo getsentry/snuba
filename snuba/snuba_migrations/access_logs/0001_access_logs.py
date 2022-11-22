@@ -1,12 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    String,
-    UInt,
-    UUID,
-)
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -55,6 +49,7 @@ ORDER BY (statsd_path, request_uri_path, _date, _time)
 TTL _date + toIntervalDay(400)
 SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 1000000000
 """
+
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
