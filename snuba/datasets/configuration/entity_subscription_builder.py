@@ -1,6 +1,7 @@
 import logging
 from typing import Type
 
+import fastjsonschema
 import sentry_sdk
 
 from snuba.datasets.configuration.json_schema import V1_ENTITY_SUBSCIPTION_SCHEMA
@@ -16,7 +17,8 @@ def build_entity_subscription_from_config(
     file_path: str,
 ) -> Type[PluggableEntitySubscription]:
     config = load_configuration_data(
-        file_path, {"entity_subscription": V1_ENTITY_SUBSCIPTION_SCHEMA}
+        file_path,
+        {"entity_subscription": fastjsonschema.compile(V1_ENTITY_SUBSCIPTION_SCHEMA)},
     )
     with sentry_sdk.start_span(
         op="build", description=f"Entity Subscription: {config['name']}"

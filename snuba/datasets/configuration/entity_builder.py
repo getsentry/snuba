@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+import fastjsonschema
 import sentry_sdk
 
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
@@ -91,7 +92,9 @@ def _build_entity_translation_mappers(
 
 
 def build_entity_from_config(file_path: str) -> PluggableEntity:
-    config = load_configuration_data(file_path, {"entity": V1_ENTITY_SCHEMA})
+    config = load_configuration_data(
+        file_path, {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+    )
     with sentry_sdk.start_span(op="build", description=f"Entity: {config['name']}"):
         return PluggableEntity(
             entity_key=register_entity_key(config["name"]),

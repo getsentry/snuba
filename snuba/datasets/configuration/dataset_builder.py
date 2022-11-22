@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fastjsonschema
 import sentry_sdk
 
 from snuba.datasets.configuration.json_schema import V1_DATASET_SCHEMA
@@ -7,7 +8,7 @@ from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.pluggable_dataset import PluggableDataset
 
-DATASET_VALIDATION_SCHEMAS = {"dataset": V1_DATASET_SCHEMA}
+DATASET_VALIDATION_SCHEMAS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
 
 
 def build_dataset_from_config(config_file_path: str) -> PluggableDataset:

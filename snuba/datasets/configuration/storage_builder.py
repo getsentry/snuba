@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import fastjsonschema
 import sentry_sdk
 
 from snuba.clickhouse.columns import ColumnSet
@@ -47,9 +48,13 @@ SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 
 
+# STORAGE_VALIDATION_SCHEMAS = {
+#     "readable_storage": V1_READABLE_STORAGE_SCHEMA,
+#     "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
+# }
 STORAGE_VALIDATION_SCHEMAS = {
-    "readable_storage": V1_READABLE_STORAGE_SCHEMA,
-    "writable_storage": V1_WRITABLE_STORAGE_SCHEMA,
+    "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
+    "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
 }
 
 
