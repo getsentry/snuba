@@ -11,6 +11,8 @@ from flask import Flask, Response, g, jsonify, make_response, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import settings, state
+from snuba.admin.audit_log.action import AuditLogAction
+from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_for_groups
@@ -21,7 +23,6 @@ from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import check_migration_perms
-from snuba.admin.notifications.base import RuntimeConfigAction, RuntimeConfigAutoClient
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -44,8 +45,8 @@ logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
-notification_client = RuntimeConfigAutoClient()
 runner = Runner()
+audit_log = AuditLog()
 
 
 @application.errorhandler(UnauthorizedException)
@@ -416,10 +417,11 @@ def configs() -> Response:
             "type": evaluated_type,
         }
 
-        notification_client.notify(
-            RuntimeConfigAction.ADDED,
-            {"option": key, "old": None, "new": evaluated_value},
-            user,
+        audit_log.record(
+            user or "",
+            AuditLogAction.ADDED_OPTION,
+            {"option": key, "new": evaluated_value},
+            notify=True,
         )
 
         return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
@@ -470,10 +472,11 @@ def config(config_key: str) -> Response:
         if request.args.get("keepDescription") is None:
             state.delete_config_description(config_key, user=user)
 
-        notification_client.notify(
-            RuntimeConfigAction.REMOVED,
-            {"option": config_key, "old": old, "new": None},
-            user,
+        audit_log.record(
+            user or "",
+            AuditLogAction.REMOVED_OPTION,
+            {"option": config_key, "old": str(old) if not old else old},
+            notify=True,
         )
 
         return Response("", 200)
@@ -523,10 +526,15 @@ def config(config_key: str) -> Response:
         evaluated_type = get_config_type_from_value(evaluated_value)
 
         # Send notification
-        notification_client.notify(
-            RuntimeConfigAction.UPDATED,
-            {"option": config_key, "old": old, "new": evaluated_value},
-            user=user,
+        audit_log.record(
+            user or "",
+            AuditLogAction.UPDATED_OPTION,
+            {
+                "option": config_key,
+                "old": str(old) if not old else old,
+                "new": evaluated_value,
+            },
+            notify=True,
         )
 
         config = {
