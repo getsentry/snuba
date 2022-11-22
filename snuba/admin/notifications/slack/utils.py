@@ -1,7 +1,11 @@
 from typing import Any, Dict, List, Optional, Union
 
 from snuba import settings
-from snuba.admin.audit_log.action import RUNTIME_CONFIG_ACTIONS, AuditLogAction
+from snuba.admin.audit_log.action import (
+    MITIGATION_ACTIONS,
+    RUNTIME_CONFIG_ACTIONS,
+    AuditLogAction,
+)
 
 
 def build_blocks(
@@ -9,6 +13,8 @@ def build_blocks(
 ) -> List[Any]:
     if action in RUNTIME_CONFIG_ACTIONS:
         text = build_runtime_config_text(data, action)
+    elif action in MITIGATION_ACTIONS:
+        text = build_migration_run_text(data, user, action)
     else:
         text = action.value
 
@@ -36,6 +42,18 @@ def build_runtime_config_text(data: Any, action: AuditLogAction) -> Optional[str
         # todo: raise error, cause slack won't accept this
         # if it is none
         return None
+
+
+def build_migration_run_text(
+    data: Any, user: str, action: AuditLogAction
+) -> Optional[str]:
+    if action == AuditLogAction.RAN_MIGRATION:
+        action_text = f"ran migration {data['migration']}"
+    elif action == AuditLogAction.REVERSED_MIGRATION:
+        action_text = f"reversed migration {data['migration']}"
+    else:
+        return None
+    return f"*Migration:* user '{user}' {action_text}  , force={data['force']}, fake={data['fake']}"
 
 
 def build_context(

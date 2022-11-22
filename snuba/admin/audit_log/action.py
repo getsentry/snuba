@@ -16,3 +16,8 @@ RUNTIME_CONFIG_ACTIONS = [
     AuditLogAction.REMOVED_OPTION,
     AuditLogAction.UPDATED_OPTION,
 ]
+
+MITIGATION_ACTIONS = [
+    AuditLogAction.RAN_MIGRATION,
+    AuditLogAction.REVERSED_MIGRATION,
+]
