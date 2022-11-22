@@ -13,7 +13,7 @@ import {
   QueryResult,
   PredefinedQuery,
 } from "./clickhouse_queries/types";
-import { MigrationGroupResult } from "./clickhouse_migrations/types";
+import { MigrationGroupResult, RunMigrationRequest, RunMigrationResult } from "./clickhouse_migrations/types";
 import { TracingRequest, TracingResult } from "./tracing/types";
 import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
 
@@ -46,6 +46,7 @@ interface Client {
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
+  runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
 }
 
 function Client() {
@@ -233,6 +234,28 @@ function Client() {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
     },
+
+    runMigration: (req: RunMigrationRequest) => {
+
+      const params = new URLSearchParams({
+        force: (req.force || false).toString(),
+        fake: (req.fake || false).toString(),
+        dry_run: (req.dry_run || false).toString(),
+      })
+      const url : string = `/migrations/${req.group}/${req.action}/${req.migration_id}?`
+      return fetch(url+params, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(params),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+
+  }
   };
 }
 

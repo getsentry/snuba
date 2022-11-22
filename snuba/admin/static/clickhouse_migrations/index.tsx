@@ -1,26 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { Table } from "../table";
-import { MigrationData, MigrationGroupResult, GroupOptions } from "./types";
-
-const SQLforwards =
-  "Local operations:\
-\n\n\
-CREATE TABLE IF NOT EXISTS replays_local (replay_id UUID, event_hash UUID, segment_id Nullable(UInt16), trace_ids Array(UUID), _trace_ids_hashed Array(UInt64) MATERIALIZED arrayMap(t -> cityHash64(t), trace_ids), title String, project_id UInt64, timestamp DateTime, platform LowCardinality(String), environment LowCardinality(Nullable(String)), release Nullable(String), dist Nullable(String), ip_address_v4 Nullable(IPv4), ip_address_v6 Nullable(IPv6), user String, user_id Nullable(String), user_name Nullable(String), user_email Nullable(String), sdk_name String, sdk_version String, tags Nested(key String, value String), retention_days UInt16, partition UInt16, offset UInt64) ENGINE ReplacingMergeTree() ORDER BY (project_id, toStartOfDay(timestamp), cityHash64(replay_id), event_hash) PARTITION BY (retention_days, toMonday(timestamp)) TTL timestamp + toIntervalDay(retention_days) SETTINGS index_granularity=8192;\
-ALTER TABLE replays_local ADD INDEX IF NOT EXISTS bf_trace_ids_hashed _trace_ids_hashed TYPE bloom_filter() GRANULARITY 1;\
-\n\n\
-Dist operations:\
-\n\n\
-Skipped dist operation - single node cluster";
-
-const SQLbackwards =
-  "Local operations:\
-\n\n\
-DROP TABLE IF EXISTS replays_local;\
-\n\n\
-Dist operations:\
-\n\n\
-Skipped dist operation - single node cluster";
+import { MigrationData, MigrationGroupResult, GroupOptions, RunMigrationRequest, RunMigrationResult, Action } from "./types";
 
 function ClickhouseMigrations(props: { api: Client }) {
   const [allGroups, setAllGroups] = useState<GroupOptions>({});
@@ -42,14 +23,15 @@ function ClickhouseMigrations(props: { api: Client }) {
   function selectGroup(groupName: string) {
     const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
+    setSQLText(()=>"")
   }
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
-    setSQLText(() => SQLforwards);
+    setSQLText(()=>"")
   }
 
-  function execute(action: string) {
+  function execute(action: Action) {
     const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
@@ -60,6 +42,28 @@ function ClickhouseMigrations(props: { api: Client }) {
     }
     console.log("executing !", action);
   }
+
+  function executeDryRun(action: Action) {
+      let req = {
+        action: action,
+        migration_id: migrationId,
+        group: migrationGroup?.group,
+        dry_run: true
+      }
+      console.log("executing dry run !", migrationId, action);
+      console.assert(req.dry_run, "dry_run must be set")
+      props.api
+      .runMigration(req as RunMigrationRequest)
+      .then((res) => {
+        console.log(res)
+        setSQLText(() => res.stdout);
+      })
+      .catch((err) => {
+        console.log(err)
+        setSQLText(() => JSON.stringify(err));
+      });
+  }
+
 
   function rowData() {
     if (migrationGroup) {
@@ -127,8 +131,8 @@ function ClickhouseMigrations(props: { api: Client }) {
           disabled={!data?.can_run}
           title={!data?.can_run ? data?.run_reason : ""}
           id="run"
-          value="EXECUTE run"
-          onClick={() => execute("run")}
+          defaultValue="EXECUTE run"
+          onClick={() => execute(Action.Run)}
           style={buttonStyle}
         />
         <input
@@ -137,8 +141,8 @@ function ClickhouseMigrations(props: { api: Client }) {
           disabled={!data?.can_reverse}
           title={!data?.can_reverse ? data?.reverse_reason : ""}
           id="reverse"
-          value="EXECUTE reverse"
-          onClick={() => execute("reverse")}
+          defaultValue="EXECUTE reverse"
+          onClick={() => execute(Action.Reverse)}
           style={buttonStyle}
         />
         <div>
@@ -168,7 +172,7 @@ function ClickhouseMigrations(props: { api: Client }) {
             groups you have access to
           </p>
           <select
-            value={migrationGroup?.group || ""}
+            defaultValue={migrationGroup?.group || ""}
             onChange={(evt) => selectGroup(evt.target.value)}
             style={dropDownStyle}
           >
@@ -187,14 +191,14 @@ function ClickhouseMigrations(props: { api: Client }) {
           {renderMigrationIds()}
           {migrationGroup && migrationId && (
             <div style={{ display: "inline-block" }}>
-              <button
-                onClick={() => setSQLText(() => SQLforwards)}
+              <button type="button"
+                onClick={() => executeDryRun(Action.Run)}
                 style={buttonStyle}
               >
                 forwards
               </button>
-              <button
-                onClick={() => setSQLText(() => SQLbackwards)}
+              <button type="button"
+                onClick={() => executeDryRun(Action.Reverse)}
                 style={buttonStyle}
               >
                 backwards
@@ -208,7 +212,7 @@ function ClickhouseMigrations(props: { api: Client }) {
               Raw SQL for running a migration (forwards) or reversing
               (backwards). Good to do before executing a migration for real.
             </p>
-            <textarea style={textareaStyle} value={SQLText} />
+            <textarea style={textareaStyle} readOnly value={SQLText} />
           </div>
         )}
         <div style={actionsStyle}>{renderActions()}</div>
