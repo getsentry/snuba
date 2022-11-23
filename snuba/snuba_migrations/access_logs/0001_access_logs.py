@@ -150,7 +150,12 @@ class Migration(migration.ClickhouseNodeMigration):
             "request_time_ms", UInt(32, codecs=["ZSTD(1)"])
         ),  # `request_time_ms` UInt32 MATERIALIZED CAST(round(request_time * 1000, 0), 'UInt32') CODEC(ZSTD(1)),
         Column(
-            "upstream_name", String(Modifiers(low_cardinality=True, default="CAST('', 'LowCardinality(String)')"))
+            "upstream_name",
+            String(
+                Modifiers(
+                    low_cardinality=True, default="CAST('', 'LowCardinality(String)')"
+                )
+            ),
         ),  # `upstream_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
         Column(
             "upstream_remote_address", String(codecs=["LZ4"])
