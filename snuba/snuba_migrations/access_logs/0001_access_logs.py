@@ -65,26 +65,14 @@ class Migration(migration.ClickhouseNodeMigration):
     granularity = "2048"
     local_table_name = "access_logs"
     columns: Sequence[Column[Modifiers]] = [
-        Column(
-            "_time", DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))
-        ),
+        Column("_time", DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
         Column("_date", Date(Modifiers(default="toDate(_time)"))),
         Column("_ms", UInt(32)),
-        Column(
-            "body_bytes_sent", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
-        ),
-        Column(
-            "status", UInt(32, Modifiers(codecs=["T64", "ZSTD(1)"]))
-        ),
-        Column(
-            "upstream_bytes_received", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
-        ),
-        Column(
-            "upstream_response_length", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
-        ),
-        Column(
-            "request_length", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
-        ),
+        Column("body_bytes_sent", UInt(32, Modifiers(codecs=["ZSTD(1)"]))),
+        Column("status", UInt(32, Modifiers(codecs=["T64", "ZSTD(1)"]))),
+        Column("upstream_bytes_received", UInt(32, Modifiers(codecs=["ZSTD(1)"]))),
+        Column("upstream_response_length", UInt(32, Modifiers(codecs=["ZSTD(1)"]))),
+        Column("request_length", UInt(32, Modifiers(codecs=["ZSTD(1)"]))),
         Column("project_id", UInt(64)),
         Column(
             "request", String(Modifiers(codecs=["LZ4HC(0)"]))
@@ -113,39 +101,21 @@ class Migration(migration.ClickhouseNodeMigration):
         Column(
             "http_referrer", String(Modifiers(codecs=["LZ4HC(0)"]))
         ),  # `http_referrer` String CODEC(LZ4HC(0)) TTL _date + toIntervalDay(30),
-        Column(
-            "remote_user", String(Modifiers(low_cardinality=True))
-        ),
-        Column(
-            "host", String(Modifiers(low_cardinality=True, codecs=["ZSTD(1)"]))
-        ),
-        Column(
-            "http_host", String(Modifiers(low_cardinality=True))
-        ),
+        Column("remote_user", String(Modifiers(low_cardinality=True))),
+        Column("host", String(Modifiers(low_cardinality=True, codecs=["ZSTD(1)"]))),
+        Column("http_host", String(Modifiers(low_cardinality=True))),
         Column(
             "http_user_agent", String(Modifiers(low_cardinality=True, codecs=["LZ4"]))
         ),
-        Column(
-            "request_completion", String(Modifiers(low_cardinality=True))
-        ),
-        Column(
-            "request_method", String(Modifiers(low_cardinality=True))
-        ),
-        Column(
-            "ssl_protocol", String(Modifiers(low_cardinality=True))
-        ),
-        Column(
-            "ssl_cipher", String(Modifiers(low_cardinality=True, default="''"))
-        ),
+        Column("request_completion", String(Modifiers(low_cardinality=True))),
+        Column("request_method", String(Modifiers(low_cardinality=True))),
+        Column("ssl_protocol", String(Modifiers(low_cardinality=True))),
+        Column("ssl_cipher", String(Modifiers(low_cardinality=True, default="''"))),
         Column(
             "ssl_server_name", String(Modifiers(low_cardinality=True, default="''"))
         ),
-        Column(
-            "statsd_path", String(Modifiers(low_cardinality=True))
-        ),
-        Column(
-            "remote_addr", IPv4(Modifiers(codecs=["ZSTD(1)"]))
-        ),
+        Column("statsd_path", String(Modifiers(low_cardinality=True))),
+        Column("remote_addr", IPv4(Modifiers(codecs=["ZSTD(1)"]))),
         Column(
             "request_time_ms", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
         ),  # `request_time_ms` UInt32 MATERIALIZED CAST(round(request_time * 1000, 0), 'UInt32') CODEC(ZSTD(1)),
@@ -153,8 +123,7 @@ class Migration(migration.ClickhouseNodeMigration):
             "upstream_name",
             String(
                 Modifiers(
-                    low_cardinality=True,
-                    default="CAST('', 'LowCardinality(String)')"
+                    low_cardinality=True, default="CAST('', 'LowCardinality(String)')"
                 )
             ),
         ),
