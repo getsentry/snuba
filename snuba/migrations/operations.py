@@ -25,8 +25,8 @@ class SqlOperation(ABC):
     def __init__(
         self,
         storage_set: StorageSetKey,
+        target: OperationTarget,
         settings: Optional[Mapping[str, Any]] = None,
-        target: OperationTarget = OperationTarget.UNSET,
     ):
         self._storage_set = storage_set
         self._settings = settings
@@ -63,8 +63,13 @@ class SqlOperation(ABC):
 
 
 class RunSql(SqlOperation):
-    def __init__(self, storage_set: StorageSetKey, statement: str) -> None:
-        super().__init__(storage_set)
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        statement: str,
+        target: OperationTarget = OperationTarget.UNSET,
+    ) -> None:
+        super().__init__(storage_set, target=target)
         self.__statement = statement
 
     def format_sql(self) -> str:
@@ -184,8 +189,8 @@ class ModifyTableTTL(SqlOperation):
         self.__materialize_ttl_on_modify = 1 if materialize_ttl_on_modify else 0
         super().__init__(
             storage_set,
+            target,
             {"materialize_ttl_on_modify": self.__materialize_ttl_on_modify},
-            target=target,
         )
         self.__table_name = table_name
         self.__reference_column = reference_column
