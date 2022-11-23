@@ -95,24 +95,36 @@ class Migration(migration.ClickhouseNodeMigration):
         Column(
             "http_referrer", String()
         ),  # `http_referrer` String CODEC(LZ4HC(0)) TTL _date + toIntervalDay(30),
-        Column("remote_user", String(Modifiers(low_cardinality=True))),  # `remote_user` LowCardinality(String),
-        Column("host", String(Modifiers(low_cardinality=True))),  # `host` LowCardinality(String) CODEC(ZSTD(1)),
-        Column("http_host", String(Modifiers(low_cardinality=True))),  # `http_host` LowCardinality(String),
+        Column(
+            "remote_user", String(Modifiers(low_cardinality=True))
+        ),  # `remote_user` LowCardinality(String),
+        Column(
+            "host", String(Modifiers(low_cardinality=True))
+        ),  # `host` LowCardinality(String) CODEC(ZSTD(1)),
+        Column(
+            "http_host", String(Modifiers(low_cardinality=True))
+        ),  # `http_host` LowCardinality(String),
         Column(
             "http_user_agent", String(Modifiers(low_cardinality=True))
         ),  # `http_user_agent` LowCardinality(String) CODEC(LZ4),
         Column(
             "request_completion", String(Modifiers(low_cardinality=True))
         ),  # `request_completion` LowCardinality(String),
-        Column("request_method", String(Modifiers(low_cardinality=True))),  # `request_method` LowCardinality(String),
-        Column("ssl_protocol", String(Modifiers(low_cardinality=True))),  # `ssl_protocol` LowCardinality(String),
+        Column(
+            "request_method", String(Modifiers(low_cardinality=True))
+        ),  # `request_method` LowCardinality(String),
+        Column(
+            "ssl_protocol", String(Modifiers(low_cardinality=True))
+        ),  # `ssl_protocol` LowCardinality(String),
         Column(
             "ssl_cipher", String(Modifiers(low_cardinality=True))
         ),  # `ssl_cipher` LowCardinality(String) DEFAULT '',
         Column(
             "ssl_server_name", String(Modifiers(low_cardinality=True))
         ),  # `ssl_server_name` LowCardinality(String) DEFAULT '',
-        Column("statsd_path", String(Modifiers(low_cardinality=True))),  # `statsd_path` LowCardinality(String),
+        Column(
+            "statsd_path", String(Modifiers(low_cardinality=True))
+        ),  # `statsd_path` LowCardinality(String),
         Column("remote_addr", IPv4()),  # `remote_addr` IPv4 CODEC(ZSTD(1)),
         Column(
             "request_time_ms", UInt(32)
