@@ -157,7 +157,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     default="CAST('', 'LowCardinality(String)')"
                 )
             ),
-        )
+        ),
         Column(
             "upstream_remote_address", String(Modifiers(codecs=["LZ4"]))
         ),  # `upstream_remote_address` String CODEC(LZ4) TTL _date + toIntervalDay(1),
