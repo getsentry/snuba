@@ -1,6 +1,16 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
+from snuba.clickhouse.columns import (
+    Column,
+    Date,
+    DateTime,
+    FixedString,
+    Float,
+    IPv4,
+    String,
+    UInt,
+)
+
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -56,57 +66,41 @@ class Migration(migration.ClickhouseNodeMigration):
     granularity = "2048"
     local_table_name = "access_logs"
     columns: Sequence[Column[Modifiers]] = [
-        Column("project_id", UInt(64)),
-        Column("event_id", UUID()),
-        Column("timestamp", DateTime()),
-        Column("event_type", String()),
-        Column("user", String()),
-        Column("details", String()),
-        Column("offset", UInt(64)),
-        Column("partition", UInt(64)),
+        Column("_time", DateTime()),  # CODEC(DoubleDelta, LZ4),
+        Column("_date", Date()),  # DEFAULT toDate(_time),
+        Column("_ms", UInt()),  # UInt32,
+
+        Column("body_bytes_sent", UInt()),  # UInt32 CODEC(ZSTD(1)),
+        Column("status", UInt()),  # UInt32 CODEC(T64, ZSTD(1)),
+        Column("upstream_bytes_received", UInt()),  # UInt32 CODEC(ZSTD(1)),
+        Column("upstream_response_length", UInt()),  # UInt32 CODEC(ZSTD(1)),
+        Column("request_length", UInt()),  # UInt32 CODEC(ZSTD(1)),
+        Column("project_id", UInt()),  # UInt64,
+
+        Column("request", String()),  # CODEC(LZ4HC(0)) TTL _date + toIntervalDay(90),
+        Column("request_uri", String()),  # CODEC(LZ4) TTL _date + toIntervalDay(30),
+        Column("request_uri_path", String()),  # LowCardinality(String) MATERIALIZED path(request_uri),
+        Column("request_time", Float()),  # Float32 CODEC(Gorilla, LZ4) TTL _date + toIntervalDay(1),
+
+        Column("upstream_connect_time", Float()),  # Float32 CODEC(Gorilla, LZ4),
+        Column("upstream_response_time", Float()),  # `upstream_response_time` Float32 CODEC(LZ4) TTL _date + toIntervalDay(1),
+        Column("upstream_response_time_ms", UInt()),  # `upstream_response_time_ms` UInt32 MATERIALIZED CAST(round(upstream_response_time * 1000, 0), 'UInt32') CODEC(T64, LZ4),
+        Column("request_id", FixedString()),  # `request_id` FixedString(32) CODEC(LZ4) TTL _date + toIntervalDay(1),
+        Column("http_referrer", String()),  # `http_referrer` String CODEC(LZ4HC(0)) TTL _date + toIntervalDay(30),
+        Column("remote_user", String()),  # `remote_user` LowCardinality(String),
+
+        Column("host", String()),  # `host` LowCardinality(String) CODEC(ZSTD(1)),
+        Column("http_host", String()),  # `http_host` LowCardinality(String),
+        Column("http_user_agent", String()),  # `http_user_agent` LowCardinality(String) CODEC(LZ4),
+        Column("request_completion", String()),  # `request_completion` LowCardinality(String),
+        Column("request_method", String()),  # `request_method` LowCardinality(String),
+
+        Column("ssl_protocol", String()),  # `ssl_protocol` LowCardinality(String),
+        Column("ssl_cipher", String()),  # `ssl_cipher` LowCardinality(String) DEFAULT '',
+        Column("ssl_server_name", String()),  # `ssl_server_name` LowCardinality(String) DEFAULT '',
+        Column("statsd_path", String()),  # `statsd_path` LowCardinality(String),
+        Column("remote_addr", IPv4()),  # `remote_addr` IPv4 CODEC(ZSTD(1)),
+        Column("request_time_ms", UInt()),  # `request_time_ms` UInt32 MATERIALIZED CAST(round(request_time * 1000, 0), 'UInt32') CODEC(ZSTD(1)),
+        Column("upstream_name", String()),  # `upstream_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+        Column("upstream_remote_address", String()),  # `upstream_remote_address` String CODEC(LZ4) TTL _date + toIntervalDay(1),
     ]
-
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.CreateTable(
-                storage_set=StorageSetKey.AUDIT_LOG,
-                table_name=self.local_table_name,
-                engine=table_engines.AggregatingMergeTree(
-                    storage_set=StorageSetKey.AUDIT_LOG,
-                    order_by="(project_id, event_id)",
-                    primary_key="(project_id, event_id)",
-                    partition_by="(toMonday(timestamp))",
-                    settings={"index_granularity": self.granularity},
-                    ttl="timestamp",
-                ),
-                columns=self.columns,
-            ),
-        ]
-
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.AUDIT_LOG,
-                table_name=self.local_table_name,
-            )
-        ]
-
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.CreateTable(
-                storage_set=StorageSetKey.AUDIT_LOG,
-                table_name="audit_log_dist",
-                engine=table_engines.Distributed(
-                    local_table_name=self.local_table_name, sharding_key=None
-                ),
-                columns=self.columns,
-            )
-        ]
-
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.AUDIT_LOG,
-                table_name="audit_log_dist",
-            )
-        ]
