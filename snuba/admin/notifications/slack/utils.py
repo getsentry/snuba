@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from snuba import settings
 from snuba.admin.audit_log.action import (
-    MITIGATION_ACTIONS,
+    MIGRATION_ACTIONS,
     RUNTIME_CONFIG_ACTIONS,
     AuditLogAction,
 )
@@ -13,7 +13,7 @@ def build_blocks(
 ) -> List[Any]:
     if action in RUNTIME_CONFIG_ACTIONS:
         text = build_runtime_config_text(data, action)
-    elif action in MITIGATION_ACTIONS:
+    elif action in MIGRATION_ACTIONS:
         text = build_migration_run_text(data, user, action)
     else:
         text = action.value
@@ -48,12 +48,12 @@ def build_migration_run_text(
     data: Any, user: str, action: AuditLogAction
 ) -> Optional[str]:
     if action == AuditLogAction.RAN_MIGRATION:
-        action_text = f"ran migration {data['migration']}"
+        action_text = f":runner: ran migration {data['migration']}"
     elif action == AuditLogAction.REVERSED_MIGRATION:
-        action_text = f"reversed migration {data['migration']}"
+        action_text = f":uno-reverse: reversed migration {data['migration']}"
     else:
         return None
-    return f"*Migration:* user '{user}' {action_text}  , force={data['force']}, fake={data['fake']}"
+    return f":warning: *Migration:* user '{user}' {action_text}  , force={data['force']}, fake={data['fake']}"
 
 
 def build_context(
