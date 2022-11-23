@@ -219,8 +219,8 @@ def test_specify_order() -> None:
     order = []
     for op in ops:
 
-        def effect(op: Mock) -> Callable[[bool], None]:
-            def add_op(local: bool) -> None:
+        def effect(op: Mock) -> Callable[[], None]:
+            def add_op() -> None:
                 order.append(op)
 
             return add_op
