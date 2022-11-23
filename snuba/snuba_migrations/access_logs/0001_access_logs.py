@@ -67,13 +67,13 @@ class Migration(migration.ClickhouseNodeMigration):
     columns: Sequence[Column[Modifiers]] = [
         Column("_time", DateTime()),  # CODEC(DoubleDelta, LZ4),
         Column("_date", Date()),  # DEFAULT toDate(_time),
-        Column("_ms", UInt()),  # UInt32,
+        Column("_ms", UInt(32)),  # UInt32,
         Column("body_bytes_sent", UInt()),  # UInt32 CODEC(ZSTD(1)),
-        Column("status", UInt()),  # UInt32 CODEC(T64, ZSTD(1)),
-        Column("upstream_bytes_received", UInt()),  # UInt32 CODEC(ZSTD(1)),
-        Column("upstream_response_length", UInt()),  # UInt32 CODEC(ZSTD(1)),
-        Column("request_length", UInt()),  # UInt32 CODEC(ZSTD(1)),
-        Column("project_id", UInt()),  # UInt64,
+        Column("status", UInt(32)),  # UInt32 CODEC(T64, ZSTD(1)),
+        Column("upstream_bytes_received", UInt(32)),  # UInt32 CODEC(ZSTD(1)),
+        Column("upstream_response_length", UInt(32)),  # UInt32 CODEC(ZSTD(1)),
+        Column("request_length", UInt(32)),  # UInt32 CODEC(ZSTD(1)),
+        Column("project_id", UInt(64)),  # UInt64,
         Column("request", String()),  # CODEC(LZ4HC(0)) TTL _date + toIntervalDay(90),
         Column("request_uri", String()),  # CODEC(LZ4) TTL _date + toIntervalDay(30),
         Column(
@@ -87,7 +87,7 @@ class Migration(migration.ClickhouseNodeMigration):
             "upstream_response_time", Float()
         ),  # `upstream_response_time` Float32 CODEC(LZ4) TTL _date + toIntervalDay(1),
         Column(
-            "upstream_response_time_ms", UInt()
+            "upstream_response_time_ms", UInt(32)
         ),  # `upstream_response_time_ms` UInt32 MATERIALIZED CAST(round(upstream_response_time * 1000, 0), 'UInt32') CODEC(T64, LZ4),
         Column(
             "request_id", FixedString()
@@ -115,7 +115,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("statsd_path", String(Modifiers(low_cardinality=True))),  # `statsd_path` LowCardinality(String),
         Column("remote_addr", IPv4()),  # `remote_addr` IPv4 CODEC(ZSTD(1)),
         Column(
-            "request_time_ms", UInt()
+            "request_time_ms", UInt(32)
         ),  # `request_time_ms` UInt32 MATERIALIZED CAST(round(request_time * 1000, 0), 'UInt32') CODEC(ZSTD(1)),
         Column(
             "upstream_name", String(Modifiers(low_cardinality=True))
