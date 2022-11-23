@@ -23,12 +23,14 @@ function ClickhouseMigrations(props: { api: Client }) {
   function selectGroup(groupName: string) {
     const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
-    setSQLText(()=>"")
+    setSQLText(()=>null)
+    setMigrationId(() => null);
+    refreshStatus(migrationGroup.group);
   }
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
-    setSQLText(()=>"")
+    setSQLText(()=>null)
   }
 
   function execute(action: Action) {
@@ -40,18 +42,17 @@ function ClickhouseMigrations(props: { api: Client }) {
         `Migration ${migrationId} is blocking, are you sure you want to execute?`
       );
     }
-    console.log("executing !", action);
+    executeRealRun(action);
   }
 
-  function executeDryRun(action: Action) {
+  function executeRun(action: Action, dry_run: boolean, force: boolean) {
       let req = {
         action: action,
         migration_id: migrationId,
         group: migrationGroup?.group,
-        dry_run: true
+        dry_run: dry_run,
+        force: force
       }
-      console.log("executing dry run !", migrationId, action);
-      console.assert(req.dry_run, "dry_run must be set")
       props.api
       .runMigration(req as RunMigrationRequest)
       .then((res) => {
@@ -62,6 +63,29 @@ function ClickhouseMigrations(props: { api: Client }) {
         console.log(err)
         setSQLText(() => JSON.stringify(err));
       });
+  }
+
+  function executeDryRun(action: Action) {
+    console.log("executing dry run !", migrationId, action);
+    executeRun(action, true, false)
+  }
+
+  function executeRealRun(action: Action) {
+    console.log("executing real run !", migrationId, action);
+    executeRun(action, false, false)
+    if (migrationGroup)
+      refreshStatus(migrationGroup.group)
+  }
+
+  function refreshStatus(group: string) {
+    props.api.getAllMigrationGroups().then((res) => {
+      let options: GroupOptions = {};
+      res.forEach(
+        (group: MigrationGroupResult) => (options[group.group] = group)
+      );
+      setAllGroups(options);
+      setMigrationGroup(options[group]);
+    });
   }
 
 
