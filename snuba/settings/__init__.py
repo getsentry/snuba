@@ -231,7 +231,8 @@ COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
-# Migrations in skipped groups will not be run
+# The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
+# Migrations for skipped groups will not be run.
 SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
