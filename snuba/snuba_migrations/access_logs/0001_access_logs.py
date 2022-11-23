@@ -67,25 +67,25 @@ class Migration(migration.ClickhouseNodeMigration):
     columns: Sequence[Column[Modifiers]] = [
         Column(
             "_time", DateTime(codecs=["DoubleDelta", "LZ4"])
-        ),  # CODEC(DoubleDelta, LZ4),
-        Column("_date", Date(default="toDate(_time)")),  # DEFAULT toDate(_time),
-        Column("_ms", UInt(32)),  # UInt32,
+        ),
+        Column("_date", Date(default="toDate(_time)")),
+        Column("_ms", UInt(32)),
         Column(
             "body_bytes_sent", UInt(32, codecs=["ZSTD(1)"])
-        ),  # UInt32 CODEC(ZSTD(1)),
+        ),
         Column(
             "status", UInt(32, codecs=["T64", "ZSTD(1)"])
-        ),  # UInt32 CODEC(T64, ZSTD(1)),
+        ),
         Column(
             "upstream_bytes_received", UInt(32, codecs=["ZSTD(1)"])
-        ),  # UInt32 CODEC(ZSTD(1)),
+        ),
         Column(
             "upstream_response_length", UInt(32, codecs=["ZSTD(1)"])
-        ),  # UInt32 CODEC(ZSTD(1)),
+        ),
         Column(
             "request_length", UInt(32, codecs=["ZSTD(1)"])
-        ),  # UInt32 CODEC(ZSTD(1)),
-        Column("project_id", UInt(64)),  # UInt64,
+        ),
+        Column("project_id", UInt(64)),
         Column(
             "request", String(codecs=["LZ4HC(0)"])
         ),  # CODEC(LZ4HC(0)) TTL _date + toIntervalDay(90),
@@ -96,11 +96,11 @@ class Migration(migration.ClickhouseNodeMigration):
             "request_uri_path", String(Modifiers(low_cardinality=True))
         ),  # LowCardinality(String) MATERIALIZED path(request_uri),
         Column(
-            "request_time", Float(32)
+            "request_time", Float(32, codecs=["Gorilla", "LZ4"])
         ),  # Float32 CODEC(Gorilla, LZ4) TTL _date + toIntervalDay(1),
         Column(
             "upstream_connect_time", Float(32, codecs=["Gorilla", "LZ4"])
-        ),  # Float32 CODEC(Gorilla, LZ4),
+        ),
         Column(
             "upstream_response_time", Float(32, codecs=["LZ4"])
         ),  # `upstream_response_time` Float32 CODEC(LZ4) TTL _date + toIntervalDay(1),
@@ -115,37 +115,37 @@ class Migration(migration.ClickhouseNodeMigration):
         ),  # `http_referrer` String CODEC(LZ4HC(0)) TTL _date + toIntervalDay(30),
         Column(
             "remote_user", String(Modifiers(low_cardinality=True))
-        ),  # `remote_user` LowCardinality(String),
+        ),
         Column(
             "host", String(Modifiers(low_cardinality=True, codecs=["ZSTD(1)"]))
-        ),  # `host` LowCardinality(String) CODEC(ZSTD(1)),
+        ),
         Column(
             "http_host", String(Modifiers(low_cardinality=True))
-        ),  # `http_host` LowCardinality(String),
+        ),
         Column(
             "http_user_agent", String(Modifiers(low_cardinality=True, codecs=["LZ4"]))
-        ),  # `http_user_agent` LowCardinality(String) CODEC(LZ4),
+        ),
         Column(
             "request_completion", String(Modifiers(low_cardinality=True))
-        ),  # `request_completion` LowCardinality(String),
+        ),
         Column(
             "request_method", String(Modifiers(low_cardinality=True))
-        ),  # `request_method` LowCardinality(String),
+        ),
         Column(
             "ssl_protocol", String(Modifiers(low_cardinality=True))
-        ),  # `ssl_protocol` LowCardinality(String),
+        ),
         Column(
             "ssl_cipher", String(Modifiers(low_cardinality=True, default="''"))
-        ),  # `ssl_cipher` LowCardinality(String) DEFAULT '',
+        ),
         Column(
             "ssl_server_name", String(Modifiers(low_cardinality=True, default="''"))
-        ),  # `ssl_server_name` LowCardinality(String) DEFAULT '',
+        ),
         Column(
             "statsd_path", String(Modifiers(low_cardinality=True))
-        ),  # `statsd_path` LowCardinality(String),
+        ),
         Column(
             "remote_addr", IPv4(codecs=["ZSTD(1)"])
-        ),  # `remote_addr` IPv4 CODEC(ZSTD(1)),
+        ),
         Column(
             "request_time_ms", UInt(32, codecs=["ZSTD(1)"])
         ),  # `request_time_ms` UInt32 MATERIALIZED CAST(round(request_time * 1000, 0), 'UInt32') CODEC(ZSTD(1)),
@@ -153,10 +153,11 @@ class Migration(migration.ClickhouseNodeMigration):
             "upstream_name",
             String(
                 Modifiers(
-                    low_cardinality=True, default="CAST('', 'LowCardinality(String)')"
+                    low_cardinality=True,
+                    default="CAST('', 'LowCardinality(String)')"
                 )
             ),
-        ),  # `upstream_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+        )
         Column(
             "upstream_remote_address", String(codecs=["LZ4"])
         ),  # `upstream_remote_address` String CODEC(LZ4) TTL _date + toIntervalDay(1),
