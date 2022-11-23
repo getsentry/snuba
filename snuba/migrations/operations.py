@@ -237,11 +237,14 @@ class ModifyColumn(SqlOperation):
         table_name: str,
         column: Column[MigrationModifiers],
         ttl_month: Optional[Tuple[str, int]] = None,
+        ttl_day: Optional[Tuple[str, int]] = None,
     ):
         super().__init__(storage_set)
         self.__table_name = table_name
         self.__column = column
+        assert not (ttl_month and ttl_day), "Only daily or monthly TTL allowed"
         self.__ttl_month = ttl_month
+        self.__ttl_day = ttl_day
 
     def format_sql(self) -> str:
         column = self.__column.for_schema()
@@ -249,11 +252,14 @@ class ModifyColumn(SqlOperation):
 
     @property
     def optional_ttl_clause(self) -> str:
-        if self.__ttl_month is None:
-            return ""
+        if self.__ttl_month is not None:
+            ttl_column, ttl_month = self.__ttl_month
+            return f" TTL {ttl_column} + INTERVAL {ttl_month} MONTH"
+        elif self.__ttl_day is not None:
+            ttl_column, ttl_day = self.__ttl_day
+            return f" TTL {ttl_column} + INTERVAL {ttl_day} DAY"
 
-        ttl_column, ttl_month = self.__ttl_month
-        return f" TTL {ttl_column} + INTERVAL {ttl_month} MONTH"
+        return ""
 
 
 class AddIndex(SqlOperation):

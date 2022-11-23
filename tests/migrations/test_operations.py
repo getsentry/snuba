@@ -3,6 +3,8 @@ from logging import Logger
 from typing import Callable, Sequence
 from unittest.mock import Mock
 
+import pytest
+
 from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration
@@ -114,6 +116,41 @@ def test_modify_column() -> None:
         ).format_sql()
         == "ALTER TABLE test_table MODIFY COLUMN test String;"
     )
+
+
+def test_modify_column_ttl_month() -> None:
+    assert (
+        ModifyColumn(
+            StorageSetKey.EVENTS,
+            "test_table",
+            Column("test", String()),
+            ttl_month=("test", 2),
+        ).format_sql()
+        == "ALTER TABLE test_table MODIFY COLUMN test String TTL test + INTERVAL 2 MONTH;"
+    )
+
+
+def test_modify_column_ttl_day() -> None:
+    assert (
+        ModifyColumn(
+            StorageSetKey.EVENTS,
+            "test_table",
+            Column("test", String()),
+            ttl_day=("test", 2),
+        ).format_sql()
+        == "ALTER TABLE test_table MODIFY COLUMN test String TTL test + INTERVAL 2 DAY;"
+    )
+
+
+def test_modify_column_ttl_day_and_ttl_month() -> None:
+    with pytest.raises(AssertionError):
+        ModifyColumn(
+            StorageSetKey.EVENTS,
+            "test_table",
+            Column("test", String()),
+            ttl_month=("test", 2),
+            ttl_day=("test", 2),
+        ).format_sql()
 
 
 def test_add_index() -> None:
