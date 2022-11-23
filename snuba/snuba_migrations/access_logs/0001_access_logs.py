@@ -66,52 +66,52 @@ class Migration(migration.ClickhouseNodeMigration):
     local_table_name = "access_logs"
     columns: Sequence[Column[Modifiers]] = [
         Column(
-            "_time", DateTime(codecs=["DoubleDelta", "LZ4"])
+            "_time", DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))
         ),
-        Column("_date", Date(default="toDate(_time)")),
+        Column("_date", Date(Modifiers(default="toDate(_time)"))),
         Column("_ms", UInt(32)),
         Column(
-            "body_bytes_sent", UInt(32, codecs=["ZSTD(1)"])
+            "body_bytes_sent", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
         ),
         Column(
-            "status", UInt(32, codecs=["T64", "ZSTD(1)"])
+            "status", UInt(32, Modifiers(codecs=["T64", "ZSTD(1)"]))
         ),
         Column(
-            "upstream_bytes_received", UInt(32, codecs=["ZSTD(1)"])
+            "upstream_bytes_received", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
         ),
         Column(
-            "upstream_response_length", UInt(32, codecs=["ZSTD(1)"])
+            "upstream_response_length", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
         ),
         Column(
-            "request_length", UInt(32, codecs=["ZSTD(1)"])
+            "request_length", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
         ),
         Column("project_id", UInt(64)),
         Column(
-            "request", String(codecs=["LZ4HC(0)"])
+            "request", String(Modifiers(codecs=["LZ4HC(0)"]))
         ),  # CODEC(LZ4HC(0)) TTL _date + toIntervalDay(90),
         Column(
-            "request_uri", String(codecs=["LZ4"])
+            "request_uri", String(Modifiers(codecs=["LZ4"]))
         ),  # CODEC(LZ4) TTL _date + toIntervalDay(30),
         Column(
             "request_uri_path", String(Modifiers(low_cardinality=True))
         ),  # LowCardinality(String) MATERIALIZED path(request_uri),
         Column(
-            "request_time", Float(32, codecs=["Gorilla", "LZ4"])
+            "request_time", Float(32, Modifiers(codecs=["Gorilla", "LZ4"]))
         ),  # Float32 CODEC(Gorilla, LZ4) TTL _date + toIntervalDay(1),
         Column(
-            "upstream_connect_time", Float(32, codecs=["Gorilla", "LZ4"])
+            "upstream_connect_time", Float(32, Modifiers(codecs=["Gorilla", "LZ4"]))
         ),
         Column(
-            "upstream_response_time", Float(32, codecs=["LZ4"])
+            "upstream_response_time", Float(32, Modifiers(codecs=["LZ4"]))
         ),  # `upstream_response_time` Float32 CODEC(LZ4) TTL _date + toIntervalDay(1),
         Column(
-            "upstream_response_time_ms", UInt(32, codecs=["T64", "LZ4"])
+            "upstream_response_time_ms", UInt(32, Modifiers(codecs=["T64", "LZ4"]))
         ),  # `upstream_response_time_ms` UInt32 MATERIALIZED CAST(round(upstream_response_time * 1000, 0), 'UInt32') CODEC(T64, LZ4),
         Column(
-            "request_id", FixedString(32, codecs=["LZ4"])
+            "request_id", FixedString(32, Modifiers(codecs=["LZ4"]))
         ),  # `request_id` FixedString(32) CODEC(LZ4) TTL _date + toIntervalDay(1),
         Column(
-            "http_referrer", String(codecs=["LZ4HC(0)"])
+            "http_referrer", String(Modifiers(codecs=["LZ4HC(0)"]))
         ),  # `http_referrer` String CODEC(LZ4HC(0)) TTL _date + toIntervalDay(30),
         Column(
             "remote_user", String(Modifiers(low_cardinality=True))
@@ -144,10 +144,10 @@ class Migration(migration.ClickhouseNodeMigration):
             "statsd_path", String(Modifiers(low_cardinality=True))
         ),
         Column(
-            "remote_addr", IPv4(codecs=["ZSTD(1)"])
+            "remote_addr", IPv4(Modifiers(codecs=["ZSTD(1)"]))
         ),
         Column(
-            "request_time_ms", UInt(32, codecs=["ZSTD(1)"])
+            "request_time_ms", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
         ),  # `request_time_ms` UInt32 MATERIALIZED CAST(round(request_time * 1000, 0), 'UInt32') CODEC(ZSTD(1)),
         Column(
             "upstream_name",
@@ -159,6 +159,6 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         )
         Column(
-            "upstream_remote_address", String(codecs=["LZ4"])
+            "upstream_remote_address", String(Modifiers(codecs=["LZ4"]))
         ),  # `upstream_remote_address` String CODEC(LZ4) TTL _date + toIntervalDay(1),
     ]
