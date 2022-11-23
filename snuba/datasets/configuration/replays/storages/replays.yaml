@@ -118,3 +118,6 @@ stream_loader:
   processor:
     name: ReplaysProcessor
   default_topic: ingest-replay-events
+  dlq_policy:
+    type: produce
+    args: [snuba-dead-letter-replays]
