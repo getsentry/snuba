@@ -50,6 +50,10 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Consumer group used for consuming the scheduled subscription topic/s.",
 )
 @click.option(
+    "--slice-id",
+    help="The slice to load scheduled queries from",
+)
+@click.option(
     "--total-concurrent-queries",
     default=64,
     type=int,
@@ -84,6 +88,7 @@ def subscriptions_executor(
     dataset_name: str,
     entity_names: Sequence[str],
     consumer_group: str,
+    slice_id: Optional[int],
     total_concurrent_queries: int,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
@@ -99,10 +104,15 @@ def subscriptions_executor(
     setup_logging(log_level)
     setup_sentry()
 
+    metrics_tags = {
+        "dataset": dataset_name,
+    }
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
     metrics = MetricsWrapper(
-        environment.metrics,
-        "subscriptions.executor",
-        tags={"dataset": dataset_name},
+        environment.metrics, "subscriptions.executor", tags=metrics_tags
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
@@ -135,6 +145,7 @@ def subscriptions_executor(
         dataset_name,
         entity_names,
         consumer_group,
+        slice_id,
         producer,
         total_concurrent_queries,
         auto_offset_reset,
