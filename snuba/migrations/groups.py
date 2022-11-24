@@ -23,7 +23,8 @@ class MigrationGroup(Enum):
     ACCESS_LOGS = "access_logs"
 
 
-# Migration groups are mandatory by default, unless they are on this list
+# Migration groups are mandatory by default. Specific groups can
+# only be skipped (SKIPPED_MIGRATION_GROUPS) if the exist in this list.
 OPTIONAL_GROUPS = {
     MigrationGroup.METRICS,
     MigrationGroup.SESSIONS,

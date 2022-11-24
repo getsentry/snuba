@@ -17,6 +17,7 @@ class MigrationModifiers(TypeModifiers):
     default: Optional[str] = None
     materialized: Optional[str] = None
     codecs: Optional[Sequence[str]] = None
+    ttl: Optional[str] = None
 
     def _get_modifiers(self) -> Sequence[TypeModifier]:
         ret: List[TypeModifier] = []
@@ -30,6 +31,8 @@ class MigrationModifiers(TypeModifiers):
             ret.append(Materialized(self.materialized))
         if self.codecs is not None:
             ret.append(WithCodecs(self.codecs))
+        if self.ttl is not None:
+            ret.append(WithTTL(self.ttl))
         return ret
 
     def merge(self, other: MigrationModifiers) -> MigrationModifiers:
@@ -41,6 +44,7 @@ class MigrationModifiers(TypeModifiers):
             if other.materialized is None
             else other.materialized,
             codecs=self.codecs if other.codecs is None else other.codecs,
+            ttl=self.ttl if other.ttl is None else other.ttl,
         )
 
 
@@ -72,3 +76,11 @@ class WithDefault(TypeModifier):
 class LowCardinality(TypeModifier):
     def for_schema(self, content: str) -> str:
         return "LowCardinality({})".format(content)
+
+
+@dataclass(frozen=True)
+class WithTTL(TypeModifier):
+    ttl_clause: str
+
+    def for_schema(self, content: str) -> str:
+        return f"{content} TTL {self.ttl_clause}"

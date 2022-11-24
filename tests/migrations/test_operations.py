@@ -54,6 +54,36 @@ def test_create_table() -> None:
     ]
 
 
+def test_create_table_with_column_ttl() -> None:
+    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
+    columns: Sequence[Column[Modifiers]] = [
+        Column("id", String()),
+        Column("name", String(Modifiers(nullable=True))),
+        Column("version", UInt(64)),
+        Column(
+            "restricted",
+            String(Modifiers(low_cardinality=True, ttl="timestamp + toIntervalDay(1)")),
+        ),
+    ]
+
+    assert CreateTable(
+        StorageSetKey.EVENTS,
+        "test_table",
+        columns,
+        ReplacingMergeTree(
+            storage_set=StorageSetKey.EVENTS,
+            version_column="version",
+            order_by="version",
+            settings={"index_granularity": "256"},
+        ),
+    ).format_sql() in [
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64, restricted LowCardinality(String) TTL timestamp + toIntervalDay(1)) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64, restricted LowCardinality(String) TTL timestamp + toIntervalDay(1)) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
+        + f"{database}/test_table'"
+        + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
+    ]
+
+
 def test_create_materialized_view() -> None:
     assert (
         CreateMaterializedView(
@@ -219,8 +249,8 @@ def test_specify_order() -> None:
     order = []
     for op in ops:
 
-        def effect(op: Mock) -> Callable[[bool], None]:
-            def add_op(local: bool) -> None:
+        def effect(op: Mock) -> Callable[[], None]:
+            def add_op() -> None:
                 order.append(op)
 
             return add_op

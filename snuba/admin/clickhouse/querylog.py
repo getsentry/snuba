@@ -1,6 +1,5 @@
 from snuba.admin.audit_log.querylog import audit_log
 from snuba.admin.clickhouse.common import (
-    InvalidCustomQuery,
     get_ro_query_node_connection,
     validate_ro_query,
 )
@@ -9,9 +8,6 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import get_config
-
-ENABLE_QUERYLOG_API_CONFIG = "enable_clickhouse_querylog_api"
 
 
 @audit_log
@@ -26,17 +22,13 @@ def run_querylog_query(query: str, user: str) -> ClickhouseResult:
     validate_ro_query(
         sql_query=query, allowed_tables={schema.get_table_name(), "clickhouse_queries"}
     )
-    if get_config(ENABLE_QUERYLOG_API_CONFIG, 0):
-        return __run_querylog_query(query)
-    raise InvalidCustomQuery("Production ClickHouse querylog access is not yet ready.")
+    return __run_querylog_query(query)
 
 
 def describe_querylog_schema() -> ClickhouseResult:
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
-    if get_config(ENABLE_QUERYLOG_API_CONFIG, 0):
-        return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}")
-    raise InvalidCustomQuery("Production ClickHouse querylog access is not yet ready.")
+    return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}")
 
 
 def __run_querylog_query(query: str) -> ClickhouseResult:
