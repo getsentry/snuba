@@ -15,7 +15,7 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 """
- CREATE TABLE default.access_log
+CREATE TABLE default.access_log
 (
     `_time` DateTime CODEC(DoubleDelta, LZ4),
     `_date` Date DEFAULT toDate(_time),
@@ -159,23 +159,13 @@ class Migration(migration.ClickhouseNodeMigration):
     ]
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        """
-        ENGINE = ReplicatedMergeTree('/clickhouse/tables/clicktail/access_log', 'chalet')
-        PARTITION BY _date
-        ORDER BY (statsd_path, request_uri_path, _date, _time)
-        TTL _date + toIntervalDay(400)
-        SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 1000000000
-        """
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.ACCESS_LOGS,
                 table_name=self.local_table_name,
-                engine=table_engines.AggregatingMergeTree(
+                engine=table_engines.MergeTree(
                     storage_set=StorageSetKey.ACCESS_LOGS,
-                    # TODO: changes to ordering?
                     order_by="(statsd_path, request_uri_path, _date, _time)",
-                    # TODO: primary_key? is this inferred from order_by?
-                    # primary_key="(org_id, project_id, metric_id, granularity, timestamp)",
                     partition_by="_date",
                     settings={
                         "index_granularity": self.index_granularity,
@@ -215,7 +205,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.ACCESS_LOGS,
                 table_name=self.dist_table_name,
                 engine=table_engines.Distributed(
-                    local_table_name=self.local_table_name, sharding_key=None
+                    local_table_name=self.local_table_name,
+                    sharding_key="request_id",
                 ),
                 columns=self.columns,
             )
