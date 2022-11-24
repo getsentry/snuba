@@ -125,9 +125,7 @@ T = TypeVar("T")
 
 class RedisClusters(TypedDict):
     cache: RedisClusterConfig | None
-    cache_v2: RedisClusterConfig | None
     rate_limiter: RedisClusterConfig | None
-    rate_limiter_v2: RedisClusterConfig | None
     subscription_store: RedisClusterConfig | None
     replacements_store: RedisClusterConfig | None
     config: RedisClusterConfig | None
@@ -137,9 +135,7 @@ class RedisClusters(TypedDict):
 
 REDIS_CLUSTERS: RedisClusters = {
     "cache": None,
-    "cache_v2": None,
     "rate_limiter": None,
-    "rate_limiter_v2": None,
     "subscription_store": None,
     "replacements_store": None,
     "config": None,
