@@ -174,10 +174,9 @@ class Migration(migration.ClickhouseNodeMigration):
                     storage_set=StorageSetKey.ACCESS_LOGS,
                     # TODO: changes to ordering?
                     order_by="(statsd_path, request_uri_path, _date, _time)",
-                    # TODO: primary_key?
-                    primary_key="(org_id, project_id, metric_id, granularity, timestamp)",
-                    # TODO: partition_by?
-                    partition_by="(retention_days, toMonday(timestamp))",
+                    # TODO: primary_key? is this inferred from order_by?
+                    # primary_key="(org_id, project_id, metric_id, granularity, timestamp)",
+                    partition_by="_date",
                     settings={
                         "index_granularity": self.index_granularity,
                         "min_bytes_for_wide_part": self.min_bytes_for_wide_part,
@@ -207,5 +206,25 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=StorageSetKey.ACCESS_LOGS,
                 table_name=self.local_table_name,
+            )
+        ]
+
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
+        return [
+            operations.CreateTable(
+                storage_set=StorageSetKey.ACCESS_LOGS,
+                table_name=self.dist_table_name,
+                engine=table_engines.Distributed(
+                    local_table_name=self.local_table_name, sharding_key=None
+                ),
+                columns=self.columns,
+            )
+        ]
+
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+        return [
+            operations.DropTable(
+                storage_set=StorageSetKey.ACCESS_LOGS,
+                table_name=self.dist_table_name,
             )
         ]
