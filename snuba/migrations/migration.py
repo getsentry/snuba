@@ -3,7 +3,7 @@ from typing import Sequence
 
 from snuba.clusters.cluster import get_cluster
 from snuba.migrations.context import Context
-from snuba.migrations.operations import RunPython, SqlOperation
+from snuba.migrations.operations import OperationTarget, RunPython, SqlOperation
 from snuba.migrations.status import Status
 
 
@@ -157,9 +157,11 @@ class ClickhouseNodeMigrationLegacy(Migration, ABC):
 
         for op in ops:
             if op in local_ops:
-                op.execute(local=True)
+                op.target = OperationTarget.LOCAL
+                op.execute()
             if op in dist_ops:
-                op.execute(local=False)
+                op.target = OperationTarget.DISTRIBUTED
+                op.execute()
 
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
@@ -185,9 +187,11 @@ class ClickhouseNodeMigrationLegacy(Migration, ABC):
 
         for op in ops:
             if op in local_ops:
-                op.execute(local=True)
+                op.target = OperationTarget.LOCAL
+                op.execute()
             if op in dist_ops:
-                op.execute(local=False)
+                op.target = OperationTarget.DISTRIBUTED
+                op.execute()
         logger.info(f"Finished reversing: {migration_id}")
 
         # The migrations table will be destroyed if the first
