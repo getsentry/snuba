@@ -81,8 +81,8 @@ class Migration(migration.ClickhouseNodeMigration):
             "request_uri", String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(30)"))
         ),
         Column(
-            "request_uri_path", String(Modifiers(low_cardinality=True))
-        ),  # LowCardinality(String) MATERIALIZED path(request_uri),
+            "request_uri_path", String(Modifiers(low_cardinality=True, materialized="path(request_uri)"))
+        ),
         Column(
             "request_time", Float(32, Modifiers(codecs=["Gorilla", "LZ4"], ttl="_date + toIntervalDay(1)"))
         ),
@@ -93,8 +93,8 @@ class Migration(migration.ClickhouseNodeMigration):
             "upstream_response_time", Float(32, Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1)"))
         ),
         Column(
-            "upstream_response_time_ms", UInt(32, Modifiers(codecs=["T64", "LZ4"]))
-        ),  # `upstream_response_time_ms` UInt32 MATERIALIZED CAST(round(upstream_response_time * 1000, 0), 'UInt32') CODEC(T64, LZ4),
+            "upstream_response_time_ms", UInt(32, Modifiers(codecs=["T64", "LZ4"], materialized="CAST(round(upstream_response_time * 1000, 0), 'UInt32')"))
+        ),
         Column(
             "request_id", FixedString(32, Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1)"))
         ),
@@ -123,8 +123,8 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("statsd_path", String(Modifiers(low_cardinality=True))),
         Column("remote_addr", IPv4(Modifiers(codecs=["ZSTD(1)"]))),
         Column(
-            "request_time_ms", UInt(32, Modifiers(codecs=["ZSTD(1)"]))
-        ),  # `request_time_ms` UInt32 MATERIALIZED CAST(round(request_time * 1000, 0), 'UInt32') CODEC(ZSTD(1)),
+            "request_time_ms", UInt(32, Modifiers(codecs=["ZSTD(1)"], materialized="CAST(round(request_time * 1000, 0), 'UInt32')"))
+        ),
         Column(
             "upstream_name",
             String(
