@@ -75,41 +75,51 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("request_length", UInt(32, Modifiers(codecs=["ZSTD(1)"]))),
         Column("project_id", UInt(64)),
         Column(
-            "request", String(Modifiers(codecs=["LZ4HC(0)"], ttl="_date + toIntervalDay(90)"))
+            "request",
+            String(Modifiers(codecs=["LZ4HC(0)"], ttl="_date + toIntervalDay(90)")),
         ),
         Column(
-            "request_uri", String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(30)"))
+            "request_uri",
+            String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(30)")),
         ),
         Column(
-            "request_uri_path", String(Modifiers(low_cardinality=True, materialized="path(request_uri)"))
+            "request_uri_path",
+            String(Modifiers(low_cardinality=True, materialized="path(request_uri)")),
         ),
         Column(
-            "request_time", Float(32, Modifiers(codecs=["Gorilla", "LZ4"], ttl="_date + toIntervalDay(1)"))
+            "request_time",
+            Float(
+                32, Modifiers(codecs=["Gorilla", "LZ4"], ttl="_date + toIntervalDay(1)")
+            ),
         ),
         Column(
             "upstream_connect_time", Float(32, Modifiers(codecs=["Gorilla", "LZ4"]))
         ),
         Column(
-            "upstream_response_time", Float(32, Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1)"))
+            "upstream_response_time",
+            Float(32, Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1)")),
         ),
         Column(
-            "upstream_response_time_ms", UInt(32, Modifiers(codecs=["T64", "LZ4"], materialized="CAST(round(upstream_response_time * 1000, 0), 'UInt32')"))
+            "upstream_response_time_ms",
+            UInt(
+                32,
+                Modifiers(
+                    codecs=["T64", "LZ4"],
+                    materialized="CAST(round(upstream_response_time * 1000, 0), 'UInt32')",
+                ),
+            ),
         ),
         Column(
-            "request_id", FixedString(32, Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1)"))
+            "request_id",
+            FixedString(32, Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1)")),
         ),
         Column(
-            "http_referrer", String(Modifiers(codecs=["LZ4HC(0)"], ttl="_date + toIntervalDay(30)"))
+            "http_referrer",
+            String(Modifiers(codecs=["LZ4HC(0)"], ttl="_date + toIntervalDay(30)")),
         ),
-        Column(
-            "remote_user", String(Modifiers(low_cardinality=True))
-        ),
-        Column(
-            "host", String(Modifiers(low_cardinality=True, codecs=["ZSTD(1)"]))
-        ),
-        Column(
-            "http_host", String(Modifiers(low_cardinality=True))
-        ),
+        Column("remote_user", String(Modifiers(low_cardinality=True))),
+        Column("host", String(Modifiers(low_cardinality=True, codecs=["ZSTD(1)"]))),
+        Column("http_host", String(Modifiers(low_cardinality=True))),
         Column(
             "http_user_agent", String(Modifiers(low_cardinality=True, codecs=["LZ4"]))
         ),
@@ -123,7 +133,14 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("statsd_path", String(Modifiers(low_cardinality=True))),
         Column("remote_addr", IPv4(Modifiers(codecs=["ZSTD(1)"]))),
         Column(
-            "request_time_ms", UInt(32, Modifiers(codecs=["ZSTD(1)"], materialized="CAST(round(request_time * 1000, 0), 'UInt32')"))
+            "request_time_ms",
+            UInt(
+                32,
+                Modifiers(
+                    codecs=["ZSTD(1)"],
+                    materialized="CAST(round(request_time * 1000, 0), 'UInt32')",
+                ),
+            ),
         ),
         Column(
             "upstream_name",
@@ -134,6 +151,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ),
         Column(
-            "upstream_remote_address", String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1),"))
+            "upstream_remote_address",
+            String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1),")),
         ),
     ]
