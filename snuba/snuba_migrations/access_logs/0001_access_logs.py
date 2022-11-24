@@ -62,8 +62,9 @@ SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 1000000000
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
-    granularity = "2048"
-    local_table_name = "access_logs"
+    index_granularity = "8192"
+    local_table_name = "access_logs_local"
+    dist_table_name = "access_logs_dist"
     columns: Sequence[Column[Modifiers]] = [
         Column("_time", DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
         Column("_date", Date(Modifiers(default="toDate(_time)"))),
@@ -155,3 +156,52 @@ class Migration(migration.ClickhouseNodeMigration):
             String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1),")),
         ),
     ]
+
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
+        """
+        ENGINE = ReplicatedMergeTree('/clickhouse/tables/clicktail/access_log', 'chalet')
+        PARTITION BY _date
+        ORDER BY (statsd_path, request_uri_path, _date, _time)
+        TTL _date + toIntervalDay(400)
+        SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 1000000000
+        """
+        return [
+            operations.CreateTable(
+                storage_set=StorageSetKey.ACCESS_LOGS,
+                table_name=self.local_table_name,
+                engine=table_engines.AggregatingMergeTree(
+                    storage_set=StorageSetKey.ACCESS_LOGS,
+                    # TODO: changes to ordering?
+                    order_by="(statsd_path, request_uri_path, _date, _time)",
+                    # TODO: primary_key?
+                    primary_key="(org_id, project_id, metric_id, granularity, timestamp)",
+                    # TODO: partition_by?
+                    partition_by="(retention_days, toMonday(timestamp))",
+                    settings={"index_granularity": self.index_granularity},
+                    ttl="TTL _date + toIntervalDay(400)",
+                ),
+                columns=self.columns,
+            ),
+            operations.AddIndex(
+                storage_set=StorageSetKey.ACCESS_LOGS,
+                table_name=self.local_table_name,
+                index_name="minmax_status",
+                index_type="minmax",
+                granularity=4,
+            ),
+            operations.AddIndex(
+                storage_set=StorageSetKey.ACCESS_LOGS,
+                table_name=self.local_table_name,
+                index_name="minmax_project_id",
+                index_type="minmax",
+                granularity=4,
+            ),
+        ]
+
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
+        return [
+            operations.DropTable(
+                storage_set=StorageSetKey.ACCESS_LOGS,
+                table_name=self.local_table_name,
+            )
+        ]
