@@ -296,7 +296,9 @@ class AccessLogsLoader(DirectoryLoader):
 
     def get_migrations(self) -> Sequence[str]:
         # returns a list of migration ids (we will add this later)
-        return []
+        return [
+            "0001_access_logs",
+        ]
 
 
 _REGISTERED_GROUPS = {
