@@ -60,10 +60,10 @@ SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 1000000000
 """
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
     index_granularity = "8192"
-    min_bytes_for_wide_part = 1000000000
+    min_bytes_for_wide_part = "1000000000"
     local_table_name = "access_logs_local"
     dist_table_name = "access_logs_dist"
     columns: Sequence[Column[Modifiers]] = [
@@ -154,7 +154,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ),
         Column(
             "upstream_remote_address",
-            String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1),")),
+            String(Modifiers(codecs=["LZ4"], ttl="_date + toIntervalDay(1)")),
         ),
     ]
 
@@ -171,13 +171,14 @@ class Migration(migration.ClickhouseNodeMigration):
                         "index_granularity": self.index_granularity,
                         "min_bytes_for_wide_part": self.min_bytes_for_wide_part,
                     },
-                    ttl="TTL _date + toIntervalDay(400)",
+                    ttl="_date + toIntervalDay(400)",
                 ),
                 columns=self.columns,
             ),
             operations.AddIndex(
                 storage_set=StorageSetKey.ACCESS_LOGS,
                 table_name=self.local_table_name,
+                index_expression="status",
                 index_name="minmax_status",
                 index_type="minmax",
                 granularity=4,
@@ -185,6 +186,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddIndex(
                 storage_set=StorageSetKey.ACCESS_LOGS,
                 table_name=self.local_table_name,
+                index_expression="project_id",
                 index_name="minmax_project_id",
                 index_type="minmax",
                 granularity=4,
