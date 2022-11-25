@@ -24,6 +24,7 @@ CLUSTERS = [
             "replays",
             "generic_metrics_sets",
             "generic_metrics_distributions",
+            "access_logs",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
