@@ -1,4 +1,5 @@
 import RuntimeConfig from "./runtime_config";
+import RateLimit from "./ratelimit";
 import AuditLog from "./runtime_config/auditlog";
 import ClickhouseMigrations from "./clickhouse_migrations";
 import ClickhouseQueries from "./clickhouse_queries";
@@ -14,6 +15,11 @@ function Placeholder(props: any) {
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Overview", component: Placeholder },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
+  {
+    id: "ratelimit",
+    display: "🚦 Rate Limit Config",
+    component: RateLimit,
+  },
   {
     id: "snql-to-sql",
     display: "🌐 SnQL to SQL",
