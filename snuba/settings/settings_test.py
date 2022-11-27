@@ -45,13 +45,7 @@ REDIS_CLUSTERS = {
     }
     for i, key in [
         (2, "cache"),
-        # ensure that cache and cache_v2 are on different
-        # clusters, without running out of db values
-        (3, "cache_v2"),
         (3, "rate_limiter"),
-        # ensure that rate_limiter and rate_limiter_v2 are on different
-        # clusters, without running out of db values
-        (4, "rate_limiter_v2"),
         (4, "subscription_store"),
         (5, "replacements_store"),
         (6, "config"),

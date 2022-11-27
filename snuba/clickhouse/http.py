@@ -140,6 +140,7 @@ class HTTPWriteBatch:
         self,
         executor: ThreadPoolExecutor,
         pool: HTTPConnectionPool,
+        metrics: MetricsBackend,
         user: str,
         password: str,
         statement: InsertStatement,
@@ -183,6 +184,9 @@ class HTTPWriteBatch:
         self.__size = 0
         self.__closed = False
 
+        self.__metrics = metrics
+        self.__statement = statement
+
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__rows} rows ({self.__size} bytes)>"
 
@@ -210,6 +214,12 @@ class HTTPWriteBatch:
         response = self.__result.result(timeout)
         logger.debug("Received response for %r.", self)
 
+        self.__metrics.timing(
+            "http_batch.size",
+            self.__size,
+            tags={"table": str(self.__statement.get_qualified_table())},
+        )
+
         if response.status != 200:
             # XXX: This should be switched to just parse the JSON body after
             # https://github.com/yandex/ClickHouse/issues/6272 is available.
@@ -233,7 +243,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         port: int,
         user: str,
         password: str,
-        metrics: MetricsBackend,  # deprecated
+        metrics: MetricsBackend,
         statement: InsertStatement,
         encoding: Optional[str],
         options: Optional[Mapping[str, Any]] = None,
@@ -242,6 +252,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
     ):
         self.__pool = HTTPConnectionPool(host, port)
         self.__executor = ThreadPoolExecutor()
+        self.__metrics = metrics
 
         self.__options = options if options is not None else {}
         self.__user = user
@@ -258,6 +269,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         batch = HTTPWriteBatch(
             self.__executor,
             self.__pool,
+            self.__metrics,
             self.__user,
             self.__password,
             self.__statement,

@@ -13,4 +13,10 @@ type QuerylogResult = {
   error?: string;
 };
 
-export { QuerylogRequest, QuerylogResult };
+type PredefinedQuery = {
+  name: string;
+  sql: string;
+  description: string;
+};
+
+export { QuerylogRequest, QuerylogResult, PredefinedQuery };

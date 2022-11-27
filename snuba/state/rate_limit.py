@@ -5,14 +5,12 @@ import uuid
 from collections import ChainMap, namedtuple
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
-from hashlib import md5
 from types import TracebackType
 from typing import ChainMap as TypingChainMap
 from typing import Iterator, MutableMapping, Optional, Sequence, Type
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.util import force_bytes
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -26,10 +24,7 @@ TABLE_RATE_LIMIT_NAME = "table"
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
-redis_clients = [
-    get_redis_client(RedisClientKey.RATE_LIMITER),
-    get_redis_client(RedisClientKey.RATE_LIMITER_V2),
-]
+rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
 
 @dataclass(frozen=True)
@@ -135,12 +130,7 @@ def rate_limit(
                                   ^
                                  now
     """
-    (
-        bypass_rate_limit,
-        rate_history_s,
-        rate_limit_shard_factor,
-        v2_cluster_rollout_rate,
-    ) = state.get_configs(
+    (bypass_rate_limit, rate_history_s, rate_limit_shard_factor,) = state.get_configs(
         [
             # bool (0/1) flag to disable rate limits altogether
             ("bypass_rate_limit", 0),
@@ -150,13 +140,11 @@ def rate_limit(
             # increasing this value multiplies the number of redis keys by that
             # factor, and (on average) reduces the size of each redis set
             ("rate_limit_shard_factor", 1),
-            ("rate_limit_use_v2_cluster", 0.0),
         ]
     )
     assert isinstance(rate_history_s, (int, float))
     assert isinstance(rate_limit_shard_factor, int)
     assert rate_limit_shard_factor > 0
-    assert isinstance(v2_cluster_rollout_rate, float)
 
     if bypass_rate_limit == 1:
         yield None
@@ -172,25 +160,6 @@ def rate_limit(
     query_bucket = _get_bucket_key(
         state.ratelimit_prefix, rate_limit_params.bucket, bucket_shard
     )
-
-    # Ignoring the set sharding factor entirely (constant 0), compute whether
-    # we should hit the v2 cluster for this query or not.
-    #
-    # If we included the sharding factor, the effective rollout rate (of
-    # v2_cluster_rollout_rate) would just become less predictable.
-    should_use_v2 = (
-        int(
-            md5(
-                force_bytes(
-                    _get_bucket_key(state.ratelimit_prefix, rate_limit_params.bucket, 0)
-                )
-            ).hexdigest(),
-            16,
-        )
-        % 1000
-        < v2_cluster_rollout_rate * 1000
-    )
-    rds = redis_clients[int(should_use_v2)]
 
     pipe = rds.pipeline(transaction=False)
     # cleanup old query timestamps past our retention window

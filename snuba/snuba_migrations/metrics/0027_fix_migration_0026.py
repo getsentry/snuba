@@ -9,7 +9,7 @@ from snuba.snuba_migrations.metrics.templates import (
 from snuba.utils.schemas import AggregateFunction, Column, Float
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     Migration 0026 reused a materialized view name and then failed silently because
     of a CREATE ... IF NOT EXISTS clause

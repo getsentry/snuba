@@ -3,6 +3,9 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+import fastjsonschema
+import sentry_sdk
+
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
 # please ensure you add a description key in the same level and succinctly describe the property.
 
@@ -608,6 +611,32 @@ V1_MIGRATION_GROUP_SCHEMA = {
     },
     "required": ["name", "migrations"],
     "additionalProperties": False,
+}
+
+with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+    STORAGE_VALIDATORS = {
+        "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
+        "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+    }
+
+with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+    ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+
+with sentry_sdk.start_span(op="compile", description="Enitity Subscription Validators"):
+    ENIITY_SUBSCRIPTION_VALIDATORS = {
+        "entity_subscription": fastjsonschema.compile(V1_ENTITY_SUBSCIPTION_SCHEMA)
+    }
+
+with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
+    DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+
+
+ALL_VALIDATORS = {
+    **STORAGE_VALIDATORS,
+    **ENTITY_VALIDATORS,
+    **ENIITY_SUBSCRIPTION_VALIDATORS,
+    **DATASET_VALIDATORS,
+    # TODO: MIGRATION_GROUP_VALIDATORS if migration groups will be config'd
 }
 
 V1_ALL_SCHEMAS = {

@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib
 import os
 from abc import ABCMeta
-from typing import Any, Dict, Tuple, Type, cast
+from typing import Any, Dict, Sequence, Tuple, Type, cast
 
 
 class NoConfigKeyError(Exception):
@@ -41,6 +41,9 @@ class _ClassRegistry:
                 f"A class with config_key={config_key} does not exist in the registry. Was it ever imported? Are you trying to look up the base class (not supported)?"
             )
         return res
+
+    def all_classes(self) -> Sequence["RegisteredClass"]:
+        return list(self.__mapping.values())
 
 
 class RegisteredClass(ABCMeta):
@@ -92,6 +95,12 @@ class RegisteredClass(ABCMeta):
             Type[Any],
             getattr(self, "_registry").get_class_from_name(name),
         )
+
+    def all_classes(self) -> Sequence[Type[Any]]:
+        return [
+            cast(Type[Any], rclass)
+            for rclass in getattr(self, "_registry").all_classes()
+        ]
 
 
 TModule = object

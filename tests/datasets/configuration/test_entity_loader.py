@@ -1,7 +1,7 @@
 from typing import Any, Type
 
 import pytest
-from jsonschema.exceptions import ValidationError
+from fastjsonschema.exceptions import JsonSchemaValueException
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
@@ -27,13 +27,13 @@ def get_object_in_list_by_class(object_list: Any, object_class: Any) -> Any:
 
 class TestEntityConfiguration(ConfigurationTest):
     def test_bad_configuration_broken_query_processor(self) -> None:
-        with pytest.raises(ValidationError):
+        with pytest.raises(JsonSchemaValueException):
             build_entity_from_config(
                 "tests/datasets/configuration/broken_entity_bad_query_processor.yaml"
             )
 
     def test_bad_configuration_broken_validator(self) -> None:
-        with pytest.raises(ValidationError):
+        with pytest.raises(JsonSchemaValueException):
             build_entity_from_config(
                 "tests/datasets/configuration/broken_entity_positional_validator_args.yaml"
             )
