@@ -66,3 +66,5 @@ class AddColumnCondition(EntitySubscriptionProcessor):
                 BooleanFunctions.AND, condition, condition_to_add
             )
             query.set_ast_condition(new_condition)
+        else:
+            query.set_ast_condition(condition_to_add)
