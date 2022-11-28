@@ -13,7 +13,7 @@ import sentry_sdk
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
@@ -135,6 +135,13 @@ class HTTPWriteBatch:
     case.
     If the buffer size is higher and the buffer is full, the `append`
     command will block while the value is sent to the server.
+
+    The "debug buffer" is being used to hold a prefix of the data
+    stream in memory. If the error returned by clickhouse happens to point to a
+    row contained in the first `debug_buffer_size_bytes` bytes of the data
+    stream, the corresponding Sentry error will contain that row's data. The
+    debug buffer is separate from the buffer that is being used to stream the
+    HTTP.
     """
 
     def __init__(
@@ -146,9 +153,10 @@ class HTTPWriteBatch:
         password: str,
         statement: InsertStatement,
         encoding: Optional[str],
-        buffer_size: int,  # 0 means unbounded
         options: Mapping[str, Any],  # should be ``Mapping[str, str]``?
         chunk_size: Optional[int] = None,
+        buffer_size: int = 0,  # 0 means unbounded
+        debug_buffer_size_bytes: Optional[int] = None,  # None means disabled
     ) -> None:
         if chunk_size is None:
             chunk_size = settings.CLICKHOUSE_HTTP_CHUNK_SIZE
@@ -181,15 +189,18 @@ class HTTPWriteBatch:
             body=body,
         )
 
-        self.__rows = []
+        self.__debug_buffer = []
         self.__size = 0
+        self.__debug_buffer_size_bytes = debug_buffer_size_bytes
         self.__closed = False
 
         self.__metrics = metrics
         self.__statement = statement
 
     def __repr__(self) -> str:
-        return f"<{type(self).__name__}: {self.__rows} rows ({self.__size} bytes)>"
+        return (
+            f"<{type(self).__name__}: {self.__debug_buffer} rows ({self.__size} bytes)>"
+        )
 
     def __read_until_eof(self) -> Iterator[bytes]:
         while True:
@@ -204,8 +215,10 @@ class HTTPWriteBatch:
         assert not self.__closed
 
         self.__queue.put(value)
-        self.__rows.append(value)
         self.__size += len(value)
+
+        if self.__size < (self.__debug_buffer_size_bytes or 0):
+            self.__debug_buffer.append(value)
 
     def close(self) -> None:
         self.__queue.put(None)
@@ -233,7 +246,7 @@ class HTTPWriteBatch:
                 try:
                     if row is not None:
                         sentry_sdk.set_context(
-                            "snuba_errored_row", {"data": self.__rows[row]}
+                            "snuba_errored_row", {"data": self.__debug_buffer[row]}
                         )
                 except IndexError:
                     sentry_sdk.set_context("snuba_errored_row", {"index_error": True})
@@ -270,6 +283,13 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         self.__statement = statement
         self.__buffer_size = buffer_size
         self.__chunk_size = chunk_size
+        self.__debug_buffer_size_bytes = state.get_config(
+            "debug_buffer_size_bytes", None
+        )
+        assert (
+            isinstance(self.__debug_buffer_size_bytes, int)
+            or self.__debug_buffer_size_bytes is None
+        )
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__statement.get_qualified_table()} on {self.__pool.host}:{self.__pool.port}>"
@@ -283,9 +303,10 @@ class HTTPBatchWriter(BatchWriter[bytes]):
             self.__password,
             self.__statement,
             self.__encoding,
-            self.__buffer_size,
             self.__options,
             self.__chunk_size,
+            self.__buffer_size,
+            self.__debug_buffer_size_bytes,
         )
 
         for value in values:
