@@ -5,7 +5,17 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, SimpleQueue
-from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Union, cast
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+    cast,
+)
 from urllib.parse import urlencode
 
 import rapidjson
@@ -189,7 +199,7 @@ class HTTPWriteBatch:
             body=body,
         )
 
-        self.__debug_buffer = []
+        self.__debug_buffer: List[bytes] = []
         self.__size = 0
         self.__debug_buffer_size_bytes = debug_buffer_size_bytes
         self.__closed = False
