@@ -8,7 +8,6 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
-from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
@@ -18,6 +17,7 @@ from snuba.consumers.consumer import (
     build_mock_batch_writer,
     process_message,
 )
+from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.slicing import validate_passed_slice
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey

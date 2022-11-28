@@ -37,11 +37,11 @@ from arroyo.processing.strategies.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.processing.strategies.factory import ConsumerStrategyFactory
 from arroyo.types import Position
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
+from snuba.consumers.strategy_factory import ConsumerStrategyFactory
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
