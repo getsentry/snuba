@@ -12,7 +12,14 @@ release = "22.12.0.dev0"
 
 # -- General configuration ---------------------------------------------------
 
-extensions = ["sphinx.ext.githubpages", "sphinx.ext.intersphinx", "myst_parser"]
+extensions = [
+    "sphinx.ext.githubpages",
+    "sphinx.ext.intersphinx",
+    "myst_parser",
+    "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
+    "sphinx.ext.napoleon",
+]
 
 # This is relative to this directory.
 templates_path = ["_templates"]
@@ -34,3 +41,10 @@ html_theme = "alabaster"
 html_static_path = ["_static"]
 
 html_logo = "_static/snuba.svg"
+
+
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": False,
+    "private-members": False,
+}

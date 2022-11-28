@@ -17,3 +17,4 @@ Contents:
    migrations/modes
    contributing/environment
    clickhouse/death_queries
+   api/modules

@@ -45,7 +45,11 @@ install-python-dependencies:
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
-	sphinx-build -W -b html docs/source docs/build
+	pip install sphinx-autodoc-typehints
+	rm -rf docs/source/api
+	rm -rf docs/build
+	sphinx-apidoc -o docs/source/api snuba
+	sphinx-build -w doc_errors.log -b html docs/source docs/build
 
 build-admin:
 	cd snuba/admin && yarn install && yarn run build
