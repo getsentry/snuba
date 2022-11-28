@@ -93,7 +93,7 @@ GROUP BY
 """
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     """
     This migration re-creates the materialized view that aggregates sessions.
     It is now using the new `X_preaggr` columns based on the `quantity`.

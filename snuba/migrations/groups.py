@@ -22,7 +22,8 @@ class MigrationGroup(Enum):
     GENERIC_METRICS = "generic_metrics"
 
 
-# Migration groups are mandatory by default, unless they are on this list
+# Migration groups are mandatory by default. Specific groups can
+# only be skipped (SKIPPED_MIGRATION_GROUPS) if the exist in this list.
 OPTIONAL_GROUPS = {
     MigrationGroup.METRICS,
     MigrationGroup.SESSIONS,

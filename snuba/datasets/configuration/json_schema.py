@@ -3,6 +3,9 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+import fastjsonschema
+import sentry_sdk
+
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
 # please ensure you add a description key in the same level and succinctly describe the property.
 
@@ -155,6 +158,11 @@ NO_ARG_SCHEMA = make_column_schema(
     },
 )
 
+# Get just the type
+_SIMPLE_COLUMN_TYPES = [
+    del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]
+]
+
 AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     column_type={"const": "AggregateFunction"},
     args={
@@ -163,21 +171,14 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
             "func": TYPE_STRING,
             "arg_types": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"enum": ["Float", "UUID", "UInt"]},
-                        "arg": {"type": ["number", "null"]},
-                    },
-                    "additionalProperties": False,
-                },
+                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
             },
         },
         "additionalProperties": False,
     },
 )
 
-SIMPLE_COLUMN_TYPES = [
+SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
@@ -185,7 +186,7 @@ SIMPLE_COLUMN_TYPES = [
 
 # Array inner types are the same as normal column types except they don't have a name
 _SIMPLE_ARRAY_INNER_TYPES = [
-    del_name_field(col_type) for col_type in SIMPLE_COLUMN_TYPES
+    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
 ]
 
 # Up to one subarray is supported. Eg Array(Array(String())).
@@ -209,8 +210,8 @@ ARRAY_SCHEMA = make_column_schema(
     },
 )
 
-COLUMN_TYPES = [
-    *SIMPLE_COLUMN_TYPES,
+COLUMN_SCHEMAS = [
+    *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
 ]
 
@@ -220,7 +221,7 @@ NESTED_SCHEMA = make_column_schema(
     args={
         "type": "object",
         "properties": {
-            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_TYPES}}
+            "subcolumns": {"type": "array", "items": {"anyOf": COLUMN_SCHEMAS}}
         },
         "additionalProperties": False,
     },
@@ -228,7 +229,7 @@ NESTED_SCHEMA = make_column_schema(
 
 SCHEMA_COLUMNS = {
     "type": "array",
-    "items": {"anyOf": [*COLUMN_TYPES, NESTED_SCHEMA]},
+    "items": {"anyOf": [*COLUMN_SCHEMAS, NESTED_SCHEMA]},
     "description": "Objects (or nested objects) representing columns containg a name, type and args",
 }
 
@@ -423,8 +424,8 @@ V1_READABLE_STORAGE_SCHEMA = {
         "storage": STORAGE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "mandatory_condition_checkers": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
+        "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
     },
     "required": [
         "version",
@@ -563,6 +564,32 @@ V1_MIGRATION_GROUP_SCHEMA = {
     },
     "required": ["name", "migrations"],
     "additionalProperties": False,
+}
+
+with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+    STORAGE_VALIDATORS = {
+        "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
+        "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+    }
+
+with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+    ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+
+with sentry_sdk.start_span(op="compile", description="Enitity Subscription Validators"):
+    ENIITY_SUBSCRIPTION_VALIDATORS = {
+        "entity_subscription": fastjsonschema.compile(V1_ENTITY_SUBSCIPTION_SCHEMA)
+    }
+
+with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
+    DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+
+
+ALL_VALIDATORS = {
+    **STORAGE_VALIDATORS,
+    **ENTITY_VALIDATORS,
+    **ENIITY_SUBSCRIPTION_VALIDATORS,
+    **DATASET_VALIDATORS,
+    # TODO: MIGRATION_GROUP_VALIDATORS if migration groups will be config'd
 }
 
 V1_ALL_SCHEMAS = {

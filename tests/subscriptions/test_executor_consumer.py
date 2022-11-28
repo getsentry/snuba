@@ -107,6 +107,7 @@ def test_executor_consumer() -> None:
         dataset_name,
         [entity_name],
         consumer_group,
+        None,
         result_producer,
         2,
         auto_offset_reset,

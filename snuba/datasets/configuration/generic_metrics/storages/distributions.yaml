@@ -1,11 +1,9 @@
 version: v1
 kind: readable_storage
-name: generic-metrics-distributions
-
+name: generic_metrics_distributions
 storage:
   key: generic_metrics_distributions
   set_key: generic_metrics_distributions
-
 schema:
   columns:
     [
@@ -28,14 +26,13 @@ schema:
               ],
           },
       },
-
       {
         name: _raw_tags_hash,
         type: Array,
         args:
           {
-            inner_type: { type: UInt, args: { size: 64 } },
             schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
           },
       },
       {
@@ -43,55 +40,57 @@ schema:
         type: Array,
         args:
           {
-            inner_type: { type: UInt, args: { size: 64 } },
             schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
           },
       },
       { name: granularity, type: UInt, args: { size: 8 } },
-
       {
         name: percentiles,
         type: AggregateFunction,
         args:
           {
             func: "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)",
-            arg_types: [{ type: Float, arg: 64 }],
+            arg_types: [{ type: Float, args: { size: 64 } }],
           },
       },
       {
         name: min,
         type: AggregateFunction,
-        args: { func: "min", arg_types: [{ type: Float, arg: 64 }] },
+        args: { func: min, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
       {
         name: max,
         type: AggregateFunction,
-        args: { func: "max", arg_types: [{ type: Float, arg: 64 }] },
+        args: { func: max, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
       {
         name: avg,
         type: AggregateFunction,
-        args: { func: "avg", arg_types: [{ type: Float, arg: 64 }] },
+        args: { func: avg, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
       {
         name: sum,
         type: AggregateFunction,
-        args: { func: "sum", arg_types: [{ type: Float, arg: 64 }] },
+        args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
       {
         name: count,
         type: AggregateFunction,
-        args: { func: "count", arg_types: [{ type: Float, arg: 64 }] },
+        args: { func: count, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
       {
         name: histogram_buckets,
         type: AggregateFunction,
-        args: { func: "histogram(250)", arg_types: [{ type: Float, arg: 64 }] },
+        args:
+          {
+            func: histogram(250),
+            arg_types: [{ type: Float, args: { size: 64 } }],
+          },
       },
     ]
   local_table_name: generic_metric_distributions_aggregated_local
   dist_table_name: generic_metric_distributions_aggregated_dist
-
 query_processors:
-  - processor: "TableRateLimit"
-  - processor: "TupleUnaliaser"
+  - processor: TableRateLimit
+  - processor: TupleUnaliaser

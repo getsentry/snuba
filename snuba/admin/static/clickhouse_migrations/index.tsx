@@ -1,88 +1,40 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import Client from "../api_client";
 import { Table } from "../table";
+import { MigrationData, MigrationGroupResult, GroupOptions, RunMigrationRequest, RunMigrationResult, Action } from "./types";
 
-type MigrationGroup = {
-  groupName: string;
-  migrations: MigrationData[];
-};
-
-type MigrationData = {
-  can_run: boolean;
-  can_reverse: boolean;
-  run_reason: string;
-  reverse_reason: string;
-  blocking: boolean;
-  status: string;
-  migration_id: string;
-};
-type groupOptions = {
-  [key: string]: MigrationGroup;
-};
-
-const Events1 = {
-  can_run: false,
-  can_reverse: false,
-  run_reason: "already run",
-  reverse_reason: "subsequent migrations must be reversed first",
-  blocking: true,
-  status: "completed",
-  migration_id: "0001_migration",
-};
-
-const Events2 = {
-  can_run: false,
-  can_reverse: true,
-  run_reason: "already run",
-  reverse_reason: "",
-  blocking: true,
-  status: "completed",
-  migration_id: "0002_migration",
-};
-
-const MIGRATIONS: groupOptions = {
-  events: {
-    groupName: "events",
-    migrations: [Events1, Events2],
-  },
-};
-
-const SQLforwards =
-  "Local operations:\
-\n\n\
-CREATE TABLE IF NOT EXISTS replays_local (replay_id UUID, event_hash UUID, segment_id Nullable(UInt16), trace_ids Array(UUID), _trace_ids_hashed Array(UInt64) MATERIALIZED arrayMap(t -> cityHash64(t), trace_ids), title String, project_id UInt64, timestamp DateTime, platform LowCardinality(String), environment LowCardinality(Nullable(String)), release Nullable(String), dist Nullable(String), ip_address_v4 Nullable(IPv4), ip_address_v6 Nullable(IPv6), user String, user_id Nullable(String), user_name Nullable(String), user_email Nullable(String), sdk_name String, sdk_version String, tags Nested(key String, value String), retention_days UInt16, partition UInt16, offset UInt64) ENGINE ReplacingMergeTree() ORDER BY (project_id, toStartOfDay(timestamp), cityHash64(replay_id), event_hash) PARTITION BY (retention_days, toMonday(timestamp)) TTL timestamp + toIntervalDay(retention_days) SETTINGS index_granularity=8192;\
-ALTER TABLE replays_local ADD INDEX IF NOT EXISTS bf_trace_ids_hashed _trace_ids_hashed TYPE bloom_filter() GRANULARITY 1;\
-\n\n\
-Dist operations:\
-\n\n\
-Skipped dist operation - single node cluster";
-
-const SQLbackwards =
-  "Local operations:\
-\n\n\
-DROP TABLE IF EXISTS replays_local;\
-\n\n\
-Dist operations:\
-\n\n\
-Skipped dist operation - single node cluster";
-
-function ClickhouseMigrations() {
-  const [migrationGroup, setMigrationGroup] = useState<MigrationGroup | null>(
-    null
-  );
+function ClickhouseMigrations(props: { api: Client }) {
+  const [allGroups, setAllGroups] = useState<GroupOptions>({});
+  const [migrationGroup, setMigrationGroup] =
+    useState<MigrationGroupResult | null>(null);
   const [migrationId, setMigrationId] = useState<string | null>(null);
   const [SQLText, setSQLText] = useState<string | null>(null);
+
+  useEffect(() => {
+    props.api.getAllMigrationGroups().then((res) => {
+      let options: GroupOptions = {};
+      res.forEach(
+        (group: MigrationGroupResult) => (options[group.group] = group)
+      );
+      setAllGroups(options);
+    });
+  }, []);
+
   function selectGroup(groupName: string) {
-    const migrationGroup: MigrationGroup = MIGRATIONS[groupName];
+    const migrationGroup: MigrationGroupResult = allGroups[groupName];
     setMigrationGroup(() => migrationGroup);
+    setSQLText(()=>null)
+    setMigrationId(() => null);
+    refreshStatus(migrationGroup.group);
   }
 
   function selectMigration(migrationId: string) {
     setMigrationId(() => migrationId);
-    setSQLText(() => SQLforwards);
+    setSQLText(()=>null)
   }
 
-  function execute(action: string) {
-    const data = migrationGroup?.migrations.find(
+  function execute(action: Action) {
+    const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
     if (data?.blocking) {
@@ -90,13 +42,57 @@ function ClickhouseMigrations() {
         `Migration ${migrationId} is blocking, are you sure you want to execute?`
       );
     }
-    console.log("executing !", action);
+    executeRealRun(action);
   }
+
+  function executeRun(action: Action, dry_run: boolean, force: boolean) {
+      let req = {
+        action: action,
+        migration_id: migrationId,
+        group: migrationGroup?.group,
+        dry_run: dry_run,
+        force: force
+      }
+      props.api
+      .runMigration(req as RunMigrationRequest)
+      .then((res) => {
+        console.log(res)
+        setSQLText(() => res.stdout);
+      })
+      .catch((err) => {
+        console.log(err)
+        setSQLText(() => JSON.stringify(err));
+      });
+  }
+
+  function executeDryRun(action: Action) {
+    console.log("executing dry run !", migrationId, action);
+    executeRun(action, true, false)
+  }
+
+  function executeRealRun(action: Action) {
+    console.log("executing real run !", migrationId, action);
+    executeRun(action, false, false)
+    if (migrationGroup)
+      refreshStatus(migrationGroup.group)
+  }
+
+  function refreshStatus(group: string) {
+    props.api.getAllMigrationGroups().then((res) => {
+      let options: GroupOptions = {};
+      res.forEach(
+        (group: MigrationGroupResult) => (options[group.group] = group)
+      );
+      setAllGroups(options);
+      setMigrationGroup(options[group]);
+    });
+  }
+
 
   function rowData() {
     if (migrationGroup) {
       let data: any = [];
-      MIGRATIONS[migrationGroup.groupName].migrations.forEach((migration) => {
+      allGroups[migrationGroup.group].migration_ids.forEach((migration) => {
         data.push([
           migration.migration_id,
           migration.status,
@@ -119,7 +115,7 @@ function ClickhouseMigrations() {
           <option disabled={!migrationGroup} value="">
             Select a migration id
           </option>
-          {MIGRATIONS[migrationGroup.groupName].migrations.map(
+          {allGroups[migrationGroup.group].migration_ids.map(
             (m: MigrationData) => (
               <option key={m.migration_id} value={m.migration_id}>
                 {m.migration_id} - {m.status}
@@ -147,7 +143,7 @@ function ClickhouseMigrations() {
     if (!(migrationGroup && migrationId)) {
       return null;
     }
-    const data = migrationGroup?.migrations.find(
+    const data = migrationGroup?.migration_ids.find(
       (m) => m.migration_id == migrationId
     );
 
@@ -159,8 +155,8 @@ function ClickhouseMigrations() {
           disabled={!data?.can_run}
           title={!data?.can_run ? data?.run_reason : ""}
           id="run"
-          value="EXECUTE run"
-          onClick={() => execute("run")}
+          defaultValue="EXECUTE run"
+          onClick={() => execute(Action.Run)}
           style={buttonStyle}
         />
         <input
@@ -169,8 +165,8 @@ function ClickhouseMigrations() {
           disabled={!data?.can_reverse}
           title={!data?.can_reverse ? data?.reverse_reason : ""}
           id="reverse"
-          value="EXECUTE reverse"
-          onClick={() => execute("reverse")}
+          defaultValue="EXECUTE reverse"
+          onClick={() => execute(Action.Reverse)}
           style={buttonStyle}
         />
         <div>
@@ -200,14 +196,14 @@ function ClickhouseMigrations() {
             groups you have access to
           </p>
           <select
-            value={migrationGroup?.groupName || ""}
+            defaultValue={migrationGroup?.group || ""}
             onChange={(evt) => selectGroup(evt.target.value)}
             style={dropDownStyle}
           >
             <option disabled value="">
               Select a migration group
             </option>
-            {Object.keys(MIGRATIONS).map((name: string) => (
+            {Object.keys(allGroups).map((name: string) => (
               <option key={name} value={name}>
                 {name}
               </option>
@@ -219,14 +215,14 @@ function ClickhouseMigrations() {
           {renderMigrationIds()}
           {migrationGroup && migrationId && (
             <div style={{ display: "inline-block" }}>
-              <button
-                onClick={() => setSQLText(() => SQLforwards)}
+              <button type="button"
+                onClick={() => executeDryRun(Action.Run)}
                 style={buttonStyle}
               >
                 forwards
               </button>
-              <button
-                onClick={() => setSQLText(() => SQLbackwards)}
+              <button type="button"
+                onClick={() => executeDryRun(Action.Reverse)}
                 style={buttonStyle}
               >
                 backwards
@@ -240,7 +236,7 @@ function ClickhouseMigrations() {
               Raw SQL for running a migration (forwards) or reversing
               (backwards). Good to do before executing a migration for real.
             </p>
-            <textarea style={textareaStyle} value={SQLText} />
+            <textarea style={textareaStyle} readOnly value={SQLText} />
           </div>
         )}
         <div style={actionsStyle}>{renderActions()}</div>

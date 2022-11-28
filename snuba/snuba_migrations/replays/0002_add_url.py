@@ -10,7 +10,7 @@ new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
 ]
 
 
-class Migration(migration.ClickhouseNodeMigration):
+class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
