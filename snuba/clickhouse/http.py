@@ -258,8 +258,10 @@ class HTTPWriteBatch:
                         sentry_sdk.set_context(
                             "snuba_errored_row", {"data": self.__debug_buffer[row]}
                         )
+                    sentry_sdk.set_tag("snuba_has_errored_row", "true")
                 except IndexError:
                     sentry_sdk.set_context("snuba_errored_row", {"index_error": True})
+                    sentry_sdk.set_tag("snuba_has_errored_row", "false")
 
                 raise ClickhouseWriterError(message, code=code, row=row)
             else:
