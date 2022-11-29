@@ -178,6 +178,7 @@ class ReplaysLoader(DirectoryLoader):
             "0004_add_error_ids_column",
             "0005_add_urls_user_agent_replay_start_timestamp",
             "0006_add_is_archived_column",
+            "0007_add_replay_type_column",
         ]
 
 
