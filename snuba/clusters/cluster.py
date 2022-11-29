@@ -45,6 +45,7 @@ class ConnectionId(NamedTuple):
 
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
+    DATA_DELETE = ClickhouseClientSettingsType({"mutations_sync": 2}, 10000)
     INSERT = ClickhouseClientSettingsType({}, None)
     MIGRATE = ClickhouseClientSettingsType(
         {
