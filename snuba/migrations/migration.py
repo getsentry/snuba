@@ -166,19 +166,19 @@ class ClickhouseNodeMigration(Migration, ABC):
         self,
         ops: Sequence[SqlOperation],
     ) -> None:
-        def print_dist_op(op: SqlOperation, is_single_node: bool) -> None:
+        def print_dist_op(op: SqlOperation) -> None:
+            cluster = get_cluster(op._storage_set)
+            is_single_node = cluster.is_single_node()
             if not is_single_node:
                 print(f"Distributed op: {op.format_sql()}")
             else:
                 print("Skipped dist operation - single node cluster")
 
         for op in ops:
-            cluster = get_cluster(op._storage_set)
-            is_single_node = cluster.is_single_node()
             if op.target == OperationTarget.LOCAL:
                 print(f"Local op: {op.format_sql()}")
             elif op.target == OperationTarget.DISTRIBUTED:
-                print_dist_op(op, is_single_node)
+                print_dist_op(op)
 
 
 class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
