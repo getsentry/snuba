@@ -50,15 +50,17 @@ def setup_logging(level: Optional[str] = None) -> None:
     if level is None:
         level = settings.LOG_LEVEL
 
+    py_logging_level = getattr(logging, level.upper())
+
     logging.basicConfig(
-        level=getattr(logging, level.upper()),
+        level=py_logging_level,
         format=settings.LOG_FORMAT,
         force=True,
     )
 
     structlog.configure(
         cache_logger_on_first_use=True,
-        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+        wrapper_class=structlog.make_filtering_bound_logger(py_logging_level),
         processors=[
             add_severity_attribute,
             structlog.contextvars.merge_contextvars,
