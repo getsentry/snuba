@@ -4,7 +4,7 @@ from time import sleep
 from typing import Any, List, Mapping, Sequence
 
 import structlog
-from structlog.contextvars import bind_contextvars, clear_contextvars
+from structlog.contextvars import bind_contextvars, unbind_contextvars
 
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import (
@@ -87,7 +87,8 @@ def data_delete(
     cluster_nodes = order_cluster_nodes(cluster.get_local_nodes())
 
     for (shard, shard_replicas) in cluster_nodes.items():
-        logger.info("data_delete.init", shard_id=shard)
+        bind_contextvars(shard_id=shard)
+        logger.info("data_delete.shard.init")
         replica_node = get_working_replica_node(
             shard_replicas, ch_user, ch_pass, clickhouse_db
         )
@@ -102,5 +103,6 @@ def data_delete(
                 logger.debug("data_delete.sleep")
                 sleep(10)
             logger.info("data_delete.finished")
-            clear_contextvars()
+            unbind_contextvars("query_parameters")
+        unbind_contextvars("shard")
     return DeleteResult.SUCCEEDED

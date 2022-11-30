@@ -78,15 +78,12 @@ def data_delete(
     from snuba.data_delete import logger
 
     storage = get_writable_storage(StorageKey(storage_name))
-
     (
         clickhouse_user,
         clickhouse_password,
     ) = storage.get_cluster().get_credentials()
 
     cluster = storage.get_cluster()
-
-    print(QUERY_PARAMS)
 
     result = delete_real(
         cluster,
