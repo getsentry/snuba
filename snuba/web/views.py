@@ -667,11 +667,8 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from arroyo.processing.strategies.factory import (
-                KafkaConsumerStrategyFactory,
-            )
-
             from snuba.consumers.consumer import build_batch_writer, process_message
+            from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
