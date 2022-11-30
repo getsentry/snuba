@@ -31,10 +31,10 @@ def order_cluster_nodes(
     """
     ordered_nodes: Mapping[int, List[ClickhouseNode]] = defaultdict(list)
     for node in nodes:
-        # assert (
-        #     node.shard is not None
-        # ), f"cannot proceed with automatic delete, node {node} has empty shard"
-        ordered_nodes[node.shard or -1].append(node)
+        assert (
+            node.shard is not None
+        ), f"cannot proceed with automatic delete, node {node} has empty shard"
+        ordered_nodes[node.shard].append(node)
     return ordered_nodes
 
 
@@ -103,4 +103,4 @@ def data_delete(
                 sleep(10)
             logger.info("data_delete.finished")
             clear_contextvars()
-    return DeleteResult.FAILED
+    return DeleteResult.SUCCEEDED
