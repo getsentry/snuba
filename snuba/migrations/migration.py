@@ -182,6 +182,9 @@ class ClickhouseNodeMigration(Migration, ABC):
 
 
 class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
+    """
+    This is now deprecated. Use ClickhouseNodeMigration instead.
+    """
 
     forwards_local_first: bool = True
     backwards_local_first: bool = False
