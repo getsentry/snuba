@@ -28,8 +28,8 @@ from uuid import UUID
 import jsonschema
 import sentry_sdk
 import simplejson as json
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
@@ -655,10 +655,12 @@ if application.debug or application.testing:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("topic"), 0),
-            0,
-            KafkaPayload(None, http_request.data, []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, http_request.data, []),
+                Partition(Topic("topic"), 0),
+                0,
+                datetime.now(),
+            )
         )
 
         type_ = record[1]

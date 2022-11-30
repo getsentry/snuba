@@ -1,10 +1,9 @@
 from typing import Any, Mapping, Optional
 
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Partition, Position, Topic
 from arroyo.utils.retries import RetryPolicy
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
@@ -27,7 +26,9 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
+    def poll(
+        self, timeout: Optional[float] = None
+    ) -> Optional[BrokerValue[KafkaPayload]]:
         self.__producer.poll(0.0)
         return super().poll(timeout)
 

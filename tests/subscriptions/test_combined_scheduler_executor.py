@@ -4,8 +4,8 @@ from contextlib import closing
 from datetime import datetime, timedelta
 from unittest import mock
 
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaProducer
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entity_subscriptions.entity_subscription import EventsSubscription
@@ -68,14 +68,16 @@ def test_combined_scheduler_and_executor() -> None:
         strategy = factory.create_with_partitions(commit, partitions)
 
         message = Message(
-            partition,
-            4,
-            Tick(
-                0,
-                offsets=Interval(1, 3),
-                timestamps=Interval(epoch, epoch + timedelta(seconds=60)),
-            ),
-            epoch,
+            BrokerValue(
+                Tick(
+                    0,
+                    offsets=Interval(1, 3),
+                    timestamps=Interval(epoch, epoch + timedelta(seconds=60)),
+                ),
+                partition,
+                4,
+                epoch,
+            )
         )
         strategy.submit(message)
 
