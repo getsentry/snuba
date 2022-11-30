@@ -1,6 +1,7 @@
 from typing import Optional
 
 import click
+from structlog.contextvars import bind_contextvars
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -48,7 +49,7 @@ QUERY_PARAMS = [{"project_id": 2, "to_monday_ts_lower": ts} for ts in TEST_TIMES
     "--dry-run",
     type=bool,
     default=True,
-    help="If true, only print which partitions would be dropped.",
+    help="If true, only print which deletion queries would be executed.",
 )
 @click.option(
     "--storage",
@@ -57,11 +58,20 @@ QUERY_PARAMS = [{"project_id": 2, "to_monday_ts_lower": ts} for ts in TEST_TIMES
     help="The storage to target",
     required=True,
 )
+@click.option(
+    "--delete-query",
+    "delete_query",
+    type=str,
+    default=TRANSACTIONS_DELETE_QUERY,
+    help="Template for the ALTER TABLE ... DELETE query to run against ClickHouse."
+    "Defaults to a sensible deletion query for transactions_local",
+)
 @click.option("--log-level", help="Logging level to use.")
 def data_delete(
     *,
     dry_run: bool,
     storage_name: str,
+    delete_query: str,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -77,6 +87,8 @@ def data_delete(
     from snuba.data_delete import data_delete as delete_real
     from snuba.data_delete import logger
 
+    bind_contextvars(dry_run=dry_run)
+
     storage = get_writable_storage(StorageKey(storage_name))
     (
         clickhouse_user,
@@ -89,7 +101,7 @@ def data_delete(
         cluster,
         clickhouse_user,
         clickhouse_password,
-        TRANSACTIONS_DELETE_QUERY,
+        delete_query,
         QUERY_PARAMS,
         dry_run,
     )
