@@ -13,6 +13,7 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.columns import WithTTL
 
 """
 CREATE TABLE default.access_log
@@ -158,6 +159,33 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ),
     ]
 
+    def dist_columns(self) -> Sequence[Column[Modifiers]]:
+        """
+        The Distributed engine doesn't support the TTL statement on specific columns,
+        so strip that modifier out when building the distributed column list.
+        """
+        new_columns = []
+        for column in self.columns:
+            modifiers = column.type.get_modifiers()
+            if modifiers is None:
+                new_columns.append(column)
+            elif not modifiers.has_modifier(WithTTL):
+                new_columns.append(column)
+            else:
+                stripped = Modifiers(
+                    nullable=modifiers.nullable,
+                    low_cardinality=modifiers.low_cardinality,
+                    default=modifiers.default,
+                    materialized=modifiers.materialized,
+                    codecs=modifiers.codecs,
+                    ttl=None,
+                )
+                new_type = column.type.set_modifiers(stripped)
+                new_column = Column(column.name, new_type)
+                new_columns.append(new_column)
+
+        return new_columns
+
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
@@ -210,7 +238,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                     local_table_name=self.local_table_name,
                     sharding_key="request_id",
                 ),
-                columns=self.columns,
+                columns=self.dist_columns(),
             )
         ]
 

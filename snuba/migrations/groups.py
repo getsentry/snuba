@@ -33,6 +33,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.FUNCTIONS,
     MigrationGroup.REPLAYS,
     MigrationGroup.GENERIC_METRICS,
+    MigrationGroup.ACCESS_LOGS,
 }
 
 
