@@ -741,7 +741,7 @@ def test_produce_stale_message() -> None:
                         now - timedelta(minutes=3), now - timedelta(seconds=60)
                     ),
                 ),
-                True,
+                2,
             ),
             partition,
             1,
@@ -767,7 +767,7 @@ def test_produce_stale_message() -> None:
                     offsets=Interval(3, 4),
                     timestamps=Interval(now - timedelta(seconds=60), now),
                 ),
-                True,
+                2,
             ),
             partition,
             1,
