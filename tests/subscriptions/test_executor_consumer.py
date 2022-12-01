@@ -235,8 +235,7 @@ def test_execute_query_strategy() -> None:
         strategy.poll()
 
     assert isinstance(message.value, BrokerValue)
-    assert next_step.submit.call_args[0][0].timestamp == message.value.timestamp
-    assert next_step.submit.call_args[0][0].offset == message.value.offset
+    assert next_step.submit.call_args[0][0].committable == message.committable
 
     result = next_step.submit.call_args[0][0].payload.result
     assert result[1]["data"] == [{"count()": 0}]
