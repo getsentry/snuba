@@ -267,10 +267,9 @@ jobs:
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
 
-
       - name: Upload to codecov
         run: |
-          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
+          curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN} -f .artifacts/tests/test_distributed/coverage.xml
 
   sentry:
     needs: [snuba-image]
