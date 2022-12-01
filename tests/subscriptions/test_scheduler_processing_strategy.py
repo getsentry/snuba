@@ -633,7 +633,7 @@ def test_produce_scheduled_subscription_message() -> None:
                     offsets=Interval(1, 3),
                     timestamps=Interval(epoch, epoch + timedelta(minutes=2)),
                 ),
-                True,
+                2,
             ),
             partition,
             1,
