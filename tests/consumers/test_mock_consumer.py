@@ -2,7 +2,7 @@ from datetime import datetime
 
 from arroyo.backends.kafka.consumer import KafkaPayload
 from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
-from arroyo.types import Message, Partition, Topic
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery, StringNode
 from snuba.consumers.consumer import build_mock_batch_writer
@@ -28,10 +28,12 @@ def test_mock_consumer() -> None:
 
     strategy.submit(
         Message(
-            Partition(Topic("events"), 0),
-            1,
-            KafkaPayload(None, b"INVALID MESSAGE", []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, b"INVALID MESSAGE", []),
+                Partition(Topic("events"), 0),
+                1,
+                datetime.now(),
+            )
         )
     )
     strategy.close()

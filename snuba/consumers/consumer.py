@@ -24,7 +24,6 @@ from typing import (
 )
 
 import rapidjson
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import FilterStep
 from arroyo.processing.strategies import ProcessingStrategy
@@ -37,7 +36,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Message, Partition, Position, Topic
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
@@ -113,7 +112,8 @@ class InsertBatchWriter(ProcessingStep[BytesInsertBatch]):
         max_end_to_end_latency: Optional[float] = None
         end_to_end_latency_sum = 0.0
         for message in self.__messages:
-            latency = write_finish - message.timestamp.timestamp()
+            assert isinstance(message.value, BrokerValue)
+            latency = write_finish - message.value.timestamp.timestamp()
             latency_sum += latency
             if max_latency is None or latency > max_latency:
                 max_latency = latency
@@ -428,24 +428,14 @@ class MultistorageCollector(
         assert not self.__closed
 
         for storage_key, payload in message.payload:
-            writer_message = Message(
-                message.partition,
-                message.offset,
-                payload,
-                message.timestamp,
-            )
+            writer_message = Message(message.value.replace(payload))
             self.__steps[storage_key].submit(writer_message)
 
             # we collect the messages in self.__messages in the off chance
             # that we get an error submitting a batch and need to forward
             # these message to the dead letter topic. The payload doesn't
             # have storage information so we need to keep the storage_key
-            other_message = Message(
-                message.partition,
-                message.offset,
-                (storage_key, payload),
-                message.timestamp,
-            )
+            other_message = Message(message.value.replace((storage_key, payload)))
 
             self.__messages[storage_key].append(other_message)
 
@@ -488,37 +478,37 @@ MultistorageProcessedMessage = Sequence[
 
 
 def __message_to_dict(
-    message: Message[KafkaPayload],
+    value: BrokerValue[KafkaPayload],
 ) -> Dict[str, Any]:
     return {
-        "message_payload_value": message.payload.value,
-        "message_offset": message.offset,
-        "message_partition": message.partition.index,
-        "message_topic": message.partition.topic.name,
+        "message_payload_value": value.payload.value,
+        "message_offset": value.offset,
+        "message_partition": value.partition.index,
+        "message_topic": value.partition.topic.name,
     }
 
 
-def skip_kafka_message(message: Message[KafkaPayload]) -> bool:
+def skip_kafka_message(value: BrokerValue[KafkaPayload]) -> bool:
     # expected format is "[topic:partition_index:offset,...]" eg [snuba-metrics:0:1,snuba-metrics:0:3]
     messages_to_skip = (get_config("kafka_messages_to_skip") or "[]")[1:-1].split(",")
     return (
-        f"{message.partition.topic.name}:{message.partition.index}:{message.offset}"
+        f"{value.partition.topic.name}:{value.partition.index}:{value.offset}"
         in messages_to_skip
     )
 
 
 def __invalid_kafka_message(
-    message: Message[KafkaPayload], consumer_group: str, err: Exception
+    value: BrokerValue[KafkaPayload], consumer_group: str, err: Exception
 ) -> InvalidKafkaMessage:
     return InvalidKafkaMessage(
-        payload=message.payload.value,
-        timestamp=message.timestamp,
-        topic=message.partition.topic.name,
+        payload=value.payload.value,
+        timestamp=value.timestamp,
+        topic=value.partition.topic.name,
         consumer_group=consumer_group,
-        partition=message.partition.index,
-        offset=message.offset,
-        headers=message.payload.headers,
-        key=message.payload.key,
+        partition=value.partition.index,
+        offset=value.offset,
+        headers=value.payload.headers,
+        key=value.payload.key,
         reason=f"{err.__class__.__name__}: {err}",
     )
 
@@ -526,11 +516,12 @@ def __invalid_kafka_message(
 def process_message(
     processor: MessageProcessor, consumer_group: str, message: Message[KafkaPayload]
 ) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+    assert isinstance(message.value, BrokerValue)
 
-    if skip_kafka_message(message):
+    if skip_kafka_message(message.value):
         logger.warning(
-            f"A consumer for {message.partition.topic.name} skipped a message!",
-            extra=__message_to_dict(message),
+            f"A consumer for {message.value.partition.topic.name} skipped a message!",
+            extra=__message_to_dict(message.value),
         )
         return None
 
@@ -538,13 +529,15 @@ def process_message(
         result = processor.process_message(
             rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
-                message.offset, message.partition.index, message.timestamp
+                message.value.offset,
+                message.value.partition.index,
+                message.value.timestamp,
             ),
         )
     except Exception as err:
         logger.error(err, exc_info=True)
         raise InvalidMessages(
-            [__invalid_kafka_message(message, consumer_group, err)]
+            [__invalid_kafka_message(message.value, consumer_group, err)]
         ) from err
 
     if isinstance(result, InsertBatch):
@@ -585,9 +578,10 @@ def _process_message_multistorage_work(
 def process_message_multistorage(
     message: Message[MultistorageKafkaPayload],
 ) -> MultistorageProcessedMessage:
+    assert isinstance(message.value, BrokerValue)
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
-        message.offset, message.partition.index, message.timestamp
+        message.value.offset, message.value.partition.index, message.value.timestamp
     )
 
     results: MutableSequence[
@@ -620,9 +614,10 @@ def process_message_multistorage_identical_storages(
     process_message_multistorage is to avoid doing a check for every message in cases
     where there are no identical storages like metrics.
     """
+    assert isinstance(message.value, BrokerValue)
     value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
-        message.offset, message.partition.index, message.timestamp
+        message.value.offset, message.value.partition.index, message.value.timestamp
     )
 
     intermediate_results: MutableMapping[
