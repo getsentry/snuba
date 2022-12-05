@@ -1,8 +1,11 @@
 import logging
+import os
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Mapping, MutableSequence, Optional, Sequence
+
+import structlog
 
 from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
@@ -23,17 +26,21 @@ from snuba.settings import (
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger("snuba.optimize")
 
 # include thread and process info in log messages
-log_handler = logging.StreamHandler()
-log_handler.setFormatter(
-    logging.Formatter(
-        "%(levelname)s %(asctime)s %(name)s %(process)d-%(threadName)s %(message)s"
-    )
+def _add_log_context(
+    logger: logging.Logger, method_name: str, event_dict: structlog.types.EventDict
+) -> structlog.types.EventDict:
+    event_dict["thread"] = threading.get_native_id()
+    event_dict["thread_name"] = threading.current_thread().name
+    event_dict["process_id"] = os.getpid()
+    return event_dict
+
+
+logger: logging.Logger = structlog.wrap_logger(
+    logging.getLogger("snuba.optimize"),
+    processors=([_add_log_context] + structlog.get_config()["processors"]),
 )
-logger.addHandler(log_handler)
-logger.propagate = False
 
 metrics = MetricsWrapper(environment.metrics, "optimize")
 
@@ -416,7 +423,7 @@ def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bo
         if merge.size > OPTIMIZE_MERGE_SIZE_CUTOFF:
             logger.info(
                 "large ongoing merge detected  "
-                f"result part: {merge.result_part_name}, size: {merge.size}"
+                f"result part: {merge.result_part_name}, size: {merge.size} "
                 f"progress: {merge.progress}, elapsed: {merge.elapsed}"
             )
             return True
