@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.operations import OperationTarget
 
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
@@ -67,6 +68,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     storage_set=StorageSetKey.SEARCH_ISSUES,
                     ttl="detection_timestamp + toIntervalDay(retention_days)",
                 ),
+                target=OperationTarget.LOCAL,
             )
         ]
 
@@ -75,6 +77,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
                 table_name="search_issues_local",
+                target=OperationTarget.LOCAL,
             )
         ]
 
@@ -88,6 +91,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     local_table_name="search_issues_local",
                     sharding_key="project_id",
                 ),
+                target=OperationTarget.DISTRIBUTED,
             )
         ]
 
@@ -96,5 +100,6 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
                 table_name="search_issues_dist",
+                target=OperationTarget.DISTRIBUTED,
             )
         ]
