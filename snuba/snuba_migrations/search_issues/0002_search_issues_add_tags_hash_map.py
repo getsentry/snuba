@@ -35,7 +35,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ]
 
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
@@ -48,7 +48,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
                 StorageSetKey.SEARCH_ISSUES, "search_issues_local", "_tags_hash_map"

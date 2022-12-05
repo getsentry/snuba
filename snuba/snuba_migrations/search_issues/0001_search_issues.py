@@ -78,7 +78,7 @@ class Migration(migration.ClickhouseNodeMigration):
             )
         ]
 
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
@@ -91,7 +91,7 @@ class Migration(migration.ClickhouseNodeMigration):
             )
         ]
 
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
