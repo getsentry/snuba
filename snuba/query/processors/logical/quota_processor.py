@@ -1,13 +1,17 @@
+from snuba import environment
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
 from snuba.state.quota import ResourceQuota
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 ENABLED_CONFIG = "resource_quota_processor_enabled"
 REFERRER_PROJECT_CONFIG = "referrer_project_thread_quota"
 REFERRER_CONFIG = "referrer_thread_quota"
+
+metrics = MetricsWrapper(environment.metrics, "resource_quota")
 
 
 class ResourceQuotaProcessor(LogicalQueryProcessor):
@@ -51,3 +55,19 @@ class ResourceQuotaProcessor(LogicalQueryProcessor):
 
         assert isinstance(thread_quota, int)
         query_settings.set_resource_quota(ResourceQuota(max_threads=thread_quota))
+
+        # NOTE: This is safe for the moment because we manually add the keys to the config
+        # and there are not many of them. This should be removed before this becomes
+        # automatic.
+        if project_referrer_thread_quota:
+            quota_key = (
+                f"{REFERRER_PROJECT_CONFIG}_{query_settings.referrer}_{project_id}"
+            )
+        else:
+            quota_key = f"{REFERRER_CONFIG}_{query_settings.referrer}"
+
+        metrics.gauge(
+            "limit.added",
+            thread_quota,
+            tags={"referrer": query_settings.referrer, "key": quota_key},
+        )
