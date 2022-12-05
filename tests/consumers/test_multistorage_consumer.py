@@ -2,8 +2,8 @@ import json
 from datetime import datetime
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.consumers.consumer import (
     MultistorageKafkaPayload,
@@ -16,17 +16,19 @@ from tests.fixtures import get_raw_event
 test_data = [
     pytest.param(
         Message(
-            Partition(Topic("errors"), 1),
-            1,
-            MultistorageKafkaPayload(
-                [StorageKey.ERRORS, StorageKey.TRANSACTIONS],
-                KafkaPayload(
-                    None,
-                    json.dumps((2, "insert", get_raw_event())).encode("utf-8"),
-                    [],
+            BrokerValue(
+                MultistorageKafkaPayload(
+                    [StorageKey.ERRORS, StorageKey.TRANSACTIONS],
+                    KafkaPayload(
+                        None,
+                        json.dumps((2, "insert", get_raw_event())).encode("utf-8"),
+                        [],
+                    ),
                 ),
-            ),
-            datetime.now(),
+                Partition(Topic("errors"), 1),
+                1,
+                datetime.now(),
+            )
         ),
         False,
         id="errors and transactions",

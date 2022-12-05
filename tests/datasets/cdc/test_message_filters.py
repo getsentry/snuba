@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.datasets.message_filters import CdcTableNameMessageFilter
 
@@ -13,29 +13,35 @@ def test_table_name_filter() -> None:
     # Messages that math the table should not be dropped.
     assert not message_filter.should_drop(
         Message(
-            Partition(Topic("topic"), 0),
-            0,
-            KafkaPayload(None, b"", [("table", table_name.encode("utf8"))]),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, b"", [("table", table_name.encode("utf8"))]),
+                Partition(Topic("topic"), 0),
+                0,
+                datetime.now(),
+            )
         )
     )
 
     # Messages without a table should be dropped.
     assert message_filter.should_drop(
         Message(
-            Partition(Topic("topic"), 0),
-            0,
-            KafkaPayload(None, b"", []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, b"", []),
+                Partition(Topic("topic"), 0),
+                0,
+                datetime.now(),
+            )
         )
     )
 
     # Messages from a different table should be dropped.
     assert message_filter.should_drop(
         Message(
-            Partition(Topic("topic"), 0),
-            0,
-            KafkaPayload(None, b"", [("table", b"other_table")]),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, b"", [("table", b"other_table")]),
+                Partition(Topic("topic"), 0),
+                0,
+                datetime.now(),
+            )
         )
     )

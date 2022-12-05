@@ -16,7 +16,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Commit
+from arroyo.types import BrokerValue, Commit
 
 from snuba import state
 from snuba.consumers.utils import get_partition_count
@@ -300,12 +300,11 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             self.__next_step.submit(
                 Message(
-                    message.partition,
-                    message.offset,
-                    SubscriptionTaskResult(
-                        result_future.task, result_future.future.result()
-                    ),
-                    message.timestamp,
+                    message.value.replace(
+                        SubscriptionTaskResult(
+                            result_future.task, result_future.future.result()
+                        )
+                    )
                 )
             )
 
@@ -386,12 +385,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
             )
 
             self.__next_step.submit(
-                Message(
-                    message.partition,
-                    message.offset,
-                    subscription_task_result,
-                    message.timestamp,
-                )
+                Message(message.value.replace(subscription_task_result))
             )
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
@@ -420,7 +414,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
         self.__encoder = SubscriptionTaskResultEncoder()
 
         self.__queue: Deque[
-            Tuple[Message[SubscriptionTaskResult], Future[Message[KafkaPayload]]]
+            Tuple[Message[SubscriptionTaskResult], Future[BrokerValue[KafkaPayload]]]
         ] = deque()
 
         self.__max_buffer_size = 10000
@@ -435,7 +429,7 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             self.__queue.popleft()
 
-            self.__commit({message.partition: message.position_to_commit})
+            self.__commit(message.committable)
 
     def submit(self, message: Message[SubscriptionTaskResult]) -> None:
         assert not self.__closed
@@ -470,7 +464,5 @@ class ProduceResult(ProcessingStrategy[SubscriptionTaskResult]):
 
             future.result(remaining)
 
-            offset = {message.partition: message.position_to_commit}
-
-            logger.info("Committing offset: %r", offset)
-            self.__commit(offset, force=True)
+            logger.info("Committing offset: %r", message.committable)
+            self.__commit(message.committable, force=True)

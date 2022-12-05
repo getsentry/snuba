@@ -6,11 +6,11 @@ from typing import Iterator, Mapping, Optional
 from unittest import mock
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.processing.strategies import MessageRejected
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
@@ -208,7 +208,7 @@ def generate_message(
             )
         )
 
-        yield Message(Partition(Topic("test"), 0), i, payload, epoch)
+        yield Message(BrokerValue(payload, Partition(Topic("test"), 0), i, epoch))
         i += 1
 
 
@@ -234,8 +234,8 @@ def test_execute_query_strategy() -> None:
         time.sleep(0.1)
         strategy.poll()
 
-    assert next_step.submit.call_args[0][0].timestamp == message.timestamp
-    assert next_step.submit.call_args[0][0].offset == message.offset
+    assert isinstance(message.value, BrokerValue)
+    assert next_step.submit.call_args[0][0].committable == message.committable
 
     result = next_step.submit.call_args[0][0].payload.result
     assert result[1]["data"] == [{"count()": 0}]
@@ -333,16 +333,18 @@ def test_produce_result() -> None:
     }
 
     message = Message(
-        Partition(scheduled_topic, 0),
-        1,
-        SubscriptionTaskResult(
-            ScheduledSubscriptionTask(
-                epoch,
-                SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
+        BrokerValue(
+            SubscriptionTaskResult(
+                ScheduledSubscriptionTask(
+                    epoch,
+                    SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1),
+                ),
+                (request, result),
             ),
-            (request, result),
-        ),
-        epoch,
+            Partition(scheduled_topic, 0),
+            1,
+            epoch,
+        )
     )
 
     strategy.submit(message)
