@@ -1,16 +1,13 @@
 from typing import List, Sequence, Tuple
 
-from snuba.clickhouse.columns import Column, Enum
+from snuba.clickhouse.columns import Column, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (
-        Column(
-            "replay_type",
-            Enum([("session", 1), ("error", 2)], Modifiers(nullable=True)),
-        ),
+        Column("replay_type", String(Modifiers(low_cardinality=True, nullable=True))),
         "replay_id",
     )
 ]
