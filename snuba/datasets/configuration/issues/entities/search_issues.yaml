@@ -1,0 +1,46 @@
+version: v1
+kind: entity
+name: search_issues
+
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: group_id, type: UInt, args: { size: 64 } },
+    { name: search_title, type: String },
+    { name: fingerprint, type: Array, args: { type: String, arg: 0 } },
+    { name: occurrence_id, type: UUID },
+    { name: occurrence_type_id, type: UInt, args: { size: 8 } },
+    { name: detection_timestamp, type: DateTime },
+
+    # TODO: fill out more fields
+  ]
+
+readable_storage: search_issues
+writable_storage: search_issues
+query_processors:
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: organization_id
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_time: detection_timestamp
+      time_parse_columns: [ detection_timestamp ]
+translation_mappers: {}
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: ["organization_id", "project_id"]
+
+required_time_column: detection_timestamp

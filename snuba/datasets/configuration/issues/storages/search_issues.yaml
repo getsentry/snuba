@@ -1,0 +1,64 @@
+version: v1
+kind: writable_storage
+name: search_issues
+
+storage:
+  key: search_issues
+  set_key: search_issues
+
+schema:
+  columns:
+    [
+      { name: organization_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: group_id, type: UInt, args: { size: 64 } },
+      { name: search_title, type: String },
+      { name: fingerprint, type: Array, args: { type: String, arg: 0 } },
+      { name: occurrence_id, type: UUID },
+      { name: occurrence_type_id, type: UInt, args: { size: 8 } },
+      { name: detection_timestamp, type: DateTime },
+
+      { name: event_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: trace_id, type: UUID, args: { schema_modifiers: [nullable] } },
+      { name: platform, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: environment, type: String, args: { schema_modifiers: [low_cardinality, nullable] } },
+      { name: release, type: String, args: { schema_modifiers: [low_cardinality, nullable] } },
+      { name: dist, type: String, args: { schema_modifiers: [low_cardinality, nullable] } },
+      { name: receive_timestamp, type: DateTime },
+      { name: client_timestamp, type: DateTime },
+      { name: tags.key, type: Array, args: { type: String, arg: 0 } },
+      { name: tags.value, type: Array, args: { type: String, arg: 0 } },
+      { name: _tags_hash_map, type: Array, args: { type: UInt, arg: 64 } },
+      { name: user, type: String },
+      { name: user_id, type: UInt, args: { size: 64 } },
+      { name: user_name, type: String, args: { schema_modifiers: [nullable] } },
+      { name: user_email, type: String, args: { schema_modifiers: [nullable] } },
+      { name: ip_address_v4, type: IPv4, args: { schema_modifiers: [nullable] } },
+      { name: ip_address_v6, type: IPv6, args: { schema_modifiers: [nullable] } },
+      { name: sdk_name, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: sdk_version, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: context.key, type: Array, args: { type: String, arg: 0 } },
+      { name: context.value, type: Array, args: { type: String, arg: 0 } },
+      { name: http_method, type: String, args: { schema_modifiers: [low_cardinality, nullable] } },
+      { name: http_referer, type: String, args: { schema_modifiers: [nullable] } },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+    ]
+  local_table_name: search_issues_local
+  dist_table_name: search_issues_dist
+query_processors:
+#  - processor: UUIDColumnProcessor
+#    args:
+#      columns: !!set
+#        trace_id: null
+#        transaction_id: null
+#        profile_id: null
+  - processor: TableRateLimit
+mandatory_condition_checkers:
+  - condition: OrgIdEnforcer
+    args:
+      field_name: organization_id
+  - condition: ProjectIdEnforcer
+stream_loader:
+  processor:
+    name: SearchIssuesMessageProcessor
+  default_topic: search-issues

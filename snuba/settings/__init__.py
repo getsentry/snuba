@@ -76,6 +76,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "replays",
             "generic_metrics_sets",
             "generic_metrics_distributions",
+            "search_issues",
         },
         "single_node": True,
     },
@@ -237,6 +238,7 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {
     "profiles",
     "functions",
     "test_migration",
+    "search_issues",
 }
 
 MAX_RESOLUTION_FOR_JITTER = 60
