@@ -8,6 +8,11 @@ schema:
   columns:
     [
       { name: replay_id, type: UUID },
+      {
+        name: replay_type,
+        type: String,
+        args: { schema_modifiers: [low_cardinality, nullable] },
+      },
       { name: event_hash, type: UUID },
       {
         name: segment_id,
