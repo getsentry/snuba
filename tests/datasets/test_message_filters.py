@@ -1,8 +1,8 @@
 from datetime import datetime
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 
@@ -10,10 +10,12 @@ test_data = [
     pytest.param(
         KafkaHeaderSelectFilter("should_drop", "1"),
         Message(
-            Partition(Topic("random"), 1),
-            1,
-            KafkaPayload(b"key", b"value", [("should_drop", b"1")]),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(b"key", b"value", [("should_drop", b"1")]),
+                Partition(Topic("random"), 1),
+                1,
+                datetime.now(),
+            )
         ),
         True,
         id="matching-headers",
@@ -21,10 +23,12 @@ test_data = [
     pytest.param(
         KafkaHeaderSelectFilter("should_drop", "0"),
         Message(
-            Partition(Topic("random"), 1),
-            1,
-            KafkaPayload(b"key", b"value", [("should_drop", b"1")]),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(b"key", b"value", [("should_drop", b"1")]),
+                Partition(Topic("random"), 1),
+                1,
+                datetime.now(),
+            )
         ),
         False,
         id="mismatched-headers",
@@ -32,10 +36,12 @@ test_data = [
     pytest.param(
         KafkaHeaderSelectFilter("should_drop", "1"),
         Message(
-            Partition(Topic("random"), 1),
-            1,
-            KafkaPayload(b"key", b"value", [("missing", b"0")]),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(b"key", b"value", [("missing", b"0")]),
+                Partition(Topic("random"), 1),
+                1,
+                datetime.now(),
+            )
         ),
         False,
         id="missing-headers",

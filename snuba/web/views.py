@@ -28,8 +28,8 @@ from uuid import UUID
 import jsonschema
 import sentry_sdk
 import simplejson as json
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
@@ -655,10 +655,12 @@ if application.debug or application.testing:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("topic"), 0),
-            0,
-            KafkaPayload(None, http_request.data, []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, http_request.data, []),
+                Partition(Topic("topic"), 0),
+                0,
+                datetime.now(),
+            )
         )
 
         type_ = record[1]
@@ -667,11 +669,8 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from arroyo.processing.strategies.factory import (
-                KafkaConsumerStrategyFactory,
-            )
-
             from snuba.consumers.consumer import build_batch_writer, process_message
+            from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()

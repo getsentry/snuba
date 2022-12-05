@@ -19,6 +19,7 @@ from snuba.migrations.operations import (
     InsertIntoSelect,
     ModifyColumn,
     ModifyTableTTL,
+    OperationTarget,
     RemoveTableTTL,
     RenameTable,
     SqlOperation,
@@ -49,6 +50,36 @@ def test_create_table() -> None:
     ).format_sql() in [
         "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
         "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
+        + f"{database}/test_table'"
+        + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
+    ]
+
+
+def test_create_table_with_column_ttl() -> None:
+    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
+    columns: Sequence[Column[Modifiers]] = [
+        Column("id", String()),
+        Column("name", String(Modifiers(nullable=True))),
+        Column("version", UInt(64)),
+        Column(
+            "restricted",
+            String(Modifiers(low_cardinality=True, ttl="timestamp + toIntervalDay(1)")),
+        ),
+    ]
+
+    assert CreateTable(
+        StorageSetKey.EVENTS,
+        "test_table",
+        columns,
+        ReplacingMergeTree(
+            storage_set=StorageSetKey.EVENTS,
+            version_column="version",
+            order_by="version",
+            settings={"index_granularity": "256"},
+        ),
+    ).format_sql() in [
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64, restricted LowCardinality(String) TTL timestamp + toIntervalDay(1)) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64, restricted LowCardinality(String) TTL timestamp + toIntervalDay(1)) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
         + f"{database}/test_table'"
         + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
     ]
@@ -200,7 +231,7 @@ def test_specify_order() -> None:
     logger = Logger("test")
     context = Context("001", logger, lambda x: None)
 
-    class TestMigration(migration.ClickhouseNodeMigration):
+    class TestMigration(migration.ClickhouseNodeMigrationLegacy):
         blocking = False
 
         def forwards_local(self) -> Sequence[SqlOperation]:
@@ -219,8 +250,8 @@ def test_specify_order() -> None:
     order = []
     for op in ops:
 
-        def effect(op: Mock) -> Callable[[bool], None]:
-            def add_op(local: bool) -> None:
+        def effect(op: Mock) -> Callable[[], None]:
+            def add_op() -> None:
                 order.append(op)
 
             return add_op
@@ -241,3 +272,125 @@ def test_specify_order() -> None:
     test_migration.backwards_local_first = True
     test_migration.backwards(context, False)
     assert order == [drop_local_op, drop_dist_op]
+
+
+def test_new_create_table() -> None:
+    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
+    columns: Sequence[Column[Modifiers]] = [
+        Column("id", String()),
+        Column("name", String(Modifiers(nullable=True))),
+        Column("version", UInt(64)),
+    ]
+
+    op = CreateTable(
+        StorageSetKey.EVENTS,
+        "test_table",
+        columns,
+        ReplacingMergeTree(
+            storage_set=StorageSetKey.EVENTS,
+            version_column="version",
+            order_by="version",
+            settings={"index_granularity": "256"},
+        ),
+        target=OperationTarget.DISTRIBUTED,
+    )
+
+    assert op.format_sql() in [
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
+        + f"{database}/test_table'"
+        + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
+    ]
+
+
+def test_new_add_column() -> None:
+    dist_op = AddColumn(
+        StorageSetKey.EVENTS,
+        "test_table",
+        Column("new_column", String()),
+        after="id",
+        target=OperationTarget.DISTRIBUTED,
+    )
+
+    assert (
+        dist_op.format_sql()
+        == "ALTER TABLE test_table ADD COLUMN IF NOT EXISTS new_column String AFTER id;"
+    )
+
+    local_op = AddColumn(
+        StorageSetKey.EVENTS,
+        "test_table",
+        Column("new_column", String()),
+        after="id",
+        target=OperationTarget.LOCAL,
+    )
+
+    assert (
+        local_op.format_sql()
+        == "ALTER TABLE test_table ADD COLUMN IF NOT EXISTS new_column String AFTER id;"
+    )
+
+
+def test_new_drop_column() -> None:
+    local_op = DropColumn(
+        StorageSetKey.EVENTS,
+        "test_table",
+        "test_column",
+        target=OperationTarget.LOCAL,
+    )
+
+    assert (
+        local_op.format_sql()
+        == "ALTER TABLE test_table DROP COLUMN IF EXISTS test_column;"
+    )
+
+    dist_op = DropColumn(
+        StorageSetKey.EVENTS,
+        "test_dist_table",
+        "test_column",
+        target=OperationTarget.DISTRIBUTED,
+    )
+    assert (
+        dist_op.format_sql()
+        == "ALTER TABLE test_dist_table DROP COLUMN IF EXISTS test_column;"
+    )
+
+
+def test_refactored_migration() -> None:
+    """
+    Test that specifying the migration order works when changing
+    """
+    create_local_op = Mock(CreateTable)
+    create_dist_op = Mock(CreateTable)
+    drop_local_op = Mock(DropTable)
+    drop_dist_op = Mock(DropTable)
+    logger = Logger("test")
+    context = Context("001", logger, lambda x: None)
+
+    class TestMigration(migration.ClickhouseNodeMigration):
+        blocking = False
+
+        def forwards_ops(self) -> Sequence[SqlOperation]:
+            return [create_local_op, create_dist_op]
+
+        def backwards_ops(self) -> Sequence[SqlOperation]:
+            return [drop_dist_op, drop_local_op]
+
+    ops = [create_local_op, create_dist_op, drop_local_op, drop_dist_op]
+    order = []
+    for op in ops:
+
+        def effect(op: Mock) -> Callable[[], None]:
+            def add_op() -> None:
+                order.append(op)
+
+            return add_op
+
+        op.execute.side_effect = effect(op)
+
+    test_migration = TestMigration()
+    test_migration.forwards(context)
+    assert order == [create_local_op, create_dist_op]
+    order.clear()
+    test_migration.backwards(context, False)
+    assert order == [drop_dist_op, drop_local_op]

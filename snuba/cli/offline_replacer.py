@@ -5,9 +5,8 @@ from typing import Optional
 
 import click
 import simplejson as json
-from arroyo import Message
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.types import Partition, Topic
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba import environment
 from snuba.datasets.storages.factory import get_writable_storage
@@ -105,11 +104,13 @@ def offline_replacer(
                 logger.info(f"Offset {current_offset} [Skip project] Skipping {data}")
                 continue
 
-            kafka_msg: Message[KafkaPayload] = Message(
-                Partition(Topic("na"), 0),
-                current_offset,
-                KafkaPayload(None, line.encode(), []),
-                datetime.now(),
+            kafka_msg = Message(
+                BrokerValue(
+                    KafkaPayload(None, line.encode(), []),
+                    Partition(Topic("na"), 0),
+                    current_offset,
+                    datetime.now(),
+                )
             )
             replacement = worker.process_message(kafka_msg)
             if replacement is not None:

@@ -21,7 +21,6 @@ setup_logging("DEBUG")
 logger = logging.getLogger("snuba_init")
 
 start = time.perf_counter()
-logger.info("Initializing Snuba CLI...")
 metrics = MetricsWrapper(environment_metrics, "cli")
 
 plugin_folder = os.path.dirname(__file__)
@@ -62,7 +61,7 @@ class SnubaCLI(click.MultiCommand):
                 code = compile(f.read(), fn, "exec")
                 eval(code, ns, ns)
             init_time = time.perf_counter() - start
-            metrics.gauge("snuba_init", init_time)
+            metrics.timing("snuba_init_time", init_time)
             logger.info(f"Snuba initialization took {init_time}s")
             return ns[actual_command_name]
 
@@ -82,3 +81,4 @@ def main() -> None:
 
 
 structlog.reset_defaults()
+setup_logging()
