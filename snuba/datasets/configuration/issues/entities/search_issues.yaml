@@ -8,7 +8,7 @@ schema:
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: group_id, type: UInt, args: { size: 64 } },
     { name: search_title, type: String },
-    { name: fingerprint, type: Array, args: { type: String, arg: 0 } },
+    { name: fingerprint, type: Array, args: { inner_type: { type: String } } },
     { name: occurrence_id, type: UUID },
     { name: occurrence_type_id, type: UInt, args: { size: 8 } },
     { name: detection_timestamp, type: DateTime },
