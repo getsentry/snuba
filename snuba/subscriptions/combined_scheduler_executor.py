@@ -256,7 +256,7 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
         for task in encoded_tasks:
-            self.__next_step.submit(Message(message.value.replace(task)))
+            self.__next_step.submit(message.replace(task))
 
     def close(self) -> None:
         self.__closed = True
