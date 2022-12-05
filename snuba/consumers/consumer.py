@@ -36,7 +36,7 @@ from arroyo.processing.strategies.dead_letter_queue import (
 from arroyo.processing.strategies.dead_letter_queue.policies.abstract import (
     DeadLetterQueuePolicy,
 )
-from arroyo.types import BrokerValue, Message, Partition, Position, Topic
+from arroyo.types import BrokerValue, Commit, Message, Partition, Topic
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
@@ -773,7 +773,7 @@ class MultistorageConsumerProcessingStrategyFactory(
 
     def create_with_partitions(
         self,
-        commit: Callable[[Mapping[Partition, Position]], None],
+        commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
         return TransformStep(
