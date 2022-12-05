@@ -41,7 +41,6 @@ class SearchIssueMessage(TypedDict, total=False):
     sdk: Mapping[str, Any]  # sdk_name, sdk_version
     contexts: Mapping[str, Any]
     request: Mapping[str, Any]  # http_method, http_referer
-    retention_days: int
 
 
 class SearchIssuesMessageProcessor(DatasetMessageProcessor):

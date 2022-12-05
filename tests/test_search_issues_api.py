@@ -21,7 +21,7 @@ class TestSearchIssuesSnQLApi(BaseApiTest):
         turbo: bool = False,
         consistent: bool = True,
         debug: bool = True,
-    ):
+    ) -> Any:
         return self.app.post(
             "/search_issues/snql",
             data=json.dumps(
@@ -45,6 +45,7 @@ class TestSearchIssuesSnQLApi(BaseApiTest):
             detection_timestamp=now.timestamp(),
         )
 
+        assert self.events_storage
         write_raw_unprocessed_events(self.events_storage, [evt])
 
         response = self.post_query(
