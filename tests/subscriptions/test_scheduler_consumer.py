@@ -7,13 +7,13 @@ from typing import Any, Mapping, Optional
 from unittest import mock
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload, KafkaProducer
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
 from arroyo.commit import Commit
 from arroyo.errors import ConsumerError
+from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 
@@ -204,12 +204,12 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     }
 
     # consume 0, 1
-    assert consumer.poll() == Message(
-        Partition(topic, 0),
-        1,
+    assert consumer.poll() == BrokerValue(
         Tick(0, offsets=Interval(0, 1), timestamps=Interval(epoch, epoch)).time_shift(
             time_shift
         ),
+        Partition(topic, 0),
+        1,
         epoch,
     )
 
@@ -218,12 +218,12 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     }
 
     # consume 0, 2
-    assert consumer.poll() == Message(
-        Partition(topic, 0),
-        2,
+    assert consumer.poll() == BrokerValue(
         Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
             time_shift
         ),
+        Partition(topic, 0),
+        2,
         epoch,
     )
 
@@ -259,12 +259,12 @@ def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
     }
 
     # consume 0, 2
-    assert consumer.poll() == Message(
-        Partition(topic, 0),
-        2,
+    assert consumer.poll() == BrokerValue(
         Tick(0, offsets=Interval(1, 2), timestamps=Interval(epoch, epoch)).time_shift(
             time_shift
         ),
+        Partition(topic, 0),
+        2,
         epoch,
     )
 
@@ -322,14 +322,14 @@ def test_tick_consumer_non_monotonic() -> None:
     assert consumer.tell() == {partition: 1}
 
     with assert_changes(consumer.tell, {partition: 1}, {partition: 2}):
-        assert consumer.poll() == Message(
-            partition,
-            1,
+        assert consumer.poll() == BrokerValue(
             Tick(
                 0,
                 offsets=Interval(0, 1),
                 timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
             ),
+            partition,
+            1,
             epoch + timedelta(seconds=1),
         )
 
@@ -353,9 +353,7 @@ def test_tick_consumer_non_monotonic() -> None:
     ).result()
 
     with assert_changes(consumer.tell, {partition: 3}, {partition: 4}):
-        assert consumer.poll() == Message(
-            partition,
-            3,
+        assert consumer.poll() == BrokerValue(
             Tick(
                 0,
                 offsets=Interval(1, 3),
@@ -363,6 +361,8 @@ def test_tick_consumer_non_monotonic() -> None:
                     epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
                 ),
             ),
+            partition,
+            3,
             epoch + timedelta(seconds=2),
         )
 

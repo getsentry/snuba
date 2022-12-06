@@ -125,9 +125,7 @@ T = TypeVar("T")
 
 class RedisClusters(TypedDict):
     cache: RedisClusterConfig | None
-    cache_v2: RedisClusterConfig | None
     rate_limiter: RedisClusterConfig | None
-    rate_limiter_v2: RedisClusterConfig | None
     subscription_store: RedisClusterConfig | None
     replacements_store: RedisClusterConfig | None
     config: RedisClusterConfig | None
@@ -137,9 +135,7 @@ class RedisClusters(TypedDict):
 
 REDIS_CLUSTERS: RedisClusters = {
     "cache": None,
-    "cache_v2": None,
     "rate_limiter": None,
-    "rate_limiter_v2": None,
     "subscription_store": None,
     "replacements_store": None,
     "config": None,
@@ -231,7 +227,8 @@ COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
-# Migrations in skipped groups will not be run
+# The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
+# Migrations for skipped groups will not be run.
 SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
@@ -294,6 +291,8 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
 OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+# how long to wait for an optimize runner to complete before sending an alert
+OPTIMIZE_ALERT_THRESHOLD = 14 * 60 * 60  # 14 hours
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"

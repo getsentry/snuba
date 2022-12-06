@@ -65,6 +65,11 @@ def set_logging_context() -> None:
     bind_contextvars(endpoint=request.endpoint, user_ip=request.remote_addr)
 
 
+@application.teardown_request
+def clear_logging_context(exception: Optional[BaseException]) -> None:
+    clear_contextvars()
+
+
 @application.before_request
 def authorize() -> None:
     logger.debug("authorize.entered")
@@ -159,7 +164,19 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     fake = request.args.get("fake", False, type=str_to_bool)
     dry_run = request.args.get("dry_run", False, type=str_to_bool)
 
+    user = request.headers.get(USER_HEADER_KEY)
+
     def do_action() -> None:
+        if not dry_run:
+            audit_log.record(
+                user or "",
+                AuditLogAction.RAN_MIGRATION
+                if action == "run"
+                else AuditLogAction.REVERSED_MIGRATION,
+                {"migration": str(migration_key), "force": force, "fake": fake},
+                notify=True,
+            )
+
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
         else:

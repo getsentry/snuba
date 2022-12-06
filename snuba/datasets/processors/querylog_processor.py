@@ -91,7 +91,7 @@ class QuerylogProcessor(DatasetMessageProcessor):
             groupby_columns.append(profile["groupby_cols"])
             array_join_columns.append(profile["array_join_cols"])
             bytes_scanned_columns.append(result_profile.get("bytes", 0))
-            duration_ms.append(result_profile.get("elapsed", 0) * 1000)
+            duration_ms.append(int(result_profile.get("elapsed", 0) * 1000))
 
         return {
             "clickhouse_queries.sql": sql,

@@ -8,8 +8,8 @@ from unittest import mock
 
 import pytz
 import simplejson as json
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba import replacer, settings
 from snuba.clickhouse.optimize.optimize import run_optimize
@@ -54,10 +54,12 @@ class TestReplacer:
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
-            Partition(Topic("replacements"), 0),
-            0,
-            KafkaPayload(None, json.dumps(msg).encode("utf-8"), []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, json.dumps(msg).encode("utf-8"), []),
+                Partition(Topic("replacements"), 0),
+                0,
+                datetime.now(),
+            )
         )
 
     def _clear_redis_and_force_merge(self) -> None:
@@ -98,27 +100,29 @@ class TestReplacer:
         project_id = self.project_id
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_UNMERGE_HIERARCHICAL,
-                        {
-                            "project_id": project_id,
-                            "previous_group_id": 1,
-                            "new_group_id": 2,
-                            "hierarchical_hash": "a" * 32,
-                            "primary_hash": "b" * 32,
-                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                        },
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_UNMERGE_HIERARCHICAL,
+                            {
+                                "project_id": project_id,
+                                "previous_group_id": 1,
+                                "new_group_id": 2,
+                                "hierarchical_hash": "a" * 32,
+                                "primary_hash": "b" * 32,
+                                "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                            },
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         processed = self.replacer.process_message(message)
@@ -167,24 +171,26 @@ class TestReplacer:
         timestamp = datetime.now(tz=pytz.utc)
 
         message: Message[KafkaPayload] = Message(
-            Partition(Topic("replacements"), 1),
-            42,
-            KafkaPayload(
-                None,
-                json.dumps(
-                    (
-                        2,
-                        ReplacementType.END_DELETE_TAG,
-                        {
-                            "project_id": project_id,
-                            "tag": "browser.name",
-                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                        },
-                    )
-                ).encode("utf-8"),
-                [],
-            ),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(
+                    None,
+                    json.dumps(
+                        (
+                            2,
+                            ReplacementType.END_DELETE_TAG,
+                            {
+                                "project_id": project_id,
+                                "tag": "browser.name",
+                                "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                            },
+                        )
+                    ).encode("utf-8"),
+                    [],
+                ),
+                Partition(Topic("replacements"), 1),
+                42,
+                datetime.now(),
+            )
         )
 
         processed = self.replacer.process_message(message)

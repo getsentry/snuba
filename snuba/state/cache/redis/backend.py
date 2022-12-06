@@ -2,8 +2,7 @@ import concurrent.futures
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from hashlib import md5
-from typing import Callable, List, Optional, Union
+from typing import Callable, Optional
 
 from pkg_resources import resource_string
 
@@ -17,7 +16,6 @@ from snuba.state.cache.abstract import (
     ExecutionTimeoutError,
     TValue,
 )
-from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -35,31 +33,24 @@ RESULT_WAIT = 2
 class RedisCache(Cache[TValue]):
     def __init__(
         self,
-        client: Union[RedisClientType, List[RedisClientType]],
+        client: RedisClientType,
         prefix: str,
         codec: ExceptionAwareCodec[bytes, TValue],
         executor: ThreadPoolExecutor,
     ) -> None:
-        self.__clients = [client] if not isinstance(client, list) else client
-        assert len(self.__clients) in (1, 2)
+        self.__client = client
         self.__prefix = prefix
         self.__codec = codec
         self.__executor = executor
 
         # TODO: This should probably be lazily instantiated, rather than
         # automatically happening at startup.
-        self.__scripts_get = [
-            client.register_script(
-                resource_string("snuba", "state/cache/redis/scripts/get.lua")
-            )
-            for client in self.__clients
-        ]
-        self.__scripts_set = [
-            client.register_script(
-                resource_string("snuba", "state/cache/redis/scripts/set.lua")
-            )
-            for client in self.__clients
-        ]
+        self.__script_get = client.register_script(
+            resource_string("snuba", "state/cache/redis/scripts/get.lua")
+        )
+        self.__script_set = client.register_script(
+            resource_string("snuba", "state/cache/redis/scripts/set.lua")
+        )
 
     def __build_key(
         self, key: str, prefix: Optional[str] = None, suffix: Optional[str] = None
@@ -68,27 +59,15 @@ class RedisCache(Cache[TValue]):
             [bit for bit in [prefix, f"{{{key}}}", suffix] if bit is not None]
         )
 
-    def __get_shard(self, key: str) -> int:
-        if len(self.__clients) != 2:
-            return 0
-        rollout_rate = get_config("cache_use_v2_cluster", 0.0)
-        assert isinstance(rollout_rate, float)
-        should_use_v2 = (
-            int(md5(force_bytes(key)).hexdigest(), 16) % 1000 < rollout_rate * 1000
-        )
-        return int(should_use_v2)
-
     def get(self, key: str) -> Optional[TValue]:
-        shard = self.__get_shard(key)
-        value = self.__clients[shard].get(self.__build_key(key))
+        value = self.__client.get(self.__build_key(key))
         if value is None:
             return None
 
         return self.__codec.decode(value)
 
     def set(self, key: str, value: TValue) -> None:
-        shard = self.__get_shard(key)
-        self.__clients[shard].set(
+        self.__client.set(
             self.__build_key(key),
             self.__codec.encode(value),
             ex=get_config("cache_expiry_sec", 1),
@@ -102,8 +81,6 @@ class RedisCache(Cache[TValue]):
         timeout: int,
         timer: Optional[Timer] = None,
     ) -> TValue:
-        shard = self.__get_shard(key)
-
         # This method is designed with the following goals in mind:
         # 1. The value generation function is only executed when no value
         # already exists for the key.
@@ -156,7 +133,7 @@ class RedisCache(Cache[TValue]):
         # wait for a different client to finish the work. We have to pass the
         # task creation parameters -- the timeout (execution deadline) and a
         # new task identity just in case we are the first in line.
-        result = self.__scripts_get[shard](
+        result = self.__script_get(
             [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
         )
 
@@ -220,7 +197,7 @@ class RedisCache(Cache[TValue]):
                 # value, other clients will know that we raised an exception.
                 logger.debug("Setting result and waking blocked clients...")
                 try:
-                    self.__scripts_set[shard](
+                    self.__script_set(
                         [
                             redis_key_to_write_to,
                             wait_queue_key,
@@ -255,7 +232,7 @@ class RedisCache(Cache[TValue]):
                 effective_timeout,
             )
             notification_received = (
-                self.__clients[shard].blpop(
+                self.__client.blpop(
                     build_notify_queue_key(task_ident), effective_timeout
                 )
                 is not None
@@ -266,7 +243,7 @@ class RedisCache(Cache[TValue]):
 
             if notification_received:
                 # There should be a value waiting for us at the result key.
-                raw_value, upsteam_error_payload = self.__clients[shard].mget(
+                raw_value, upsteam_error_payload = self.__client.mget(
                     [result_key, error_key]
                 )
                 # If there is no value, that means that the client responsible

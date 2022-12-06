@@ -22,7 +22,8 @@ class MigrationGroup(Enum):
     GENERIC_METRICS = "generic_metrics"
 
 
-# Migration groups are mandatory by default, unless they are on this list
+# Migration groups are mandatory by default. Specific groups can
+# only be skipped (SKIPPED_MIGRATION_GROUPS) if the exist in this list.
 OPTIONAL_GROUPS = {
     MigrationGroup.METRICS,
     MigrationGroup.SESSIONS,
@@ -177,6 +178,7 @@ class ReplaysLoader(DirectoryLoader):
             "0004_add_error_ids_column",
             "0005_add_urls_user_agent_replay_start_timestamp",
             "0006_add_is_archived_column",
+            "0007_add_replay_type_column",
         ]
 
 
