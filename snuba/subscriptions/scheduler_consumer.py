@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
 import rapidjson
-from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
@@ -11,7 +10,7 @@ from arroyo.commit import IMMEDIATE
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Partition, Position, Topic
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
@@ -122,18 +121,18 @@ class CommitLogTickConsumer(Consumer[Tick]):
     def unsubscribe(self) -> None:
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Tick]]:
-        message = self.__consumer.poll(timeout)
-        if message is None:
+    def poll(self, timeout: Optional[float] = None) -> Optional[BrokerValue[Tick]]:
+        value = self.__consumer.poll(timeout)
+        if value is None:
             return None
 
         try:
-            commit = commit_codec.decode(message.payload)
+            commit = commit_codec.decode(value.payload)
             assert commit.orig_message_ts is not None
         except Exception:
             logger.error(
                 f"Error decoding commit log message for followed group: {self.__followed_consumer_group}.",
-                extra={"payload": str(message.payload), "offset": message.offset},
+                extra={"payload": str(value.payload), "offset": value.offset},
                 exc_info=True,
             )
             return None
@@ -143,7 +142,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         previous_message = self.__previous_messages.get(commit.partition)
 
-        result: Optional[Message[Tick]]
+        result: Optional[BrokerValue[Tick]]
         if previous_message is not None:
             try:
                 time_interval = Interval(
@@ -158,16 +157,17 @@ class CommitLogTickConsumer(Consumer[Tick]):
                 )
                 return None
             else:
-                result = Message(
-                    message.partition,
-                    message.offset,
+                result = BrokerValue(
                     Tick(
                         commit.partition.index,
                         Interval(previous_message.offset, commit.offset),
                         time_interval,
                     ).time_shift(self.__time_shift),
-                    message.timestamp,
+                    value.partition,
+                    value.offset,
+                    value.timestamp,
                 )
+
         else:
             result = None
 

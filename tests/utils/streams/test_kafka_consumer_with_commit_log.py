@@ -3,11 +3,10 @@ from contextlib import closing
 from datetime import datetime
 from typing import Iterator
 
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Partition, Position, Topic
 
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
@@ -54,7 +53,7 @@ def test_commit_log_consumer() -> None:
         consumer.subscribe([topic])
 
         message = consumer.poll(10.0)  # XXX: getting the subscription is slow
-        assert isinstance(message, Message)
+        assert isinstance(message, BrokerValue)
 
         now = datetime.now()
 

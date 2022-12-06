@@ -10,7 +10,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 SENTRY_LOGICAL_PARTITIONS = 256
 
 
-def map_partition_key_to_logical_partition(partition_key: int) -> int:
+def map_org_id_to_logical_partition(partition_key: int) -> int:
     """
     Maps a partition key to a logical partition. Since SENTRY_LOGICAL_PARTITIONS is
     fixed, an org id will always be mapped to the same logical partition.

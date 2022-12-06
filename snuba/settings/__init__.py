@@ -125,9 +125,7 @@ T = TypeVar("T")
 
 class RedisClusters(TypedDict):
     cache: RedisClusterConfig | None
-    cache_v2: RedisClusterConfig | None
     rate_limiter: RedisClusterConfig | None
-    rate_limiter_v2: RedisClusterConfig | None
     subscription_store: RedisClusterConfig | None
     replacements_store: RedisClusterConfig | None
     config: RedisClusterConfig | None
@@ -137,9 +135,7 @@ class RedisClusters(TypedDict):
 
 REDIS_CLUSTERS: RedisClusters = {
     "cache": None,
-    "cache_v2": None,
     "rate_limiter": None,
-    "rate_limiter_v2": None,
     "subscription_store": None,
     "replacements_store": None,
     "config": None,
@@ -231,7 +227,8 @@ COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
-# Migrations in skipped groups will not be run
+# The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
+# Migrations for skipped groups will not be run.
 SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "profiles", "functions"}
 
 MAX_RESOLUTION_FOR_JITTER = 60
@@ -319,24 +316,27 @@ SLICED_STORAGES: Mapping[str, int] = {}
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
-# The slice configs below are the "SLICED" versions to
-# the equivalent default settings above. For example,
-# "SLICED_KAFKA_TOPIC_MAP" is the "SLICED" version of
-# "KAFKA_TOPIC_MAP". These should be filled out
-# for any corresponding sliced storages defined above,
-# with the applicable number of slices in mind.
+# The slice configs below are the "SLICED" versions to the equivalent default
+# settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
+# version of "KAFKA_TOPIC_MAP". These should be filled out for any
+# corresponding sliced storages defined above, with the applicable number of
+# slices in mind.
 
-# Storage set keys should be defined either in CLUSTERS
-# or SLICED_CLUSTERS. CLUSTERS will define clusters
-# which are not sliced, i.e. are associated with
-# only the default slice_id (0). CLUSTERS is defined in
-# the default way, without adding slice id in
-# the storage_sets field. We define sliced clusters,
-# i.e. clusters that reside on multiple slices
-# in SLICED_CLUSTERS. We define all associated
-# (storage set, slice id) pairs in SLICED_CLUSTERS
-# in the storage_sets field. Other fields are defined
-# in the same way as they are in CLUSTERS.
+# Cluster access can happen in one of the following ways:
+# 1. The storage set is not sliced. In this case, the storage set key should
+#    be defined in CLUSTERS only.
+# 2. The storage set is sliced and there is no mega-cluster needed. In this
+#    case, the storage set key should be defined in SLICED_CLUSTERS only.
+# 3. The storage set is sliced and there is a mega-cluster needed. In this
+#    case, the storage set key should be defined in both CLUSTERS and
+#    SLICED_CLUSTERS. SLICED_CLUSTERS would contain the cluster information
+#    of the sliced cluster. CLUSTERS would contain the cluster information of
+#    the mega-cluster.
+#
+# We define sliced clusters, i.e. clusters that reside on multiple slices
+# in SLICED_CLUSTERS. We define all associated(storage set, slice id) pairs in
+# SLICED_CLUSTERS in the storage_sets field. Other fields are defined in the
+# same way as they are in CLUSTERS.
 SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Mapping of (logical topic names, slice id) pairs to custom physical topic names

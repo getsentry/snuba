@@ -1,6 +1,5 @@
-from dataclasses import replace
 from datetime import timedelta
-from typing import Mapping, NamedTuple, Optional, Sequence, cast
+from typing import Mapping, NamedTuple, Optional, Sequence
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -257,9 +256,7 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
         for task in encoded_tasks:
-            self.__next_step.submit(
-                cast(Message[KafkaPayload], replace(message, payload=task))
-            )
+            self.__next_step.submit(message.replace(task))
 
     def close(self) -> None:
         self.__closed = True

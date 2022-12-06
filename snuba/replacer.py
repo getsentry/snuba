@@ -17,7 +17,7 @@ from arroyo.processing.strategies.batching import (
     AbstractBatchWorker,
     BatchProcessingStrategy,
 )
-from arroyo.types import Message, Partition, Position
+from arroyo.types import BrokerValue, Message, Partition, Position
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
@@ -390,9 +390,10 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
+        assert isinstance(message.value, BrokerValue)
         metadata = ReplacementMessageMetadata(
-            partition_index=message.partition.index,
-            offset=message.offset,
+            partition_index=message.value.partition.index,
+            offset=message.value.offset,
             consumer_group=self.__consumer_group,
         )
 

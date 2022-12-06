@@ -17,6 +17,7 @@ from snuba.datasets.processors.replays_processor import (
     process_tags_object,
     to_capped_list,
     to_datetime,
+    to_enum,
     to_string,
     to_typed_list,
     to_uint16,
@@ -29,6 +30,7 @@ from snuba.util import force_bytes
 @dataclass
 class ReplayEvent:
     replay_id: str
+    replay_type: str
     segment_id: Any
     trace_ids: Any
     error_ids: Any
@@ -61,6 +63,7 @@ class ReplayEvent:
     def empty_set(cls) -> ReplayEvent:
         return cls(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
+            replay_type="session",
             title=None,
             error_ids=[],
             trace_ids=[],
@@ -94,6 +97,7 @@ class ReplayEvent:
         replay_event: Any = {
             "type": "replay_event",
             "replay_id": self.replay_id,
+            "replay_type": self.replay_type,
             "segment_id": self.segment_id,
             "tags": {"customtag": "is_set", "transaction": self.title},
             "urls": self.urls,
@@ -175,6 +179,7 @@ class ReplayEvent:
         ret = {
             "project_id": 1,
             "replay_id": str(uuid.UUID(self.replay_id)),
+            "replay_type": self.replay_type,
             "event_hash": event_hash,
             "segment_id": self.segment_id,
             "trace_ids": list(
@@ -231,6 +236,7 @@ class TestReplaysProcessor:
 
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
+            replay_type="session",
             title="/organizations/:orgId/issues/",
             error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
             trace_ids=[
@@ -275,6 +281,7 @@ class TestReplaysProcessor:
 
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
+            replay_type="other",
             title="/organizations/:orgId/issues/",
             error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
             trace_ids=[
@@ -312,6 +319,7 @@ class TestReplaysProcessor:
         )
         assert isinstance(processed_message, InsertBatch)
         assert processed_message.rows[0]["urls"] == ["http://localhost:8001", "0"]
+        assert processed_message.rows[0]["replay_type"] is None
         assert processed_message.rows[0]["platform"] == "0"
         assert processed_message.rows[0]["dist"] == "0"
         assert processed_message.rows[0]["user_name"] == "0"
@@ -505,6 +513,13 @@ class TestReplaysProcessor:
 
         with pytest.raises(ValueError):
             assert to_typed_list(to_uint16, ["a"])
+
+    def test_to_enum(self) -> None:
+        """Test "to_enum" function."""
+        assert to_enum(["session", "error"])("session") == "session"
+        assert to_enum(["session", "error"])("error") == "error"
+        assert to_enum(["session", "error"])("other") is None
+        assert to_enum(["session", "error"])(None) is None
 
     def test_to_uuid(self) -> None:
         """Test "to_uuid" function."""

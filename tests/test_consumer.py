@@ -8,10 +8,8 @@ from typing import MutableSequence, Optional
 from unittest.mock import Mock, call
 
 import pytest
-from arroyo import Message, Partition, Topic
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies.factory import KafkaConsumerStrategyFactory
-from arroyo.types import Position
+from arroyo.types import BrokerValue, Message, Partition, Position, Topic
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -22,6 +20,7 @@ from snuba.consumers.consumer import (
     ReplacementBatchWriter,
     process_message,
 )
+from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
@@ -34,10 +33,12 @@ from tests.backends.metrics import TestingMetricsBackend, Timing
 def test_streaming_consumer_strategy() -> None:
     messages = (
         Message(
-            Partition(Topic("events"), 0),
-            i,
-            KafkaPayload(None, b"{}", []),
-            datetime.now(),
+            BrokerValue(
+                KafkaPayload(None, b"{}", []),
+                Partition(Topic("events"), 0),
+                i,
+                datetime.now(),
+            )
         )
         for i in itertools.count()
     )
@@ -188,7 +189,7 @@ def test_multistorage_strategy(
     now = datetime.now()
 
     messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now)
+        Message(BrokerValue(payload, Partition(Topic("topic"), 0), offset, now))
         for offset, payload in enumerate(payloads)
     ]
 
@@ -241,7 +242,7 @@ def test_metrics_writing_e2e() -> None:
     payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
     now = datetime.now()
     messages = [
-        Message(Partition(Topic("topic"), 0), offset, payload, now)
+        Message(BrokerValue(payload, Partition(Topic("topic"), 0), offset, now))
         for offset, payload in enumerate(payloads)
     ]
 

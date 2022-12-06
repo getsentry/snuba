@@ -1,7 +1,7 @@
 from typing import Type
 
 import pytest
-from jsonschema.exceptions import ValidationError
+from fastjsonschema.exceptions import JsonSchemaValueException
 
 from snuba.datasets.configuration.entity_subscription_builder import (
     build_entity_subscription_from_config,
@@ -39,7 +39,7 @@ def test_build_entity_subscription_from_config() -> None:
 
 
 def test_bad_configuration_broken_attribute() -> None:
-    with pytest.raises((ValidationError, TypeError)):
+    with pytest.raises((JsonSchemaValueException, TypeError)):
         build_entity_subscription_from_config(
             "tests/subscriptions/entity_subscriptions/configuration/broken_entity_subscription_bad_attribute.yaml"
         )
