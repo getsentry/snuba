@@ -60,6 +60,6 @@ def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
         Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
         Topic.REPLAYEVENTS: {"message.timestamp.type": "LogAppendTime"},
         Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.SEARCH_ISSUES: {"message.detection_timestamp.type": "LogAppendTime"},
+        Topic.SEARCH_ISSUES: {"message.timestamp.type": "LogAppendTime"},
     }
     return config.get(topic, {})
