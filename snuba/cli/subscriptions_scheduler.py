@@ -116,8 +116,13 @@ def subscriptions_scheduler(
     setup_logging(log_level)
     setup_sentry()
 
+    metrics_tags = {"entity": entity_name}
+
+    if slice_id:
+        metrics_tags["slice_id"] = str(slice_id)
+
     metrics = MetricsWrapper(
-        environment.metrics, "subscriptions.scheduler", tags={"entity": entity_name}
+        environment.metrics, "subscriptions.scheduler", tags=metrics_tags
     )
 
     configure_metrics(StreamMetricsAdapter(metrics))
