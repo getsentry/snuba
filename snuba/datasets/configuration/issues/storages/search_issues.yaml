@@ -62,3 +62,6 @@ stream_loader:
   processor:
     name: SearchIssuesMessageProcessor
   default_topic: search-issues
+  dlq_policy:
+    type: produce
+    args: [ snuba-dead-letter-search-issues ]

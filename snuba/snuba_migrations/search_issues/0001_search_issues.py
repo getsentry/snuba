@@ -57,7 +57,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.SEARCH_ISSUES,
-                table_name=params[0],
+                table_name="search_issues_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     order_by="(organization_id, project_id, toStartOfDay(detection_timestamp))",
@@ -68,12 +68,18 @@ class Migration(migration.ClickhouseNodeMigration):
                     storage_set=StorageSetKey.SEARCH_ISSUES,
                     ttl="detection_timestamp + toIntervalDay(retention_days)",
                 ),
-                target=params[1],
-            )
-            for params in [
-                ("search_issues_local", OperationTarget.LOCAL),
-                ("search_issues_dist", OperationTarget.DISTRIBUTED),
-            ]
+                target=OperationTarget.LOCAL,
+            ),
+            operations.CreateTable(
+                storage_set=StorageSetKey.SEARCH_ISSUES,
+                table_name="search_issues_dist",
+                columns=columns,
+                engine=table_engines.Distributed(
+                    local_table_name="search_issues_local",
+                    sharding_key="cityHash64(project_id)",
+                ),
+                target=OperationTarget.DISTRIBUTED,
+            ),
         ]
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
