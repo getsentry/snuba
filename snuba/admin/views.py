@@ -37,7 +37,7 @@ from snuba.datasets.factory import (
 )
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
-from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
+from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -89,7 +89,7 @@ def migrations_groups() -> Response:
     res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
     allowed_groups: Sequence[MigrationGroup] = [
         group
-        for group in get_active_migration_groups()
+        for group in MigrationGroup
         if group.value in settings.ADMIN_ALLOWED_MIGRATION_GROUPS
     ]
     if not allowed_groups:

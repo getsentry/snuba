@@ -40,6 +40,7 @@ ADMIN_ALLOWED_MIGRATION_GROUPS = {
     "profiles": "NonBlockingMigrationsPolicy",
     "functions": "NonBlockingMigrationsPolicy",
     "replays": "NonBlockingMigrationsPolicy",
+    "querylog": "NonBlockingMigrationsPolicy",
 }
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
