@@ -75,3 +75,19 @@ class DatadogMetricsBackend(MetricsBackend):
             tags=self.__normalize_tags(tags),
             sample_rate=self.__sample_rates.get(name, 1.0),
         )
+
+    def events(
+        self,
+        title: str,
+        text: str,
+        alert_type: str,
+        priority: str,
+        tags: Optional[Tags] = None,
+    ) -> None:
+        self.__client.event(
+            title=title,
+            text=text,
+            alert_type=alert_type,
+            tags=self.__normalize_tags(tags),
+            priority=priority,
+        )

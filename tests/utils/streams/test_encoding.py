@@ -1,6 +1,6 @@
-from arroyo import Message, Topic
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.types import Topic
 from arroyo.utils.clock import TestingClock
 
 from snuba.utils.codecs import Encoder
@@ -31,7 +31,4 @@ def test_encoding_producer() -> None:
     assert encoded_message.payload == "olleh"
 
     # All other attributes should be the same.
-    for attribute in set(Message.__slots__) - {"payload"}:
-        assert getattr(encoded_message, attribute) == getattr(
-            decoded_message, attribute
-        )
+    assert encoded_message.committable == decoded_message.committable

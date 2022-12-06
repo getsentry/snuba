@@ -22,6 +22,14 @@ class Timing(NamedTuple):
     tags: Optional[Tags]
 
 
+class Events(NamedTuple):
+    title: str
+    text: str
+    alert_type: str
+    priority: str
+    tags: Optional[Tags]
+
+
 class TestingMetricsBackend(MetricsBackend):
     """
     A metrics backend that logs all metrics recorded. Intended for testing
@@ -32,7 +40,7 @@ class TestingMetricsBackend(MetricsBackend):
     # TODO: This might make sense to extend the dummy metrics backend.
 
     def __init__(self) -> None:
-        self.calls: MutableSequence[Union[Increment, Gauge, Timing]] = []
+        self.calls: MutableSequence[Union[Increment, Gauge, Timing, Events]] = []
 
     def increment(
         self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
@@ -48,3 +56,13 @@ class TestingMetricsBackend(MetricsBackend):
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         self.calls.append(Timing(name, value, tags))
+
+    def events(
+        self,
+        title: str,
+        text: str,
+        alert_type: str,
+        priority: str,
+        tags: Optional[Tags] = None,
+    ) -> None:
+        self.calls.append(Events(title, text, alert_type, priority, tags))
