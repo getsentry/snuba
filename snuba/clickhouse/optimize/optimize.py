@@ -138,6 +138,30 @@ def run_optimize_cron_job(
 
     logger.info(f"All partitions list: {partitions_to_optimize}")
 
+    is_done = threading.Event()
+    start_runner = time.time()
+
+    # start a thread that triggers alerts if optimize runner takes too long
+    def monitor() -> None:
+        while True:
+            if is_done.wait(10):
+                break
+            if time.time() - start_runner > OPTIMIZE_ALERT_THRESHOLD:
+                logger.warn(
+                    f"Optimizing job is running longer than {OPTIMIZE_ALERT_THRESHOLD}s"
+                )
+                metrics.events(
+                    title="optimize_job_long_running",
+                    text=f"Optimizing job is running longer than {OPTIMIZE_ALERT_THRESHOLD}s",
+                    priority="error",
+                    alert_type="error",
+                    tags=_get_metrics_tags(table, clickhouse_host),
+                )
+                break
+
+    monitor_thread = threading.Thread(target=monitor)
+    monitor_thread.start()
+
     optimize_partition_runner(
         clickhouse=clickhouse,
         database=database,
@@ -147,6 +171,9 @@ def run_optimize_cron_job(
         scheduler=optimize_scheduler,
         clickhouse_host=clickhouse_host,
     )
+
+    is_done.set()
+    monitor_thread.join()
 
     metrics.timing(
         "optimized_all_parts",
@@ -379,36 +406,13 @@ def optimize_partitions(
             tracker.update_completed_partitions(partition)
 
         start = time.time()
-        is_done = threading.Event()
-
-        def monitor() -> None:
-            while True:
-                if is_done.wait(1):
-                    break
-                if time.time() - start > OPTIMIZE_ALERT_THRESHOLD:
-                    logger.warn(
-                        f"Optimizing partition {partition} is running longer than {OPTIMIZE_ALERT_THRESHOLD}s"
-                    )
-                    metrics.events(
-                        title="optimize_partition_long_running",
-                        text=f"Optimizing partition {partition} is running longer than {OPTIMIZE_ALERT_THRESHOLD}s",
-                        priority="error",
-                        alert_type="error",
-                        tags=_get_metrics_tags(table, clickhouse_host),
-                    )
-                    break
-
-        monitor_thread = threading.Thread(target=monitor)
-        monitor_thread.start()
 
         clickhouse.execute(query, retryable=False)
-        is_done.set()
         metrics.timing(
             "optimized_part",
             time.time() - start,
             tags=_get_metrics_tags(table, clickhouse_host),
         )
-        monitor_thread.join()
 
 
 def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bool:
