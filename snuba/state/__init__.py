@@ -207,13 +207,20 @@ def get_all_configs() -> Mapping[str, Optional[Any]]:
 def get_raw_configs() -> Mapping[str, Optional[Any]]:
     try:
         all_configs = rds.hgetall(config_hash)
-        return {
+        configs = {
             k.decode("utf-8"): get_typed_value(v.decode("utf-8"))
             for k, v in all_configs.items()
             if v is not None
         }
+        if os.environ.get("SENTRY_SINGLE_TENANT"):
+            # Single Tenant has this overriding CONFIG_STATE.
+            for k, v in settings.CONFIG_STATE.items():
+                configs[k] = v
+        return configs
     except Exception as ex:
         logger.exception(ex)
+        if os.environ.get("SENTRY_SINGLE_TENANT"):
+            return settings.CONFIG_STATE
         return {}
 
 
