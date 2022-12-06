@@ -75,5 +75,6 @@ def test_all_names() -> None:
             "functions",
             "generic_metrics",
             "replays",
+            "search_issues",
         ]
     )
